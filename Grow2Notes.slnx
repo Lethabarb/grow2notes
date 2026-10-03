@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Grow2Notes.Web/Grow2Notes.Web.csproj" />
+  </Folder>
+</Solution>
