@@ -6,6 +6,9 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Deliberate CS0219 (assigned but never used), which warnings as errors must turn into a failed build. Throwaway.
+var unusedOnPurpose = 0;
+
 builder.Services.AddHealthEndpoints();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
