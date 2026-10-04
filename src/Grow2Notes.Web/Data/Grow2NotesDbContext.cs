@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -53,5 +54,9 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
             user.HasIndex(u => new { u.OrganisationId, u.Status });
         });
+
+        // KeysDbContext reads and writes the Data Protection key ring. The table is in this model as well, so that this
+        // context's migrations create it, under the plural name that KeysDbContext expects (design.md §5.3).
+        builder.Entity<DataProtectionKey>().ToTable(nameof(KeysDbContext.DataProtectionKeys));
     }
 }

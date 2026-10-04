@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -19,23 +20,25 @@ namespace Grow2Notes.Tests.Data;
 public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
 {
     [Fact]
-    public void Tables_are_named_after_their_entity_and_the_Identity_tables_keep_their_AspNet_names()
+    public void Tables_are_named_after_their_entity_and_the_Identity_and_Data_Protection_tables_keep_their_names()
     {
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
 
-        var identityTables = new Dictionary<Type, string>
+        var namedByTheirLibrary = new Dictionary<Type, string>
         {
             [typeof(ApplicationUser)] = "AspNetUsers",
             [typeof(IdentityUserClaim<Guid>)] = "AspNetUserClaims",
             [typeof(IdentityUserLogin<Guid>)] = "AspNetUserLogins",
             [typeof(IdentityUserToken<Guid>)] = "AspNetUserTokens",
             [typeof(IdentityUserPasskey<Guid>)] = "AspNetUserPasskeys",
+            [typeof(DataProtectionKey)] = "DataProtectionKeys",
         };
 
         // An owned type, such as Identity's passkey data, is stored in its owner's table.
         Assert.All(db.Model.GetEntityTypes().Where(e => !e.IsOwned()), entity =>
-            Assert.Equal(identityTables.GetValueOrDefault(entity.ClrType, entity.ClrType.Name), entity.GetTableName()));
+            Assert.Equal(namedByTheirLibrary.GetValueOrDefault(entity.ClrType, entity.ClrType.Name),
+                entity.GetTableName()));
     }
 
     [Fact]

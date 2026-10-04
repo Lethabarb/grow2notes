@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,8 +10,19 @@ builder.Services.AddHealthEndpoints();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
-builder.Services.AddDbContext<Grow2NotesDbContext>((services, options) =>
-    options.UseSqlServer(services.GetRequiredService<IConfiguration>().GetConnectionString("Grow2Notes")));
+static void UseGrow2NotesDatabase(IServiceProvider services, DbContextOptionsBuilder options) =>
+    options.UseSqlServer(services.GetRequiredService<IConfiguration>().GetConnectionString("Grow2Notes"));
+
+builder.Services.AddDbContext<Grow2NotesDbContext>(UseGrow2NotesDatabase);
+builder.Services.AddDbContext<KeysDbContext>(UseGrow2NotesDatabase);
+
+// The key ring that protects the sign-in cookie and setup links lives in the database, so a restart or a deploy does
+// not sign everyone out (design.md §9.3). The application name replaces the default, the content root path, which
+// follows the working directory: setup links that the operator commands print from the SSH console (§7.4) must open in
+// the app.
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<KeysDbContext>()
+    .SetApplicationName("Grow2Notes");
 
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
