@@ -5,8 +5,8 @@ using Microsoft.Extensions.Configuration;
 namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
-/// Hosts the app in memory against <paramref name="sqlServer"/>, with the web project as its content root, so it serves
-/// the real SPA build from that project's wwwroot.
+/// Hosts the app in memory against the migrated database in <paramref name="sqlServer"/>, with the web project as its
+/// content root, so it serves the real SPA build from that project's wwwroot.
 /// </summary>
 public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicationFactory<Program>
 {

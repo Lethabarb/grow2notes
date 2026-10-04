@@ -1,0 +1,212 @@
+using System.Text.RegularExpressions;
+using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace Grow2Notes.Tests.Data;
+
+/// <summary>
+/// The design.md §5.1 conventions, checked on every entity in the app's model, so each entity added later is checked
+/// too. <see cref="ModelConventionsOnNewEntitiesTests"/> covers the rows that no entity in the model uses yet.
+/// </summary>
+[Collection<SqlServerCollection>]
+public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
+{
+    [Fact]
+    public void Tables_are_named_after_their_entity_and_the_Identity_and_Data_Protection_tables_keep_their_names()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var namedByTheirLibrary = new Dictionary<Type, string>
+        {
+            [typeof(ApplicationUser)] = "AspNetUsers",
+            [typeof(IdentityUserClaim<Guid>)] = "AspNetUserClaims",
+            [typeof(IdentityUserLogin<Guid>)] = "AspNetUserLogins",
+            [typeof(IdentityUserToken<Guid>)] = "AspNetUserTokens",
+            [typeof(IdentityUserPasskey<Guid>)] = "AspNetUserPasskeys",
+            [typeof(DataProtectionKey)] = "DataProtectionKeys",
+        };
+
+        // An owned type, such as Identity's passkey data, is stored in its owner's table.
+        Assert.All(db.Model.GetEntityTypes().Where(e => !e.IsOwned()), entity =>
+            Assert.Equal(namedByTheirLibrary.GetValueOrDefault(entity.ClrType, entity.ClrType.Name),
+                entity.GetTableName()));
+    }
+
+    [Fact]
+    public void Guid_keys_get_sequential_GUIDs_that_EF_Core_generates_on_the_client()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var generators = db.GetService<IValueGeneratorSelector>();
+
+        var keys = db.Model.GetEntityTypes()
+            .Select(e => e.FindPrimaryKey()?.Properties)
+            .Where(key => key is [{ ClrType: var type }] && type == typeof(Guid))
+            .Select(key => key![0])
+            .ToList();
+
+        Assert.NotEmpty(keys);
+        Assert.All(keys, key =>
+        {
+            Assert.Equal(ValueGenerated.OnAdd, key.ValueGenerated);
+            Assert.Null(key.GetDefaultValueSql());
+            Assert.True(generators.TrySelect(key, key.DeclaringType, out var generator));
+            Assert.IsType<SequentialGuidValueGenerator>(generator);
+        });
+    }
+
+    [Fact]
+    public void DateTime_columns_are_named_Utc_stored_as_datetime2_3_and_read_back_as_UTC()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var properties = db.Model.GetEntityTypes().SelectMany(e => e.GetProperties()).ToList();
+        var dateTimes = properties.Where(IsDateTime).ToList();
+
+        Assert.Contains(dateTimes, p => p.ClrType == typeof(DateTime));
+        Assert.Contains(dateTimes, p => p.ClrType == typeof(DateTime?));
+        Assert.All(properties, p => Assert.Equal(IsDateTime(p), p.Name.EndsWith("Utc", StringComparison.Ordinal)));
+        Assert.All(dateTimes, p =>
+        {
+            Assert.Equal("datetime2(3)", p.GetColumnType());
+
+            var stored = new DateTime(2026, 10, 4, 1, 30, 15, 250, DateTimeKind.Unspecified);
+            var read = Assert.IsType<DateTime>(p.GetTypeMapping().Converter?.ConvertFromProvider(stored));
+            Assert.Equal(DateTimeKind.Utc, read.Kind);
+            Assert.Equal(stored.Ticks, read.Ticks);
+        });
+
+        static bool IsDateTime(IProperty p) => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?);
+    }
+
+    [Fact]
+    public async Task Enum_columns_are_tinyint_from_byte_enums_whose_members_all_have_explicit_values()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var enumProperties = db.Model.GetEntityTypes()
+            .SelectMany(e => e.GetProperties())
+            .Where(p => (Nullable.GetUnderlyingType(p.ClrType) ?? p.ClrType).IsEnum)
+            .ToList();
+        var source = Comment().Replace(await ReadWebProjectSourceAsync(), "");
+
+        Assert.NotEmpty(enumProperties);
+        Assert.All(enumProperties, p =>
+        {
+            var type = Nullable.GetUnderlyingType(p.ClrType) ?? p.ClrType;
+            Assert.Equal(typeof(byte), Enum.GetUnderlyingType(type));
+            Assert.Equal("tinyint", p.GetColumnType());
+
+            // A compiled enum cannot show whether a value was written or implied by the member's position, and an
+            // implied value changes when a member is inserted above it, so this reads the declaration.
+            var members = Assert.Single(EnumDeclaration().Matches(source), m => m.Groups["name"].Value == type.Name)
+                .Groups["members"].Value;
+            Assert.All(Enum.GetNames(type), name => Assert.Matches($@"\b{name}\s*=", members));
+        });
+    }
+
+    [Fact]
+    public void Every_string_column_the_app_adds_is_sized_from_Limits_or_declared_nvarchar_max()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var limits = typeof(Limits).GetFields().Select(f => (int)f.GetRawConstantValue()!).ToHashSet();
+
+        // Identity's own columns keep Identity's sizes, apart from the ones that hold the email address, which
+        // Grow2NotesDbContextTests checks.
+        var strings = db.Model.GetEntityTypes()
+            .SelectMany(e => e.GetDeclaredProperties())
+            .Where(p => p.ClrType == typeof(string)
+                        && p.PropertyInfo?.DeclaringType?.Assembly == typeof(Limits).Assembly)
+            .ToList();
+
+        Assert.NotEmpty(strings);
+        Assert.All(strings, p =>
+        {
+            if (p.GetMaxLength() is { } maxLength)
+            {
+                Assert.Contains(maxLength, limits);
+            }
+            else
+            {
+                // Only a column whose type was set explicitly has this annotation, so a column that is nvarchar(max)
+                // on purpose, such as the Guided notes text, passes, and one that was never given a size fails.
+                Assert.Equal("nvarchar(max)", p.FindAnnotation(RelationalAnnotationNames.ColumnType)?.Value);
+            }
+        });
+    }
+
+    [Fact]
+    public void Configuration_entities_have_a_RowVersion_that_SQL_Server_sets_and_EF_Core_checks()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        // Named rather than typed, so each one is checked as soon as a later story adds it.
+        string[] configurationEntities = ["Organisation", "Participant", "Goal", "CommonItemGroup", "CommonItem"];
+
+        var entities = db.Model.GetEntityTypes().Where(e => configurationEntities.Contains(e.ClrType.Name)).ToList();
+
+        Assert.NotEmpty(entities);
+        Assert.All(entities, entity =>
+        {
+            var rowVersion = entity.FindProperty("RowVersion");
+            Assert.NotNull(rowVersion);
+            Assert.Equal(typeof(byte[]), rowVersion.ClrType);
+            Assert.Equal("rowversion", rowVersion.GetColumnType());
+            Assert.Equal(ValueGenerated.OnAddOrUpdate, rowVersion.ValueGenerated);
+            Assert.True(rowVersion.IsConcurrencyToken);
+        });
+    }
+
+    [Fact]
+    public void Every_foreign_key_is_ON_DELETE_NO_ACTION()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        // An ownership is part of its owner's row, with no foreign key in the database.
+        var foreignKeys = db.Model.GetEntityTypes()
+            .SelectMany(e => e.GetForeignKeys())
+            .Where(fk => !fk.IsOwnership)
+            .ToList();
+
+        Assert.NotEmpty(foreignKeys);
+        Assert.All(foreignKeys, fk => Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior));
+
+        // SQL Server has no RESTRICT, so the script EF Core gives the database says NO ACTION for each foreign key.
+        var script = db.Database.GenerateCreateScript();
+        Assert.Equal(foreignKeys.Count, Regex.Count(script, "FOREIGN KEY"));
+        Assert.Equal(foreignKeys.Count, Regex.Count(script, "ON DELETE NO ACTION"));
+    }
+
+    private async Task<string> ReadWebProjectSourceAsync()
+    {
+        var webProject = factory.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath;
+        var files = Directory.EnumerateFiles(webProject, "*.cs", SearchOption.AllDirectories)
+            .Where(f => Path.GetRelativePath(webProject, f).Split(Path.DirectorySeparatorChar)[0]
+                is not ("bin" or "obj"));
+
+        var sources = await Task.WhenAll(files.Select(f =>
+            File.ReadAllTextAsync(f, TestContext.Current.CancellationToken)));
+        return string.Join('\n', sources);
+    }
+
+    [GeneratedRegex(@"\benum\s+(?<name>\w+)[^{]*\{(?<members>[^}]*)\}")]
+    private static partial Regex EnumDeclaration();
+
+    [GeneratedRegex(@"//[^\n]*|/\*.*?\*/", RegexOptions.Singleline)]
+    private static partial Regex Comment();
+}
