@@ -21,6 +21,8 @@
          mode, which takes `dotnet test Grow2Notes.slnx` as written. The plain xunit.v3 package brings in Microsoft
          Testing Platform v2, which stops dotnet test in that mode. -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <!-- Throwaway: a version with a high advisory (GHSA-5crp-9r3c-p9vr), which NuGet Audit must fail as NU1903. -->
+    <PackageVersion Include="Newtonsoft.Json" Version="12.0.3" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.1" />
