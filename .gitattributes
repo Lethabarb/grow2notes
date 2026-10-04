@@ -1,0 +1,2 @@
+# Store text with LF and check it out with LF everywhere, so Windows (core.autocrlf) and Linux CI see the same bytes.
+* text=auto eol=lf

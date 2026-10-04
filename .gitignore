@@ -1,0 +1,14 @@
+# .NET build output
+bin/
+obj/
+
+# SPA dependencies, and the Vite build output that the web app serves (design.md §7.3)
+node_modules/
+src/Grow2Notes.Web/wwwroot/
+
+# IDE and per-user files
+.vs/
+.idea/
+*.user
+*.suo
+*.DotSettings.user
