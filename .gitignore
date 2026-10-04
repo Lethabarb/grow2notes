@@ -6,6 +6,13 @@ obj/
 node_modules/
 src/Grow2Notes.Web/wwwroot/
 
+# CI's package output: app.zip, efbundle, migrate.sql and the built Bicep (design.md §10.4 step 3)
+artifacts/
+
+# Playwright's HTML report and per-test output, traces included (tests/e2e)
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+
 # IDE and per-user files
 .vs/
 .idea/

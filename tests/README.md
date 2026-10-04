@@ -6,6 +6,22 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests with axe accessibility checks, run against the published app.
 
+The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
+`src/grow2notes-spa/src`, and run in Vitest with Testing Library.
+
+## Running the SPA checks
+
+Each is a separate step of design.md §10.4 step 2. In `src/grow2notes-spa`, after `npm ci`:
+
+```shell
+npm run typecheck   # tsc over the app, the tests and the config files
+npm run lint        # ESLint; a warning fails it too
+npm test            # Vitest, once
+npm run build       # vite build into src/Grow2Notes.Web/wwwroot
+```
+
+`npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
@@ -19,6 +35,39 @@ dotnet test Grow2Notes.slnx
 ```
 
 If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying so.
+
+## Running the end-to-end tests
+
+CI runs them against the published app, on a SQL Server container that the migrations bundle has migrated (the
+end-to-end steps of `.github/workflows/ci.yml`). To do the same on a machine, build the SPA as above, then from the
+repository root, with Docker running:
+
+```shell
+docker run -d --name grow2notes-e2e-sql -p 1433:1433 -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=Grow2Notes-CI-only-1 \
+  mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
+# Once SQL Server has started, about 15 seconds later:
+export ConnectionStrings__Grow2Notes="Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=Grow2Notes-CI-only-1;TrustServerCertificate=True"
+dotnet tool restore
+dotnet ef database update --project src/Grow2Notes.Web --context Grow2NotesDbContext \
+  --connection "$ConnectionStrings__Grow2Notes"
+dotnet publish src/Grow2Notes.Web --configuration Release --output artifacts/app
+cd artifacts/app
+ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 dotnet Grow2Notes.Web.dll
+```
+
+Then, in a second terminal:
+
+```shell
+cd tests/e2e
+npm ci
+npx playwright install chromium
+npm run typecheck
+npm test
+```
+
+The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. After a failure,
+`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
+`docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing integration tests
 
