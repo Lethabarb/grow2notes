@@ -48,5 +48,53 @@ resource deploymentIdentityContributor 'Microsoft.Authorization/roleAssignments@
   }
 }
 
+// Wrap and unwrap only, with the vault's one key, which protects the Data Protection key ring (design.md §9.3, §9.4).
+var keyVaultCryptoServiceEncryptionUserRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  'e147488a-f6f5-4113-8e2d-b22465e65bf6'
+)
+
+// Telemetry ingestion, because local auth is off for it (design.md §9.5).
+var monitoringMetricsPublisherRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '3913510d-42f4-4e42-8a64-420c390055eb'
+)
+
+// Sending email with Entra ID needs read and write on the Communication Services resource. This is the only built-in
+// Communication Services role; Contributor, the other built-in role Microsoft names for it, reaches every resource
+// type. This role also lets the app list keys and delete the group's Communication and Email resources, which it
+// never does.
+var communicationAndEmailServiceOwnerRoleDefinitionId = subscriptionResourceId(
+  'Microsoft.Authorization/roleDefinitions',
+  '09976791-48a7-449e-bb21-39d1a415f350'
+)
+
+// The web app runs as this identity for SQL, Key Vault, telemetry and email (design.md §9.4). Its database access is a
+// database user that grant-identities.sql adds, not an Azure role.
+resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: 'id-grow2notes-${environmentName}-app'
+  location: resourceGroup().location
+  tags: resourceGroup().tags
+}
+
+// Scoped to the group, because the vault, Application Insights and Communication Services are created later by
+// main.bicep, whose identity cannot assign roles (design.md §10.5).
+resource appIdentityRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
+  for roleDefinitionId in [
+    keyVaultCryptoServiceEncryptionUserRoleDefinitionId
+    monitoringMetricsPublisherRoleDefinitionId
+    communicationAndEmailServiceOwnerRoleDefinitionId
+  ]: {
+    name: guid(resourceGroup().id, appIdentity.id, roleDefinitionId)
+    properties: {
+      roleDefinitionId: roleDefinitionId
+      principalId: appIdentity.properties.principalId
+      principalType: 'ServicePrincipal'
+    }
+  }
+]
+
 output deploymentIdentityClientId string = deploymentIdentity.properties.clientId
 output deploymentIdentityPrincipalId string = deploymentIdentity.properties.principalId
+output appIdentityClientId string = appIdentity.properties.clientId
+output appIdentityPrincipalId string = appIdentity.properties.principalId
