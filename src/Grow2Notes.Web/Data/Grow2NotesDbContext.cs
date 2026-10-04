@@ -12,6 +12,9 @@ namespace Grow2Notes.Web.Data;
 internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options)
     : IdentityUserContext<ApplicationUser, Guid>(options)
 {
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
+        ModelConventions.Apply(configurationBuilder);
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
