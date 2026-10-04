@@ -4,11 +4,11 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D59 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, and D28 and D31 by D48. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A47), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A47), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
-The developer's business owns the production Azure subscription and operates Grow2Notes for the provider (D40). Where this document says "the developer" or "the operator", it means that business.
+The developer's business owns the Azure subscription that hosts test and production, an existing subscription that also runs the operator's other workloads (D60), and operates Grow2Notes for the provider (D40). Where this document says "the developer" or "the operator", it means that business.
 
 ---
 
@@ -1632,7 +1632,7 @@ builder.Services.ConfigureApplicationCookie(o =>
 - `auth_time` is added once by overriding `SignInManager.SignInWithClaimsAsync` (the path every password, TOTP and passkey sign-in takes) and copied forward in `OnRefreshingPrincipal`.
 - `SessionRules.ValidateAsync` first awaits `SecurityStampValidator.ValidatePrincipalAsync`, then rejects the principal when `now − auth_time` exceeds 12 hours. The validator already renews the cookie on each request, which makes the 30-minute idle timeout exact.
 
-**The passkey domain is chosen once.** Passkeys are bound to `ServerDomain`; changing the production domain later invalidates every passkey. Use one product domain for all future tenants (the tenant comes from the signed-in user, not a subdomain) and fix it before the first real enrolment (A38). The test environment has its own domain and passkeys.
+**The passkey domain is chosen once.** Passkeys are bound to `ServerDomain`; changing the production domain later invalidates every passkey. Use one product domain for all future tenants (the tenant comes from the signed-in user, not a subdomain) and fix it before the first real enrolment (A38). The test environment has its own address (for now its default `*.azurewebsites.net` address, D62) and its own passkeys.
 
 **The passkey prompt shows the domain.** `IdentityPasskeyOptions` has no relying-party display-name setting, so the passkey's relying party is identified by `ServerDomain`, and that is the name browsers and password managers show. A38 makes it a Grow2Notes domain, so the passkey prompt shows Grow2Notes (D42).
 
@@ -1669,7 +1669,7 @@ Described in full in §5.9: the tenant comes only from the signed-in user, a nam
 
 | | Control |
 |---|---|
-| **Browser ↔ app** | HTTPS only; minimum TLS 1.2 (1.3 where supported); HSTS for 1 year with `includeSubDomains`; free App Service managed certificate on the custom domain. |
+| **Browser ↔ app** | HTTPS only; minimum TLS 1.2 (1.3 where supported); HSTS for 1 year with `includeSubDomains`; free App Service managed certificate on the custom domain in production; the test environment uses App Service's built-in certificate on its default `*.azurewebsites.net` address (D62). |
 | **App ↔ database** | `Encrypt=Strict` (TDS 8.0); server minimum TLS 1.2. |
 | **At rest** | Azure SQL Transparent Data Encryption (on by default, AES-256, service-managed key), covering backups. Log Analytics and App Service storage are encrypted by the platform. |
 | **Application keys** | The Data Protection key ring (protecting cookies and setup tokens) is stored in SQL and wrapped by a Key Vault RSA key. Key Vault has soft delete and purge protection on. |
@@ -1678,10 +1678,10 @@ Described in full in §5.9: the tenant comes only from the signed-in user, a nam
 ### 9.4 Secrets and identities
 
 There are no long-lived secrets:
-- **App → Azure SQL, Key Vault, ACS:** a **user-assigned managed identity** created by `bootstrap.bicep` (§10.5). SqlClient connects with `Authentication=Active Directory Managed Identity; User Id=<clientId>`; `ManagedIdentityCredential(clientId)` is used for Key Vault and ACS. The SQL server uses **Microsoft Entra-only authentication**; SQL logins are disabled.
-- **GitHub Actions → Azure:** OIDC workload identity federation to a deployment identity per environment. GitHub stores only non-secret IDs.
+- **App → Azure SQL, Key Vault, ACS, telemetry:** a **user-assigned managed identity** created by `bootstrap.bicep` (§10.5). SqlClient connects with `Authentication=Active Directory Managed Identity; User Id=<clientId>`; `ManagedIdentityCredential(clientId)` is used for Key Vault, ACS and telemetry ingestion (*Monitoring Metrics Publisher*, because local auth is off for ingestion, §9.5). The SQL server uses **Microsoft Entra-only authentication**; SQL logins are disabled.
+- **GitHub Actions → Azure:** OIDC workload identity federation to a deployment identity per environment. GitHub stores no credential, only IDs: the deployment identity's client ID and the tenant and subscription IDs, as secrets of the `test` and `prod` environments so that the public Actions logs mask them, never in the repository (D60, D65).
 - **Key Vault** holds one key and no secrets. The app identity has *Key Vault Crypto Service Encryption User* (wrap and unwrap only).
-- **Database permissions:** the app identity is a member of `grow2notes_runtime`, with the grants and denies in §5.8. This makes version history, reviews and the audit log append-only even if application code has a bug, which matters given the 2026 Act's offence for altering records (§12). The deployment identity owns the schema for migrations. The developer's Entra account is the SQL Entra admin (through a group) for bootstrap, restore drills and the manual retention task only; any other direct production query is recorded in `ops/` with a reason.
+- **Database permissions:** the app identity is a member of `grow2notes_runtime`, with the grants and denies in §5.8. This makes version history, reviews and the audit log append-only even if application code has a bug, which matters given the 2026 Act's offence for altering records (§12). The deployment identity owns the schema for migrations. The SQL Entra admin in both environments is the Entra security group "Grow2Notes SQL admins", whose only member is the developer's Entra account (D64), used for bootstrap, restore drills and the manual retention task only; any other direct production query is recorded in `ops/` with a reason.
 - **Publishing:** FTP and basic-auth publishing credentials are disabled.
 
 ### 9.5 No participant data in logs or telemetry
@@ -1786,7 +1786,7 @@ Australia Southeast has no availability zones. Nothing here depends on them: the
 | Log Analytics + Application Insights | `log-` / `appi-grow2notes-prod` | Pay-as-you-go; 30-day retention; daily cap 0.5 GB |
 | Communication Services + Email | `acs-grow2notes` / `ecs-grow2notes` | Data location Australia (a geography; cannot be set to Victoria); sender on the product domain with SPF, DKIM and DMARC |
 | Alerts | — | HTTP 5xx, health-check failure and DTU above 80%. The action group emails the developer; these are operations alerts, not app emails. |
-| Governance | subscription | Azure Policy *Allowed locations* = Australia Southeast and Australia East (Australia East only for geo-restore and the disaster-recovery redeploy, §10.7); Cost Management budget alert at AUD 100/month |
+| Governance | the two Grow2Notes resource groups | Azure Policy *Allowed locations* = Australia Southeast and Australia East (Australia East only for geo-restore and the disaster-recovery redeploy, §10.7), assigned to each of the two resource groups; a Cost Management budget alert inside each resource group, emailing the developer: AUD 30/month for test and AUD 70/month for prod (AUD 100 in total). Neither applies to the rest of the operator's shared subscription, so its other workloads are unaffected (D60, D61, D63) |
 
 The lock is on the database rather than the server, so the pipeline can still remove its temporary firewall rule and restore-drill copies can be deleted. M0 confirms in the test environment that deleting the server is refused while the database is locked; if it is not, long-term backups (which survive server deletion) remain the protection. There is no Front Door, WAF, deployment slot or paid Defender plan: none is justified at under 20 users. Defender for Cloud's free posture checks are on.
 
@@ -1804,7 +1804,7 @@ Unit prices marked "verified" were read from the Azure Retail Prices API (`curre
 | Log Analytics (within the 5 GB/month free allowance; AUD 4.64/GB beyond, verified) | 0.00 | 0.00 |
 | Communication Services Email (estimate) | < 0.10 | < 0.10 |
 | Metric alerts, 3 rules (estimate) | < 1.00 | — |
-| VNet, service endpoints, managed certificate | 0.00 | 0.00 |
+| VNet, service endpoints, TLS certificate (managed certificate in prod; built-in `*.azurewebsites.net` certificate in test, D62) | 0.00 | 0.00 |
 | **Total** | **≈ 42–45** | **≈ 19.50** |
 
 That is **about AUD 62–65 a month ex GST (about AUD 68–72 including GST) for both environments** (estimate). Other costs, all estimates: a domain name (about AUD 20–40 a year); GitHub Pro (about USD 4 a month) only if the repository is private, because environment branch restrictions need it there.
@@ -1814,7 +1814,7 @@ That is **about AUD 62–65 a month ex GST (about AUD 68–72 including GST) for
 | Environment | Purpose | Data | Differences from prod |
 |---|---|---|---|
 | **Local** | Development on Windows | Made-up seed data | SQL Server LocalDB or Developer edition; emails written to the console; no Azure resources |
-| **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its own domain, identities and passkeys |
+| **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its default `*.azurewebsites.net` address with App Service's built-in HTTPS, so no custom domain or managed certificate for now (D62); its own identities and passkeys |
 | **Prod** | Real use | Real | — |
 
 There are no deployment slots. A production deploy restarts the app for a few seconds; autosave retries with backoff and unsaved text stays in memory. Production deploys are run by hand at an agreed time outside the usual note-writing hours (A35).
@@ -1848,7 +1848,9 @@ infra/
 ├─ bootstrap.bicep        # run by the developer as subscription Owner, before the first deploy: resource groups,
 │                         #   deployment identities + federated credentials + Contributor on their own group,
 │                         #   the app's user-assigned identity + its role assignments (Key Vault crypto user,
-│                         #   ACS) scoped to the resource group, Azure Policy, budget
+│                         #   ACS, Monitoring Metrics Publisher for telemetry ingestion) scoped to the resource
+│                         #   group, Azure Policy *Allowed locations* assigned to each of the two resource
+│                         #   groups, and a budget inside each group (AUD 30/month test, AUD 70/month prod, D63)
 ├─ locks.bicep            # run once per environment by the developer as Owner, after its first deploy: CanNotDelete on the database
 ├─ main.bicep             # per environment; the pipeline runs it on every deploy; contains no Microsoft.Authorization resources
 ├─ modules/
@@ -1859,7 +1861,8 @@ infra/
 │  ├─ monitoring.bicep    # Log Analytics, App Insights, alerts, daily cap
 │  └─ email.bicep         # Communication Services, Email service, domain
 ├─ sql/grant-identities.sql   # one-off, run as Entra admin: CREATE USER ... FROM EXTERNAL PROVIDER for the app and
-│                             #   deployment identities; ALTER ROLE grow2notes_runtime ADD MEMBER for the app identity
+│                             #   deployment identities; ALTER ROLE grow2notes_runtime ADD MEMBER for the app identity,
+│                             #   first creating the role with the first migration's guard if it is missing
 ├─ test.bicepparam
 └─ prod.bicepparam
 ```
@@ -1870,7 +1873,7 @@ The pipeline's identity has Contributor on its own resource group only, which ca
 
 - **EF Core code-first migrations** under `Data/Migrations`; the reviewed `migrate.sql` shows exactly what will run.
 - **The app never migrates itself at startup.** Its identity has no DDL rights. Migrations run as a pipeline step before the new code is deployed.
-- **The first migration creates the role `grow2notes_runtime`** with the grants and denies in §5.8. A later migration that adds an append-only table adds its `DENY` to the role. Because the denies target a role rather than an Azure identity, migrations run the same in Testcontainers, LocalDB and Azure; `grant-identities.sql` only adds identities to the role.
+- **The first migration creates the role `grow2notes_runtime`** if it does not exist yet, and gives it the grants and denies in §5.8. A later migration that adds an append-only table adds its `DENY` to the role. Because the denies target a role rather than an Azure identity, migrations run the same in Testcontainers, LocalDB and Azure. `grant-identities.sql` adds identities to the role; because it runs before the first migration, it creates the role with the same guard if it is missing, and the migration's guard tolerates that.
 - **Expand, then contract.** Every migration must stay compatible with the previous release: add tables and nullable columns first, backfill, and drop or rename only in a later release.
 - **Data fixes are migrations too,** reviewed in a pull request. No ad-hoc SQL against production.
 - **Rollback:** redeploy the previous artifact (the schema stays expanded). If data was damaged, restore to the time recorded before the migration. `Down` migrations are not used in production.
@@ -1897,7 +1900,7 @@ The pipeline's identity has Contributor on its own resource group only, which ca
 | When | Task |
 |---|---|
 | Weekly | Merge Dependabot PRs that pass CI, letting them reach test |
-| Monthly | Production deploy (picks up .NET and package patches); check alerts, the budget and Application Insights failures |
+| Monthly | Production deploy (picks up .NET and package patches); check alerts, the budgets and Application Insights failures |
 | Quarterly | Restore drill; review Azure role assignments |
 | Yearly | Geo-restore drill; run the retention query and give the managers the list of participants whose retention period may have ended, for their decision (APP 11.2, A29; first relevant in 2033) |
 | By November 2028 | Upgrade from .NET 10 to the next LTS |
