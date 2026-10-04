@@ -1831,7 +1831,7 @@ There are no deployment slots. A production deploy restarts the app for a few se
 **`deploy.yml`:**
 - **Triggers:** automatically to test when CI succeeds on `main`. To prod only by `workflow_dispatch`, naming the CI run of a build that has already passed in test.
 - **Steps, per environment:**
-  1. `azure/login` with OIDC. The federated credential trusts only `repo:<owner>/<repo>:environment:<env>`.
+  1. `azure/login` with OIDC. The federated credential trusts only `repo:<owner>/<repo>:environment:<env>`, written with the repository's immutable subject prefix (`repo:<owner>@<owner id>/<repo>@<repo id>`) when GitHub reports one.
   2. `az deployment group what-if`, then `az deployment group create` with `main.bicep`.
   3. Record the UTC time: the point-in-time restore target if the migration goes wrong.
   4. Add the runner's IP as a temporary SQL firewall rule.
