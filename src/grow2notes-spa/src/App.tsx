@@ -1,3 +1,5 @@
 export function App() {
-  return <h1>Grow2Notes</h1>;
+  // Throwaway: never reassigned, so ESLint's prefer-const rejects the let, which tsc accepts.
+  let heading = 'Grow2Notes';
+  return <h1>{heading}</h1>;
 }
