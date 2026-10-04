@@ -48,12 +48,14 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     steps:
-      - uses: actions/checkout@v7
+      # Every action, the first-party actions/* ones included, is pinned to a full commit SHA with its release in a
+      # trailing comment (design.md §9.11): a tag can be moved to other code, a commit cannot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here pushes, so the token is not left in .git/config for later steps to read.
           persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
           cache: npm
@@ -62,7 +64,7 @@ jobs:
             tests/e2e/package-lock.json
 
       # Installs the latest 10.0 SDK, which global.json's rollForward latestFeature accepts.
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
 
@@ -228,10 +230,28 @@ jobs:
         if: failure() && env.E2E_APP_PID != ''
         run: cat "$RUNNER_TEMP/e2e/app.log"
 
-      # The HTML report holds each failed test's error and trace; npx playwright show-report opens it.
+      # The HTML report holds each failed test's error and trace; npx playwright show-report opens it. A re-run that
+      # fails again replaces the earlier attempt's report rather than failing on the name it already used.
       - name: Upload the Playwright report
         if: failure() && steps.e2e.outcome == 'failure'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report
           path: tests/e2e/playwright-report/
+          overwrite: true
+
+      # Upload (design.md §10.4 step 5). Production deploys exactly these files; nothing is rebuilt. Only a run whose
+      # end-to-end tests passed gets here. Pull request runs upload them too, so migrate.sql can be read in review.
+      # deploy.yml downloads the artifact named grow2notes from the CI run it is given (download-artifact's run-id)
+      # and must chmod +x efbundle first: an artifact is a zip, which keeps no file permissions. Re-running all jobs
+      # deletes a run's earlier artifacts and uploads a fresh build under the same name, so deploy.yml must not assume
+      # a run's artifact is the one test received.
+      - name: Upload the artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: grow2notes
+          path: artifacts/
+          if-no-files-found: error
+          # The longest a public repository allows. Production deploys a named run that is already in test, and a
+          # rollback redeploys an earlier run's artifact (design.md §10.6), so each is kept as long as it can be.
+          retention-days: 90
