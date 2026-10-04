@@ -7,4 +7,13 @@
     <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
+  <!-- NuGet Audit on every restore, over transitive packages too, and every advisory is reported (design.md §9.11).
+       TreatWarningsAsErrors turns the high (NU1903) and critical (NU1904) ones into errors that fail the restore; low
+       (NU1901) and moderate (NU1902) ones stay warnings, because the design fails CI only on high and critical. -->
+  <PropertyGroup>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902</WarningsNotAsErrors>
+  </PropertyGroup>
+
 </Project>

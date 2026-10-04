@@ -1,0 +1,78 @@
+# Builds and tests every pull request and every push to main (design.md §10.4, ci.yml).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A new push to a pull request cancels that pull request's run in progress. head_ref is empty on a push, so each run on
+# main gets a group of its own and always finishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The Linux half of the MelbourneClock check: its tests pass with the machine clock in UTC as well as on Windows
+      # (design.md §14 M2).
+      TZ: UTC
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Nothing here pushes, so the token is not left in .git/config for later steps to read.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/grow2notes-spa/package-lock.json
+
+      # Installs the latest 10.0 SDK, which global.json's rollForward latestFeature accepts.
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # SPA (design.md §10.4 step 2). It runs before the .NET steps: the web project serves the Vite build from
+      # wwwroot, MapStaticAssets lists those files when the project is built, and the test project's build stops
+      # without them.
+      - name: Install SPA packages
+        working-directory: src/grow2notes-spa
+        run: npm ci
+
+      - name: Build the SPA
+        working-directory: src/grow2notes-spa
+        run: npm run build
+
+      # .NET (design.md §10.4 step 1).
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      # NuGet Audit runs as part of restore; Directory.Build.props makes high and critical advisories fail it.
+      - name: Restore NuGet packages
+        run: dotnet restore Grow2Notes.slnx
+
+      # Directory.Build.props already treats warnings as errors; the switch keeps that true here even if a project
+      # turns it off.
+      - name: Build
+        run: dotnet build Grow2Notes.slnx --no-restore --configuration Release -warnaserror
+
+      # The integration tests start SQL Server in Docker through Testcontainers.
+      - name: Test
+        run: dotnet test Grow2Notes.slnx --no-build --configuration Release
+
+      - name: Check for model changes without a migration
+        run: >-
+          dotnet ef migrations has-pending-model-changes
+          --project src/Grow2Notes.Web
+          --context Grow2NotesDbContext
+          --configuration Release
+          --no-build
