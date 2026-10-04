@@ -94,6 +94,41 @@ resource appIdentityRoleAssignments 'Microsoft.Authorization/roleAssignments@202
   }
 ]
 
+// The built-in definition skips resources whose location is 'global', so Communication Services, its Email service, the
+// alert rules and the action group are still allowed, and it checks only resources that have a location, so budgets
+// and role assignments are not affected. Australia East is there only for geo-restore and the disaster-recovery
+// redeploy (design.md §10.7).
+resource allowedLocations 'Microsoft.Authorization/policyAssignments@2026-06-01' = {
+  name: 'allowed-locations'
+  properties: {
+    displayName: 'Grow2Notes ${environmentName}: Australia Southeast and Australia East only'
+    description: 'Refuses any resource in this group outside Australia Southeast and Australia East (D33, D38, D61).'
+    policyDefinitionId: tenantResourceId(
+      'Microsoft.Authorization/policyDefinitions',
+      'e56962a6-4747-49cd-b67b-bf8b01975c4c'
+    )
+    parameters: {
+      listOfAllowedLocations: {
+        value: [
+          'australiasoutheast'
+          'australiaeast'
+        ]
+      }
+      // Deny, like enforcementMode Default below, is what Azure assumes anyway. Both are written out because this
+      // assignment must refuse, not just audit.
+      effect: {
+        value: 'Deny'
+      }
+    }
+    enforcementMode: 'Default'
+    nonComplianceMessages: [
+      {
+        message: 'Grow2Notes resources can be created only in Australia Southeast or Australia East (D33, D38).'
+      }
+    ]
+  }
+}
+
 output deploymentIdentityClientId string = deploymentIdentity.properties.clientId
 output deploymentIdentityPrincipalId string = deploymentIdentity.properties.principalId
 output appIdentityClientId string = appIdentity.properties.clientId
