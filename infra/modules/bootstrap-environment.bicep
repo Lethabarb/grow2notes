@@ -9,6 +9,15 @@ param environmentName string
 @description('The OIDC subject prefix of the repository, repo:<owner>@<owner id>/<repo>@<repo id>.')
 param githubSubjectPrefix string
 
+@description('This group\'s monthly budget, in the subscription\'s billing currency.')
+param budgetAmount int
+
+@description('The address the budget alerts are emailed to.')
+param budgetEmail string
+
+@description('The first day of the month the budget starts, as yyyy-MM-01T00:00:00Z.')
+param budgetStartDate string
+
 // Built-in Contributor: enough to deploy main.bicep into the group, but it cannot create role assignments or locks,
 // which is why those live in this file and locks.bicep (design.md §10.5).
 var contributorRoleDefinitionId = subscriptionResourceId(
@@ -126,6 +135,34 @@ resource allowedLocations 'Microsoft.Authorization/policyAssignments@2026-06-01'
         message: 'Grow2Notes resources can be created only in Australia Southeast or Australia East (D33, D38).'
       }
     ]
+  }
+}
+
+// Created in the group, the budget counts only this group's costs, not the other workloads on the shared subscription
+// (D61, D63). A budget has no currency of its own: the amount is in the subscription's billing currency, AUD.
+resource budget 'Microsoft.Consumption/budgets@2024-08-01' = {
+  name: 'budget-grow2notes-${environmentName}'
+  properties: {
+    category: 'Cost'
+    amount: budgetAmount
+    timeGrain: 'Monthly'
+    timePeriod: {
+      startDate: budgetStartDate
+    }
+    // The design names no thresholds: 80% warns while there is still room, 100% says the budget has been spent.
+    notifications: toObject(
+      [80, 100],
+      threshold => 'Actual_GreaterThan_${threshold}_Percent',
+      threshold => {
+        enabled: true
+        thresholdType: 'Actual'
+        operator: 'GreaterThan'
+        threshold: threshold
+        contactEmails: [
+          budgetEmail
+        ]
+      }
+    )
   }
 }
 

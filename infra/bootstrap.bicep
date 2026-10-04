@@ -7,32 +7,52 @@ targetScope = 'subscription'
 @description('The sub_claim_prefix that gh api repos/<owner>/<repo>/actions/oidc/customization/sub returns, verbatim.')
 param githubSubjectPrefix string = 'repo:Lethabarb@76515166/grow2notes@1403713365'
 
+// Passed when the file is run and never committed, because it may contain the company's name (D42).
+@description('The developer\'s email address for both budget alerts.')
+param budgetEmail string
+
+// Azure refuses a new budget that starts before the first of the current month, and refuses any change to the start
+// date of an existing one. So the default suits the first run and any rerun in the same month, and a rerun in a later
+// month must pass the date the budgets started. It has the form Azure stores, so what-if shows no change to it.
+@description('The budgets\' start date, yyyy-MM-01T00:00:00Z. On a rerun in a later month, pass the existing one.')
+param budgetStartDate string = '${utcNow('yyyy-MM')}-01T00:00:00Z'
+
 // The two groups, and what this file creates in them, are in Australia Southeast (D38).
 var location = 'australiasoutheast'
 
+// Each group's monthly budget, AUD 100 in total (D63).
 var environments = [
-  'test'
-  'prod'
+  {
+    name: 'test'
+    budgetAmount: 30
+  }
+  {
+    name: 'prod'
+    budgetAmount: 70
+  }
 ]
 
 resource resourceGroups 'Microsoft.Resources/resourceGroups@2025-04-01' = [
   for environment in environments: {
-    name: 'rg-grow2notes-${environment}-ause'
+    name: 'rg-grow2notes-${environment.name}-ause'
     location: location
     tags: {
       app: 'grow2notes'
-      env: environment
+      env: environment.name
     }
   }
 ]
 
 module environmentResources 'modules/bootstrap-environment.bicep' = [
   for (environment, i) in environments: {
-    name: 'bootstrap-${environment}'
+    name: 'bootstrap-${environment.name}'
     scope: resourceGroups[i]
     params: {
-      environmentName: environment
+      environmentName: environment.name
       githubSubjectPrefix: githubSubjectPrefix
+      budgetAmount: environment.budgetAmount
+      budgetEmail: budgetEmail
+      budgetStartDate: budgetStartDate
     }
   }
 ]
