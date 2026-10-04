@@ -114,6 +114,38 @@ public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : I
     }
 
     [Fact]
+    public void Every_string_column_the_app_adds_is_sized_from_Limits_or_declared_nvarchar_max()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var limits = typeof(Limits).GetFields().Select(f => (int)f.GetRawConstantValue()!).ToHashSet();
+
+        // Identity's own columns keep Identity's sizes, apart from the ones that hold the email address, which
+        // Grow2NotesDbContextTests checks.
+        var strings = db.Model.GetEntityTypes()
+            .SelectMany(e => e.GetDeclaredProperties())
+            .Where(p => p.ClrType == typeof(string)
+                        && p.PropertyInfo?.DeclaringType?.Assembly == typeof(Limits).Assembly)
+            .ToList();
+
+        Assert.NotEmpty(strings);
+        Assert.All(strings, p =>
+        {
+            if (p.GetMaxLength() is { } maxLength)
+            {
+                Assert.Contains(maxLength, limits);
+            }
+            else
+            {
+                // Only a column whose type was set explicitly has this annotation, so a column that is nvarchar(max)
+                // on purpose, such as the Guided notes text, passes, and one that was never given a size fails.
+                Assert.Equal("nvarchar(max)", p.FindAnnotation(RelationalAnnotationNames.ColumnType)?.Value);
+            }
+        });
+    }
+
+    [Fact]
     public void Every_foreign_key_is_ON_DELETE_NO_ACTION()
     {
         using var scope = factory.Services.CreateScope();

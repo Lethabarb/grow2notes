@@ -42,4 +42,23 @@ public sealed class Grow2NotesDbContextTests(Grow2NotesFactory factory) : IClass
         Assert.Equal("tinyint", user.FindProperty(nameof(ApplicationUser.Role))!.GetColumnType());
         Assert.Equal("tinyint", user.FindProperty(nameof(ApplicationUser.Status))!.GetColumnType());
     }
+
+    [Fact]
+    public void DisplayName_and_the_columns_that_hold_the_email_address_are_sized_from_Limits()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var user = db.Model.FindEntityType(typeof(ApplicationUser))!;
+        string[] emailColumns =
+        [
+            nameof(ApplicationUser.Email),
+            nameof(ApplicationUser.NormalizedEmail),
+            nameof(ApplicationUser.UserName),
+            nameof(ApplicationUser.NormalizedUserName),
+        ];
+
+        Assert.Equal(Limits.DisplayName, user.FindProperty(nameof(ApplicationUser.DisplayName))!.GetMaxLength());
+        Assert.All(emailColumns, name => Assert.Equal(Limits.Email, user.FindProperty(name)!.GetMaxLength()));
+    }
 }
