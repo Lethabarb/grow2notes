@@ -1854,6 +1854,7 @@ infra/
 ├─ locks.bicep            # run once per environment by the developer as Owner, after its first deploy: CanNotDelete on the database
 ├─ main.bicep             # per environment; the pipeline runs it on every deploy; contains no Microsoft.Authorization resources
 ├─ modules/
+│  ├─ bootstrap-environment.bicep  # bootstrap.bicep's per-group module: identities, role and policy assignments, budget
 │  ├─ network.bicep       # VNet, delegated subnet, service endpoints
 │  ├─ app.bicep           # plan, web app, settings, attaches the user-assigned identity, health check, VNet integration
 │  ├─ sql.bicep           # server (Entra-only admin group), database, VNet rule, PITR and LTR policies
