@@ -6,6 +6,22 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests with axe accessibility checks, run against the published app.
 
+The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
+`src/grow2notes-spa/src`, and run in Vitest with Testing Library.
+
+## Running the SPA checks
+
+Each is a separate step of design.md §10.4 step 2. In `src/grow2notes-spa`, after `npm ci`:
+
+```shell
+npm run typecheck   # tsc over the app, the tests and the config files
+npm run lint        # ESLint; a warning fails it too
+npm test            # Vitest, once
+npm run build       # vite build into src/Grow2Notes.Web/wwwroot
+```
+
+`npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
