@@ -1,6 +1,10 @@
+using Grow2Notes.Web.Platform;
+
 var builder = WebApplication.CreateBuilder(args);
 
 var app = builder.Build();
+
+app.UseCacheHeaders();
 
 // The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
 app.MapStaticAssets();
