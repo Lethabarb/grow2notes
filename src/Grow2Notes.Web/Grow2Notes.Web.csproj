@@ -8,4 +8,8 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Grow2Notes.Tests" />
+  </ItemGroup>
+
 </Project>

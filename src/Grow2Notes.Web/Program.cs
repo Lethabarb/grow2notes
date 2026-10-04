@@ -4,6 +4,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddHealthEndpoints();
 
+// Code asks TimeProvider for the time, never DateTime.Now, so tests can replace the clock (design.md §7.5).
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<MelbourneClock>();
+
 var app = builder.Build();
 
 app.UseCacheHeaders();
