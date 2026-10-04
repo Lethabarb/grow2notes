@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -73,7 +72,10 @@ public sealed class KeysDbContextTests(SqlServerFixture sqlServer, Grow2NotesFac
     public async Task A_payload_protected_by_one_instance_of_the_app_is_unprotected_by_another()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var database = await CreateDatabaseAsync("KeyRingRoundTrip", cancellationToken);
+
+        // A database of the test's own, whose key ring starts empty. In the shared one, any instance of the app that
+        // started earlier in the run has already made a key.
+        var database = await sqlServer.CreateDatabaseAsync("KeyRingRoundTrip", cancellationToken);
         await using var first = OnDatabase(database);
         await using var second = OnDatabase(database);
 
@@ -84,24 +86,6 @@ public sealed class KeysDbContextTests(SqlServerFixture sqlServer, Grow2NotesFac
         using var scope = second.Services.CreateScope();
         Assert.Single(await scope.ServiceProvider.GetRequiredService<KeysDbContext>().DataProtectionKeys
             .ToListAsync(cancellationToken));
-    }
-
-    /// <summary>
-    /// A database of the test's own, with the tables of the app context's model, from which its migrations are
-    /// generated. It is created through the running app, before any instance on it starts, because Data Protection
-    /// reads its keys as the app starts.
-    /// </summary>
-    private async Task<string> CreateDatabaseAsync(string name, CancellationToken cancellationToken)
-    {
-        var database = new SqlConnectionStringBuilder(sqlServer.ConnectionString) { InitialCatalog = name }
-            .ConnectionString;
-
-        using var scope = factory.Services.CreateScope();
-        var app = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        app.Database.SetConnectionString(database);
-        await app.Database.EnsureCreatedAsync(cancellationToken);
-
-        return database;
     }
 
     private WebApplicationFactory<Program> OnDatabase(string connectionString) =>

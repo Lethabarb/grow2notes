@@ -1,14 +1,12 @@
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Data;
 
 [Collection<SqlServerCollection>]
-public sealed class TransactionsAndRetriesTests(SqlServerFixture sqlServer, Grow2NotesFactory factory)
-    : IClassFixture<Grow2NotesFactory>
+public sealed class TransactionsAndRetriesTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
 {
     [Fact]
     public void Both_contexts_use_the_retrying_SQL_Server_execution_strategy()
@@ -26,7 +24,7 @@ public sealed class TransactionsAndRetriesTests(SqlServerFixture sqlServer, Grow
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var scope = factory.Services.CreateScope();
-        var db = await AppContextWithTablesAsync(scope, cancellationToken);
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var organisation = NewOrganisation();
 
         await db.InTransactionAsync(async ct =>
@@ -43,7 +41,7 @@ public sealed class TransactionsAndRetriesTests(SqlServerFixture sqlServer, Grow
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var scope = factory.Services.CreateScope();
-        var db = await AppContextWithTablesAsync(scope, cancellationToken);
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var organisation = NewOrganisation();
         var attempts = 0;
 
@@ -64,7 +62,7 @@ public sealed class TransactionsAndRetriesTests(SqlServerFixture sqlServer, Grow
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var scope = factory.Services.CreateScope();
-        var db = await AppContextWithTablesAsync(scope, cancellationToken);
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         List<int> trackedAtStart = [];
         List<Guid> saved = [];
 
@@ -86,23 +84,6 @@ public sealed class TransactionsAndRetriesTests(SqlServerFixture sqlServer, Grow
         Assert.Equal(2, saved.Count);
         Assert.False(await db.Organisations.AnyAsync(o => o.Id == saved[0], cancellationToken));
         Assert.True(await db.Organisations.AnyAsync(o => o.Id == saved[1], cancellationToken));
-    }
-
-    /// <summary>
-    /// The app context from <paramref name="scope"/>, on a database of this class's own with the tables of the app
-    /// context's model.
-    /// </summary>
-    private async Task<Grow2NotesDbContext> AppContextWithTablesAsync(
-        IServiceScope scope, CancellationToken cancellationToken)
-    {
-        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        db.Database.SetConnectionString(
-            new SqlConnectionStringBuilder(sqlServer.ConnectionString)
-            {
-                InitialCatalog = nameof(TransactionsAndRetriesTests),
-            }.ConnectionString);
-        await db.Database.EnsureCreatedAsync(cancellationToken);
-        return db;
     }
 
     private static Organisation NewOrganisation() =>
