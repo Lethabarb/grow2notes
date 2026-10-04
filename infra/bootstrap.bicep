@@ -56,3 +56,16 @@ module environmentResources 'modules/bootstrap-environment.bicep' = [
     }
   }
 ]
+
+// Client IDs are not secrets, but they belong to the operator's tenant, so the developer reads them from the deployment
+// and they are never written into the repository (D60). This is one output looping over the environments, not one per
+// identity: with each module scoped to resourceGroups[i], Bicep 0.44 compiles a reference to a single instance such as
+// environmentResources[0] into a copyIndex() outside any loop, which Azure rejects.
+@description('Per environment, the client IDs of its deployment identity (AZURE_CLIENT_ID in GitHub) and app identity.')
+output clientIds array = [
+  for (environment, i) in environments: {
+    environment: environment.name
+    deploymentIdentityClientId: environmentResources[i].outputs.deploymentIdentityClientId
+    appIdentityClientId: environmentResources[i].outputs.appIdentityClientId
+  }
+]

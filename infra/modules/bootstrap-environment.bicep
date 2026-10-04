@@ -167,6 +167,4 @@ resource budget 'Microsoft.Consumption/budgets@2024-08-01' = {
 }
 
 output deploymentIdentityClientId string = deploymentIdentity.properties.clientId
-output deploymentIdentityPrincipalId string = deploymentIdentity.properties.principalId
 output appIdentityClientId string = appIdentity.properties.clientId
-output appIdentityPrincipalId string = appIdentity.properties.principalId
