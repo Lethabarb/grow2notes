@@ -146,6 +146,29 @@ public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : I
     }
 
     [Fact]
+    public void Configuration_entities_have_a_RowVersion_that_SQL_Server_sets_and_EF_Core_checks()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        // Named rather than typed, so each one is checked as soon as a later story adds it.
+        string[] configurationEntities = ["Organisation", "Participant", "Goal", "CommonItemGroup", "CommonItem"];
+
+        var entities = db.Model.GetEntityTypes().Where(e => configurationEntities.Contains(e.ClrType.Name)).ToList();
+
+        Assert.NotEmpty(entities);
+        Assert.All(entities, entity =>
+        {
+            var rowVersion = entity.FindProperty("RowVersion");
+            Assert.NotNull(rowVersion);
+            Assert.Equal(typeof(byte[]), rowVersion.ClrType);
+            Assert.Equal("rowversion", rowVersion.GetColumnType());
+            Assert.Equal(ValueGenerated.OnAddOrUpdate, rowVersion.ValueGenerated);
+            Assert.True(rowVersion.IsConcurrencyToken);
+        });
+    }
+
+    [Fact]
     public void Every_foreign_key_is_ON_DELETE_NO_ACTION()
     {
         using var scope = factory.Services.CreateScope();

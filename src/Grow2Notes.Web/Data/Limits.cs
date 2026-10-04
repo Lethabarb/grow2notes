@@ -9,10 +9,10 @@ namespace Grow2Notes.Web.Data;
 /// </summary>
 internal static class Limits
 {
-    /// <summary><c>Organisation.Name</c>, printed on report and export headers (§5.3).</summary>
+    /// <summary><see cref="Organisation.Name"/>, printed on report and export headers (§5.3).</summary>
     public const int OrganisationName = 200;
 
-    /// <summary><c>Organisation.GuidePrompts</c> (A6).</summary>
+    /// <summary><see cref="Organisation.GuidePrompts"/> (A6).</summary>
     public const int GuidePrompts = 1_000;
 
     /// <summary><see cref="ApplicationUser.DisplayName"/> (§5.1).</summary>

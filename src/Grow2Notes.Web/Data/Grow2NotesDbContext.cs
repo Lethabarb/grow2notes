@@ -12,6 +12,8 @@ namespace Grow2Notes.Web.Data;
 internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options)
     : IdentityUserContext<ApplicationUser, Guid>(options)
 {
+    public DbSet<Organisation> Organisations => Set<Organisation>();
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         ModelConventions.Apply(configurationBuilder);
 
@@ -19,8 +21,21 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
     {
         base.OnModelCreating(builder);
 
+        builder.Entity<Organisation>(organisation =>
+        {
+            organisation.Property(o => o.Name).HasMaxLength(Limits.OrganisationName);
+            organisation.Property(o => o.GuidePrompts).HasMaxLength(Limits.GuidePrompts).HasDefaultValue("");
+            organisation.Property(o => o.RowVersion).IsRowVersion();
+        });
+
         builder.Entity<ApplicationUser>(user =>
         {
+            user.HasOne<Organisation>().WithMany().HasForeignKey(u => u.OrganisationId);
+
+            // The principal of every composite user foreign key, so the database keeps the authors, editors and
+            // reviewers of an organisation's rows within that organisation (design.md §5.1, Tenancy).
+            user.HasAlternateKey(u => new { u.OrganisationId, u.Id });
+
             user.Property(u => u.DisplayName).HasMaxLength(Limits.DisplayName);
 
             // Identity already sizes these, at the same length. Taking the size from Limits keeps the request
@@ -29,6 +44,12 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             user.Property(u => u.NormalizedEmail).HasMaxLength(Limits.Email);
             user.Property(u => u.UserName).HasMaxLength(Limits.Email);
             user.Property(u => u.NormalizedUserName).HasMaxLength(Limits.Email);
+
+            // Identity's EmailIndex, made unique: one account per email address across the whole app (A27). Identity's
+            // RequireUniqueEmail option only checks in the app, where two requests at once can both pass, and leaves
+            // the index non-unique. NormalizedEmail is upper-cased, so the index also refuses the same address in
+            // another letter case.
+            user.HasIndex(u => u.NormalizedEmail).IsUnique();
 
             user.HasIndex(u => new { u.OrganisationId, u.Status });
         });
