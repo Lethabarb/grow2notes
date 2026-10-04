@@ -48,6 +48,24 @@ jobs:
         working-directory: src/grow2notes-spa
         run: npm ci
 
+      # Only the dependencies bundled into the browser build are audited; high and critical advisories fail the run
+      # (design.md §9.11).
+      - name: Audit SPA packages
+        working-directory: src/grow2notes-spa
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Type-check the SPA
+        working-directory: src/grow2notes-spa
+        run: npm run typecheck
+
+      - name: Lint the SPA
+        working-directory: src/grow2notes-spa
+        run: npm run lint
+
+      - name: Test the SPA
+        working-directory: src/grow2notes-spa
+        run: npm test
+
       - name: Build the SPA
         working-directory: src/grow2notes-spa
         run: npm run build
