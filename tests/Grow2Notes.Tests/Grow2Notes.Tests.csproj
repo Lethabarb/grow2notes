@@ -7,8 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="xunit.v3.mtp-off" />
   </ItemGroup>
@@ -20,5 +22,13 @@
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
+
+  <!-- The integration tests serve the real SPA build, and MapStaticAssets serves only the files that were in wwwroot
+       when the web project was built, so the Vite build must come first. Failing the build says so once, instead of
+       every SPA test failing with a 404. -->
+  <Target Name="RequireSpaBuild" BeforeTargets="BeforeBuild">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)../../src/Grow2Notes.Web/wwwroot/index.html')"
+           Text="The integration tests serve the SPA build, and src/Grow2Notes.Web/wwwroot has none. Run 'npm ci' and then 'npm run build' in src/grow2notes-spa, and build again." />
+  </Target>
 
 </Project>
