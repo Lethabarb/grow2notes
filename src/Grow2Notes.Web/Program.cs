@@ -10,8 +10,14 @@ builder.Services.AddHealthEndpoints();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
+//
+// Both contexts retry transient failures, such as Azure SQL's brief failovers, with the provider's default limits
+// (design.md §5.9). The key ring needs it as much as the app's data: Data Protection loads the keys at startup and
+// whenever the ring refreshes, and it saves a new key with a plain SaveChanges, which the strategy retries by itself.
 static void UseGrow2NotesDatabase(IServiceProvider services, DbContextOptionsBuilder options) =>
-    options.UseSqlServer(services.GetRequiredService<IConfiguration>().GetConnectionString("Grow2Notes"));
+    options.UseSqlServer(
+        services.GetRequiredService<IConfiguration>().GetConnectionString("Grow2Notes"),
+        sql => sql.EnableRetryOnFailure());
 
 builder.Services.AddDbContext<Grow2NotesDbContext>(UseGrow2NotesDatabase);
 builder.Services.AddDbContext<KeysDbContext>(UseGrow2NotesDatabase);

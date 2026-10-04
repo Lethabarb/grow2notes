@@ -15,6 +15,24 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 {
     public DbSet<Organisation> Organisations => Set<Organisation>();
 
+    /// <summary>
+    /// Runs <paramref name="work"/> in one transaction and commits it (design.md §5.9). The retrying execution strategy
+    /// refuses a transaction begun outside it. Inside it, a transient failure rolls the transaction back and the
+    /// strategy runs the whole of <paramref name="work"/> again in a new one. So <paramref name="work"/> loads what it
+    /// changes: every attempt starts with an empty change tracker, which also discards anything tracked before the
+    /// call. A connection lost after the commit reached the server is retried too, so work that would do harm if it ran
+    /// twice needs a key that finds its first run, as the <c>Idempotency-Key</c> does for a version save.
+    /// </summary>
+    public Task InTransactionAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken = default) =>
+        Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+        {
+            // Entities tracked by a failed attempt describe rows that its rollback removed.
+            ChangeTracker.Clear();
+            await using var transaction = await Database.BeginTransactionAsync(ct);
+            await work(ct);
+            await transaction.CommitAsync(ct);
+        }, cancellationToken);
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         ModelConventions.Apply(configurationBuilder);
 
