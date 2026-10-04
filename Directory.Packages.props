@@ -4,4 +4,10 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The 6.1 line that EF Core 10's SQL Server provider uses; it keeps managed-identity authentication built in
+         (design.md §7.5, §9.4). -->
+    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
+  </ItemGroup>
+
 </Project>

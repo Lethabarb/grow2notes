@@ -2,12 +2,16 @@ using Grow2Notes.Web.Platform;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddHealthEndpoints();
+
 var app = builder.Build();
 
 app.UseCacheHeaders();
 
 // The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
 app.MapStaticAssets();
+
+app.MapHealthEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1).
