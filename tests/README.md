@@ -36,6 +36,39 @@ dotnet test Grow2Notes.slnx
 
 If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying so.
 
+## Running the end-to-end tests
+
+CI runs them against the published app, on a SQL Server container that the migrations bundle has migrated (the
+end-to-end steps of `.github/workflows/ci.yml`). To do the same on a machine, build the SPA as above, then from the
+repository root, with Docker running:
+
+```shell
+docker run -d --name grow2notes-e2e-sql -p 1433:1433 -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=Grow2Notes-CI-only-1 \
+  mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
+# Once SQL Server has started, about 15 seconds later:
+export ConnectionStrings__Grow2Notes="Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=Grow2Notes-CI-only-1;TrustServerCertificate=True"
+dotnet tool restore
+dotnet ef database update --project src/Grow2Notes.Web --context Grow2NotesDbContext \
+  --connection "$ConnectionStrings__Grow2Notes"
+dotnet publish src/Grow2Notes.Web --configuration Release --output artifacts/app
+cd artifacts/app
+ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 dotnet Grow2Notes.Web.dll
+```
+
+Then, in a second terminal:
+
+```shell
+cd tests/e2e
+npm ci
+npx playwright install chromium
+npm run typecheck
+npm test
+```
+
+The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. After a failure,
+`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
+`docker rm -f grow2notes-e2e-sql` when done.
+
 ## Writing integration tests
 
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
