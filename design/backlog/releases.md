@@ -335,7 +335,7 @@ sprint; a rise shows new scope, not slow work.
 | Sprint | Ends | Points done | Stories done | Total points done | Scope (points) |
 |---|---|---|---|---|---|
 | Start | 12 Oct 2026 | | | 0 | 384 |
-| 01 | 25 Oct 2026 | | | | |
+| 01 | 25 Oct 2026 | 13 | 3 | 13 | 384 |
 | 02 | 8 Nov 2026 | | | | |
 | 03 | 22 Nov 2026 | | | | |
 | 04 | 6 Dec 2026 | | | | |
