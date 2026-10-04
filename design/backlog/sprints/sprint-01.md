@@ -5,8 +5,8 @@ start: 2026-10-12
 end: 2026-10-25
 capacity_hours: 29
 planned_points: 13
-done_points:
-done_stories:
+done_points: 13
+done_stories: 3
 ---
 # Sprint 01
 
@@ -86,9 +86,17 @@ These follow from this being the first sprint. They are recorded in the stories'
 
 ## Result
 
-Done: __ points, __ stories. Not done (back to the backlog): …
+Done: 13 points, 3 stories (S00.01.01 PR #2, S00.03.01 PR #3, S00.01.02 PR #4). Not done: none.
 
-Unplanned work: what it was, and roughly how many hours, so the next sprint's capacity allows for it.
+- All three were finished and merged on 4 October 2026, before the planned start, in one session with Claude Code
+  running one build-and-review workflow per task. Hours are not recorded (README §7). The first CI run on `main`
+  (run 37184855408) was green, which completes S00.01.01 and S00.03.01 as planned.
+- Carried to later stories, as planned: the Azure SQL migration run and the built-Bicep artifact (S00.02.03's first
+  deploy), and the request-validation half of the Limits criterion (the first story with a validated request).
+- Repository settings applied with the owner's approval: ruleset `Protect main` (no bypass) and required SHA-pinned
+  actions.
+
+Unplanned work: the Data Protection key ring retry and readiness checks needed no extra time; none to allow for.
 
 ## Review
 
@@ -97,4 +105,7 @@ instead (README §10). Date sent: …
 
 ## Retro
 
-Keep: … Change: …
+Keep: one workflow per task (build, then an independent review that runs the checks), one PR per story, carrying
+loose ends into the Notes of the story that owns them.
+Change: 13 points took one session rather than two weeks, so the hour-based forecast in releases.md is far too slow
+for this way of working; re-forecast from measured throughput after Sprint 02 rather than from hours.
