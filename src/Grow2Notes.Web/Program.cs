@@ -32,7 +32,14 @@ builder.Services.AddDataProtection()
 
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
-builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+// Throwaway: MaxLengthForKeys resizes the AspNetUserLogins and AspNetUserTokens key columns from 128 to 64, a model
+// change with no migration. The test fixture builds its model from the schema version alone, so only the
+// pending-model-changes check sees it.
+builder.Services.AddIdentityCore<ApplicationUser>(o =>
+    {
+        o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+        o.Stores.MaxLengthForKeys = 64;
+    })
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
 
 // Code asks TimeProvider for the time, never DateTime.Now, so tests can replace the clock (design.md §7.5).
