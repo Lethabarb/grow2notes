@@ -6,6 +6,9 @@ obj/
 node_modules/
 src/Grow2Notes.Web/wwwroot/
 
+# CI's package output: app.zip, efbundle, migrate.sql and the built Bicep (design.md §10.4 step 3)
+artifacts/
+
 # IDE and per-user files
 .vs/
 .idea/

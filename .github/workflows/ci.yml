@@ -1,4 +1,4 @@
-# Builds and tests every pull request and every push to main (design.md §10.4, ci.yml).
+# Builds, tests and packages every pull request and every push to main (design.md §10.4, ci.yml).
 name: CI
 
 on:
@@ -94,3 +94,51 @@ jobs:
           --context Grow2NotesDbContext
           --configuration Release
           --no-build
+
+      # Package (design.md §10.4 step 3). What production deploys is made once, here, into artifacts/.
+      # The tested Release build is published as it is, with the SPA build in its wwwroot. App Service's zip deploy
+      # takes the contents of the publish folder at the root of the zip.
+      - name: Package the app as app.zip
+        run: |
+          dotnet publish src/Grow2Notes.Web --configuration Release --no-build --output "$RUNNER_TEMP/app"
+          mkdir -p artifacts
+          cd "$RUNNER_TEMP/app"
+          zip -q -r "$GITHUB_WORKSPACE/artifacts/app.zip" .
+
+      # For review only; the deploy applies the bundle (design.md §10.6).
+      - name: Script the migrations as migrate.sql
+        run: >-
+          dotnet ef migrations script
+          --idempotent
+          --project src/Grow2Notes.Web
+          --context Grow2NotesDbContext
+          --configuration Release
+          --no-build
+          --output artifacts/migrate.sql
+
+      # The bundle always builds its own linux-x64 copy of the project, so --no-build only skips building the
+      # portable one again.
+      - name: Bundle the migrations as efbundle
+        run: >-
+          dotnet ef migrations bundle
+          --self-contained
+          --target-runtime linux-x64
+          --project src/Grow2Notes.Web
+          --context Grow2NotesDbContext
+          --configuration Release
+          --no-build
+          --output artifacts/efbundle
+
+      # Each top-level file in infra/ is built to ARM JSON, with the modules it uses built into it.
+      - name: Build the Bicep
+        run: |
+          shopt -s nullglob
+          files=(infra/*.bicep)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "infra/ has no Bicep files, so there is nothing to build."
+            exit 0
+          fi
+          mkdir -p artifacts/infra
+          for file in "${files[@]}"; do
+            az bicep build --file "$file" --outdir artifacts/infra
+          done
