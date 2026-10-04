@@ -20,8 +20,10 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public string ConnectionString => container.GetConnectionString();
 
     /// <summary>
-    /// Stops SQL Server, leaving the container for disposal to remove. It is not restarted: Docker can map a different
-    /// host port on a restart, which would leave the app holding a connection string that no longer works.
+    /// Stops SQL Server, leaving the container for disposal to remove. Start the app first: a stopped container has no
+    /// mapped port, so <see cref="ConnectionString"/> throws. Calling it again does nothing. It is not restarted:
+    /// Docker can map a different host port on a restart, which would leave the app holding a connection string that
+    /// no longer works.
     /// </summary>
     public Task StopAsync() => container.StopAsync(TestContext.Current.CancellationToken);
 

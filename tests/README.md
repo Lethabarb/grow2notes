@@ -25,7 +25,9 @@ If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops wit
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
   in that collection shares one SQL Server container for the run, and xUnit runs their tests one at a time.
 - A test that stops its database (`SqlServerFixture.StopAsync`) declares a collection of its own with
-  `ICollectionFixture<SqlServerFixture>`, so it gets its own container and cannot break the shared one.
+  `ICollectionFixture<SqlServerFixture>`, so it gets its own container and cannot break the shared one. It starts the
+  app (`factory.CreateClient()`) before stopping the database, because a stopped container has no port to build the
+  connection string from. `Grow2Notes.Tests/Platform/HealthEndpointsWithDatabaseStoppedTests.cs` is the example.
 - The factory runs the app in the `Testing` environment, so `appsettings.Development.json` is not loaded, and its
   connection string overrides any on the machine.
 - A run filtered to unit tests starts no container.
