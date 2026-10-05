@@ -78,6 +78,7 @@ Running record of product decisions made during design discovery. Newest at the 
 | D63 | 2026-10-04 | Budget per group | One budget inside each Grow2Notes resource group: AUD 30 a month for test and AUD 70 a month for prod (AUD 100 in total), each alerting the developer. Amends D61's single AUD 100 budget. |
 | D64 | 2026-10-04 | SQL admin group | A new Entra security group, "Grow2Notes SQL admins", with the developer as its only member, is the Entra-only admin of the SQL server in both environments (design.md §9.4). |
 | D65 | 2026-10-04 | Azure IDs in GitHub | The deployment identity's client ID and the tenant and subscription IDs are GitHub environment **secrets** (masked in the public Actions logs), not variables. They are still not credentials: sign-in uses OIDC. Amends D60. |
+| D66 | 2026-10-05 | Free-offer region | The test database uses the Azure SQL free offer in Australia Southeast. The owner accepts that the subscription's first free-offer database fixes Australia Southeast as the region for every later free-offer database in the shared subscription (D60). |
 
 ## Research highlights that constrain the design
 
