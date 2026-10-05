@@ -119,3 +119,6 @@ output serverFullyQualifiedDomainName string = server.properties.fullyQualifiedD
 
 @description('The database\'s name.')
 output databaseName string = database.name
+
+@description('The database\'s resource ID, which monitoring.bicep\'s alert watches.')
+output databaseId string = database.id

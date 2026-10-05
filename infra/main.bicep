@@ -9,13 +9,17 @@ param environmentName 'test' | 'prod'
 @description('The path App Service probes: /healthz in test, /healthz/ready in prod (design.md §10.3, §10.8).')
 param healthCheckPath '/healthz' | '/healthz/ready'
 
-// Every deploy passes both, and they are never committed, because the object ID belongs to the operator's tenant (D60,
-// D64, D65). The parameters files leave them empty; sql.bicep refuses them empty.
+// Every deploy passes these three, and they are never committed, because the object ID belongs to the operator's tenant
+// and the address may contain the company's name (D42, D60, D64, D65). The parameters files leave them empty;
+// sql.bicep and monitoring.bicep refuse them empty.
 @description('The display name of the Entra group that is the SQL server\'s admin, "Grow2Notes SQL admins" (D64).')
 param sqlAdminGroupName string
 
 @description('The object ID of that Entra group.')
 param sqlAdminGroupObjectId string
+
+@description('The developer\'s email address, which the operations alerts are sent to (design.md §10.1).')
+param alertEmail string
 
 @description('The database SKU, written the way Azure returns it: name, tier, family and capacity.')
 param databaseSku resourceInput<'Microsoft.Sql/servers/databases@2025-01-01'>.sku
@@ -57,6 +61,16 @@ module sql 'modules/sql.bicep' = {
     useFreeOffer: useFreeOffer
     backupStorageRedundancy: backupStorageRedundancy
     pointInTimeRestoreDays: pointInTimeRestoreDays
+  }
+}
+
+module monitoring 'modules/monitoring.bicep' = {
+  name: 'monitoring'
+  params: {
+    environmentName: environmentName
+    alertEmail: alertEmail
+    databaseId: sql.outputs.databaseId
+    useFreeOffer: useFreeOffer
   }
 }
 
