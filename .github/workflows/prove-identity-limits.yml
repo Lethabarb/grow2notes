@@ -1,0 +1,161 @@
+# Throwaway, never merged: proves the test deployment identity's limits for S00.02.01 ("Prove the identity limits").
+# Its branch is deleted once the runs are recorded in the story's Notes.
+name: Prove the deployment identity limits
+
+on:
+  pull_request:
+
+# An explicit bash runs each step with -eo pipefail, so a failure inside a pipe also fails the step.
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  without-environment:
+    name: Without an environment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      # The IDs are test environment secrets (D65), and the repository has no secrets of the same names.
+      - name: The test environment's secrets are withheld
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          if [ -n "$AZURE_CLIENT_ID$AZURE_TENANT_ID$AZURE_SUBSCRIPTION_ID" ]; then
+            echo "::error::A job outside the test environment can read the environment's Azure IDs."
+            exit 1
+          fi
+          echo "AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID are all empty outside the test environment."
+
+      # The token azure/login would present from this job, requested the same way. The claims Entra matches a federated
+      # credential against are printed; the subject must not name an environment.
+      - name: Get this job's GitHub OIDC token for Azure
+        run: |
+          token=$(curl --fail --silent --show-error --get \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            --data-urlencode 'audience=api://AzureADTokenExchange' \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq --raw-output .value)
+          echo "::add-mask::$token"
+          payload=$(cut --delimiter=. --fields=2 <<<"$token" | tr '_-' '/+')
+          while (( ${#payload} % 4 )); do payload+='='; done
+          claims=$(base64 --decode <<<"$payload")
+          jq '{iss, aud, sub}' <<<"$claims"
+          if [[ "$(jq --raw-output .sub <<<"$claims")" == *:environment:* ]]; then
+            echo "::error::The token's subject names an environment."
+            exit 1
+          fi
+          printf '%s' "$token" > "$RUNNER_TEMP/outside-token.jwt"
+
+      # The cache hands the token to the test environment job without showing it: GitHub drops a masked job output, an
+      # unmasked one is printed wherever the next job uses it, and anyone signed in can download a public repository's
+      # artifacts. The key names the attempt, so re-running all jobs saves a fresh token.
+      - name: Hand the token to the test environment job
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/outside-token.jwt
+          key: outside-token-${{ github.run_id }}-${{ github.run_attempt }}
+
+  with-test-environment:
+    name: With the test environment
+    needs: without-environment
+    # Every check reports even when another one fails.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: test
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      RESOURCE_GROUP: rg-grow2notes-test-ause
+    steps:
+      - name: Take the token from the job without an environment
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/outside-token.jwt
+          key: outside-token-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      # First, because the token expires minutes after it is issued. The same sign-in azure/login makes, with this
+      # job's IDs and the other job's token, in an Azure CLI profile of its own so it cannot touch the sign-in below.
+      # Entra must refuse it because no federated credential matches its subject (AADSTS700213, formerly AADSTS70021);
+      # any other failure, an expired token's AADSTS700024 included, proves nothing and fails the step.
+      - name: Entra refuses the token of the job without an environment
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CONFIG_DIR: ${{ runner.temp }}/outside-azure-profile
+        run: |
+          token=$(cat "$RUNNER_TEMP/outside-token.jwt")
+          echo "::add-mask::$token"
+          if az login --service-principal --username "$AZURE_CLIENT_ID" --tenant "$AZURE_TENANT_ID" \
+            --federated-token "$token" --output none 2>"$RUNNER_TEMP/outside-login-error.txt"; then
+            echo "::error::Entra accepted a token issued to a job outside the test environment."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/outside-login-error.txt"
+          if ! grep --quiet --extended-regexp 'AADSTS(70021|700213):' "$RUNNER_TEMP/outside-login-error.txt"; then
+            echo "::error::The sign-in failed, but not because the token's subject matches no federated credential."
+            exit 1
+          fi
+
+      - name: Sign in to Azure with OIDC
+        id: login
+        if: ${{ !cancelled() }}
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Contributor on the group lets the identity read it.
+      - name: The identity can read its resource group
+        if: ${{ !cancelled() && steps.login.outcome == 'success' }}
+        run: |
+          az group show --name "$RESOURCE_GROUP" --query '{name: name, location: location}' --output table
+
+      # Contributor excludes Microsoft.Authorization/*/Write, so Azure Resource Manager must refuse with
+      # AuthorizationFailed. The attempt gives the identity Reader on its own group, named by object ID so the CLI makes
+      # no Microsoft Graph lookup; an assignment that is made anyway is deleted and the step fails. The object ID is
+      # masked like the IDs in D65.
+      - name: The identity cannot create a role assignment
+        if: ${{ !cancelled() && steps.login.outcome == 'success' }}
+        run: |
+          principal_id=$(az identity show --name id-grow2notes-test-deploy --resource-group "$RESOURCE_GROUP" \
+            --query principalId --output tsv)
+          echo "::add-mask::$principal_id"
+          group_id=$(az group show --name "$RESOURCE_GROUP" --query id --output tsv)
+          if assignment_id=$(az role assignment create --assignee-object-id "$principal_id" \
+            --assignee-principal-type ServicePrincipal --role Reader --scope "$group_id" \
+            --query id --output tsv 2>"$RUNNER_TEMP/role-assignment-error.txt"); then
+            az role assignment delete --ids "$assignment_id"
+            echo "::error::The deployment identity created a role assignment, now deleted."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/role-assignment-error.txt"
+          if ! grep --quiet AuthorizationFailed "$RUNNER_TEMP/role-assignment-error.txt"; then
+            echo "::error::Creating the role assignment failed, but not with AuthorizationFailed."
+            exit 1
+          fi
+
+      # A lock is a Microsoft.Authorization resource too (design.md §10.5). A lock that is made anyway is deleted and
+      # the step fails.
+      - name: The identity cannot create a lock
+        if: ${{ !cancelled() && steps.login.outcome == 'success' }}
+        run: |
+          if lock_id=$(az lock create --lock-type CanNotDelete --resource-group "$RESOURCE_GROUP" --name prove-limits \
+            --query id --output tsv 2>"$RUNNER_TEMP/lock-error.txt"); then
+            az lock delete --ids "$lock_id"
+            echo "::error::The deployment identity created a lock, now deleted."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/lock-error.txt"
+          if ! grep --quiet AuthorizationFailed "$RUNNER_TEMP/lock-error.txt"; then
+            echo "::error::Creating the lock failed, but not with AuthorizationFailed."
+            exit 1
+          fi
