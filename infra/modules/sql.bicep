@@ -16,11 +16,16 @@ param tags object = resourceGroup().tags
 param subnetId string
 
 // Both are passed in by every deploy and never committed, because the object ID belongs to the operator's tenant
-// (D60, D64, D65).
+// (D60, D64, D65). The parameters files hold empty placeholders, so a deploy that forgets them fails on these lengths
+// before the server is touched. They are checked here rather than in main.bicep, because there Bicep would refuse to
+// build the parameters files' placeholders.
 @description('The display name of the Entra group that is the server\'s admin, "Grow2Notes SQL admins" (D64).')
+@minLength(1)
 param sqlAdminGroupName string
 
-@description('The object ID of that Entra group.')
+@description('The object ID of that Entra group, a GUID.')
+@minLength(36)
+@maxLength(36)
 param sqlAdminGroupObjectId string
 
 // Written the way Azure returns it (name GP_S_Gen5 with capacity 2, not GP_S_Gen5_2), so what-if shows no change.
