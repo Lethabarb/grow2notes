@@ -5,6 +5,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.4" />
+    <!-- Microsoft.Data.SqlClient asks for Azure.Identity 1.17.1, which defines its own credential types. From 1.21.0
+         the package only forwards them to Azure.Core, which the Key Vault package brings in at 1.61, so a lower
+         Azure.Identity would put a second copy of every credential type in the app. -->
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <!-- The 6.1 line that EF Core 10's SQL Server provider uses; it keeps managed-identity authentication built in
