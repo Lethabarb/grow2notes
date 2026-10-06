@@ -104,4 +104,26 @@ jobs:
           az deployment group what-if "${deployment[@]}"
           az deployment group create "${deployment[@]}" --output none
 
-      # design.md §10.4 steps 3 to 8 follow, added by S00.02.03's later tasks.
+      # design.md §10.4 step 3: the time design.md §10.6 restores the database to if the migration damages data. The job
+      # summary puts it on the run's page, where it is found without searching the log.
+      - name: Record the restore point
+        env:
+          CI_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          restore_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "Restore point before the migration: $restore_time"
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ### Restore point before the migration
+
+          **$restore_time**, before the migration of commit $CI_COMMIT.
+
+          If this run's migration damages data, this is the point-in-time restore target for sqldb-grow2notes
+          (7 days of restore points) on sql-grow2notes-test. The restore makes a new database:
+
+          ~~~bash
+          az sql db restore --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \\
+            --name sqldb-grow2notes --dest-name sqldb-grow2notes-restored --time $restore_time
+          ~~~
+          EOF
+
+      # design.md §10.4 steps 4 to 8 follow, added by S00.02.03's later tasks.
