@@ -64,4 +64,44 @@ jobs:
           echo "The artifacts of CI run $CI_RUN_ID, built from commit $CI_COMMIT:"
           ls -lR artifacts
 
-      # design.md §10.4 steps 1 to 8 follow, added by S00.02.03's later tasks.
+      # design.md §10.4 step 1. Given a client ID and no client secret, azure/login signs in with this job's OIDC token.
+      # The IDs are environment secrets so that the public log masks them wherever they appear, inside the resource IDs
+      # az prints too (D65).
+      - name: Sign in to Azure
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # design.md §10.4 step 2. The secrets replace test.parameters.json's empty placeholders (S00.02.02). They reach
+      # the script through env, not as expressions in it, which GitHub would paste into the script's text before bash
+      # reads it. what-if and create get the same arguments, so the preview is of what is then deployed. create prints
+      # only errors: its result would list every resource ID, parameter value and output.
+      # Every deploy reuses the name of the first one, made by hand (S00.02.02). Azure refuses a deployment while one
+      # with the same name is still running, as it can be after its job is cancelled or times out, so two never overlap.
+      # main.bicep puts the app identity's client ID in the app's settings, where what-if may print it, so the log masks
+      # it and the principal ID as it does the secrets.
+      - name: Deploy main.bicep
+        env:
+          SQL_ADMIN_GROUP_NAME: ${{ secrets.SQL_ADMIN_GROUP_NAME }}
+          SQL_ADMIN_GROUP_OBJECT_ID: ${{ secrets.SQL_ADMIN_GROUP_OBJECT_ID }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          for id in $(az identity show --resource-group rg-grow2notes-test-ause --name id-grow2notes-test-app \
+                        --query '[clientId, principalId]' --output tsv --only-show-errors); do
+            echo "::add-mask::$id"
+          done
+          deployment=(
+            --resource-group rg-grow2notes-test-ause
+            --name grow2notes-test-main
+            --template-file artifacts/infra/main.json
+            --parameters @artifacts/infra/test.parameters.json
+            --parameters sqlAdminGroupName="$SQL_ADMIN_GROUP_NAME" sqlAdminGroupObjectId="$SQL_ADMIN_GROUP_OBJECT_ID"
+              alertEmail="$ALERT_EMAIL"
+            --only-show-errors
+          )
+          az deployment group what-if "${deployment[@]}"
+          az deployment group create "${deployment[@]}" --output none
+
+      # design.md §10.4 steps 3 to 8 follow, added by S00.02.03's later tasks.

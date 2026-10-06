@@ -13,8 +13,9 @@ Bicep for the Azure resources (design.md §10.1, §10.5).
 
 `bootstrap.bicep` creates both environments' resource groups and what goes in them before any deploy: the identities,
 the role and policy assignments and the budgets. Run it from the root of a clone of this repository, in Bash (Git Bash
-on Windows). The subscription and tenant IDs, the client IDs and the budget email address stay in the shell, in Azure
-and in GitHub's environment secrets, and are never written into the repository (D42, D60, D65).
+on Windows). The subscription and tenant IDs, the client IDs, the SQL admin group's object ID and the email addresses
+stay in the shell, in Azure and in GitHub's environment secrets, and are never written into the repository (D42, D60,
+D65).
 
 You need:
 - the Azure CLI, signed in (`az login`) with an account that is Owner of the subscription, and its Bicep
@@ -73,8 +74,17 @@ You need:
    Each environment's deployment identity client ID is that GitHub environment's `AZURE_CLIENT_ID`. Nothing needs the
    app identities' client IDs copied: `main.bicep` finds each app identity by its name (S00.02.02).
 
-6. Create the GitHub `test` environment, and give it the three IDs as secrets. Their names are the ones `deploy.yml`
-   passes to `azure/login`'s `client-id`, `tenant-id` and `subscription-id` (S00.02.03):
+6. Create the GitHub `test` environment, and give it six secrets, which `deploy.yml` reads (D65):
+   - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`: the test deployment identity's client ID and the
+     tenant and subscription IDs, which `deploy.yml` passes to `azure/login`'s `client-id`, `tenant-id` and
+     `subscription-id`;
+   - `SQL_ADMIN_GROUP_NAME` and `SQL_ADMIN_GROUP_OBJECT_ID`: the name and object ID of the Entra security group
+     "Grow2Notes SQL admins", the SQL server's Entra admin in both environments, whose only member is the developer
+     (D64);
+   - `ALERT_EMAIL`: the address the operations alerts are sent to.
+
+   `deploy.yml` passes the last three to `main.bicep` as `sqlAdminGroupName`, `sqlAdminGroupObjectId` and `alertEmail`,
+   in place of the empty placeholders in `test.bicepparam`. `read` asks for the address, as in step 3:
 
    ```shell
    # Only if the environment does not exist yet:
@@ -85,12 +95,25 @@ You need:
    gh secret set AZURE_CLIENT_ID --env test --body "$client_id"
    gh secret set AZURE_TENANT_ID --env test --body "$(az account show --query tenantId --output tsv)"
    gh secret set AZURE_SUBSCRIPTION_ID --env test --body "$(az account show --query id --output tsv)"
+
+   # Only if the group does not exist yet, with you as its only member. Creating a group needs an Entra role or tenant
+   # setting that allows it; being Owner of the subscription is not enough.
+   az ad group create --display-name 'Grow2Notes SQL admins' --mail-nickname grow2notes-sql-admins --output none
+   az ad group member add --group 'Grow2Notes SQL admins' \
+     --member-id "$(az ad signed-in-user show --query id --output tsv)"
+
+   gh secret set SQL_ADMIN_GROUP_NAME --env test --body 'Grow2Notes SQL admins'
+   gh secret set SQL_ADMIN_GROUP_OBJECT_ID --env test \
+     --body "$(az ad group show --group 'Grow2Notes SQL admins' --query id --output tsv)"
+   read -rp 'Alert email address: ' alert_email
+   gh secret set ALERT_EMAIL --env test --body "$alert_email"
+
    gh secret list --env test
    gh secret list
    ```
 
-   The environment should hold exactly those three secrets, and neither it nor the repository should hold a client
-   secret or a publish profile. The `prod` environment gets the same three, with the prod row's client ID, in S00.02.04.
+   The environment should hold exactly those six secrets, and neither it nor the repository should hold a client secret
+   or a publish profile. The `prod` environment gets the same six, with the prod row's client ID, in S00.02.04.
 
 ### Running it again
 
