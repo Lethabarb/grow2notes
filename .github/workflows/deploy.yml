@@ -40,6 +40,10 @@ jobs:
       id-token: write
       # download-artifact reads another run's artifacts through the Actions API.
       actions: read
+    env:
+      # The runner's SQL firewall rule, which steps 4 and 6 add and remove. If the runner is lost in between, no later
+      # step runs and the rule stays; its name says which run and attempt left it, so it can be deleted by hand.
+      FIREWALL_RULE: deploy-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       # Pinned to a full commit SHA with its release in a trailing comment, like every action here (design.md §9.11).
       - name: Download the CI run's artifacts
@@ -126,4 +130,52 @@ jobs:
           ~~~
           EOF
 
-      # design.md §10.4 steps 4 to 8 follow, added by S00.02.03's later tasks.
+      # az keeps the OIDC token it signed in with and presents it again whenever it needs a token for a resource it has
+      # none for yet. GitHub's token expires five minutes after it is issued, and what-if and create can take longer
+      # than that, so the migration's request for an Azure SQL token would be refused (AADSTS700024). Signing in again
+      # just before the database steps gives az a fresh one. The tokens it gets last an hour, longer than the job.
+      - name: Sign in to Azure again
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # design.md §10.4 step 4. The server accepts only the app's subnet (design.md §10.1), so the runner's public IPv4
+      # address gets a rule of its own for the migration. The address comes from a third party, so an answer that is
+      # not an IPv4 address fails the step before it reaches az or the log.
+      - name: Allow the runner through the SQL firewall
+        id: allow-runner
+        run: |
+          ip=$(curl -fsS --retry 3 --retry-all-errors --max-time 10 https://api.ipify.org)
+          if [[ ! $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "::error::api.ipify.org did not answer with an IPv4 address."
+            exit 1
+          fi
+          echo "Allowing $ip through the firewall of sql-grow2notes-test as $FIREWALL_RULE."
+          az sql server firewall-rule create --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \
+            --name "$FIREWALL_RULE" --start-ip-address "$ip" --end-ip-address "$ip" --output none --only-show-errors
+
+      # design.md §10.4 step 5. Active Directory Default has SqlClient sign in with DefaultAzureCredential, which uses
+      # the Azure CLI's sign-in: the deployment identity, a member of db_owner (infra/sql/grant-identities.sql). The
+      # string holds no secret. The free-offer database pauses when idle and refuses logins with error 40613 for about a
+      # minute while it resumes. Program.cs's retrying execution strategy outlasts that: six retries spread over about a
+      # minute of back-off, and SqlClient retries a refused login once itself, ten seconds later, when its connect
+      # timeout allows.
+      - name: Migrate the database
+        env:
+          ConnectionStrings__Grow2Notes: >-
+            Server=tcp:sql-grow2notes-test.database.windows.net,1433; Database=sqldb-grow2notes;
+            Authentication=Active Directory Default; Encrypt=Strict
+        run: artifacts/efbundle --connection "$ConnectionStrings__Grow2Notes"
+
+      # design.md §10.4 step 6. always() runs it after a failed migration or a cancelled run too, whenever step 4 has
+      # started, even if step 4 then failed. A rule that was never created is no error: Azure answers its delete with
+      # 204 No Content, which az accepts.
+      - name: Remove the runner's firewall rule
+        if: always() && steps.allow-runner.outcome != 'skipped'
+        run: >-
+          az sql server firewall-rule delete --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test
+          --name "$FIREWALL_RULE" --output none --only-show-errors
+
+      # design.md §10.4 steps 7 and 8 follow, added by S00.02.03's next task.
