@@ -33,13 +33,13 @@ resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
     enableSoftDelete: true
     softDeleteRetentionInDays: 90
     enablePurgeProtection: true
-    // The firewall covers the vault's data plane, which the app reaches through the subnet's Microsoft.KeyVault service
-    // endpoint (design.md §7.7). ARM creates the key below through the control plane, which the firewall does not
-    // cover, and no trusted Azure service uses the vault, so nothing bypasses the firewall.
+    // The app reaches the vault through the subnet's Microsoft.KeyVault service endpoint (design.md §7.7); every other
+    // address is refused. ARM creates the key below through Key Vault's management plane, which the firewall does check:
+    // with bypass 'None' the deploy fails with ForbiddenByFirewall (seen 7 Oct 2026), so trusted Azure services bypass.
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Deny'
-      bypass: 'None'
+      bypass: 'AzureServices'
       virtualNetworkRules: [
         {
           id: subnetId
