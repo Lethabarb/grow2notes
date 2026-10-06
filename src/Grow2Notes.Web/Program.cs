@@ -26,9 +26,14 @@ builder.Services.AddDbContext<KeysDbContext>(UseGrow2NotesDatabase);
 // not sign everyone out (design.md §9.3). The application name replaces the default, the content root path, which
 // follows the working directory: setup links that the operator commands print from the SSH console (§7.4) must open in
 // the app.
+//
+// In Azure the Key Vault key also wraps each key. Unlike the connection string, its settings are read here, as the
+// services are registered: they decide which services Data Protection gets, and a missing client ID must stop the app
+// starting. App Service passes them as environment variables, which are loaded before this line runs.
 builder.Services.AddDataProtection()
     .PersistKeysToDbContext<KeysDbContext>()
-    .SetApplicationName("Grow2Notes");
+    .SetApplicationName("Grow2Notes")
+    .ProtectKeysWithKeyVaultWhenConfigured(builder.Configuration);
 
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
