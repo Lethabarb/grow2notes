@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using OpenTelemetry;
 using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 
 namespace Grow2Notes.Tests.Fixtures;
 
@@ -35,3 +36,36 @@ public sealed class LogCollector : BaseProcessor<LogRecord>
 public sealed record ExportedLog(
     string? CategoryName, Exception? Exception, string? FormattedMessage, string? Body,
     IReadOnlyList<KeyValuePair<string, object?>> Attributes);
+
+/// <summary>
+/// Copies every metric point it is given. As the exporter of a reader added to a provider, it sees what any other
+/// reader's exporter would. It copies because OpenTelemetry reuses the points from one collection to the next.
+/// </summary>
+public sealed class MetricCollector : BaseExporter<Metric>
+{
+    private readonly ConcurrentQueue<ExportedMetric> points = new();
+
+    public IReadOnlyCollection<ExportedMetric> Points => points;
+
+    public override ExportResult Export(in Batch<Metric> batch)
+    {
+        foreach (var metric in batch)
+        {
+            foreach (ref readonly var point in metric.GetMetricPoints())
+            {
+                List<KeyValuePair<string, object?>> tags = [];
+                foreach (var tag in point.Tags)
+                {
+                    tags.Add(tag);
+                }
+
+                points.Enqueue(new(metric.Name, tags));
+            }
+        }
+
+        return ExportResult.Success;
+    }
+}
+
+/// <summary>A metric point as an exporter receives it: the metric's name and the point's attributes.</summary>
+public sealed record ExportedMetric(string Name, IReadOnlyList<KeyValuePair<string, object?>> Tags);
