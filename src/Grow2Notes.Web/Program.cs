@@ -12,6 +12,10 @@ builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
 
 builder.Services.AddHealthEndpoints();
 
+// Database failures are logged in one place, with the exception type and SQL error number only, because SQL Server's
+// error text can hold the values that failed (design.md §9.5).
+builder.Services.AddExceptionHandler<DatabaseFailureHandler>();
+
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
 //
@@ -51,6 +55,11 @@ builder.Services.AddSingleton<MelbourneClock>();
 var app = builder.Build();
 
 app.UseCacheHeaders();
+
+// Inside UseCacheHeaders, so its rules keep the final word on error responses. The middleware will not start without
+// a path, a delegate or problem details for the exceptions no handler takes. This delegate adds nothing, so they keep
+// the empty 500 they got before; design.md §6.1's problem+json errors are not built yet.
+app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
 
 // The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
 app.MapStaticAssets();

@@ -47,10 +47,13 @@ public sealed class LoggingTests
         Assert.False(own.IsEnabled(LogLevel.Debug));
         Assert.True(own.IsEnabled(LogLevel.Information));
 
-        // A SQL Server error message can hold the values that failed, such as a truncated value or a duplicate key, and
-        // EF Core logs the message under these two at Error.
+        // A SQL Server error message can hold the values that failed, such as a truncated value or a duplicate key. EF
+        // Core logs the exception, message included, under Update when a save fails and under Query when a query or
+        // ExecuteUpdate fails, and the SQL of a failed command under Database.Command. DatabaseFailureHandler logs
+        // these failures instead.
         Assert.False(loggers.CreateLogger(DbLoggerCategory.Update.Name).IsEnabled(LogLevel.Critical));
         Assert.False(loggers.CreateLogger(DbLoggerCategory.Database.Command.Name).IsEnabled(LogLevel.Critical));
+        Assert.False(loggers.CreateLogger(DbLoggerCategory.Query.Name).IsEnabled(LogLevel.Critical));
 
         // A rule that names the OpenTelemetry provider, by its alias or its type, would give telemetry levels of its
         // own. TelemetryTests checks that the distro adds no rule either.

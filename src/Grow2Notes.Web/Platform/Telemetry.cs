@@ -1,5 +1,7 @@
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Trace;
 
 namespace Grow2Notes.Web.Platform;
 
@@ -43,16 +45,22 @@ internal static class Telemetry
                 "client ID of the app's user-assigned managed identity, which sends the telemetry.");
         }
 
-        services.AddOpenTelemetry().UseAzureMonitor(azureMonitor =>
-        {
-            azureMonitor.ConnectionString = connectionString;
-            azureMonitor.Credential =
-                new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
-            // Live Metrics streams sample requests, dependencies and exceptions, messages included, straight to the
-            // portal, outside the workspace whose access, retention and cap design.md §9.5 sets. The design does not
-            // ask for it.
-            azureMonitor.EnableLiveMetrics = false;
-        });
+        services.AddOpenTelemetry()
+            // SQL Server's error text can hold the values that failed, so these strip it (design.md §9.5). They are
+            // added as the providers are built, so they run before the distro's exporters, which it adds to the built
+            // providers when the host starts.
+            .WithTracing(tracing => tracing.AddProcessor(new DatabaseSpanProcessor()))
+            .WithLogging(logging => logging.AddProcessor(new DatabaseFailureLogProcessor()))
+            .UseAzureMonitor(azureMonitor =>
+            {
+                azureMonitor.ConnectionString = connectionString;
+                azureMonitor.Credential =
+                    new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId));
+                // Live Metrics streams sample requests, dependencies and exceptions, messages included, straight to
+                // the portal, outside the workspace whose access, retention and cap design.md §9.5 sets. The design
+                // does not ask for it.
+                azureMonitor.EnableLiveMetrics = false;
+            });
         return services;
     }
 }

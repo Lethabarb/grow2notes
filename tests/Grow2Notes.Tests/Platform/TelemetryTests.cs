@@ -1,17 +1,23 @@
+using System.Diagnostics;
 using System.Reflection;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Trace;
 
 namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
-/// These tests register the services and read the options without starting a host, so no exporter is built, no token
-/// is requested and nothing is sent.
+/// These tests build the services without starting a host. The distro adds its exporters to the built providers when
+/// the host starts, so no exporter is built, no token is requested and nothing is sent. A test that needs to see what
+/// an exporter would see adds a collector to the built provider in the same way.
 /// </summary>
 public sealed class TelemetryTests
 {
@@ -63,6 +69,49 @@ public sealed class TelemetryTests
         // A rule here could give the OpenTelemetry logger provider levels of its own, apart from appsettings.json's
         // (design.md §9.5). LoggingTests checks that the app's settings name no such rule either.
         Assert.Empty(services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value.Rules);
+    }
+
+    [Fact]
+    public void A_failed_SqlClient_command_reaches_the_exporters_with_its_error_status_and_no_description()
+    {
+        using var services = ServicesWith(
+            ("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString),
+            ("ManagedIdentity:ClientId", ClientId));
+        var exported = new SpanCollector();
+        services.GetRequiredService<TracerProvider>().AddProcessor(exported);
+
+        // Spans from SqlClient anywhere in the process reach the provider; this database name picks out this test's.
+        var database = $"telemetry-test-{Guid.NewGuid():N}";
+        using var connection = new SqlConnection($"Data Source=unused.invalid;Initial Catalog={database}");
+        using var command = new SqlCommand("SELECT 1", connection);
+
+        // SqlClient fails a command on a closed connection itself, so no server is needed. The instrumentation records
+        // it as it records an error from SQL Server, with the exception's message as the description.
+        Assert.Throws<InvalidOperationException>(() => command.ExecuteNonQuery());
+
+        var span = Assert.Single(exported.Spans, s => Equals(s.GetTagItem("db.name"), database));
+        Assert.Equal("mssql", span.GetTagItem("db.system"));
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        Assert.Null(span.StatusDescription);
+    }
+
+    [Fact]
+    public void A_database_failure_logged_with_its_exception_reaches_the_exporters_with_the_type_and_number_only()
+    {
+        using var services = ServicesWith(
+            ("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString),
+            ("ManagedIdentity:ClientId", ClientId));
+        var exported = new LogCollector();
+        services.GetRequiredService<LoggerProvider>().AddProcessor(exported);
+        var failure = TestSqlException.Create(2601, $"The duplicate key value is (canary-{Guid.NewGuid():N}).");
+
+        // As the health check service logs a check that threw.
+        services.GetRequiredService<ILogger<TelemetryTests>>()
+            .LogError(failure, "Health check {HealthCheckName} threw an unhandled exception", "database");
+
+        var log = Assert.Single(exported.Logs, l => l.CategoryName == typeof(TelemetryTests).FullName);
+        Assert.Null(log.Exception);
+        Assert.Contains(new("SqlErrorNumber", 2601), log.Attributes);
     }
 
     [Fact]
