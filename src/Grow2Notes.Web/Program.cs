@@ -6,6 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Server telemetry goes to Application Insights only where it is configured, as in Azure (design.md §9.5). Its
+// settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
+builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
+
 builder.Services.AddHealthEndpoints();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
