@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
-using Azure.Core.Pipeline;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
@@ -33,12 +32,6 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
     // Endpoints that only this test maps. No real endpoint forces a database failure on purpose.
     private const string TruncationPath = "/api/test-only/truncation";
     private const string DuplicateEmailPath = "/api/test-only/duplicate-email";
-
-    // No such resource exists, and nothing is sent to it: the exporters send to an IngestionRecorder.
-    private const string ConnectionString =
-        "InstrumentationKey=00000000-0000-0000-0000-000000000002;IngestionEndpoint=https://ingestion.example.invalid/";
-
-    private const string ClientId = "00000000-0000-0000-0000-000000000001";
 
     private static readonly DateTime TimeUtc = new(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
 
@@ -102,11 +95,7 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
 
     private static void RouteEverythingToSinks(IWebHostBuilder builder, Sinks sinks)
     {
-        // The settings App Service passes. Program.cs reads them as it registers services, too early for configuration
-        // added the way Grow2NotesFactory adds its own; WebApplicationFactory passes host settings to Program.cs as
-        // command-line arguments.
-        builder.UseSetting("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString);
-        builder.UseSetting("ManagedIdentity:ClientId", ClientId);
+        builder.UseTelemetrySentTo(sinks.Ingestion);
 
         // Beside the console and the app's other providers, with no rules of its own, so it receives what they do.
         builder.ConfigureLogging(logging => logging.AddProvider(sinks.Logs));
@@ -123,17 +112,10 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
             services.ConfigureOpenTelemetryMeterProvider(
                 metrics => metrics.AddReader(new BaseExportingMetricReader(sinks.Metrics)));
 
-            // The distro's own exporters still run, and what they would send to Application Insights goes to the
-            // recorder instead. Without a credential, which would ask the machine's managed identity endpoint for a
-            // token, and without offline storage, which would keep unsent telemetry on disk.
+            // Every trace sampled. The default rate limit can drop the test's requests, and the exporter then sends
+            // none of their spans; sampling only ever sends less than this.
             services.PostConfigureAll<AzureMonitorExporterOptions>(options =>
             {
-                options.Transport = new HttpClientTransport(sinks.Ingestion);
-                options.Credential = null;
-                options.DisableOfflineStorage = true;
-
-                // Every trace sampled. The default rate limit can drop the test's requests, and the exporters then
-                // send neither their spans nor their logs; sampling only ever sends less than this.
                 options.TracesPerSecond = null;
                 options.SamplingRatio = 1;
             });

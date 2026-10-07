@@ -51,6 +51,12 @@ internal static class Telemetry
             // providers when the host starts.
             .WithTracing(tracing => tracing.AddProcessor(new DatabaseSpanProcessor()))
             .WithLogging(logging => logging.AddProcessor(new DatabaseFailureLogProcessor()))
+            // The distro also passes the Azure SDK's own events, from Warning up, to ILogger, under categories named
+            // after their event sources, such as Azure.Core. Azure.Core's warnings list response headers: Key Vault's
+            // answer to the first request of each start, a 401, carries the tenant ID in its challenge and the app's
+            // subnet address in its network info. appsettings.json sets every category starting with Azure to Error,
+            // so none of them reaches a log or telemetry. Its rule names Azure, not Azure.Core: a rule starting with
+            // "Azure." would make the distro listen to every event, down to Verbose, and pass them all to ILogger.
             .UseAzureMonitor(azureMonitor =>
             {
                 azureMonitor.ConnectionString = connectionString;
@@ -60,6 +66,12 @@ internal static class Telemetry
                 // the portal, outside the workspace whose access, retention and cap design.md §9.5 sets. The design
                 // does not ask for it.
                 azureMonitor.EnableLiveMetrics = false;
+                // Every log entry is exported, whether or not its trace was sampled. Otherwise the exporter drops the
+                // entries of traces the sampler left out, and the default sampler, a limit of 5 traces a second, leaves
+                // some out even at low traffic, as it does just after a start, so a failed request's one entry,
+                // DatabaseFailureHandler's, could be lost. The logs are few, Warning and up and the app's own
+                // Information, and the workspace's daily cap bounds what they cost.
+                azureMonitor.EnableTraceBasedLogsSampler = false;
             });
         return services;
     }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Azure.Monitor.OpenTelemetry.Exporter;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform;
 using Microsoft.Data.SqlClient;
@@ -57,6 +58,18 @@ public sealed class TelemetryTests
             ("ManagedIdentity:ClientId", ClientId));
 
         Assert.False(azureMonitor.EnableLiveMetrics);
+    }
+
+    [Fact]
+    public void Trace_based_log_sampling_is_off()
+    {
+        using var services = ServicesWith(
+            ("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString),
+            ("ManagedIdentity:ClientId", ClientId));
+
+        // The exporter picks its log processor from its own options, which the distro copies from AzureMonitorOptions.
+        var exporter = services.GetRequiredService<IOptions<AzureMonitorExporterOptions>>().Value;
+        Assert.False(exporter.EnableTraceBasedLogsSampler);
     }
 
     [Fact]
