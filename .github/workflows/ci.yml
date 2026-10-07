@@ -156,7 +156,10 @@ jobs:
           --no-build
           --output artifacts/efbundle
 
-      # Each top-level file in infra/ is built to ARM JSON, with the modules it uses built into it.
+      # Each top-level .bicep file in infra/ is built to ARM JSON, with the modules it uses built into it, and each
+      # environment's .bicepparam to <environment>.parameters.json, which holds only the parameter values. A deploy
+      # then needs nothing outside this run's artifact: main.json with its environment's parameters file. --outfile
+      # rather than --outdir, which would name test.bicepparam's output test.json, like a template.
       - name: Build the Bicep
         run: |
           shopt -s nullglob
@@ -168,6 +171,10 @@ jobs:
           mkdir -p artifacts/infra
           for file in "${files[@]}"; do
             az bicep build --file "$file" --outdir artifacts/infra
+          done
+          for file in infra/*.bicepparam; do
+            environment=$(basename "$file" .bicepparam)
+            az bicep build-params --file "$file" --outfile "artifacts/infra/$environment.parameters.json"
           done
 
       # End-to-end (design.md §10.4 step 4). The packaged app runs against the sqlserver service, migrated by the
