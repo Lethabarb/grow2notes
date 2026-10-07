@@ -106,11 +106,14 @@ module app 'modules/app.bicep' = {
     // The app reads these as ConnectionStrings:Grow2Notes, ManagedIdentity:ClientId and DataProtection:KeyVaultKeyUri.
     // The client ID picks the user-assigned identity for ManagedIdentityCredential, which signs in to Key Vault and
     // later to telemetry and email (design.md §9.4). The key URI has no version: Data Protection wraps each new key
-    // with the key's current version (design.md §9.3).
+    // with the key's current version (design.md §9.3). APPLICATIONINSIGHTS_CONNECTION_STRING is the name the Azure
+    // Monitor OpenTelemetry distro reads; the string only says where to send, and the identity's token is what lets
+    // the app send (design.md §9.5).
     appSettings: {
       ConnectionStrings__Grow2Notes: connectionString
       ManagedIdentity__ClientId: appIdentity.properties.clientId
       DataProtection__KeyVaultKeyUri: keyVault.outputs.keyUri
+      APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.applicationInsightsConnectionString
     }
   }
 }

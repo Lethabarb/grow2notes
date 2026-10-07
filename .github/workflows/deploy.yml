@@ -85,7 +85,10 @@ jobs:
       # Every deploy reuses the name of the first one, made by hand (S00.02.02). Azure refuses a deployment while one
       # with the same name is still running, as it can be after its job is cancelled or times out, so two never overlap.
       # main.bicep puts the app identity's client ID in the app's settings, where what-if may print it, so the log masks
-      # it and the principal ID as it does the secrets.
+      # it and the principal ID as it does the secrets. It masks the Application Insights connection string, also in the
+      # app's settings, and the instrumentation key and application ID in it, the same way. Until a deploy has created
+      # Application Insights, az reports it not found and nothing is masked: the string does not exist before that
+      # deploy's create, which prints nothing.
       - name: Deploy main.bicep
         env:
           SQL_ADMIN_GROUP_NAME: ${{ secrets.SQL_ADMIN_GROUP_NAME }}
@@ -95,6 +98,12 @@ jobs:
           for id in $(az identity show --resource-group rg-grow2notes-test-ause --name id-grow2notes-test-app \
                         --query '[clientId, principalId]' --output tsv --only-show-errors); do
             echo "::add-mask::$id"
+          done
+          for value in $(az resource show --resource-group rg-grow2notes-test-ause --name appi-grow2notes-test \
+                           --resource-type Microsoft.Insights/components \
+                           --query '[properties.ConnectionString, properties.InstrumentationKey, properties.AppId]' \
+                           --output tsv --only-show-errors); do
+            echo "::add-mask::$value"
           done
           deployment=(
             --resource-group rg-grow2notes-test-ause
