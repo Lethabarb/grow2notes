@@ -8,6 +8,8 @@ Bicep for the Azure resources (design.md §10.1, §10.5).
 - `main.bicep` and the other modules in `modules/`: one environment; the pipeline runs it on every deploy.
 - `test.bicepparam` and `prod.bicepparam`: the parameters for each environment.
 - `sql/grant-identities.sql`: run once as the Entra admin to add the app and deployment identities to the database.
+- `sql/check-database.sql`: run as the Entra admin to check, read-only, the identities' database rights and the
+  wrapped key ring after a deploy.
 
 ## Bootstrap (run once, as Owner)
 
