@@ -66,6 +66,9 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.InternalServerError, r.StatusCode));
         Assert.All(bodies, Assert.Empty);
 
+        // What Application Insights would receive reached this test's recorder, so the check below looks at something.
+        Assert.NotEmpty(sinks.Ingestion.Payloads);
+
         // Ignoring case, because the email index holds the address upper-cased.
         Assert.Empty(sinks.Texts()
             .Concat(responses.SelectMany(ResponseHeaders))

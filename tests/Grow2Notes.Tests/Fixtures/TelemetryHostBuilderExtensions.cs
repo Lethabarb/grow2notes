@@ -7,10 +7,6 @@ namespace Grow2Notes.Tests.Fixtures;
 
 public static class TelemetryHostBuilderExtensions
 {
-    // No such resource exists, and nothing is sent to it.
-    private const string ConnectionString =
-        "InstrumentationKey=00000000-0000-0000-0000-000000000002;IngestionEndpoint=https://ingestion.example.invalid/";
-
     private const string ClientId = "00000000-0000-0000-0000-000000000001";
 
     /// <summary>
@@ -21,8 +17,11 @@ public static class TelemetryHostBuilderExtensions
     {
         // The settings App Service passes. Program.cs reads them as it registers services, too early for configuration
         // added the way Grow2NotesFactory adds its own; WebApplicationFactory passes host settings to Program.cs as
-        // command-line arguments.
-        builder.UseSetting("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString);
+        // command-line arguments. No such resource exists, and nothing is sent to it. The exporter keeps one transmitter
+        // per connection string for the life of the process, built with the first app's transport, so each app has a
+        // key of its own; otherwise its telemetry would go to an earlier test's recorder.
+        builder.UseSetting("APPLICATIONINSIGHTS_CONNECTION_STRING",
+            $"InstrumentationKey={Guid.NewGuid()};IngestionEndpoint=https://ingestion.example.invalid/");
         builder.UseSetting("ManagedIdentity:ClientId", ClientId);
 
         // The distro's own exporters still run. Without a credential, which would ask the machine's managed identity
