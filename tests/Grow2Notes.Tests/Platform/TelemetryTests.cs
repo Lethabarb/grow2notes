@@ -4,6 +4,7 @@ using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Grow2Notes.Web.Platform;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Grow2Notes.Tests.Platform;
@@ -53,6 +54,18 @@ public sealed class TelemetryTests
     }
 
     [Fact]
+    public void Telemetry_adds_no_logging_rules_so_its_logger_follows_the_app_s_levels()
+    {
+        using var services = ServicesWith(
+            ("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString),
+            ("ManagedIdentity:ClientId", ClientId));
+
+        // A rule here could give the OpenTelemetry logger provider levels of its own, apart from appsettings.json's
+        // (design.md §9.5). LoggingTests checks that the app's settings name no such rule either.
+        Assert.Empty(services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value.Rules);
+    }
+
+    [Fact]
     public void A_connection_string_without_a_client_ID_stops_the_app_starting()
     {
         var configuration = Configuration(("APPLICATIONINSIGHTS_CONNECTION_STRING", ConnectionString));
@@ -68,13 +81,18 @@ public sealed class TelemetryTests
             .Build();
 
     // The distro also reads configuration from the services, as it would from the host's.
-    private static AzureMonitorOptions AzureMonitorWith(params (string Key, string Value)[] settings)
+    private static ServiceProvider ServicesWith(params (string Key, string Value)[] settings)
     {
         var configuration = Configuration(settings);
-        using var services = new ServiceCollection()
+        return new ServiceCollection()
             .AddSingleton(configuration)
             .AddTelemetryWhenConfigured(configuration)
             .BuildServiceProvider();
+    }
+
+    private static AzureMonitorOptions AzureMonitorWith(params (string Key, string Value)[] settings)
+    {
+        using var services = ServicesWith(settings);
         return services.GetRequiredService<IOptions<AzureMonitorOptions>>().Value;
     }
 
