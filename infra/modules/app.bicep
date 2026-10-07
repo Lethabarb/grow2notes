@@ -58,6 +58,8 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
     // HTTP is redirected to HTTPS. The address is the default *.azurewebsites.net one, which App Service's own
     // certificate covers, so there is no custom domain or certificate here (D62).
     httpsOnly: true
+    // design.md names only the session cookie, and one instance needs no affinity, so no ARRAffinity cookies.
+    clientAffinityEnabled: false
     virtualNetworkSubnetId: subnetId
     // Only the traffic to SQL and Key Vault, through the subnet's service endpoints, goes into the VNet (design.md
     // §7.7); Entra ID, email and telemetry go out directly from App Service, so the subnet needs no NAT gateway.

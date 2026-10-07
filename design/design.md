@@ -1681,7 +1681,7 @@ There are no long-lived secrets:
 - **App → Azure SQL, Key Vault, ACS, telemetry:** a **user-assigned managed identity** created by `bootstrap.bicep` (§10.5). SqlClient connects with `Authentication=Active Directory Managed Identity; User Id=<clientId>`; `ManagedIdentityCredential(clientId)` is used for Key Vault, ACS and telemetry ingestion (*Monitoring Metrics Publisher*, because local auth is off for ingestion, §9.5). The SQL server uses **Microsoft Entra-only authentication**; SQL logins are disabled.
 - **GitHub Actions → Azure:** OIDC workload identity federation to a deployment identity per environment. GitHub stores no credential, only IDs: the deployment identity's client ID and the tenant and subscription IDs, as secrets of the `test` and `prod` environments so that the public Actions logs mask them, never in the repository (D60, D65).
 - **Key Vault** holds one key and no secrets. The app identity has *Key Vault Crypto Service Encryption User* (wrap and unwrap only).
-- **Database permissions:** the app identity is a member of `grow2notes_runtime`, with the grants and denies in §5.8. This makes version history, reviews and the audit log append-only even if application code has a bug, which matters given the 2026 Act's offence for altering records (§12). The deployment identity owns the schema for migrations. The SQL Entra admin in both environments is the Entra security group "Grow2Notes SQL admins", whose only member is the developer's Entra account (D64), used for bootstrap, restore drills and the manual retention task only; any other direct production query is recorded in `ops/` with a reason.
+- **Database permissions:** the app identity is a member of `grow2notes_runtime`, with the grants and denies in §5.8. This makes version history, reviews and the audit log append-only even if application code has a bug, which matters given the 2026 Act's offence for altering records (§12). The deployment identity is a member of `db_owner`, through which the migrations create and change the schema (`dbo` owns the schema objects). The SQL Entra admin in both environments is the Entra security group "Grow2Notes SQL admins", whose only member is the developer's Entra account (D64), used for bootstrap, restore drills and the manual retention task only; any other direct production query is recorded in `ops/` with a reason.
 - **Publishing:** FTP and basic-auth publishing credentials are disabled.
 
 ### 9.5 No participant data in logs or telemetry
@@ -1864,6 +1864,8 @@ infra/
 ├─ sql/grant-identities.sql   # one-off, run as Entra admin: CREATE USER ... FROM EXTERNAL PROVIDER for the app and
 │                             #   deployment identities; ALTER ROLE grow2notes_runtime ADD MEMBER for the app identity,
 │                             #   first creating the role with the first migration's guard if it is missing
+├─ sql/check-database.sql     # read-only, run as Entra admin after a deploy: the identities' roles and rights, the
+│                             #   role's grants and denies, and the key ring wrapped by Key Vault
 ├─ test.bicepparam
 └─ prod.bicepparam
 ```
