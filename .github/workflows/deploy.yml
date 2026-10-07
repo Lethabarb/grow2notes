@@ -178,4 +178,36 @@ jobs:
           az sql server firewall-rule delete --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test
           --name "$FIREWALL_RULE" --output none --only-show-errors
 
-      # design.md §10.4 steps 7 and 8 follow, added by S00.02.03's next task.
+      # design.md §10.4 step 7. The app accepts no basic-auth publishing credentials (design.md §9.4), so there is no
+      # publish profile: the action presents a token from the Azure CLI's sign-in to the app's Kudu (scm) site, which
+      # the deployment identity's Contributor role lets in. Kudu's defaults for a zip suit an app that is already
+      # published: it deletes the previous files, unpacks the publish output that ci.yml put at the zip's root, builds
+      # nothing (SCM_DO_BUILD_DURING_DEPLOYMENT is not set) and restarts the app. App Service starts the only assembly
+      # with a .runtimeconfig.json, Grow2Notes.Web.dll, so no startup command is set. v3 is the current major; GitHub
+      # can label a later patch to v2 as the latest release.
+      - name: Deploy app.zip
+        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
+        with:
+          app-name: app-grow2notes-test
+          # The subscription is shared with other workloads (D60), so the group makes the action's lookup of the app
+          # by name explicit.
+          resource-group-name: rg-grow2notes-test-ause
+          package: artifacts/app.zip
+
+      # design.md §10.4 step 8, /healthz only until S00.03.04 adds /api/auth/antiforgery. /healthz never touches the
+      # database (design.md §10.8). webapps-deploy returns once Kudu has asked App Service to restart the app, not once
+      # the new build answers: it does not track the restart as az webapp deploy does, and nothing the app serves names
+      # its build. So a 200 in the first seconds can come from the old build before the restart stops it; this step
+      # cannot tell the two apart, and catches a new build that does not start only if the old one has stopped first.
+      # curl retries every error, App Service's 5xx answers while the app restarts included, every 10 seconds for up to
+      # five minutes, to allow for the restart and a cold start on B1.
+      - name: Smoke-test /healthz
+        env:
+          HEALTHZ_URL: https://app-grow2notes-test.azurewebsites.net/healthz
+        run: |
+          if ! body=$(curl -fsS --max-time 20 --retry 30 --retry-delay 10 --retry-max-time 300 --retry-all-errors \
+                        "$HEALTHZ_URL"); then
+            echo "::error::$HEALTHZ_URL did not answer 200 OK within five minutes."
+            exit 1
+          fi
+          echo "$HEALTHZ_URL answered: $body"
