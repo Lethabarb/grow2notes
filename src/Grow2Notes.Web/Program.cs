@@ -19,6 +19,11 @@ builder.Services.AddHealthEndpoints();
 // error text can hold the values that failed (design.md §9.5).
 builder.Services.AddExceptionHandler<DatabaseFailureHandler>();
 
+// A request the server could not read, such as a body over the size limit, keeps its own status rather than becoming a
+// 500 logged as an unhandled error. Handlers are asked in the order they are added, so a database failure always
+// reaches the handler above first.
+builder.Services.AddExceptionHandler<BadHttpRequestHandler>();
+
 // The body of every error response: RFC 9457 problem details (design.md §6.1), written by the exception handler and
 // the status code pages below.
 builder.Services.AddProblemDetails();
