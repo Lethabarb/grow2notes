@@ -1,15 +1,15 @@
+using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// The tenant save interceptor on a stand-in context, since no entity in the app's model is tenant-owned yet, through
-/// both <c>SaveChanges</c> and <c>SaveChangesAsync</c>. A second interceptor ends each save where the database would
-/// take over, so these tests need no database.
+/// The tenant save interceptor on a stand-in context, through both <c>SaveChanges</c> and <c>SaveChangesAsync</c>.
+/// <see cref="InsteadOfTheDatabase"/> ends each save where the database would take over, so these tests need no
+/// database.
 /// </summary>
 public sealed class TenantSaveChangesInterceptorTests
 {
@@ -201,28 +201,8 @@ public sealed class TenantSaveChangesInterceptorTests
 
         public InsteadOfTheDatabase Store { get; } = new();
 
-        // The tenant interceptor first, so it sees each save before the stand-in for the database ends it.
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
             optionsBuilder.UseSqlServer().AddInterceptors(new TenantSaveChangesInterceptor(tenant), Store);
-    }
-
-    /// <summary>Ends each save that reaches it, as though the database had written it, and counts them.</summary>
-    private sealed class InsteadOfTheDatabase : SaveChangesInterceptor
-    {
-        public int Saves { get; private set; }
-
-        public override InterceptionResult<int> SavingChanges(
-            DbContextEventData eventData, InterceptionResult<int> result)
-        {
-            Saves++;
-            return InterceptionResult<int>.SuppressWithResult(0);
-        }
-
-        public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
-        {
-            return ValueTask.FromResult(SavingChanges(eventData, result));
-        }
     }
 
     private sealed class Visit : ITenantOwned

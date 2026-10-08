@@ -13,9 +13,9 @@ namespace Grow2Notes.Tests.Data;
 /// <see cref="ITenantOwned"/>, with the <c>"Tenant"</c> query filter and <c>OrganisationId</c> as a concurrency token
 /// (design.md §5.9 items 2 and 3, A48), or one of the named exceptions; every owned type is stored wholly in its
 /// owner's table; and every foreign key from an <see cref="ITenantOwned"/> entity type keeps its rows to their
-/// organisation (design.md §5.1 <i>Tenancy</i>, §5.9 item 4). Nothing in the app's model breaks the rule yet, and no
-/// entity type in it is tenant-owned, so stand-in models show that the same check finds each breach. Building a model
-/// opens no connection, so no test here needs a database.
+/// organisation (design.md §5.1 <i>Tenancy</i>, §5.9 item 4). Nothing in the app's model breaks the rule, and no
+/// tenant-owned entity type in it has a foreign key yet, so stand-in models show that the same check finds each
+/// breach. Building a model opens no connection, so no test here needs a database.
 /// </summary>
 public sealed class ModelTenancyTests
 {

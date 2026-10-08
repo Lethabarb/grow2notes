@@ -10,8 +10,9 @@ namespace Grow2Notes.Tests.Data;
 /// <summary>
 /// Tenant isolation on SQL Server (design.md §5.9 items 1 to 4): the query filter, the save interceptor, the
 /// concurrency token on <c>OrganisationId</c> and a composite foreign key, on two stand-in tenant-owned entities, since
-/// no entity in the app's model is tenant-owned yet. They are in a test-only context with a database of its own. Each
-/// test has two new organisations, A and B, so the tests can share that database.
+/// the one in the app's model, <c>AuditEvent</c>, has no foreign key and is never changed or deleted (design.md §5.8).
+/// They are in a test-only context with a database of its own. Each test has two new organisations, A and B, so the
+/// tests can share that database.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TenantIsolationOnNewEntitiesTests(TenantIsolationOnNewEntitiesTests.StandInDatabase database)

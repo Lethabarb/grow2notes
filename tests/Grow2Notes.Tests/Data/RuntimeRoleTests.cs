@@ -5,8 +5,8 @@ namespace Grow2Notes.Tests.Data;
 
 /// <summary>
 /// The database role <c>grow2notes_runtime</c>, of which the app's database identity is a member (design.md §5.8,
-/// §10.6). The migrations give it its grants and denies, so the database refuses a delete that the app's code must never
-/// make. A migration that adds a deny adds it to these tests too.
+/// §10.6). The migrations give it its grants and denies, so the database refuses the changes and deletes that the app's
+/// code must never make. A migration that adds a deny adds it to these tests too.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
@@ -26,7 +26,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     }
 
     [Fact]
-    public async Task The_role_has_no_permissions_of_its_own_except_DENY_DELETE_on_Organisation_and_AspNetUsers()
+    public async Task The_role_has_no_permissions_of_its_own_except_its_denies()
     {
         var permissions = await ReadColumnAsync("""
             SELECT CONCAT(p.[state_desc], N' ', p.[permission_name], N' ON ',
@@ -36,12 +36,20 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
             ORDER BY 1;
             """);
 
-        Assert.Equal(["DENY DELETE ON dbo.AspNetUsers", "DENY DELETE ON dbo.Organisation"], permissions);
+        Assert.Equal(
+            [
+                "DENY DELETE ON dbo.AspNetUsers",
+                "DENY DELETE ON dbo.AuditEvent",
+                "DENY DELETE ON dbo.Organisation",
+                "DENY UPDATE ON dbo.AuditEvent",
+            ],
+            permissions);
     }
 
     [Theory]
     [InlineData("Organisation")]
     [InlineData("AspNetUsers")]
+    [InlineData("AuditEvent")]
     public async Task A_member_of_the_role_gets_error_229_for_a_delete(string table)
     {
         await AsMemberOfTheRoleAsync(async session =>
@@ -53,6 +61,40 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
 
             // 229: the permission was denied on the object.
             Assert.Equal(229, error.Number);
+        });
+    }
+
+    [Theory]
+    [InlineData("AuditEvent")]
+    public async Task A_member_of_the_role_gets_error_229_for_an_update(string table)
+    {
+        await AsMemberOfTheRoleAsync(async session =>
+        {
+            // As for a delete, the permission is checked before any row is touched. Every append-only table is
+            // tenant-owned, so each has the column.
+            var error = await Assert.ThrowsAsync<SqlException>(() =>
+                session.ExecuteAsync($"UPDATE [dbo].[{table}] SET [OrganisationId] = [OrganisationId];"));
+
+            Assert.Equal(229, error.Number);
+        });
+    }
+
+    [Fact]
+    public async Task A_member_of_the_role_can_add_and_read_an_audit_event()
+    {
+        await AsMemberOfTheRoleAsync(async session =>
+        {
+            // AuditEvent has no foreign keys (design.md §5.3), so the row needs no organisation row to point at.
+            var row = await session.ReadRowAsync("""
+                DECLARE @organisationId uniqueidentifier = NEWID();
+
+                INSERT INTO [dbo].[AuditEvent] ([OrganisationId], [OccurredAtUtc], [EventType])
+                VALUES (@organisationId, SYSUTCDATETIME(), 'auth.signin_succeeded');
+
+                SELECT [EventType] FROM [dbo].[AuditEvent] WHERE [OrganisationId] = @organisationId;
+                """);
+
+            Assert.Equal(["auth.signin_succeeded"], row);
         });
     }
 
