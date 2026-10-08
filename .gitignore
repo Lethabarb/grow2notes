@@ -19,3 +19,6 @@ tests/e2e/test-results/
 *.user
 *.suo
 *.DotSettings.user
+
+# Git Bash (msys) crash dumps
+*.stackdump
