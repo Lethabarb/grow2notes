@@ -100,9 +100,10 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
   show what a signed-out caller gets.
 - A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
-  it `AllowAnonymous` unless the test is about who may call it. In `AppWithoutDatabase`, where the session cookie is
-  the default scheme, as in the deployed app, a signed-out request to one that is not gets the cookie's `401`, as
-  problem details (`Grow2Notes.Tests/SignedOutTests.cs`).
+  it `AllowAnonymous` unless the test is about who may call it. A signed-out request to one that is not gets the
+  session cookie's `401`, as problem details, as in the deployed app: in `AppWithoutDatabase`, where the cookie is the
+  default scheme (`Grow2Notes.Tests/SignedOutTests.cs`), and in `Grow2NotesFactory`, whose default scheme sends a
+  request without the test-only sign-in's headers to the cookie (below).
 - A test that calls `GET /api/auth/antiforgery` or an endpoint in the `/api` group calls `https://localhost`, with a
   client from `CreateHttpsClient()` (`Grow2Notes.Tests/Fixtures/AntiforgeryTokens.cs`): the antiforgery cookie is
   `Secure` always, so antiforgery throws on a request that is not HTTPS, and the app answers `500`. A request that
@@ -156,12 +157,17 @@ organisation itself, as `SeededOrganisationsTests` does.
 
 ### Calling as a seeded user
 
-`Grow2NotesFactory` makes a test-only authentication scheme the app's default
-(`Grow2Notes.Tests/Fixtures/TestSignIn.cs`); the app itself has no such scheme. A request that names a user's ID in its
-`X-Test-User` header is signed in as that user, with the user ID, `org_id` and role claims that design.md §8.4's claims
-factory adds, read from the user's row: the user's ID, `org_id`, which makes the user's organisation the request's
-tenant, and the role by its `UserRole` name. A request without the header is signed out. `SignInAs` adds the header to
-every request a client sends:
+`Grow2NotesFactory` keeps a test-only authentication scheme beside the session cookie
+(`Grow2Notes.Tests/Fixtures/TestSignIn.cs`); the app itself has no such scheme. The factory's default scheme is a
+policy scheme that sends a request with the `X-Test-User` or `X-Test-Role` header to the test-only sign-in, and any
+other request to the session cookie, as in the deployed app, so a request with neither header and no session cookie
+is signed out. A request that names a user's ID in its `X-Test-User` header is signed in as that user, with the
+principal that the app's claims factory builds from the user's row (design.md §8.4), as the session check rebuilds it
+on every request: Identity's claims (the user's ID, user name, email and security stamp), `org_id`, which makes the
+user's organisation the request's tenant, the role by its `UserRole` name, and the display name.
+`Grow2Notes.Tests/Fixtures/TestSignInTests.cs` shows it. The session checks run in the cookie only, so a request
+signed in this way skips them: the security stamp, the idle limit and the 12-hour limit do not apply to it, and its
+principal has no `auth_time`, which only a sign-in adds. `SignInAs` adds the header to every request a client sends:
 
 ```csharp
 using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
@@ -170,11 +176,13 @@ using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
 `SignInAs(caller, sqlServer.Seeded)` signs in as one of the endpoint matrix's callers (below), or, for
 `Caller.SignedOut`, adds nothing.
 
-A request that the fallback policy or the `Manager` policy refuses then answers `401` signed out and `403` signed in,
-as problem details. To test a role that `UserRole` does not have, such as Release 2's Support, a request also sends
-the `X-Test-Role` header, whose value replaces the role claim's; the value `TestSignIn.NoRole` leaves the user with no
-role claim (an empty value would not: the test server drops a header whose value is empty).
-`Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
+A request that the fallback policy or the `Manager` policy refuses then answers as problem details: `401` signed
+out, from the session cookie, and `403` signed in, from the test-only sign-in, which forbids as the cookie does. To
+test a role that `UserRole` does not have, such as Release 2's Support, a request also sends the `X-Test-Role` header,
+whose value replaces the role claim's, and no other claim changes; the value `TestSignIn.NoRole` leaves the user with
+no role claim (an empty value would not: the test server drops a header whose value is empty). The header needs
+`X-Test-User`: a request with `X-Test-Role` alone fails to sign in, rather than going to the cookie, which would
+ignore the header. `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
 
 ### The endpoint matrix
 
