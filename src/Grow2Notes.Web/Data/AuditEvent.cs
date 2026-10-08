@@ -3,8 +3,9 @@ namespace Grow2Notes.Web.Data;
 /// <summary>
 /// One row of the audit trail (design.md §5.3, A28): a state change or a download, with who made it, when and from
 /// where. The table has no foreign keys, so the trail never blocks, and is never rewritten by, a manual retention task.
+/// A row is only ever added (design.md §5.8).
 /// </summary>
-internal sealed class AuditEvent : ITenantOwned
+internal sealed class AuditEvent : ITenantOwned, IAppendOnly
 {
     /// <summary>
     /// A <c>bigint</c> identity, design.md §5.1's exception to client-generated GUID keys, so SQL Server sets it as the

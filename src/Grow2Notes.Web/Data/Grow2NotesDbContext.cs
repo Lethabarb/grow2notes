@@ -10,7 +10,7 @@ namespace Grow2Notes.Web.Data;
 /// <c>IdentityDbContext</c>, so Identity creates no role tables: a user's role is the <c>Role</c> column. The Identity
 /// schema version comes from <c>IdentityOptions.Stores.SchemaVersion</c>, which Program.cs sets to <c>Version3</c> to
 /// add <c>AspNetUserPasskeys</c>. A query on a tenant-owned table sees only the tenant's rows, and a save writes only
-/// the tenant's rows (design.md §5.9).
+/// the tenant's rows (design.md §5.9) and never changes or deletes an append-only one (§5.8).
 /// </summary>
 internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options, ITenantContext tenant)
     : IdentityUserContext<ApplicationUser, Guid>(options)
@@ -41,10 +41,13 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             await transaction.CommitAsync(ct);
         }, cancellationToken);
 
-    // Here rather than where the app registers the context, so that every instance has it, however it is made, and it
-    // checks each save against the same tenant as this context's queries.
+    // Here rather than where the app registers the context, so that every instance has them, however it is made, and
+    // the tenant one checks each save against the same tenant as this context's queries. EF Core runs them in the order
+    // added. The append-only one goes first because it reads no tenant and changes nothing: a change to an append-only
+    // row is refused for what it is even with no tenant, and a save it refuses leaves its added rows unstamped.
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
-        optionsBuilder.AddInterceptors(new TenantSaveChangesInterceptor(tenant));
+        optionsBuilder.AddInterceptors(
+            new AppendOnlySaveChangesInterceptor(), new TenantSaveChangesInterceptor(tenant));
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         ModelConventions.Apply(configurationBuilder);
