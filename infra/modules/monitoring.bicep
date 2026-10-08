@@ -64,6 +64,7 @@ resource applicationInsightsTables 'Microsoft.OperationalInsights/workspaces/tab
     'AppDependencies'
     'AppEvents'
     'AppExceptions'
+    'AppGenAIContent'
     'AppMetrics'
     'AppPageViews'
     'AppPerformanceCounters'
