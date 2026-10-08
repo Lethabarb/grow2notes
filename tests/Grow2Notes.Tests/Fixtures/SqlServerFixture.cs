@@ -1,4 +1,6 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -78,7 +80,8 @@ public sealed class SqlServerFixture : IAsyncLifetime
             .UseApplicationServiceProvider(services)
             .Options;
 
-        await using var db = new Grow2NotesDbContext(options);
+        // Migrating reads no tenant-owned rows, so it runs with no tenant.
+        await using var db = new Grow2NotesDbContext(options, new TenantContext(new HttpContextAccessor()));
         await db.Database.MigrateAsync(cancellationToken);
     }
 

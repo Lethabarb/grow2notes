@@ -1,3 +1,4 @@
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -8,12 +9,16 @@ namespace Grow2Notes.Web.Data;
 /// The application database (design.md §5). It derives from <see cref="IdentityUserContext{TUser, TKey}"/>, not
 /// <c>IdentityDbContext</c>, so Identity creates no role tables: a user's role is the <c>Role</c> column. The Identity
 /// schema version comes from <c>IdentityOptions.Stores.SchemaVersion</c>, which Program.cs sets to <c>Version3</c> to
-/// add <c>AspNetUserPasskeys</c>.
+/// add <c>AspNetUserPasskeys</c>. A query on a tenant-owned table sees only the tenant's rows (design.md §5.9).
 /// </summary>
-internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options)
+internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options, ITenantContext tenant)
     : IdentityUserContext<ApplicationUser, Guid>(options)
 {
     public DbSet<Organisation> Organisations => Set<Organisation>();
+
+    // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
+    // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
+    private Guid TenantId => tenant.OrganisationId;
 
     /// <summary>
     /// Runs <paramref name="work"/> in one transaction and commits it (design.md §5.9). The retrying execution strategy
@@ -76,5 +81,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
         // KeysDbContext reads and writes the Data Protection key ring. The table is in this model as well, so that this
         // context's migrations create it, under the plural name that KeysDbContext expects (design.md §5.3).
         builder.Entity<DataProtectionKey>().ToTable(nameof(KeysDbContext.DataProtectionKeys));
+
+        // Last, so it finds every entity type configured above.
+        TenantQueryFilter.Apply(builder, () => TenantId);
     }
 }
