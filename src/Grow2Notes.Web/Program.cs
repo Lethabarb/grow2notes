@@ -25,8 +25,14 @@ builder.Services.AddExceptionHandler<DatabaseFailureHandler>();
 builder.Services.AddExceptionHandler<BadHttpRequestHandler>();
 
 // The body of every error response: RFC 9457 problem details (design.md §6.1), written by the exception handler and
-// the status code pages below.
-builder.Services.AddProblemDetails();
+// the status code pages below, by ErrorCode.Problem, and by the validation below, whose problem ValidationProblems
+// makes design.md's 422 validation.failed.
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ValidationProblems.Customize);
+
+// Minimal APIs' built-in validation (design.md §7.5): before an endpoint runs, its parameters and request body are
+// checked against their data annotations, and a request that breaks one never reaches it. Its source generator
+// describes only public types, so a request type with annotations is public, unlike most of the app's types.
+builder.Services.AddValidation();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
