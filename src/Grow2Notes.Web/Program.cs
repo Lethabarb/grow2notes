@@ -65,6 +65,8 @@ builder.Services.AddDataProtection()
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
 builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+    .AddSignInManager<Grow2NotesSignInManager>()
+    .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
 
 // Requests are denied by default (Policies). The app has no authentication scheme of its own until S00.04.01 adds
