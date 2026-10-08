@@ -8,7 +8,8 @@
     "build": "vite build",
     "typecheck": "tsc -b",
     "lint": "eslint . --max-warnings=0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:no-analytics": "node scripts/check-no-analytics.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

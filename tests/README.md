@@ -11,16 +11,20 @@ The SPA's unit tests are not here: they sit next to the code they test, as `*.te
 
 ## Running the SPA checks
 
-Each is a separate step of design.md §10.4 step 2. In `src/grow2notes-spa`, after `npm ci`:
+Each is a separate step of CI's SPA checks (design.md §10.4 step 2). In `src/grow2notes-spa`, after `npm ci`:
 
 ```shell
-npm run typecheck   # tsc over the app, the tests and the config files
-npm run lint        # ESLint; a warning fails it too
-npm test            # Vitest, once
-npm run build       # vite build into src/Grow2Notes.Web/wwwroot
+npm run typecheck           # tsc over the app, the tests, the config files and scripts/
+npm run lint                # ESLint; a warning fails it too
+npm test                    # Vitest, once
+npm run build               # vite build into src/Grow2Notes.Web/wwwroot
+npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
 ```
 
 `npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
+`npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
+`npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
 
 ## Running the .NET tests
 
@@ -87,4 +91,6 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   connection string from. `Grow2Notes.Tests/Platform/HealthEndpointsWithDatabaseStoppedTests.cs` is the example.
 - The factory runs the app in the `Testing` environment, so `appsettings.Development.json` is not loaded, and its
   connection string overrides any on the machine.
+- A test that only reads the app's services or settings, and sends no request that needs the database, can host the
+  app without one, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is the example.
 - A run filtered to unit tests starts no container.

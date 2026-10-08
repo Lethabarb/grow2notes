@@ -97,6 +97,12 @@ jobs:
         working-directory: src/grow2notes-spa
         run: npm run build
 
+      # No Application Insights JavaScript SDK and no third-party analytics in any installed package or in the build
+      # (design.md §9.5, A34). It reads the build, so it runs after it.
+      - name: Check the SPA has no browser telemetry
+        working-directory: src/grow2notes-spa
+        run: npm run check:no-analytics
+
       # .NET (design.md §10.4 step 1).
       - name: Restore .NET tools
         run: dotnet tool restore
