@@ -11,11 +11,11 @@ namespace Grow2Notes.Tests.Data;
 /// <summary>
 /// The model test of design.md §14 M0 <i>Done when</i>: every entity type in the app's model is
 /// <see cref="ITenantOwned"/>, with the <c>"Tenant"</c> query filter and <c>OrganisationId</c> as a concurrency token
-/// (design.md §5.9 items 2 and 3, D67), or one of the named exceptions; and every foreign key from an
-/// <see cref="ITenantOwned"/> entity type keeps its rows to their organisation (design.md §5.1 <i>Tenancy</i>, §5.9
-/// item 4). Nothing in the app's model breaks the rule yet, and no entity type in it is tenant-owned, so stand-in
-/// models show that the same check finds each breach. Building a model opens no connection, so no test here needs a
-/// database.
+/// (design.md §5.9 items 2 and 3, A48), or one of the named exceptions; every owned type is stored wholly in its
+/// owner's table; and every foreign key from an <see cref="ITenantOwned"/> entity type keeps its rows to their
+/// organisation (design.md §5.1 <i>Tenancy</i>, §5.9 item 4). Nothing in the app's model breaks the rule yet, and no
+/// entity type in it is tenant-owned, so stand-in models show that the same check finds each breach. Building a model
+/// opens no connection, so no test here needs a database.
 /// </summary>
 public sealed class ModelTenancyTests
 {
@@ -87,6 +87,20 @@ public sealed class ModelTenancyTests
     }
 
     [Fact]
+    public void An_owned_type_with_a_table_of_its_own_is_a_breach_and_one_wholly_in_its_owner_s_table_is_not()
+    {
+        using var db = new OwnedTypesContext();
+
+        Assert.Equal(
+            [
+                new Breach(nameof(ShiftHandover), Fault.OwnedTypeWithATableOfItsOwn),
+                new Breach(nameof(ShiftIncident), Fault.OwnedTypeWithATableOfItsOwn),
+                new Breach(nameof(ShiftTask), Fault.OwnedTypeWithATableOfItsOwn),
+            ],
+            Breaches(db.Model, []));
+    }
+
+    [Fact]
     public void Composite_links_matched_on_OrganisationId_and_OrganisationId_alone_to_Organisation_keep_the_rule()
     {
         using var db = new LinkedContext();
@@ -133,15 +147,17 @@ public sealed class ModelTenancyTests
 
     /// <summary>
     /// Each breach of the rule in <paramref name="model"/>: an entity type that is neither <see cref="ITenantOwned"/>
-    /// nor in <paramref name="namedExceptions"/>; an <see cref="ITenantOwned"/> one without the <c>"Tenant"</c> filter,
-    /// or whose <c>OrganisationId</c> is not a concurrency token; a named exception that the model does not have; and a
-    /// foreign key from an <see cref="ITenantOwned"/> entity type that does not keep its row to its organisation. One
-    /// to another <see cref="ITenantOwned"/> entity type or to <see cref="ApplicationUser"/> must pair the row's
+    /// nor in <paramref name="namedExceptions"/>; an owned type not wholly in its owner's table; an
+    /// <see cref="ITenantOwned"/> entity type without the <c>"Tenant"</c> filter, or whose <c>OrganisationId</c> is not
+    /// a concurrency token; a named exception that the model does not have; and a foreign key from an
+    /// <see cref="ITenantOwned"/> entity type that does not keep its row to its organisation. One to another
+    /// <see cref="ITenantOwned"/> entity type or to <see cref="ApplicationUser"/> must pair the row's
     /// <c>OrganisationId</c> with the principal's, so that the database refuses a link to another organisation's row;
     /// the principal key it points at includes <c>OrganisationId</c>, as an alternate key such as
     /// <c>(OrganisationId, Id)</c> does, which <c>AspNetUsers</c> has. One to <see cref="Organisation"/> must be
     /// <c>OrganisationId</c> alone, the row's own organisation. An entity type goes by its table, as the named
-    /// exceptions do, and a foreign key by its dependent's table and its properties.
+    /// exceptions do; an owned type by each table it has of its own; and a foreign key by its dependent's table and its
+    /// properties.
     /// </summary>
     /// <remarks>
     /// A foreign key from a named exception, such as Identity's from its child tables to <c>AspNetUsers</c>, is outside
@@ -151,8 +167,21 @@ public sealed class ModelTenancyTests
     {
         const string organisationId = nameof(ITenantOwned.OrganisationId);
 
-        // An owned type, such as Identity's passkey data, is stored in its owner's rows, so it goes with its owner.
+        // An owned type wholly in its owner's table, as a JSON column (Identity's passkey data) or as more of the
+        // owner's columns, is in the owner's rows, so it goes with its owner. A table of its own, whole (OwnsMany,
+        // ToTable) or split off (SplitToTable), is a breach: its rows have no OrganisationId, the interceptor sees only
+        // the owner, and the owner's concurrency token is matched only in the owner's table, so a save could change
+        // another organisation's rows. Nor can an owned type be ITenantOwned, since TenantQueryFilter.Apply throws on
+        // one. A tenant-owned child row is an ITenantOwned entity type with a composite foreign key instead (design.md
+        // §5.1 Tenancy).
         var entityTypes = model.GetEntityTypes().Where(entityType => !entityType.IsOwned()).ToList();
+        var ownedTypesTablesOfTheirOwn = model.GetEntityTypes()
+            .SelectMany(entityType => entityType.FindOwnership() is { PrincipalEntityType: var owner }
+                ? entityType.GetTableMappings()
+                    .Select(mapping => StoreObjectIdentifier.Table(mapping.Table.Name, mapping.Table.Schema))
+                    .Where(table => table != StoreObjectIdentifier.Create(owner, StoreObjectType.Table))
+                : [])
+            .ToList();
         var tenantOwned = entityTypes
             .Where(entityType => entityType.ClrType.IsAssignableTo(typeof(ITenantOwned)))
             .ToList();
@@ -163,6 +192,7 @@ public sealed class ModelTenancyTests
             .. entityTypes.Except(tenantOwned)
                 .Where(entityType => !namedExceptions.Contains(TableOf(entityType)))
                 .Select(entityType => new Breach(TableOf(entityType), Fault.NeitherTenantOwnedNorANamedException)),
+            .. ownedTypesTablesOfTheirOwn.Select(table => new Breach(table.Name, Fault.OwnedTypeWithATableOfItsOwn)),
             .. tenantOwned
                 .Where(entityType => entityType.FindDeclaredQueryFilter(TenantQueryFilter.Name) is null)
                 .Select(entityType => new Breach(TableOf(entityType), Fault.NoTenantFilter)),
@@ -196,6 +226,7 @@ public sealed class ModelTenancyTests
     private enum Fault
     {
         NeitherTenantOwnedNorANamedException,
+        OwnedTypeWithATableOfItsOwn,
         NoTenantFilter,
         OrganisationIdIsNotAConcurrencyToken,
         NamedExceptionNotInTheModel,
@@ -241,6 +272,26 @@ public sealed class ModelTenancyTests
     private sealed class UnfilteredContext : StandInContext
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Visit>();
+    }
+
+    // A tenant-owned entity type that owns a collection with a table of its own, as an owned collection has unless it
+    // is mapped to JSON, a value moved to a table of its own, and a value split between the owner's columns and a table
+    // of its own; a value wholly in the owner's own columns, and a collection in a JSON column of the owner's table.
+    private sealed class OwnedTypesContext : StandInContext
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Shift>(entity =>
+            {
+                entity.OwnsMany(shift => shift.Tasks);
+                entity.OwnsOne(shift => shift.Handover).ToTable(nameof(ShiftHandover));
+                entity.OwnsOne(shift => shift.Incident)
+                    .SplitToTable(nameof(ShiftIncident), table => table.Property(incident => incident.Details));
+                entity.OwnsOne(shift => shift.Times);
+                entity.OwnsMany(shift => shift.Tags).ToJson();
+            });
+            TenantQueryFilter.Apply(modelBuilder, () => TenantId);
+        }
     }
 
     // Linked as design.md §5.10 links entities: to a tenant-owned entity's, or a user's, alternate key
@@ -333,6 +384,50 @@ public sealed class ModelTenancyTests
         public required string OrganisationName { get; set; }
 
         public Guid FromOrganisationId { get; set; }
+    }
+
+    private sealed class Shift : ITenantOwned
+    {
+        public Guid Id { get; set; }
+
+        public Guid OrganisationId { get; set; }
+
+        public List<ShiftTask> Tasks { get; } = [];
+
+        public ShiftHandover? Handover { get; set; }
+
+        public ShiftIncident? Incident { get; set; }
+
+        public required ShiftTimes Times { get; set; }
+
+        public List<ShiftTag> Tags { get; } = [];
+    }
+
+    private sealed class ShiftTask
+    {
+        public required string Text { get; set; }
+    }
+
+    private sealed class ShiftHandover
+    {
+        public required string Text { get; set; }
+    }
+
+    private sealed class ShiftIncident
+    {
+        public required string Summary { get; set; }
+
+        public required string Details { get; set; }
+    }
+
+    private sealed class ShiftTimes
+    {
+        public DateTime StartUtc { get; set; }
+    }
+
+    private sealed class ShiftTag
+    {
+        public required string Name { get; set; }
     }
 
     private sealed class Region

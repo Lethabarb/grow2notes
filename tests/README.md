@@ -108,8 +108,13 @@ takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and fin
 and checks that nothing of B's reaches it. `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is
 seeded.
 
-- Other tests rely on the seeded rows as they are. A test may add rows to a seeded organisation, but it changes a
-  seeded row, or adds a user to a seeded organisation, only in a transaction that it rolls back.
+- Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
+  and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. An endpoint call
+  commits, and may change other columns of a seeded row, such as Identity's `ConcurrencyStamp`. A test may add rows
+  to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
+  deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
+  added itself, and one that invites through the API invites an address of its own; or it works in a migrated
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so nothing can sign in as them yet.
 

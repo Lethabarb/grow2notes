@@ -23,7 +23,7 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
     }
 
     [Fact]
-    public async Task Each_organisation_is_there_with_exactly_one_Active_manager_and_one_Active_worker()
+    public async Task Each_organisation_is_there_with_its_Active_manager_and_Active_worker()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var scope = factory.Services.CreateScope();
@@ -34,14 +34,19 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
             Assert.True(await db.Organisations.AnyAsync(o => o.Id == seeded.OrganisationId, cancellationToken));
 
             // AspNetUsers has no tenant filter, so the query names the organisation itself (design.md §5.9 item 5).
-            var activeUsers = await db.Users
-                .Where(u => u.OrganisationId == seeded.OrganisationId && u.Status == UserStatus.Active)
+            // Other tests may add users to a seeded organisation, so it reads the seeded two by their IDs.
+            var users = await db.Users
+                .Where(u => u.OrganisationId == seeded.OrganisationId
+                    && (u.Id == seeded.ManagerId || u.Id == seeded.WorkerId))
                 .ToListAsync(cancellationToken);
 
             Assert.Equal(
-                [(seeded.ManagerId, UserRole.Manager), (seeded.WorkerId, UserRole.Worker)],
+                [
+                    (seeded.ManagerId, UserRole.Manager, UserStatus.Active),
+                    (seeded.WorkerId, UserRole.Worker, UserStatus.Active),
+                ],
                 // Manager (2) sorts before Worker (1).
-                activeUsers.OrderByDescending(u => u.Role).Select(u => (u.Id, u.Role)));
+                users.OrderByDescending(u => u.Role).Select(u => (u.Id, u.Role, u.Status)));
         }
     }
 

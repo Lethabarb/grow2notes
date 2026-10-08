@@ -79,7 +79,6 @@ Running record of product decisions made during design discovery. Newest at the 
 | D64 | 2026-10-04 | SQL admin group | A new Entra security group, "Grow2Notes SQL admins", with the developer as its only member, is the Entra-only admin of the SQL server in both environments (design.md §9.4). |
 | D65 | 2026-10-04 | Azure IDs in GitHub | The deployment identity's client ID and the tenant and subscription IDs are GitHub environment **secrets** (masked in the public Actions logs), not variables. They are still not credentials: sign-in uses OIDC. Amends D60. |
 | D66 | 2026-10-05 | Free-offer region | The test database uses the Azure SQL free offer in Australia Southeast. The owner accepts that the subscription's first free-offer database fixes Australia Southeast as the region for every later free-offer database in the shared subscription (D60). |
-| D67 | 2026-10-08 | Tenant concurrency token | `OrganisationId` is a concurrency token on every tenant-owned entity, so EF Core's updates and deletes also match the row's original organisation: a row made up with another organisation's key matches nothing and the save fails, writing nothing (design.md §5.9 item 3, S00.03.02). Taken by the developer when a test found the gap; the owner may overturn it. |
 
 ## Research highlights that constrain the design
 
