@@ -8,13 +8,22 @@ namespace Grow2Notes.Web.Data;
 /// <summary>
 /// Keeps every save to the tenant's own rows (design.md §5.9 item 3, D3), as the query filter keeps every query. An
 /// added <see cref="ITenantOwned"/> row with no <see cref="ITenantOwned.OrganisationId"/> is stamped with the tenant.
-/// A save that would add, change or delete a row of another organisation, or move a row from one organisation to
-/// another, throws before anything is written, and leaves the tracked rows as they were.
+/// A save that would add, change or delete a row whose <see cref="ITenantOwned.OrganisationId"/> is another
+/// organisation's, or move a row from one organisation to another, throws before anything is written, and leaves the
+/// tracked rows as they were.
 /// </summary>
 /// <remarks>
+/// <para>
+/// It goes by the <see cref="ITenantOwned.OrganisationId"/> a row carries, so it passes a row made up with the tenant's
+/// ID and another organisation's key. That row's update or delete matches no row instead:
+/// <see cref="TenantQueryFilter.Apply"/> makes <see cref="ITenantOwned.OrganisationId"/> a concurrency token, and this
+/// check holds its original value to the tenant.
+/// </para>
+/// <para>
 /// It reads the tenant only when the save adds, changes or deletes a tenant-owned row, so saves of other rows need
 /// none: Identity's, such as sign-in's before it has loaded the user, and the organisation's. A context adds it in
 /// <c>OnConfiguring</c> with its own <see cref="ITenantContext"/>, so its saves and its queries have the same tenant.
+/// </para>
 /// </remarks>
 internal sealed class TenantSaveChangesInterceptor(ITenantContext tenant) : SaveChangesInterceptor
 {

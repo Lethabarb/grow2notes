@@ -88,7 +88,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
         // context's migrations create it, under the plural name that KeysDbContext expects (design.md §5.3).
         builder.Entity<DataProtectionKey>().ToTable(nameof(KeysDbContext.DataProtectionKeys));
 
-        // Last, so it finds every entity type configured above.
+        // Last, so it finds every entity type configured above. With the filter, it makes OrganisationId a concurrency
+        // token, so updates and deletes keep to the tenant's rows too.
         TenantQueryFilter.Apply(builder, () => TenantId);
     }
 }

@@ -81,7 +81,9 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   deploy runs them before the new code starts; the app never migrates itself (design.md §10.6). Every test in the
   collection shares that database, so a test finds its rows by their keys and never assumes a table is empty. A test
   that must leave nothing behind runs in a transaction that it rolls back; one that must know every row in a table
-  takes a migrated database of its own from `SqlServerFixture.CreateDatabaseAsync`.
+  takes a migrated database of its own from `SqlServerFixture.CreateDatabaseAsync`. A test-only context gets a
+  database of its own from `SqlServerFixture.ConnectionStringFor` and creates it from its model with `EnsureCreated`;
+  `Grow2Notes.Tests/Data/TenantIsolationOnNewEntitiesTests.cs` is the example.
 - The app under test connects as `sa`, to which the denies of `grow2notes_runtime` do not apply. A test of what the
   database refuses the app runs its statements as a member of that role, as the app's identity is in Azure.
   `Grow2Notes.Tests/Data/RuntimeRoleTests.cs` is the example.

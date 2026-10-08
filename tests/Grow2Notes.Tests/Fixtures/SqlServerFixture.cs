@@ -46,6 +46,13 @@ public sealed class SqlServerFixture : IAsyncLifetime
     }
 
     /// <summary>
+    /// The <c>sa</c> connection string of a database named <paramref name="database"/> on this server, which need not
+    /// exist yet. It is for a test-only context, whose test creates the database from that context's model.
+    /// </summary>
+    public string ConnectionStringFor(string database) =>
+        new SqlConnectionStringBuilder(container.GetConnectionString()) { InitialCatalog = database }.ConnectionString;
+
+    /// <summary>
     /// Stops SQL Server, leaving the container for disposal to remove. Start the app first: a stopped container has no
     /// mapped port, so <see cref="ConnectionString"/> throws. Calling it again does nothing. It is not restarted:
     /// Docker can map a different host port on a restart, which would leave the app holding a connection string that
@@ -84,7 +91,4 @@ public sealed class SqlServerFixture : IAsyncLifetime
         await using var db = new Grow2NotesDbContext(options, new TenantContext(new HttpContextAccessor()));
         await db.Database.MigrateAsync(cancellationToken);
     }
-
-    private string ConnectionStringFor(string database) =>
-        new SqlConnectionStringBuilder(container.GetConnectionString()) { InitialCatalog = database }.ConnectionString;
 }

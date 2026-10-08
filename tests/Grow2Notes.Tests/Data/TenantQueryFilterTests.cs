@@ -6,8 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// The tenant query filter on a stand-in context, since no entity in the app's model is tenant-owned yet. Building a
-/// model and writing a query's SQL open no connection, so these tests need no database.
+/// The tenant query filter, and the concurrency token that goes with it, on a stand-in context, since no entity in the
+/// app's model is tenant-owned yet. Building a model and writing a query's SQL open no connection, so these tests need
+/// no database. <see cref="TenantIsolationOnNewEntitiesTests"/> shows both at work on SQL Server.
 /// </summary>
 public sealed class TenantQueryFilterTests
 {
@@ -25,6 +26,16 @@ public sealed class TenantQueryFilterTests
 
         Assert.Equal(TenantQueryFilter.Name, Assert.Single(visit.GetDeclaredQueryFilters()).Key);
         Assert.Empty(region.GetDeclaredQueryFilters());
+    }
+
+    [Fact]
+    public void The_OrganisationId_of_a_tenant_owned_entity_type_is_a_concurrency_token()
+    {
+        using var db = new StandInContext(NoTenant());
+
+        var organisationId = db.Model.FindEntityType(typeof(Visit))!.FindProperty(nameof(Visit.OrganisationId))!;
+
+        Assert.True(organisationId.IsConcurrencyToken);
     }
 
     [Fact]

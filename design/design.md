@@ -1121,7 +1121,7 @@ It is used for saving a version, review, discard, setup completion, invite, deac
 **Tenant isolation** (D3):
 1. **The tenant comes from the session, never from the request.** `ITenantContext` reads the `org_id` claim, which the claims factory adds on every request (§8.4). Sign-in and setup endpoints run before there is a session, so they set the tenant explicitly from the user row they have just loaded (`using (tenant.Use(user.OrganisationId))`). Any other request without a tenant throws.
 2. **EF Core named query filter** `"Tenant"` (`e => e.OrganisationId == TenantId`) on every `ITenantOwned` entity. A unit test asserts every `ITenantOwned` type has it. `IgnoreQueryFilters()` is banned outside the operator commands, and a test checks the source for it.
-3. **SaveChanges interceptor** stamps `OrganisationId` on added rows and throws if an added or modified row's `OrganisationId` differs from the current tenant. The audit writer takes `OrganisationId` as a parameter.
+3. **SaveChanges interceptor** stamps `OrganisationId` on added rows and throws if an added or modified row's `OrganisationId` differs from the current tenant; `OrganisationId` is also a concurrency token on every `ITenantOwned` entity, so an update or delete of a row that is not the tenant's matches no row and throws. The audit writer takes `OrganisationId` as a parameter.
 4. **Composite foreign keys** include `OrganisationId`, so the database cannot store a link from one organisation's row to another's.
 5. **Named exceptions.** `AspNetUsers` is not filtered, because Identity must find a user by email before a tenant is known; user-admin queries filter by `OrganisationId` explicitly, and the composite user FKs keep authors, editors and reviewers in the same organisation. The Identity child tables (`AspNetUserTokens`, `AspNetUserPasskeys`, `AspNetUserClaims`, `AspNetUserLogins`) and `DataProtectionKeys` have no `OrganisationId`. The Data Protection key ring uses its own `KeysDbContext`, so it never depends on a tenant.
 6. **No SQL Server row-level security in v1** (single organisation). Every table already carries `OrganisationId`, so adding it later is one migration plus a connection interceptor that sets `SESSION_CONTEXT`. Add it when a second organisation is onboarded.
@@ -1191,7 +1191,8 @@ public sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> o,
     }
 
     private void Tenant<T>(ModelBuilder b) where T : class, ITenantOwned =>
-        b.Entity<T>().HasQueryFilter("Tenant", e => e.OrganisationId == TenantId);
+        b.Entity<T>().HasQueryFilter("Tenant", e => e.OrganisationId == TenantId)
+         .Property(e => e.OrganisationId).IsConcurrencyToken(); // 5.9 item 3
 }
 ```
 
