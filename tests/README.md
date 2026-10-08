@@ -159,5 +159,6 @@ using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
 
 A request that the fallback policy or the `Manager` policy refuses then answers `401` signed out and `403` signed in,
 as problem details. To test a role that `UserRole` does not have, such as Release 2's Support, a request also sends
-the `X-Test-Role` header, whose value replaces the role claim's; an empty value leaves the user with no role claim.
+the `X-Test-Role` header, whose value replaces the role claim's; the value `TestSignIn.NoRole` leaves the user with no
+role claim (an empty value would not: the test server drops a header whose value is empty).
 `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.

@@ -24,10 +24,16 @@ internal static class TestSignIn
     public const string UserHeader = "X-Test-User";
 
     /// <summary>
-    /// Replaces the signed-in user's role claim value, for a role that <see cref="UserRole"/> does not have; with an
-    /// empty value, the user has no role claim. It needs <see cref="UserHeader"/>.
+    /// Replaces the signed-in user's role claim value, for a role that <see cref="UserRole"/> does not have; with
+    /// <see cref="NoRole"/>, the user has no role claim. It needs <see cref="UserHeader"/>.
     /// </summary>
     public const string RoleHeader = "X-Test-Role";
+
+    /// <summary>
+    /// The <see cref="RoleHeader"/> value that leaves the user with no role claim. An empty value cannot say so: the
+    /// test server drops a header whose value is empty, and the user keeps the role on their row.
+    /// </summary>
+    public const string NoRole = "(none)";
 
     private const string SchemeName = "TestSignIn";
 
@@ -76,7 +82,7 @@ internal static class TestSignIn
             ];
 
             var roleValue = replacesRole ? role.ToString() : user.Role.ToString();
-            if (roleValue.Length > 0)
+            if (roleValue != NoRole)
             {
                 claims.Add(new(types.RoleClaimType, roleValue));
             }

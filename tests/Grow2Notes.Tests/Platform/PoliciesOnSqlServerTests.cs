@@ -1,18 +1,24 @@
+using System.Globalization;
 using System.Net;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// Each policy through the app's pipeline, at a test-only endpoint behind it, called signed out and, with the test-only
-/// sign-in, as seeded organisation A's worker and manager and B's manager. <see cref="PoliciesTests"/> covers the
-/// policies without a database.
+/// sign-in, as seeded organisation A's worker and manager and B's manager; and every endpoint that is not
+/// <c>AllowAnonymous</c>, called as a seeded user whose role claim no policy names. <see cref="PoliciesTests"/> covers
+/// the policies without a database.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -21,6 +27,9 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
     // needs a signed-in user yet.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
     private const string ManagerPolicyPath = "/api/test-only/manager-policy";
+
+    // The methods an endpoint that names none is called with.
+    private static readonly string[] AnyMethod = ["GET", "POST", "PUT", "DELETE"];
 
     private readonly SeededOrganisations seeded;
     private readonly WebApplicationFactory<Program> app;
@@ -56,6 +65,16 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         { ManagerPolicyPath, Caller.ManagerOfB },
     };
 
+    // Roles are named, never inferred (mcp-server.md §3.5, convention 4): Release 2's Support, which UserRole does not
+    // have, Worker's name in the wrong case, Worker's stored value, and no role claim at all.
+    public static TheoryData<string> RolesNoPolicyNames { get; } = new()
+    {
+        "Support",
+        "worker",
+        ((int)UserRole.Worker).ToString(CultureInfo.InvariantCulture),
+        TestSignIn.NoRole,
+    };
+
     [Theory]
     [MemberData(nameof(Refusals))]
     public async Task A_caller_the_policy_refuses_gets_a_problem_that_is_never_stored(
@@ -80,6 +99,29 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    [Theory]
+    [MemberData(nameof(RolesNoPolicyNames))]
+    public async Task A_role_no_policy_names_is_refused_by_every_endpoint_that_is_not_anonymous(string role)
+    {
+        // A's manager, whom every policy admits with the role on their row, so only the replaced role can refuse them.
+        using var client = ClientFor(Caller.ManagerOfA);
+        client.DefaultRequestHeaders.Add(TestSignIn.RoleHeader, role);
+        var requests = RequestsToEveryEndpointThatIsNotAnonymous();
+        // So that the test cannot pass by calling nothing.
+        Assert.Contains((HttpMethod.Get, FallbackPolicyPath), requests);
+
+        foreach (var (method, path) in requests)
+        {
+            using var request = new HttpRequestMessage(method, path);
+
+            using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+            // The request is on both sides, so a failure names the request that got through.
+            Assert.Equal($"{method} {path}: 403", $"{method} {path}: {(int)response.StatusCode}");
+            await response.ReadProblemAsync(HttpStatusCode.Forbidden);
+        }
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
     private HttpClient ClientFor(Caller caller)
@@ -94,6 +136,22 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
             _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
         };
     }
+
+    // A request to each method of each endpoint that the app and this test map, taken from EndpointDataSource, except
+    // those marked AllowAnonymous, which authorization lets anyone call.
+    private List<(HttpMethod Method, string Path)> RequestsToEveryEndpointThatIsNotAnonymous() =>
+    [
+        .. from endpoint in app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
+           where endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null
+           from method in endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? AnyMethod
+           select (HttpMethod.Parse(method), PathOf(endpoint.RoutePattern)),
+    ];
+
+    // No endpoint that needs a signed-in user has a route parameter yet; the first to have one needs a value for it.
+    private static string PathOf(RoutePattern pattern) =>
+        pattern is { Parameters: [], RawText: { } path }
+            ? path
+            : throw new NotSupportedException($"This test has no value for the parameters of {pattern.RawText}.");
 
     // The header exactly as the app sent it. The typed CacheControl property would reformat it from parsed directives.
     private static string? CacheControl(HttpResponseMessage response) =>
