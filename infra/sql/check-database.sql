@@ -13,15 +13,16 @@
 --      encryptedSecret whose decryptorType is AzureKeyVaultXmlDecryptor and whose kid is the data-protection key in
 --      kv-grow2notes-<env>, and no unencrypted masterKey. The app identity can read and add keys.
 --   D  grow2notes_runtime is in db_datareader and db_datawriter only, and is denied DELETE on dbo.Organisation and
---      dbo.AspNetUsers; impersonating the app identity shows the denies in effect.
+--      dbo.AspNetUsers, and UPDATE and DELETE on dbo.AuditEvent; impersonating the app identity shows the denies in
+--      effect.
 --   E  Entra-only authentication is on, no database user signs in with a SQL password, and no Entra group is a
 --      database user. For information only: the app identity's open sessions.
 -- The second result set has one row per row of the key ring, as dates and 1/0 flags. To check that a restart of the
 -- web app keeps the key ring, run this before and after the restart: C2 and the same single row (row_id and
 -- creation_date) show it.
 --
--- When a migration adds tables or denies (design.md §10.6), update B7's table list, B8's expected history and D3's
--- denies below; D3 fails until it is updated.
+-- When a migration adds tables or denies (design.md §10.6), update B7's table list, B8's expected history, D3's
+-- denies and D5's probes below; D3 fails until it is updated.
 --
 -- It prints nothing secret: no SID (an Entra user's SID is the identity's client or object ID), no key ring XML, key
 -- ID or Key Vault key version, and no principal name but the two identities, grow2notes_runtime and the built-in
@@ -252,6 +253,14 @@ BEGIN TRY
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'UPDATE')), N'NULL'),
         N' DELETE=',
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'DELETE')), N'NULL'),
+        N'; AuditEvent SELECT=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'SELECT')), N'NULL'),
+        N' INSERT=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'INSERT')), N'NULL'),
+        N' UPDATE=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'UPDATE')), N'NULL'),
+        N' DELETE=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'DELETE')), N'NULL'),
         N'; for comparison, AspNetUserClaims DELETE=',
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.AspNetUserClaims', N'OBJECT', N'DELETE')), N'NULL'));
     SET @d5Pass = CASE WHEN HAS_PERMS_BY_NAME(N'dbo.Organisation', N'OBJECT', N'SELECT') = 1
@@ -261,7 +270,11 @@ BEGIN TRY
                          AND HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'SELECT') = 1
                          AND HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'INSERT') = 1
                          AND HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'UPDATE') = 1
-                         AND HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'DELETE') = 0 THEN 1 ELSE 0 END;
+                         AND HAS_PERMS_BY_NAME(N'dbo.AspNetUsers', N'OBJECT', N'DELETE') = 0
+                         AND HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'SELECT') = 1
+                         AND HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'INSERT') = 1
+                         AND HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'UPDATE') = 0
+                         AND HAS_PERMS_BY_NAME(N'dbo.AuditEvent', N'OBJECT', N'DELETE') = 0 THEN 1 ELSE 0 END;
 
     REVERT;
     SET @Impersonating = 0;
@@ -357,22 +370,24 @@ FROM (
     GROUP BY s.name, p.principal_id, o.owner_name
 ) AS d;
 
--- The tables that InitialCreate creates, and the history table.
+-- The tables that the migrations create, and the history table.
 DECLARE @b7Missing nvarchar(max), @b7Extra nvarchar(max), @b7Present int;
 SELECT @b7Missing = STRING_AGG(CASE WHEN t.object_id IS NULL THEN e.name END, N', '),
        @b7Extra = STRING_AGG(CASE WHEN e.name IS NULL THEN t.name END, N', '),
        @b7Present = SUM(CASE WHEN t.object_id IS NOT NULL AND e.name IS NOT NULL THEN 1 ELSE 0 END)
 FROM (SELECT object_id, name FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo') AND is_ms_shipped = 0) AS t
 FULL JOIN (VALUES (N'__EFMigrationsHistory'), (N'AspNetUserClaims'), (N'AspNetUserLogins'), (N'AspNetUserPasskeys'),
-                  (N'AspNetUsers'), (N'AspNetUserTokens'), (N'DataProtectionKeys'), (N'Organisation')) AS e(name)
+                  (N'AspNetUsers'), (N'AspNetUserTokens'), (N'AuditEvent'), (N'DataProtectionKeys'),
+                  (N'Organisation')) AS e(name)
     ON e.name = t.name COLLATE DATABASE_DEFAULT;
 
 DECLARE @b8 nvarchar(max) = (
     SELECT STRING_AGG(CONCAT(MigrationId, N' (EF Core ', ProductVersion, N')'), N', ')
                WITHIN GROUP (ORDER BY MigrationId)
     FROM dbo.[__EFMigrationsHistory]);
-DECLARE @b8Initial int = CASE WHEN EXISTS (
-    SELECT 1 FROM dbo.[__EFMigrationsHistory] WHERE MigrationId = N'20261004032521_InitialCreate') THEN 1 ELSE 0 END;
+DECLARE @b8Expected int = (
+    SELECT COUNT(*) FROM dbo.[__EFMigrationsHistory]
+    WHERE MigrationId IN (N'20261004032521_InitialCreate', N'20261008130254_AddAuditEvent'));
 
 ------------------------------------------------------------------------------------------------------------------------
 -- C. The Data Protection key ring in SQL, wrapped by the Key Vault key
@@ -447,9 +462,13 @@ SELECT @d3 = STRING_AGG(CONCAT(p.state_desc, N' ', p.permission_name, N' on ', p
                                    ELSE N' (target not shown)'
                                END), N'; ') WITHIN GROUP (ORDER BY p.class, OBJECT_NAME(p.major_id), p.permission_name),
        @d3Count = COUNT(*),
-       @d3Expected = SUM(CASE WHEN p.class = 1 AND p.minor_id = 0 AND p.state = 'D' AND p.permission_name = N'DELETE'
-                               AND p.major_id IN (OBJECT_ID(N'dbo.Organisation', N'U'),
-                                                  OBJECT_ID(N'dbo.AspNetUsers', N'U'))
+       @d3Expected = SUM(CASE WHEN p.class = 1 AND p.minor_id = 0 AND p.state = 'D'
+                               AND (   (p.permission_name = N'DELETE'
+                                        AND p.major_id IN (OBJECT_ID(N'dbo.Organisation', N'U'),
+                                                           OBJECT_ID(N'dbo.AspNetUsers', N'U'),
+                                                           OBJECT_ID(N'dbo.AuditEvent', N'U')))
+                                    OR (p.permission_name = N'UPDATE'
+                                        AND p.major_id = OBJECT_ID(N'dbo.AuditEvent', N'U')))
                               THEN 1 ELSE 0 END)
 FROM sys.database_permissions AS p
 WHERE p.grantee_principal_id = @RuntimeId;
@@ -577,15 +596,15 @@ WITH checks AS (
               N'dbo owns all tables, in schema dbo',
               ISNULL(@b6, N'(no tables)'),
               CASE WHEN @b6Total > 0 AND @b6NotDbo = 0 THEN 1 ELSE 0 END),
-        (207, N'B7', N'Tables created by InitialCreate, plus __EFMigrationsHistory',
-              N'8 present, none missing',
+        (207, N'B7', N'Tables created by the migrations, plus __EFMigrationsHistory',
+              N'9 present, none missing',
               CONCAT(ISNULL(@b7Present, 0), N' present; missing: ', ISNULL(@b7Missing, N'none'),
                      N'; other tables: ', ISNULL(@b7Extra, N'none')),
-              CASE WHEN @b7Present = 8 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
+              CASE WHEN @b7Present = 9 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
         (208, N'B8', N'Migrations history (dbo.__EFMigrationsHistory)',
-              N'20261004032521_InitialCreate (EF Core 10.0.12)',
+              N'20261004032521_InitialCreate (EF Core 10.0.12), 20261008130254_AddAuditEvent (EF Core 10.0.12)',
               ISNULL(@b8, N'(empty)'),
-              @b8Initial),
+              CASE WHEN @b8Expected = 2 THEN 1 ELSE 0 END),
 
         (301, N'C1', N'Key ring table dbo.DataProtectionKeys and its columns',
               N'Id int, FriendlyName nvarchar(max), Xml nvarchar(max)',
@@ -624,17 +643,22 @@ WITH checks AS (
               N'db_datareader, db_datawriter',
               ISNULL(@d2, N'(none)'),
               CASE WHEN @d2 = N'db_datareader, db_datawriter' THEN 1 ELSE 0 END),
-        (403, N'D3', N'Grants and denies on grow2notes_runtime (from InitialCreate)',
-              N'DENY DELETE on OBJECT_OR_COLUMN dbo.AspNetUsers; DENY DELETE on OBJECT_OR_COLUMN dbo.Organisation',
+        (403, N'D3', N'Grants and denies on grow2notes_runtime (from the migrations)',
+              CONCAT(N'DENY DELETE on OBJECT_OR_COLUMN dbo.AspNetUsers; ',
+                     N'DENY DELETE on OBJECT_OR_COLUMN dbo.AuditEvent; ',
+                     N'DENY UPDATE on OBJECT_OR_COLUMN dbo.AuditEvent; ',
+                     N'DENY DELETE on OBJECT_OR_COLUMN dbo.Organisation'),
               ISNULL(@d3, N'(none)'),
-              CASE WHEN @d3Count = 2 AND @d3Expected = 2 THEN 1 ELSE 0 END),
+              CASE WHEN @d3Count = 4 AND @d3Expected = 4 THEN 1 ELSE 0 END),
         (404, N'D4', N'Members of grow2notes_runtime',
               @AppUser,
               ISNULL(@d4, N'(none)'),
               CASE WHEN @d4 = @AppUser THEN 1 ELSE 0 END),
         (405, N'D5',
-              N'As the app identity: SELECT, INSERT, UPDATE allowed, DELETE refused on Organisation and AspNetUsers',
-              N'SELECT=1 INSERT=1 UPDATE=1 DELETE=0 on both',
+              CONCAT(N'As the app identity: SELECT and INSERT allowed; DELETE refused on Organisation, ',
+                     N'AspNetUsers and AuditEvent, and UPDATE on AuditEvent'),
+              CONCAT(N'SELECT=1 INSERT=1 UPDATE=1 DELETE=0 on Organisation and AspNetUsers; ',
+                     N'SELECT=1 INSERT=1 UPDATE=0 DELETE=0 on AuditEvent'),
               COALESCE(@d5, N'(not run, see A6)'),
               CASE WHEN @a6Error IS NULL AND @d5Pass = 1 THEN 1 ELSE 0 END),
 

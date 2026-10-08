@@ -49,11 +49,19 @@ namespace Grow2Notes.Web.Data.Migrations
                 table: "AuditEvent",
                 columns: new[] { "OrganisationId", "ParticipantId", "OccurredAtUtc" },
                 filter: "[ParticipantId] IS NOT NULL");
+
+            // The audit log is append-only, so the database itself refuses the app's identity a change or removal of a
+            // row, even if its code has a bug (design.md §5.8, §10.6). InitialCreate created the role.
+            migrationBuilder.Sql("DENY UPDATE, DELETE ON [dbo].[AuditEvent] TO [grow2notes_runtime];");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Dropping the table would drop the deny with it; revoking it first keeps Down the mirror of Up, as
+            // InitialCreate's is. Production never runs Down (design.md §10.6).
+            migrationBuilder.Sql("REVOKE UPDATE, DELETE ON [dbo].[AuditEvent] FROM [grow2notes_runtime];");
+
             migrationBuilder.DropTable(
                 name: "AuditEvent");
         }
