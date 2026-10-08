@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Grow2Notes.Tests.Fixtures;
 
 namespace Grow2Notes.Tests.Data;
 
@@ -27,7 +28,7 @@ public sealed partial class IgnoreQueryFiltersSourceTests
     [Fact]
     public void No_source_file_outside_the_operator_commands_uses_IgnoreQueryFilters()
     {
-        Assert.Empty(FindIgnoreQueryFiltersOutside(Path.Combine(RepositoryRoot(), "src"), OperatorCommands));
+        Assert.Empty(FindIgnoreQueryFiltersOutside(Path.Combine(Repository.Root(), "src"), OperatorCommands));
     }
 
     [Theory]
@@ -98,21 +99,6 @@ public sealed partial class IgnoreQueryFiltersSourceTests
         {
             Directory.Delete(srcRoot, recursive: true);
         }
-    }
-
-    // Found from the test's build output, which is inside the repository on a machine and in CI alike, so the test
-    // needs no app host for its content root, as the tests that read the web project's files through the factory do.
-    private static string RepositoryRoot()
-    {
-        for (var folder = new DirectoryInfo(AppContext.BaseDirectory); folder is not null; folder = folder.Parent)
-        {
-            if (File.Exists(Path.Combine(folder.FullName, "Grow2Notes.slnx")))
-            {
-                return folder.FullName;
-            }
-        }
-
-        throw new InvalidOperationException($"No folder above {AppContext.BaseDirectory} holds Grow2Notes.slnx.");
     }
 
     [GeneratedRegex(@"\bIgnoreQueryFilters\b")]
