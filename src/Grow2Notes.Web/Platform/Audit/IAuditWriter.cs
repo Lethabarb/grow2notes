@@ -17,7 +17,10 @@ internal interface IAuditWriter
     /// is the context's, so it also writes any other change the context is tracking. Saved or not, the event then
     /// leaves the change tracker, so with no transaction open a failed write is tried again by calling this method
     /// again, not by another <c>SaveChanges</c>, which would leave the event out. Inside <c>InTransactionAsync</c> a
-    /// transient failure runs the whole work again, this call included, so the event commits once.
+    /// transient failure runs the whole work again, this call included. The event is written at least once: if the
+    /// connection drops after the server has committed, the acknowledgement is lost and the retry can store the event
+    /// again: with no transaction open always, and inside <c>InTransactionAsync</c> unless the change it records has
+    /// its own idempotency guard, such as a version save's <c>Idempotency-Key</c> (design.md §5.9).
     /// </summary>
     /// <param name="organisationId">
     /// The organisation the event belongs to, which must be the tenant: the tenant save interceptor refuses the event

@@ -62,6 +62,8 @@ public sealed class AuditWriterTransactionTests(Grow2NotesFactory factory, SqlSe
         Assert.Equal(new Stored(Users: 0, Events: 0), await CommittedAsync(userId));
     }
 
+    // The failure comes before the commit. One after it, whose acknowledgement is lost, can store the event twice
+    // (IAuditWriter.WriteAsync).
     [Fact]
     public async Task When_a_transient_failure_runs_the_work_again_the_user_and_its_event_commit_once()
     {

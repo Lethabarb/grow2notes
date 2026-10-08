@@ -15,9 +15,9 @@ namespace Grow2Notes.Tests;
 /// <summary>
 /// Forwarded headers through the app's pipeline, with no database: a request comes as App Service's front end sends it,
 /// with the client's address in <c>X-Forwarded-For</c> and <c>https</c> in <c>X-Forwarded-Proto</c>, from a private
-/// address that the app's dual-stack socket gives as IPv4-mapped IPv6, or from any other address. A test-only endpoint
-/// writes an audit event, whose <c>IpAddress</c> is the client address the app took, and answers with the request's
-/// scheme as the app saw it.
+/// or link-local address that the app's dual-stack socket gives as IPv4-mapped IPv6, or as plain IPv4, or from any
+/// other address. A test-only endpoint writes an audit event, whose <c>IpAddress</c> is the client address the app
+/// took, and answers with the request's scheme as the app saw it.
 /// </summary>
 public sealed class ForwardedHeadersTests : IAsyncDisposable
 {
@@ -36,8 +36,8 @@ public sealed class ForwardedHeadersTests : IAsyncDisposable
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(store))));
 
-    // Addresses at both ends of each of the front end's ranges, with the client's address in App Service's own form,
-    // with a port, and without one.
+    // Addresses at both ends of each of the front end's private ranges, and link-local ones that Linux App Service's
+    // front end calls from, with the client's address in App Service's own form, with a port, and without one.
     [Theory]
     [InlineData("::ffff:10.0.0.1", "203.0.113.7:51234", "203.0.113.7")]
     [InlineData("::ffff:10.255.255.254", "203.0.113.7", "203.0.113.7")]
@@ -48,6 +48,8 @@ public sealed class ForwardedHeadersTests : IAsyncDisposable
     [InlineData("10.0.0.1", "203.0.113.7", "203.0.113.7")]
     [InlineData("172.31.255.254", "203.0.113.7", "203.0.113.7")]
     [InlineData("192.168.0.1", "203.0.113.7", "203.0.113.7")]
+    [InlineData("::ffff:169.254.130.1", "203.0.113.7:51234", "203.0.113.7")]
+    [InlineData("169.254.129.1", "203.0.113.7", "203.0.113.7")]
     public async Task From_a_front_end_address_the_IP_address_and_scheme_are_the_forwarded_ones_with_or_without_a_port(
         string frontEnd, string forwardedFor, string stored)
     {
@@ -85,6 +87,8 @@ public sealed class ForwardedHeadersTests : IAsyncDisposable
     [InlineData("::ffff:172.32.0.1", "172.32.0.1")]
     [InlineData("::ffff:192.167.255.254", "192.167.255.254")]
     [InlineData("::ffff:192.169.0.1", "192.169.0.1")]
+    [InlineData("::ffff:169.253.255.254", "169.253.255.254")]
+    [InlineData("::ffff:169.255.0.1", "169.255.0.1")]
     public async Task A_request_from_any_other_address_keeps_its_own_IP_address_and_scheme(string remote, string stored)
     {
         var scheme = await SendAsync(remote, "198.51.100.66:51234");
