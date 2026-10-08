@@ -28,6 +28,8 @@ internal static class EndpointMatrix
     /// </summary>
     public static readonly IReadOnlyList<string> AnyMethod = [];
 
+    private static readonly IReadOnlyList<string> Get = ["GET"];
+
     private static readonly IReadOnlyList<string> GetOrHead = ["GET", "HEAD"];
 
     private static readonly HttpMethod[] CalledForAnyMethod =
@@ -38,21 +40,26 @@ internal static class EndpointMatrix
     [
         // The SPA, for everyone, so a signed-out user gets the sign-in page: each file of the build, and index.html at
         // each client route.
-        //  Methods    Route              Signed out A's worker A's manager B's manager Request
-        new(GetOrHead, StaticAssets,      OK,        OK,        OK,         OK),
-        new(GetOrHead, "{*path:nonfile}", OK,        OK,        OK,         OK,         At("/")),
+        //  Methods    Route                     Signed out A's worker A's manager B's manager Request
+        new(GetOrHead, StaticAssets,             OK,        OK,        OK,         OK),
+        new(GetOrHead, "{*path:nonfile}",        OK,        OK,        OK,         OK,         At("/")),
 
         // A request that no other endpoint answers is a 404, never a 401: a path with a file extension that is no
         // file of the build, such as /favicon.ico, or a client route called with a method other than GET or HEAD.
-        new(AnyMethod, "{*path}",         NotFound,  NotFound,  NotFound,   NotFound,   At("/favicon.ico")),
+        new(AnyMethod, "{*path}",                NotFound,  NotFound,  NotFound,   NotFound,   At("/favicon.ico")),
 
-        // An unknown /api path is a 404 for every method, never the SPA page or a 401 (design.md §6.1).
-        new(AnyMethod, "/api/{**rest}",   NotFound,  NotFound,  NotFound,   NotFound,   At("/api/no-such-endpoint")),
+        // An unknown /api path is a 404 for every method, never the SPA page or a 401 (design.md §6.1). It is outside
+        // the /api group, so it needs no antiforgery token either.
+        new(AnyMethod, "/api/{**rest}",          NotFound,  NotFound,  NotFound,   NotFound,   At("/api/no-such-path")),
 
         // App Service's health check and the deploy's smoke test send no credentials. Readiness runs the database
         // check, which passes here.
-        new(AnyMethod, "/healthz",        OK,        OK,        OK,         OK),
-        new(AnyMethod, "/healthz/ready",  OK,        OK,        OK,         OK),
+        new(AnyMethod, "/healthz",               OK,        OK,        OK,         OK),
+        new(AnyMethod, "/healthz/ready",         OK,        OK,        OK,         OK),
+
+        // The API (design.md §6), in the /api group. The sign-in page needs an antiforgery token before anyone is
+        // signed in (§6.2).
+        new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -83,7 +90,8 @@ internal static class EndpointMatrix
         return ([.. endpointKeys.Except(RowsByKey.Keys)], [.. RowsByKey.Keys.Except(endpointKeys)]);
     }
 
-    private static IReadOnlyList<string> MethodsOf(RouteEndpoint endpoint) =>
+    /// <summary>The methods that <paramref name="endpoint"/> names, or <see cref="AnyMethod"/>.</summary>
+    public static IReadOnlyList<string> MethodsOf(RouteEndpoint endpoint) =>
         endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? AnyMethod;
 
     private static string KeyOf(RouteEndpoint endpoint) => KeyOf(
@@ -137,6 +145,16 @@ internal sealed record EndpointRow(
 /// <summary>A call of an endpoint with one of the methods that <see cref="EndpointMatrix.CallsTo"/> gives it.</summary>
 internal sealed record EndpointCall(HttpMethod Method, RouteEndpoint Endpoint)
 {
+    // The methods that antiforgery leaves unchecked.
+    private static readonly HttpMethod[] Safe = [HttpMethod.Get, HttpMethod.Head, HttpMethod.Options, HttpMethod.Trace];
+
+    /// <summary>
+    /// Whether the call changes something, so it must send the caller's antiforgery token (design.md §9.8): a call of
+    /// an endpoint that names its methods, with any method but GET, HEAD, OPTIONS and TRACE, such as POST, PUT or
+    /// DELETE. An endpoint that names none, such as a catch-all, answers those methods too, but changes nothing.
+    /// </summary>
+    public bool ChangesState => EndpointMatrix.MethodsOf(Endpoint) is not [] && !Safe.Contains(Method);
+
     /// <summary>
     /// The request for this call, as the endpoint's row builds it. An endpoint with no row, such as one that a test
     /// maps for itself, is called at its route pattern.

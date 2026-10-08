@@ -1,4 +1,5 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.DataProtection;
@@ -72,6 +73,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = 
 builder.Services.AddAuthentication();
 builder.Services.AddPolicies();
 
+// Antiforgery, whose token the /api group's filter checks on every request that changes something (design.md §9.8).
+builder.Services.AddApiGroup();
+
 // The tenant of each request or operator command: the signed-in user's organisation, or the one that sign-in, setup
 // and the commands set from what they have loaded (design.md §5.9). It reads the user from the request's HttpContext.
 builder.Services.AddHttpContextAccessor();
@@ -134,8 +138,13 @@ app.MapStaticAssets().AllowAnonymous();
 
 app.MapHealthEndpoints();
 
+// Every API endpoint is mapped in the /api group (ApiGroup).
+app.MapApiGroup()
+    .MapAntiforgeryEndpoint();
+
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
-// every method, never the SPA page (design.md §6.1), and never a 401.
+// every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's
+// filter never answers in its place.
 app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
 
 // Client-side routes get index.html, for GET and HEAD. The default pattern skips paths with a file extension.

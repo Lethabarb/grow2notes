@@ -44,10 +44,12 @@ internal static class TestSignIn
     }
 
     /// <summary>
-    /// Signs in every request that <paramref name="client"/> sends as the user whose ID is <paramref name="userId"/>.
+    /// Signs in every request that <paramref name="client"/> sends from now on as the user whose ID is
+    /// <paramref name="userId"/>, in place of any user it signed in as before.
     /// </summary>
     public static HttpClient SignInAs(this HttpClient client, Guid userId)
     {
+        client.DefaultRequestHeaders.Remove(UserHeader);
         client.DefaultRequestHeaders.Add(UserHeader, userId.ToString());
         return client;
     }

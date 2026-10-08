@@ -103,6 +103,14 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   it `AllowAnonymous` unless the test is about who may call it. Until S00.04.01 adds the session cookie, the app has
   no authentication scheme, so in `AppWithoutDatabase` an endpoint that refuses a signed-out request answers `500`:
   the challenge has no scheme to use.
+- A test that calls `GET /api/auth/antiforgery` or an endpoint in the `/api` group calls `https://localhost`, with a
+  client from `CreateHttpsClient()` (`Grow2Notes.Tests/Fixtures/AntiforgeryTokens.cs`): the antiforgery cookie is
+  `Secure` always, so antiforgery throws on a request that is not HTTPS, and the app answers `500`. A request that
+  changes something sends the token that `FetchTokenAsync()` fetched with the same client, which keeps the cookie, in
+  its `X-XSRF-TOKEN` header, as the SPA does (design.md §9.8). A token is issued to the user a request is signed in
+  as, so fetch it after signing the client in. In `AppWithoutDatabase`, Data Protection, which protects the tokens,
+  has no key ring until `KeepKeysInMemory()` gives it one. A test-only endpoint mapped in the group, as
+  `TestOnlyApiEndpoint` maps one, gets the group's filter; one mapped outside it, as most tests map theirs, does not.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant
@@ -183,10 +191,22 @@ maps for itself needs no row.
   for A's worker at one with the `Manager` policy, and, from the first endpoint that loads one of an organisation's
   records, `404` for B's manager at A's (§9.2).
 - By default the matrix calls an endpoint at its route pattern. A row whose route has parameters builds its own
-  request, such as `At("/api/no-such-endpoint")`, and its builder is asked again for each call. A call commits, so a
+  request, such as `At("/api/no-such-path")`, and its builder is asked again for each call. A call commits, so a
   row whose calls change something builds each call's request after adding the record that call acts on, in
   organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's services and
   the seeded organisations to do it with.
+- The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
+  token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
+  or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it once more without one,
+  expecting `400` from the `/api` group's filter. Of the statuses a row gives, only authorization's `401` and `403` come
+  before the filter (binding and validation run first too, but a row's requests are valid), so at an endpoint that is
+  not `AllowAnonymous`, the matrix expects the row's `401` or `403` without a token too. At one that is, such as `POST
+  /api/auth/login`, whose `401` to bad credentials is its own (design.md §6.2), it expects `400`. So a row's statuses
+  are those of a call with the token, and an endpoint that changes something outside the group fails the run, even one
+  that answers `401` to every caller. A `403` that the handler of an endpoint that is not `AllowAnonymous` gives, such
+  as `note.not_editable` (§6.3), comes after the filter, yet the matrix expects it without a token too; the first such
+  row will need to say what a call without one gets. An endpoint that names no method, such as a catch-all, is called
+  with `POST`, `PUT` and `DELETE` too, but changes nothing, and gets no token.
 - `EndpointMatrix.CallsTo` lists every call the matrix makes, and `EndpointCall.RequestAsync` builds the request as
   the endpoint's row does, so a test of every endpoint, such as `PoliciesOnSqlServerTests`' role test, uses them. An
   endpoint with no row, such as one the test maps for itself, gets a request to its route pattern.
