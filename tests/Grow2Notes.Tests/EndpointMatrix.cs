@@ -149,9 +149,10 @@ internal sealed record EndpointCall(HttpMethod Method, RouteEndpoint Endpoint)
     private static readonly HttpMethod[] Safe = [HttpMethod.Get, HttpMethod.Head, HttpMethod.Options, HttpMethod.Trace];
 
     /// <summary>
-    /// Whether the call changes something, so it must send the caller's antiforgery token (design.md §9.8): a call of
-    /// an endpoint that names its methods, with any method but GET, HEAD, OPTIONS and TRACE, such as POST, PUT or
-    /// DELETE. An endpoint that names none, such as a catch-all, answers those methods too, but changes nothing.
+    /// Whether the call changes something, so it must send the caller's antiforgery token, and any body as JSON
+    /// (design.md §9.8): a call of an endpoint that names its methods, with any method but GET, HEAD, OPTIONS and
+    /// TRACE, such as POST, PUT or DELETE. An endpoint that names none, such as a catch-all, answers those methods too,
+    /// but changes nothing.
     /// </summary>
     public bool ChangesState => EndpointMatrix.MethodsOf(Endpoint) is not [] && !Safe.Contains(Method);
 

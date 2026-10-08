@@ -107,10 +107,12 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   client from `CreateHttpsClient()` (`Grow2Notes.Tests/Fixtures/AntiforgeryTokens.cs`): the antiforgery cookie is
   `Secure` always, so antiforgery throws on a request that is not HTTPS, and the app answers `500`. A request that
   changes something sends the token that `FetchTokenAsync()` fetched with the same client, which keeps the cookie, in
-  its `X-XSRF-TOKEN` header, as the SPA does (design.md §9.8). A token is issued to the user a request is signed in
-  as, so fetch it after signing the client in. In `AppWithoutDatabase`, Data Protection, which protects the tokens,
-  has no key ring until `KeepKeysInMemory()` gives it one. A test-only endpoint mapped in the group, as
-  `TestOnlyApiEndpoint` maps one, gets the group's filter; one mapped outside it, as most tests map theirs, does not.
+  its `X-XSRF-TOKEN` header, as the SPA does (design.md §9.8), and sends any body as `application/json`, as
+  `PostAsJsonAsync` and `JsonContent` do: the group answers `415` to a request with any other `Content-Type`, or with
+  a body and none. A token is issued to the user a request is signed in as, so fetch it after signing the client in.
+  In `AppWithoutDatabase`, Data Protection, which protects the tokens, has no key ring until `KeepKeysInMemory()` gives
+  it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
+  mapped outside it, as most tests map theirs, does not.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant
@@ -197,16 +199,17 @@ maps for itself needs no row.
   the seeded organisations to do it with.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
-  or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it once more without one,
-  expecting `400` from the `/api` group's filter. Of the statuses a row gives, only authorization's `401` and `403` come
-  before the filter (binding and validation run first too, but a row's requests are valid), so at an endpoint that is
-  not `AllowAnonymous`, the matrix expects the row's `401` or `403` without a token too. At one that is, such as `POST
-  /api/auth/login`, whose `401` to bad credentials is its own (design.md §6.2), it expects `400`. So a row's statuses
-  are those of a call with the token, and an endpoint that changes something outside the group fails the run, even one
-  that answers `401` to every caller. A `403` that the handler of an endpoint that is not `AllowAnonymous` gives, such
-  as `note.not_editable` (§6.3), comes after the filter, yet the matrix expects it without a token too; the first such
-  row will need to say what a call without one gets. An endpoint that names no method, such as a catch-all, is called
-  with `POST`, `PUT` and `DELETE` too, but changes nothing, and gets no token.
+  or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,
+  expecting `400` from the `/api` group's filter, and with it but with a form-encoded body in place of the row's,
+  expecting `415` (§9.8 item 3). Of the statuses a row gives, only authorization's `401` and `403` come before the
+  filter (binding and validation run first too, but a row's requests are valid), so at an endpoint that is not
+  `AllowAnonymous`, the matrix expects the row's `401` or `403` to both calls too. At one that is, such as `POST
+  /api/auth/login`, whose `401` to bad credentials is its own (design.md §6.2), it expects `400` and `415`. So a row's
+  statuses are those of a call with the token, and an endpoint that changes something outside the group fails the
+  run, even one that answers `401` to every caller. A `403` that the handler of an endpoint that is not
+  `AllowAnonymous` gives, such as `note.not_editable` (§6.3), comes after the filter, yet the matrix expects it to both
+  calls too; the first such row will need to say what they get. An endpoint that names no method, such as a
+  catch-all, is called with `POST`, `PUT` and `DELETE` too, but changes nothing, and gets no token.
 - `EndpointMatrix.CallsTo` lists every call the matrix makes, and `EndpointCall.RequestAsync` builds the request as
   the endpoint's row does, so a test of every endpoint, such as `PoliciesOnSqlServerTests`' role test, uses them. An
   endpoint with no row, such as one the test maps for itself, gets a request to its route pattern.
