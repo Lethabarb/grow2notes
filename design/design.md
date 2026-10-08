@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A48), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A49), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1838,8 +1838,8 @@ There are no deployment slots. A production deploy restarts the app for a few se
   4. Add the runner's IP as a temporary SQL firewall rule.
   5. Run `efbundle` with Entra authentication as the deployment identity.
   6. Remove the firewall rule (an `always()` step).
-  7. Zip-deploy with `azure/webapps-deploy`.
-  8. Smoke-test `/healthz` and `/api/auth/antiforgery`.
+  7. Deploy `app.zip` with `az webapp deploy --type zip --track-status true`. The app runs from the package (A49): App Service mounts the zip read-only as `wwwroot` rather than unpacking it under the running app, and sends traffic to the new build only once its `/healthz` answers `200`; the command waits until the new build has started.
+  8. Smoke-test: wait until `/index.html` carries the `Last-Modified` that the build's static asset manifest in `app.zip` gives it, which proves the new build is answering (A49), then check `/healthz` and `/api/auth/antiforgery`.
 - **Approval on a private repository:** required reviewers need GitHub Enterprise there, so the deliberate manual `workflow_dispatch` is the approval. The `prod` environment is restricted to `main` (GitHub Pro or Team on a private repository).
 
 ### 10.5 Infrastructure as code (Bicep)
@@ -2123,6 +2123,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A46 | Unpicking a group | Unpicking a group clears that group's ticks on this note, with no confirmation. Picking it again shows its items unticked. |
 | A47 | Copied-picks line | When at least one group was copied (A44), the new note and its draft show one line naming the date of the note the picks came from: "These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen." Edit mode, the read view and the files do not. This line is not part of D46; dropping it also removes `NoteDraft.PicksCopiedFrom`, the `picksCopiedFrom` field on `GET …/draft`, and the copied-line rows in the note form and group picker specs. |
 | A48 | Tenant concurrency token | `OrganisationId` is a concurrency token on every `ITenantOwned` entity, so EF Core's updates and deletes match the row's original organisation as well as its key: a row made up with another organisation's key and the tenant's ID, which the `SaveChanges` interceptor cannot tell from one of the tenant's, matches no row, and the save throws and writes nothing (§5.9 item 3). Taken by the developer on 8 October 2026, when a test found that gap (S00.03.02); the owner may overturn it. |
+| A49 | Deploying the app | Both environments run the app from its deployed zip (`WEBSITE_RUN_FROM_PACKAGE=1`): App Service mounts `app.zip` read-only as `wwwroot`, so a running build never loads a later build's files, and it sends traffic to a newly started build only once `/healthz` answers `200` (`WEBSITE_WARMUP_PATH=/healthz`, `WEBSITE_WARMUP_STATUSES=200`; `/healthz` never touches the database, §10.8). The pipeline deploys with `az webapp deploy --track-status true`, which waits until the new build has started, and the smoke test waits until `/index.html` carries the `Last-Modified` that the build's static asset manifest in `app.zip` gives it before checking `/healthz` (§10.4 steps 7 and 8). Taken by the developer on 9 October 2026, after a deploy unpacked the new build under the running app and the old process answered `500` while it loaded the new files (S00.02.03); the owner may overturn it. |
 
 ---
 
