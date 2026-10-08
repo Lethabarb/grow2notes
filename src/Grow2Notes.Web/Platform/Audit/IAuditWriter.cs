@@ -10,12 +10,14 @@ namespace Grow2Notes.Web.Platform.Audit;
 internal interface IAuditWriter
 {
     /// <summary>
-    /// Saves one event through the scope's <c>Grow2NotesDbContext</c>, at the time <see cref="TimeProvider"/> gives
-    /// and from the client address of the current request, or none outside a request. Inside
-    /// <c>InTransactionAsync</c> the save joins the open transaction, so the event commits or rolls back with the
-    /// change it records (design.md §5.9); with no transaction open it commits at once, as a download's event must
-    /// before the file is sent (§5.3). The save is the context's, so it also writes any other change the context is
-    /// tracking.
+    /// Saves one event through the scope's <c>Grow2NotesDbContext</c>, at the time <see cref="TimeProvider"/> gives and
+    /// from the client address of the current request, or none outside a request. Inside <c>InTransactionAsync</c> the
+    /// save joins the open transaction, so the event commits or rolls back with the change it records (design.md §5.9);
+    /// with no transaction open it commits at once, as a download's event must before the file is sent (§5.3). The save
+    /// is the context's, so it also writes any other change the context is tracking. Saved or not, the event then
+    /// leaves the change tracker, so with no transaction open a failed write is tried again by calling this method
+    /// again, not by another <c>SaveChanges</c>, which would leave the event out. Inside <c>InTransactionAsync</c> a
+    /// transient failure runs the whole work again, this call included, so the event commits once.
     /// </summary>
     /// <param name="organisationId">
     /// The organisation the event belongs to, which must be the tenant: the tenant save interceptor refuses the event
