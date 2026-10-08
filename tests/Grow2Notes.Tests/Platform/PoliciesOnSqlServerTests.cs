@@ -22,8 +22,8 @@ namespace Grow2Notes.Tests.Platform;
 [Collection<SqlServerCollection>]
 public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
 {
-    // Endpoints that only this test maps, under /api, so their responses get the API's caching rule. No real endpoint
-    // needs a signed-in user yet.
+    // Endpoints that only this test maps, each behind one policy and nothing else, under /api, so their responses get
+    // the API's caching rule.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
     private const string ManagerPolicyPath = "/api/test-only/manager-policy";
 

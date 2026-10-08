@@ -11,14 +11,14 @@ namespace Grow2Notes.Tests;
 /// <summary>
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy refuses is challenged
-/// by the cookie, and gets a <c>401</c> problem, as a test-only endpoint behind that policy shows; so the others show
-/// that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page
-/// or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database here, so they run without
-/// Docker.
+/// by the cookie, and gets a <c>401</c> problem, as a test-only endpoint behind that policy and the app's own
+/// <c>/api/auth/me</c> show; so the others show that the page, its files and the health endpoints are
+/// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
+/// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed partial class SignedOutTests : IAsyncDisposable
 {
-    // Under /api, so it gets the API's caching rule. No endpoint of the app's needs a signed-in user yet.
+    // Under /api, so it gets the API's caching rule, as the app's own endpoints there do.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
 
     public static MatrixTheoryData<string, string> NoSuchFiles { get; } =
@@ -35,15 +35,18 @@ public sealed partial class SignedOutTests : IAsyncDisposable
 
     // The cookie challenges with a bare 401, which the status code pages make problem details, rather than redirecting
     // to a login page, which the app does not have (design.md §7.2). Without the app's OnRedirectToLogin, the cookie
-    // handler still answers this endpoint 401, but with a Location naming /Account/Login, so the Location is the check.
-    [Fact]
-    public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored()
+    // handler still answers 401, but with a Location naming /Account/Login, so the Location is the check. The session's
+    // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user.
+    [Theory]
+    [InlineData(FallbackPolicyPath)]
+    [InlineData("/api/auth/me")]
+    public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored(string path)
     {
         await using var withEndpoint = app.WithWebHostBuilder(builder => builder.ConfigureServices(
             services => services.AddSingleton<IStartupFilter>(new FallbackPolicyEndpoint())));
         using var client = withEndpoint.CreateClient(new() { AllowAutoRedirect = false });
 
-        using var response = await client.GetAsync(FallbackPolicyPath, TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
