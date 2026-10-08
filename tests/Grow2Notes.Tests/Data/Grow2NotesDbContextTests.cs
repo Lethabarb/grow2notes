@@ -1,6 +1,7 @@
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Data;
@@ -15,6 +16,20 @@ public sealed class Grow2NotesDbContextTests(Grow2NotesFactory factory) : IClass
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
 
         Assert.True(await db.Database.CanConnectAsync(TestContext.Current.CancellationToken));
+    }
+
+    // From the app's services, as every test here takes the context. One made without the app's Identity options
+    // builds its model at Identity's default schema version, and EF Core caches that model for every context of this
+    // type in the test run, so migrating the test database would then fail.
+    [Fact]
+    public void The_app_context_has_the_tenant_save_interceptor()
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var interceptors = db.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()!.Interceptors;
+
+        Assert.Single(interceptors!.OfType<TenantSaveChangesInterceptor>());
     }
 
     [Fact]

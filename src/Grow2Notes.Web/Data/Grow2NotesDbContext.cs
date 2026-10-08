@@ -9,7 +9,8 @@ namespace Grow2Notes.Web.Data;
 /// The application database (design.md §5). It derives from <see cref="IdentityUserContext{TUser, TKey}"/>, not
 /// <c>IdentityDbContext</c>, so Identity creates no role tables: a user's role is the <c>Role</c> column. The Identity
 /// schema version comes from <c>IdentityOptions.Stores.SchemaVersion</c>, which Program.cs sets to <c>Version3</c> to
-/// add <c>AspNetUserPasskeys</c>. A query on a tenant-owned table sees only the tenant's rows (design.md §5.9).
+/// add <c>AspNetUserPasskeys</c>. A query on a tenant-owned table sees only the tenant's rows, and a save writes only
+/// the tenant's rows (design.md §5.9).
 /// </summary>
 internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options, ITenantContext tenant)
     : IdentityUserContext<ApplicationUser, Guid>(options)
@@ -37,6 +38,11 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             await work(ct);
             await transaction.CommitAsync(ct);
         }, cancellationToken);
+
+    // Here rather than where the app registers the context, so that every instance has it, however it is made, and it
+    // checks each save against the same tenant as this context's queries.
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder.AddInterceptors(new TenantSaveChangesInterceptor(tenant));
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
         ModelConventions.Apply(configurationBuilder);
