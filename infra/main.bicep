@@ -116,6 +116,13 @@ module app 'modules/app.bicep' = {
       DataProtection__KeyVaultKeyUri: keyVault.outputs.keyUri
       APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.applicationInsightsConnectionString
       APPLICATIONINSIGHTS_STATSBEAT_DISABLED: 'true'
+      // App Service mounts the deployed zip read-only as wwwroot, so a running build never loads a later build's files,
+      // and sends traffic to a newly started build only once /healthz answers 200 (design.md §10.4 step 7, A49).
+      // /healthz in both environments, not prod's /healthz/ready, because it never touches the database (design.md
+      // §10.8): a database outage cannot hold back a start.
+      WEBSITE_RUN_FROM_PACKAGE: '1'
+      WEBSITE_WARMUP_PATH: '/healthz'
+      WEBSITE_WARMUP_STATUSES: '200'
     }
   }
 }

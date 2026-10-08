@@ -187,36 +187,57 @@ jobs:
           az sql server firewall-rule delete --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test
           --name "$FIREWALL_RULE" --output none --only-show-errors
 
-      # design.md §10.4 step 7. The app accepts no basic-auth publishing credentials (design.md §9.4), so there is no
-      # publish profile: the action presents a token from the Azure CLI's sign-in to the app's Kudu (scm) site, which
-      # the deployment identity's Contributor role lets in. Kudu's defaults for a zip suit an app that is already
-      # published: it deletes the previous files, unpacks the publish output that ci.yml put at the zip's root, builds
-      # nothing (SCM_DO_BUILD_DURING_DEPLOYMENT is not set) and restarts the app. App Service starts the only assembly
-      # with a .runtimeconfig.json, Grow2Notes.Web.dll, so no startup command is set. v3 is the current major; GitHub
-      # can label a later patch to v2 as the latest release.
-      - name: Deploy app.zip
-        uses: azure/webapps-deploy@02a81bead70021f5284939794bcec79c271ab383 # v3.0.8
+      # The deploy needs a token for the app's Kudu (scm) site, a resource az has none for yet, so az presents GitHub's
+      # token again, and the database steps can take longer than its five minutes.
+      - name: Sign in to Azure before the app deploy
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
-          app-name: app-grow2notes-test
-          # The subscription is shared with other workloads (D60), so the group makes the action's lookup of the app
-          # by name explicit.
-          resource-group-name: rg-grow2notes-test-ause
-          package: artifacts/app.zip
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # design.md §10.4 step 8, /healthz only until S00.03.04 adds /api/auth/antiforgery. /healthz never touches the
-      # database (design.md §10.8). webapps-deploy returns once Kudu has asked App Service to restart the app, not once
-      # the new build answers: it does not track the restart as az webapp deploy does, and nothing the app serves names
-      # its build. So a 200 in the first seconds can come from the old build before the restart stops it; this step
-      # cannot tell the two apart, and catches a new build that does not start only if the old one has stopped first.
-      # curl retries every error, App Service's 5xx answers while the app restarts included, every 10 seconds for up to
-      # five minutes, to allow for the restart and a cold start on B1.
-      - name: Smoke-test /healthz
+      # design.md §10.4 step 7 (A49). The app accepts no basic-auth publishing credentials (design.md §9.4), so az signs
+      # in to Kudu with an Entra token, which the deployment identity's Contributor role lets in. The app runs from its
+      # package (main.bicep), so the old process never loads the new build's files, as it did when Kudu unpacked them
+      # under it (S00.02.03's Notes). App Service starts the only assembly with a .runtimeconfig.json, so no startup
+      # command is set. When az cannot track the new build's start, it returns once Kudu has the zip, so step 8 is what
+      # proves the new build answers. The result lists resource IDs, hence --output none.
+      - name: Deploy app.zip
+        run: >-
+          az webapp deploy --resource-group rg-grow2notes-test-ause --name app-grow2notes-test
+          --src-path artifacts/app.zip --type zip --track-status true --output none --only-show-errors
+
+      # design.md §10.4 step 8 (A49), /healthz only until S00.03.04 adds /api/auth/antiforgery. A 200 alone can come
+      # from the old build, so the step first waits for this build's index.html. The app serves its Last-Modified, the
+      # time CI built the SPA, from the static asset manifest in app.zip, so it names the build. curl sends no
+      # Accept-Encoding, so it gets the plain index.html: the manifest's entry with no selectors. It tries every 10
+      # seconds for up to five minutes, to allow for a cold start on B1, then checks /healthz, which never touches the
+      # database (design.md §10.8).
+      - name: Smoke-test the new build
         env:
-          HEALTHZ_URL: https://app-grow2notes-test.azurewebsites.net/healthz
+          SITE_URL: https://app-grow2notes-test.azurewebsites.net
+          MANIFEST: Grow2Notes.Web.staticwebassets.endpoints.json
         run: |
-          if ! body=$(curl -fsS --max-time 20 --retry 30 --retry-delay 10 --retry-max-time 300 --retry-all-errors \
-                        "$HEALTHZ_URL"); then
-            echo "::error::$HEALTHZ_URL did not answer 200 OK within five minutes."
+          if ! expected=$(unzip -p artifacts/app.zip "$MANIFEST" | jq -er '
+                            .Endpoints[] | select(.Route == "index.html" and (.Selectors | length) == 0)
+                            | .ResponseHeaders[] | select(.Name == "Last-Modified") | .Value'); then
+            echo "::error::$MANIFEST in app.zip gives no Last-Modified for index.html."
             exit 1
           fi
-          echo "$HEALTHZ_URL answered: $body"
+          echo "This build's index.html was last modified $expected."
+          deadline=$((SECONDS + 300))
+          until served=$(curl -fsS --max-time 20 --output /dev/null --write-out '%header{last-modified}' \
+                           "$SITE_URL/index.html") && [[ $served == "$expected" ]]; do
+            if ((SECONDS >= deadline)); then
+              echo "::error::$SITE_URL/index.html was not this build's within five minutes."
+              exit 1
+            fi
+            echo "index.html is not this build's yet (Last-Modified: ${served:-none}); trying again in 10 seconds."
+            sleep 10
+          done
+          echo "$SITE_URL/index.html is this build's."
+          if ! body=$(curl -fsS --max-time 20 "$SITE_URL/healthz"); then
+            echo "::error::$SITE_URL/healthz did not answer 200 OK."
+            exit 1
+          fi
+          echo "$SITE_URL/healthz answered: $body"
