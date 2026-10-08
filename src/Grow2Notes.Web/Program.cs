@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +57,10 @@ builder.Services.AddScoped<ITenantContext, TenantContext>();
 // Code asks TimeProvider for the time, never DateTime.Now, so tests can replace the clock (design.md §7.5).
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MelbourneClock>();
+
+// One per scope, so each event is saved through the scope's context and joins the transaction open there, committing
+// or rolling back with the change it records (design.md §5.9).
+builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 
 var app = builder.Build();
 
