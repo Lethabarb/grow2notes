@@ -48,6 +48,11 @@ builder.Services.AddDataProtection()
 builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
 
+// The tenant of each request or operator command: the signed-in user's organisation, or the one that sign-in, setup
+// and the commands set from what they have loaded (design.md §5.9). It reads the user from the request's HttpContext.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+
 // Code asks TimeProvider for the time, never DateTime.Now, so tests can replace the clock (design.md §7.5).
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MelbourneClock>();
