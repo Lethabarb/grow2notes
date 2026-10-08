@@ -157,8 +157,36 @@ every request a client sends:
 using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
 ```
 
+`SignInAs(caller, sqlServer.Seeded)` signs in as one of the endpoint matrix's callers (below), or, for
+`Caller.SignedOut`, adds nothing.
+
 A request that the fallback policy or the `Manager` policy refuses then answers `401` signed out and `403` signed in,
 as problem details. To test a role that `UserRole` does not have, such as Release 2's Support, a request also sends
 the `X-Test-Role` header, whose value replaces the role claim's; the value `TestSignIn.NoRole` leaves the user with no
 role claim (an empty value would not: the test server drops a header whose value is empty).
 `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
+
+### The endpoint matrix
+
+`Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
+`Caller`: signed out, A's worker, A's manager and B's manager (design.md §2, §9.2). Each must answer with the status in
+the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status only. An endpoint with no row
+fails the run, and so does a row with no endpoint, so a story that maps, changes or removes an endpoint changes its row
+in the same change. The app is hosted there with no test-only endpoints, as in production, so an endpoint that a test
+maps for itself needs no row.
+
+- A row finds its endpoint by the methods it is mapped with and its route pattern as mapped, the `/api` group's prefix
+  included: `["GET"]` for `MapGet`, and `AnyMethod` for an endpoint mapped with `Map` or `MapFallback`, which names no
+  method and is called with `GET`, `POST`, `PUT` and `DELETE`. One row stands for every file of the SPA build
+  (`StaticAssets`), whose names change with each build.
+- The four statuses follow design.md §2 and §9.1: `401` signed out at an endpoint that is not `AllowAnonymous`, `403`
+  for A's worker at one with the `Manager` policy, and, from the first endpoint that loads one of an organisation's
+  records, `404` for B's manager at A's (§9.2).
+- By default the matrix calls an endpoint at its route pattern. A row whose route has parameters builds its own
+  request, such as `At("/api/no-such-endpoint")`, and its builder is asked again for each call. A call commits, so a
+  row whose calls change something builds each call's request after adding the record that call acts on, in
+  organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's services and
+  the seeded organisations to do it with.
+- `EndpointMatrix.CallsTo` lists every call the matrix makes, and `EndpointCall.RequestAsync` builds the request as
+  the endpoint's row does, so a test of every endpoint, such as `PoliciesOnSqlServerTests`' role test, uses them. An
+  endpoint with no row, such as one the test maps for itself, gets a request to its route pattern.

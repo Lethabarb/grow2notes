@@ -52,6 +52,20 @@ internal static class TestSignIn
         return client;
     }
 
+    /// <summary>
+    /// Signs in every request that <paramref name="client"/> sends as <paramref name="caller"/>, one of the users in
+    /// <paramref name="seeded"/>, or leaves it signed out.
+    /// </summary>
+    public static HttpClient SignInAs(this HttpClient client, Caller caller, SeededOrganisations seeded) =>
+        caller switch
+        {
+            Caller.SignedOut => client,
+            Caller.WorkerOfA => client.SignInAs(seeded.A.WorkerId),
+            Caller.ManagerOfA => client.SignInAs(seeded.A.ManagerId),
+            Caller.ManagerOfB => client.SignInAs(seeded.B.ManagerId),
+            _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
+        };
+
     private sealed class Handler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,

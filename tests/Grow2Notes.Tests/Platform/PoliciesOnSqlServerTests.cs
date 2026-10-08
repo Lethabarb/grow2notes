@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Platform;
@@ -28,9 +27,6 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
     private const string ManagerPolicyPath = "/api/test-only/manager-policy";
 
-    // The methods an endpoint that names none is called with.
-    private static readonly string[] AnyMethod = ["GET", "POST", "PUT", "DELETE"];
-
     private readonly SeededOrganisations seeded;
     private readonly WebApplicationFactory<Program> app;
 
@@ -39,14 +35,6 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         seeded = sqlServer.Seeded;
         app = factory.WithWebHostBuilder(builder => builder.ConfigureServices(
             services => services.AddSingleton<IStartupFilter>(new TestOnlyEndpoints())));
-    }
-
-    public enum Caller
-    {
-        SignedOut,
-        WorkerOfA,
-        ManagerOfA,
-        ManagerOfB,
     }
 
     public static TheoryData<string, Caller, HttpStatusCode> Refusals { get; } = new()
@@ -106,52 +94,36 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         // A's manager, whom every policy admits with the role on their row, so only the replaced role can refuse them.
         using var client = ClientFor(Caller.ManagerOfA);
         client.DefaultRequestHeaders.Add(TestSignIn.RoleHeader, role);
-        var requests = RequestsToEveryEndpointThatIsNotAnonymous();
+        var calls = CallsToEveryEndpointThatIsNotAnonymous();
         // So that the test cannot pass by calling nothing.
-        Assert.Contains((HttpMethod.Get, FallbackPolicyPath), requests);
+        Assert.Contains(calls, call => call.Endpoint.RoutePattern.RawText == FallbackPolicyPath);
 
-        foreach (var (method, path) in requests)
+        foreach (var call in calls)
         {
-            using var request = new HttpRequestMessage(method, path);
+            using var request = await call.RequestAsync();
+            // Before sending, which makes the request's URI absolute.
+            var name = $"{call.Method} {request.RequestUri}";
 
             using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
             // The request is on both sides, so a failure names the request that got through.
-            Assert.Equal($"{method} {path}: 403", $"{method} {path}: {(int)response.StatusCode}");
+            Assert.Equal($"{name}: 403", $"{name}: {(int)response.StatusCode}");
             await response.ReadProblemAsync(HttpStatusCode.Forbidden);
         }
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
-    private HttpClient ClientFor(Caller caller)
-    {
-        var client = app.CreateClient();
-        return caller switch
-        {
-            Caller.SignedOut => client,
-            Caller.WorkerOfA => client.SignInAs(seeded.A.WorkerId),
-            Caller.ManagerOfA => client.SignInAs(seeded.A.ManagerId),
-            Caller.ManagerOfB => client.SignInAs(seeded.B.ManagerId),
-            _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
-        };
-    }
+    private HttpClient ClientFor(Caller caller) => app.CreateClient().SignInAs(caller, seeded);
 
-    // A request to each method of each endpoint that the app and this test map, taken from EndpointDataSource, except
-    // those marked AllowAnonymous, which authorization lets anyone call.
-    private List<(HttpMethod Method, string Path)> RequestsToEveryEndpointThatIsNotAnonymous() =>
+    // The endpoint matrix's calls of the endpoints that the app and this test map, except those marked AllowAnonymous,
+    // which authorization lets anyone call. Each of the app's endpoints is called as its matrix row builds the request,
+    // which gives any route parameter a value, and this test's own at their route patterns.
+    private List<EndpointCall> CallsToEveryEndpointThatIsNotAnonymous() =>
     [
-        .. from endpoint in app.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
-           where endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null
-           from method in endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? AnyMethod
-           select (HttpMethod.Parse(method), PathOf(endpoint.RoutePattern)),
+        .. EndpointMatrix.CallsTo(app.Services.GetRequiredService<EndpointDataSource>())
+            .Where(call => call.Endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null),
     ];
-
-    // No endpoint that needs a signed-in user has a route parameter yet; the first to have one needs a value for it.
-    private static string PathOf(RoutePattern pattern) =>
-        pattern is { Parameters: [], RawText: { } path }
-            ? path
-            : throw new NotSupportedException($"This test has no value for the parameters of {pattern.RawText}.");
 
     // The header exactly as the app sent it. The typed CacheControl property would reformat it from parsed directives.
     private static string? CacheControl(HttpResponseMessage response) =>
