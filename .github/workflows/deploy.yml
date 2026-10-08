@@ -202,10 +202,21 @@ jobs:
       # under it (S00.02.03's Notes). App Service starts the only assembly with a .runtimeconfig.json, so no startup
       # command is set. When az cannot track the new build's start, it returns once Kudu has the zip, so step 8 is what
       # proves the new build answers. The result lists resource IDs, hence --output none.
+      # When the main.bicep step has changed the app's settings, the zip can land while App Service is still starting
+      # the app for them. That start fails, the next one succeeds, and az reports the failed one (S00.02.03's Notes),
+      # so a failed deploy runs once more a minute later, deploying the same zip again. --timeout ends each attempt's
+      # tracking after five minutes; az reads the value as seconds, although its help says milliseconds.
       - name: Deploy app.zip
-        run: >-
-          az webapp deploy --resource-group rg-grow2notes-test-ause --name app-grow2notes-test
-          --src-path artifacts/app.zip --type zip --track-status true --output none --only-show-errors
+        run: |
+          deploy=(
+            az webapp deploy --resource-group rg-grow2notes-test-ause --name app-grow2notes-test
+            --src-path artifacts/app.zip --type zip --track-status true --timeout 300 --output none --only-show-errors
+          )
+          if ! "${deploy[@]}"; then
+            echo "::warning::The deploy failed, perhaps racing a restart for changed app settings. Retrying in 60 s."
+            sleep 60
+            "${deploy[@]}"
+          fi
 
       # design.md §10.4 step 8 (A49), /healthz only until S00.03.04 adds /api/auth/antiforgery. A 200 alone can come
       # from the old build, so the step first waits for this build's index.html. The app serves its Last-Modified, the
