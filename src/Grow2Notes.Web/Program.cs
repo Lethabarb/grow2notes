@@ -69,10 +69,46 @@ builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = 
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
 
-// Requests are denied by default (Policies). The app has no authentication scheme of its own until S00.04.01 adds
-// Identity's cookie, so nothing signs in, and a challenge, having no scheme to challenge with, would throw. So every
-// endpoint below is AllowAnonymous, and every request matches one of them.
-builder.Services.AddAuthentication();
+// The session is Identity's cookie (design.md §8.3, §8.4).
+builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddIdentityCookies();
+
+// The security stamp is checked on every request that carries the cookie, rebuilding the principal from the user's
+// row, so deactivation, a sign-in reset and a role change apply on the user's next request (§8.4, §8.6).
+builder.Services.Configure<SecurityStampValidatorOptions>(o =>
+{
+    o.ValidationInterval = TimeSpan.Zero;
+    o.OnRefreshingPrincipal = SessionRules.CarryForward;
+});
+
+// A session cookie, with no Expires or Max-Age, since nothing signs in as persistent (§8.5). The session ends after 30
+// minutes with no request, and in any case 12 hours after sign-in (SessionRules). A browser takes a __Host- cookie
+// only when it is Secure, has Path=/ and names no Domain, so no other site under a parent domain can set it. The app
+// has no login page to redirect to, so a request that the policies refuse gets a bare 401 or 403, whatever it asked
+// for (§7.2), which the status code pages make problem details.
+builder.Services.ConfigureApplicationCookie(o =>
+{
+    o.Cookie.Name = "__Host-grow2notes";
+    o.Cookie.Path = "/";
+    o.Cookie.HttpOnly = true;
+    o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    o.Cookie.SameSite = SameSiteMode.Strict;
+    o.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+    o.SlidingExpiration = true;
+    o.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        return Task.CompletedTask;
+    };
+    o.Events.OnRedirectToAccessDenied = context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status403Forbidden;
+        return Task.CompletedTask;
+    };
+    o.Events.OnValidatePrincipal = SessionRules.ValidateAsync;
+});
+
+// Requests are denied by default (Policies).
 builder.Services.AddPolicies();
 
 // Antiforgery, whose token the /api group's filter checks on every request that changes something (design.md §9.8).

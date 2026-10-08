@@ -26,7 +26,8 @@ internal sealed class Grow2NotesSignInManager(
     /// <summary>
     /// The claim that holds when the session signed in, from <see cref="TimeProvider"/>, in whole seconds since 1970
     /// UTC, as OpenID Connect writes its <c>auth_time</c> claim. It is added once, at sign-in, because the claims
-    /// factory cannot know it, and is carried forward each time the principal is rebuilt.
+    /// factory cannot know it; <see cref="SessionRules.CarryForward"/> copies it each time the session check rebuilds
+    /// the principal, and <see cref="SessionRules.ValidateAsync"/> ends the session 12 hours after it.
     /// </summary>
     public const string AuthTimeClaimType = "auth_time";
 

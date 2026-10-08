@@ -1,18 +1,26 @@
 using System.Net;
 using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests;
 
 /// <summary>
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
-/// sign-in, so with no authentication scheme until S00.04.01 adds the session cookie. A request that the fallback
-/// policy refused would be challenged with no scheme to challenge with, which throws, and the caller would get a
-/// <c>500</c>; so these show that each endpoint is <c>AllowAnonymous</c>, and that a request that no file, page or API
-/// endpoint answers still matches one. The app has no database here, so they run without Docker.
+/// sign-in, so with the session cookie as the default scheme. A request that the fallback policy refuses is challenged
+/// by the cookie, and gets a <c>401</c> problem, as a test-only endpoint behind that policy shows; so the others show
+/// that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page
+/// or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database here, so they run without
+/// Docker.
 /// </summary>
 public sealed partial class SignedOutTests : IAsyncDisposable
 {
+    // Under /api, so it gets the API's caching rule. No endpoint of the app's needs a signed-in user yet.
+    private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
+
     public static MatrixTheoryData<string, string> NoSuchFiles { get; } =
         new(["GET", "POST", "PUT", "DELETE"], ["/favicon.ico", "/assets/no-such-file.js"]);
 
@@ -24,6 +32,23 @@ public sealed partial class SignedOutTests : IAsyncDisposable
         new(["GET", "POST", "PUT", "DELETE"], ["/api", "/api/no-such-endpoint"]);
 
     private readonly AppWithoutDatabase app = new("Production");
+
+    // The cookie challenges with a bare 401, which the status code pages make problem details, rather than redirecting
+    // to a login page, which the app does not have (design.md §7.2). Without the app's OnRedirectToLogin, the cookie
+    // handler still answers this endpoint 401, but with a Location naming /Account/Login, so the Location is the check.
+    [Fact]
+    public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored()
+    {
+        await using var withEndpoint = app.WithWebHostBuilder(builder => builder.ConfigureServices(
+            services => services.AddSingleton<IStartupFilter>(new FallbackPolicyEndpoint())));
+        using var client = withEndpoint.CreateClient(new() { AllowAutoRedirect = false });
+
+        using var response = await client.GetAsync(FallbackPolicyPath, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
 
     [Theory]
     [MemberData(nameof(NoSuchFiles))]
@@ -107,4 +132,19 @@ public sealed partial class SignedOutTests : IAsyncDisposable
 
     [GeneratedRegex("""<script\b[^>]*\bsrc="(?<path>/assets/[^"]+)"[^>]*>""", RegexOptions.IgnoreCase)]
     private static partial Regex HashedScript();
+
+    /// <summary>
+    /// Maps an endpoint with no policy of its own, which the fallback policy covers. It is routed ahead of the app's
+    /// own routing, which then leaves the endpoint already chosen, so it runs where the app's own endpoints do, after
+    /// the app's authorization.
+    /// </summary>
+    private sealed class FallbackPolicyEndpoint : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.UseRouting();
+            next(app);
+            app.UseEndpoints(endpoints => endpoints.MapGet(FallbackPolicyPath, () => TypedResults.NoContent()));
+        };
+    }
 }

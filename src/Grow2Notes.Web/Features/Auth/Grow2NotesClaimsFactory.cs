@@ -13,9 +13,10 @@ namespace Grow2Notes.Web.Features.Auth;
 /// role claim type, and their display name in <see cref="DisplayNameClaimType"/>.
 /// </summary>
 /// <remarks>
-/// The session check rebuilds the principal with this factory on every request, so these claims always follow the
-/// row: a role change applies on the user's next request. A claim added only at sign-in would be lost on that next
-/// request, so <see cref="Grow2NotesSignInManager.AuthTimeClaimType"/> is carried forward instead.
+/// The session check (<see cref="SessionRules"/>) rebuilds the principal with this factory on every request, so these
+/// claims always follow the row: a role change applies on the user's next request. A claim added only at sign-in would
+/// be lost on that next request, so <see cref="SessionRules.CarryForward"/> copies
+/// <see cref="Grow2NotesSignInManager.AuthTimeClaimType"/> to the rebuilt principal instead.
 /// </remarks>
 internal sealed class Grow2NotesClaimsFactory(
     UserManager<ApplicationUser> userManager, IOptions<IdentityOptions> optionsAccessor)

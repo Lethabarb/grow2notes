@@ -100,9 +100,9 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
   show what a signed-out caller gets.
 - A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
-  it `AllowAnonymous` unless the test is about who may call it. Until S00.04.01 adds the session cookie, the app has
-  no authentication scheme, so in `AppWithoutDatabase` an endpoint that refuses a signed-out request answers `500`:
-  the challenge has no scheme to use.
+  it `AllowAnonymous` unless the test is about who may call it. In `AppWithoutDatabase`, where the session cookie is
+  the default scheme, as in the deployed app, a signed-out request to one that is not gets the cookie's `401`, as
+  problem details (`Grow2Notes.Tests/SignedOutTests.cs`).
 - A test that calls `GET /api/auth/antiforgery` or an endpoint in the `/api` group calls `https://localhost`, with a
   client from `CreateHttpsClient()` (`Grow2Notes.Tests/Fixtures/AntiforgeryTokens.cs`): the antiforgery cookie is
   `Secure` always, so antiforgery throws on a request that is not HTTPS, and the app answers `500`. A request that
