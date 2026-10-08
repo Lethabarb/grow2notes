@@ -187,7 +187,7 @@ public sealed class DatabaseFailureHandlerTests
                 });
                 app.UseRouting();
                 next(app);
-                app.UseEndpoints(endpoints => endpoints.Map(Path, endpoint));
+                app.UseEndpoints(endpoints => endpoints.Map(Path, endpoint).AllowAnonymous());
             };
         }
     }

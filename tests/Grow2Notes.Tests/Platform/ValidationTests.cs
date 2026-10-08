@@ -106,8 +106,8 @@ public sealed class ValidationTests
             next(app);
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapPost(Path, (TestOnlyBody _) => TypedResults.NoContent());
-                endpoints.MapGet(Path, ([Range(1, 10)] int count) => TypedResults.NoContent());
+                endpoints.MapPost(Path, (TestOnlyBody _) => TypedResults.NoContent()).AllowAnonymous();
+                endpoints.MapGet(Path, ([Range(1, 10)] int count) => TypedResults.NoContent()).AllowAnonymous();
             });
         };
     }

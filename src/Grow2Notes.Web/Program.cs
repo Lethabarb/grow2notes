@@ -66,6 +66,12 @@ builder.Services.AddDataProtection()
 builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
 
+// Requests are denied by default (Policies). The app has no authentication scheme of its own until S00.04.01 adds
+// Identity's cookie, so nothing signs in, and a challenge, having no scheme to challenge with, would throw. So every
+// endpoint below is AllowAnonymous, and every request matches one of them.
+builder.Services.AddAuthentication();
+builder.Services.AddPolicies();
+
 // The tenant of each request or operator command: the signed-in user's organisation, or the one that sign-in, setup
 // and the commands set from what they have loaded (design.md §5.9). It reads the user from the request's HttpContext.
 builder.Services.AddHttpContextAccessor();
@@ -116,17 +122,29 @@ app.UseCacheHeaders();
 app.UseStatusCodePages();
 app.UseExceptionHandler();
 
-// The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
-app.MapStaticAssets();
+// After the exception handling, so the 401 and 403 that authorization answers get problem details and the caching
+// rules too, and an exception while authenticating is handled like any other. Without these calls, the host would add
+// both ahead of all the app's middleware.
+app.UseAuthentication();
+app.UseAuthorization();
+
+// The Vite build in wwwroot, served from the same origin as the API (design.md §7.2). Like the SPA's page below, it is
+// for everyone: a signed-out user gets the sign-in page.
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapHealthEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
-// every method, never the SPA page (design.md §6.1).
-app.Map("/api/{**rest}", () => Results.NotFound());
+// every method, never the SPA page (design.md §6.1), and never a 401.
+app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
 
-// Client-side routes get index.html. The default pattern skips paths with a file extension, so a missing file such as
-// /favicon.ico is a 404 rather than the page.
-app.MapFallbackToFile("index.html");
+// Client-side routes get index.html, for GET and HEAD. The default pattern skips paths with a file extension.
+app.MapFallbackToFile("index.html").AllowAnonymous();
+
+// Any other request is a 404 from here: a path with a file extension that is no file of the build, such as the
+// /favicon.ico every browser asks for, and a method other than GET or HEAD at a client route. The fallback policy
+// applies to a request that matches no endpoint too, so without this, such a request would be refused rather than a
+// 404. Its pattern is the least specific, so routing prefers any other endpoint that matches.
+app.MapFallback("{*path}", () => Results.NotFound()).AllowAnonymous();
 
 app.Run();

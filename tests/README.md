@@ -96,7 +96,13 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   connection string overrides any on the machine.
 - A test that only reads the app's services or settings, and sends no request that needs the database, can host the
   app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
-  the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way.
+  the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way. It hosts the app
+  without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
+  show what a signed-out caller gets.
+- A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
+  it `AllowAnonymous` unless the test is about who may call it. Until S00.04.01 adds the session cookie, the app has
+  no authentication scheme, so in `AppWithoutDatabase` an endpoint that refuses a signed-out request answers `500`:
+  the challenge has no scheme to use.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant
@@ -116,7 +122,7 @@ seeded.
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
   database of its own from `SqlServerFixture.CreateDatabaseAsync`.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
-  they have no passkey or password, so nothing can sign in as them yet.
+  they have no passkey or password, so a test calls as them with the test-only sign-in.
 
 Tenant-owned rows are read and written under a tenant (design.md §5.9). In a request, the app takes it from the
 signed-in user's session. A test that uses the app's context outside a request sets it as sign-in and the operator
@@ -137,3 +143,21 @@ With no `Use` block open, a query or save of a tenant-owned row throws. Open the
 around its awaits: a tenant set inside an awaited helper method does not flow back to its caller. `Organisation` and
 `AspNetUsers` need no tenant: the first is the tenant, and the second is not filtered, so a query of users names the
 organisation itself, as `SeededOrganisationsTests` does.
+
+### Calling as a seeded user
+
+`Grow2NotesFactory` makes a test-only authentication scheme the app's default
+(`Grow2Notes.Tests/Fixtures/TestSignIn.cs`); the app itself has no such scheme. A request that names a user's ID in its
+`X-Test-User` header is signed in as that user, with the user ID, `org_id` and role claims that design.md §8.4's claims
+factory adds, read from the user's row: the user's ID, `org_id`, which makes the user's organisation the request's
+tenant, and the role by its `UserRole` name. A request without the header is signed out. `SignInAs` adds the header to
+every request a client sends:
+
+```csharp
+using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
+```
+
+A request that the fallback policy or the `Manager` policy refuses then answers `401` signed out and `403` signed in,
+as problem details. To test a role that `UserRole` does not have, such as Release 2's Support, a request also sends
+the `X-Test-Role` header, whose value replaces the role claim's; an empty value leaves the user with no role claim.
+`Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.

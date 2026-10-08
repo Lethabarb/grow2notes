@@ -5,7 +5,8 @@ namespace Grow2Notes.Web.Platform;
 /// <summary>
 /// The design.md §10.8 health endpoints: <c>/healthz</c> for liveness and <c>/healthz/ready</c> with the database
 /// check. Both keep the built-in response: the overall status as plain text (<c>200</c>, or <c>503</c> when
-/// unhealthy) with no check names, messages or exception details, and headers that forbid caching.
+/// unhealthy) with no check names, messages or exception details, and headers that forbid caching. Both answer anyone,
+/// signed in or not: App Service's health check and the deploy's smoke test send no credentials.
 /// </summary>
 internal static class HealthEndpoints
 {
@@ -23,10 +24,11 @@ internal static class HealthEndpoints
     {
         // Runs no checks, so it never opens a database connection and the test environment's free serverless
         // database can auto-pause (design.md §10.3).
-        endpoints.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = static _ => false });
+        endpoints.MapHealthChecks("/healthz", new HealthCheckOptions { Predicate = static _ => false })
+            .AllowAnonymous();
 
         // Runs every check. Production's App Service health check and its alert use this path (design.md §10.1).
-        endpoints.MapHealthChecks("/healthz/ready");
+        endpoints.MapHealthChecks("/healthz/ready").AllowAnonymous();
 
         return endpoints;
     }

@@ -247,14 +247,16 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
                 endpoints.MapPost(TruncationPath, (CanaryRequest request, Grow2NotesDbContext db,
                     ILookupNormalizer normalizer, CancellationToken cancellationToken) =>
                     AddAccountsAsync(db, normalizer, cancellationToken,
-                        (request.Value.PadRight(Limits.DisplayName + 1, 'x'), Email: null)));
+                        (request.Value.PadRight(Limits.DisplayName + 1, 'x'), Email: null)))
+                    .AllowAnonymous();
 
                 // The unique email index refuses the second account, and its message gives the duplicate key, which is
                 // the address upper-cased (error 2601).
                 endpoints.MapPost(DuplicateEmailPath, (CanaryRequest request, Grow2NotesDbContext db,
                     ILookupNormalizer normalizer, CancellationToken cancellationToken) =>
                     AddAccountsAsync(db, normalizer, cancellationToken,
-                        ("Canary", request.Value), ("Canary", request.Value)));
+                        ("Canary", request.Value), ("Canary", request.Value)))
+                    .AllowAnonymous();
             });
         };
 

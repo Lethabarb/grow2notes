@@ -139,7 +139,7 @@ public sealed class ForwardedHeadersTests : IAsyncDisposable
                 }
 
                 return Results.Text(request.Scheme);
-            }));
+            }).AllowAnonymous());
         };
     }
 }
