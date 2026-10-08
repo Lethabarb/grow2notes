@@ -1,4 +1,5 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.DataProtection;
@@ -18,6 +19,21 @@ builder.Services.AddHealthEndpoints();
 // Database failures are logged in one place, with the exception type and SQL error number only, because SQL Server's
 // error text can hold the values that failed (design.md §9.5).
 builder.Services.AddExceptionHandler<DatabaseFailureHandler>();
+
+// A request the server could not read, such as a body over the size limit, keeps its own status rather than becoming a
+// 500 logged as an unhandled error. Handlers are asked in the order they are added, so a database failure always
+// reaches the handler above first.
+builder.Services.AddExceptionHandler<BadHttpRequestHandler>();
+
+// The body of every error response: RFC 9457 problem details (design.md §6.1), written by the exception handler and
+// the status code pages below, by ErrorCode.Problem, and by the validation below, whose problem ValidationProblems
+// makes design.md's 422 validation.failed.
+builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ValidationProblems.Customize);
+
+// Minimal APIs' built-in validation (design.md §7.5): before an endpoint runs, its parameters and request body are
+// checked against their data annotations, and a request that breaks one never reaches it. Its source generator
+// describes only public types, so a request type with annotations is public, unlike most of the app's types.
+builder.Services.AddValidation();
 
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
@@ -50,6 +66,15 @@ builder.Services.AddDataProtection()
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
 builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
     .AddEntityFrameworkStores<Grow2NotesDbContext>();
+
+// Requests are denied by default (Policies). The app has no authentication scheme of its own until S00.04.01 adds
+// Identity's cookie, so nothing signs in, and a challenge, having no scheme to challenge with, would throw. So every
+// endpoint below is AllowAnonymous, and every request matches one of them.
+builder.Services.AddAuthentication();
+builder.Services.AddPolicies();
+
+// Antiforgery, whose token the /api group's filter checks on every request that changes something (design.md §9.8).
+builder.Services.AddApiGroup();
 
 // The tenant of each request or operator command: the signed-in user's organisation, or the one that sign-in, setup
 // and the commands set from what they have loaded (design.md §5.9). It reads the user from the request's HttpContext.
@@ -94,22 +119,41 @@ app.UseForwardedHeaders();
 
 app.UseCacheHeaders();
 
-// Inside UseCacheHeaders, so its rules keep the final word on error responses. The middleware will not start without
-// a path, a delegate or problem details for the exceptions no handler takes. This delegate adds nothing, so they keep
-// the empty 500 they got before; design.md §6.1's problem+json errors are not built yet.
-app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
+// Both inside UseCacheHeaders, so its rules keep the final word on error responses. Status code pages give problem
+// details to every error status that has no body, outside /api too. They come first, so that the bare status an
+// exception handler sets, such as DatabaseFailureHandler's 500, gets them as well; for an exception that no handler
+// takes, the exception handler writes them itself. Neither puts the exception's text in them, in any environment.
+app.UseStatusCodePages();
+app.UseExceptionHandler();
 
-// The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
-app.MapStaticAssets();
+// After the exception handling, so the 401 and 403 that authorization answers get problem details and the caching
+// rules too, and an exception while authenticating is handled like any other. Without these calls, the host would add
+// both ahead of all the app's middleware.
+app.UseAuthentication();
+app.UseAuthorization();
+
+// The Vite build in wwwroot, served from the same origin as the API (design.md §7.2). Like the SPA's page below, it is
+// for everyone: a signed-out user gets the sign-in page.
+app.MapStaticAssets().AllowAnonymous();
 
 app.MapHealthEndpoints();
 
-// Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
-// every method, never the SPA page (design.md §6.1).
-app.Map("/api/{**rest}", () => Results.NotFound());
+// Every API endpoint is mapped in the /api group (ApiGroup).
+app.MapApiGroup()
+    .MapAntiforgeryEndpoint();
 
-// Client-side routes get index.html. The default pattern skips paths with a file extension, so a missing file such as
-// /favicon.ico is a plain 404 rather than the page.
-app.MapFallbackToFile("index.html");
+// Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
+// every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's
+// filter never answers in its place.
+app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
+
+// Client-side routes get index.html, for GET and HEAD. The default pattern skips paths with a file extension.
+app.MapFallbackToFile("index.html").AllowAnonymous();
+
+// Any other request is a 404 from here: a path with a file extension that is no file of the build, such as the
+// /favicon.ico every browser asks for, and a method other than GET or HEAD at a client route. The fallback policy
+// applies to a request that matches no endpoint too, so without this, such a request would be refused rather than a
+// 404. Its pattern is the least specific, so routing prefers any other endpoint that matches.
+app.MapFallback("{*path}", () => Results.NotFound()).AllowAnonymous();
 
 app.Run();

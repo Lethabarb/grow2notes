@@ -17,11 +17,11 @@ public sealed partial class AuditTypesTests
 {
     [Fact]
     public void The_event_type_constants_are_exactly_the_events_of_design_md_5_4() =>
-        AssertSameNames("event type", EventTypesIn(DesignMd()), ConstantsIn(typeof(AuditEventTypes)));
+        AssertSameNames("event type", EventTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEventTypes)));
 
     [Fact]
     public void The_entity_type_constants_are_exactly_the_entity_types_of_design_md_5_3() =>
-        AssertSameNames("entity type", EntityTypesIn(DesignMd()), ConstantsIn(typeof(AuditEntityTypes)));
+        AssertSameNames("entity type", EntityTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEntityTypes)));
 
     [Fact]
     public void Every_event_type_fits_the_EventType_column() =>
@@ -89,8 +89,6 @@ public sealed partial class AuditTypesTests
         Assert.Contains(named, ex.Message, StringComparison.Ordinal);
     }
 
-    private static string DesignMd() => File.ReadAllText(Path.Combine(Repository.Root(), "design", "design.md"));
-
     /// <summary>
     /// The events of §5.4's catalogue: the backticked names in its table's Events column, with each "the same five with
     /// a <c>prefix.</c> prefix" expanded from the <c>goal.</c> events, as the catalogue writes the common item and
@@ -98,7 +96,9 @@ public sealed partial class AuditTypesTests
     /// </summary>
     private static SortedSet<string> EventTypesIn(string design)
     {
-        var events = OnlyTable(Section(Lines(design), "### 5.4 "), "§5.4").Select(row => row["Events"]).ToList();
+        var events = DesignMd.OnlyTable(DesignMd.Section(design, "### 5.4 "), "§5.4")
+            .Select(row => row["Events"])
+            .ToList();
         var prefixes = events
             .SelectMany(cell => SameFiveWithAPrefix().Matches(cell))
             .Select(match => match.Groups[1].Value)
@@ -130,60 +130,10 @@ public sealed partial class AuditTypesTests
     /// </summary>
     private static SortedSet<string> EntityTypesIn(string design)
     {
-        var auditEvent = Section(Section(Lines(design), "### 5.3 "), "#### AuditEvent");
-        var entityType = OnlyTable(auditEvent, "§5.3").Single(row => row["Field"] == "EntityType");
+        var auditEvent = DesignMd.Section(DesignMd.Section(design, "### 5.3 "), "#### AuditEvent");
+        var entityType = DesignMd.OnlyTable(auditEvent, "§5.3").Single(row => row["Field"] == "EntityType");
         return new(BacktickedNames(entityType["Notes"], EntityTypeName(), "§5.3"), StringComparer.Ordinal);
     }
-
-    private static string[] Lines(string text) => text.ReplaceLineEndings("\n").Split('\n');
-
-    /// <summary>
-    /// The lines under the one heading that starts with <paramref name="heading"/>, up to the next heading of the same
-    /// level or a higher one.
-    /// </summary>
-    private static List<string> Section(IReadOnlyList<string> lines, string heading)
-    {
-        var found = lines.Index().Where(line => line.Item.StartsWith(heading, StringComparison.Ordinal)).ToList();
-        if (found is not [var (start, title)])
-        {
-            throw new InvalidOperationException($"Expected one heading starting \"{heading}\", found {found.Count}.");
-        }
-
-        var level = HeadingLevel(title);
-        return [.. lines.Skip(start + 1).TakeWhile(line => HeadingLevel(line) > level)];
-    }
-
-    // A line that is not a heading ranks below every heading, so a section runs on through it.
-    private static int HeadingLevel(string line) =>
-        Heading().Match(line) is { Success: true } heading ? heading.Groups[1].Length : int.MaxValue;
-
-    /// <summary>
-    /// The body rows of the one table in <paramref name="lines"/>, each cell keyed by its column's name. A second
-    /// table, or the one table split in two by a blank or prose line, throws rather than leave its rows unread.
-    /// </summary>
-    private static List<Dictionary<string, string>> OnlyTable(IReadOnlyList<string> lines, string section)
-    {
-        var tables = lines.Where((line, i) => IsTableRow(line) && (i == 0 || !IsTableRow(lines[i - 1]))).Count();
-        if (tables != 1)
-        {
-            throw new InvalidOperationException($"design.md {section} has {tables} tables, where this test reads one.");
-        }
-
-        var rows = lines
-            .SkipWhile(line => !IsTableRow(line))
-            .TakeWhile(IsTableRow)
-            .Select(line => line.Trim().Trim('|').Split('|').Select(cell => cell.Trim()).ToArray())
-            .ToArray();
-        if (rows is not [var columns, var underline, .. var body] || !underline.All(TableUnderline().IsMatch))
-        {
-            throw new InvalidOperationException(
-                $"design.md {section} has a table with no |---| line under its column names.");
-        }
-
-        return [.. body.Select(cells => columns.Zip(cells).ToDictionary(cell => cell.First, cell => cell.Second))];
-    }
-
-    private static bool IsTableRow(string line) => line.StartsWith('|');
 
     private static IEnumerable<string> BacktickedNames(string text, Regex name, string section) =>
         from Match match in Backticked().Matches(text)
@@ -221,18 +171,12 @@ public sealed partial class AuditTypesTests
         }
     }
 
-    [GeneratedRegex(@"^(#{1,6}) ")]
-    private static partial Regex Heading();
-
     [GeneratedRegex("`([^`]*)`")]
     private static partial Regex Backticked();
 
     // The prefix keeps its dot, as the catalogue writes it, so a prefix plus an action is an event name.
     [GeneratedRegex(@"the same five with a `([a-z_]+\.)` prefix")]
     private static partial Regex SameFiveWithAPrefix();
-
-    [GeneratedRegex("^:?-+:?$")]
-    private static partial Regex TableUnderline();
 
     [GeneratedRegex(@"^[a-z_]+\.[a-z_]+$")]
     private static partial Regex EventName();

@@ -147,7 +147,7 @@ public sealed class AuditWriterOnSqlServerTests(Grow2NotesFactory factory, SqlSe
                 }
 
                 return Results.NoContent();
-            }));
+            }).AllowAnonymous());
         };
     }
 }
