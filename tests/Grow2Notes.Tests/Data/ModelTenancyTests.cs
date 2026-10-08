@@ -11,9 +11,11 @@ namespace Grow2Notes.Tests.Data;
 /// <summary>
 /// The model test of design.md §14 M0 <i>Done when</i>: every entity type in the app's model is
 /// <see cref="ITenantOwned"/>, with the <c>"Tenant"</c> query filter and <c>OrganisationId</c> as a concurrency token
-/// (design.md §5.9 items 2 and 3, D67), or one of the named exceptions. Nothing in the app's model breaks the rule yet,
-/// so stand-in models show that the same check finds each breach. Building a model opens no connection, so no test
-/// here needs a database.
+/// (design.md §5.9 items 2 and 3, D67), or one of the named exceptions; and every foreign key from an
+/// <see cref="ITenantOwned"/> entity type keeps its rows to their organisation (design.md §5.1 <i>Tenancy</i>, §5.9
+/// item 4). Nothing in the app's model breaks the rule yet, and no entity type in it is tenant-owned, so stand-in
+/// models show that the same check finds each breach. Building a model opens no connection, so no test here needs a
+/// database.
 /// </summary>
 public sealed class ModelTenancyTests
 {
@@ -32,7 +34,7 @@ public sealed class ModelTenancyTests
     ];
 
     [Fact]
-    public async Task Every_entity_type_in_the_app_s_model_is_tenant_owned_and_filtered_or_a_named_exception()
+    public async Task Every_entity_type_and_foreign_key_in_the_app_s_model_keeps_the_tenancy_rule()
     {
         // The app's own services make the context, so its model is the one the app runs with: built at the Identity
         // schema version that Program.cs sets, which adds AspNetUserPasskeys. A context made here by hand could build
@@ -84,19 +86,77 @@ public sealed class ModelTenancyTests
             Breaches(db.Model, []));
     }
 
+    [Fact]
+    public void Composite_links_matched_on_OrganisationId_and_OrganisationId_alone_to_Organisation_keep_the_rule()
+    {
+        using var db = new LinkedContext();
+
+        Assert.Empty(Breaches(db.Model, [nameof(Organisation), nameof(ApplicationUser)]));
+    }
+
+    [Fact]
+    public void A_link_by_ID_alone_to_a_tenant_owned_entity_type_or_to_a_user_is_a_breach()
+    {
+        using var db = new SingleColumnLinksContext();
+
+        Assert.Equal(
+            [
+                new Breach(nameof(VisitNote), Fault.ForeignKeyDoesNotMatchOrganisationId, "AuthorUserId"),
+                new Breach(nameof(VisitNote), Fault.ForeignKeyDoesNotMatchOrganisationId, "VisitId"),
+            ],
+            Breaches(db.Model, [nameof(ApplicationUser)]));
+    }
+
+    [Fact]
+    public void A_composite_link_that_pairs_OrganisationId_with_another_principal_property_is_a_breach()
+    {
+        using var db = new MismatchedLinkContext();
+
+        Assert.Equal(
+            [new Breach(nameof(VisitNote), Fault.ForeignKeyDoesNotMatchOrganisationId, "OrganisationId, VisitId")],
+            Breaches(db.Model, []));
+    }
+
+    [Fact]
+    public void A_link_to_Organisation_that_is_not_OrganisationId_alone_is_a_breach()
+    {
+        const Fault fault = Fault.ForeignKeyToOrganisationIsNotOrganisationIdAlone;
+        using var db = new OrganisationLinksContext();
+
+        Assert.Equal(
+            [
+                new Breach(nameof(Referral), fault, "FromOrganisationId"),
+                new Breach(nameof(Referral), fault, "OrganisationId, OrganisationName"),
+            ],
+            Breaches(db.Model, [nameof(Organisation)]));
+    }
+
     /// <summary>
     /// Each breach of the rule in <paramref name="model"/>: an entity type that is neither <see cref="ITenantOwned"/>
     /// nor in <paramref name="namedExceptions"/>; an <see cref="ITenantOwned"/> one without the <c>"Tenant"</c> filter,
-    /// or whose <c>OrganisationId</c> is not a concurrency token; and a named exception that the model does not have.
-    /// An entity type goes by its table, as the named exceptions do.
+    /// or whose <c>OrganisationId</c> is not a concurrency token; a named exception that the model does not have; and a
+    /// foreign key from an <see cref="ITenantOwned"/> entity type that does not keep its row to its organisation. One
+    /// to another <see cref="ITenantOwned"/> entity type or to <see cref="ApplicationUser"/> must pair the row's
+    /// <c>OrganisationId</c> with the principal's, so that the database refuses a link to another organisation's row;
+    /// the principal key it points at includes <c>OrganisationId</c>, as an alternate key such as
+    /// <c>(OrganisationId, Id)</c> does, which <c>AspNetUsers</c> has. One to <see cref="Organisation"/> must be
+    /// <c>OrganisationId</c> alone, the row's own organisation. An entity type goes by its table, as the named
+    /// exceptions do, and a foreign key by its dependent's table and its properties.
     /// </summary>
+    /// <remarks>
+    /// A foreign key from a named exception, such as Identity's from its child tables to <c>AspNetUsers</c>, is outside
+    /// the rule: design.md §5.1 sets it for the foreign keys of tenant-owned tables.
+    /// </remarks>
     private static List<Breach> Breaches(IModel model, string[] namedExceptions)
     {
+        const string organisationId = nameof(ITenantOwned.OrganisationId);
+
         // An owned type, such as Identity's passkey data, is stored in its owner's rows, so it goes with its owner.
         var entityTypes = model.GetEntityTypes().Where(entityType => !entityType.IsOwned()).ToList();
         var tenantOwned = entityTypes
             .Where(entityType => entityType.ClrType.IsAssignableTo(typeof(ITenantOwned)))
             .ToList();
+        var foreignKeys = tenantOwned.SelectMany(entityType => entityType.GetDeclaredForeignKeys()).ToList();
 
         return
         [
@@ -107,15 +167,30 @@ public sealed class ModelTenancyTests
                 .Where(entityType => entityType.FindDeclaredQueryFilter(TenantQueryFilter.Name) is null)
                 .Select(entityType => new Breach(TableOf(entityType), Fault.NoTenantFilter)),
             .. tenantOwned
-                .Where(entityType => entityType.FindProperty(nameof(ITenantOwned.OrganisationId))
-                    is not { IsConcurrencyToken: true })
+                .Where(entityType => entityType.FindProperty(organisationId) is not { IsConcurrencyToken: true })
                 .Select(entityType => new Breach(TableOf(entityType), Fault.OrganisationIdIsNotAConcurrencyToken)),
             .. namedExceptions.Except(entityTypes.Select(TableOf))
                 .Select(table => new Breach(table, Fault.NamedExceptionNotInTheModel)),
+            .. foreignKeys
+                .Where(foreignKey => (tenantOwned.Contains(foreignKey.PrincipalEntityType)
+                        || foreignKey.PrincipalEntityType.ClrType == typeof(ApplicationUser))
+                    && !foreignKey.Properties.Zip(foreignKey.PrincipalKey.Properties)
+                        .Any(pair => pair.First.Name == organisationId && pair.Second.Name == organisationId))
+                .Select(foreignKey => BreachOf(foreignKey, Fault.ForeignKeyDoesNotMatchOrganisationId)),
+            .. foreignKeys
+                .Where(foreignKey => foreignKey.PrincipalEntityType.ClrType == typeof(Organisation)
+                    && (foreignKey.Properties is not [{ Name: organisationId }]
+                        || !foreignKey.PrincipalKey.IsPrimaryKey()))
+                .Select(foreignKey => BreachOf(foreignKey, Fault.ForeignKeyToOrganisationIsNotOrganisationIdAlone)),
         ];
 
         // One mapped to a view or a query rather than a table goes by its own name.
         static string TableOf(IEntityType entityType) => entityType.GetTableName() ?? entityType.DisplayName();
+
+        static Breach BreachOf(IForeignKey foreignKey, Fault fault) => new(
+            TableOf(foreignKey.DeclaringEntityType),
+            fault,
+            string.Join(", ", foreignKey.Properties.Select(property => property.Name)));
     }
 
     private enum Fault
@@ -124,9 +199,12 @@ public sealed class ModelTenancyTests
         NoTenantFilter,
         OrganisationIdIsNotAConcurrencyToken,
         NamedExceptionNotInTheModel,
+        ForeignKeyDoesNotMatchOrganisationId,
+        ForeignKeyToOrganisationIsNotOrganisationIdAlone,
     }
 
-    private sealed record Breach(string Table, Fault Fault);
+    // A breach by a foreign key has its dependent's table, and lists the foreign key's properties.
+    private sealed record Breach(string Table, Fault Fault, string? ForeignKey = null);
 
     // EF Core builds a model once for each context type, so each stand-in model has a context type of its own.
     private abstract class StandInContext : DbContext
@@ -165,11 +243,96 @@ public sealed class ModelTenancyTests
         protected override void OnModelCreating(ModelBuilder modelBuilder) => modelBuilder.Entity<Visit>();
     }
 
+    // Linked as design.md §5.10 links entities: to a tenant-owned entity's, or a user's, alternate key
+    // (OrganisationId, Id), and to Organisation by OrganisationId.
+    private sealed class LinkedContext : StandInContext
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Visit>().HasOne<Organisation>().WithMany().HasForeignKey(visit => visit.OrganisationId);
+            modelBuilder.Entity<VisitNote>(entity =>
+            {
+                entity.HasOne<Visit>().WithMany()
+                    .HasForeignKey(note => new { note.OrganisationId, note.VisitId })
+                    .HasPrincipalKey(visit => new { visit.OrganisationId, visit.Id });
+                entity.HasOne<ApplicationUser>().WithMany()
+                    .HasForeignKey(note => new { note.OrganisationId, note.AuthorUserId })
+                    .HasPrincipalKey(user => new { user.OrganisationId, user.Id });
+            });
+            TenantQueryFilter.Apply(modelBuilder, () => TenantId);
+        }
+    }
+
+    // By the ID alone, the database would keep a note of one organisation that points at another's visit or user.
+    private sealed class SingleColumnLinksContext : StandInContext
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<VisitNote>(entity =>
+            {
+                entity.HasOne<Visit>().WithMany().HasForeignKey(note => note.VisitId);
+                entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(note => note.AuthorUserId);
+            });
+            TenantQueryFilter.Apply(modelBuilder, () => TenantId);
+        }
+    }
+
+    // Both columns are in the key, but the note's OrganisationId is paired with the visit's Id, so the organisations of
+    // the two rows are never compared.
+    private sealed class MismatchedLinkContext : StandInContext
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<VisitNote>().HasOne<Visit>().WithMany()
+                .HasForeignKey(note => new { note.OrganisationId, note.VisitId })
+                .HasPrincipalKey(visit => new { visit.Id, visit.OrganisationId });
+            TenantQueryFilter.Apply(modelBuilder, () => TenantId);
+        }
+    }
+
+    // A second column on a link to Organisation, and a link to it by another column, which names another organisation.
+    private sealed class OrganisationLinksContext : StandInContext
+    {
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Referral>(entity =>
+            {
+                entity.HasOne<Organisation>().WithMany()
+                    .HasForeignKey(referral => new { referral.OrganisationId, referral.OrganisationName })
+                    .HasPrincipalKey(organisation => new { organisation.Id, organisation.Name });
+                entity.HasOne<Organisation>().WithMany().HasForeignKey(referral => referral.FromOrganisationId);
+            });
+            TenantQueryFilter.Apply(modelBuilder, () => TenantId);
+        }
+    }
+
     private sealed class Visit : ITenantOwned
     {
         public Guid Id { get; set; }
 
         public Guid OrganisationId { get; set; }
+    }
+
+    private sealed class VisitNote : ITenantOwned
+    {
+        public Guid Id { get; set; }
+
+        public Guid OrganisationId { get; set; }
+
+        public Guid VisitId { get; set; }
+
+        public Guid AuthorUserId { get; set; }
+    }
+
+    private sealed class Referral : ITenantOwned
+    {
+        public Guid Id { get; set; }
+
+        public Guid OrganisationId { get; set; }
+
+        public required string OrganisationName { get; set; }
+
+        public Guid FromOrganisationId { get; set; }
     }
 
     private sealed class Region
