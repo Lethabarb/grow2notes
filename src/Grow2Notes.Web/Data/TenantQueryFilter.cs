@@ -6,8 +6,9 @@ namespace Grow2Notes.Web.Data;
 /// <summary>
 /// The query filter that keeps every query on an <see cref="ITenantOwned"/> entity to the tenant's rows (design.md
 /// §5.9 item 2, D3), and the concurrency token on <c>OrganisationId</c> that does the same for updates and deletes. It
-/// is a named filter, so other filters can sit beside it, and the operator commands can lift this one alone with
-/// <c>IgnoreQueryFilters([TenantQueryFilter.Name])</c>, the only place that may.
+/// is a named filter, so other filters can sit beside it, and the operator commands can lift this one alone by its
+/// <see cref="Name"/>. They are the only code that may lift it: a source test fails if the method that does is named
+/// anywhere else in <c>src/</c>, in a comment like this one too.
 /// </summary>
 internal static class TenantQueryFilter
 {
