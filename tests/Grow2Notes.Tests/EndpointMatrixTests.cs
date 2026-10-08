@@ -165,6 +165,7 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
 
             if (body is not null)
             {
+                request.Content?.Dispose();
                 request.Content = body;
             }
 

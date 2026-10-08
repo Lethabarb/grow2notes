@@ -218,16 +218,19 @@ jobs:
             "${deploy[@]}"
           fi
 
-      # design.md §10.4 step 8 (A49), /healthz only until S00.03.04 adds /api/auth/antiforgery. A 200 alone can come
-      # from the old build, so the step first waits for this build's index.html. The app serves its Last-Modified, the
-      # time CI built the SPA, from the static asset manifest in app.zip, so it names the build. curl sends no
-      # Accept-Encoding, so it gets the plain index.html: the manifest's entry with no selectors. It tries every 10
-      # seconds for up to five minutes, to allow for a cold start on B1, then checks /healthz, which never touches the
-      # database (design.md §10.8).
+      # design.md §10.4 step 8 (A49). A 200 alone can come from the old build, so the step first waits for this build's
+      # index.html. The app serves its Last-Modified, the time CI built the SPA, from the static asset manifest in
+      # app.zip, so it names the build. curl sends no Accept-Encoding, so it gets the plain index.html: the manifest's
+      # entry with no selectors. It tries every 10 seconds for up to five minutes, to allow for a cold start on B1, then
+      # checks /healthz, which never touches the database (design.md §10.8), and /api/auth/antiforgery, which must
+      # answer 204 with the SPA's token and the cookie that holds its other half (design.md §9.8 item 2), printing
+      # neither value. Antiforgery throws on a request that is not HTTPS, and a request through App Service's front end
+      # is HTTPS only by the X-Forwarded-Proto the app trusts from it, so this check proves that trust too (S00.03.03).
       - name: Smoke-test the new build
         env:
           SITE_URL: https://app-grow2notes-test.azurewebsites.net
           MANIFEST: Grow2Notes.Web.staticwebassets.endpoints.json
+          XSRF_COOKIE: __Host-grow2notes-xsrf
         run: |
           if ! expected=$(unzip -p artifacts/app.zip "$MANIFEST" | jq -er '
                             .Endpoints[] | select(.Route == "index.html" and (.Selectors | length) == 0)
@@ -252,3 +255,59 @@ jobs:
             exit 1
           fi
           echo "$SITE_URL/healthz answered: $body"
+          # design.md §10.4 step 8. Only the headers are kept, without their CRs, and neither the token nor the cookie's
+          # value is printed. HTTP/2 sends header names in lower case, and cookie attributes are case-insensitive, so
+          # both are compared in lower case.
+          url=$SITE_URL/api/auth/antiforgery
+          if ! headers=$(curl -sS --max-time 20 -D - -o /dev/null "$url"); then
+            echo "::error::$url did not answer."
+            exit 1
+          fi
+          headers=${headers//$'\r'/}
+          read -r _ status _ <<< "$headers"
+          if [[ $status == 500 ]]; then
+            echo "::error::$url answered 500. Antiforgery throws on a request that is not HTTPS, so the likeliest" \
+                 "cause is that App Service's front end called from an address outside KnownIPNetworks (Program.cs)," \
+                 "whose X-Forwarded-Proto the app then ignored."
+            exit 1
+          elif [[ $status != 204 ]]; then
+            echo "::error::$url answered ${status:-nothing}, not 204."
+            exit 1
+          fi
+          token=false cookie=false
+          cookie_pattern="^$XSRF_COOKIE=[^;]+(.*)$"
+          while IFS= read -r line; do
+            name=${line%%:*}
+            read -r value <<< "${line#*:}"
+            case ${name,,} in
+              x-xsrf-token) [[ -z $value ]] || token=true ;;
+              set-cookie)
+                if [[ $value =~ $cookie_pattern ]]; then
+                  cookie=true
+                  # What follows the value: "; Path=/; Secure" becomes "path=/;secure".
+                  attributes=${BASH_REMATCH[1],,}
+                  attributes=${attributes//[[:blank:]]/}
+                  attributes=${attributes#;}
+                fi
+                ;;
+            esac
+          done <<< "$headers"
+          if [[ $token != true ]]; then
+            echo "::error::$url answered no X-XSRF-TOKEN header with a value."
+            exit 1
+          fi
+          if [[ $cookie != true ]]; then
+            echo "::error::$url set no $XSRF_COOKIE cookie with a value."
+            exit 1
+          fi
+          echo "$url answered 204 with an X-XSRF-TOKEN header and the $XSRF_COOKIE cookie," \
+               "whose attributes are: ${attributes:-none}."
+          # The session cookie's attributes (design.md §8.4), which antiforgery's cookie follows.
+          missing=
+          for attribute in secure httponly samesite=strict path=/; do
+            [[ ";$attributes;" == *";$attribute;"* ]] || missing+=" $attribute"
+          done
+          if [[ -n $missing ]]; then
+            echo "::error::The $XSRF_COOKIE cookie lacks$missing."
+            exit 1
+          fi

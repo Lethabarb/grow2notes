@@ -201,15 +201,16 @@ maps for itself needs no row.
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,
   expecting `400` from the `/api` group's filter, and with it but with a form-encoded body in place of the row's,
-  expecting `415` (§9.8 item 3). Of the statuses a row gives, only authorization's `401` and `403` come before the
-  filter (binding and validation run first too, but a row's requests are valid), so at an endpoint that is not
-  `AllowAnonymous`, the matrix expects the row's `401` or `403` to both calls too. At one that is, such as `POST
-  /api/auth/login`, whose `401` to bad credentials is its own (design.md §6.2), it expects `400` and `415`. So a row's
-  statuses are those of a call with the token, and an endpoint that changes something outside the group fails the
-  run, even one that answers `401` to every caller. A `403` that the handler of an endpoint that is not
-  `AllowAnonymous` gives, such as `note.not_editable` (§6.3), comes after the filter, yet the matrix expects it to both
-  calls too; the first such row will need to say what they get. An endpoint that names no method, such as a
-  catch-all, is called with `POST`, `PUT` and `DELETE` too, but changes nothing, and gets no token.
+  expecting `415` (§9.8 item 3; at an endpoint that reads JSON, binding answers the form body's `415` first, the same
+  status). Of the statuses a row gives, only authorization's `401` and `403` come before the filter (binding and
+  validation run first too, but a row's requests are valid), so at an endpoint that is not `AllowAnonymous`, the
+  matrix expects the row's `401` or `403` to both calls too. At one that is, such as `POST /api/auth/login`, whose
+  `401` to bad credentials is its own (design.md §6.2), it expects `400` and `415`. So a row's statuses are those of a
+  call with the token, and an endpoint that changes something outside the group fails the run, even one that answers
+  `401` to every caller. A `403` that the handler of an endpoint that is not `AllowAnonymous` gives, such as
+  `note.not_editable` (§6.3), comes after the filter, yet the matrix expects it to both calls too; the first such row
+  will need to say what they get. An endpoint that names no method, such as a catch-all, is called with `POST`, `PUT`
+  and `DELETE` too, but changes nothing, and gets no token.
 - `EndpointMatrix.CallsTo` lists every call the matrix makes, and `EndpointCall.RequestAsync` builds the request as
   the endpoint's row does, so a test of every endpoint, such as `PoliciesOnSqlServerTests`' role test, uses them. An
   endpoint with no row, such as one the test maps for itself, gets a request to its route pattern.
