@@ -167,7 +167,8 @@ on every request: Identity's claims (the user's ID, user name, email and securit
 user's organisation the request's tenant, the role by its `UserRole` name, and the display name.
 `Grow2Notes.Tests/Fixtures/TestSignInTests.cs` shows it. The session checks run in the cookie only, so a request
 signed in this way skips them: the security stamp, the idle limit and the 12-hour limit do not apply to it, and its
-principal has no `auth_time`, which only a sign-in adds. `SignInAs` adds the header to every request a client sends:
+principal has no `auth_time`, which only a sign-in adds; a test of them signs in with the cookie (below). `SignInAs`
+adds the header to every request a client sends:
 
 ```csharp
 using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
@@ -183,6 +184,44 @@ whose value replaces the role claim's, and no other claim changes; the value `Te
 no role claim (an empty value would not: the test server drops a header whose value is empty). The header needs
 `X-Test-User`: a request with `X-Test-Role` alone fails to sign in, rather than going to the cookie, which would
 ignore the header. `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
+
+### Signing in with the session cookie, on a fake clock
+
+A test of the session itself signs in with the real session cookie, `__Host-grow2notes`, so its later requests meet
+the app's own session checks: the security stamp, the idle limit and the 12-hour limit (design.md §8.4, §8.5). No
+sign-in endpoint exists yet, so the test maps a test-only one with `MapCookieSignIn()`
+(`Grow2Notes.Tests/Fixtures/CookieSignIn.cs`), which signs in the user whose ID it is given through the app's
+`SignInManager.SignInAsync(user, isPersistent: false)`, as setup does when it completes (§8.1 step 5). So the cookie is
+the one a real sign-in issues, `auth_time` included. That call does not ask `CanSignInAsync`, so sign in Active users
+only.
+
+The cookie is `Secure`, so the client calls `https://localhost`: `SignInWithCookieAsync` signs in a client from
+`CreateHttpsClient()`, which keeps the cookie and sends it with every later request, and returns the cookie that the
+sign-in set. A later request goes to the cookie as long as it has neither of the test-only sign-in's headers.
+
+`UseClock` (`Grow2Notes.Tests/Fixtures/TestClock.cs`) hosts the app on a `FakeTimeProvider` in place of the system
+clock, which then drives the sign-in time, the cookie's expiry, the stamp check, the 12-hour limit and `MelbourneClock`
+alike; Data Protection keeps the real clock, whose keys do not expire within a run. Start the clock on a whole second,
+such as `TestClock.Start` (2026-10-09T13:30:00Z): the cookie and `auth_time` keep times to the second, and the session
+limits are tested to the second. Move the clock forward at least a second before each request: the stamp check runs
+only once more time than its interval of zero has passed since the cookie was issued or last renewed, so on a clock
+that has not moved, a request skips it, and a changed security stamp or role goes unseen.
+
+```csharp
+private readonly FakeTimeProvider clock = new(TestClock.Start);
+
+// In the test:
+await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));
+using var client = app.CreateHttpsClient();
+await client.SignInWithCookieAsync(sqlServer.Seeded.A.WorkerId);
+
+clock.Advance(TimeSpan.FromSeconds(1));
+using var response = await client.GetAsync("/api/...", TestContext.Current.CancellationToken);
+```
+
+Signing in changes no row, so a test may sign in as a seeded user; one that then changes the user, such as rotating
+their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
+`Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
 ### The endpoint matrix
 

@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Security.Claims;
-using Grow2Notes.Web.Data;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -35,7 +34,7 @@ public sealed class TestSignInTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
     [Fact]
     public async Task A_request_that_names_a_user_holds_the_claims_factory_s_principal_for_them()
     {
-        var fromTheFactory = await ClaimsFromTheFactoryAsync(seeded.A.WorkerId);
+        var fromTheFactory = await app.FromTheClaimsFactoryAsync(seeded.A.WorkerId);
         using var client = app.CreateClient().SignInAs(seeded.A.WorkerId);
 
         var claims = await client.GetFromJsonAsync<string[]>(ClaimsPath, TestContext.Current.CancellationToken);
@@ -50,14 +49,14 @@ public sealed class TestSignInTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
     {
         var roleClaimType = app.Services.GetRequiredService<IOptions<IdentityOptions>>().Value.ClaimsIdentity
             .RoleClaimType;
-        var managersRole = Describe(new(roleClaimType, "Manager"));
-        var fromTheFactory = await ClaimsFromTheFactoryAsync(seeded.A.ManagerId);
+        var managersRole = DescribedClaims.Describe(new(roleClaimType, "Manager"));
+        var fromTheFactory = await app.FromTheClaimsFactoryAsync(seeded.A.ManagerId);
         // So that the test cannot pass by removing nothing.
         Assert.Contains(managersRole, fromTheFactory);
         List<string> expected = [.. fromTheFactory.Where(claim => claim != managersRole)];
         if (role != TestSignIn.NoRole)
         {
-            expected.Add(Describe(new(roleClaimType, role)));
+            expected.Add(DescribedClaims.Describe(new(roleClaimType, role)));
         }
 
         using var client = app.CreateClient().SignInAs(seeded.A.ManagerId);
@@ -72,20 +71,6 @@ public sealed class TestSignInTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
-    private async Task<List<string>> ClaimsFromTheFactoryAsync(Guid userId)
-    {
-        await using var scope = app.Services.CreateAsyncScope();
-        var user = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>()
-            .FindByIdAsync(userId.ToString());
-        Assert.NotNull(user);
-
-        var principal = await scope.ServiceProvider.GetRequiredService<IUserClaimsPrincipalFactory<ApplicationUser>>()
-            .CreateAsync(user);
-        return [.. principal.Claims.Select(Describe)];
-    }
-
-    private static string Describe(Claim claim) => $"{claim.Type}: {claim.Value}";
-
     /// <summary>
     /// Maps an endpoint that anyone may call, which lists the claims of the request's user. It is routed ahead of the
     /// app's own routing, which then leaves the endpoint already chosen, so it runs where the app's own endpoints do,
@@ -98,7 +83,7 @@ public sealed class TestSignInTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
             app.UseRouting();
             next(app);
             app.UseEndpoints(endpoints => endpoints
-                .MapGet(ClaimsPath, (ClaimsPrincipal user) => user.Claims.Select(Describe))
+                .MapGet(ClaimsPath, (ClaimsPrincipal user) => user.Claims.Select(DescribedClaims.Describe))
                 .AllowAnonymous());
         };
     }
