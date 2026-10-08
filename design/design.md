@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A47), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A48), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1121,7 +1121,7 @@ It is used for saving a version, review, discard, setup completion, invite, deac
 **Tenant isolation** (D3):
 1. **The tenant comes from the session, never from the request.** `ITenantContext` reads the `org_id` claim, which the claims factory adds on every request (§8.4). Sign-in and setup endpoints run before there is a session, so they set the tenant explicitly from the user row they have just loaded (`using (tenant.Use(user.OrganisationId))`). Any other request without a tenant throws.
 2. **EF Core named query filter** `"Tenant"` (`e => e.OrganisationId == TenantId`) on every `ITenantOwned` entity. A unit test asserts every `ITenantOwned` type has it. `IgnoreQueryFilters()` is banned outside the operator commands, and a test checks the source for it.
-3. **SaveChanges interceptor** stamps `OrganisationId` on added rows and throws if an added or modified row's `OrganisationId` differs from the current tenant. The audit writer takes `OrganisationId` as a parameter.
+3. **SaveChanges interceptor** stamps `OrganisationId` on added rows and throws if an added or modified row's `OrganisationId` differs from the current tenant; `OrganisationId` is also a concurrency token on every `ITenantOwned` entity (A48), so an update or delete of a row that is not the tenant's matches no row and throws. The audit writer takes `OrganisationId` as a parameter.
 4. **Composite foreign keys** include `OrganisationId`, so the database cannot store a link from one organisation's row to another's.
 5. **Named exceptions.** `AspNetUsers` is not filtered, because Identity must find a user by email before a tenant is known; user-admin queries filter by `OrganisationId` explicitly, and the composite user FKs keep authors, editors and reviewers in the same organisation. The Identity child tables (`AspNetUserTokens`, `AspNetUserPasskeys`, `AspNetUserClaims`, `AspNetUserLogins`) and `DataProtectionKeys` have no `OrganisationId`. The Data Protection key ring uses its own `KeysDbContext`, so it never depends on a tenant.
 6. **No SQL Server row-level security in v1** (single organisation). Every table already carries `OrganisationId`, so adding it later is one migration plus a connection interceptor that sets `SESSION_CONTEXT`. Add it when a second organisation is onboarded.
@@ -1191,7 +1191,8 @@ public sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> o,
     }
 
     private void Tenant<T>(ModelBuilder b) where T : class, ITenantOwned =>
-        b.Entity<T>().HasQueryFilter("Tenant", e => e.OrganisationId == TenantId);
+        b.Entity<T>().HasQueryFilter("Tenant", e => e.OrganisationId == TenantId)
+         .Property(e => e.OrganisationId).IsConcurrencyToken(); // 5.9 item 3
 }
 ```
 
@@ -2121,6 +2122,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A45 | Picking groups | No group has to be picked to submit. Ticks stay optional; Guided notes is still required. A group with no active items is not offered on the note. |
 | A46 | Unpicking a group | Unpicking a group clears that group's ticks on this note, with no confirmation. Picking it again shows its items unticked. |
 | A47 | Copied-picks line | When at least one group was copied (A44), the new note and its draft show one line naming the date of the note the picks came from: "These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen." Edit mode, the read view and the files do not. This line is not part of D46; dropping it also removes `NoteDraft.PicksCopiedFrom`, the `picksCopiedFrom` field on `GET …/draft`, and the copied-line rows in the note form and group picker specs. |
+| A48 | Tenant concurrency token | `OrganisationId` is a concurrency token on every `ITenantOwned` entity, so EF Core's updates and deletes match the row's original organisation as well as its key: a row made up with another organisation's key and the tenant's ID, which the `SaveChanges` interceptor cannot tell from one of the tenant's, matches no row, and the save throws and writes nothing (§5.9 item 3). Taken by the developer on 8 October 2026, when a test found that gap (S00.03.02); the owner may overturn it. |
 
 ---
 

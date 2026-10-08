@@ -78,10 +78,13 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
   in that collection shares one SQL Server container for the run, and xUnit runs their tests one at a time.
 - `SqlServerFixture` applies the app's migrations to the container's `Grow2Notes` database before the first test, as a
-  deploy runs them before the new code starts; the app never migrates itself (design.md §10.6). Every test in the
-  collection shares that database, so a test finds its rows by their keys and never assumes a table is empty. A test
-  that must leave nothing behind runs in a transaction that it rolls back; one that must know every row in a table
-  takes a migrated database of its own from `SqlServerFixture.CreateDatabaseAsync`.
+  deploy runs them before the new code starts; the app never migrates itself (design.md §10.6). It then seeds the two
+  organisations described below. Every test in the collection shares that database, so a test finds its rows by their
+  keys and never assumes a table is empty. A test that must leave nothing behind runs in a transaction that it rolls
+  back; one that must know every row in a table takes a migrated database of its own, with nothing seeded, from
+  `SqlServerFixture.CreateDatabaseAsync`. A test-only context gets a database of its own from
+  `SqlServerFixture.ConnectionStringFor` and creates it from its model with `EnsureCreated`;
+  `Grow2Notes.Tests/Data/TenantIsolationOnNewEntitiesTests.cs` is the example.
 - The app under test connects as `sa`, to which the denies of `grow2notes_runtime` do not apply. A test of what the
   database refuses the app runs its statements as a member of that role, as the app's identity is in Azure.
   `Grow2Notes.Tests/Data/RuntimeRoleTests.cs` is the example.
@@ -92,5 +95,45 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 - The factory runs the app in the `Testing` environment, so `appsettings.Development.json` is not loaded, and its
   connection string overrides any on the machine.
 - A test that only reads the app's services or settings, and sends no request that needs the database, can host the
-  app without one, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is the example.
+  app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
+  the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way.
 - A run filtered to unit tests starts no container.
+
+### The seeded organisations and the tenant
+
+After migrating the shared database, `SqlServerFixture` adds two made-up organisations (A35) for the two-organisation
+tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address. A test
+takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs in `sqlServer.Seeded`:
+`Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId` and `WorkerId`. A two-organisation test acts in A
+and checks that nothing of B's reaches it. `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is
+seeded.
+
+- Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
+  and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. An endpoint call
+  commits, and may change other columns of a seeded row, such as Identity's `ConcurrencyStamp`. A test may add rows
+  to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
+  deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
+  added itself, and one that invites through the API invites an address of its own; or it works in a migrated
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`.
+- The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
+  they have no passkey or password, so nothing can sign in as them yet.
+
+Tenant-owned rows are read and written under a tenant (design.md §5.9). In a request, the app takes it from the
+signed-in user's session. A test that uses the app's context outside a request sets it as sign-in and the operator
+commands do: it takes `ITenantContext` from the same scope as the context and opens a `Use` block.
+
+```csharp
+using var scope = factory.Services.CreateScope();
+var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+
+using (tenant.Use(sqlServer.Seeded.A.OrganisationId))
+{
+    // Queries return only A's rows; a save stamps A's ID on added rows and throws for another organisation's.
+}
+```
+
+With no `Use` block open, a query or save of a tenant-owned row throws. Open the block in the test method itself,
+around its awaits: a tenant set inside an awaited helper method does not flow back to its caller. `Organisation` and
+`AspNetUsers` need no tenant: the first is the tenant, and the second is not filtered, so a query of users names the
+organisation itself, as `SeededOrganisationsTests` does.

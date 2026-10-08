@@ -42,28 +42,35 @@ asks for a re-forecast from measured throughput after this sprint; until then th
 | 2 | S00.02.02 | Test environment resources | enabler | 5 |
 | 3 | S00.02.03 | Deploy to test from main | enabler | 3 |
 | 4 | S00.02.06 | Server telemetry with IDs only | enabler | 3 |
-| | | **Total** | | **14** |
+| | | **Total at planning** | | **14** |
+| 5 | S00.03.02 | Tenant isolation and its tests (pulled in on 8 October 2026) | enabler | 3 |
 
 These are the next four items in the backlog. S00.02.02 needs S00.02.01's resource groups and identities; S00.02.03
 needs S00.02.02's database and web app; S00.02.06 adds `monitoring.bicep` to `main.bicep` and is checked in test after
 S00.02.03's first deploy. Together they meet the Definition of Done's "Deployed to the test environment" line for this
 and every later story. If time is left over, take the next story in backlog order (S00.03.02) once it is Ready.
 
+**Pulled in on 8 October 2026.** S00.02.01 and S00.02.03 are done, S00.02.06 is in review (PR #19), and S00.02.02's
+last checks wait on the owner's answer to Q6, so time was left over. As the paragraph above allows, S00.03.02 was
+refined to Ready that day, its tasks were written in its own section, and it was taken into the sprint. Its 3 points
+are not added to `planned_points`, which stays at the 14 planned on 4 October. They count in `done_points` only if it
+is done by 18 October; otherwise it goes back to the backlog (README §7.2 step 4).
+
 ## Definition of Ready check
 
 README §8, used as a reminder, not a gate. All four stories are `ready`, and the five owner questions raised at
-planning were answered on 4 October 2026 (below).
+planning were answered on 4 October 2026 (below). S00.03.02 was checked on 8 October 2026, when it was pulled in.
 
-| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 |
-|---|---|---|---|---|
-| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes |
-| Sources linked; what to build is clear | Yes | Yes | Yes | Yes |
-| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription |
-| Copy marked (P) | None used | None used | None used | None used |
-| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes |
-| Sized at 1–5 points | 3 | 5 | 3 | 3 |
-| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None |
-| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string |
+| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 | S00.03.02 (8 October) |
+|---|---|---|---|---|---|
+| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes | Yes |
+| Sources linked; what to build is clear | Yes | Yes | Yes | Yes | Yes, with its Notes from refinement |
+| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription | None open. No open question in ux/README.md or releases.md concerns tenancy; Q6 changes only S00.02.02 |
+| Copy marked (P) | None used | None used | None used | None used | None used |
+| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes | Yes (linked §5.9 and §9.2 groups narrowed to what it builds) |
+| Sized at 1–5 points | 3 | 5 | 3 | 3 | 3 |
+| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None | None (extends S00.03.01's context, done in Sprint 01) |
+| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string | Two made-up organisations, each with a manager and a worker (`example.org` addresses) |
 
 ## Owner questions
 
@@ -93,6 +100,8 @@ Each story's tasks are written once, in its own section, and ticked there (READM
    in F00.02.
 4. [S00.02.06 Server telemetry with IDs only](../E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000206-server-telemetry-with-ids-only),
    in F00.02.
+5. [S00.03.02 Tenant isolation and its tests](../E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000302-tenant-isolation-and-its-tests),
+   in F00.03, pulled in on 8 October 2026.
 
 ## Settled at planning
 
@@ -143,6 +152,8 @@ keeping releases.md assumption 1's Monday-to-Sunday sprints; the sprint's first 
 PR #15). So the sprint ends on Sunday 18 October 2026 (D53) instead of the forecast's 26 October to 8 November.
 Sprint 01 keeps its forecast dates in sprint-01.md, and both sprints' dates are settled at Sprint 02's review
 re-forecast.
+
+Pulled in: S00.03.02 (3 points) on 8 October 2026 (Plan).
 
 Done: __ points, __ stories. Not done (back to the backlog): …
 
