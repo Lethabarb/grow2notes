@@ -44,6 +44,7 @@ asks for a re-forecast from measured throughput after this sprint; until then th
 | 4 | S00.02.06 | Server telemetry with IDs only | enabler | 3 |
 | | | **Total at planning** | | **14** |
 | 5 | S00.03.02 | Tenant isolation and its tests (pulled in on 8 October 2026) | enabler | 3 |
+| 6 | S00.03.03 | Audit writer (pulled in on 8 October 2026) | enabler | 2 |
 
 These are the next four items in the backlog. S00.02.02 needs S00.02.01's resource groups and identities; S00.02.03
 needs S00.02.02's database and web app; S00.02.06 adds `monitoring.bicep` to `main.bicep` and is checked in test after
@@ -56,21 +57,27 @@ refined to Ready that day, its tasks were written in its own section, and it was
 are not added to `planned_points`, which stays at the 14 planned on 4 October. They count in `done_points` only if it
 is done by 18 October; otherwise it goes back to the backlog (README §7.2 step 4).
 
+**S00.03.03, pulled in on 8 October 2026.** S00.03.02 was pulled in earlier that day and is in review (PR #21),
+S00.02.06 is done, and S00.02.02's last checks still wait on the owner's answer to Q6, so time was left over again.
+S00.03.03, next in backlog order, was refined to Ready the same day, its tasks were written in its own section, and it
+was taken into the sprint. Its 2 points are not added to `planned_points` either, which stays at 14. They count in
+`done_points` only if it is done by 18 October; otherwise it goes back to the backlog (README §7.2 step 4).
+
 ## Definition of Ready check
 
 README §8, used as a reminder, not a gate. All four stories are `ready`, and the five owner questions raised at
-planning were answered on 4 October 2026 (below). S00.03.02 was checked on 8 October 2026, when it was pulled in.
+planning were answered on 4 October 2026 (below). S00.03.02 and S00.03.03 were checked on 8 October 2026, when they were pulled in.
 
-| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 | S00.03.02 (8 October) |
-|---|---|---|---|---|---|
-| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes | Yes |
-| Sources linked; what to build is clear | Yes | Yes | Yes | Yes | Yes, with its Notes from refinement |
-| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription | None open. No open question in ux/README.md or releases.md concerns tenancy; Q6 changes only S00.02.02 |
-| Copy marked (P) | None used | None used | None used | None used | None used |
-| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes | Yes (linked §5.9 and §9.2 groups narrowed to what it builds) |
-| Sized at 1–5 points | 3 | 5 | 3 | 3 | 3 |
-| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None | None (extends S00.03.01's context, done in Sprint 01) |
-| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string | Two made-up organisations, each with a manager and a worker (`example.org` addresses) |
+| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 | S00.03.02 (8 October) | S00.03.03 (8 October) |
+|---|---|---|---|---|---|---|
+| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes | Yes | Yes |
+| Sources linked; what to build is clear | Yes | Yes | Yes | Yes | Yes, with its Notes from refinement | Yes, with its Notes from refinement |
+| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription | None open. No open question in ux/README.md or releases.md concerns tenancy; Q6 changes only S00.02.02 | None open. No open question in ux/README.md or releases.md concerns the audit log or forwarded headers; Q6 changes only S00.02.02 |
+| Copy marked (P) | None used | None used | None used | None used | None used | None used |
+| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes | Yes (linked §5.9 and §9.2 groups narrowed to what it builds) | Yes (linked §5.8 group narrowed to what it builds; mcp-server.md §3.5 convention 3 linked) |
+| Sized at 1–5 points | 3 | 5 | 3 | 3 | 3 | 2 |
+| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None | None (extends S00.03.01's context, done in Sprint 01) | S00.03.02: earlier in this sprint (in review, PR #21) |
+| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string | Two made-up organisations, each with a manager and a worker (`example.org` addresses) | The seeded organisations (S00.03.02), and client addresses from the documentation ranges (RFC 5737) |
 
 ## Owner questions
 
@@ -102,6 +109,8 @@ Each story's tasks are written once, in its own section, and ticked there (READM
    in F00.02.
 5. [S00.03.02 Tenant isolation and its tests](../E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000302-tenant-isolation-and-its-tests),
    in F00.03, pulled in on 8 October 2026.
+6. [S00.03.03 Audit writer](../E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000303-audit-writer),
+   in F00.03, pulled in on 8 October 2026 after S00.03.02.
 
 ## Settled at planning
 
@@ -154,6 +163,7 @@ Sprint 01 keeps its forecast dates in sprint-01.md, and both sprints' dates are 
 re-forecast.
 
 Pulled in: S00.03.02 (3 points) on 8 October 2026 (Plan).
+Pulled in: S00.03.03 (2 points) on 8 October 2026 (Plan).
 
 Done: __ points, __ stories. Not done (back to the backlog): …
 
