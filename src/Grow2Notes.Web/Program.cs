@@ -2,8 +2,10 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using IPNetwork = System.Net.IPNetwork;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,7 +64,29 @@ builder.Services.AddSingleton<MelbourneClock>();
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 
+// App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
+// X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
+// App Service guidance gives for the front end, as IPv4-mapped networks, since the app's dual-stack socket gives IPv4
+// addresses in that form, and as plain IPv4 too, in case a socket gives them so; so audit events, and later the rate
+// limits, key on the real client (design.md §9.9).
+// ForwardLimit keeps its default of 1: only the last X-Forwarded-For entry, the one the front end added, is used, and
+// an address a client sent itself is ignored. Set here, not by ASPNETCORE_FORWARDEDHEADERS_ENABLED, which takes the
+// headers from any address.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Add(IPNetwork.Parse("::ffff:10.0.0.0/104"));
+    options.KnownIPNetworks.Add(IPNetwork.Parse("::ffff:172.16.0.0/108"));
+    options.KnownIPNetworks.Add(IPNetwork.Parse("::ffff:192.168.0.0/112"));
+    options.KnownIPNetworks.Add(IPNetwork.Parse("10.0.0.0/8"));
+    options.KnownIPNetworks.Add(IPNetwork.Parse("172.16.0.0/12"));
+    options.KnownIPNetworks.Add(IPNetwork.Parse("192.168.0.0/16"));
+});
+
 var app = builder.Build();
+
+// First, so that everything after it, the exception handler included, sees the client's address and scheme.
+app.UseForwardedHeaders();
 
 app.UseCacheHeaders();
 
