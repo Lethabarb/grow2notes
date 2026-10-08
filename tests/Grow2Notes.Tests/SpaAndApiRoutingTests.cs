@@ -13,15 +13,27 @@ public sealed class SpaAndApiRoutingTests(Grow2NotesFactory factory) : IClassFix
 
     [Theory]
     [MemberData(nameof(UnknownApiRequests))]
-    public async Task Unknown_api_paths_return_404_rather_than_the_SPA_page(string method, string path)
+    public async Task Unknown_api_paths_return_a_404_problem_rather_than_the_SPA_page(string method, string path)
     {
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.NotEqual("text/html", response.Content.Headers.ContentType?.MediaType);
+        await response.ReadProblemAsync(HttpStatusCode.NotFound);
+    }
+
+    // The client-route fallback skips paths with a file extension, so a file that is not in the build is a 404 too.
+    [Theory]
+    [InlineData("/favicon.ico")]
+    [InlineData("/assets/no-such-file.js")]
+    public async Task Missing_files_return_a_404_problem(string path)
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }
 
     [Theory]

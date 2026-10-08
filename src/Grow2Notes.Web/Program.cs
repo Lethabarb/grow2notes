@@ -19,6 +19,10 @@ builder.Services.AddHealthEndpoints();
 // error text can hold the values that failed (design.md §9.5).
 builder.Services.AddExceptionHandler<DatabaseFailureHandler>();
 
+// The body of every error response: RFC 9457 problem details (design.md §6.1), written by the exception handler and
+// the status code pages below.
+builder.Services.AddProblemDetails();
+
 // The connection string is read when a context is configured, not here: configuration that WebApplicationFactory adds
 // arrives only when the host is built, so reading it here would miss the test database.
 //
@@ -94,10 +98,12 @@ app.UseForwardedHeaders();
 
 app.UseCacheHeaders();
 
-// Inside UseCacheHeaders, so its rules keep the final word on error responses. The middleware will not start without
-// a path, a delegate or problem details for the exceptions no handler takes. This delegate adds nothing, so they keep
-// the empty 500 they got before; design.md §6.1's problem+json errors are not built yet.
-app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
+// Both inside UseCacheHeaders, so its rules keep the final word on error responses. Status code pages give problem
+// details to every error status that has no body, outside /api too. They come first, so that the bare status an
+// exception handler sets, such as DatabaseFailureHandler's 500, gets them as well; for an exception that no handler
+// takes, the exception handler writes them itself. Neither puts the exception's text in them, in any environment.
+app.UseStatusCodePages();
+app.UseExceptionHandler();
 
 // The Vite build in wwwroot, served from the same origin as the API (design.md §7.2).
 app.MapStaticAssets();
@@ -109,7 +115,7 @@ app.MapHealthEndpoints();
 app.Map("/api/{**rest}", () => Results.NotFound());
 
 // Client-side routes get index.html. The default pattern skips paths with a file extension, so a missing file such as
-// /favicon.ico is a plain 404 rather than the page.
+// /favicon.ico is a 404 rather than the page.
 app.MapFallbackToFile("index.html");
 
 app.Run();

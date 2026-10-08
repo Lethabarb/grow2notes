@@ -4,7 +4,8 @@ namespace Grow2Notes.Web.Platform;
 
 /// <summary>
 /// The one place that logs a database failure in a request (design.md §9.5), with only the exception's type and SQL
-/// error number, and answers with an empty <c>500</c>, whatever the environment.
+/// error number, and answers <c>500</c>, whatever the environment. It writes no body: the status code pages in
+/// Program.cs give the bare status the same problem details as any other error, with none of the exception's text.
 /// </summary>
 /// <remarks>
 /// Handling the exception also keeps it out of every other log. ASP.NET Core 10's exception handler middleware neither

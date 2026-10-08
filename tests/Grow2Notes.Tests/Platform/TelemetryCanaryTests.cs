@@ -50,7 +50,10 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         using var duplicate = await client.PostAsJsonAsync(
             DuplicateEmailPath, new CanaryRequest($"{Canary}@example.org"), cancellationToken);
         HttpResponseMessage[] responses = [truncation, duplicate];
-        var bodies = await Task.WhenAll(responses.Select(r => r.Content.ReadAsStringAsync(cancellationToken)));
+
+        // The app answered each request with a 500 problem, whose body the check below looks in too.
+        var bodies = await Task.WhenAll(
+            responses.Select(r => r.ReadProblemAsync(HttpStatusCode.InternalServerError)));
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
         Assert.True(
@@ -60,11 +63,9 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         Assert.True(app.Services.GetRequiredService<LoggerProvider>().ForceFlush());
         Assert.True(app.Services.GetRequiredService<MeterProvider>().ForceFlush());
 
-        // SQL Server put the canary in its error text, and the app answered each request with an empty 500.
+        // SQL Server put the canary in its error text.
         Assert.Equal([2628, 2601], sinks.Failures.Select(f => f.Number));
         Assert.All(sinks.Failures, f => Assert.Contains(Canary, f.Message, StringComparison.OrdinalIgnoreCase));
-        Assert.All(responses, r => Assert.Equal(HttpStatusCode.InternalServerError, r.StatusCode));
-        Assert.All(bodies, Assert.Empty);
 
         // What Application Insights would receive reached this test's recorder, so the check below looks at something.
         Assert.NotEmpty(sinks.Ingestion.Payloads);
@@ -72,6 +73,7 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         // Ignoring case, because the email index holds the address upper-cased.
         Assert.Empty(sinks.Texts()
             .Concat(responses.SelectMany(ResponseHeaders))
+            .Concat(bodies.Select(body => (Sink: "response body", Text: (string?)body)))
             .Where(t => t.Text?.Contains(Canary, StringComparison.OrdinalIgnoreCase) == true)
             .Select(t => $"{t.Sink}: {t.Text}"));
 
