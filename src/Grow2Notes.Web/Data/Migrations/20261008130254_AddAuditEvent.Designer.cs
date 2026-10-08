@@ -4,6 +4,7 @@ using Grow2Notes.Web.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Grow2Notes.Web.Data.Migrations
 {
     [DbContext(typeof(Grow2NotesDbContext))]
-    partial class Grow2NotesDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008130254_AddAuditEvent")]
+    partial class AddAuditEvent
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -7,9 +7,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// The tenant save interceptor on a stand-in context, since no entity in the app's model is tenant-owned yet, through
-/// both <c>SaveChanges</c> and <c>SaveChangesAsync</c>. A second interceptor ends each save where the database would
-/// take over, so these tests need no database.
+/// The tenant save interceptor on a stand-in context, through both <c>SaveChanges</c> and <c>SaveChangesAsync</c>. A
+/// second interceptor ends each save where the database would take over, so these tests need no database.
 /// </summary>
 public sealed class TenantSaveChangesInterceptorTests
 {

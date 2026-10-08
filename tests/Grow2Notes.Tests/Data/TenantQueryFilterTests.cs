@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// The tenant query filter, and the concurrency token that goes with it, on a stand-in context, since no entity in the
-/// app's model is tenant-owned yet. Building a model and writing a query's SQL open no connection, so these tests need
-/// no database. <see cref="TenantIsolationOnNewEntitiesTests"/> shows both at work on SQL Server.
+/// The tenant query filter, and the concurrency token that goes with it, on a stand-in context. Building a model and
+/// writing a query's SQL open no connection, so these tests need no database.
+/// <see cref="TenantIsolationOnNewEntitiesTests"/> shows both at work on SQL Server.
 /// </summary>
 public sealed class TenantQueryFilterTests
 {

@@ -17,6 +17,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 {
     public DbSet<Organisation> Organisations => Set<Organisation>();
 
+    public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
     private Guid TenantId => tenant.OrganisationId;
@@ -82,6 +84,21 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             user.HasIndex(u => u.NormalizedEmail).IsUnique();
 
             user.HasIndex(u => new { u.OrganisationId, u.Status });
+        });
+
+        // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).
+        builder.Entity<AuditEvent>(auditEvent =>
+        {
+            // varchar, as design.md §5.3 has them: event and entity types are ASCII names, and so is an IP address.
+            auditEvent.Property(e => e.EventType).HasMaxLength(Limits.AuditEventType).IsUnicode(false);
+            auditEvent.Property(e => e.EntityType).HasMaxLength(Limits.AuditEntityType).IsUnicode(false);
+            auditEvent.Property(e => e.IpAddress).HasMaxLength(Limits.IpAddress).IsUnicode(false);
+            auditEvent.Property(e => e.Details).HasColumnType("nvarchar(max)");
+
+            auditEvent.HasIndex(e => new { e.OrganisationId, e.OccurredAtUtc });
+            auditEvent.HasIndex(e => new { e.OrganisationId, e.ParticipantId, e.OccurredAtUtc })
+                .HasFilter("[ParticipantId] IS NOT NULL");
+            auditEvent.HasIndex(e => new { e.OrganisationId, e.ActorUserId, e.OccurredAtUtc });
         });
 
         // KeysDbContext reads and writes the Data Protection key ring. The table is in this model as well, so that this
