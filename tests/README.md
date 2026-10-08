@@ -94,5 +94,6 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 - The factory runs the app in the `Testing` environment, so `appsettings.Development.json` is not loaded, and its
   connection string overrides any on the machine.
 - A test that only reads the app's services or settings, and sends no request that needs the database, can host the
-  app without one, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is the example.
+  app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
+  the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way.
 - A run filtered to unit tests starts no container.

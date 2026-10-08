@@ -9,10 +9,8 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpLogging;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -217,19 +215,6 @@ public sealed class LoggingTests
         {
             Transport = transport;
             Diagnostics.LoggedHeaderNames.Add("x-ms-keyvault-network-info");
-        }
-    }
-
-    private sealed class AppWithoutDatabase(string environment) : WebApplicationFactory<Program>
-    {
-        protected override void ConfigureWebHost(IWebHostBuilder builder)
-        {
-            builder.UseEnvironment(environment);
-
-            // Hides the connection string of Development and any on the machine, so the key ring's load fails at once
-            // instead of retrying against a server.
-            builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(
-                [new("ConnectionStrings:Grow2Notes", null)]));
         }
     }
 }
