@@ -38,10 +38,31 @@ export type ApiOptions = {
 // The same 10 seconds as autosave and the session ping (empty-loading-error.md *Timing*).
 const defaultTimeoutMs = 10_000;
 
+// The antiforgery endpoint, and the header in which its token comes and goes back with each change (design.md §9.8
+// item 2).
+const antiforgeryPath = '/api/auth/antiforgery';
+const antiforgeryHeader = 'X-XSRF-TOKEN';
+
+// The four calls that sign someone in, those that answer 200 Me (design.md §6.2). A token is bound to the user it was
+// issued to, so after one of them the next change fetches a token for the person now signed in.
+const signIns = new Set([
+  '/api/auth/login/totp',
+  '/api/auth/passkey',
+  '/api/auth/setup/password',
+  '/api/auth/setup/passkey',
+]);
+
+// The antiforgery token, held here only, never in storage or a cookie that script can read (§9.8 item 2), as the
+// promise of its request, so that changes sent together wait on one request.
+let antiforgeryToken: Promise<string> | undefined;
+
+type Answer = { response: Response; text: string };
+
 /**
- * Sends a request to the API and gives the JSON of its `2xx` answer, or nothing when that answer has no body. Throws
- * `ApiError` for any other answer, and with status `0` when no whole answer came within `timeoutMs`; a `401` that
- * means the session has ended raises the session-ended event first.
+ * Sends a request to the API and gives the JSON of its `2xx` answer, or nothing when that answer has no body. A
+ * `POST`, `PUT` or `DELETE` carries the antiforgery token, fetched first when none is held. Throws `ApiError` for any
+ * other answer, and with status `0` when no whole answer came within `timeoutMs`; a `401` that means the session has
+ * ended raises the session-ended event first.
  */
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { method = 'GET', body, ifMatch, timeoutMs = defaultTimeoutMs, signal } = options;
@@ -53,14 +74,21 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     headers['If-Match'] = entityTag(ifMatch);
   }
 
-  const { response, text } = await exchange(
-    path,
-    { method, headers, body: body === undefined ? undefined : JSON.stringify(body) },
-    timeoutMs,
-    signal,
-  );
+  const json = body === undefined ? undefined : JSON.stringify(body);
+  const send = (token?: string) =>
+    exchange(
+      path,
+      { method, headers: token === undefined ? headers : { ...headers, [antiforgeryHeader]: token }, body: json },
+      timeoutMs,
+      signal,
+    );
+  const { response, text } = method === 'GET' ? await send() : await sendChange(send);
 
   if (response.ok) {
+    if (signIns.has(path)) {
+      antiforgeryToken = undefined;
+    }
+
     // Several writes answer a bare 200 or 201 with no body (design.md §6.6), on which `response.json()` would throw.
     return (text === '' ? undefined : JSON.parse(text)) as T;
   }
@@ -91,11 +119,68 @@ export function classify(error: unknown): Failure {
 }
 
 /**
+ * Sends a change with the antiforgery token. A `400` with no `code` is how the `/api` filter refuses a missing or
+ * stale token, so such a change is sent once more, with the same body and a fresh token.
+ */
+async function sendChange(send: (token: string) => Promise<Answer>): Promise<Answer> {
+  const token = heldToken();
+  const answer = await send(await token);
+  if (answer.response.status !== 400 || failure(400, answer.text).code !== undefined) {
+    return answer;
+  }
+
+  forgetToken(token);
+  return send(await heldToken());
+}
+
+// The token held, or the request for one. A request that fails is not kept, so that the next change asks again.
+function heldToken(): Promise<string> {
+  if (antiforgeryToken === undefined) {
+    const request = requestToken();
+    antiforgeryToken = request;
+    void request.catch(() => {
+      forgetToken(request);
+    });
+  }
+
+  return antiforgeryToken;
+}
+
+// Forgets `token` only while it is still the one held, so that changes refused together share one fresh request: a
+// token request sent with no valid antiforgery cookie sets a new one, which another such request's token cannot match.
+function forgetToken(token: Promise<string>): void {
+  if (antiforgeryToken === token) {
+    antiforgeryToken = undefined;
+  }
+}
+
+// From the SPA's own origin, as the endpoint refuses a request from another (AntiforgeryEndpoint), and with a timeout
+// of its own. A request that fails fails its change with its own status.
+async function requestToken(): Promise<string> {
+  const { response, text } = await exchange(antiforgeryPath, { method: 'GET' }, defaultTimeoutMs, undefined);
+  if (!response.ok) {
+    throw failure(response.status, text);
+  }
+
+  const token = response.headers.get(antiforgeryHeader);
+  if (!token) {
+    throw new Error('The antiforgery endpoint answered with no token.');
+  }
+
+  return token;
+}
+
+/**
  * Sends the request and reads its whole body, or throws `ApiError` with status `0` when `fetch` or the reading
  * rejects, or the body is not all read after `timeoutMs`, so that an answer that stalls half-way fails too. An abort
  * by the caller's own `signal` is rethrown as it came.
  */
-async function exchange(path: string, init: RequestInit, timeoutMs: number, signal: AbortSignal | undefined) {
+async function exchange(
+  path: string,
+  init: RequestInit,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+): Promise<Answer> {
   signal?.throwIfAborted();
 
   // Neither AbortSignal.timeout, which Vitest's fake timers cannot drive, nor AbortSignal.any, which Safari has only
