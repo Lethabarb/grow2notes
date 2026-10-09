@@ -102,7 +102,7 @@ S00.03.04 and S00.04.01 on 9 October 2026, when they were pulled in.
 
 Also in releases.md's owner questions table, needed by Sprint 02, and in the affected stories' *Notes*. Q1 to Q5 were
 raised at planning and answered on 4 October 2026. Q6 was raised on 7 October 2026 by the checks after S00.02.03's
-first deploy (S00.02.02's *Notes*) and is open.
+first deploy (S00.02.02's *Notes*) and answered on 9 October 2026.
 
 | | Question | Answer | Stories |
 |---|---|---|---|
@@ -111,7 +111,7 @@ first deploy (S00.02.02's *Notes*) and is open.
 | Q3 | Is any paid Defender for Cloud plan on in the shared subscription? It would cover, and bill for, the Grow2Notes resources too, against design.md §10.1 and §10.2 (no paid Defender plan): accept that and its cost, or turn it off for the Grow2Notes resources where the plan allows? | **Answered** by inspecting the subscription: the App Service, SQL, Key Vault and all other workload plans are on the Free tier; only Foundational CSPM (free) and Discovery show Standard, and neither covers or bills the Grow2Notes resources. No change needed | S00.02.01 |
 | Q4 | The SQL Entra admin group (design.md §9.4): a new security group in the operator's Entra tenant holding only the developer's account, or an existing group? Its name must not name the parent company (D42) | **Answered:** a new Entra security group, "Grow2Notes SQL admins", with the developer as its only member, used for both test and prod (D64) | S00.02.02 |
 | Q5 | The repository's Actions logs are public, and GitHub prints environment variables in them but masks secrets. Keep the deployment identity's client ID, the tenant and subscription IDs, the SQL admin group and the alert email address as `test` environment secrets (recommended), or as variables as D60 says, accepting that they appear in the run logs? | **Answered:** environment secrets on the GitHub `test` environment (later `prod`), masked in the public logs; the workflows read `secrets.*`, not `vars.*` (D65, amending D60) | S00.02.01, S00.02.02, S00.02.03 |
-| Q6 | S00.02.02's database checks (the app identity in `grow2notes_runtime` with no DDL right; the stored key wrapped by Key Vault and still the only key after a restart) need a SQL connection from outside the VNet. Approve a temporary firewall rule for the operator's address on `sql-grow2notes-test`, removed straight after (as for `grant-identities.sql`), to run `infra/sql/check-database.sql`, and one restart of `app-grow2notes-test` between two runs of it? | **Open** | S00.02.02 |
+| Q6 | S00.02.02's database checks (the app identity in `grow2notes_runtime` with no DDL right; the stored key wrapped by Key Vault and still the only key after a restart) need a SQL connection from outside the VNet. Approve a temporary firewall rule for the operator's address on `sql-grow2notes-test`, removed straight after (as for `grant-identities.sql`), to run `infra/sql/check-database.sql`, and one restart of `app-grow2notes-test` between two runs of it? | **Answered 9 October 2026:** approved; the checks ran before and after one restart (three runs, as the restart took effect only after the second), through temporary firewall rules for the operator's address, removed straight after: 34 PASS and 0 FAIL each time, and the key ring kept its one key, wrapped by Key Vault (S00.02.02's *Notes*) | S00.02.02 |
 
 ## Tasks
 
