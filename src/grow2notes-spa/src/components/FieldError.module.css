@@ -1,0 +1,7 @@
+/* Bold, in the error colour, at the size of the text under a field (foundations.md *Type scale*). */
+.message {
+  margin: 0 0 var(--space-2);
+  color: var(--colour-error);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+}
