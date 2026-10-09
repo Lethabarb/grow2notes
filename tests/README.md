@@ -100,9 +100,10 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
   show what a signed-out caller gets.
 - A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
-  it `AllowAnonymous` unless the test is about who may call it. Until S00.04.01 adds the session cookie, the app has
-  no authentication scheme, so in `AppWithoutDatabase` an endpoint that refuses a signed-out request answers `500`:
-  the challenge has no scheme to use.
+  it `AllowAnonymous` unless the test is about who may call it. A signed-out request to one that is not gets the
+  session cookie's `401`, as problem details, as in the deployed app: in `AppWithoutDatabase`, where the cookie is the
+  default scheme (`Grow2Notes.Tests/SignedOutTests.cs`), and in `Grow2NotesFactory`, whose default scheme sends a
+  request without the test-only sign-in's headers to the cookie (below).
 - A test that calls `GET /api/auth/antiforgery` or an endpoint in the `/api` group calls `https://localhost`, with a
   client from `CreateHttpsClient()` (`Grow2Notes.Tests/Fixtures/AntiforgeryTokens.cs`): the antiforgery cookie is
   `Secure` always, so antiforgery throws on a request that is not HTTPS, and the app answers `500`. A request that
@@ -113,6 +114,9 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   In `AppWithoutDatabase`, Data Protection, which protects the tokens, has no key ring until `KeepKeysInMemory()` gives
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
+- A test of `Strict-Transport-Security` calls a host name other than `localhost` over HTTPS, as
+  `Grow2Notes.Tests/HstsTests.cs` calls `https://grow2notes.example`: the HSTS middleware never sends the header to
+  `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant
@@ -156,12 +160,18 @@ organisation itself, as `SeededOrganisationsTests` does.
 
 ### Calling as a seeded user
 
-`Grow2NotesFactory` makes a test-only authentication scheme the app's default
-(`Grow2Notes.Tests/Fixtures/TestSignIn.cs`); the app itself has no such scheme. A request that names a user's ID in its
-`X-Test-User` header is signed in as that user, with the user ID, `org_id` and role claims that design.md §8.4's claims
-factory adds, read from the user's row: the user's ID, `org_id`, which makes the user's organisation the request's
-tenant, and the role by its `UserRole` name. A request without the header is signed out. `SignInAs` adds the header to
-every request a client sends:
+`Grow2NotesFactory` keeps a test-only authentication scheme beside the session cookie
+(`Grow2Notes.Tests/Fixtures/TestSignIn.cs`); the app itself has no such scheme. The factory's default scheme is a
+policy scheme that sends a request with the `X-Test-User` or `X-Test-Role` header to the test-only sign-in, and any
+other request to the session cookie, as in the deployed app, so a request with neither header and no session cookie
+is signed out. A request that names a user's ID in its `X-Test-User` header is signed in as that user, with the
+principal that the app's claims factory builds from the user's row (design.md §8.4), as the session check rebuilds it
+on every request: Identity's claims (the user's ID, user name, email and security stamp), `org_id`, which makes the
+user's organisation the request's tenant, the role by its `UserRole` name, and the display name.
+`Grow2Notes.Tests/Fixtures/TestSignInTests.cs` shows it. The session checks run in the cookie only, so a request
+signed in this way skips them: the security stamp, the idle limit and the 12-hour limit do not apply to it, and its
+principal has no `auth_time`, which only a sign-in adds; a test of them signs in with the cookie (below). `SignInAs`
+adds the header to every request a client sends:
 
 ```csharp
 using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
@@ -170,11 +180,51 @@ using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
 `SignInAs(caller, sqlServer.Seeded)` signs in as one of the endpoint matrix's callers (below), or, for
 `Caller.SignedOut`, adds nothing.
 
-A request that the fallback policy or the `Manager` policy refuses then answers `401` signed out and `403` signed in,
-as problem details. To test a role that `UserRole` does not have, such as Release 2's Support, a request also sends
-the `X-Test-Role` header, whose value replaces the role claim's; the value `TestSignIn.NoRole` leaves the user with no
-role claim (an empty value would not: the test server drops a header whose value is empty).
-`Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
+A request that the fallback policy or the `Manager` policy refuses then answers as problem details: `401` signed
+out, from the session cookie, and `403` signed in, from the test-only sign-in, which forbids as the cookie does. To
+test a role that `UserRole` does not have, such as Release 2's Support, a request also sends the `X-Test-Role` header,
+whose value replaces the role claim's, and no other claim changes; the value `TestSignIn.NoRole` leaves the user with
+no role claim (an empty value would not: the test server drops a header whose value is empty). The header needs
+`X-Test-User`: a request with `X-Test-Role` alone fails to sign in, rather than going to the cookie, which would
+ignore the header. `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is the example.
+
+### Signing in with the session cookie, on a fake clock
+
+A test of the session itself signs in with the real session cookie, `__Host-grow2notes`, so its later requests meet
+the app's own session checks: the security stamp, the idle limit and the 12-hour limit (design.md §8.4, §8.5). No
+sign-in endpoint exists yet, so the test maps a test-only one with `MapCookieSignIn()`
+(`Grow2Notes.Tests/Fixtures/CookieSignIn.cs`), which signs in the user whose ID it is given through the app's
+`SignInManager.SignInAsync(user, isPersistent: false)`, as setup does when it completes (§8.1 step 5). So the cookie is
+the one a real sign-in issues, `auth_time` included. That call does not ask `CanSignInAsync`, so sign in Active users
+only.
+
+The cookie is `Secure`, so the client calls `https://localhost`: `SignInWithCookieAsync` signs in a client from
+`CreateHttpsClient()`, which keeps the cookie and sends it with every later request, and returns the cookie that the
+sign-in set. A later request goes to the cookie as long as it has neither of the test-only sign-in's headers.
+
+`UseClock` (`Grow2Notes.Tests/Fixtures/TestClock.cs`) hosts the app on a `FakeTimeProvider` in place of the system
+clock, which then drives the sign-in time, the cookie's expiry, the stamp check, the 12-hour limit and `MelbourneClock`
+alike; Data Protection keeps the real clock, whose keys do not expire within a run. Start the clock on a whole second,
+such as `TestClock.Start` (2026-10-09T13:30:00Z): the cookie and `auth_time` keep times to the second, and the session
+limits are tested to the second. Move the clock forward at least a second before each request: the stamp check runs
+only once more time than its interval of zero has passed since the cookie was issued or last renewed, so on a clock
+that has not moved, a request skips it, and a changed security stamp or role goes unseen.
+
+```csharp
+private readonly FakeTimeProvider clock = new(TestClock.Start);
+
+// In the test:
+await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));
+using var client = app.CreateHttpsClient();
+await client.SignInWithCookieAsync(sqlServer.Seeded.A.WorkerId);
+
+clock.Advance(TimeSpan.FromSeconds(1));
+using var response = await client.GetAsync("/api/...", TestContext.Current.CancellationToken);
+```
+
+Signing in changes no row, so a test may sign in as a seeded user; one that then changes the user, such as rotating
+their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
+`Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
 ### The endpoint matrix
 

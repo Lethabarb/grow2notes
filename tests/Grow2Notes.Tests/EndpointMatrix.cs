@@ -58,8 +58,9 @@ internal static class EndpointMatrix
         new(AnyMethod, "/healthz/ready",         OK,        OK,        OK,         OK),
 
         // The API (design.md §6), in the /api group. The sign-in page needs an antiforgery token before anyone is
-        // signed in (§6.2).
+        // signed in (§6.2). Each signed-in user gets themselves from /api/auth/me, in their own organisation.
         new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
+        new(Get,       "/api/auth/me",           Unauthorized, OK,     OK,         OK),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.

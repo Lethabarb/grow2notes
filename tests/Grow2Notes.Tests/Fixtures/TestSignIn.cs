@@ -1,8 +1,8 @@
-using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Grow2Notes.Web.Data;
-using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Features.Auth;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -11,21 +11,28 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
-/// Signing in, in tests only: an authentication scheme of the test project's own, which <see cref="Grow2NotesFactory"/>
-/// makes the app's default, so a test calls as a seeded user, who has no passkey or password. A request that names a
-/// user's ID in <see cref="UserHeader"/> is signed in as that user, with the claims that design.md §8.4's claims
-/// factory adds, read from the user's row: the user's ID, their organisation's ID in
-/// <see cref="TenantContext.OrganisationIdClaimType"/>, and their role by its <see cref="UserRole"/> name, the ID and
-/// the role in Identity's claim types for them. A request with neither header is signed out. The scheme challenges
-/// with <c>401</c> and forbids with <c>403</c>, as the session cookie's events do. The app has no such scheme.
+/// Signing in, in tests only: an authentication scheme of the test project's own, beside the session cookie, so a test
+/// calls as a seeded user, who has no passkey or password. <see cref="Grow2NotesFactory"/>'s default scheme sends a
+/// request with <see cref="UserHeader"/> or <see cref="RoleHeader"/> here, and any other to the session cookie, as in
+/// the deployed app, so a request with neither is signed in by its cookie or is signed out. A request that names a
+/// user's ID in <see cref="UserHeader"/> is signed in as that user, with the principal that the app's claims factory
+/// (<see cref="Grow2NotesClaimsFactory"/>) builds from the user's row, as the session cookie's stamp check rebuilds it
+/// on every request (design.md §8.4). The scheme challenges with <c>401</c> and forbids with <c>403</c>, as the session
+/// cookie's events do. The app has no such scheme.
 /// </summary>
+/// <remarks>
+/// The session checks (<see cref="SessionRules"/>) run in the session cookie only, so a request signed in here skips
+/// them: the security stamp, the idle limit and the 12-hour limit do not apply to it, and its principal has no
+/// <see cref="Grow2NotesSignInManager.AuthTimeClaimType"/>, which only a sign-in adds.
+/// </remarks>
 internal static class TestSignIn
 {
     public const string UserHeader = "X-Test-User";
 
     /// <summary>
-    /// Replaces the signed-in user's role claim value, for a role that <see cref="UserRole"/> does not have; with
-    /// <see cref="NoRole"/>, the user has no role claim. It needs <see cref="UserHeader"/>.
+    /// Replaces the signed-in user's role claim, and no other, for a role that <see cref="UserRole"/> does not have;
+    /// with <see cref="NoRole"/>, the user has no role claim. It needs <see cref="UserHeader"/>: a request with this
+    /// header alone fails to sign in, rather than going to the session cookie, which would ignore the header.
     /// </summary>
     public const string RoleHeader = "X-Test-Role";
 
@@ -37,9 +44,20 @@ internal static class TestSignIn
 
     private const string SchemeName = "TestSignIn";
 
+    private const string PolicySchemeName = "TestSignInOrCookie";
+
+    /// <summary>
+    /// Adds the test-only sign-in, and makes the default scheme, in place of the session cookie, one that sends each
+    /// request to the test-only sign-in or to the cookie by its headers, to challenge or forbid it as well as to
+    /// authenticate it, so a request is refused by the scheme that signed it in or found it signed out.
+    /// </summary>
     public static IServiceCollection AddTestSignIn(this IServiceCollection services)
     {
-        services.AddAuthentication(SchemeName).AddScheme<AuthenticationSchemeOptions, Handler>(SchemeName, null);
+        services.AddAuthentication(PolicySchemeName)
+            .AddPolicyScheme(PolicySchemeName, displayName: null, options =>
+                options.ForwardDefaultSelector = context =>
+                    HasTestHeader(context.Request) ? SchemeName : IdentityConstants.ApplicationScheme)
+            .AddScheme<AuthenticationSchemeOptions, Handler>(SchemeName, null);
         return services;
     }
 
@@ -68,21 +86,23 @@ internal static class TestSignIn
             _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
         };
 
+    private static bool HasTestHeader(HttpRequest request) =>
+        request.Headers.ContainsKey(UserHeader) || request.Headers.ContainsKey(RoleHeader);
+
     private sealed class Handler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        UserManager<ApplicationUser> users)
+        UserManager<ApplicationUser> users,
+        IUserClaimsPrincipalFactory<ApplicationUser> claimsFactory)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
         {
-            var replacesRole = Request.Headers.TryGetValue(RoleHeader, out var role);
+            // The default scheme sends a request here only when it has one of the two headers.
             if (!Request.Headers.TryGetValue(UserHeader, out var userId))
             {
-                return replacesRole
-                    ? AuthenticateResult.Fail($"{RoleHeader} needs {UserHeader}.")
-                    : AuthenticateResult.NoResult();
+                return AuthenticateResult.Fail($"{RoleHeader} needs {UserHeader}.");
             }
 
             if (!Guid.TryParse(userId, out var id) || await users.FindByIdAsync(id.ToString()) is not { } user)
@@ -90,21 +110,19 @@ internal static class TestSignIn
                 return AuthenticateResult.Fail($"{UserHeader} names no user.");
             }
 
-            var types = users.Options.ClaimsIdentity;
-            List<Claim> claims =
-            [
-                new(types.UserIdClaimType, user.Id.ToString()),
-                new(TenantContext.OrganisationIdClaimType, user.OrganisationId.ToString()),
-            ];
-
-            var roleValue = replacesRole ? role.ToString() : user.Role.ToString();
-            if (roleValue != NoRole)
+            var principal = await claimsFactory.CreateAsync(user);
+            if (Request.Headers.TryGetValue(RoleHeader, out var role))
             {
-                claims.Add(new(types.RoleClaimType, roleValue));
+                // The factory builds one identity, with one role claim, of the type that its IsInRole reads.
+                var identity = principal.Identities.Single();
+                identity.RemoveClaim(identity.FindFirst(identity.RoleClaimType));
+                if (role != NoRole)
+                {
+                    identity.AddClaim(new(identity.RoleClaimType, role.ToString()));
+                }
             }
 
-            var identity = new ClaimsIdentity(claims, Scheme.Name, types.UserNameClaimType, types.RoleClaimType);
-            return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
+            return AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name));
         }
     }
 }

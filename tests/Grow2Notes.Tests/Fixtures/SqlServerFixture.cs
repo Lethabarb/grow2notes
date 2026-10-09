@@ -81,8 +81,9 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public ValueTask DisposeAsync() => container.DisposeAsync();
 
     /// <summary>
-    /// The app's context on the database at <paramref name="connectionString"/>, with Identity and the tenant
-    /// registered as Program.cs registers them, for migrating and seeding.
+    /// The app's context on the database at <paramref name="connectionString"/>, with what migrating and seeding use
+    /// registered as Program.cs registers it: the tenant, and Identity's user manager and store at Program.cs's schema
+    /// version. Neither uses the sign-in manager, the claims factory or the session cookie, so they are left out.
     /// </summary>
     private static ServiceProvider AppDataServices(string connectionString)
     {
