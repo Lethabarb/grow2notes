@@ -73,6 +73,16 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
 `docker rm -f grow2notes-e2e-sql` when done.
 
+## Writing end-to-end tests
+
+Every end-to-end test imports `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`. The fixture's
+`page` fails the test, after it ends, if the browser's console reported a Content Security Policy violation, so each
+screen's test also shows that the screen works under design.md §9.7's policy (S06.01.04). Other console errors, such
+as the one Chromium logs for a `401`, do not fail a test.
+
+`e2e/fixtures.spec.ts` shows that the fixture fails a test whose page meets a violation. It is marked `test.fail()`, so
+it passes by failing: the run marks it as failed, with a cross, and counts it as passed.
+
 ## Writing integration tests
 
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class

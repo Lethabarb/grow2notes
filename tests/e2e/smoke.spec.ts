@@ -1,11 +1,14 @@
 import { AxeBuilder } from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
 
 // Every WCAG A and AA rule axe has, up to WCAG 2.2 AA (design.md §1, A32). axe has no wcag22a tag.
 const wcag22aa = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
 test('the home page shows Grow2Notes and passes the WCAG 2.2 AA checks', async ({ page }) => {
-  await page.goto('/');
+  const response = await page.goto('/');
+
+  // The fixture's check of the console means something only if the page is under the policy.
+  expect(await response?.headerValue('Content-Security-Policy')).toBeTruthy();
 
   await expect(page).toHaveTitle('Grow2Notes');
   await expect(page.getByRole('heading', { level: 1, name: 'Grow2Notes' })).toBeVisible();
