@@ -1,0 +1,111 @@
+/*
+ * The three button styles (primary-actions.md §1 to §4), for a <button> and for a link styled as one. The colours
+ * come from tokens.css, so that tokens.test.ts checks them, and the focus ring is base.css's.
+ */
+.button {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 100%;
+  min-block-size: var(--target-button);
+  min-inline-size: var(--target-button);
+  padding: 0.625rem 1.25rem;
+  /* Transparent on the filled styles, but there, so that forced colours still draw a border round every button. */
+  border: var(--border-control) solid transparent;
+  border-radius: var(--radius-s);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@media (min-width: 40rem) {
+  .button {
+    inline-size: auto;
+    min-inline-size: 8rem;
+  }
+}
+
+/*
+ * Both labels share one grid cell from the first render, so the button is as wide as the longer one and showing the
+ * busy label moves nothing. Hidden by visibility, which also leaves the hidden label out of the button's name.
+ */
+.label,
+.busyLabel {
+  grid-area: 1 / 1;
+  /* A long word, such as a long name, wraps rather than widening the button past the page. */
+  min-inline-size: 0;
+}
+
+.busyLabel,
+.button[data-busy] .label {
+  visibility: hidden;
+}
+
+.button[data-busy] .busyLabel {
+  visibility: visible;
+}
+
+.button[data-busy] {
+  cursor: progress;
+}
+
+/* Two classes each, so that base.css's a:hover colour cannot win on a link styled as a button. */
+.button.primary {
+  background: var(--colour-action);
+  color: var(--colour-on-action);
+}
+
+.button.secondary {
+  background: var(--colour-surface);
+  color: var(--colour-action);
+  border-color: var(--colour-action);
+}
+
+.button.warning {
+  background: var(--colour-error);
+  color: var(--colour-on-action);
+}
+
+/* Only where a fine pointer can hover, so that a tap on a phone does not leave a hover look stuck. */
+@media (hover: hover) and (pointer: fine) {
+  .primary:hover:not([aria-disabled]) {
+    background: var(--colour-action-hover);
+  }
+
+  .secondary:hover:not([aria-disabled]) {
+    background: var(--colour-hover);
+  }
+
+  .warning:hover:not([aria-disabled]) {
+    background: var(--colour-error-hover);
+  }
+}
+
+.primary:active:not([aria-disabled]) {
+  background: var(--colour-action-pressed);
+}
+
+.secondary:active:not([aria-disabled]) {
+  background: var(--colour-action-tint-pressed);
+}
+
+.warning:active:not([aria-disabled]) {
+  background: var(--colour-error-pressed);
+}
+
+/* The dashed border is a second cue, so that colour is not the only one. A busy button keeps its colours. */
+.button[data-unavailable] {
+  background: var(--colour-surface-muted);
+  color: var(--colour-text-secondary);
+  border: var(--border-control) dashed var(--colour-text-secondary);
+  cursor: not-allowed;
+}
+
+/* base.css has the same rule, but the colours above outrank it, as this stylesheet comes after base.css. */
+@media (forced-colors: active) {
+  .button[aria-disabled="true"] {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}

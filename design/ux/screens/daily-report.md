@@ -160,7 +160,7 @@ What changes from the phone:
 - **Downloads:** side by side, Word first, both at least `12rem` wide so they are the same size; left-aligned (AgDS:
   right-aligned buttons are missed by magnifier users) [Convention] https://design-system.agriculture.gov.au/components/button.
 - **Hover** styles appear (pointer devices only): primary buttons go to `--colour-action-hover`; step links get the
-  `--colour-action-tint` fill; nothing changes on the unavailable controls.
+  `--colour-hover` fill; nothing changes on the unavailable controls.
 - Nothing else changes: same words, same order, no extra columns, no side panel, no preview.
 
 ---
@@ -221,7 +221,7 @@ Specs: [date-navigation.md](../components/date-navigation.md), [primary-actions.
 | Previous day | Always available (there is no earliest date) |
 | Next day on today (design: "disabled") | The **same `<a>` element**: no `href`, `role="link"`, `aria-disabled="true"`, `tabIndex={0}`, no click handler. Unavailable look: `--colour-surface-muted` fill, `--colour-text-secondary` label (8.1:1), 2 px **dashed** border, `cursor: not-allowed`; `GrayText` in forced colours. Enter or a click does nothing. Swapping the element or dropping `href` without `tabIndex` would drop a keyboard user's focus to `<body>` when they step onto today [Standard] HTML focus fixup, https://html.spec.whatwg.org/multipage/interaction.html · React state reset on a different element type, https://react.dev/learn/preserving-and-resetting-state · [Convention] O'Hara, https://www.scottohara.me/blog/2021/05/28/disabled-links.html |
 | Reason text for Next day | None added. The field shows the chosen date and the status line names it; design.md gives no reason string, and the meaning ("no later day") is plain from the position [Opinion] |
-| States | Default (secondary: 2 px `--colour-action` border, `--colour-action` label) · Hover (laptop: `--colour-action-tint` fill) · Focus (3 px outline, 2 px offset) · Active (`--colour-action-tint-pressed`, instant) · Unavailable (Next day on today only) |
+| States | Default (secondary: 2 px `--colour-action` border, `--colour-action` label) · Hover (laptop: `--colour-hover` fill) · Focus (3 px outline, 2 px offset) · Active (`--colour-action-tint-pressed`, instant) · Unavailable (Next day on today only) |
 
 ### 4. Date status line
 

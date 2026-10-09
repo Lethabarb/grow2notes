@@ -1,0 +1,14 @@
+/* Stacked on a phone; from 40rem a left-aligned row that wraps when it runs out of room (primary-actions.md §3). */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+@media (min-width: 40rem) {
+  .group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+}

@@ -141,7 +141,7 @@ Everywhere. The foundations are the same on every screen; what differs is which 
 2. **Body text 18 px** (`1.125rem`) with a 1.5 line height, on phone and laptop. **Nothing smaller than 16 px anywhere**, including tags, hints and timestamps.
 3. **Four type sizes in use, two weights (400 and 700), sentence case, no italics.**
 4. **Reading measure `40rem`** (about 70 characters at 18 px) for forms and the read view. **Page width `60rem`** for the shell and setup screens.
-5. **Palette:** near-black text, a dark secondary grey, one blue action colour, and red, amber and green only for status. **Every text colour reaches 7:1** on the surfaces where it is used, except the placeholder (6.1:1). That margin is for glare.
+5. **Palette:** near-black text, a dark secondary grey, one blue action colour, and red, amber and green only for status. **Every text colour reaches 7:1** on the surfaces where it is used, except the placeholder (6.1:1) and the secondary button's label while the button is held down (5.9:1). That margin is for glare.
 6. **Light only.** No dark theme, no theme setting, and no `only light` opt-out of browser darkening, apart from the QR code.
 7. **Spacing:** one 4 px-based scale in `rem`. Larger gutters and section gaps from 40 rem up.
 8. **Tap targets:** at least 44 × 44 px everywhere (A32). 48 px for buttons and nav links; 56 px for the rows tapped most (tick rows, participant rows). At least 8 px between separate targets.
@@ -195,7 +195,7 @@ One theme, light. Tokens are named by job, not by hue. Components use these name
 | `--colour-page` | `#ffffff` | Page background | — |
 | `--colour-surface` | `#ffffff` | Inputs, dialogs, the top bar | — |
 | `--colour-surface-muted` | `#f3f2f1` | Read-only fields, the "unavailable" button fill | — |
-| `--colour-hover` | `#f3f2f1` | Row and secondary-button hover (laptop) | Text stays ≥ 7:1 |
+| `--colour-hover` | `#f3f2f1` | Row and secondary-button hover (laptop) | Text stays ≥ 7:1; action text 7.0:1 |
 | `--colour-pressed` | `#e5e4e2` | Row pressed state | Text 15.4:1; secondary 7.1:1 |
 | `--colour-border-control` | `#0b0c0c` | 2 px borders of text inputs, textareas, date fields, tick boxes and radios | 19.6:1 (needs 3:1) |
 | `--colour-divider` | `#b1b4b6` | 1 px rules between list rows and sections. Decorative only: spacing does the grouping | 2.1:1 (not required) |
@@ -203,7 +203,7 @@ One theme, light. Tokens are named by job, not by hue. Components use these name
 | `--colour-action-hover` | `#003e66` | Primary hover, link hover | 11.2:1 |
 | `--colour-action-pressed` | `#002d4d` | Primary pressed | 14.2:1 |
 | `--colour-on-action` | `#ffffff` | Text on action and error fills | 7.9:1 on action; 8.1:1 on error |
-| `--colour-action-tint` | `#e8f1f8` | Secondary button hover; notice banner fill | Action text 6.9:1; body text 17.1:1 |
+| `--colour-action-tint` | `#e8f1f8` | Notice banner fill | Body text 17.1:1 |
 | `--colour-action-tint-pressed` | `#d2e2ef` | Secondary button pressed | Action text 5.9:1 |
 | `--colour-focus` | `#0b0c0c` | Focus ring | 19.6:1 against white and ≥ 14:1 against every tint |
 | `--colour-error` | `#a4000f` | Error text, error border, the error-summary border, the warning (destructive) button fill | 8.1:1 on white; 7.1:1 on its tint |
@@ -222,7 +222,7 @@ One theme, light. Tokens are named by job, not by hue. Components use these name
 
 Rules that go with the palette:
 
-- **Text at 7:1 or better.** Every text colour above clears 7:1 (WCAG AAA 1.4.6) on the surfaces listed, except the placeholder. The placeholder sits at 6.1:1 so it is clearly lighter than typed text (D34's grey) while still well above the 4.5:1 that design.md 4.10 requires. The extra margin is for glare and tired eyes, not for compliance.
+- **Text at 7:1 or better.** Every text colour above clears 7:1 (WCAG AAA 1.4.6) on the surfaces listed, except the placeholder and the secondary button's pressed label. The placeholder sits at 6.1:1 so it is clearly lighter than typed text (D34's grey) while still well above the 4.5:1 that design.md 4.10 requires. The secondary button's label is 5.9:1 on its pressed fill, `--colour-action-tint-pressed`, which shows only while the button is held down, and is still well above A32's 4.5:1. The extra margin is for glare and tired eyes, not for compliance.
 - **No light grey text anywhere.** Not for hints, timestamps, "No participants yet." or disabled labels. Empty-state and loading sentences use `--colour-text` or `--colour-text-secondary`, never anything lighter.
 - **Red means error or destructive, amber means "needs attention", green means "done".** Blue means "you can act on this" and is also used for neutral notices. Never introduce another status hue.
 - **The words always carry the meaning** (A32, 1.4.1). Colour is a second channel: "There is a problem", "Not saved", "Flagged", "Submitted", "Note for Jane Citizen submitted".
@@ -373,7 +373,7 @@ Foundations owns the shared text formats, because every screen uses them.
   - Windows contrast themes: borders on every meaningful shape; `Highlight` focus; `GrayText` for unavailable controls; SVG icons drawn in `currentColor`; no meaning in background images.
   - Reduced motion: nothing moves anyway.
   - iOS and Android at their largest text setting, and Safari's page zoom at 200%.
-- **WCAG 2.2 criteria these foundations meet or enable:** 1.3.4 Orientation; 1.4.1 Use of Color; 1.4.3 Contrast (Minimum); 1.4.4 Resize Text; 1.4.10 Reflow; 1.4.11 Non-text Contrast; 1.4.12 Text Spacing; 2.4.7 Focus Visible; 2.4.11 Focus Not Obscured (Minimum), with the sticky-bar handling in the save-indicator file; 2.5.8 Target Size (Minimum); 3.1.1 Language of Page. They also meet these AAA criteria at no extra cost: 1.4.6 Contrast (Enhanced) for all text except the placeholder; 2.3.3 Animation from Interactions; 2.4.13 Focus Appearance; 2.5.5 Target Size (Enhanced).
+- **WCAG 2.2 criteria these foundations meet or enable:** 1.3.4 Orientation; 1.4.1 Use of Color; 1.4.3 Contrast (Minimum); 1.4.4 Resize Text; 1.4.10 Reflow; 1.4.11 Non-text Contrast; 1.4.12 Text Spacing; 2.4.7 Focus Visible; 2.4.11 Focus Not Obscured (Minimum), with the sticky-bar handling in the save-indicator file; 2.5.8 Target Size (Minimum); 3.1.1 Language of Page. They also meet these AAA criteria at no extra cost: 1.4.6 Contrast (Enhanced) for all text except the placeholder and the secondary button's pressed label; 2.3.3 Animation from Interactions; 2.4.13 Focus Appearance; 2.5.5 Target Size (Enhanced).
 
 ### Implementation notes (React 19, native HTML, CSS Modules)
 
@@ -596,7 +596,7 @@ test.each([
 | `--colour-surface-muted`, `--action-unavailable-bg` | `--colour-surface-muted` |
 | `--colour-input-border`, `--color-input-border`, `--border-input`, `--border-strong`, `--color-border-strong`, `--border-hover` | `--colour-border-control` (no hover change on input borders) |
 | `--colour-border`, `--border`, `--colour-divider`, `--divider` | `--colour-divider` |
-| `--colour-row-hover`, `--row-hover`, `--surface-hover`, `--color-surface-hover`, `--action-secondary-bg-hover` | `--colour-hover` (secondary buttons: `--colour-action-tint`) |
+| `--colour-row-hover`, `--row-hover`, `--surface-hover`, `--color-surface-hover`, `--action-secondary-bg-hover` | `--colour-hover` |
 | `--colour-row-active`, `--colour-pressed`, `--pressed` | `--colour-pressed` |
 | `--colour-focus`, `--color-focus`, `--focus`, `--focus-ring` | `--colour-focus` |
 | `--colour-error`, `--color-error`, `--error`, `--colour-error-text`, `--color-error-text`, `--action-warning-bg` | `--colour-error` |
