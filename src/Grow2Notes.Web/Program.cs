@@ -10,7 +10,11 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using IPNetwork = System.Net.IPNetwork;
 
-var builder = WebApplication.CreateBuilder(args);
+// The operator commands run from the app's own binary, as `dotnet Grow2Notes.Web.dll admin bootstrap …` in the SSH
+// console (design.md §7.4), with the services and settings the web app has. Their arguments are not given to the
+// builder, so none of them becomes configuration.
+string[]? operatorCommand = args is ["admin", .. var command] ? command : null;
+var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 
 // Server telemetry goes to Application Insights only where it is configured, as in Azure (design.md §9.5). Its
 // settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
@@ -181,6 +185,20 @@ builder.Services.AddHsts(options =>
 });
 
 var app = builder.Build();
+
+// An operator command runs in place of the web server, in a scope of its own, and the process exits with its code: 0
+// when done, 1 when refused. Disposing the app flushes its loggers before the process ends.
+if (operatorCommand is not null)
+{
+    await using (app)
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        Environment.ExitCode = await scope.ServiceProvider.GetRequiredService<AdminCommands>()
+            .RunAsync(operatorCommand, Console.Out, Console.Error);
+    }
+
+    return;
+}
 
 // First, so that everything after it, the exception handler included, sees the client's address and scheme.
 app.UseForwardedHeaders();
