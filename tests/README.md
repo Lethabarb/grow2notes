@@ -125,8 +125,9 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
 - A test of `Strict-Transport-Security` calls a host name other than `localhost` over HTTPS, as
-  `Grow2Notes.Tests/HstsTests.cs` calls `https://grow2notes.example`: the HSTS middleware never sends the header to
-  `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP.
+  `Grow2Notes.Tests/Platform/SecurityHeadersTests.cs` calls `https://grow2notes.example`: the HSTS middleware never
+  sends the header to `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP, which `Grow2Notes.Tests/HstsTests.cs`
+  shows.
 - Every response carries design.md §9.7's security headers, the exception handler's without
   `Strict-Transport-Security` (S06.01.04's Notes). `Grow2Notes.Tests/Platform/SecurityHeadersTests.cs` asks
   `https://grow2notes.example` for each kind of response that the app gives and checks that it carries all six, once

@@ -10,7 +10,7 @@ namespace Grow2Notes.Tests.Platform;
 /// in §9.7's text block, read from design.md itself (<see cref="DesignedSecurityHeaders"/>), so the code and the design
 /// cannot drift apart. A story that adds a kind of response adds it here (tests/README.md).
 /// <c>Strict-Transport-Security</c> is <c>UseHsts</c>'s, which sends it only over HTTPS and never to <c>localhost</c>,
-/// so the tests call another host name over HTTPS, as <see cref="HstsTests"/> does.
+/// so the tests call another host name over HTTPS; <see cref="HstsTests"/> shows the cases that get none.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class SecurityHeadersTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
