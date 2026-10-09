@@ -51,6 +51,11 @@ npx playwright install --with-deps webkit  # Linux, with WebKit's system package
 The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
 default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
 
+`npm test` also runs microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of its
+own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and the
+word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
+contraction outside design.md's two "can't" strings.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
