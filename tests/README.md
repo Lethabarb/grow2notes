@@ -70,6 +70,30 @@ dotnet test Grow2Notes.slnx
 
 If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying so.
 
+### The D42 check
+
+`Grow2Notes.Tests/Fixtures/ForbiddenNameTests.cs` searches every file that `git ls-files` lists, each one's path, and
+every file of the SPA build in `src/Grow2Notes.Web/wwwroot` for the parent company's name (D42), and fails naming each
+file, and the line of each match in its text, but never the name: a path that holds it shows `<FORBIDDEN_NAME>` in its
+place. It reads the files as they are in the working tree, so a new file is searched once it is added with `git add`.
+Its matcher, `Fixtures/ForbiddenName.cs`, ignores case and takes the name's words in order with any run of characters
+other than letters and digits, or none, between them.
+
+The name is never written in the repository: the test reads it from the environment variable `FORBIDDEN_NAME`, which
+CI's Test step fills from the repository's Actions secret of that name. Without it, the test fails where `CI` is set,
+as GitHub Actions sets it, and is skipped elsewhere. It needs no database. To run it on a machine, build the SPA as
+above, then from the repository root in Git Bash:
+
+```shell
+read -rs FORBIDDEN_NAME   # type the name at the prompt, which neither shows it nor keeps it in the shell's history
+FORBIDDEN_NAME="$FORBIDDEN_NAME" dotnet test tests/Grow2Notes.Tests --filter "FullyQualifiedName~ForbiddenNameTests"
+unset FORBIDDEN_NAME
+```
+
+`read` puts the name in a shell variable, which is not exported, so no other command sees it; the second line passes
+it into the environment of that one command only. Never type the name into a command, or write it in a file, a script
+or a shell profile.
+
 ## Running the end-to-end tests
 
 CI runs them against the published app, on a SQL Server container that the migrations bundle has migrated (the
