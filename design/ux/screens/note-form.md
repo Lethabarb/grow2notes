@@ -1145,8 +1145,8 @@ keyboard open on Guided notes; Chrome page translation leaves names unchanged.
     common items.
 42. The placeholder colour is #626262 (or the token) with `opacity: 1`, checked by hand (axe may not check
     `::placeholder`).
-43. The Vitest copy check (`microcopy.md` §8) finds no trace of the parent company's name (D42), no banned words and
-    no US spellings in this screen's strings.
+43. The Vitest copy check (`copy.test.ts`, `microcopy.md` §8) finds no banned words and no US spellings in this
+    screen's strings, and the D42 check (`ForbiddenNameTests`, §8) no trace of the parent company's name.
 
 ---
 

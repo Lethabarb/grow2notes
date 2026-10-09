@@ -677,8 +677,8 @@ Consistent Navigation · 3.2.4 Consistent Identification · 3.3.1 Error Identifi
   walks every route and fails if a participant or user name appears in any title.
 - [ ] No route pushes `history.state` containing anything other than React Router's own key and the boolean
   `inScreen`; after a full manager and worker session, `localStorage`, `sessionStorage` and IndexedDB are empty.
-- [ ] A Vitest/CI check fails if the parent company's name appears in `index.html`, the bundle, CSS tokens, file names
-  or copy modules (D42).
+- [ ] A CI check fails if the parent company's name appears in `index.html`, the bundle, CSS tokens, file names or
+  copy modules (D42; `ForbiddenNameTests`, microcopy.md §8).
 - [ ] `<html lang="en-AU">`, the viewport tag has no `maximum-scale` or `user-scalable`, and `color-scheme` is
   `light` without `only`.
 

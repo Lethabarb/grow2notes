@@ -17,11 +17,25 @@ Each is a separate step of CI's SPA checks (design.md §10.4 step 2). In `src/gr
 npm run typecheck           # tsc over the app, the tests, the config files and scripts/
 npm run lint                # ESLint; a warning fails it too
 npm test                    # Vitest, once
+npm run test:webkit         # the format tests again, in Playwright's WebKit (below)
 npm run build               # vite build into src/Grow2Notes.Web/wwwroot
 npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
 ```
 
 `npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
+`npm run test:webkit` runs `src/copy/format.test.ts` alone, headless in Playwright's WebKit, Safari's engine, through
+Vitest's browser mode (`vitest.webkit.config.ts`), because Safari's time-zone data can differ from Node's
+(microcopy.md §8). The browser's zone is set to America/Los_Angeles, behind UTC, whatever the machine's, so that a date
+read in the device's own time, which there falls on the day before, fails it. It needs the WebKit build that the SPA's
+`playwright` package drives, installed once per machine and again after that package is updated:
+
+```shell
+npx playwright install webkit              # Windows and macOS
+npx playwright install --with-deps webkit  # Linux, with WebKit's system packages, as CI installs it
+```
+
+`npm test` needs no browser: it runs every test, `format.test.ts` included, in jsdom.
 
 `npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
 `npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
@@ -38,6 +52,13 @@ npm run check:no-analytics  # no Application Insights JavaScript SDK or third-pa
 The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
 default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
 
+`npm test` also runs microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of its
+own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and the
+word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
+contraction outside design.md's two "can't" strings. With it, `src/copy/wordsInJsx.test.ts` lints sample components
+with `eslint.config.js` and checks which words in JSX its rule refuses, as no JSX in `src` holds one for
+`npm run lint` to refuse.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
@@ -51,6 +72,30 @@ dotnet test Grow2Notes.slnx
 ```
 
 If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying so.
+
+### The D42 check
+
+`Grow2Notes.Tests/Fixtures/ForbiddenNameTests.cs` searches every file that `git ls-files` lists, each one's path, and
+every file of the SPA build in `src/Grow2Notes.Web/wwwroot` for the parent company's name (D42), and fails naming each
+file, and the line of each match in its text, but never the name: a path that holds it shows `<FORBIDDEN_NAME>` in its
+place. It reads the files as they are in the working tree, so a new file is searched once it is added with `git add`.
+Its matcher, `Fixtures/ForbiddenName.cs`, ignores case and takes the name's words in order with any run of characters
+other than letters and digits, or none, between them.
+
+The name is never written in the repository: the test reads it from the environment variable `FORBIDDEN_NAME`, which
+CI's Test step fills from the repository's Actions secret of that name. Without it, the test fails where `CI` is set,
+as GitHub Actions sets it, and is skipped elsewhere. It needs no database. To run it on a machine, build the SPA as
+above, then from the repository root in Git Bash:
+
+```shell
+read -rs FORBIDDEN_NAME   # type the name at the prompt, which neither shows it nor keeps it in the shell's history
+FORBIDDEN_NAME="$FORBIDDEN_NAME" dotnet test tests/Grow2Notes.Tests --filter "FullyQualifiedName~ForbiddenNameTests"
+unset FORBIDDEN_NAME
+```
+
+`read` puts the name in a shell variable, which is not exported, so no other command sees it; the second line passes
+it into the environment of that one command only. Never type the name into a command, or write it in a file, a script
+or a shell profile.
 
 ## Running the end-to-end tests
 

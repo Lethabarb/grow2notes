@@ -93,6 +93,18 @@ jobs:
         working-directory: src/grow2notes-spa
         run: npm test
 
+      # The format tests again in WebKit, Safari's engine, whose time-zone data can differ from Node's, and in a zone
+      # behind UTC, which vitest.webkit.config.ts sets for the browser (microcopy.md §8). The SPA's own playwright
+      # package installs the WebKit build that its version drives; not cached, for the reason given at Install
+      # Chromium for Playwright.
+      - name: Install WebKit for Playwright
+        working-directory: src/grow2notes-spa
+        run: npx playwright install --with-deps webkit
+
+      - name: Test the formats in WebKit
+        working-directory: src/grow2notes-spa
+        run: npm run test:webkit
+
       - name: Build the SPA
         working-directory: src/grow2notes-spa
         run: npm run build
@@ -116,8 +128,12 @@ jobs:
       - name: Build
         run: dotnet build Grow2Notes.slnx --no-restore --configuration Release -warnaserror
 
-      # The integration tests start SQL Server in Docker through Testcontainers.
+      # The integration tests start SQL Server in Docker through Testcontainers. ForbiddenNameTests, D42's check, reads
+      # the parent company's name from the repository's Actions secret, given to this step alone; GitHub masks it in
+      # the log. Without it, as in a fork's pull request, that test fails.
       - name: Test
+        env:
+          FORBIDDEN_NAME: ${{ secrets.FORBIDDEN_NAME }}
         run: dotnet test Grow2Notes.slnx --no-build --configuration Release
 
       - name: Check for model changes without a migration

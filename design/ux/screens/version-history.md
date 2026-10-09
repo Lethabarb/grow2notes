@@ -242,7 +242,7 @@ All queries are memory-only, with no persister and no browser storage (D22, 9.6)
   ]},
 ]}
 
-// VersionRow.tsx: all visible strings come from src/copy (jsx-no-literals, microcopy.md)
+// VersionRow.tsx: all visible strings come from src/copy (the no-restricted-syntax lint rule, microcopy.md §8)
 function VersionRow({ v, authorId }: { v: VersionSummary; authorId: string }) {
   const metaId = useId();
   const saver = v.createdBy.displayName + (v.createdBy.id !== authorId ? copy.managerSuffix : '');
@@ -384,7 +384,7 @@ function VersionRow({ v, authorId }: { v: VersionSummary; authorId: string }) {
 - [ ] A manager whose role becomes Worker mid-session sees Page not found on the next screen change. A `403` from the API also shows Page not found.
 - [ ] `document.title` is "Grow2Notes – Version history" on A, B, loading and failure. The URL and `history.state` contain no names or note text.
 - [ ] After using both pages, `localStorage`, `sessionStorage` and IndexedDB hold nothing written by the app (Playwright check). React Router `<ScrollRestoration>` is not mounted.
-- [ ] No string on this screen contains the parent company's name (the app-wide D42 check in microcopy.md's `copy.test.ts`).
+- [ ] No string on this screen contains the parent company's name (the app-wide D42 check, `ForbiddenNameTests`, in microcopy.md §8).
 
 **Page A**
 - [ ] The `<h1>` text is "Version history Jane Citizen Thursday 1 October 2026" (U+00A0 between "1" and "October"; the date is the heading's third line).

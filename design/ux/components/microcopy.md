@@ -355,12 +355,14 @@ TypeScript so a missing parameter is a compile error.
 
 ```
 src/copy/
-  format.ts      // the five date/time tokens, names, numbers, plurals
-  strings.ts     // fixed strings, `as const`
-  messages.ts    // functions for strings with slots
-  apiErrors.ts   // design §6.9 error code -> message function
-  Sep.tsx        // the spoken-comma separator
-  copy.test.ts   // banned words, formats, D42
+  format.ts          // the five date/time tokens, names, numbers, plurals
+  strings.ts         // fixed strings, `as const`
+  messages.ts        // functions for strings with slots
+  apiErrors.ts       // design §6.9 error code -> message function
+  Sep.tsx            // the spoken-comma separator
+  copy.test.ts       // banned words, US spellings, negative contractions
+  format.test.ts     // the format snapshots, in jsdom and in WebKit
+  wordsInJsx.test.ts // the lint rule on words in JSX, tried on samples
 ```
 
 **Formats.** Compose from numeric parts so engine differences ("Sept", commas, spaces, "AM") cannot leak in. A note
@@ -402,11 +404,14 @@ export const time = (utcIso: string) => {
   return `${h % 12 || 12}:${String(min).padStart(2, '0')}${NBSP}${h < 12 ? 'am' : 'pm'}`;
 };
 
-/** Time alone on the reference day (Melbourne today, or the note date); otherwise "Thu 1 Oct 2026, 4:12 pm". */
+/** "Thu 1 Oct 2026, 4:12 pm", for version rows (version-history.md) and for `stamp` on another day. */
+export const dateTime = (utcIso: string) => `${dateShort(inMelbourne(utcIso))}, ${time(utcIso)}`;
+
+/** Time alone on the reference day (Melbourne today, or the note date); otherwise `dateTime`. */
 export const stamp = (utcIso: string, referenceDay: Ymd) => {
   const t = inMelbourne(utcIso);
   const same = t.y === referenceDay.y && t.m === referenceDay.m && t.d === referenceDay.d;
-  return same ? time(utcIso) : `${dateShort(t)}, ${time(utcIso)}`;
+  return same ? time(utcIso) : dateTime(utcIso);
 };
 
 const nf = new Intl.NumberFormat('en-AU');
@@ -457,21 +462,58 @@ import styles from './Sep.module.css';   // .vh = visually hidden
 export const Sep = () => (<><span aria-hidden="true"> · </span><span className={styles.vh}>, </span></>);
 ```
 
-**Keeping it consistent.** Turn on ESLint `react/jsx-no-literals` (eslint-plugin-react) so visible text cannot be typed
-straight into JSX and every string goes through `src/copy`. [Opinion: the cheapest way to make the glossary enforceable
-for a solo developer] `copy.test.ts` (Vitest) reads the `src/copy` sources and fails on:
+**Keeping it consistent.** Four checks, each run by CI on every pull request:
 
-- The parent company's name anywhere (D42), case-insensitive. The test reads the forbidden string from a CI secret
-  (environment variable `FORBIDDEN_NAME`), never from committed source, so the name is never written into the
-  repository. Run the same check in CI over the API's email templates, the report renderers, the passkey relying-party
-  name and the authenticator issuer.
-- Banned words: `/\b(log ?in|login|log out|click|invalid|oops|sorry)\b/i`, `/\bdelete/i`, and `please` except in the
-  one design.md string.
-- US spellings: `/\b(organiz|authoriz|recogniz|color\b|center\b|canceled)/i`.
-- Format snapshots: `dateLong({y:2026,m:10,d:1})` is "Thursday 1 October 2026" (with U+00A0), `time` at 02:00Z on
-  1 October 2026 is "midday", 15:30Z on 3 October 2026 is "1:30 am" and 16:30Z is "3:30 am" (daylight saving starts
-  at 2:00 am on Sunday 4 October 2026; verified in Node 24.12). Run the same tests in Playwright WebKit, because
-  Safari's Intl data can differ.
+- **No words typed into JSX.** ESLint's own `no-restricted-syntax` rule keeps them out, so that every visible string
+  goes through `src/copy`. [Opinion: the cheapest way to make the glossary enforceable for a solo developer]
+  `eslint.config.js` sets it for `src/**/*.tsx` but not the tests, whose words are made up, or `src/copy/`, where the
+  words live. It refuses, as a JSX child, text that is not whitespace, a string literal that is not whitespace
+  (`{'…'}`) and a template literal (`` {`…`} ``), and the same literals as a direct branch of a conditional or
+  logical expression that is a JSX child (`{busy ? 'a' : 'b'}`, `{x && 'a'}`), with a message that points to
+  `src/copy`. It stands in for eslint-plugin-react's `react/jsx-no-literals`, whose latest release, 7.37.5, allows
+  ESLint only up to 9, so it cannot be installed beside the SPA's ESLint 10. Like that rule at its defaults, it reads
+  no props: review checks a label passed in a prop (`busyLabel`, `loading`, `alt`) and a literal nested deeper in a
+  child expression, such as an inner conditional or a function's argument. No JSX in `src` holds a word for
+  `npm run lint` to refuse, so `src/copy/wordsInJsx.test.ts` (Vitest, in `npm test`) lints sample components with
+  `eslint.config.js` and checks what the rule refuses and passes: a selector that matched nothing would fail it.
+- **The words in `src/copy`.** `src/copy/copy.test.ts` (Vitest, in `npm test`) reads every `.ts` and `.tsx` module in
+  `src/copy` but its tests, whole, comments included, through `import.meta.glob` with `?raw`, and fails, naming the
+  file and the word, on:
+  - Banned words: `/\b(log ?in|login|log out|click|invalid|oops|sorry)\b/i`, `/\bdelete/i`, and `please` except in
+    the one design.md string, "Please check your ticks.".
+  - US spellings: `/\b(organiz|authoriz|recogniz|color\b|center\b|canceled)/i`.
+  - A negative contraction, with a straight or a typographic apostrophe, except in design.md's two "can't" strings,
+    "this note can't be started" and "and can't sign in" (§1 *Contractions*; *Tensions with decisions* 3), which pass
+    with either apostrophe.
+
+  It also fails unless it read `strings.ts`, `messages.ts` and `format.ts`, so that it cannot pass on no files. A new
+  design.md string with "please" or a negative contraction adds its exception there. The other words §1 bans in new
+  copy (valid, tap, illegal, an exclamation mark and the rest) are left to review, as a plain search of source would
+  trip on `!` in code and on "valid" in a comment.
+- **The formats.** `src/copy/format.test.ts` holds the snapshots: `dateLong({y:2026,m:10,d:1})` is
+  "Thursday 1 October 2026" (with U+00A0), `time` at 02:00Z on 1 October 2026 is "midday", 15:30Z on 3 October 2026
+  is "1:30 am" and 16:30Z is "3:30 am" (daylight saving starts at 2:00 am on Sunday 4 October 2026; verified in
+  Node 24.12), and each token's form, "midnight", "Sep" and the reference day besides. `npm test` runs them in jsdom,
+  and `npm run test:webkit` again in Playwright's WebKit through Vitest's browser mode (`vitest.webkit.config.ts`),
+  because Safari's Intl data can differ. The WebKit run sets the browser's zone to America/Los_Angeles, so that CI
+  runs the dates in a zone behind UTC, where a date read in the device's own time falls on the day before, as well
+  as in jsdom under the job's `TZ=UTC`.
+- **The parent company's name (D42).** A .NET test, `ForbiddenNameTests` in `tests/Grow2Notes.Tests/Fixtures/`, rather
+  than a part of `copy.test.ts`, because the name must appear nowhere in the repository or the build, not just nowhere
+  in `src/copy`. It searches every file that `git ls-files` lists, each one's path, and every file of the SPA build in
+  `wwwroot`: so `src/copy`, `index.html`, the stylesheets, the file names and the bundle, and the API's setup email
+  template, the passkey domain and the authenticator issuer, which their stories keep in tracked files, never only in a
+  portal setting or a secret. E04's and E05's tests check each generated Word or PDF file's text and properties with
+  the same matcher, `ForbiddenName` (F04.01's criteria; S05.01.01's Notes). The match ignores case and takes the
+  name's words in order, with any run of characters other than letters and digits, or none, between them, so the name
+  is found wrapped across two lines of Markdown, hyphenated in a file name or run together in a domain; a match on an
+  innocent word fails too, to be looked at rather than passed. A failure names each file and line, never the name. It
+  searches the files in the pull request, not the history or commit messages. The name is never written into the
+  repository: the test reads it from the environment variable `FORBIDDEN_NAME`, which CI's Test step fills from the
+  repository's Actions secret of that name, and from a Dependabot secret of the same name on Dependabot's pull
+  requests (S06.01.03). With no name it fails where `CI` is set, so a missing secret cannot pass unseen (a fork's pull
+  request, which gets no secrets, fails it too), and is skipped elsewhere. tests/README.md says how to run it on a
+  machine, keeping the name out of every file and the shell's history.
 
 Server-side strings (setup email, report and export files) follow the same glossary and formats; §11 fixes their
 exact layout. In .NET, use the `Australia/Melbourne` time zone and compose the strings the same way rather than
@@ -770,6 +812,11 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
 - Larson, The science of word recognition (all-caps reading speed): https://learn.microsoft.com/en-us/typography/develop/word-recognition
 - Microsoft Writing Style Guide, Bias-free communication: https://learn.microsoft.com/en-us/style-guide/bias-free-communication
 - MDN, Intl.DateTimeFormat.prototype.formatToParts: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/formatToParts
-- eslint-plugin-react, jsx-no-literals: https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-literals.md
+- ESLint, no-restricted-syntax, the lint rule as built (§8): https://eslint.org/docs/latest/rules/no-restricted-syntax
+- ESLint, selectors: https://eslint.org/docs/latest/extend/selectors
+- eslint-plugin-react, jsx-no-literals, which that rule stands in for: the plugin's latest release, 7.37.5, declares
+  the peer `eslint: ^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7` (npm, 9 October 2026), so it does not install beside
+  ESLint 10: https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-no-literals.md
+- Vitest, browser mode, which runs the format tests in WebKit: https://vitest.dev/guide/browser/
 - Local verification: Node 24.12 `Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne' })` outputs quoted in Best practice (run 1 October 2026).
 - Grow2Notes design.md §3, §4, §5.3, §6.9, §11, §13 and decisions.md D1–D47.

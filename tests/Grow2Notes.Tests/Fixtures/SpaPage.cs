@@ -10,9 +10,12 @@ internal static partial class SpaPage
     /// <c>/assets</c>, a hashed asset. The bundle's file name changes with its content, so it is read from the page
     /// rather than written in a test.
     /// </summary>
-    public static async Task<string> FetchHashedScriptPathAsync(this HttpClient client)
+    public static async Task<string> FetchHashedScriptPathAsync(this HttpClient client) =>
+        HashedScriptPath(await client.GetStringAsync("/", TestContext.Current.CancellationToken));
+
+    /// <summary>The path of the script bundle that <paramref name="page"/> names under <c>/assets</c>.</summary>
+    public static string HashedScriptPath(string page)
     {
-        var page = await client.GetStringAsync("/", TestContext.Current.CancellationToken);
         var bundle = HashedScript().Match(page);
         Assert.True(bundle.Success, "index.html names no script under /assets.");
         return bundle.Groups["path"].Value;
