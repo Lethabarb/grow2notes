@@ -529,7 +529,7 @@ Every state the shell can be in. Screen states (empty lists, banners) belong to 
 | 30:00 idle on a visible page, or any `401` | Close the warning if open. Pause autosave. Header drops nav and Account. Route hidden, still mounted. Signed-out block shown. Title "Grow2Notes – Sign in". No request is sent at 30:00 to "check" (it would extend the session). | `<h1>` "You've been signed out" | The heading |
 | Page hidden | The session clock does nothing | — | — |
 | Page visible again | `sessionClock.holdWhile(refreshMe())`: `200` resets the clock and undoes a false "signed out"; `401` → signed out in place; network failure → the clock decides | Unchanged (or the signed-out heading) | — |
-| Sign in again, same person | Fresh antiforgery token. Unhide the route. Invalidate the current screen's queries. Resume autosave (same `clientId`, next `seq`). Restore nav, Account and title. Never replay Submit, Save changes, Discard or Mark reviewed. | The page `<h1>` (on the note form, the participant's name) | The heading |
+| Sign in again, same person | No token request: `api()` dropped its antiforgery token on the sign-in's `200 Me`, so the next change fetches a fresh one (§9.8). Unhide the route. Invalidate the current screen's queries. Resume autosave (same `clientId`, next `seq`). Restore nav, Account and title. Never replay Submit, Save changes, Discard or Mark reviewed. | The page `<h1>` (on the note form, the participant's name) | The heading |
 | Sign in again, a different person | `disarmUnloadGuard()`, then `location.replace('/')`: the previous person's unsaved text and cached data are dropped, never saved under the new name, and no leave prompt appears | Fresh page | — |
 
 ### The route-change rule (one owner)

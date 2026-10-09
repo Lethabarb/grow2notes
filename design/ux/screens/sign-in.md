@@ -394,10 +394,11 @@ back to this page." · field label and hint as in Components row 10 · button "F
    otherwise stay, clear the code, generic message. [Product fact: Identity's two-factor cookie lasts 5 minutes and
    then every code fails without counting towards lockout,
    https://github.com/dotnet/aspnetcore/blob/main/src/Identity/Core/src/IdentityCookiesBuilderExtensions.cs]
-5. **Sign-in success (any method).** Fetch a fresh antiforgery token (§9.8), `queryClient.setQueryData(['me'], me)`,
-   then: fresh load → render the requested route with `replace: true`; in place → same `userId`: unhide the route,
-   refetch, resume autosave (same `clientId`, next `seq`), restore the page title; different `userId`:
-   `location.replace('/')`.
+5. **Sign-in success (any method).** `queryClient.setQueryData(['me'], me)`, then: fresh load → render the requested
+   route with `replace: true`; in place → same `userId`: unhide the route, refetch, resume autosave (same `clientId`,
+   next `seq`), restore the page title; different `userId`: `location.replace('/')`. The screen fetches no antiforgery
+   token: the `api()` wrapper drops its own on this `200 Me`, so its next change fetches a fresh one, bound to the
+   person now signed in (§9.8).
 6. **Show / Hide (view F).** Toggles `type`; writes the announcement into the field's polite live line. Focus stays
    on the toggle. On submit the field returns to hidden.
 7. **Setup arrival.** Read `u` and `t` from `location.hash` once (lazy `useState` initialiser, so StrictMode's second
@@ -420,8 +421,9 @@ back to this page." · field label and hint as in Components row 10 · button "F
     in memory (Safari and Firefox require a user action; HTTPS only,
     https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText).
 12. **Finish setup.** Code checked as in step 4 (inline errors, nothing sent). `POST /api/auth/setup/password
-    {password, totpCode}` → `200 Me` → antiforgery refresh, `setQueryData`, clear the setup context, navigate to Today
-    with `replace: true`. A wrong code clears the code only; the password is never cleared on this view.
+    {password, totpCode}` → `200 Me` → `setQueryData` (the wrapper drops its token, step 5), clear the setup context,
+    navigate to Today with `replace: true`. A wrong code clears the code only; the password is never cleared on this
+    view.
 13. **Leaving `/setup*`** for any reason clears the setup context (password, email, name) from memory.
 14. **Back links** (F, G): the shared BackLink pops when the previous entry is the destination (so it is the same as
     browser Back), otherwise it pushes the destination.

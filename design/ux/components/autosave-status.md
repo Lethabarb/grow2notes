@@ -138,7 +138,7 @@ Parts:
 - A full reload starts a new map. That only happens on Sign out (`session-timeout.md`).
 
 **4. Retry** (V: "the page keeps retrying")
-- Retry indefinitely while the form is open for **network errors, timeouts (10 s per request via `AbortSignal.timeout`), `408`, `429` (honour `Retry-After`), `500`, `502`, `503` and `504`**. Back off 1 s, 2 s, 4 s, 8 s, then every 10 s. Keep TanStack's default `networkMode: 'online'`, so an `offline` event pauses retries and `online` restarts them. When the page becomes visible, a save is sent at once. [Opinion on the numbers. 300 requests a minute per user, §9.9, is never approached.]
+- Retry indefinitely while the form is open for **network errors, timeouts (10 s per request, the `api()` wrapper's own, `empty-loading-error.md` *Timing*; the mutation passes no `AbortSignal.timeout`, whose abort the wrapper would rethrow as it came, not as a timeout), `408`, `429` (honour `Retry-After`), `500`, `502`, `503` and `504`**. Back off 1 s, 2 s, 4 s, 8 s, then every 10 s. Set `networkMode: 'online'` on autosave's own mutation, as the app's query client makes `'always'` the default for every other one (`empty-loading-error.md` *Timing*), so an `offline` event pauses retries and `online` restarts them. When the page becomes visible, a save is sent at once. [Opinion on the numbers. 300 requests a minute per user, §9.9, is never approached.]
 - **Show "Not saved" only after the first retry has also failed** (about 1 s), or at once if the mutation is paused because the browser reported offline. A single dropped packet on a moving train should not flash a warning. Until then the indicator truthfully says "Saving…". [Opinion]
 - Never retry `401`, `403`, `409`, `412` or `422`. Each one has its own handling below.
 
@@ -335,7 +335,7 @@ export const forgetSaveIds = (noteKey: string) => ids.delete(noteKey); // Keep /
 // useAutosave.ts (sketch: error mapping, flushNow/checkSave promises and pause/stop omitted for brevity)
 const DEBOUNCE_MS = 2_000;   // design.md 5.6 (V)
 const MAX_WAIT_MS = 5_000;   // [Opinion] continuous typing or dictation still saves
-const TIMEOUT_MS = 10_000;   // [Opinion] a hung request becomes a retry
+// No timeout of its own: api()'s 10 s one makes a hung request a retry (empty-loading-error.md *Timing*).
 
 export function useAutosave(o: {
   noteKey: string; url: string; baseVersion: number;
@@ -353,9 +353,10 @@ export function useAutosave(o: {
     mutationFn: async () => {
       const version = v.current.local;                       // read at send time, so a retry
       const body = { ...o.getContent(), baseVersion: o.baseVersion, ...nextSaveIds(o.noteKey) };
-      const res = await putDraft(o.url, body, AbortSignal.timeout(TIMEOUT_MS)); // always sends the newest text
+      const res = await putDraft(o.url, body);               // always sends the newest text
       return { version, savedAtUtc: res.savedAtUtc };
     },
+    networkMode: 'online',                                     // the client's default, 'always', never pauses
     retry: (_n, e) => isTransient(e),                          // network, timeout, 408, 429, 5xx
     retryDelay: (n, e) => retryAfterMs(e) ?? Math.min(1_000 * 2 ** n, 10_000),
     onMutate: () => { v.current.inFlight = true; },
