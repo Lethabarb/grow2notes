@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A51), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D70 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A51), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1231,9 +1231,9 @@ ASP.NET Core Identity's `MapIdentityApi()` is **not** used: it exposes self-regi
 | POST | /api/auth/setup/start | Anon (setup link) | Validate the setup link once; issue the 30-minute enrolment cookie. | `{userId, token}` → `{email, displayName}` or `410 auth.setup_link_invalid` |
 | GET | /api/auth/setup/authenticator | Enrolment cookie | Return the authenticator key generated when the link was sent. | → `{sharedKey, authenticatorUri}` |
 | GET | /api/auth/setup/authenticator/qr.png | Enrolment cookie | The same key as a QR code image (QRCoder, same origin). | → `image/png` |
-| POST | /api/auth/setup/password | Enrolment cookie | Finish setup with password + authenticator (§8.1). | `{password, totpCode}` → `200 Me` |
+| POST | /api/auth/setup/password | Enrolment cookie | Finish setup with password + authenticator (§8.1). | `{password, totpCode}` → `200 Me`, or `422 validation.failed` with `errors.totpCode` for a wrong code (D70) |
 | POST | /api/auth/setup/passkey/options | Enrolment cookie | `MakePasskeyCreationOptionsAsync`. | → WebAuthn creation options |
-| POST | /api/auth/setup/passkey | Enrolment cookie | Finish setup with a passkey (§8.1). | `{credentialJson, name}` → `200 Me` |
+| POST | /api/auth/setup/passkey | Enrolment cookie | Finish setup with a passkey (§8.1). `name` is always "Grow2Notes", which no screen shows or asks for (D70). | `{credentialJson, name}` → `200 Me` |
 
 A forgotten password or a lost authenticator or passkey is fixed by a manager sending a new setup link (`POST /api/admin/users/{id}/setup-link`). There is no self-service reset, no recovery codes and no self-service change of sign-in methods (A22).
 
@@ -1542,6 +1542,7 @@ Accounts are created only by a manager's invitation; there is no self-registrati
 | Enrolment cookie | 30 minutes, valid only on `/api/auth/setup/*` |
 | Idle timeout | 30 minutes; warning at 28 minutes (A24) |
 | Absolute session limit | 12 hours from sign-in (A24) |
+| Two-factor code step | 5 minutes from the accepted password: the two-factor cookie's lifetime, set explicitly with no sliding expiration (a wrong code does not renew it) and proved by an integration test. After that the person signs in again; an expired step gets the same `401` as a wrong code (D69) |
 | "Keep me signed in" / "remember this device" | Not offered |
 | Lockout | 5 failed attempts → 15 minutes (A25) |
 | Recovery | A manager's Reset sign-in only (A23) |
@@ -1600,6 +1601,12 @@ builder.Services
 
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies();
+
+builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, o =>
+{
+    o.ExpireTimeSpan = TimeSpan.FromMinutes(5);    // the code step lasts 5 minutes, set explicitly (D69)
+    o.SlidingExpiration = false;                   // a wrong code part-way through must not renew it (D69)
+});
 
 builder.Services.Configure<IdentityPasskeyOptions>(o =>
 {

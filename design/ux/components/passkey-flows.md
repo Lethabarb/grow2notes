@@ -262,8 +262,8 @@ Password  [ ........ ] [Show]                                         (password 
    nothing on top of it.
 5. **When a credential comes back:**
    - mark the options as used
-   - `POST /api/auth/setup/passkey` with `{credentialJson, name}`, where `name` is a fixed value; never ask the person
-     to name the passkey, because no screen ever shows it (A22)
+   - `POST /api/auth/setup/passkey` with `{credentialJson, name}`, where `name` is the fixed value "Grow2Notes" (D70);
+     never ask the person to name the passkey, because no screen ever shows it (A22)
    - on `200 Me`, go to Today with the confirmation line.
 6. **On any failure,** map it to one state (see [States](#states)). Keep both buttons usable. If the server consumed
    the options, prefetch new ones, so the next tap still comes straight from a gesture.

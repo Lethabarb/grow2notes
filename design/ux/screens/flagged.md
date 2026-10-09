@@ -8,8 +8,9 @@ notification, screen or data. Every view, list, count and action here is already
 This file adds only the back link's label, "Flagged", and the list behaviour around it.
 
 Copy marks: **(V)** word for word from design.md. **(N)** design.md wording with only the date, time or punctuation
-normalised to `microcopy.md`. **(P)** proposed, because design.md has no string for that state; needs the owner's
-approval. Evidence grades: **[Research]**, **[Standard]**, **[Convention]**, **[Opinion]**, as in the component files.
+normalised to `microcopy.md`. **(P)** proposed, because design.md has no string for that state. Every (P) string here
+on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's approval.
+Evidence grades: **[Research]**, **[Standard]**, **[Convention]**, **[Opinion]**, as in the component files.
 
 ---
 

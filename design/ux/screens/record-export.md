@@ -7,7 +7,7 @@ Screen spec for design.md **§4.12**. The file's content is defined in **§11.6*
 **Copy marks** (as defined in [microcopy.md](../components/microcopy.md)):
 - **(V)** is word for word from design.md.
 - **(N)** is design.md wording with only the date format normalised by microcopy.md.
-- **(P)** is proposed and not in design.md. The owner needs to sign it off.
+- **(P)** is proposed and not in design.md. Every (P) string here on 9 October 2026 was approved as written (D67, Open question 5); a (P) string added later still needs the owner's sign-off.
 
 **Example data used throughout (made up):** `me.today` is Thursday 1 October 2026. The participant is Jane Citizen, and her earliest submitted note is dated Thursday 1 January 2026.
 
@@ -687,6 +687,7 @@ Each is recorded once. No change is proposed.
 3. **Future To date.** The server's behaviour is undefined: reject with `422`, clamp to today, or accept. If it accepts, the file's title block prints a future end date.
 4. **Same-day wording.** For From = To, should "No submitted notes for Jane Citizen between 1 October 2026 and 1 October 2026." become "…on Thursday 1 October 2026."? This is the owner's call. It is not built.
 5. **Owner sign-off on every (P) string:** the busy label, the preparing and exported lines, the four failure lines, the load lines, the field errors, and the three hints.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module. A (P) string added after that date still needs the owner's approval.
 6. **Ready line on both download screens.** Both screens now show "{file name} is ready. Look in your downloads." after a file is handed to the browser (primary-actions.md said downloads get no in-page success). Approve the line, or show nothing on both.
 7. **Unverified on devices** (M5):
    - blob saves after user activation has expired (10–30 s) on iOS Safari and Chrome on iOS;
