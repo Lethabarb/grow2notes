@@ -18,8 +18,8 @@ describe('the microcopy.md §8 snapshots', () => {
   });
 });
 
-// A device in a zone behind UTC that read these dates in its own time would give the day before, so they are run
-// with TZ=America/Los_Angeles as well as CI's TZ=UTC.
+// A device in a zone behind UTC that read these dates in its own time would give the day before, so CI runs them in
+// America/Los_Angeles, in WebKit (vitest.webkit.config.ts), as well as in UTC, in jsdom.
 describe('the dates', () => {
   it('read a calendar date from the API', () => {
     expect(parseDateOnly('2026-10-01')).toEqual(firstOctober);
