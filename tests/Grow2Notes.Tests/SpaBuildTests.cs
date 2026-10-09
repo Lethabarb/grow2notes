@@ -8,7 +8,8 @@ namespace Grow2Notes.Tests;
 /// <summary>
 /// The production build stays within the strict Content Security Policy, which allows scripts, styles and images only
 /// from the app's own files (design.md §7.2, §9.7). <see cref="CspBlockedContent"/> finds what the policy would
-/// block, and <see cref="CspBlockedContentTests"/> shows it finding each kind of thing on a short sample.
+/// block, and <see cref="CspBlockedContentTests"/> shows it finding each kind of thing on a short sample. The build
+/// also keeps foundations.md's <c>min-width</c> media queries, which older iPhones read.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed partial class SpaBuildTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -59,7 +60,35 @@ public sealed partial class SpaBuildTests(Grow2NotesFactory factory) : IClassFix
         Assert.Matches(AssetsInlineLimitZero(), viteConfig);
     }
 
+    [Fact]
+    public async Task The_built_stylesheets_keep_min_width_media_queries()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var webRoot = factory.Services.GetRequiredService<IWebHostEnvironment>().WebRootPath;
+
+        List<string> stylesheets = [];
+        List<string> found = [];
+        var folder = Path.Combine(webRoot, "assets");
+        foreach (var file in Directory.EnumerateFiles(folder, "*.css", SearchOption.AllDirectories))
+        {
+            var text = await File.ReadAllTextAsync(file, cancellationToken);
+            stylesheets.Add(text);
+            found.AddRange(RangeSyntax().Matches(text).Select(query => $"{Path.GetFileName(file)}: {query.Value}"));
+        }
+
+        Assert.Empty(found);
+        // tokens.css's breakpoint is in the build, so the check cannot pass on a build with no media query to read.
+        Assert.Contains(stylesheets, text => MinWidthBreakpoint().IsMatch(text));
+    }
+
     // Anchored to the start of a line, so a commented-out setting does not count.
     [GeneratedRegex(@"^\s*assetsInlineLimit:\s*0\b", RegexOptions.Multiline)]
     private static partial Regex AssetsInlineLimitZero();
+
+    // A media query's condition holds `<` or `>` only in range syntax, such as `(width>=40rem)`.
+    [GeneratedRegex(@"@media[^{]*[<>][^{]*")]
+    private static partial Regex RangeSyntax();
+
+    [GeneratedRegex(@"@media\s*\(min-width:\s*40rem\)")]
+    private static partial Regex MinWidthBreakpoint();
 }

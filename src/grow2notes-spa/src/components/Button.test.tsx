@@ -1,14 +1,27 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import type { FormEvent } from 'react';
+import { createRef, type FormEvent, type MouseEvent } from 'react';
 import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Button } from './Button.tsx';
-import { buttonClass } from './buttonClass.ts';
+import { buttonClass, type ButtonVariant } from './buttonClass.ts';
 import { PageStatus } from './PageStatus.tsx';
 
 /** A form's submit handler that records each submit, and stops jsdom navigating, which it cannot do. */
 function submitHandler() {
   return vi.fn((event: FormEvent) => event.preventDefault());
 }
+
+/** The fill, label colour and pointer of a button or a link styled as one. jsdom keeps a `var()` as written. */
+function look(element: HTMLElement) {
+  const style = getComputedStyle(element);
+  return { fill: style.getPropertyValue('background'), label: style.getPropertyValue('color'), cursor: style.cursor };
+}
+
+/** The three styles' fills and labels (primary-actions.md §1). */
+const looks = {
+  primary: { fill: 'var(--colour-action)', label: 'var(--colour-on-action)', cursor: 'pointer' },
+  secondary: { fill: 'var(--colour-surface)', label: 'var(--colour-action)', cursor: 'pointer' },
+  warning: { fill: 'var(--colour-error)', label: 'var(--colour-on-action)', cursor: 'pointer' },
+} satisfies Record<ButtonVariant, ReturnType<typeof look>>;
 
 describe('Button', () => {
   it('is a button that submits nothing unless it is given a type', () => {
@@ -26,6 +39,65 @@ describe('Button', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
     expect(submit).toHaveBeenCalledOnce();
+  });
+
+  it('passes its ref, its class name and its other attributes to the button', () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(
+      <Button ref={ref} id="close" name="action" value="close" aria-label="Close" className="extra">
+        ×
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: 'Close' });
+
+    expect(ref.current).toBe(button);
+    expect(button).toHaveAttribute('id', 'close');
+    expect(button).toHaveAttribute('name', 'action');
+    expect(button).toHaveAttribute('value', 'close');
+    expect(button.className).toBe(`${buttonClass()} extra`);
+  });
+
+  it('has the fill and label colours of its style, secondary unless given one', () => {
+    render(
+      <>
+        <Button variant="primary">Invite user</Button>
+        <Button variant="warning">Deactivate</Button>
+        <Button>Edit</Button>
+      </>,
+    );
+
+    expect(look(screen.getByRole('button', { name: 'Invite user' }))).toEqual(looks.primary);
+    expect(look(screen.getByRole('button', { name: 'Deactivate' }))).toEqual(looks.warning);
+    expect(look(screen.getByRole('button', { name: 'Edit' }))).toEqual(looks.secondary);
+  });
+
+  describe('when available', () => {
+    it('calls onClick once on a press, with the press', () => {
+      // currentTarget is the button only while the press is being handled, so the handler returns it.
+      const click = vi.fn((event: MouseEvent<HTMLButtonElement>) => event.currentTarget);
+      render(<Button onClick={click}>Go back</Button>);
+      const button = screen.getByRole('button', { name: 'Go back' });
+
+      fireEvent.click(button);
+
+      expect(click).toHaveBeenCalledOnce();
+      expect(click).toHaveReturnedWith(button);
+    });
+
+    it('calls onClick and submits its form when it is a submit button', () => {
+      const submit = submitHandler();
+      const click = vi.fn();
+      render(
+        <form onSubmit={submit}>
+          <Button type="submit" onClick={click}>Send invite</Button>
+        </form>,
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send invite' }));
+
+      expect(click).toHaveBeenCalledOnce();
+      expect(submit).toHaveBeenCalledOnce();
+    });
   });
 
   it('is never rendered with disabled, and its type refuses it', () => {
@@ -100,6 +172,29 @@ describe('Button', () => {
       expect(unavailablePress).toHaveBeenCalledOnce();
       expect(click).not.toHaveBeenCalled();
       expect(submit).not.toHaveBeenCalled();
+    });
+
+    it('has the unavailable look, which an available or busy button does not take', () => {
+      const submitNote = (state: { unavailable?: boolean; busy?: boolean }) => (
+        <Button variant="primary" {...state}>Submit note</Button>
+      );
+      const { rerender } = render(submitNote({ unavailable: true }));
+      const button = screen.getByRole('button');
+
+      // The dashed border is checked by hand (task 4): jsdom drops a `border` that holds a `var()`.
+      expect(button).toHaveAttribute('data-unavailable');
+      expect(look(button)).toEqual({
+        fill: 'var(--colour-surface-muted)',
+        label: 'var(--colour-text-secondary)',
+        cursor: 'not-allowed',
+      });
+
+      for (const state of [{}, { busy: true }, { unavailable: true, busy: true }]) {
+        rerender(submitNote(state));
+
+        expect(button).not.toHaveAttribute('data-unavailable');
+        expect(look(button)).toEqual(looks.primary);
+      }
     });
   });
 
@@ -263,15 +358,26 @@ describe('Button', () => {
 });
 
 describe('buttonClass', () => {
+  it('gives each style the shared class and one of its own', () => {
+    const classes = (['primary', 'secondary', 'warning'] as const).map((variant) => buttonClass(variant).split(' '));
+
+    for (const names of classes) {
+      expect(names).toHaveLength(2);
+      expect(names).not.toContain('undefined');
+    }
+    expect(new Set(classes.map(([shared]) => shared)).size).toBe(1);
+    expect(new Set(classes.map(([, own]) => own)).size).toBe(3);
+  });
+
   it('styles a link as the button of the same style, secondary unless given one', () => {
     render(
       <>
-        <Button variant="primary">Invite user</Button>
-        <Button>Edit</Button>
+        <a href="/users/new" className={buttonClass('primary')}>Invite user</a>
+        <a href="/reports/daily" className={buttonClass()}>Daily report</a>
       </>,
     );
 
-    expect(buttonClass('primary')).toBe(screen.getByRole('button', { name: 'Invite user' }).className);
-    expect(buttonClass()).toBe(screen.getByRole('button', { name: 'Edit' }).className);
+    expect(look(screen.getByRole('link', { name: 'Invite user' }))).toEqual(looks.primary);
+    expect(look(screen.getByRole('link', { name: 'Daily report' }))).toEqual(looks.secondary);
   });
 });

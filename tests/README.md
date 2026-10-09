@@ -35,6 +35,9 @@ npm run check:no-analytics  # no Application Insights JavaScript SDK or third-pa
   file and the rule, on a media query on width or height other than `(min-width: 40rem)` and `(max-height: 30rem)`,
   range syntax included, and on any `@container` rule.
 
+The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
+default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
