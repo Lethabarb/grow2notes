@@ -355,13 +355,14 @@ TypeScript so a missing parameter is a compile error.
 
 ```
 src/copy/
-  format.ts      // the five date/time tokens, names, numbers, plurals
-  strings.ts     // fixed strings, `as const`
-  messages.ts    // functions for strings with slots
-  apiErrors.ts   // design §6.9 error code -> message function
-  Sep.tsx        // the spoken-comma separator
-  copy.test.ts   // banned words, US spellings, negative contractions
-  format.test.ts // the format snapshots, in jsdom and in WebKit
+  format.ts          // the five date/time tokens, names, numbers, plurals
+  strings.ts         // fixed strings, `as const`
+  messages.ts        // functions for strings with slots
+  apiErrors.ts       // design §6.9 error code -> message function
+  Sep.tsx            // the spoken-comma separator
+  copy.test.ts       // banned words, US spellings, negative contractions
+  format.test.ts     // the format snapshots, in jsdom and in WebKit
+  wordsInJsx.test.ts // the lint rule on words in JSX, tried on samples
 ```
 
 **Formats.** Compose from numeric parts so engine differences ("Sept", commas, spaces, "AM") cannot leak in. A note
@@ -472,7 +473,9 @@ export const Sep = () => (<><span aria-hidden="true"> · </span><span className=
   `src/copy`. It stands in for eslint-plugin-react's `react/jsx-no-literals`, whose latest release, 7.37.5, allows
   ESLint only up to 9, so it cannot be installed beside the SPA's ESLint 10. Like that rule at its defaults, it reads
   no props: review checks a label passed in a prop (`busyLabel`, `loading`, `alt`) and a literal nested deeper in a
-  child expression, such as an inner conditional or a function's argument.
+  child expression, such as an inner conditional or a function's argument. No JSX in `src` holds a word for
+  `npm run lint` to refuse, so `src/copy/wordsInJsx.test.ts` (Vitest, in `npm test`) lints sample components with
+  `eslint.config.js` and checks what the rule refuses and passes: a selector that matched nothing would fail it.
 - **The words in `src/copy`.** `src/copy/copy.test.ts` (Vitest, in `npm test`) reads every `.ts` and `.tsx` module in
   `src/copy` but its tests, whole, comments included, through `import.meta.glob` with `?raw`, and fails, naming the
   file and the word, on:
@@ -492,23 +495,25 @@ export const Sep = () => (<><span aria-hidden="true"> · </span><span className=
   is "1:30 am" and 16:30Z is "3:30 am" (daylight saving starts at 2:00 am on Sunday 4 October 2026; verified in
   Node 24.12), and each token's form, "midnight", "Sep" and the reference day besides. `npm test` runs them in jsdom,
   and `npm run test:webkit` again in Playwright's WebKit through Vitest's browser mode (`vitest.webkit.config.ts`),
-  because Safari's Intl data can differ.
+  because Safari's Intl data can differ. The WebKit run sets the browser's zone to America/Los_Angeles, so that CI
+  runs the dates in a zone behind UTC, where a date read in the device's own time falls on the day before, as well
+  as in jsdom under the job's `TZ=UTC`.
 - **The parent company's name (D42).** A .NET test, `ForbiddenNameTests` in `tests/Grow2Notes.Tests/Fixtures/`, rather
   than a part of `copy.test.ts`, because the name must appear nowhere in the repository or the build, not just nowhere
   in `src/copy`. It searches every file that `git ls-files` lists, each one's path, and every file of the SPA build in
   `wwwroot`: so `src/copy`, `index.html`, the stylesheets, the file names and the bundle, and the API's setup email
   template, the passkey domain and the authenticator issuer, which their stories keep in tracked files, never only in a
-  portal setting or a secret. E04's and E05's tests check each generated Word or PDF file's text with the same matcher,
-  `ForbiddenName`. The match ignores case and takes the name's words in order, with any run of characters other than
-  letters and digits, or none, between them, so the name is found wrapped across two lines of Markdown, hyphenated in a
-  file name or run together in a domain; a match on an innocent word fails too, to be looked at rather than passed. A
-  failure names each file and line, never the name. It searches the files in the pull request, not the history or commit
-  messages. The name is never written into the repository: the test reads it from the environment variable
-  `FORBIDDEN_NAME`, which CI's Test step fills from the repository's Actions secret of that name, and from a Dependabot
-  secret of the same name on Dependabot's pull requests (S06.01.03). With no name it fails where `CI` is set, so a
-  missing secret cannot pass unseen (a fork's pull request, which gets no secrets, fails it too), and is skipped
-  elsewhere. tests/README.md says how to run it on a machine, keeping the name out of every file and the shell's
-  history.
+  portal setting or a secret. E04's and E05's tests check each generated Word or PDF file's text and properties with
+  the same matcher, `ForbiddenName` (F04.01's criteria; S05.01.01's Notes). The match ignores case and takes the
+  name's words in order, with any run of characters other than letters and digits, or none, between them, so the name
+  is found wrapped across two lines of Markdown, hyphenated in a file name or run together in a domain; a match on an
+  innocent word fails too, to be looked at rather than passed. A failure names each file and line, never the name. It
+  searches the files in the pull request, not the history or commit messages. The name is never written into the
+  repository: the test reads it from the environment variable `FORBIDDEN_NAME`, which CI's Test step fills from the
+  repository's Actions secret of that name, and from a Dependabot secret of the same name on Dependabot's pull
+  requests (S06.01.03). With no name it fails where `CI` is set, so a missing secret cannot pass unseen (a fork's pull
+  request, which gets no secrets, fails it too), and is skipped elsewhere. tests/README.md says how to run it on a
+  machine, keeping the name out of every file and the shell's history.
 
 Server-side strings (setup email, report and export files) follow the same glossary and formats; §11 fixes their
 exact layout. In .NET, use the `Australia/Melbourne` time zone and compose the strings the same way rather than

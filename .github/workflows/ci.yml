@@ -93,9 +93,10 @@ jobs:
         working-directory: src/grow2notes-spa
         run: npm test
 
-      # The format tests again in WebKit, Safari's engine, whose time-zone data can differ from Node's (microcopy.md
-      # §8). The SPA's own playwright package installs the WebKit build that its version drives; not cached, for the
-      # reason given at Install Chromium for Playwright.
+      # The format tests again in WebKit, Safari's engine, whose time-zone data can differ from Node's, and in a zone
+      # behind UTC, which vitest.webkit.config.ts sets for the browser (microcopy.md §8). The SPA's own playwright
+      # package installs the WebKit build that its version drives; not cached, for the reason given at Install
+      # Chromium for Playwright.
       - name: Install WebKit for Playwright
         working-directory: src/grow2notes-spa
         run: npx playwright install --with-deps webkit

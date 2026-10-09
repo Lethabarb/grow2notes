@@ -26,8 +26,9 @@ npm run check:no-analytics  # no Application Insights JavaScript SDK or third-pa
 
 `npm run test:webkit` runs `src/copy/format.test.ts` alone, headless in Playwright's WebKit, Safari's engine, through
 Vitest's browser mode (`vitest.webkit.config.ts`), because Safari's time-zone data can differ from Node's
-(microcopy.md §8). It needs the WebKit build that the SPA's `playwright` package drives, installed once per machine and
-again after that package is updated:
+(microcopy.md §8). The browser's zone is set to America/Los_Angeles, behind UTC, whatever the machine's, so that a date
+read in the device's own time, which there falls on the day before, fails it. It needs the WebKit build that the SPA's
+`playwright` package drives, installed once per machine and again after that package is updated:
 
 ```shell
 npx playwright install webkit              # Windows and macOS
@@ -54,7 +55,9 @@ default targets the minifier rewrites them in range syntax. `SpaBuildTests` chec
 `npm test` also runs microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of its
 own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and the
 word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
-contraction outside design.md's two "can't" strings.
+contraction outside design.md's two "can't" strings. With it, `src/copy/wordsInJsx.test.ts` lints sample components
+with `eslint.config.js` and checks which words in JSX its rule refuses, as no JSX in `src` holds one for
+`npm run lint` to refuse.
 
 ## Running the .NET tests
 
