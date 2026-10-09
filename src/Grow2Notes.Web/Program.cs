@@ -64,10 +64,21 @@ builder.Services.AddDataProtection()
 
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
-builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+//
+// RequireUniqueEmail checks an address's form and refuses one that another account holds, in any organisation, so the
+// app refuses a second account before the unique index is reached; the index stays the guard against two at once
+// (A27). The user name holds the address (§5.3), and Identity's default user-name characters refuse some valid
+// addresses, such as o'brien@example.org, so that list is cleared and only the address check applies.
+builder.Services.AddIdentityCore<ApplicationUser>(o =>
+    {
+        o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+        o.User.RequireUniqueEmail = true;
+        o.User.AllowedUserNameCharacters = string.Empty;
+    })
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
-    .AddEntityFrameworkStores<Grow2NotesDbContext>();
+    .AddEntityFrameworkStores<Grow2NotesDbContext>()
+    .AddTokenProvider<SetupTokenProvider>(SetupTokenProvider.ProviderName);
 
 // The session is Identity's cookie (design.md §8.3, §8.4).
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
