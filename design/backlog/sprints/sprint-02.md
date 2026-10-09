@@ -47,6 +47,7 @@ asks for a re-forecast from measured throughput after this sprint; until then th
 | 6 | S00.03.03 | Audit writer (pulled in on 8 October 2026) | enabler | 2 |
 | 7 | S00.03.04 | Deny by default, CSRF and the endpoint matrix (pulled in on 9 October 2026) | enabler | 5 |
 | 8 | S00.04.01 | Session checked on every request (pulled in on 9 October 2026) | enabler | 3 |
+| 9 | S06.01.04 | Security headers and CSP on every response (pulled in on 9 October 2026) | enabler | 2 |
 
 These are the next four items in the backlog. S00.02.02 needs S00.02.01's resource groups and identities; S00.02.03
 needs S00.02.02's database and web app; S00.02.06 adds `monitoring.bicep` to `main.bicep` and is checked in test after
@@ -81,22 +82,32 @@ added to `planned_points` either, which stays at 14, and count in `done_points` 
 otherwise it goes back to the backlog (README §7.2 step 4). Its tasks build on S00.03.04's policies, `/api` group,
 endpoint matrix and test-only sign-in, so they are built on `main` once PR #26 has merged.
 
+**S06.01.04, pulled in on 9 October 2026.** S00.03.04 is done (PR #26, its deploy recorded in PR #27), S00.04.01 was
+pulled in earlier that day and has merged (PR #28) with its after-deploy check to come, and S00.02.02's last checks,
+run after the owner's answer to Q6, are in review (PR #29), so time was left over again. S06.01.04, next in backlog
+order (releases.md places it straight after S00.04.01, before the first screen), was refined to Ready the same day, its
+tasks were written in its own section in F06.01, and it was taken into the sprint at 2 points (its *Notes* say why they
+stand). They are not added to `planned_points` either, which stays at 14, and count in `done_points` only if it is done
+by 18 October; otherwise it goes back to the backlog (README §7.2 step 4). Its tasks build on S00.04.01's HSTS,
+session cookie and `/api/auth/me`, so they are built on `main` from PR #28's merge. With it, all five stories that
+releases.md forecast for Sprint 03 are in this sprint.
+
 ## Definition of Ready check
 
 README §8, used as a reminder, not a gate. All four stories are `ready`, and the five owner questions raised at
 planning were answered on 4 October 2026 (below). S00.03.02 and S00.03.03 were checked on 8 October 2026, and
-S00.03.04 and S00.04.01 on 9 October 2026, when they were pulled in.
+S00.03.04, S00.04.01 and S06.01.04 on 9 October 2026, when they were pulled in.
 
-| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 | S00.03.02 (8 October) | S00.03.03 (8 October) | S00.03.04 (9 October) | S00.04.01 (9 October) |
-|---|---|---|---|---|---|---|---|---|
-| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| Sources linked; what to build is clear | Yes | Yes | Yes | Yes | Yes, with its Notes from refinement | Yes, with its Notes from refinement | Yes, with its Notes from refinement (the choices where design.md is silent, the test-only sign-in among them) | Yes, with its Notes from refinement (the choices where design.md is silent, the test-only cookie sign-in and HSTS through ASP.NET Core's middleware among them) |
-| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription | None open. No open question in ux/README.md or releases.md concerns tenancy; Q6 changes only S00.02.02 | None open. No open question in ux/README.md or releases.md concerns the audit log or forwarded headers; Q6 changes only S00.02.02 | None open. ux/README.md question 10 (per-row ETags for `If-Match` on participants and users) changes the endpoints that send them (E01, F00.06), not the helper; Q6 changes only S00.02.02 | None open. No open question in ux/README.md, sign-in.md, app-shell.md or releases.md concerns the session check: sign-in.md questions 6 and 7 change S00.04.02, S00.04.03 and S00.04.05, not it; Q6 changes only S00.02.02 |
-| Copy marked (P) | None used | None used | None used | None used | None used | None used | None used | None used |
-| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes | Yes (linked §5.9 and §9.2 groups narrowed to what it builds) | Yes (linked §5.8 group narrowed to what it builds; mcp-server.md §3.5 convention 3 linked) | Yes (linked §2, §9.1, §9.2 and §9.8 groups narrowed to what it builds) | Yes (linked §14 M0, §8.4 and §9.3 groups narrowed to what it builds; §7.2 and §9.8 item 1 linked; a criterion added for a changed security stamp, coverage.md's M0 *Done when* row 2) |
-| Sized at 1–5 points | 3 | 5 | 3 | 3 | 3 | 2 | 5 (re-sized from 3; its Notes say why) | 3 (stays at 3; its Notes say why) |
-| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None | None (extends S00.03.01's context, done in Sprint 01) | S00.03.02: earlier in this sprint (in review, PR #21) | S00.03.02: done (closed in PR #24); S00.03.03: earlier in this sprint (in review, PR #24) | S00.03.02: done; S00.03.04: earlier in this sprint (in review, PR #26), whose code its tasks build on |
-| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string | Two made-up organisations, each with a manager and a worker (`example.org` addresses) | The seeded organisations (S00.03.02), and client addresses from the documentation ranges (RFC 5737) | The seeded organisations' users (S00.03.02), signed in by the test-only scheme; nothing of its own | The seeded organisations' users (S00.03.02), and users each test adds to organisation A for the role and stamp changes (`example.org` addresses) |
+| Check | S00.02.01 | S00.02.02 | S00.02.03 | S00.02.06 | S00.03.02 (8 October) | S00.03.03 (8 October) | S00.03.04 (9 October) | S00.04.01 (9 October) | S06.01.04 (9 October) |
+|---|---|---|---|---|---|---|---|---|---|
+| Type and title; an enabler says what it is for | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Sources linked; what to build is clear | Yes | Yes | Yes | Yes | Yes, with its Notes from refinement | Yes, with its Notes from refinement | Yes, with its Notes from refinement (the choices where design.md is silent, the test-only sign-in among them) | Yes, with its Notes from refinement (the choices where design.md is silent, the test-only cookie sign-in and HSTS through ASP.NET Core's middleware among them) | Yes, with its Notes from refinement (the choices where design.md is silent, keeping S00.04.01's HSTS and accepting none on the exception handler's responses among them) |
+| No open owner question changes it (ux/README.md open questions; screen files; releases.md owner questions) | None open. Q1 (a budget per group, D63), Q2 (no other role holders), Q3 (no paid Defender plan) and Q5 (secrets, D65) answered on 4 October; D60 and D61 settled the subscription and the policy and budget scope | None open. Q4 (the "Grow2Notes SQL admins" group, D64) and Q5 answered. D62 settled the test address, so no domain or certificate is needed | None open. Q5 answered: the deploy reads environment secrets (D65) | None open. Q2 answered: no one else holds a role on the subscription | None open. No open question in ux/README.md or releases.md concerns tenancy; Q6 changes only S00.02.02 | None open. No open question in ux/README.md or releases.md concerns the audit log or forwarded headers; Q6 changes only S00.02.02 | None open. ux/README.md question 10 (per-row ETags for `If-Match` on participants and users) changes the endpoints that send them (E01, F00.06), not the helper; Q6 changes only S00.02.02 | None open. No open question in ux/README.md, sign-in.md, app-shell.md or releases.md concerns the session check: sign-in.md questions 6 and 7 change S00.04.02, S00.04.03 and S00.04.05, not it; Q6 changes only S00.02.02 | None open. No open question in ux/README.md, the screen files or releases.md concerns the headers or the CSP, and the ux/ specs already keep to the strict policy (foundations.md); the `blob:` download checks are S04.02.05's and S05.01.04's; Q6 changes only S00.02.02 |
+| Copy marked (P) | None used | None used | None used | None used | None used | None used | None used | None used | None used |
+| Acceptance criteria written and testable | Yes (budget criterion updated for D61 and D63) | Yes (HTTPS criterion updated for D62) | Yes | Yes | Yes (linked §5.9 and §9.2 groups narrowed to what it builds) | Yes (linked §5.8 group narrowed to what it builds; mcp-server.md §3.5 convention 3 linked) | Yes (linked §2, §9.1, §9.2 and §9.8 groups narrowed to what it builds) | Yes (linked §14 M0, §8.4 and §9.3 groups narrowed to what it builds; §7.2 and §9.8 item 1 linked; a criterion added for a changed security stamp, coverage.md's M0 *Done when* row 2) | Yes (linked §9.7 and §7.2 groups narrowed to what it builds; the first criterion's list brought up to date with the kinds S00.03.04 and S00.04.01 added) |
+| Sized at 1–5 points | 3 | 5 | 3 | 3 | 3 | 2 | 5 (re-sized from 3; its Notes say why) | 3 (stays at 3; its Notes say why) | 2 (stays at 2; its Notes say why) |
+| `depends_on` done or earlier in this sprint | None | None (uses S00.02.01's groups and identities, earlier in this sprint) | S00.01.02: done; S00.02.02: earlier in this sprint | None | None (extends S00.03.01's context, done in Sprint 01) | S00.03.02: earlier in this sprint (in review, PR #21) | S00.03.02: done (closed in PR #24); S00.03.03: earlier in this sprint (in review, PR #24) | S00.03.02: done; S00.03.04: earlier in this sprint (in review, PR #26), whose code its tasks build on | S00.01.02: done; S00.03.04: done (PR #26, its deploy recorded in PR #27); S00.04.01: earlier in this sprint (merged in PR #28, its after-deploy check to come), whose HSTS, session cookie and `/api/auth/me` its tasks build on |
+| Made-up test data known (A35) | None needed | None needed | None needed | A made-up canary string | Two made-up organisations, each with a manager and a worker (`example.org` addresses) | The seeded organisations (S00.03.02), and client addresses from the documentation ranges (RFC 5737) | The seeded organisations' users (S00.03.02), signed in by the test-only scheme; nothing of its own | The seeded organisations' users (S00.03.02), and users each test adds to organisation A for the role and stamp changes (`example.org` addresses) | The seeded organisations' users (S00.03.02), signed in by the test-only scheme for the JSON `200` and the `403`; nothing of its own |
 
 ## Owner questions
 
@@ -134,6 +145,8 @@ Each story's tasks are written once, in its own section, and ticked there (READM
    in F00.03, pulled in on 9 October 2026 after S00.03.03.
 8. [S00.04.01 Session checked on every request](../E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000401-session-checked-on-every-request),
    in F00.04, pulled in on 9 October 2026 after S00.03.04.
+9. [S06.01.04 Security headers and CSP on every response](../E06-hardening-and-go-live/F06.01-security-review-hardening.md#s060104-security-headers-and-csp-on-every-response),
+   in F06.01, pulled in on 9 October 2026 after S00.04.01.
 
 ## Settled at planning
 
@@ -189,6 +202,7 @@ Pulled in: S00.03.02 (3 points) on 8 October 2026 (Plan).
 Pulled in: S00.03.03 (2 points) on 8 October 2026 (Plan).
 Pulled in: S00.03.04 (5 points) on 9 October 2026 (Plan).
 Pulled in: S00.04.01 (3 points) on 9 October 2026 (Plan).
+Pulled in: S06.01.04 (2 points) on 9 October 2026 (Plan).
 
 Done: __ points, __ stories. Not done (back to the backlog): …
 
