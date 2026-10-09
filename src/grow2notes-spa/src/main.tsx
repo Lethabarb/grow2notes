@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/base.css';
 import { App } from './App.tsx';
+import { PageStatus } from './components/PageStatus.tsx';
 
 const container = document.getElementById('root');
 if (container === null) {
@@ -12,6 +13,10 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    <App />
+    {/* The placeholder home page is the one page, so its status region is here until the shell gives each page its
+        own (app-shell.md component 3). */}
+    <PageStatus>
+      <App />
+    </PageStatus>
   </StrictMode>,
 );
