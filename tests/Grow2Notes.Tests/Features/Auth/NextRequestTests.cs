@@ -83,6 +83,10 @@ public sealed class NextRequestTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         using var asWorker = await NextRequestAsync(client, ManagerPolicyPath);
 
         await asWorker.ReadProblemAsync(HttpStatusCode.Forbidden);
+        // A bare 403, not a redirect to an access-denied page, which the app does not have (design.md §7.2). Without
+        // the app's OnRedirectToAccessDenied, the cookie handler still answers 403 here, but with a Location naming
+        // /Account/AccessDenied, so the Location is the check, as in SignedOutTests.
+        Assert.Null(asWorker.Headers.Location);
         Assert.Equal("Worker", (await MeAsync(client)).GetProperty("role").GetString());
     }
 

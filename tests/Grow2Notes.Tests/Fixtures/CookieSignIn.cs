@@ -35,7 +35,8 @@ internal static class CookieSignIn
     /// that the sign-in's one <c>Set-Cookie</c> sets. The client is one from
     /// <see cref="AntiforgeryTokens.CreateHttpsClient"/>: the cookie is <c>Secure</c>, so it is sent over HTTPS only,
     /// and the client keeps it and sends it with every later request, which goes to the cookie as long as it has
-    /// neither of <see cref="TestSignIn"/>'s headers.
+    /// neither of <see cref="TestSignIn"/>'s headers. A plain-HTTP client gets the same cookie but never sends it back,
+    /// which is all a test of the sign-in over HTTP needs.
     /// </summary>
     /// <remarks>
     /// <c>SignInAsync</c> does not ask <c>CanSignInAsync</c>, so sign in Active users only, as setup does.

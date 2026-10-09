@@ -13,10 +13,10 @@ namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
 /// The cookie sign-in (<see cref="CookieSignIn"/>) on a fake clock (<see cref="TestClock"/>), which the session tests
-/// build on: the sign-in sets the session cookie with design.md §8.4's attributes, and a later request with that cookie
-/// alone is signed in as the user, with the claims factory's claims and the sign-in time, and gets the cookie renewed
-/// with the same attributes. <see cref="Grow2NotesFactory"/>'s default scheme sends such a request to the cookie, and
-/// one that has the test-only sign-in's role header too to the test-only sign-in.
+/// build on: the sign-in sets the session cookie with design.md §8.4's attributes, over plain HTTP too, and a later
+/// request with that cookie alone is signed in as the user, with the claims factory's claims and the sign-in time, and
+/// gets the cookie renewed with the same attributes. <see cref="Grow2NotesFactory"/>'s default scheme sends such a
+/// request to the cookie, and one that has the test-only sign-in's role header too to the test-only sign-in.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -41,6 +41,19 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
     public async Task The_sign_in_s_Set_Cookie_holds_the_session_cookie_with_its_attributes()
     {
         using var client = app.CreateHttpsClient();
+
+        var cookie = await client.SignInWithCookieAsync(seeded.A.WorkerId);
+
+        AssertIsTheSessionCookie(cookie);
+    }
+
+    // Secure whatever the request's scheme (design.md §8.4). App Service's front end calls the app over HTTP, so were
+    // the cookie Secure only on an HTTPS request, a sign-in whose forwarded scheme the app did not trust would set it
+    // without Secure, which a browser refuses for a __Host- cookie.
+    [Fact]
+    public async Task A_sign_in_over_plain_HTTP_sets_the_session_cookie_Secure_all_the_same()
+    {
+        using var client = app.CreateClient(new() { AllowAutoRedirect = false });
 
         var cookie = await client.SignInWithCookieAsync(seeded.A.WorkerId);
 
