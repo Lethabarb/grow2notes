@@ -168,7 +168,8 @@ describe('ErrorSummary', () => {
     expect(links.map((link) => link.textContent)).toEqual([nameError, roleError]);
     expect(document.getElementById(`${nameId}-error`)).toHaveTextContent(`Error: ${nameError}`);
     expect(document.getElementById(`${roleId}-error`)).toHaveTextContent(`Error: ${roleError}`);
-    expect(within(summary()).getByRole('list')).toBeInTheDocument();
+    // Set, not only implied by the <ul>, as VoiceOver in Safari reads a list with no bullets as no list.
+    expect(within(summary()).getByRole('list')).toHaveAttribute('role', 'list');
     expect(links[0]).toHaveStyle({ display: 'block', minBlockSize: 'var(--target-min)' });
   });
 
@@ -268,6 +269,28 @@ describe('ErrorSummary', () => {
     expect(summary()).toHaveFocus();
   });
 
+  it('moves no focus when errors come after an attempt that had none, with no new attempt', () => {
+    const errors = [{ fieldId: nameId, message: nameError }];
+    const { rerender } = render(
+      <>
+        <ErrorSummary errors={[]} attempt={1} />
+        <input id={nameId} aria-label="Name" />
+      </>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    input.focus();
+
+    rerender(
+      <>
+        <ErrorSummary errors={errors} attempt={1} />
+        <input id={nameId} aria-label="Name" />
+      </>,
+    );
+
+    expect(summary()).toBeInTheDocument();
+    expect(input).toHaveFocus();
+  });
+
   it('puts "Error: " in front of the page title while it shows errors, and takes it off when they clear', () => {
     render(<InviteForm />);
 
@@ -280,6 +303,17 @@ describe('ErrorSummary', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Manager' }));
     expect(document.title).toBe(pageTitle);
+  });
+
+  it('leaves a page title that changed while it showed errors as it is when they clear', () => {
+    const errors = [{ fieldId: nameId, message: nameError }];
+    const { rerender } = render(<ErrorSummary errors={errors} attempt={1} />);
+    expect(document.title).toBe(`Error: ${pageTitle}`);
+    document.title = 'Grow2Notes – Users';
+
+    rerender(<ErrorSummary errors={[]} attempt={1} />);
+
+    expect(document.title).toBe('Grow2Notes – Users');
   });
 
   it('takes "Error: " off the page title when the form goes', () => {

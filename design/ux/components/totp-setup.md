@@ -340,8 +340,9 @@ regions).
   - Setup key query: `staleTime: Infinity`, `gcTime: 0`, `refetchOnWindowFocus: false`, `retry: false`. The key never
     changes during setup. The person goes to their authenticator app and back, and that focus change mustn't refetch.
     `gcTime: 0` drops the secret from memory once the component unmounts.
-  - Code mutations: `retry: false`, set explicitly, because every retry would count towards lockout. Leave
-    `/api/auth/login*` and `/api/auth/setup/*` out of the global "session ended → sign in again" `401` handler.
+  - Code mutations: `retry: false`, set explicitly, because every retry would count towards lockout. The `api()`
+    wrapper leaves `/api/auth/login*`, `/api/auth/passkey*`, `/api/auth/setup/*` and `/api/auth/logout` out of the
+    global "session ended → sign in again" `401` handler (app-shell.md component 7).
 - **Server (mirror of the client):** NFKC, strip spaces and dashes, require `^[0-9]{6}$` before calling Identity.
   Badly formed codes don't reach `TwoFactorAuthenticatorSignInAsync`, so they don't count as attempts. The QR PNG and
   key responses are under `/api`, so they already get `Cache-Control: no-store` (6.1). Never log the code or the key.

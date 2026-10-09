@@ -422,7 +422,8 @@ DOM order equals visual order everywhere. Sizes and colours are foundations.md t
 ### 7. Signed-out-in-place view → [session-timeout.md](../components/session-timeout.md) (sign-in controls from sign-in-form.md)
 
 - Shown at 30:00 idle on a visible page, or on any `401` from the shared `api()` wrapper (except `/api/auth/login*`,
-  `/api/auth/setup/*` and `/api/auth/logout`).
+  `/api/auth/passkey*`, `/api/auth/setup/*` and `/api/auth/logout`, whose `401` is a failed sign-in, as sign-in.md's
+  *Sign-in failed* row reads it, an ended setup session, or a sign-out that counts as done).
 - **Structure (one `<main>`):** the header drops the nav and Account and shows the wordmark as text. The before-main
   bar slot gets `hidden` (component 3a). Inside `<main>`:
   the signed-out block, then `<div hidden>` wrapping the route outlet, **still mounted**, so unsaved note text,

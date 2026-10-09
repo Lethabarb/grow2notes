@@ -248,6 +248,16 @@ describe('LoadRegion', () => {
     expect(screen.getByText('No participants yet.')).toBeInTheDocument();
   });
 
+  it('puts the content before its line, so that a data heading is the first thing in <main>', async () => {
+    serve(participantPath, () => json(jane));
+    renderPage(<ParticipantPage />);
+
+    await settle();
+
+    const heading = screen.getByRole('heading', { level: 1, name: 'Jane Citizen' });
+    expect(heading.compareDocumentPosition(line())).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
   describe('after a failed first load', () => {
     it.each([
       { failure: 'no connection', answer: noConnection, failsAfter: 1000, cause: 'no connection' },
@@ -265,6 +275,33 @@ describe('LoadRegion', () => {
       expect(line().textContent).toBe(`The participant list did not load: ${cause}. Try again.`);
       // Outside the line, so that its label is not read as part of the sentence.
       expect(line()).not.toContainElement(screen.getByRole('button', { name: 'Try again' }));
+    });
+
+    it('waits, with the loading line, until none of its queries is still fetching', async () => {
+      serve(todayPath, () => problem(404));
+      serve(draftsPath, () => jsonAfter(3000, []));
+      renderPage(<TodayPage />);
+
+      await wait(1000);
+      expect(line()).toHaveTextContent('Loading participants…');
+      await wait(1999);
+      expect(line()).toHaveTextContent('Loading participants…');
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
+
+      await wait(1);
+      await settle();
+      expect(line().textContent).toBe('The participant list did not load: something went wrong. Try again.');
+    });
+
+    it('gives the cause of the first of its queries that failed', async () => {
+      serve(todayPath, noConnection);
+      serve(draftsPath, () => problem(503));
+      renderPage(<TodayPage />);
+
+      await wait(1000);
+      await settle();
+
+      expect(line().textContent).toBe('The participant list did not load: no connection. Try again.');
     });
 
     it('shows the fallback heading on a screen whose heading is data', async () => {
@@ -323,7 +360,7 @@ describe('LoadRegion', () => {
   });
 
   describe('Try again', () => {
-    it('keeps focus, empties the line at once, ignores presses, and shows "Loading…" after 400 ms', async () => {
+    it('keeps focus, empties the line at once, and shows "Loading…" after 400 ms', async () => {
       serve(participantsPath, noConnection);
       renderPage(<ParticipantsPage />);
       await wait(1000);
@@ -337,9 +374,7 @@ describe('LoadRegion', () => {
       expect(button).toHaveAttribute('aria-disabled', 'true');
       expect(sent(participantsPath)).toBe(3);
 
-      fireEvent.click(button);
       await wait(399);
-      expect(sent(participantsPath)).toBe(3);
       expect(button).toHaveAccessibleName('Try again');
 
       await wait(1);

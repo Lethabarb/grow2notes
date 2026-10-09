@@ -428,9 +428,10 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
   is off; app-shell.md lists this query among the opt-ins), so they refetch on mount and on window focus (6.8). The
   Edit form copies the values once and is never overwritten by a refetch. No polling. There is no single-user
   endpoint and none is needed.
-- **Query defaults** (empty-loading-error.md): `networkMode: 'always'`, 10 s `AbortSignal.timeout`, one silent retry
-  for network, timeout or 5xx only. Use `isLoadingError` (never `isError`) so a failed background refetch never
-  replaces data already on screen.
+- **Query defaults** (empty-loading-error.md): `networkMode: 'always'`, the `api()` wrapper's own 10 s timeout (the
+  query passes TanStack's `signal`, never `AbortSignal.timeout`, whose abort the wrapper would rethrow as it came, not
+  as a timeout; empty-loading-error.md *Timing*), one silent retry for network, timeout or 5xx only. Use
+  `isLoadingError` (never `isError`) so a failed background refetch never replaces data already on screen.
 - **Mutations**: `retry: 0` (TanStack's mutation default is no retry
   [Convention https://tanstack.com/query/latest/docs/framework/react/guides/mutations]); the manager retries. Each
   action's `mutationFn` does the request **and then awaits `refetchQueries(['admin','users'])`**, so the button stays

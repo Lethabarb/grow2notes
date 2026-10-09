@@ -279,7 +279,7 @@ export function SessionTimeoutWarning() {
     setPing('busy');
     const slow = setTimeout(() => setPing('slow'), 1000);
     try {
-      await api('/api/auth/ping', { method: 'POST', signal: AbortSignal.timeout(10_000) });
+      await api('/api/auth/ping', { method: 'POST' }); // api()'s own 10 s timeout (empty-loading-error.md)
       setPing('ready');                       // api() → requestAccepted() → phase 'active' → effect closes
     } catch (e) {
       if (!isUnauthorised(e)) {               // a 401 → api() → sessionEnded() → sign-in in place
