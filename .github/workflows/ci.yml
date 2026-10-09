@@ -127,8 +127,12 @@ jobs:
       - name: Build
         run: dotnet build Grow2Notes.slnx --no-restore --configuration Release -warnaserror
 
-      # The integration tests start SQL Server in Docker through Testcontainers.
+      # The integration tests start SQL Server in Docker through Testcontainers. ForbiddenNameTests, D42's check, reads
+      # the parent company's name from the repository's Actions secret, given to this step alone; GitHub masks it in
+      # the log. Without it, as in a fork's pull request, that test fails.
       - name: Test
+        env:
+          FORBIDDEN_NAME: ${{ secrets.FORBIDDEN_NAME }}
         run: dotnet test Grow2Notes.slnx --no-build --configuration Release
 
       - name: Check for model changes without a migration
