@@ -422,13 +422,17 @@ Melbourne "today" comes from the API (`GET /api/today` returns `date`), never `n
 ```ts
 // src/copy/messages.ts
 import { time } from './format';
+// Cause is 'offline' | 'server', the keys of strings.cause's two cause words (§9), as src/api's classify() gives them.
+import { strings, type Cause } from './strings';
 export const msg = {
   noteSubmitted: (participant: string) => `Note for ${participant} submitted`,                 // (V)
   startedByOther: (author: string, participant: string, startedUtc: string) =>
     `${author} started today’s note for ${participant} at ${time(startedUtc)}. Only ${author} can finish it.`, // (N)
   noMatch: (typed: string) => `No participant matches ‘${typed.trim()}’.`,                    // (N)
-  notDone: (done: string, offline: boolean, safe?: string) =>
-    `Not ${done}: ${offline ? 'no connection' : 'something went wrong'}.${safe ? ` ${safe}` : ''} Try again.`,
+  notDone: (done: string, cause: Cause, safe?: string) =>                   // §4 Action failed
+    `Not ${done}: ${strings.cause[cause]}.${safe === undefined ? '' : ` ${safe}`} Try again.`,
+  loadFailed: (what: string, cause: Cause, again: boolean) =>               // §4 Load failed, §9 still
+    `${what} ${again ? 'still did not load' : 'did not load'}: ${strings.cause[cause]}. Try again.`,
 } as const;
 ```
 

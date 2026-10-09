@@ -1,0 +1,10 @@
+/* A request's failure, bold in the error colour, directly above the form's buttons (export-form.md). */
+.alert {
+  color: var(--colour-error);
+  font-weight: 700;
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.alert:not(:empty) {
+  margin-block-end: var(--space-4);
+}

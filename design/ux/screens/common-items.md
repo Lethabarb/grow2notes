@@ -316,10 +316,11 @@ DOM order is reading order is visual order.
 - **One query for the whole page:** `GET /api/admin/common-item-groups?includeArchived=true` (design.md §6.6),
   `queryKey: ['admin', 'common-item-groups']`, returning every group (Every note first, active and archived) with its
   active and archived items, each with `sortOrder` and `archivedAtUtc`, plus a `rowVersion` per group and per item for `If-Match`
-  (design.md §6.6). Each group's list editor reads its own rows from this query
-  (`select`), so one re-read refreshes every section. `networkMode: 'always'`, one silent retry for network failures or 5xx only,
-  `AbortSignal.timeout(10_000)`, `refetchOnWindowFocus: false`. Gate on `isLoadingError`, never `isError`: a failed
-  background re-read leaves the page on screen.
+  (design.md §6.6). Each group's list editor reads its own rows from this query (`select`), so one re-read refreshes
+  every section. `networkMode: 'always'`, one silent retry for network failures or 5xx only, the `api()` wrapper's own
+  10 s timeout (the query passes TanStack's `signal`, never `AbortSignal.timeout`, whose abort the wrapper would
+  rethrow as it came, not as a timeout; empty-loading-error.md *Timing*), `refetchOnWindowFocus: false`. Gate on
+  `isLoadingError`, never `isError`: a failed background re-read leaves the page on screen.
 
 ### 4. List-conflict message slot
 - Rendered only after a conflict (see Interactions). It is a `<p tabIndex={-1}>` above the first group section, with

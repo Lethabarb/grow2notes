@@ -1,0 +1,34 @@
+/*
+ * A field's error look (form-validation.md *Anatomy*): a 4 px bar down the group and a 3 px border on each control
+ * marked invalid, thicker than a control's own 2 px border. Both are real borders, so under forced colours they still
+ * show the error as a shape when the colour has gone.
+ */
+.group[data-invalid] {
+  border-inline-start: 4px solid var(--colour-error);
+  padding-inline-start: var(--space-3);
+}
+
+.group [aria-invalid="true"] {
+  border: 3px solid var(--colour-error);
+}
+
+/* No min-content width, the default, by which one long word would make a 320 px page scroll sideways. */
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-inline-size: 0;
+}
+
+.label {
+  display: block;
+  padding: 0;
+  margin-block-end: var(--space-2);
+  font-weight: 700;
+}
+
+.hint {
+  margin: 0 0 var(--space-2);
+  color: var(--colour-text-secondary);
+  font-size: var(--font-size-small);
+}

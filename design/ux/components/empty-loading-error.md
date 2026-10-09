@@ -182,9 +182,9 @@ There is no illustration, icon, coloured box, status code or red text in any of 
 
 - **No indicator under 1 s.** A 1 s timer starts with the request. If the data lands first, nothing was shown. This matches `participant-list-rows.md` and `app-shell-nav.md`. [Research] NN/g; [Opinion] for the exact 1 s.
 - **No minimum display time.** If "Loading…" appears at 1 s and the data lands at 1.1 s, the line simply goes. It is one line of text, so the flash is small, and holding content back to avoid it would make every slow load slower. [Opinion]
-- **One request timeout of 10 s**, the same as autosave and the session ping (`autosave-status.md`, `session-timeout.md`), via `AbortSignal.timeout(10_000)`. A call may pass its own `timeoutMs`: the two file downloads (Daily report, Export record) pass `30_000`, because M4 and M5 allow slow but working requests that a 10 s cut-off would report as "no connection".
+- **One request timeout of 10 s**, the same as autosave and the session ping (`autosave-status.md`, `session-timeout.md`), made by the `api()` wrapper with a `setTimeout` that aborts an `AbortController`. It runs until the whole body has been read, so an answer that stalls half-way fails too, and each request has its own, the antiforgery token request and a change sent again with a fresh token included. Not `AbortSignal.timeout`, which test fake timers cannot drive, nor `AbortSignal.any`, which Safari has only from 17.4. A call may pass its own `timeoutMs`: the two file downloads (Daily report, Export record) pass `30_000`, because M4 and M5 allow slow but working requests that a 10 s cut-off would report as "no connection".
 - **One silent retry** for network failures, timeouts and `5xx`, then the Load failed state. Never retry `401`, `403`, `404`, `409`, `410`, `412` or `422`: retrying cannot change the answer. The worst case is about 21 s of "Loading…" (10 s, a 1 s pause, 10 s) on a server that answers nothing; an offline phone fails in about 1 s because `fetch` rejects at once. [Opinion], within TanStack's documented `retry` options.
-- **Queries use `networkMode: 'always'`.** In the default `'online'` mode a query started while the phone reports offline sits in `pending` + `paused` with no error, so the screen would say "Loading…" for ever. With `'always'`, it fails in about a second and says "Check your internet connection". Mutations keep their own settings (`autosave-status.md` relies on the default pause). [Convention] TanStack docs; [Opinion] the choice.
+- **Queries and mutations use `networkMode: 'always'`.** In the default `'online'` mode a query started while the phone reports offline sits in `pending` + `paused` with no error, so the screen would say "Loading…" for ever. With `'always'`, it fails in about a second and says "[Thing] did not load: no connection. Try again." A mutation is paused the same way, so Save or Send invite would stay busy, never say "Not [done]: no connection. Try again.", and be sent by itself when the browser is back online; mutations use `'always'` too, with `retry: 0`, set explicitly (`form-validation.md` *Server responses*, `primary-actions.md` §8). Autosave alone sets `'online'` on its own mutation, so an `offline` event pauses its retries (`autosave-status.md`). [Convention] TanStack docs; [Opinion] the choice.
 
 **Load failed and Try again**
 
@@ -355,6 +355,7 @@ The page title never contains a name (§4.0). "There is a problem" needs adding 
 - **No React Aria** is needed: a `<p role="status">`, a `<button>`, links and headings are all native.
 - **Use `useQuery`, not `useSuspenseQuery` or `<Suspense>`,** so every screen uses one visible pattern and errors stay as data, not thrown exceptions. [Opinion]
 - **Tell a first-load failure from a background one with `isLoadingError`, never `isError`.** In TanStack Query 5 a failed background refetch also sets `status: 'error'` while the old data is kept, so testing `isError` would replace good data with an error.
+- **Keep the failure through Try again.** TanStack Query 5 puts a query that has no data back to `pending`, with no error, the moment it refetches, so a region that read its failure from `isLoadingError` alone would unmount Try again as it was pressed, and focus would fall to `<body>`. `LoadRegion` keeps a failed first load in its own state, set during render, until every failed query has loaded or they fail again: Try again stays mounted, focused and `aria-disabled` meanwhile, and the region's line stays empty.
 - **One `api()` wrapper** (already shared with `session-timeout.md`) turns a rejected `fetch` or a timeout into an `ApiError` with `status: 0`, and any non-2xx into an `ApiError` with the status and the problem-details `code`. On a `401` it tells the session layer first, then throws, and the region shows nothing for it. Classify by **status**, not by `TypeError`, because a bug inside a query function also throws `TypeError`.
 - **No route-level code splitting.** The bundle is small, and with one bundle a deploy cannot leave an open tab asking for a chunk that no longer exists. If a lazy import is ever added, handle `vite:preloadError` by showing the "There is a problem" page, **not** by reloading automatically as Vite's example does: a reload drops unsaved text held in memory (§8.5).
 - **Route error boundary** (`errorElement` / `ErrorBoundary` on the root layout route and on the signed-in layout): crashes inside a screen keep the shell and nav; a crash in the shell itself gets the bare page. Unknown routes use the same boundary's not-found branch (`app-shell-nav.md`).
@@ -365,7 +366,14 @@ The page title never contains a name (§4.0). "There is a problem" needs adding 
 ```ts
 // api/errors.ts
 export class ApiError extends Error {
-  constructor(public status: number, public code?: string) { super(code ?? `HTTP ${status}`); }
+  // Declared fields, as tsconfig's erasableSyntaxOnly refuses parameter properties.
+  readonly status: number;
+  readonly code?: string;
+  constructor(status: number, code?: string) {
+    super(code ?? `HTTP ${status}`);
+    this.status = status;
+    this.code = code;
+  }
 }
 export type Failure = 'offline' | 'server' | 'notFound' | 'notEditable' | 'signedOut';
 
@@ -382,26 +390,38 @@ export const isTransient = (e: unknown) =>
 
 // api/client.ts (excerpt): 401 never reaches a screen
 // timeoutMs: per-call override of the 10 s default; the file downloads pass 30_000 (daily-report.md, record-export.md).
-// signal: the caller's own AbortSignal (leaving the page); it is combined with the timeout.
+// signal: the caller's own AbortSignal (leaving the page); its abort is passed on, and rethrown as it came.
 export async function api<T>(
   path: string,
   init: RequestInit & { timeoutMs?: number } = {},
 ): Promise<T> {
   const { timeoutMs = 10_000, signal, ...rest } = init;
-  const timeout = AbortSignal.timeout(timeoutMs);
+  signal?.throwIfAborted();                                      // the caller has already left: send nothing
+  // A setTimeout that aborts a controller: fake timers drive it, as they cannot AbortSignal.timeout, and Safari before
+  // 17.4 has no AbortSignal.any. It runs until the body has been read, so an answer that stalls half-way fails too.
+  const controller = new AbortController();
+  const passOn = () => controller.abort(signal?.reason);
+  signal?.addEventListener('abort', passOn);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
+  let text: string;
   try {
-    res = await fetch(path, { ...rest, signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    res = await fetch(path, { ...rest, signal: controller.signal });
+    text = await res.text();
   } catch (e) {
     if (signal?.aborted) throw e;                                // the caller left the page: say nothing
     throw new ApiError(0);                                       // offline, DNS, timeout
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', passOn);
   }
   if (res.status === 401) { sessionEnded(); throw new ApiError(401); }  // session-timeout.md
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body.code);                   // RFC 9457 `code` (§6.1)
+    let code: string | undefined;
+    try { code = JSON.parse(text).code; } catch { /* a body that is not problem+json has no code */ }
+    throw new ApiError(res.status, code);                        // RFC 9457 `code` (§6.1)
   }
-  return res.status === 204 ? (undefined as T) : res.json();
+  return (text === '' ? undefined : JSON.parse(text)) as T;     // a 204, or a bare 200 or 201, has no body
 }
 
 // queryClient.ts
@@ -412,6 +432,10 @@ export const queryClient = new QueryClient({
       retry: (count, e) => count < 1 && isTransient(e),  // one silent retry; default 1 s delay
       refetchOnWindowFocus: false,                 // per app-shell-nav.md
     },
+    mutations: {
+      networkMode: 'always',                       // fail at once offline, never wait paused (autosave sets 'online')
+      retry: 0,                                    // never sent twice by itself (primary-actions.md §8)
+    },
   },
 });
 ```
@@ -420,8 +444,9 @@ export const queryClient = new QueryClient({
 // ui/useDelayed.ts
 export function useDelayed(active: boolean, ms: number): boolean {
   const [late, setLate] = useState(false);
+  if (late && !active) setLate(false);           // reset during render: an effect that reset it would render twice
   useEffect(() => {
-    if (!active) { setLate(false); return; }
+    if (!active) return;
     const t = window.setTimeout(() => setLate(true), ms);
     return () => window.clearTimeout(t);
   }, [active, ms]);
@@ -436,57 +461,77 @@ type Props = {
   loading: string;                      // "Loading participants…"
   what: string;                         // "The participant list" (sentence start)
   fallbackHeading?: string;             // data-<h1> screens: "Past notes"
-  children: () => ReactNode;            // renders only when every query has succeeded
+  children: () => ReactNode;            // renders only when every query has data
 };
 
+// A failed first load, kept through Try again; at: the latest errorUpdatedAt of its queries.
+type Shown = { kind: Failure; again: boolean; at: number };
+
 export function LoadRegion({ queries, loading, what, fallbackHeading, children }: Props) {
+  const ready = queries.every(q => q.data !== undefined);       // a failed *background* refetch keeps its data
+  const fetching = queries.some(q => q.isFetching);
   const errored = queries.find(q => q.isLoadingError);          // never isError (keeps good data)
-  const kind = errored ? classify(errored.error) : null;
-  const failed = kind !== null && kind !== 'signedOut';          // a 401 waits for sign-in, silently
-  const fetching = queries.some(q => q.fetchStatus === 'fetching');
-  // A failed *background* refetch has status 'error' but keeps its data: still ready.
-  const ready = queries.every(q => q.isSuccess || q.isRefetchError);
-  const slow = useDelayed(!ready && !failed && fetching, 1000);
-  const busy = useDelayed(failed && fetching, 400);
-  const [tries, setTries] = useState(0);
-  const focusWhenReady = useRef(false);
+  const at = Math.max(0, ...queries.map(q => q.errorUpdatedAt));
+
+  // TanStack puts a query with no data back to 'pending', with no error, when it refetches, so a failure read from
+  // isLoadingError alone would unmount Try again as it is pressed: the region keeps it until the queries load or fail
+  // again. The page gets the refetch's state a moment after the press, so a failure is new only when `at` is not the
+  // one shown; an earlier one means other queries (a new key, as ?date= gives), which load as a first load does. Set
+  // during render, as an effect that set it would render twice.
+  const [shown, setShown] = useState<Shown>();
+  const [retrying, setRetrying] = useState(false);
+  if (ready && shown) {
+    setShown(undefined);
+    setRetrying(false);
+  } else if (!ready && errored && !fetching && at !== shown?.at) {
+    setShown({ kind: classify(errored.error), again: retrying, at });
+    setRetrying(false);
+  } else if (shown && at < shown.at) {
+    setShown(undefined);
+    setRetrying(false);
+  }
+
+  const failed = shown !== undefined && shown.kind !== 'signedOut';  // a 401 waits for sign-in, silently
+  const slow = useDelayed(!ready && fetching && !failed, 1000);
+  const focusOnLoad = useRef(false);
 
   useEffect(() => {                                              // runs after the new <h1> is in the DOM
-    if (ready && focusWhenReady.current) { focusWhenReady.current = false; focusPageHeading(); }
+    if (ready && focusOnLoad.current) {
+      focusOnLoad.current = false;
+      // Only if focus fell to the page with the button: after a Try again that failed, the person may have moved on
+      // before a refetch of TanStack's own, on reconnecting, say, loads the region.
+      if (document.activeElement === document.body) focusPageHeading();
+    }
   }, [ready]);
 
-  if (kind === 'notFound') return <NotFound />;                  // its own <h1>, takes focus
-  if (kind === 'notEditable') return <EditRefused />;
+  if (shown?.kind === 'notFound') return <NotFound />;           // its own <h1>, takes focus
+  if (shown?.kind === 'notEditable') return <EditRefused />;
 
-  const text =
-    failed && !fetching
-      ? `${what} ${tries > 0 ? 'still did not' : 'did not'} load: ${CAUSE[kind === 'offline' ? 'offline' : 'server']}. Try again.`
-      : slow ? loading : '';
-
-  async function retry() {
-    if (fetching) return;                                        // aria-disabled: ignore presses
-    focusWhenReady.current = true;                               // set before the data can land
-    const results = await Promise.all(queries.filter(q => q.isLoadingError).map(q => q.refetch()));
-    if (results.every(r => r.isSuccess)) setTries(0);
-    else { focusWhenReady.current = false; setTries(n => n + 1); }   // focus stays on Try again
+  function tryAgain() {
+    focusOnLoad.current = true;                                  // set before the data can land
+    setRetrying(true);                                           // empties the line at once
+    for (const q of queries) if (q.isLoadingError) void q.refetch();  // only the failed ones
   }
+
+  const cause = CAUSE[shown?.kind === 'offline' ? 'offline' : 'server'];
+  const line =
+    failed ? (retrying ? '' : `${what} ${shown.again ? 'still did not' : 'did not'} load: ${cause}. Try again.`)
+    : slow ? loading : '';
 
   return (
     <>
-      {failed && fallbackHeading && <PageHeading>{fallbackHeading}</PageHeading>}
-      <p role="status" className={s.status}>{text}</p>
-      {failed && (
-        <button type="button" className={btn.secondary} aria-disabled={fetching || undefined} onClick={retry}>
-          {busy ? 'Loading…' : 'Try again'}
-        </button>
-      )}
+      {/* The content first, so that a data <h1> is the first thing in <main> (app-shell.md). */}
       {ready && children()}
+      {failed && fallbackHeading && <PageHeading>{fallbackHeading}</PageHeading>}
+      <p role="status" className={s.status}>{line}</p>
+      {/* The shared Button: aria-disabled while busy, ignoring presses, and "Loading…" after 400 ms. */}
+      {failed && <Button busy={retrying} busyLabel="Loading…" onClick={tryAgain}>Try again</Button>}
     </>
   );
 }
 ```
 
-The `<p role="status">` is rendered on every pass, so it exists before any text is written into it. On a data-`<h1>` screen whose load failed, the fallback `<PageHeading>` takes the pending focus. When a retry succeeds, the effect runs after React has committed the new content, so `focusPageHeading()` finds the real heading (static, or the data heading inside `children()`) rather than the fallback heading that is about to unmount. A `401` shows nothing here: `api()` has already handed over to the signed-out state, and the region's queries are invalidated after sign-in.
+The `<p role="status">` is rendered on every pass, so it exists before any text is written into it. On a data-`<h1>` screen whose load failed, the fallback `<PageHeading>` takes the pending focus. Try again stays mounted and focused while it runs, as the failure is kept in `shown`, so a failure that repeats leaves focus on it under the new "still did not load" sentence. When a retry succeeds, the effect runs after React has committed the new content, so `focusPageHeading()` finds the real heading (static, or the data heading inside `children()`) rather than the fallback heading that is about to unmount. A `401` shows nothing here: `api()` has already handed over to the signed-out state, and the region's queries are invalidated after sign-in.
 
 ```tsx
 // ui/PageHeading.tsx: focus waits for the heading, in memory only (D22)
@@ -556,7 +601,7 @@ export function Crashed() {             // used by the route error boundary
 
 ### App shell, global (§4.0)
 
-- **Start-up:** `index.html` shows "Loading…" after 1 s while JavaScript loads. The shell then calls `GET /api/auth/me`: `200` shows the nav and the screen; `401` shows sign-in (§4.1), which is not an error; no connection or a server error shows the shell's whole-page message with **Try again**. The antiforgery token request (§9.8) is part of start-up and fails the same way.
+- **Start-up:** `index.html` shows "Loading…" after 1 s while JavaScript loads. The shell then calls `GET /api/auth/me`: `200` shows the nav and the screen; `401` shows sign-in (§4.1), which is not an error; no connection or a server error shows the shell's whole-page message with **Try again**. The antiforgery token (§9.8) is not fetched at start-up: `api()` fetches it with the first `POST`, `PUT` or `DELETE`, so start-up sends one request fewer and no token is fetched that nothing uses, and a token request that fails fails that change with its own cause, "no connection" or "something went wrong".
 - **Wordmark only while `/me` is pending** (`app-shell-nav.md`): no nav, no badge, no fake "0", because the role decides the nav.
 - **Background `/me` refresh** on focus or visibility (§6.8) never shows an error: the last known badge and nav stay (`notification-badge.md`).
 - **Crashes** inside a screen show "There is a problem with Grow2Notes" in `<main>` with the nav still usable. A crash in the shell itself shows the same page without the nav.

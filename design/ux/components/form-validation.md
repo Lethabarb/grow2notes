@@ -9,7 +9,8 @@
 >   button. The one exception is sign-in's A25 "Sign-in failed" message: a credential outcome, it stays an unlinked
 >   summary item (sign-in.md).
 > - **Mutations use `retry: 0`** (TanStack's default). Nothing is retried automatically unless repeating it is safe
->   (autosave `PUT`s; the note-version `POST` with its `Idempotency-Key`, retried only when the person presses again).
+>   (autosave `PUT`s; a change refused before any handler ran, which the `api()` wrapper sends once more with a fresh
+>   antiforgery token; the note-version `POST` with its `Idempotency-Key`, retried only when the person presses again).
 > - **Radio pre-selection:** no radio group is pre-selected (GOV.UK), so a "Choose …" error can occur. The one stated
 >   exception is users.md's Role, which starts on Worker (least privilege) and is listed as an owner question. Every
 >   radio uses the shared ChoiceRow: a 40 px circle drawn with `appearance: none` in a 56 px row (users.md), never
@@ -147,8 +148,11 @@ Error summary (multi-field forms only)          Field in error
 **Retries (editorial pass):** mutations use `retry: 0`, set as the `QueryClient`'s mutation default (TanStack's own
 default is no retry). No create or state-changing `POST` in design §6.6 has an idempotency key except the
 note-version `POST`, so a silent retry after a lost response could create a second participant, goal or common item.
-The person retries by pressing the focused button again. (This file first proposed `retry: (n, e) => isRetryable(e) &&
-n < 3`; participants.md, common-items.md and users.md showed why that is unsafe.)
+The person retries by pressing the focused button again. The one change sent again with no press is one answered `400`
+with no `code`, as the `/api` filter refuses a missing or stale antiforgery token before any handler runs: the `api()`
+wrapper sends it once more with a fresh token, so nothing can be done twice (empty-loading-error.md *Timing*). (This
+file first proposed `retry: (n, e) => isRetryable(e) && n < 3`; participants.md, common-items.md and users.md showed
+why that is unsafe.)
 
 ### States
 

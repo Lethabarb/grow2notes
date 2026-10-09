@@ -1,0 +1,14 @@
+/* The loading line and the failure sentence, in the body text (empty-loading-error.md *Visual specification*). */
+.line {
+  margin: var(--space-4) 0 0;
+  max-inline-size: var(--measure);
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.line:empty {
+  margin: 0;
+}
+
+.tryAgain {
+  margin-block-start: var(--space-3);
+}

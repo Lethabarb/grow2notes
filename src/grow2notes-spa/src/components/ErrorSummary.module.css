@@ -1,0 +1,46 @@
+/* As wide as the form's column, not the page, so its lines stay short enough to read (form-validation.md). */
+.summary {
+  max-inline-size: var(--measure);
+  margin-block-end: var(--space-6);
+  padding: var(--space-4);
+  border: 4px solid var(--colour-error);
+}
+
+/*
+ * The focus ring however the summary got focus. base.css draws it on :focus-visible only, which a browser need not
+ * match when script moves focus after a press with the mouse.
+ */
+.summary:focus {
+  outline: var(--focus-width) solid var(--colour-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list > li {
+  color: var(--colour-error);
+  font-weight: 700;
+}
+
+/* The error colour when hovered too, when base.css's thicker underline is the change (form-validation.md *States*). */
+.list a,
+.list a:hover {
+  color: inherit;
+}
+
+/* Each link a block at least 44 px tall, so the whole line is the target on a phone. */
+.list a {
+  display: block;
+  min-block-size: var(--target-min);
+  padding-block: var(--space-2);
+}
+
+@media (forced-colors: active) {
+  .summary:focus {
+    outline-color: Highlight;
+  }
+}

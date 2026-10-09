@@ -203,9 +203,10 @@ listed here.
   `disabled`) while running, label **Loading…** (P) after 400 ms; a repeat failure reads **The participant list still
   did not load: …** (P) so screen readers announce it again ([Convention] NHS App "There is still a problem",
   https://design-system.nhsapp.service.nhs.uk/patterns/error-page/).
-- Query settings: `networkMode: 'always'`, one silent retry for network/timeout/5xx only, 10 s
-  `AbortSignal.timeout`, no retry of any 4xx (empty-loading-error.md). A `401` shows nothing here: it hands over to
-  session-timeout.md, and the region's queries are invalidated after signing in again.
+- Query settings: `networkMode: 'always'`, one silent retry for network/timeout/5xx only, no retry of any 4xx, and
+  the `api()` wrapper's own 10 s timeout: each query passes TanStack's `signal`, never `AbortSignal.timeout`, whose
+  abort the wrapper would rethrow as it came, not as a timeout (empty-loading-error.md *Timing*). A `401` shows
+  nothing here: it hands over to session-timeout.md, and the region's queries are invalidated after signing in again.
 
 ### 5. Your unfinished drafts (only when needed)
 

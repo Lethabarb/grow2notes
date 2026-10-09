@@ -211,8 +211,9 @@ groups of 4 · label "Enter the 6-digit code from the app" + hint · code field 
     so in-memory note text survives) and views 1–2 render with the notice. On success: if `Me.userId` is the same,
     unhide and retry the pending save. If it is a **different** person, do a full reload to `/`, so one person's unsaved
     text is never shown to another. [Opinion, privacy]
-11. **After any sign-in or setup success:** fetch a fresh antiforgery token (9.8), set the `me` query data, and navigate
-    with `replace: true`, so Back does not return to a sign-in step.
+11. **After any sign-in or setup success:** set the `me` query data and navigate with `replace: true`, so Back does not
+    return to a sign-in step. The screen fetches no antiforgery token: the `api()` wrapper drops its own on the
+    `200 Me`, so its next change fetches a fresh one, bound to the person now signed in (9.8).
 12. **Repeat taps:** while a request is in flight, the button gets `aria-disabled="true"` and further presses are
     ignored. It is never `disabled`, which would drop keyboard focus to `<body>`. Show the status text only if the wait
     passes 1 s. [Convention]
