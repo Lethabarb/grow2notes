@@ -1,5 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+// Before App, so that the build puts these first and a component's own stylesheet wins over them at equal specificity.
+import './styles/tokens.css';
+import './styles/base.css';
 import { App } from './App.tsx';
 
 const container = document.getElementById('root');

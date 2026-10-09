@@ -1,0 +1,87 @@
+/*
+ * The design tokens (foundations.md). Components take their colours and font sizes from these and nothing else, so
+ * tokens.test.ts can check every colour's contrast in one place.
+ */
+:root {
+  /* Light only, but not `only light`: a user who has asked their browser to darken pages still gets that. */
+  color-scheme: light;
+  /* For any native radio or checkbox that a component does not draw itself. */
+  accent-color: var(--colour-action);
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-family-code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-size-small: 1rem;
+  --font-size-body: 1.125rem;
+  --font-size-h2: 1.375rem;
+  --font-size-h1: 1.75rem;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.25;
+
+  --colour-text: #0b0c0c;
+  --colour-text-secondary: #484949;
+  --colour-placeholder: #626262;
+  --colour-page: #ffffff;
+  --colour-surface: #ffffff;
+  --colour-surface-muted: #f3f2f1;
+  --colour-hover: #f3f2f1;
+  --colour-pressed: #e5e4e2;
+  --colour-border-control: #0b0c0c;
+  --colour-divider: #b1b4b6;
+  --colour-action: #00558b;
+  --colour-action-hover: #003e66;
+  --colour-action-pressed: #002d4d;
+  --colour-on-action: #ffffff;
+  --colour-action-tint: #e8f1f8;
+  --colour-action-tint-pressed: #d2e2ef;
+  --colour-focus: #0b0c0c;
+  --colour-error: #a4000f;
+  --colour-error-hover: #8a000d;
+  --colour-error-pressed: #6e000a;
+  --colour-error-tint: #fdecea;
+  --colour-success: #00703c;
+  --colour-success-tint: #e7f4ec;
+  --colour-attention-edge: #b35900;
+  --colour-attention-tint: #fff4d6;
+  --colour-attention-tint-strong: #ffe2a8;
+  --colour-attention-text: #5c3a00;
+  --colour-neutral-tint: #e8eaed;
+  --colour-neutral-text: #1f2328;
+  --colour-badge: #0b0c0c;
+  --colour-on-badge: #ffffff;
+  --colour-backdrop: rgb(11 12 12 / 0.6);
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --page-gutter: var(--space-4);
+  --section-gap: var(--space-6);
+  --measure: 40rem;
+  --page-max: 60rem;
+
+  /* max() keeps each target at its pixel size even if the user's default font is smaller than 16 px. */
+  --target-min: max(2.75rem, 44px);
+  --target-button: max(3rem, 48px);
+  --target-row: 3.5rem;
+
+  --radius-s: 0.25rem;
+  --radius-m: 0.5rem;
+  --border-control: 2px;
+  --border-divider: 1px;
+  --focus-width: 3px;
+  --focus-offset: 2px;
+}
+
+/* The one breakpoint. A media query cannot read a custom property, so 40rem is written out wherever it is used. */
+@media (min-width: 40rem) {
+  :root {
+    --font-size-h1: 2rem;
+    --font-size-h2: 1.5rem;
+    --page-gutter: var(--space-6);
+    --section-gap: var(--space-7);
+  }
+}
