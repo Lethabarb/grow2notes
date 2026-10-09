@@ -5,12 +5,12 @@ namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// design.md §9.7's security headers on each kind of response that the app has so far, other than those the exception
-/// handler writes, which go without <c>Strict-Transport-Security</c> (see <c>Program.cs</c>): each carries all six,
-/// once each, with the value in §9.7's text block, read from design.md itself
-/// (<see cref="DesignedSecurityHeaders"/>), so the code and the design cannot drift apart. A story that adds a kind of
-/// response adds it here (tests/README.md). <c>Strict-Transport-Security</c> is <c>UseHsts</c>'s, which sends it only
-/// over HTTPS and never to <c>localhost</c>, so the tests call another host name over HTTPS, as <see cref="HstsTests"/>
-/// does.
+/// handler writes, which go without <c>Strict-Transport-Security</c> (see <c>Program.cs</c>) and which
+/// <see cref="DatabaseFailureHandlerTests"/> checks for the other five: each carries all six, once each, with the value
+/// in §9.7's text block, read from design.md itself (<see cref="DesignedSecurityHeaders"/>), so the code and the design
+/// cannot drift apart. A story that adds a kind of response adds it here (tests/README.md).
+/// <c>Strict-Transport-Security</c> is <c>UseHsts</c>'s, which sends it only over HTTPS and never to <c>localhost</c>,
+/// so the tests call another host name over HTTPS, as <see cref="HstsTests"/> does.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class SecurityHeadersTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)

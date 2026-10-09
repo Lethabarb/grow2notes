@@ -45,7 +45,8 @@ public sealed class DesignedSecurityHeadersTests
     [InlineData("```text\nX-Content-Type-Options nosniff\n```", "\"X-Content-Type-Options nosniff\"")]
     [InlineData("```text\nReferrer-Policy: no-referrer\nreferrer-policy: none\n```", "referrer-policy twice")]
     [InlineData("```text\n```", "no header")]
-    [InlineData("```text\nReferrer-Policy: no-referrer\n```\n\n```text\nX-Frame-Options: DENY\n```", "4 fences")]
+    [InlineData("```text\nReferrer-Policy: no-referrer\n```\n\n```text\nX-Frame-Options: DENY\n```", "4 fences,")]
+    [InlineData("```http\nReferrer-Policy: no-referrer\n```", "2 fences, the first ```http,")]
     public void Reading_9_7_refuses_what_it_cannot_read(string body, string named)
     {
         var design = $"""

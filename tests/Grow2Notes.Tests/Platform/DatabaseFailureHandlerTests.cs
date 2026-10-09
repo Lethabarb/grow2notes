@@ -9,15 +9,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
 
 namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// The app's whole pipeline, with a test-only endpoint that throws and every log entry recorded. The tests host the
-/// app without a database, so they run without Docker.
+/// app without a database, so they run without Docker. Each response that the exception handler writes is checked for
+/// design.md §9.7's security headers, as <see cref="SecurityHeadersTests"/> checks every other kind, over HTTPS at a
+/// host name other than <c>localhost</c>, where <c>UseHsts</c> sends <c>Strict-Transport-Security</c>.
 /// </summary>
 public sealed class DatabaseFailureHandlerTests
 {
+    // RFC 2606 reserves .example, so the name is no real site's.
+    private const string HostName = "grow2notes.example";
+
     private static readonly string Canary = $"canary-{Guid.NewGuid():N}";
 
     // Production is what App Service runs. Development is where the app would show an exception that reached the
@@ -30,7 +36,7 @@ public sealed class DatabaseFailureHandlerTests
         var failure = new DbUpdateException("An error occurred while saving the entity changes.",
             TestSqlException.Create(2601, $"Cannot insert duplicate key row. The duplicate key value is ({Canary})."));
         await using var app = new AppThatThrows(_ => throw failure, "Production");
-        using var client = app.CreateClient();
+        using var client = CreateClientAtHostName(app);
 
         using var response = await client.GetAsync(AppThatThrows.Path, TestContext.Current.CancellationToken);
 
@@ -38,6 +44,7 @@ public sealed class DatabaseFailureHandlerTests
         Assert.DoesNotContain(Canary, body, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(DbUpdateException), body, StringComparison.Ordinal);
         Assert.Equal("no-store", CacheControl(response));
+        AssertCarriesTheHeadersOfDesignMdButHsts(response);
 
         var entry = Assert.Single(app.Logs.Entries, e => e.Category == typeof(DatabaseFailureHandler).FullName);
         Assert.Equal(LogLevel.Error, entry.Level);
@@ -81,13 +88,14 @@ public sealed class DatabaseFailureHandlerTests
     {
         var exception = new BadHttpRequestException($"The request could not be read: {Canary}.", (int)status);
         await using var app = new AppThatThrows(_ => throw exception, "Production");
-        using var client = app.CreateClient();
+        using var client = CreateClientAtHostName(app);
 
         using var response = await client.GetAsync(AppThatThrows.Path, TestContext.Current.CancellationToken);
 
         var body = await response.ReadProblemAsync(status);
         Assert.DoesNotContain(Canary, body, StringComparison.Ordinal);
         Assert.Equal("no-store", CacheControl(response));
+        AssertCarriesTheHeadersOfDesignMdButHsts(response);
         Assert.DoesNotContain(app.Logs.Entries, HoldsCanary);
     }
 
@@ -95,17 +103,37 @@ public sealed class DatabaseFailureHandlerTests
     public async Task A_body_over_Kestrels_size_limit_gets_a_413_problem_and_is_not_logged()
     {
         const int Limit = 16;
-        await using var app = new AppThatThrows(context => context.Request.Body.CopyToAsync(Stream.Null), "Production");
+        string? called = null;
+        await using var app = new AppThatThrows(context =>
+        {
+            called = $"{context.Request.Scheme}://{context.Request.Host}";
+            return context.Request.Body.CopyToAsync(Stream.Null);
+        }, "Production");
 
         // On Kestrel, at any free port, because the test server has no size limit. Kestrel throws as the body is read.
         app.UseKestrel(0);
         app.UseKestrel(kestrel => kestrel.Limits.MaxRequestBodySize = Limit);
         using var client = app.CreateClient();
-        using var body = new ByteArrayContent(new byte[Limit + 1]);
 
-        using var response = await client.PostAsync(AppThatThrows.Path, body, TestContext.Current.CancellationToken);
+        // Kestrel listens on plain HTTP at a loopback address, from which the app takes forwarded headers by default,
+        // so the request comes as App Service's front end forwards one from HTTPS, with the host name that the browser
+        // called, as HstsTests sends one.
+        using var request = new HttpRequestMessage(HttpMethod.Post, AppThatThrows.Path)
+        {
+            Content = new ByteArrayContent(new byte[Limit + 1]),
+            Headers =
+            {
+                { "Host", HostName },
+                { "X-Forwarded-For", "203.0.113.7:51234" },
+                { "X-Forwarded-Proto", "https" },
+            },
+        };
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.RequestEntityTooLarge);
+        Assert.Equal($"https://{HostName}", called);
+        AssertCarriesTheHeadersOfDesignMdButHsts(response);
         Assert.DoesNotContain(app.Logs.Entries, e => e.Exception is BadHttpRequestException);
     }
 
@@ -116,7 +144,7 @@ public sealed class DatabaseFailureHandlerTests
     {
         var exception = new InvalidOperationException($"Not a database failure: {Canary}.");
         await using var app = new AppThatThrows(_ => throw exception, environment);
-        using var client = app.CreateClient();
+        using var client = CreateClientAtHostName(app);
 
         using var response = await client.GetAsync(AppThatThrows.Path, TestContext.Current.CancellationToken);
 
@@ -124,6 +152,7 @@ public sealed class DatabaseFailureHandlerTests
         Assert.DoesNotContain(Canary, body, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InvalidOperationException), body, StringComparison.Ordinal);
         Assert.Equal("no-store", CacheControl(response));
+        AssertCarriesTheHeadersOfDesignMdButHsts(response);
         Assert.Contains(app.Logs.Entries, e => e.Level == LogLevel.Error && e.Exception == exception);
         Assert.DoesNotContain(app.Logs.Entries, e => e.Category == typeof(DatabaseFailureHandler).FullName);
     }
@@ -131,6 +160,27 @@ public sealed class DatabaseFailureHandlerTests
     // The header exactly as the app sent it. The typed CacheControl property would reformat it from parsed directives.
     private static string? CacheControl(HttpResponseMessage response) =>
         response.Headers.NonValidated.TryGetValues("Cache-Control", out var values) ? values.ToString() : null;
+
+    // design.md §9.7's headers, read from design.md itself, as SecurityHeadersTests reads them: each but
+    // Strict-Transport-Security once, with its value there, and no Strict-Transport-Security. The exception handler
+    // clears the response's headers before it writes its problem, which takes the one that UseHsts set; the others are
+    // set as the response starts. That gap is accepted (S06.01.04's Notes).
+    private static void AssertCarriesTheHeadersOfDesignMdButHsts(HttpResponseMessage response)
+    {
+        var designed = DesignedSecurityHeaders.Read();
+        designed.Remove(HeaderNames.StrictTransportSecurity);
+
+        Assert.All(designed, header => Assert.Equal(header.Value, Assert.Single(Sent(response, header.Key))));
+        Assert.Empty(Sent(response, HeaderNames.StrictTransportSecurity));
+    }
+
+    // Every value of the header, exactly as the app sent them, so a second one would show.
+    private static string[] Sent(HttpResponseMessage response, string header) =>
+        response.Headers.NonValidated.TryGetValues(header, out var values) ? [.. values] : [];
+
+    // The test server's client, calling a host name other than localhost over HTTPS, where UseHsts sends its header.
+    private static HttpClient CreateClientAtHostName(AppThatThrows app) =>
+        app.CreateClient(new() { BaseAddress = new($"https://{HostName}") });
 
     private static bool HoldsCanary(RecordedLog entry) =>
         entry.Message.Contains(Canary, StringComparison.Ordinal)

@@ -66,8 +66,9 @@ internal static partial class DesignMd
         var fences = lines.Index().Where(line => line.Item.StartsWith("```", StringComparison.Ordinal)).ToList();
         if (fences is not [(var start, "```text"), (var end, "```")])
         {
+            var opening = fences is [(_, var first and not "```text"), ..] ? $", the first {first}" : "";
             throw new InvalidOperationException(
-                $"design.md {section} has {fences.Count} fences, where this test reads one ```text block.");
+                $"design.md {section} has {fences.Count} fences{opening}, where this test reads one ```text block.");
         }
 
         return [.. lines.Skip(start + 1).Take(end - start - 1)];
