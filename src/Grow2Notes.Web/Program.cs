@@ -169,12 +169,16 @@ app.UseForwardedHeaders();
 // because the handler clears the response's headers first; a browser keeps the policy from any earlier response.
 app.UseHsts();
 
+// design.md §9.7's other headers, the Content Security Policy among them, on every response in every environment.
+app.UseSecurityHeaders();
+
 app.UseCacheHeaders();
 
-// Both inside UseCacheHeaders, so its rules keep the final word on error responses. Status code pages give problem
-// details to every error status that has no body, outside /api too. They come first, so that the bare status an
-// exception handler sets, such as DatabaseFailureHandler's 500, gets them as well; for an exception that no handler
-// takes, the exception handler writes them itself. Neither puts the exception's text in them, in any environment.
+// Both inside UseSecurityHeaders and UseCacheHeaders, so their headers keep the final word on error responses. Status
+// code pages give problem details to every error status that has no body, outside /api too. They come first, so that
+// the bare status an exception handler sets, such as DatabaseFailureHandler's 500, gets them as well; for an exception
+// that no handler takes, the exception handler writes them itself. Neither puts the exception's text in them, in any
+// environment.
 app.UseStatusCodePages();
 app.UseExceptionHandler();
 

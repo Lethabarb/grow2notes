@@ -117,6 +117,11 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 - A test of `Strict-Transport-Security` calls a host name other than `localhost` over HTTPS, as
   `Grow2Notes.Tests/HstsTests.cs` calls `https://grow2notes.example`: the HSTS middleware never sends the header to
   `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP.
+- Every response carries design.md §9.7's security headers, the exception handler's without
+  `Strict-Transport-Security` (S06.01.04's Notes). `Grow2Notes.Tests/Platform/SecurityHeadersTests.cs` asks
+  `https://grow2notes.example` for each kind of response that the app gives and checks that it carries all six, once
+  each, with the values that it reads from §9.7 itself. A story that adds a kind of response, such as a file download
+  or an image, adds it to that test, as the Definition of Done's headers bullet asks.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant

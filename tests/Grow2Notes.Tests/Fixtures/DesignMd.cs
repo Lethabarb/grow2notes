@@ -57,6 +57,22 @@ internal static partial class DesignMd
         return [.. body.Select(cells => columns.Zip(cells).ToDictionary(cell => cell.First, cell => cell.Second))];
     }
 
+    /// <summary>
+    /// The lines inside the one fenced <c>text</c> block in <paramref name="lines"/>. A second fenced block, or a fence
+    /// left open, throws rather than leave its lines unread.
+    /// </summary>
+    public static List<string> OnlyTextBlock(IReadOnlyList<string> lines, string section)
+    {
+        var fences = lines.Index().Where(line => line.Item.StartsWith("```", StringComparison.Ordinal)).ToList();
+        if (fences is not [(var start, "```text"), (var end, "```")])
+        {
+            throw new InvalidOperationException(
+                $"design.md {section} has {fences.Count} fences, where this test reads one ```text block.");
+        }
+
+        return [.. lines.Skip(start + 1).Take(end - start - 1)];
+    }
+
     // A line that is not a heading ranks below every heading, so a section runs on through it.
     private static int HeadingLevel(string line) =>
         Heading().Match(line) is { Success: true } heading ? heading.Groups[1].Length : int.MaxValue;
