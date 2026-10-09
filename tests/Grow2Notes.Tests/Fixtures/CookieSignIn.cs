@@ -53,6 +53,25 @@ internal static class CookieSignIn
             : [];
 
     /// <summary>
+    /// Asserts that <paramref name="response"/> deletes the session cookie, as signing out does when the session check
+    /// ends a session, so the browser stops sending it.
+    /// </summary>
+    /// <remarks>
+    /// ASP.NET Core deletes a cookie by setting it empty, expiring at the start of 1970. A browser takes a
+    /// <c>__Host-</c> cookie, even to delete one, only when it is <c>Secure</c>, has <c>Path=/</c> and names no
+    /// <c>Domain</c>.
+    /// </remarks>
+    public static void AssertClearsTheSessionCookie(this HttpResponseMessage response)
+    {
+        var cookie = Assert.Single(response.SetCookies(), setCookie => setCookie.Name.Value == "__Host-grow2notes");
+        Assert.Equal(string.Empty, cookie.Value.Value);
+        Assert.Equal(DateTimeOffset.UnixEpoch, cookie.Expires);
+        Assert.True(cookie.Secure);
+        Assert.Equal("/", cookie.Path.Value);
+        Assert.False(cookie.Domain.HasValue);
+    }
+
+    /// <summary>
     /// Maps <c>POST</c> at <see cref="Path"/> and a user's ID, which anyone may call, since its caller is signed out
     /// until it answers. It is routed ahead of the app's own routing, which then leaves the endpoint already chosen, so
     /// it runs where the app's own endpoints do, after the app's authentication.

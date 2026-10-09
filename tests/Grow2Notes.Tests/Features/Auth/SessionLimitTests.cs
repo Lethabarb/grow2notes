@@ -111,7 +111,7 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
         using var refused = await client.GetAsync(MePath, cancellationToken);
 
         await refused.ReadProblemAsync(HttpStatusCode.Unauthorized);
-        AssertClearsTheSessionCookie(refused);
+        refused.AssertClearsTheSessionCookie();
     }
 
     // The cookie is the session cookie, with the user's own claims and security stamp, so the stamp check lets it
@@ -130,7 +130,7 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
         using var response = await client.GetAsync(MePath, cancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
-        AssertClearsTheSessionCookie(response);
+        response.AssertClearsTheSessionCookie();
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
@@ -140,18 +140,6 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var me = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(organisationName, me.GetProperty("organisationName").GetString());
-    }
-
-    // Signing out deletes the cookie as ASP.NET Core deletes any: empty, and expiring at the start of 1970. A browser
-    // takes a __Host- cookie, even to delete one, only when it is Secure, has Path=/ and names no Domain.
-    private static void AssertClearsTheSessionCookie(HttpResponseMessage response)
-    {
-        var cookie = Assert.Single(response.SetCookies(), setCookie => setCookie.Name.Value == SessionCookie);
-        Assert.Equal(string.Empty, cookie.Value.Value);
-        Assert.Equal(DateTimeOffset.UnixEpoch, cookie.Expires);
-        Assert.True(cookie.Secure);
-        Assert.Equal("/", cookie.Path.Value);
-        Assert.False(cookie.Domain.HasValue);
     }
 
     // As its row holds it. An organisation is the tenant, not tenant-owned, so reading one needs no tenant.
