@@ -14,7 +14,8 @@ Component specs composed here are linked in "Components, in order".
 
 Evidence grades: **[Research]** studies and usability testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML ·
 **[Convention]** established design systems · **[Opinion]** reasoned judgement. Copy marks: **(V)** verbatim from
-design.md · **(N)** design.md wording normalised as `microcopy.md` directs · **(P)** proposed, needs owner sign-off.
+design.md · **(N)** design.md wording normalised as `microcopy.md` directs · **(P)** proposed. Every (P) string here
+on 9 October 2026 was approved as written (D67, Open question 4); a (P) string added later still needs owner sign-off.
 
 ---
 
@@ -796,3 +797,5 @@ Recorded once; no change recommended.
 4. **Proposed strings:** "Review", the comment hint, "Marking reviewed…", the 409 messages, "Your comment was not
    saved:", "Nothing written yet.", "There is no note for this day.", "Loading notes…", "Loading note…", the load and
    Show older failure lines.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.

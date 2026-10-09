@@ -5,8 +5,9 @@ Screen spec for design.md §4.2 ("Today (home for everyone)"). It composes the r
 count or data item: everything on this screen is in design.md §4.2, §4.0, §4.3 (the post-submit message) and §6.3.
 
 **Copy marks used in this file.** **(V)** design.md's words, verbatim. **(N)** design.md's words with the punctuation
-or name rule from `microcopy.md` applied. **(P)** proposed copy for a state design.md implies but does not word; the
-owner should approve it (see Open questions).
+or name rule from `microcopy.md` applied. **(P)** proposed copy for a state design.md implies but does not word. Every
+(P) string here on 9 October 2026 was approved as written (D67, Open question 1); a (P) string added later still needs
+the owner's approval.
 
 **Evidence grades.** [Research] studies and usability-research write-ups · [Standard] WCAG 2.2, WAI-ARIA, HTML ·
 [Convention] established design systems · [Opinion] reasoned judgement. The full evidence sits in each component file;
@@ -661,6 +662,8 @@ For the owner unless marked otherwise. None of them adds a feature.
 1. Approve the proposed copy: "Submitted · You · 4:12 pm"; "Loading participants…"; "The participant list did not
    load: no connection. Try again." and the server and "still" forms; "Try again" / "Loading…";
    "Clear"; the hidden "Participants" heading and the hidden search description.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 2. Should pending edits in "Your unfinished drafts" say "Editing submitted note" (design.md's own words), or stay as
    name and date only (current spec)?
 3. A pending edit on **today's** submitted note shows only "Submitted · …" on its row and is excluded from the drafts

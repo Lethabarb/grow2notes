@@ -4,9 +4,10 @@ Screen spec for design.md **4.11 Users (managers)**. It puts together the resear
 `../components/` into one buildable screen. It adds no screen, field, setting, notification, status or data item: the
 four pages below are the list, the invite form, the user detail and the edit form that 4.11 already describes.
 
-Copy marks: **(V)** verbatim from design.md · **(S)** taken from a sibling component file · **(P)** proposed, needs the
-owner's approval. Evidence marks: **[Research]**, **[Standard]**, **[Convention]**, **[Opinion]**. Example people:
-**Sam Lee** is the signed-in manager; **Alex Park** is a worker; **Chris Ng** is deactivated.
+Copy marks: **(V)** verbatim from design.md · **(S)** taken from a sibling component file · **(P)** proposed.
+Every (P) string here on 9 October 2026 was approved as written (D67, Open question 9); a (P) string added later still
+needs the owner's approval. Evidence marks: **[Research]**, **[Standard]**, **[Convention]**, **[Opinion]**.
+Example people: **Sam Lee** is the signed-in manager; **Alex Park** is a worker; **Chris Ng** is deactivated.
 
 ---
 
@@ -916,6 +917,8 @@ change recommended.
 9. **All (P) strings** need approval: the Name hint, the email hints, role hints, action descriptions, the last-manager
    notices and field errors, the Invited and "your own" dialog variants, the Resend inline status, the `412` sentence,
    and the back-link labels ("Users", the user's name).
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 10. **Worker preselected on Invite.** GOV.UK says not to preselect radios; this form preselects Worker (least
     privilege; most invites are workers). It is the one stated exception to the app's no-preselection rule
     (form-validation.md). Keep it?

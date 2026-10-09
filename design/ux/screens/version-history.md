@@ -2,7 +2,7 @@
 
 Screen spec for design.md **4.5 Version history (managers)**. It puts together these component files, and where they disagree it picks one answer (see Conflicts resolved): [version-history](../components/version-history.md), [chronological-list](../components/chronological-list.md), [note-read-view](../components/note-read-view.md), [status-tags](../components/status-tags.md), [foundations](../components/foundations.md) and [microcopy](../components/microcopy.md). It also uses the shared pieces from [note-identity-header](../components/note-identity-header.md), [app-shell-nav](../components/app-shell-nav.md), [empty-loading-error](../components/empty-loading-error.md) and [checkbox-list](../components/checkbox-list.md), so that this screen looks and works like the read view the manager has just left.
 
-Evidence grades: **[Research]** studies and usability write-ups, **[Standard]** WCAG, WAI-ARIA and HTML, **[Convention]** established design systems, **[Opinion]** reasoned judgement. Copy marks: **(V)** word for word from design.md, **(N)** design.md wording with only the format normalised under microcopy.md, **(P)** proposed (not in design.md), which needs the owner's approval.
+Evidence grades: **[Research]** studies and usability write-ups, **[Standard]** WCAG, WAI-ARIA and HTML, **[Convention]** established design systems, **[Opinion]** reasoned judgement. Copy marks: **(V)** word for word from design.md, **(N)** design.md wording with only the format normalised under microcopy.md, **(P)** proposed (not in design.md). Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's approval.
 
 ---
 

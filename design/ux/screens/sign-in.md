@@ -2,7 +2,7 @@
 
 Screen spec for design.md **§4.1**, plus the "sign in again in place" view from §4.0 Sessions and §8.5. It puts
 together the researched component files into one buildable screen. It adds no feature, field, screen, setting,
-notification or stored data. Rules it keeps: D21–D23, D42, A22–A25, A32, §6.2, §8.1–8.6, §9.6–9.9.
+notification or stored data. Rules it keeps: D21–D23, D42, D67–D70, A22–A25, A32, §6.2, §8.1–8.6, §9.6–9.9.
 
 **Evidence tags:** **[Research]** studies and usability testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML/WebAuthn
 specs, NIST · **[Convention]** established design systems and browser-vendor guidance · **[Opinion]** reasoned
@@ -10,9 +10,9 @@ judgement. Behaviour of ASP.NET Core Identity is quoted from its source as read 
 about the product, not graded evidence.
 
 **Copy marks:** **(V)** word for word from design.md · **(N)** design.md wording, split or punctuated per
-[microcopy.md](../components/microcopy.md) · **(P)** proposed, not in design.md, needs the owner's OK (all listed under
-Open questions). No string, title, alt text, hidden text, passkey name or authenticator label ever contains the parent
-company's name (D42).
+[microcopy.md](../components/microcopy.md) · **(P)** proposed, not in design.md. Every (P) string here was approved as
+written on 9 October 2026 (D67, Open question 1); a (P) string added later still needs the owner's OK. No string,
+title, alt text, hidden text, passkey name or authenticator label ever contains the parent company's name (D42).
 
 ---
 
@@ -69,7 +69,7 @@ above the button that was pressed, and focus stays on that button.
 | +-------------------------------------+ |
 | Password                                |
 | +-------------------------------------+ |  type=password, 48 px; no Show/Hide here
-| |                                     | |  unless approved (Optional, not built)
+| |                                     | |  (D68)
 | +-------------------------------------+ |
 |  (empty)                                |  <p role="alert">: request failures
 | +-------------------------------------+ |
@@ -265,7 +265,7 @@ Every visible string lives in `src/copy`.
 | 4 | Passkey sign-in button ([passkey-flows.md](../components/passkey-flows.md), [primary-actions.md](../components/primary-actions.md)) | A, C | `<Button type="button" variant="primary">` "Sign in with a passkey" (V), **outside** the email/password `<form>`. No icon (see Conflicts). Busy label "Signing in…" (P). Options prefetched on render (Interactions 2). If `browserSupportsWebAuthn()` is false, render instead the static notice "Passkeys do not work in this browser. To use your passkey, open Grow2Notes in your phone's main browser, such as Safari or Chrome." (P) and drop the "or". |
 | 5 | "or" divider | A, C, E | Plain `<p>` "or" (P), read by screen readers; any rule lines are CSS pseudo-elements. |
 | 6 | EmailInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C | `<label>` "Email address". `id`/`name="email"`, `type="email"`, `autoComplete="username"`, `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Trimmed before sending. Not pre-filled, no placeholder, no `autoFocus`. |
-| 7 | PasswordInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C (`current-password`); F (`new-password`) | One shared component. Label "Password" (A, C) or "Create a password" inside the `h1` (F). **Show/Hide on F only** (design 4.1: "set a password of at least 12 characters, with show/hide"): a 48 px "Show"/"Hide" button with accessible names "Show password"/"Hide password" (visible word first, SC 2.5.3), `aria-controls`, and a persistent visually hidden `aria-live="polite"` line saying "Your password is visible"/"Your password is hidden" (empty on mount); back to `type="password"` on form submit. On A and C the field has no toggle unless the owner approves it (Optional, not built). `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Never trimmed, no `maxLength`. F only: `minLength={12}` (guides password generators; `noValidate` stops it blocking) and a hidden `<input type="email" name="username" autoComplete="username" value={email} readOnly hidden>` inside the form. |
+| 7 | PasswordInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C (`current-password`); F (`new-password`) | One shared component. Label "Password" (A, C) or "Create a password" inside the `h1` (F). **Show/Hide on F only** (design 4.1: "set a password of at least 12 characters, with show/hide"): a 48 px "Show"/"Hide" button with accessible names "Show password"/"Hide password" (visible word first, SC 2.5.3), `aria-controls`, and a persistent visually hidden `aria-live="polite"` line saying "Your password is visible"/"Your password is hidden" (empty on mount); back to `type="password"` on form submit. On A and C the field has no toggle (D68). `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Never trimmed, no `maxLength`. F only: `minLength={12}` (guides password generators; `noValidate` stops it blocking) and a hidden `<input type="email" name="username" autoComplete="username" value={email} readOnly hidden>` inside the form. |
 | 8 | Continue button ([primary-actions.md](../components/primary-actions.md)) | A, C (secondary, busy "Checking…" (P)); F (primary, no request, no busy) | `type="submit"`. Never `disabled`. |
 | 9 | Help line ([microcopy.md](../components/microcopy.md) §9) | A, B, C | Plain `<p>`: "If you cannot sign in, ask a manager to reset your sign-in." (P). Not a link. |
 | 10 | OneTimeCodeField ([totp-setup.md](../components/totp-setup.md)) | B (label inside `h1`); C (plain label styled as h2); G (plain label inside step 3) | One `<input>`: `type="text"`, `id`/`name="code"`, `inputMode="numeric"`, `autoComplete="one-time-code"`, `enterKeyHint="go"`, `spellCheck={false}`, `autoCapitalize="off"`, `autoCorrect="off"`. No `maxLength`, `pattern` or placeholder; never auto-submits. 24 px bold tabular digits, letter-spacing 0.15em, `inline-size: 10ch`, 48 px tall, `scroll-margin-block` so it is never under anything. Label "Enter the 6-digit code from your authenticator app" (P). Hints: B/C "Open your authenticator app and find Grow2Notes. If the code changes while you're typing, you can still use it." (P); G "Find Grow2Notes in the app. If the code changes while you're typing, you can still use it." (P). |
@@ -274,7 +274,7 @@ Every visible string lives in `src/copy`.
 | 13 | Account summary | E | `<dl>`: "Name" / display name, "Email address" / email, as text (not disabled or read-only inputs). Hint "If these are wrong, ask a manager." (P). |
 | 14 | Method choice ([passkey-flows.md](../components/passkey-flows.md)) | E | `h2` "Choose how you'll sign in" (P, from design's "Choose"). Primary `<Button type="button">` "Use a passkey (recommended)" (V), busy "Setting up your account…" (P), `aria-describedby` its hint. Secondary router `<Link>` styled as a button, "Use a password and authenticator app" (V), `aria-describedby` its hint. Accessible names equal the visible labels (no `aria-label`). |
 | 15 | Back link (the shared BackLink, [app-shell.md](app-shell.md) component 3a) | F, G | Labelled with the destination: "‹ Set up your account" on F (to `/setup`), "‹ Create a password" on G (to `/setup/password`; the password is still in memory and shown again) (P). Rendered into the shell's before-main bar slot (GOV.UK back-link position), so the error summary or the `h1` is the first thing in `<main>`. Pops when the previous entry is the destination, otherwise pushes. |
-| 16 | Authenticator setup block ([totp-setup.md](../components/totp-setup.md)) | G | `h1` "Set up your authenticator app" (P), intro, `<ol>` of 3 steps (copy in States). QR `<img src="/api/auth/setup/authenticator/qr.png" width="200" height="200" alt="QR code for adding Grow2Notes to your authenticator app">` on a white panel with the 4-module quiet zone, container `color-scheme: only light`, `image-rendering: pixelated`. SetupKey: term "Setup key", key in capitals, `--font-family-code`, groups of 4 as separate `<span>`s (no space characters), `user-select: all`, `translate="no"`. No Copy button in the default build (design 4.1: "type the setup key"; see Optional, not built). |
+| 16 | Authenticator setup block ([totp-setup.md](../components/totp-setup.md)) | G | `h1` "Set up your authenticator app" (P), intro, `<ol>` of 3 steps (copy in States). QR `<img src="/api/auth/setup/authenticator/qr.png" width="200" height="200" alt="QR code for adding Grow2Notes to your authenticator app">` on a white panel with the 4-module quiet zone, container `color-scheme: only light`, `image-rendering: pixelated`. SetupKey: term "Setup key", key in capitals, `--font-family-code`, groups of 4 as separate `<span>`s (no space characters), `user-select: all`, `translate="no"`. No Copy button (design 4.1: "type the setup key"; D68). |
 | 18 | Page status region ([app-shell.md](app-shell.md) component 3) | All views | The shared visually hidden `<p role="status">` (`PageStatus`), present from the first render. The shared Button writes its busy labels here ("Checking…", "Signing in…", "Setting up your account…", "Finishing setup…"). There is no app-level region. |
 | 17 | Finish setup ([primary-actions.md](../components/primary-actions.md)) | G | Primary "Finish setup" (V), busy "Finishing setup…" (P), `type="submit"` of the code form. |
 
@@ -283,7 +283,8 @@ React Aria is not needed anywhere on this screen: every control is a native `<bu
 ### Optional, not built unless approved
 
 Each item below was proposed by a component file but is not in design.md 4.1. The default build leaves it out, and
-nothing else depends on it. If the owner approves one, add it exactly as described.
+nothing else depends on it. The owner declined both on 9 October 2026 (D68), so neither is built; they stay here as the
+record of what was proposed.
 
 - **(P) Show/Hide on the sign-in password (views A and C).** The same PasswordInput toggle as view F. Design 4.1 gives
   show/hide only when creating a password. Evidence for adding it: NIST SP 800-63B says verifiers SHOULD offer to show
@@ -316,7 +317,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Email has no "@" with text both sides | Client check | "Enter an email address in the correct format, like name@example.com" (P, GOV.UK) | Summary | Summary on focus |
 | Busy | Continue / passkey / Sign in pressed | Button `aria-disabled="true"`; after 400 ms its label becomes "Checking…" (Continue) or "Signing in…" (passkey, code step). No spinner. | Stays on the button | Busy label through the page status region (`PageStatus`) |
 | **Sign-in failed** (design) | `401` or `429` from `/api/auth/login`, `/api/auth/login/totp` or `/api/auth/passkey` | Summary, unlinked: **"Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes."** (V). No field marked invalid. Password step: email kept, **password cleared**. Code step: code cleared, stays on step B. | Summary | Summary on focus |
-| Code step expired | `401`/`429` on the code step **4 min 50 s or more** after the password was accepted | Back to step A with the email kept, password empty, and the same design message in the summary. Nothing says why. | Summary | Summary on focus |
+| Code step expired | `401`/`429` on the code step **4 min 50 s or more** after the password was accepted (the step lasts 5 minutes, D69) | Back to step A with the email kept, password empty, and the same design message in the summary. Nothing says why. | Summary | Summary on focus |
 | Code empty / wrong format (one-field form) | Client check after removing spaces, hyphens and dashes (NFKC) | Inline only: "Enter the 6-digit code from your authenticator app" (P) · "The code must be 6 digits" (P). `aria-invalid` on the field. Nothing is sent, so no lockout attempt is used. | The code field | Label, "invalid", hint, "Error: …" via `aria-describedby` |
 | Passkey prompt dismissed | `NotAllowedError` (cancel, timeout or no passkey: the page cannot tell which, WebAuthn §14.5) | **Nothing.** Button back to default. | Stays on the button | Nothing |
 | Passkey other client error | Any other WebAuthn error | Alert above the passkey button: "Not signed in: something went wrong. Try again." (P) | Stays on the passkey button | The alert (assertive) |
@@ -348,7 +349,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | QR image failed | `<img onError>` | Image hidden; "The QR code did not load. Use the setup key instead." (P) | — | Static |
 
 | Setup code empty / wrong format | Client check | Inline: "Enter the 6-digit code from your authenticator app" (P) · "The code must be 6 digits" (P) | The field | Via `aria-describedby` |
-| Setup code rejected | `422 validation.failed` with `errors.totpCode` (assumed shape, see Open questions) | Inline on the code field: "That code did not work. Enter the code the app shows for Grow2Notes now." (P). Code cleared, password kept in memory. | The field | Via `aria-describedby` |
+| Setup code rejected | `422 validation.failed` with `errors.totpCode` (D70) | Inline on the code field: "That code did not work. Enter the code the app shows for Grow2Notes now." (P). Code cleared, password kept in memory. | The field | Via `aria-describedby` |
 | Password rejected by server | `422` with `errors.password` (only if client and server rules ever drift) | Navigate back to view F with that message inline | F's field | Via `aria-describedby` |
 | Too many tries | `429` on a setup call | Alert above the pressed button: "Too many tries. Wait 1 minute, then try again." (P) | Stays on the pressed button | The alert (assertive) |
 | Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5), `navigate('/', { replace: true })`; setup state cleared from memory | Today's `h1` | Heading on focus |
@@ -391,8 +392,9 @@ back to this page." · field label and hint as in Components row 10 · button "F
    digits, else inline error and nothing sent. `POST /api/auth/login/totp {code}` with `retry: false` semantics (never
    retried automatically: every attempt counts towards lockout). `200 Me` → success path. `401`/`429` → if
    `Date.now() − passwordAcceptedAt ≥ 4 min 50 s`, return to step A (email kept, password empty, generic message);
-   otherwise stay, clear the code, generic message. [Product fact: Identity's two-factor cookie lasts 5 minutes and
-   then every code fails without counting towards lockout,
+   otherwise stay, clear the code, generic message. The server sets the two-factor cookie's 5 minutes explicitly,
+   with no sliding expiration, so a wrong code does not move the end (D69). [Product fact: Identity's two-factor
+   cookie lasts 5 minutes by default and then every code fails without counting towards lockout,
    https://github.com/dotnet/aspnetcore/blob/main/src/Identity/Core/src/IdentityCookiesBuilderExtensions.cs]
 5. **Sign-in success (any method).** `queryClient.setQueryData(['me'], me)`, then: fresh load → render the requested
    route with `replace: true`; in place → same `userId`: unhide the route, refetch, resume autosave (same `clientId`,
@@ -408,18 +410,16 @@ back to this page." · field label and hint as in Components row 10 · button "F
    memory above the `/setup*` routes, never into storage, the URL or router `state`.
 8. **Use a passkey (recommended).** When view E renders with passkeys offered, prefetch
    `POST /api/auth/setup/passkey/options` (one object, same 4-minute rule). Tap → `startRegistration` straight from
-   the tap → `POST /api/auth/setup/passkey {credentialJson, name}` with a fixed `name` (no UI asks for one) →
-   `200 Me` → Today. Never start the prompt on page load (SC 3.2.1, 3.2.2; FIDO found jumping straight into the OS
-   dialog "disorienting", https://www.passkeycentral.org/design-guidelines/principles).
+   the tap → `POST /api/auth/setup/passkey {credentialJson, name}` with the fixed `name` "Grow2Notes" (D70; never
+   shown, no UI asks for one) → `200 Me` → Today. Never start the prompt on page load (SC 3.2.1, 3.2.2; FIDO found
+   jumping straight into the OS dialog "disorienting", https://www.passkeycentral.org/design-guidelines/principles).
 9. **Use a password and authenticator app.** A link to `/setup/password`. Start fetching the key
    (`GET /api/auth/setup/authenticator`: `staleTime: Infinity`, `gcTime: 0`, `refetchOnWindowFocus: false`,
    `retry: false`) so view G is ready.
 10. **Continue (Create a password).** Client check only (no request): empty → "Enter a password"; under 12 → "Password
     must be 12 characters or more". Pass → store the password in the setup context (memory) and go to `/setup/app`.
-11. **Setup key.** Shown as selectable text only; the default build has no Copy button (Optional, not built). If the
-    owner approves the button: `navigator.clipboard.writeText(key)` called directly in the click with the key already
-    in memory (Safari and Firefox require a user action; HTTPS only,
-    https://developer.mozilla.org/en-US/docs/Web/API/Clipboard/writeText).
+11. **Setup key.** Shown as selectable text only. There is no Copy button, so the app never puts the key on the
+    clipboard (D68); a person may still select and copy it by hand.
 12. **Finish setup.** Code checked as in step 4 (inline errors, nothing sent). `POST /api/auth/setup/password
     {password, totpCode}` → `200 Me` → `setQueryData` (the wrapper drops its token, step 5), clear the setup context,
     navigate to Today with `replace: true`. A wrong code clears the code only; the password is never cleared on this
@@ -544,7 +544,7 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
 - [ ] With no session, any URL shows view A at that URL; after signing in, that route renders. There is no
       `/sign-in` route and no `returnUrl`.
 - [ ] Tab order on A is passkey button → email → password → Continue; nothing has focus on first load; the sign-in
-      password has no Show/Hide toggle (Optional, not built).
+      password has no Show/Hide toggle (D68).
 - [ ] The passkey button is `type="button"` and outside the `<form>`; pressing Enter in the password field submits the
       password form and never opens a passkey prompt.
 - [ ] Only "Sign in with a passkey" (A) and "Sign in" (B) use the primary style on the sign-in views.
@@ -558,7 +558,8 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
       must be 6 digits" and sends nothing (check the network log).
 - [ ] The code is never submitted automatically after the 6th digit.
 - [ ] A code `401` arriving 4 min 50 s or more after the password was accepted returns to step A with the email kept
-      and the design message shown (test with a mocked clock and a server whose two-factor cookie is set to 5 minutes).
+      and the design message shown (test with a mocked clock and a server whose two-factor cookie is set to 5 minutes,
+      D69).
 - [ ] Code requests are never retried automatically (one press = one request).
 - [ ] Dismissing the passkey prompt shows no message and leaves focus on the button.
 - [ ] With `window.PublicKeyCredential` removed, the passkey button is replaced by the "Passkeys do not work in this
@@ -657,7 +658,7 @@ orchestrator so the other files can be aligned.
 | 27 | **Back controls:** Back on the code step and setup views (sign-in-form.md) vs none (primary-actions.md) | **Back links on F and G only**, as the shared BackLink labelled with the destination ("‹ Set up your account", "‹ Create a password") in the shell's bar slot | They are real routes [Convention: GOV.UK question pages]; the code step is short-lived and returns to step A by itself after 5 minutes. One back-link label pattern app-wide (SC 3.2.4), instead of a bare "Back". |
 | 28 | **Pending state source:** `useMutation().isPending` (primary-actions.md) vs a direct API call (sign-in-form.md) | **Direct call with local `pending` state passed to `Button busy`** | The mutation cache would hold the password as `variables`. |
 | 29 | **Code input styling:** ~9ch (sign-in-form.md) vs 10ch, 24 px bold (totp-setup.md); error border 4 px (totp-setup.md) vs 4 px bar + 3 px border (form-validation.md) | **totp-setup.md size; form-validation.md error styling** | Each file owns its part. |
-| 30 | **Unrequested controls:** Show/Hide on the sign-in password and a Copy setup key button (sign-in-form.md, totp-setup.md) vs design 4.1 (show/hide only when creating a password; "type the setup key") | **Neither in the default build**; both described under "Optional, not built unless approved" | The default build matches design 4.1 exactly (owner's simplicity rule); the clipboard concern is recorded with the Copy question. |
+| 30 | **Unrequested controls:** Show/Hide on the sign-in password and a Copy setup key button (sign-in-form.md, totp-setup.md) vs design 4.1 (show/hide only when creating a password; "type the setup key") | **Neither in the default build**; both described under "Optional, not built unless approved", and the owner declined both (D68) | The default build matches design 4.1 exactly (owner's simplicity rule); the clipboard concern is recorded with the Copy question. |
 
 ### Tensions with decisions (recorded once; no change proposed)
 
@@ -684,13 +685,17 @@ orchestrator so the other files can be aligned.
    chose when you set up your account.", the help line "If you cannot sign in, ask a manager to reset your sign-in.",
    "If these are wrong, ask a manager.", the two method hints, the authenticator steps (including naming Google
    Authenticator and Microsoft Authenticator as examples), and every error, busy and notice string.
+   **Answered 9 October 2026 (D67):** all approved as written; any of them can be changed later in the copy module. A
+   (P) string added after that date still needs the owner's approval.
 2. **Show/Hide on the sign-in password (not built unless approved).** Design 4.1 mentions it only when setting a
    password, so the default build has it on view F only. Adding it to sign-in is supported by NIST (SHOULD) and WCAG
    3.3.8 Understanding ("can improve the chance of success"). Add it?
+   **Answered 9 October 2026 (D68):** no. Show/Hide stays on view F only, as designed.
 3. **Copy setup key button (not built unless approved).** Design says "type the setup key". On a phone (the main case)
    the person cannot scan their own screen, so a copy button was proposed. **Clipboard concern:** the key is the
    authenticator's shared secret; on the clipboard it can be kept by Windows clipboard history or synced by iOS
    Universal Clipboard, which sits badly with §9.6 and D22's "nothing stored on the device". Add it?
+   **Answered 9 October 2026 (D68):** no. The app never puts the setup key on the clipboard.
 4. **Passkey autofill**, the passkey icon (needs FIDO's download form), a privacy line ("Your face, fingerprint and PIN
    stay on your device. Grow2Notes never sees them.") and a "Your account is set up" line on Today: all left out; say
    if any are wanted.
@@ -698,9 +703,13 @@ orchestrator so the other files can be aligned.
    there and may ask for needless resets.
 6. **Two-factor expiry:** set the two-factor cookie's lifetime explicitly (5 minutes) with an integration test, or have
    the API return a distinct response for an expired code step?
+   **Answered 9 October 2026 (D69):** the cookie's lifetime is set explicitly to 5 minutes and proved by an integration
+   test; after it the person starts sign-in again. There is no distinct expired-code response.
 7. **API details not in §6.2:** the response for a wrong code at `POST /api/auth/setup/password` (assumed `422
    validation.failed` with `errors.totpCode`), and the fixed `name` to send with `POST /api/auth/setup/passkey`
    (suggested "Grow2Notes"; never shown).
+   **Answered 9 October 2026 (D70):** `422 validation.failed` with `errors.totpCode`, and the name "Grow2Notes", never
+   shown; both are now in design.md §6.2.
 8. **Lockout and passkeys:** does Identity's lockout block `PasskeySignInAsync`, and do passkey failures count? This
    decides whether the A25 sentence is accurate for passkey users (M0 test).
 9. **Oldest phones:** which iOS and Android versions may workers' own phones run? (Drives the prefetch rule and the
@@ -711,7 +720,7 @@ orchestrator so the other files can be aligned.
 
 ## Sources
 
-- design.md §4.0, §4.1, §6.2, §6.9, §8.1–8.6, §9.6–9.9, §13 (A22–A25, A32); decisions.md D21–D23, D42.
+- design.md §4.0, §4.1, §6.2, §6.9, §8.1–8.6, §9.6–9.9, §13 (A22–A25, A32); decisions.md D21–D23, D42, D67–D70.
 - Component files: [sign-in-form.md](../components/sign-in-form.md), [passkey-flows.md](../components/passkey-flows.md),
   [totp-setup.md](../components/totp-setup.md), [form-validation.md](../components/form-validation.md),
   [primary-actions.md](../components/primary-actions.md), [empty-loading-error.md](../components/empty-loading-error.md),

@@ -7,7 +7,8 @@ file's content follows §11.3 and D47).
 
 **Copy marks used in this file.** **(V)** design.md's words, verbatim. **(N)** design.md's words with only the date
 format or punctuation rule from `microcopy.md` applied. **(P)** proposed copy for a state design.md implies but does not
-word; the owner should approve it (see Open questions).
+word. Every (P) string here on 9 October 2026 was approved as written (D67, Open question 1); a (P) string added later
+still needs the owner's approval.
 
 **Evidence grades.** [Research] studies, usability or assistive-technology testing · [Standard] WCAG 2.2, WAI-ARIA,
 HTML, MDN, framework documentation · [Convention] established design systems · [Opinion] reasoned judgement. The full
@@ -692,6 +693,8 @@ For the owner unless marked otherwise. None of them adds a feature.
    past"; "Downloading…"; "Preparing the Word file… Keep this page open." (and PDF); "{file name} is ready. Look in your downloads.";
    "Not downloaded: no connection. Try again."; "Not downloaded: something went wrong. Try again."; "Not downloaded:
    too many downloads in the last minute. Wait a minute, then try again."
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 2. Should the report date have an earliest allowed date (for example go-live)? design.md sets none, so none is set;
    earlier days simply show "No submitted notes for …". Dates before go-live are covered by the Word records (A39).
 3. For testing (not the owner), in M4 on real devices under the production CSP: whether iPhone Safari, iPhone Chrome,

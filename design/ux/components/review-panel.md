@@ -7,7 +7,8 @@ Component key: `review-panel`. One component, `ReviewPanel`. It is the last bloc
 manager when the note has been flagged. While the note is **To review** it holds an optional comment and the
 **Mark reviewed** button. Once the note is **Reviewed** it shows who reviewed it, when, and their comment. It adds no
 features, screens, settings or data. Copy marked **(V)** is verbatim from design.md. Copy marked **(P)** is proposed
-here because design.md gives no string, and needs the owner's approval.
+here because design.md gives no string. Every (P) string here on 9 October 2026 was approved as written (D67); a (P)
+string added later still needs the owner's approval.
 
 It reuses, and does not redefine:
 - the **Mark reviewed** button's styles, busy state and error slot from `primary-actions.md` (`ActionButton`);
