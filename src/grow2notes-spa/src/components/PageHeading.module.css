@@ -1,0 +1,5 @@
+/* As wide as its text, so that its focus ring hugs the words, not the page's width (app-shell.md component 3). */
+.heading {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+}
