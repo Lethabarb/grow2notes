@@ -17,11 +17,24 @@ Each is a separate step of CI's SPA checks (design.md §10.4 step 2). In `src/gr
 npm run typecheck           # tsc over the app, the tests, the config files and scripts/
 npm run lint                # ESLint; a warning fails it too
 npm test                    # Vitest, once
+npm run test:webkit         # the format tests again, in Playwright's WebKit (below)
 npm run build               # vite build into src/Grow2Notes.Web/wwwroot
 npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
 ```
 
 `npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
+`npm run test:webkit` runs `src/copy/format.test.ts` alone, headless in Playwright's WebKit, Safari's engine, through
+Vitest's browser mode (`vitest.webkit.config.ts`), because Safari's time-zone data can differ from Node's
+(microcopy.md §8). It needs the WebKit build that the SPA's `playwright` package drives, installed once per machine and
+again after that package is updated:
+
+```shell
+npx playwright install webkit              # Windows and macOS
+npx playwright install --with-deps webkit  # Linux, with WebKit's system packages, as CI installs it
+```
+
+`npm test` needs no browser: it runs every test, `format.test.ts` included, in jsdom.
 
 `npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
 `npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
