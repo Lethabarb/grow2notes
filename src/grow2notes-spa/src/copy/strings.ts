@@ -1,5 +1,6 @@
 /** Words that have no slots (microcopy.md §8), each written here once. */
 export const strings = {
+  appName: 'Grow2Notes',
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',
