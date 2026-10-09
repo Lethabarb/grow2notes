@@ -6,6 +6,9 @@ param environmentName = 'test'
 // Liveness only, with no database call, so the free database can pause (design.md §10.8).
 param healthCheckPath = '/healthz'
 
+// The web app's default address, which App Service's own certificate covers (D62).
+param appOrigin = 'https://app-grow2notes-test.azurewebsites.net'
+
 // The Azure SQL free offer, which keeps test's database at no cost (design.md §10.2): a General Purpose serverless
 // database of at most 4 vCores (2 here, the offer's default) and at most 32 GB, with local backup storage and at most
 // 7 days of point-in-time restore. sql.bicep pauses it until the next month when the month's free amount is used up,

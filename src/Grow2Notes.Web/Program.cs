@@ -1,14 +1,20 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using IPNetwork = System.Net.IPNetwork;
 
-var builder = WebApplication.CreateBuilder(args);
+// The operator commands run from the app's own binary, as `dotnet Grow2Notes.Web.dll admin bootstrap …` in the SSH
+// console (design.md §7.4), with the services and settings the web app has. Their arguments are not given to the
+// builder, so none of them becomes configuration.
+string[]? operatorCommand = args is ["admin", .. var command] ? command : null;
+var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 
 // Server telemetry goes to Application Insights only where it is configured, as in Azure (design.md §9.5). Its
 // settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
@@ -64,10 +70,24 @@ builder.Services.AddDataProtection()
 
 // Grow2NotesDbContext reads the schema version from these options when it builds its model; Version3 adds the passkey
 // table (design.md §8.4). The store is user-only, because the context has no role tables.
-builder.Services.AddIdentityCore<ApplicationUser>(o => o.Stores.SchemaVersion = IdentitySchemaVersions.Version3)
+//
+// RequireUniqueEmail checks an address's form and refuses one that another account holds, in any organisation, so the
+// app refuses a second account before the unique index is reached; the index stays the guard against two at once
+// (A27). The user name holds the address (§5.3), and Identity's default user-name characters refuse some valid
+// addresses, such as o'brien@example.org, so the rest of RFC 5322's characters for an address join them. The list is
+// kept, not cleared, because Identity compares addresses as they are written: a copy of one with a space or an
+// invisible character in it would be another address to Identity and to the index, and so a second account for the
+// same mailbox.
+builder.Services.AddIdentityCore<ApplicationUser>(o =>
+    {
+        o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+        o.User.RequireUniqueEmail = true;
+        o.User.AllowedUserNameCharacters += "!#$%&'*/=?^`{|}~";
+    })
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
-    .AddEntityFrameworkStores<Grow2NotesDbContext>();
+    .AddEntityFrameworkStores<Grow2NotesDbContext>()
+    .AddTokenProvider<SetupTokenProvider>(SetupTokenProvider.ProviderName);
 
 // The session is Identity's cookie (design.md §8.3, §8.4).
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
@@ -127,6 +147,15 @@ builder.Services.AddSingleton<MelbourneClock>();
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 
+// One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
+// transaction its caller opens there, with the audit event that records it.
+builder.Services.AddScoped<Invitations>();
+
+// The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
+// its audit event's share the scope's context, and so the one transaction.
+builder.Services.AddScoped<AdminCommands>();
+builder.Services.AddScoped<BootstrapCommand>();
+
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
 // App Service guidance gives for the front end, as IPv4-mapped networks, since the app's dual-stack socket gives IPv4
@@ -159,6 +188,20 @@ builder.Services.AddHsts(options =>
 });
 
 var app = builder.Build();
+
+// An operator command runs in place of the web server, in a scope of its own, and the process exits with its code: 0
+// when done, 1 when refused. Disposing the app flushes its loggers before the process ends.
+if (operatorCommand is not null)
+{
+    await using (app)
+    await using (var scope = app.Services.CreateAsyncScope())
+    {
+        Environment.ExitCode = await scope.ServiceProvider.GetRequiredService<AdminCommands>()
+            .RunAsync(operatorCommand, Console.Out, Console.Error);
+    }
+
+    return;
+}
 
 // First, so that everything after it, the exception handler included, sees the client's address and scheme.
 app.UseForwardedHeaders();

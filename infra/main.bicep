@@ -9,6 +9,9 @@ param environmentName 'test' | 'prod'
 @description('The path App Service probes: /healthz in test, /healthz/ready in prod (design.md §10.3, §10.8).')
 param healthCheckPath '/healthz' | '/healthz/ready'
 
+@description('The address the app is reached at, https://<host>, which its links start with (design.md §8.1).')
+param appOrigin string
+
 // Every deploy passes these three, and they are never committed, because the object ID belongs to the operator's tenant
 // and the address may contain the company's name (D42, D60, D64, D65). The parameters files leave them empty;
 // sql.bicep and monitoring.bicep refuse them empty.
@@ -116,6 +119,9 @@ module app 'modules/app.bicep' = {
       DataProtection__KeyVaultKeyUri: keyVault.outputs.keyUri
       APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.applicationInsightsConnectionString
       APPLICATIONINSIGHTS_STATSBEAT_DISABLED: 'true'
+      // Read as App:Origin. An invite's setup link starts with it, because the operator commands, which print one,
+      // run where there is no request to take the address from (design.md §7.4, §8.1).
+      App__Origin: appOrigin
       // App Service mounts the deployed zip read-only as wwwroot, so a running build never loads a later build's files,
       // and sends traffic to a newly started build only once /healthz answers 200 (design.md §10.4 step 7, A49).
       // /healthz in both environments, not prod's /healthz/ready, because it never touches the database (design.md
