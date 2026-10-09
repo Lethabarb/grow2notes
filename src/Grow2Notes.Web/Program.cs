@@ -3,6 +3,7 @@ using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -142,6 +143,11 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 // One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
 // transaction its caller opens there, with the audit event that records it.
 builder.Services.AddScoped<Invitations>();
+
+// The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
+// its audit event's share the scope's context, and so the one transaction.
+builder.Services.AddScoped<AdminCommands>();
+builder.Services.AddScoped<BootstrapCommand>();
 
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
