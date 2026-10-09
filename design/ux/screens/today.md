@@ -326,9 +326,9 @@ listed here.
 - [foundations](../components/foundations.md): system font stack; 18 px body, 16 px minimum; weights 400/700; the
   `--colour-*` tokens above; 3 px near-black focus ring with 2 px offset (`Highlight` in forced colours); no motion;
   light only.
-- [microcopy](../components/microcopy.md): every visible string comes from `src/copy` (`react/jsx-no-literals`);
-  `<html lang="en-AU">`; no negative contractions in new copy; glossary terms only (participant, draft, submitted,
-  Flagged).
+- [microcopy](../components/microcopy.md): every visible string comes from `src/copy` (§8's lint rule, ESLint's
+  `no-restricted-syntax`); `<html lang="en-AU">`; no negative contractions in new copy; glossary terms only
+  (participant, draft, submitted, Flagged).
 
 ---
 

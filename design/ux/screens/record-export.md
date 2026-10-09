@@ -346,7 +346,7 @@ Uses [file-download.md](../components/file-download.md), [export-form.md](../com
 Uses [microcopy.md](../components/microcopy.md) and [foundations.md](../components/foundations.md).
 
 - **Dates in messages use `datePlain` ("1 January 2026").** microcopy.md uses it for From/To ranges, and its section 9 makes it canonical for the range error. A non-breaking space goes between the day and the month. The text is built from numeric parts, never `Intl` `dateStyle`.
-- **Strings live in `src/copy`.** This screen uses the shared `filePreparing(format)` and `fileReady(fileName)` (one pair for both download screens), and adds `noNotesInRange(name, from, to)`, `notExported(cause)` and the four field errors. ESLint `react/jsx-no-literals` keeps literals out of JSX.
+- **Strings live in `src/copy`.** This screen uses the shared `filePreparing(format)` and `fileReady(fileName)` (one pair for both download screens), and adds `noNotesInRange(name, from, to)`, `notExported(cause)` and the four field errors. microcopy.md §8's lint rule, ESLint's `no-restricted-syntax`, keeps literals out of JSX.
 - **The action is "Export", never "download".** The glossary uses "Export" here and "Download" on the Daily report (microcopy.md). The one exception is the ready line's "Look in your downloads.", which names the browser's Downloads folder, not the action; it is shared word for word with the Daily report.
 - **`<html lang="en-AU">`.** Light theme only: `color-scheme: light`, so the native date picker stays light (foundations.md).
 
@@ -620,7 +620,7 @@ The `<h1>` and the summary container are focus targets (`tabIndex={-1}`), not ta
 - [ ] At 320 px wide, and at 200% text, there is no horizontal scroll, including with a `.docx` file name in the status line.
 - [ ] Measured target heights: date inputs and Export are at least 48 px, and radio and checkbox rows are at least 56 px.
 - [ ] Forced-colours emulation: field borders, radio and checkbox states, the error bar and the focus ring are all visible.
-- [ ] A copy test finds no "download" (except the shared ready line's "Look in your downloads."), "please", "sorry" or "invalid", and not the parent company's name (D42), in this screen's strings (microcopy.md `copy.test.ts`).
+- [ ] A copy test finds no "download" (except the shared ready line's "Look in your downloads."), "please", "sorry" or "invalid" in this screen's strings (microcopy.md `copy.test.ts`), and the D42 check (`ForbiddenNameTests`, microcopy.md §8) finds the parent company's name nowhere in them.
 
 **Real devices** (test environment with the production CSP, before M5 sign-off; file-download.md, export-form.md)
 - [ ] iPhone Safari, iPhone Chrome, Android Chrome and Samsung Internet each save (or offer to save) the file for a fast export **and** for one taking more than 10 s, after the click's user activation has expired. If one cannot, apply file-download.md's plain-link contingency to this screen only.
