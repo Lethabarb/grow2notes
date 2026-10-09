@@ -13,6 +13,12 @@ namespace Grow2Notes.Tests.Fixtures;
 /// </summary>
 public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// The app's <c>App:Origin</c>, which the links it gives out start with: a host other than <c>localhost</c>, as
+    /// <see cref="HstsTests"/> calls the app.
+    /// </summary>
+    public const string Origin = "https://grow2notes.example";
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Not Development, whose settings point at LocalDB.
@@ -30,6 +36,7 @@ public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicati
             // With a build manifest, MapStaticAssets otherwise rewrites responses for hot reload, compressing files on
             // the fly. Off, it serves the precompressed files and the manifest's headers, as production does.
             new("ReloadStaticAssetsAtRuntime", "false"),
+            new("App:Origin", Origin),
         ]));
 
         builder.ConfigureTestServices(services => services.AddTestSignIn());

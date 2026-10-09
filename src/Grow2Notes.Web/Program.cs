@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.DataProtection;
@@ -137,6 +138,10 @@ builder.Services.AddSingleton<MelbourneClock>();
 // One per scope, so each event is saved through the scope's context and joins the transaction open there, committing
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
+
+// One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
+// transaction its caller opens there, with the audit event that records it.
+builder.Services.AddScoped<Invitations>();
 
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
