@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -16,7 +15,7 @@ namespace Grow2Notes.Tests;
 /// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
 /// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
-public sealed partial class SignedOutTests : IAsyncDisposable
+public sealed class SignedOutTests : IAsyncDisposable
 {
     // Under /api, so it gets the API's caching rule, as the app's own endpoints there do.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
@@ -89,7 +88,7 @@ public sealed partial class SignedOutTests : IAsyncDisposable
         await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }
 
-    // The page itself, from the static assets, and a client route, from the client-route fallback.
+    // The page from the static assets (/index.html), and through the client-route fallback (/ and a client route).
     [Theory]
     [InlineData("/")]
     [InlineData("/index.html")]
@@ -108,12 +107,9 @@ public sealed partial class SignedOutTests : IAsyncDisposable
     public async Task The_page_s_script_is_served()
     {
         using var client = app.CreateClient();
-        var page = await client.GetStringAsync("/", TestContext.Current.CancellationToken);
-        // The bundle's file name changes with its content, so it is read from the page rather than written here.
-        var bundle = HashedScript().Match(page);
-        Assert.True(bundle.Success, "index.html names no script under /assets.");
+        var bundle = await client.FetchHashedScriptPathAsync();
 
-        using var response = await client.GetAsync(bundle.Groups["path"].Value, TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(bundle, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -132,9 +128,6 @@ public sealed partial class SignedOutTests : IAsyncDisposable
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
-
-    [GeneratedRegex("""<script\b[^>]*\bsrc="(?<path>/assets/[^"]+)"[^>]*>""", RegexOptions.IgnoreCase)]
-    private static partial Regex HashedScript();
 
     /// <summary>
     /// Maps an endpoint with no policy of its own, which the fallback policy covers. It is routed ahead of the app's

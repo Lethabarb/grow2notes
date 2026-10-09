@@ -31,8 +31,6 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
 {
     private const string MePath = "/api/auth/me";
 
-    private const string SessionCookie = "__Host-grow2notes";
-
     private readonly FakeTimeProvider clock = new(TestClock.Start);
 
     // Signing in changes no row, so the tests sign in as A's seeded worker (tests/README.md).
@@ -66,7 +64,7 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
 
         await AssertNamesTheOrganisationAsync(first, organisationName);
         var renewed = Assert.Single(first.SetCookies());
-        Assert.Equal(SessionCookie, renewed.Name.Value);
+        Assert.Equal(CookieSignIn.SessionCookie, renewed.Name.Value);
         Assert.NotEqual(string.Empty, renewed.Value.Value);
 
         clock.Advance(TimeSpan.FromMinutes(29));
@@ -124,7 +122,7 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
         using var signIn = await client.PostAsync(
             $"{SignInOutsideTheSignInManager.Path}/{userId}", content: null, cancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, signIn.StatusCode);
-        Assert.Equal(SessionCookie, Assert.Single(signIn.SetCookies()).Name.Value);
+        Assert.Equal(CookieSignIn.SessionCookie, Assert.Single(signIn.SetCookies()).Name.Value);
 
         clock.Advance(TimeSpan.FromSeconds(1));
         using var response = await client.GetAsync(MePath, cancellationToken);

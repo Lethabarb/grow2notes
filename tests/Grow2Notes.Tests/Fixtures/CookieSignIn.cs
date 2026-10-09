@@ -20,6 +20,9 @@ namespace Grow2Notes.Tests.Fixtures;
 /// </summary>
 internal static class CookieSignIn
 {
+    /// <summary>The session cookie's name, as Program.cs sets it (design.md §8.4).</summary>
+    public const string SessionCookie = "__Host-grow2notes";
+
     // Outside the /api group, whose filter would ask a signed-out caller for an antiforgery token first.
     private const string Path = "/test-only/sign-in";
 
@@ -63,7 +66,7 @@ internal static class CookieSignIn
     /// </remarks>
     public static void AssertClearsTheSessionCookie(this HttpResponseMessage response)
     {
-        var cookie = Assert.Single(response.SetCookies(), setCookie => setCookie.Name.Value == "__Host-grow2notes");
+        var cookie = Assert.Single(response.SetCookies(), setCookie => setCookie.Name.Value == SessionCookie);
         Assert.Equal(string.Empty, cookie.Value.Value);
         Assert.Equal(DateTimeOffset.UnixEpoch, cookie.Expires);
         Assert.True(cookie.Secure);

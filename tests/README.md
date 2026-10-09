@@ -114,6 +114,9 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   In `AppWithoutDatabase`, Data Protection, which protects the tokens, has no key ring until `KeepKeysInMemory()` gives
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
+- A test of `Strict-Transport-Security` calls a host name other than `localhost` over HTTPS, as
+  `Grow2Notes.Tests/HstsTests.cs` calls `https://grow2notes.example`: the HSTS middleware never sends the header to
+  `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant

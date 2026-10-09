@@ -90,7 +90,7 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
     // Max-Age it is a session cookie, which the browser drops when it closes (§8.5).
     private static void AssertIsTheSessionCookie(SetCookieHeaderValue cookie)
     {
-        Assert.Equal("__Host-grow2notes", cookie.Name.Value);
+        Assert.Equal(CookieSignIn.SessionCookie, cookie.Name.Value);
         Assert.True(cookie.Secure);
         Assert.True(cookie.HttpOnly);
         Assert.Equal(SameSiteMode.Strict, cookie.SameSite);

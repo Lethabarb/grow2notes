@@ -150,10 +150,24 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownIPNetworks.Add(IPNetwork.Parse("169.254.0.0/16"));
 });
 
+// Strict-Transport-Security: max-age=31536000; includeSubDomains (design.md §9.3, §9.7), with no preload, which the
+// design does not give.
+builder.Services.AddHsts(options =>
+{
+    options.MaxAge = TimeSpan.FromDays(365);
+    options.IncludeSubDomains = true;
+});
+
 var app = builder.Build();
 
 // First, so that everything after it, the exception handler included, sees the client's address and scheme.
 app.UseForwardedHeaders();
+
+// HSTS goes only on an HTTPS request, the only kind a browser heeds it on, so it comes straight after the forwarded
+// headers, which make a request that App Service's front end forwarded an HTTPS one. It is never sent to localhost, so
+// development over https://localhost is never pinned. A response that the exception handler writes goes without it,
+// because the handler clears the response's headers first; a browser keeps the policy from any earlier response.
+app.UseHsts();
 
 app.UseCacheHeaders();
 
