@@ -26,6 +26,18 @@ npm run check:no-analytics  # no Application Insights JavaScript SDK or third-pa
 `npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
 `npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
 
+`npm test` also runs foundations.md's two checks on the stylesheets, which have no script or CI step of their own:
+
+- `src/styles/tokens.test.ts`, the contrast test, checks each colour token in `tokens.css` against each background it
+  is used on, at 7:1, 4.5:1 or 3:1 (the pairs are listed at the top of the test), and fails on a colour token in no
+  pair.
+- `src/styles/breakpoints.test.ts`, the breakpoint check, reads every `.css` file under `src/` and fails, naming the
+  file and the rule, on a media query on width or height other than `(min-width: 40rem)` and `(max-height: 30rem)`,
+  range syntax included, and on any `@container` rule.
+
+The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
+default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
+
 ## Running the .NET tests
 
 The integration tests serve the real SPA build, so build the SPA first, and again after changing it:

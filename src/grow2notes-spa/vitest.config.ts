@@ -6,6 +6,8 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
+      // Vitest otherwise empties every stylesheet, even one imported with ?raw, which tokens.test.ts reads.
+      css: true,
       include: ['src/**/*.test.{ts,tsx}'],
       setupFiles: ['./vitest.setup.ts'],
     },
