@@ -1,3 +1,5 @@
+import { strings } from './copy/strings.ts';
+
 export function App() {
-  return <h1>Grow2Notes</h1>;
+  return <h1>{strings.appName}</h1>;
 }
