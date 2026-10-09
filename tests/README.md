@@ -73,6 +73,16 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
 `docker rm -f grow2notes-e2e-sql` when done.
 
+## Writing end-to-end tests
+
+Every end-to-end test imports `test` and `expect` from `e2e/fixtures.ts`, not from `@playwright/test`. The fixture's
+`page` fails the test, after it ends, if the browser's console reported a Content Security Policy violation, so each
+screen's test also shows that the screen works under design.md §9.7's policy (S06.01.04). Other console errors, such
+as the one Chromium logs for a `401`, do not fail a test.
+
+`e2e/fixtures.spec.ts` shows that the fixture fails a test whose page meets a violation. It is marked `test.fail()`, so
+it passes by failing: the run marks it as failed, with a cross, and counts it as passed.
+
 ## Writing integration tests
 
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
@@ -115,8 +125,16 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
 - A test of `Strict-Transport-Security` calls a host name other than `localhost` over HTTPS, as
-  `Grow2Notes.Tests/HstsTests.cs` calls `https://grow2notes.example`: the HSTS middleware never sends the header to
-  `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP.
+  `Grow2Notes.Tests/Platform/SecurityHeadersTests.cs` calls `https://grow2notes.example`: the HSTS middleware never
+  sends the header to `localhost`, `127.0.0.1` or `[::1]`, nor over plain HTTP, which `Grow2Notes.Tests/HstsTests.cs`
+  shows.
+- Every response carries design.md §9.7's security headers, the exception handler's without
+  `Strict-Transport-Security` (S06.01.04's Notes). `Grow2Notes.Tests/Platform/SecurityHeadersTests.cs` asks
+  `https://grow2notes.example` for each kind of response that the app gives and checks that it carries all six, once
+  each, with the values that it reads from §9.7 itself. `Grow2Notes.Tests/Platform/DatabaseFailureHandlerTests.cs`
+  checks the exception handler's `500`, `400` and `413` the same way for the other five. A story that adds a kind of
+  response, such as a file download or an image, adds it to `SecurityHeadersTests`, as the Definition of Done's
+  headers bullet asks.
 - A run filtered to unit tests starts no container.
 
 ### The seeded organisations and the tenant

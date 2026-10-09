@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A50), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D65 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A51), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1708,7 +1708,7 @@ There are no long-lived secrets:
 
 ### 9.7 Security headers and CSP
 
-Set by middleware on every response; an integration test asserts they are present.
+Set by middleware on every response; an integration test asserts they are present. `Strict-Transport-Security` goes only on an HTTPS response not addressed to `localhost`, and not on a response that the exception handler writes (A51).
 
 ```text
 Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self';
@@ -2125,6 +2125,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A48 | Tenant concurrency token | `OrganisationId` is a concurrency token on every `ITenantOwned` entity, so EF Core's updates and deletes match the row's original organisation as well as its key: a row made up with another organisation's key and the tenant's ID, which the `SaveChanges` interceptor cannot tell from one of the tenant's, matches no row, and the save throws and writes nothing (§5.9 item 3). Taken by the developer on 8 October 2026, when a test found that gap (S00.03.02); the owner may overturn it. |
 | A49 | Deploying the app | Both environments run the app from its deployed zip (`WEBSITE_RUN_FROM_PACKAGE=1`): App Service mounts `app.zip` read-only as `wwwroot`, so a running build never loads a later build's files, and it sends traffic to a newly started build only once `/healthz` answers `200` (`WEBSITE_WARMUP_PATH=/healthz`, `WEBSITE_WARMUP_STATUSES=200`; `/healthz` never touches the database, §10.8). The pipeline deploys with `az webapp deploy --track-status true`, which waits until the new build has started, and the smoke test waits until `/index.html` carries the `Last-Modified` that the build's static asset manifest in `app.zip` gives it before checking `/healthz` (§10.4 steps 7 and 8). Taken by the developer on 9 October 2026, after a deploy unpacked the new build under the running app and the old process answered `500` while it loaded the new files (S00.02.03); the owner may overturn it. |
 | A50 | Caching a response that renews the session | The session check renews the session cookie on every request that carries it (§8.4), so a page or asset response can carry a `Set-Cookie`. Such a response is `Cache-Control: private` (`private, max-age=31536000, immutable` for a hashed asset, `private, no-cache` for `index.html`), because a `Set-Cookie` does not stop a shared cache from storing a response and serving it, cookie and all, to someone else (RFC 9111 §7.3); and an asset's response drops the `Pragma: no-cache` and past `Expires` that the cookie handler adds, which Chromium and WebKit would otherwise read as `no-cache`, revalidating the bundle on every signed-in load. A response that sets no cookie keeps §7.2's `public` and `no-cache`. Taken by the developer on 9 October 2026, after the PR #28 review found those headers on a signed-in asset response (S00.04.01); the owner may overturn it. |
+| A51 | HSTS on the exception handler's responses | `Strict-Transport-Security` comes from ASP.NET Core's HSTS middleware, which sets it as the request comes in, and the exception handler clears a response's headers before it writes its problem, so its `500`, `400` and `413` go without HSTS, while the other §9.7 headers, set as each response starts, stay. That is accepted: a browser heeds the header on any HTTPS response and keeps it for a year (RFC 6797 §8.1), and every visit starts with `index.html`, which carries it; setting HSTS as the response starts instead would rebuild the middleware's HTTPS and host checks for no gain. Taken by the developer on 9 October 2026 (S00.04.01, S06.01.04); the owner may overturn it. |
 
 ---
 
