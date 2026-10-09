@@ -10,8 +10,9 @@ namespace Grow2Notes.Tests.Features.Auth;
 /// Identity's user options as Program.cs sets them (design.md §8.4), through the app's
 /// <see cref="UserManager{TUser}"/>, which creates accounts with the address as both the user name and the email
 /// (§5.3): one account per address across the whole app (A27), refused by the app before the database's unique index
-/// is reached (<see cref="Data.UniqueEmailTests"/> shows the index), and any valid address accepted as a user name.
-/// Each test adds its own users to seeded organisation A, as tests/README.md's seeded-rows rule asks.
+/// is reached (<see cref="Data.UniqueEmailTests"/> shows the index), even for a copy of an address with a space or an
+/// invisible character in it; and an address with any of RFC 5322's characters accepted as a user name. Each test adds
+/// its own users to seeded organisation A, as tests/README.md's seeded-rows rule asks.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class UserOptionsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -44,11 +45,49 @@ public sealed class UserOptionsTests(Grow2NotesFactory factory, SqlServerFixture
         Assert.Equal([firstUserId], holders);
     }
 
-    // Identity's default user-name characters have no apostrophe, which an address may hold.
-    [Fact]
-    public async Task An_address_such_as_o_brien_at_example_org_is_accepted_as_the_user_name()
+    // Identity compares addresses as they are written, so a copy of sam@example.org with a space or an invisible
+    // character in it can be another address to it and to the unique index, and so a second account for the same
+    // mailbox; each is refused for its characters. They are, in order: a leading space, a leading no-break space, a
+    // space before the @, a zero-width space before the @, which a paste can carry unseen, a trailing space and a
+    // trailing tab.
+    [Theory]
+    [InlineData(" sam@example.org")]
+    [InlineData("\u00A0sam@example.org")]
+    [InlineData("sam @example.org")]
+    [InlineData("sam\u200B@example.org")]
+    [InlineData("sam@example.org ")]
+    [InlineData("sam@example.org\t")]
+    public async Task A_copy_of_an_address_another_account_holds_with_a_space_or_an_invisible_character_is_refused(
+        string copy)
     {
-        var email = $"o'brien.{Guid.NewGuid():N}@example.org";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        // An address of its own, which no other test or run of this one uses.
+        var localPart = $"sam.{Guid.NewGuid():N}";
+        var firstUserId = await AddUserAsync(sqlServer.Seeded.A, $"{localPart}@example.org");
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        // In another organisation, because the address is unique across the whole app.
+        var result = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>()
+            .CreateAsync(NewUser(sqlServer.Seeded.B, copy.Replace("sam", localPart, StringComparison.Ordinal)));
+
+        Assert.Contains(nameof(IdentityErrorDescriber.InvalidUserName), result.Errors.Select(error => error.Code));
+        // Every account whose address holds this test's own part, with anything around it: only the first.
+        var holders = await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Users
+            .Where(user => user.Email!.Contains(localPart))
+            .Select(user => user.Id)
+            .ToListAsync(cancellationToken);
+        Assert.Equal([firstUserId], holders);
+    }
+
+    // Identity's default user-name characters have only + - _ of RFC 5322's characters for an address, which may hold
+    // any of them, such as an apostrophe.
+    [Theory]
+    [InlineData("o'brien")]
+    [InlineData("!#$%&'*+-/=?^_`{|}~")]
+    public async Task An_address_with_any_of_RFC_5322_s_characters_such_as_o_brien_is_accepted_as_the_user_name(
+        string localPart)
+    {
+        var email = $"{localPart}.{Guid.NewGuid():N}@example.org";
         var userId = await AddUserAsync(sqlServer.Seeded.A, email);
 
         await using var scope = factory.Services.CreateAsyncScope();

@@ -129,7 +129,10 @@ so neither goes to telemetry (design.md §9.5).
   the usage line when an argument was at fault. Put right what it names and run it again. Before writing anything, it
   refuses an unknown command or option, an option that is missing, empty, given twice or too long, and an `App__Origin`
   that is missing or not an absolute address, which the refusal calls `App:Origin`. Inside the transaction, which then
-  rolls back, it refuses an address that already has an account (A27) or that is not an email address.
+  rolls back, it refuses an address that already has an account (A27) or that is not an email address
+  (`InvalidEmail`), and one with a character that the app does not take in an address (`InvalidUserName`): a space, a
+  tab, an invisible character that came with a paste, or a letter outside ASCII, such as an accented one. Type the
+  address again rather than pasting it.
 - **A refusal wrote nothing, with one exception: a first run with a new address that is refused as already having an
   account.** That happens only when a brief database failure hid the commit of the run's first attempt, and the
   retry was refused on the address that attempt had saved. The organisation and the Invited manager exist, but no

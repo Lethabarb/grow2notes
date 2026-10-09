@@ -7,9 +7,11 @@ namespace Grow2Notes.Web.Features.Users;
 
 /// <summary>
 /// The invite core (design.md §8.1 steps 1 and 2): creates a user as Invited, generates their authenticator key, and
-/// makes their setup link. <c>admin bootstrap</c> invites the first manager with it, and Invite user, a resend and a
-/// sign-in reset reuse it. It opens no transaction and writes no audit event: its caller does both, so that the event
-/// commits or rolls back with the invite it records (S00.03.05's Notes).
+/// makes their setup link. <c>admin bootstrap</c> invites the first manager with it, and Invite user will invite the
+/// others. It only creates a new user: a resend and a sign-in reset, which need a new link for a user who exists, split
+/// out its key, token and link step when they are built (S00.06.03, S00.06.04). It opens no transaction and writes no
+/// audit event: its caller does both, so that the event commits or rolls back with the invite it records (S00.03.05's
+/// Notes).
 /// </summary>
 internal sealed class Invitations(
     UserManager<ApplicationUser> users, TimeProvider timeProvider, IConfiguration configuration)

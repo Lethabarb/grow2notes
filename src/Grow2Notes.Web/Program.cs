@@ -74,12 +74,15 @@ builder.Services.AddDataProtection()
 // RequireUniqueEmail checks an address's form and refuses one that another account holds, in any organisation, so the
 // app refuses a second account before the unique index is reached; the index stays the guard against two at once
 // (A27). The user name holds the address (§5.3), and Identity's default user-name characters refuse some valid
-// addresses, such as o'brien@example.org, so that list is cleared and only the address check applies.
+// addresses, such as o'brien@example.org, so the rest of RFC 5322's characters for an address join them. The list is
+// kept, not cleared, because Identity compares addresses as they are written: a copy of one with a space or an
+// invisible character in it would be another address to Identity and to the index, and so a second account for the
+// same mailbox.
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
         o.User.RequireUniqueEmail = true;
-        o.User.AllowedUserNameCharacters = string.Empty;
+        o.User.AllowedUserNameCharacters += "!#$%&'*/=?^`{|}~";
     })
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
