@@ -221,11 +221,16 @@ jobs:
       # design.md §10.4 step 8 (A49). A 200 alone can come from the old build, so the step first waits for this build's
       # index.html. The app serves its Last-Modified, the time CI built the SPA, from the static asset manifest in
       # app.zip, so it names the build. curl sends no Accept-Encoding, so it gets the plain index.html: the manifest's
-      # entry with no selectors. It tries every 10 seconds for up to five minutes, to allow for a cold start on B1, then
-      # checks /healthz, which never touches the database (design.md §10.8), and /api/auth/antiforgery, which must
-      # answer 204 with the SPA's token and the cookie that holds its other half (design.md §9.8 item 2), printing
-      # neither value. Antiforgery throws on a request that is not HTTPS, and a request through App Service's front end
-      # is HTTPS only by the X-Forwarded-Proto the app trusts from it, so this check proves that trust too (S00.03.03).
+      # entry with no selectors. It tries every 10 seconds for up to five minutes, to allow for a cold start on B1.
+      # When the main.bicep step has changed the app's settings, App Service's restart for them can also swallow the
+      # recycle Kudu asks for to start the new package: az then reports success while the old build keeps answering
+      # (S00.02.03's Notes). So if this build's index.html has not come within the five minutes, the step restarts the
+      # app once, which mounts the newest package and which the deployment identity's Contributor role allows, and
+      # waits up to five minutes more. Then it checks /healthz, which never touches the database (design.md §10.8), and
+      # /api/auth/antiforgery, which must answer 204 with the SPA's token and the cookie that holds its other half
+      # (design.md §9.8 item 2), printing neither value. Antiforgery throws on a request that is not HTTPS, and a
+      # request through App Service's front end is HTTPS only by the X-Forwarded-Proto the app trusts from it, so this
+      # check proves that trust too (S00.03.03).
       - name: Smoke-test the new build
         env:
           SITE_URL: https://app-grow2notes-test.azurewebsites.net
@@ -239,16 +244,30 @@ jobs:
             exit 1
           fi
           echo "This build's index.html was last modified $expected."
-          deadline=$((SECONDS + 300))
-          until served=$(curl -fsS --max-time 20 --output /dev/null --write-out '%header{last-modified}' \
-                           "$SITE_URL/index.html") && [[ $served == "$expected" ]]; do
-            if ((SECONDS >= deadline)); then
-              echo "::error::$SITE_URL/index.html was not this build's within five minutes."
+          wait_for_build() {
+            local deadline=$((SECONDS + 300)) served
+            until served=$(curl -fsS --max-time 20 --output /dev/null --write-out '%header{last-modified}' \
+                             "$SITE_URL/index.html") && [[ $served == "$expected" ]]; do
+              if ((SECONDS >= deadline)); then
+                return 1
+              fi
+              echo "index.html is not this build's yet (Last-Modified: ${served:-none}); trying again in 10 seconds."
+              sleep 10
+            done
+          }
+          if ! wait_for_build; then
+            echo "::warning::$SITE_URL/index.html was not this build's within five minutes, perhaps because a restart" \
+                 "for changed app settings swallowed the deploy's recycle. Restarting the app to mount the new package."
+            if ! az webapp restart --resource-group rg-grow2notes-test-ause --name app-grow2notes-test --output none \
+                   --only-show-errors; then
+              echo "::error::The restart of app-grow2notes-test failed."
               exit 1
             fi
-            echo "index.html is not this build's yet (Last-Modified: ${served:-none}); trying again in 10 seconds."
-            sleep 10
-          done
+            if ! wait_for_build; then
+              echo "::error::$SITE_URL/index.html was not this build's within five minutes of the app's restart either."
+              exit 1
+            fi
+          fi
           echo "$SITE_URL/index.html is this build's."
           if ! body=$(curl -fsS --max-time 20 "$SITE_URL/healthz"); then
             echo "::error::$SITE_URL/healthz did not answer 200 OK."
