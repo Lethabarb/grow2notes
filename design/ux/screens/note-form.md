@@ -31,7 +31,8 @@ decision.
 
 **Copy marks.** **(V)** word for word from design.md. **(N)** design.md's words with only the date, time or name format
 normalised by `microcopy.md` §3 and §9. **(D)** derived from design.md wording for a case design.md does not cover.
-**(P)** proposed, needs the owner's sign-off. The copy module uses typographic apostrophes (’); this file shows
+**(P)** proposed. Every (P) string here on 9 October 2026 was approved as written (D67, Open question 5); a (P) string
+added later still needs the owner's sign-off. The copy module uses typographic apostrophes (’); this file shows
 straight quotes for readability (`microcopy.md` §1).
 
 **Evidence grades.** **[Research]** studies or usability testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML, CSS ·
@@ -1250,6 +1251,8 @@ Each is recorded once, with the evidence in the cited component file.
    the archived-participant refusal; the version-conflict line and summary; the Discard dialog body lines;
    "More actions"; "Saving changes…", "Cancelling…", "Changes not saved: …", "Not cancelled: …", "Not discarded: …";
    "Loading note…" and "The note did not load: …".
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 6. **No success message after Discard, Save changes or Cancel** (only focus on the destination heading). Confirm.
 7. **Leaving after a failed save** stays on the form with no dialog. Confirm.
 8. **Pressing Submit during "Saving…"** opens the confirmation once the check save lands. Confirm this reading of

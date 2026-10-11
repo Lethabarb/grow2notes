@@ -17,7 +17,9 @@ It adds no screen, field, setting, notification or data that design.md does not 
 to and comes back from (`primary-actions.md`: "Write past-day note … go[es] to another URL").
 
 **Copy marks** (from `../components/microcopy.md`): **(V)** word for word from design.md · **(N)** design.md wording
-with only punctuation or a date format normalised · **(P)** proposed, not in design.md, needs the owner's sign-off.
+with only punctuation or a date format normalised · **(P)** proposed, not in design.md. Every (P) string here on
+9 October 2026 was approved as written (D67, Open question 1); a (P) string added later still needs the owner's
+sign-off.
 
 **Evidence grades:** **[Research]** studies and usability or assistive-technology testing · **[Standard]** WCAG 2.2,
 WAI-ARIA, HTML spec, framework docs · **[Convention]** established design systems · **[Opinion]** reasoned judgement.
@@ -875,6 +877,8 @@ content, not context) · 3.2.3 Consistent Navigation · 3.2.4 Consistent Identif
 1. **Copy sign-off** for every (P) string above, especially: the archived notice, the
    past-day archived sentence, "No goals yet.", "No active participants.", "No archived participants.", the date of
    birth hint "For example, 27 3 1987", "Note date" / "A date before today" / "Continue", and the load-failure lines.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 2. **API gaps to close in M1** (gaps, not decision changes):
    - `GET /api/admin/participants` shows no per-row `RowVersion`/ETag, but every `PUT` and state-changing `POST`
      needs `If-Match` (6.6). Each row needs, for example, `rowVersion` as base64. (The goals list now has it.)

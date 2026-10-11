@@ -1,7 +1,7 @@
 # Authenticator app setup and one-time code entry
 
 > **Precedence.** Where a screen spec's "Conflicts resolved" table differs from this file, the screen spec wins.
-> Editorial pass, 1 October 2026. No Copy setup key button unless the owner approves it (clipboard concern, sign-in.md); request failures go in the alert above Finish setup.
+> Editorial pass, 1 October 2026. No Copy setup key button (clipboard concern, sign-in.md; the owner declined it on 9 October 2026, D68); request failures go in the alert above Finish setup.
 
 Component key: `totp-setup`. Covers two pieces that share one input: the **authenticator app setup block**
 (QR code, setup key, first code) and the **one-time code field** used at setup and at sign-in.
@@ -205,9 +205,9 @@ saves a tired worker from using up their 5 attempts on a phone they no longer ha
   password was accepted. If a `401` or `429` arrives 4 minutes 50 seconds or more after that, it goes back to the email
   and password step. It keeps the email, clears the password, and shows the same generic message. Nothing reveals why.
   **[Opinion]** Set the two-factor cookie's lifetime explicitly in the server configuration so the SPA's constant and
-  the server agree, and cover both with an integration test.
-- **Setup rejected (`422 validation.failed` with a `totpCode` error):** clear the code, keep the password, and show the
-  setup wrong-code message.
+  the server agree, and cover both with an integration test. (The owner chose this on 9 October 2026, D69.)
+- **Setup rejected (`422 validation.failed` with a `totpCode` error, D70):** clear the code, keep the password, and
+  show the setup wrong-code message.
 - **Setup timed out (`401` from any setup call):** show the design's message. Reopening the link shows the **same**
   key, because it was generated at invite (8.1), so a Grow2Notes entry the person already added to their app still works.
 - **Copy setup key:** call `navigator.clipboard.writeText(key)` directly in the click handler, with the key already in

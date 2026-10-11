@@ -5,8 +5,9 @@ one buildable screen. It adds no field, setting, preview, notification or data. 
 disagreed, the choice made is listed under "Conflicts resolved".
 
 **Copy marks.** **(V)** is word for word from design.md. **(P)** is proposed: the design implies the state but gives
-no words, and the owner should confirm it. **(M)** is a design or component string changed only because
-`microcopy.md` says to. Each one is listed under "Conflicts resolved".
+no words. Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string added later still needs
+the owner's approval. **(M)** is a design or component string changed only because `microcopy.md` says to; D67 does
+not cover it, so the owner should still confirm it. Each one is listed under "Conflicts resolved".
 
 **Evidence grades.** [Research] studies or usability testing · [Standard] WCAG 2.2, WAI-ARIA APG, HTML spec,
 browser-vendor documentation · [Convention] established design systems · [Opinion] reasoned judgement.
@@ -582,6 +583,9 @@ off-screen, for whoever enters the prompts (`microcopy.md` 4.10) [Opinion]:
   saved: no connection. Try again."; "Not saved: something went wrong. Try again."; "Saving…"; "Saved 4:12 pm"; the
   conflict message; "Leave without saving?", "Your changes to the guide prompts are not saved.", "Stay on this page",
   "Leave without saving".
+  **Partly answered 9 October 2026 (D67):** the (P) strings are approved as written; any of them can still be changed
+  later in the copy module, and a (P) string added after that date still needs the owner's approval. D67 covers (P)
+  only, so the (M) string "You can enter up to 1,000 characters" is still open.
 - **API at M1:** should the PUT `200` carry the new `ETag` header? (Otherwise the client refetches after every
   save.) Should saving unchanged text still write a `guide_prompts.updated` audit event? Save is deliberately never
   unavailable.

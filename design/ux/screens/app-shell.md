@@ -13,7 +13,8 @@ around every screen. It composes these component specs and adds nothing to them:
 - [microcopy.md](../components/microcopy.md) (glossary, voice, page names, canonical wording)
 
 Copy marks: **(V)** word for word from design.md · **(N)** design.md wording with format normalised per microcopy.md ·
-**(P)** proposed, not in design.md, needs the owner's approval. Evidence grades: [Research] · [Standard] ·
+**(P)** proposed, not in design.md. Every (P) string here on 9 October 2026 was approved as written (D67, Open
+question 2); a (P) string added later still needs the owner's approval. Evidence grades: [Research] · [Standard] ·
 [Convention] · [Opinion]. Where two component specs disagreed, the choice made here is listed under "Conflicts
 resolved".
 
@@ -846,6 +847,8 @@ Recorded once each, with evidence. No change is recommended.
    "You cannot edit this note" / "Read the note", "Anything already saved is kept.", "You've been signed out" / "Sign
    in again to go back to where you were.", "Connecting…", "No connection. Try again.", the 1-minute, 40-second and
    20-second warning steps, and the `<noscript>` line.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 3. **"When a page loads"** (§4.6, §6.8) is read as every screen opened inside the app, not only a browser reload,
    so the badge and `today` stay fresh during a visit. Confirm.
 4. **Shared laptop:** if a different person signs in on the "You've been signed out" view, the app reloads to Today

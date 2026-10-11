@@ -1,14 +1,15 @@
 # Sign-in form and account setup form
 
 > **Precedence.** Where a screen spec's "Conflicts resolved" table differs from this file, the screen spec wins.
-> Editorial pass, 1 October 2026. No `/sign-in` route; sign-in renders at the requested URL. Show/Hide only on "Create a password" and no Copy setup key button unless the owner approves them; request failures go in the alert above the pressed button (sign-in.md).
+> Editorial pass, 1 October 2026. No `/sign-in` route; sign-in renders at the requested URL. Show/Hide only on "Create a password" and no Copy setup key button (the owner declined both extras on 9 October 2026, D68); request failures go in the alert above the pressed button (sign-in.md).
 
 Component key: `sign-in-form`. Screens: design.md 4.1 (Sign-in and account setup), plus the "sign-in in place"
 after a session ends (design.md 4.0 Sessions, 5.6, 8.5). Rules it must keep: D23, D42, A22–A25, §6.2, §8.1–8.6, §9.6–9.9.
 
 Evidence tags: **[Research]** measured with users · **[Standard]** WCAG 2.2, NIST, HTML/WebAuthn specs ·
 **[Convention]** established design systems and browser-vendor guidance · **[Opinion]** reasoned judgement, not tested.
-"Proposed copy" means the string is not in design.md and needs the owner's OK (listed again in the summary).
+"Proposed copy" means the string is not in design.md and needs the owner's OK (listed again in the summary). Strings
+that sign-in.md adopts as (P) were approved as written on 9 October 2026 (D67).
 
 ---
 

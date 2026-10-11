@@ -7,11 +7,13 @@ recommendation for Grow2Notes, with code sketches. **Screen files** (`screens/`)
 screen of design.md §4: layout on phone and laptop, components in order, every state with exact copy, focus and
 announcements, an accessibility checklist and acceptance criteria. Build from the screen file and open the component
 file for the evidence. Where a screen's "Conflicts resolved" table differs from a component file, **the screen wins**
-(every component file says so at the top). Copy marked **(P)** is proposed and needs the owner's approval. The
-editorial pass of 1 October 2026 settled the cross-screen rules below once, for every screen. The update of
-3 October 2026 added common-item groups (D44–D47) across the note form, read view, version history, files and the
-Common items screen; their assumed defaults (design.md A41–A47, with A2, A3, A4 and A6 extended) are stated in
-[group-picker](components/group-picker.md) and can be overridden by the owner.
+(every component file says so at the top). Copy marked **(P)** is proposed wording. Every (P) string in these specs on
+9 October 2026 was approved by the owner as written (D67), and any of them can still be changed later in the copy
+module; a (P) string added after that date still needs the owner's approval. Approving wording builds nothing that is
+marked "not built unless approved". The editorial pass of 1 October 2026 settled the cross-screen rules below once,
+for every screen. The update of 3 October 2026 added common-item groups (D44–D47) across the note form, read view,
+version history, files and the Common items screen; their assumed defaults (design.md A41–A47, with A2, A3, A4 and A6
+extended) are stated in [group-picker](components/group-picker.md) and can be overridden by the owner.
 
 ## Global conventions
 
@@ -173,7 +175,8 @@ recommended**, and every spec builds the decision as written. Details and links 
 
 ## Open questions
 
-Only the ones that need the owner. Each screen file also asks for sign-off on its **(P)** strings.
+Only the ones that need the owner. Each screen file also asks for sign-off on its **(P)** strings; those that existed on
+9 October 2026 were approved as written that day (D67), so only a (P) string added later needs sign-off.
 
 1. **The Manage page.** Manage is reached through a `/manage` page holding four links. It could be read as an extra
    screen; the alternative is a disclosure in the nav. ([app-shell](screens/app-shell.md) Q1)
@@ -186,6 +189,8 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
 4. **Sign-in extras.** Not built: Show/Hide on the sign-in password (design gives it only when creating one), and a
    Copy setup key button. The setup key is the authenticator's shared secret: on the clipboard it can be kept by
    Windows clipboard history or synced by iOS Universal Clipboard, which sits badly with D22. ([sign-in](screens/sign-in.md) Q2, Q3)
+   **Answered 9 October 2026 (D68):** neither is built; Show/Hide stays on "Create a password" only, and the setup key
+   never goes on the clipboard.
 5. **Compact name in the note form's sticky bar** once the large name scrolls away: keep or drop?
    ([note-form](screens/note-form.md) Q1)
 6. **Reset sign-in and email changes.** Approve the confirmation dialog for Reset sign-in (design asks the manager to
@@ -217,3 +222,5 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
     ("Archived groups", the group announcements) and two Common items choices: group buttons in the item rows' order
     (Move up, Move down, Rename, Archive), and the Group radios only when there are two or more groups.
     ([common-items](screens/common-items.md) Q2–Q4, [note-form](screens/note-form.md) Q13)
+    **Partly answered 9 October 2026 (D67):** the proposed manager-side strings are approved as written
+    (common-items.md Q2); the rest of this question is still open.

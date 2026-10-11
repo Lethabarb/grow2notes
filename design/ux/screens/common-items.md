@@ -13,8 +13,9 @@ button and status region from [primary-actions](../components/primary-actions.md
 [app-shell-nav](../components/app-shell-nav.md).
 
 Copy marks: **(V)** design.md word for word · **(N)** design.md words with only punctuation normalised to the
-microcopy rules · **(P)** proposed, needs the owner's sign-off. Evidence grades: **[Research]** · **[Standard]** ·
-**[Convention]** · **[Opinion]**.
+microcopy rules · **(P)** proposed. Every (P) string here on 9 October 2026 was approved as written (D67, Open
+question 2); a (P) string added later still needs the owner's sign-off. Evidence grades: **[Research]** ·
+**[Standard]** · **[Convention]** · **[Opinion]**.
 
 **Assumed defaults this screen builds on** (design.md §13; shared with every file that touches groups and stated in
 full in group-picker.md). They are assumed defaults, not decisions: the owner can override any of them by adding a
@@ -825,6 +826,8 @@ contract, not a conflict with a decision.
    labels, the announcements (including "Group renamed", "Group moved up", "Group moved down", "Group archived",
    "Group restored to the end of the list", "Group added at the end of the list" and "Item saved and moved to the end
    of [group name]"), the per-action "Not [done]: …" lines and both conflict messages.
+   **Answered 9 October 2026 (D67):** approved as written; any of them can still be changed later in the copy module.
+   A (P) string added after that date still needs the owner's approval.
 3. **Assumed defaults:** confirm or override A41, A42, A43 and the 200-character group name (A6), as listed at the top.
    The group name limit is set in one place (design.md A6) so every spec uses the same number.
 4. **Group button order and the radios rule** (Conflicts resolved 15 and 18) are this file's own choices. Confirm.

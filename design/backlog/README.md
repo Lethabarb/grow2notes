@@ -526,8 +526,10 @@ A story is ready to plan into a sprint when all of these are true:
 - [ ] No open owner question changes the story: check *Open questions* in ux/README.md and the screen file's
   questions.
 - [ ] **R2:** mcp-server.md §12 Q4 answered if the story depends on it.
-- [ ] Any copy it uses that is marked **(P)** is either approved, or the story notes that it ships with the proposed
-  wording.
+- [ ] Any copy it uses that is marked **(P)** may ship: (P) copy in the UX specs that existed on 9 October 2026 is
+  approved (D67), and any (P) string added to them later is approved by the owner before Ready. (P) wording outside
+  the UX specs (mcp-server.md's texts, the setup-link email) is either approved, or the story notes that it ships with
+  the proposed wording.
 - [ ] Acceptance criteria are written: linked groups plus story-specific checks, all testable.
 - [ ] It is sized at 1–5 points.
 - [ ] Everything in `depends_on` is done, or planned earlier in the same sprint.

@@ -12,7 +12,7 @@ Sibling component docs this one hands off to:
 - `form-validation.md` owns field errors and the error summary, including the length-limit state that pauses autosave.
 - `session-timeout.md` owns the 28-minute warning and signing in again in place. It calls this component's `flushNow()`, `pause()` and `resume()`.
 
-Grades: **[Research]** studies or usability testing, **[Standard]** a spec (WCAG, WAI-ARIA, HTML, Fetch), **[Convention]** established design systems and platform guidance, **[Opinion]** reasoned judgement. "(V)" means copy taken word for word from design.md. "(P)" means proposed copy that the owner has not yet approved.
+Grades: **[Research]** studies or usability testing, **[Standard]** a spec (WCAG, WAI-ARIA, HTML, Fetch), **[Convention]** established design systems and platform guidance, **[Opinion]** reasoned judgement. "(V)" means copy taken word for word from design.md. "(P)" means proposed copy. Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's approval.
 
 ---
 

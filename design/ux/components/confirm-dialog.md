@@ -6,7 +6,8 @@
 Component key: `confirm-dialog`. One shared component, `ConfirmDialog`, built on native `<dialog>` + `showModal()`.
 It asks the user to confirm one action and names who the action affects. It is not used for errors, success messages
 or information. Copy marked **(V)** is verbatim from design.md. Copy marked **(P)** is proposed here, because
-design.md gives no string for it, and needs the owner's approval.
+design.md gives no string for it. Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string
+added later still needs the owner's approval.
 
 ---
 

@@ -10,8 +10,8 @@ picker. Defined by D44–D47 (D9 and D11 as amended by D44), design.md 3.1, 3.4 
 
 Evidence grades: **[Research]** studies or usability testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML · **[Convention]**
 established design systems · **[Opinion]** reasoned judgement, no direct evidence. Copy marks: **(V)** word for word
-from design.md or decisions.md · **(D)** derived from existing design wording · **(P)** proposed, needs the owner's
-sign-off.
+from design.md or decisions.md · **(D)** derived from existing design wording · **(P)** proposed. Every (P) string
+here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's sign-off.
 
 **Assumed defaults this file builds on** (shared by every file that touches groups, and recorded in design.md §13 as
 A41–A47 with A2, A3, A4 and A6 extended; the owner can override any of them by adding a decision):

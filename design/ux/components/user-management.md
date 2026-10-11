@@ -16,7 +16,8 @@ notice and inline status (status-messages.md), plain status words (status-tags.m
 (participant-list-rows.md).
 
 Copy marks: **(V)** verbatim from design.md · **(S)** already proposed in a sibling component file · **(P)** proposed
-here, needs the owner's approval. Example people: **Sam Lee** is the signed-in manager; **Alex Park** is a worker.
+here. Every (P) string here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the
+owner's approval. Example people: **Sam Lee** is the signed-in manager; **Alex Park** is a worker.
 
 ---
 
