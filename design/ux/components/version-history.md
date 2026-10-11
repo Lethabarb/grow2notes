@@ -357,7 +357,7 @@ export const versionsQuery = (p: string, d: string) =>
   queryOptions({
     queryKey: [...noteKey(p, d), 'versions'],
     queryFn: async () => {
-      const list = await getVersions(p, d);                 // openapi-fetch wrapper; throws ApiError(status)
+      const list = await getVersions(p, d);                 // api(), typed by hand (D71); throws ApiError(status)
       return [...list].sort((a, b) => b.versionNumber - a.versionNumber);  // newest first, by number
     },
   });

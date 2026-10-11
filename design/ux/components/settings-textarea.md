@@ -355,9 +355,9 @@ Value · 4.1.3 Status Messages (Saved, count, errors without moving focus).
 
 - **No form library and no `<form action>`.** React 19 resets uncontrolled fields after a form action succeeds, which
   would empty this box. Use `onSubmit` + `preventDefault()` (react.dev `<form>`).
-- **One `limits.ts`** holds `GUIDE_PROMPTS_MAX = 1000` next to the other A6 limits. It is checked against the API's
-  OpenAPI `maxLength` in a unit test (`form-validation.md`). `value.length` counts UTF-16 code units, which matches
-  .NET `string.Length` and `nvarchar(1000)`.
+- **One `limits.ts`** holds `GUIDE_PROMPTS_MAX = 1000` next to the other A6 limits. A .NET test checks it against the
+  server's `Limits.GuidePrompts`, with no OpenAPI document (`form-validation.md`, D71). `value.length` counts UTF-16
+  code units, which matches .NET `string.Length` and `nvarchar(1000)`.
 - **Share the count helper with Guided notes:** `countMessage(len, limit)`, plus a threshold of 90%.
 - **Query:** `useQuery({ queryKey: ['admin', 'guidePrompts'], refetchOnWindowFocus: false })`. The editor is mounted
   only once the query has data, and it reads that data once.
