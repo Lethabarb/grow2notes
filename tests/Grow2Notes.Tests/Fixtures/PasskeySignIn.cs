@@ -23,13 +23,51 @@ internal static class PasskeySignIn
     /// <see cref="AntiforgeryTokens.CreateHttpsClient"/>, which keeps the cookies it is sent, the session cookie among
     /// them, and sends them with every later request.
     /// </summary>
+    public static Task<HttpResponseMessage> SignInWithPasskeyAsync(
+        this HttpClient client, TestAuthenticator authenticator) =>
+        client.SignInWithPasskeyAsync(challenge => authenticator.GetAssertion(challenge));
+
+    /// <summary>
+    /// Signs <paramref name="client"/> in as the overload with an authenticator does, but sends the credential that
+    /// <paramref name="credentialFor"/> gives for the options' challenge, such as an assertion that fails.
+    /// </summary>
     public static async Task<HttpResponseMessage> SignInWithPasskeyAsync(
-        this HttpClient client, TestAuthenticator authenticator)
+        this HttpClient client, Func<string, string> credentialFor)
     {
         var token = await client.FetchTokenAsync();
-        var challenge = await FetchChallengeAsync(client, token);
+        var challenge = await client.FetchPasskeyChallengeAsync(token);
+        return await client.SendPasskeyCredentialAsync(credentialFor(challenge), token);
+    }
 
-        using var request = Request(authenticator.GetAssertion(challenge));
+    /// <summary>
+    /// Asks for passkey request options with <paramref name="token"/>, and returns their challenge. The answer sets the
+    /// ceremony's cookie, which replaces any earlier ceremony of <paramref name="client"/>'s.
+    /// </summary>
+    public static async Task<string> FetchPasskeyChallengeAsync(this HttpClient client, string token)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // With no body, as the SPA asks for them.
+        using var request = new HttpRequestMessage(HttpMethod.Post, OptionsPath);
+        request.Headers.Add(AntiforgeryTokens.Header, token);
+
+        using var response = await client.SendAsync(request, cancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var options = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var challenge = options.GetProperty("challenge").GetString();
+        Assert.NotNull(challenge);
+        return challenge;
+    }
+
+    /// <summary>
+    /// Sends <paramref name="credentialJson"/> to the sign-in endpoint with <paramref name="token"/>, as the SPA sends
+    /// a credential, and returns the response.
+    /// </summary>
+    public static async Task<HttpResponseMessage> SendPasskeyCredentialAsync(
+        this HttpClient client, string credentialJson, string token)
+    {
+        using var request = Request(credentialJson);
         request.Headers.Add(AntiforgeryTokens.Header, token);
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
@@ -50,21 +88,5 @@ internal static class PasskeySignIn
         };
         request.Headers.Add(HeaderNames.Origin, Grow2NotesFactory.Origin);
         return request;
-    }
-
-    // With no body, as the SPA asks for them.
-    private static async Task<string> FetchChallengeAsync(HttpClient client, string token)
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        using var request = new HttpRequestMessage(HttpMethod.Post, OptionsPath);
-        request.Headers.Add(AntiforgeryTokens.Header, token);
-
-        using var response = await client.SendAsync(request, cancellationToken);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var options = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-        var challenge = options.GetProperty("challenge").GetString();
-        Assert.NotNull(challenge);
-        return challenge;
     }
 }

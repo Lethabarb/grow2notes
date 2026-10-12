@@ -38,6 +38,30 @@ internal sealed class Grow2NotesSignInManager(
     public override async Task<bool> CanSignInAsync(ApplicationUser user) =>
         user.Status == UserStatus.Active && await base.CanSignInAsync(user);
 
+    /// <summary>
+    /// Checks a passkey sign-in's credential against the ceremony in Identity's two-factor cookie, and fails, rather
+    /// than throws, where no passkey sign-in is underway: the cookie is missing, has expired after its 5 minutes, or
+    /// holds another operation, such as setup's ceremony or a password sign-in's code step. For the person, that is a
+    /// failed sign-in like any other, so <c>PasskeySignInAsync</c> returns <c>Failed</c> (S00.04.04's Notes).
+    /// </summary>
+    /// <remarks>
+    /// Identity throws <see cref="InvalidOperationException"/> for each of those where it reads the ceremony, which is
+    /// private, so the exception is caught around this call alone. Saving the passkey and signing in come after it, so
+    /// an exception from either still reaches the exception handler as a <c>500</c>.
+    /// </remarks>
+    public override async Task<PasskeyAssertionResult<ApplicationUser>> PerformPasskeyAssertionAsync(
+        string credentialJson)
+    {
+        try
+        {
+            return await base.PerformPasskeyAssertionAsync(credentialJson);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return PasskeyAssertionResult.Fail<ApplicationUser>(new PasskeyException(exception.Message, exception));
+        }
+    }
+
     // Every sign-in ends here: SignInAsync, as setup completion calls it, and the password, two-factor and passkey
     // sign-ins.
     public override Task SignInWithClaimsAsync(

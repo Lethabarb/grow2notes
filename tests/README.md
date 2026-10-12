@@ -348,15 +348,19 @@ Identity's own passkey handler verifies them, as it verifies a real one.
 - `TestAuthenticator.RegisterAsync(app.Services, userId)` makes an authenticator and stores its passkey for the user,
   through the app's `UserManager.AddOrUpdatePasskeyAsync`, as setup stores one. The seeded users have no passkey, so
   register it for a user the test adds itself (the seeded-rows rule above). A `new TestAuthenticator()` holds a
-  passkey that no account holds, as the endpoint matrix's row for `POST /api/auth/passkey` sends.
+  passkey that no account holds, as the endpoint matrix's row for `POST /api/auth/passkey` sends. For a sign-in that
+  fails, `GetAssertion(challenge, userVerified: false)` leaves the person unverified, and `WithAnotherKey()` gives an
+  authenticator that signs for the same passkey with a key of its own.
 - `SignInWithPasskeyAsync(authenticator)` (`Grow2Notes.Tests/Fixtures/PasskeySignIn.cs`) signs in a client from
   `CreateHttpsClient()` as the SPA does: it fetches an antiforgery token, asks `POST /api/auth/passkey/options` for
   the options, which set the ceremony's cookie, and sends the authenticator's assertion over their challenge to
   `POST /api/auth/passkey`. It returns that response; the client keeps the session cookie it sets, and sends it with
   every later request. The request carries the `Origin` header that a browser sends with every `POST`, as Identity
-  checks the origin that the assertion was signed for against it.
-- `PasskeySignIn.Request(credentialJson)` is that request for a credential of the test's own; the test adds the
-  token.
+  checks the origin that the assertion was signed for against it. `SignInWithPasskeyAsync(challenge => …)` sends
+  the credential that the function gives for the challenge instead, such as a failing assertion.
+- `FetchPasskeyChallengeAsync(token)` and `SendPasskeyCredentialAsync(credentialJson, token)` are its two requests,
+  for a test that sends a credential with no options asked for, after other options, or after the clock has moved.
+  `PasskeySignIn.Request(credentialJson)` is the second request alone; the test adds the token.
 
 Host the app on a fake clock with `UseClock`, and move the clock a second before each later request of the session,
 as for the cookie sign-in above.
@@ -374,8 +378,9 @@ clock.Advance(TimeSpan.FromSeconds(1));
 using var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
 ```
 
-Each sign-in commits an audit event about its user, so a test reads only the events of a user it added, by the user's
-ID. `Grow2Notes.Tests/Features/Auth/PasskeySignInEndpointTests.cs` is the example.
+Each sign-in, and each failed one on a known account, commits an audit event about its user, so a test reads only the
+events of a user it added, by the user's ID. `Grow2Notes.Tests/Features/Auth/PasskeySignInEndpointTests.cs` is the
+example.
 
 ### The endpoint matrix
 

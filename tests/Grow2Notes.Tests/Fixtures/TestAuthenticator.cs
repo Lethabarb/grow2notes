@@ -18,16 +18,18 @@ namespace Grow2Notes.Tests.Fixtures;
 /// </summary>
 /// <remarks>
 /// A new authenticator's passkey belongs to no account; <see cref="RegisterAsync"/> makes one whose passkey a user
-/// holds. <see cref="PasskeySignIn"/> signs a client in with it.
+/// holds. <see cref="PasskeySignIn"/> signs a client in with it. For a failed sign-in, an assertion can leave the
+/// person unverified, and <see cref="WithAnotherKey"/> signs for the passkey with a key that is not its own.
 /// </remarks>
 internal sealed class TestAuthenticator : IDisposable
 {
     // The passkey name that setup stores and no screen shows (D70).
     private const string PasskeyName = "Grow2Notes";
 
-    // The authenticator data's flags (WebAuthn §6.1): the person was present and verified, by a face, a fingerprint or
-    // a device PIN, which the passkey options require (design.md §8.4). The passkey is bound to the device, so it is
-    // neither backup eligible nor backed up, as Identity checks against the stored passkey.
+    // The authenticator data's flags (WebAuthn §6.1): the person was present and, unless an assertion says otherwise,
+    // verified, by a face, a fingerprint or a device PIN, which the passkey options require (design.md §8.4). The
+    // passkey is bound to the device, so it is neither backup eligible nor backed up, as Identity checks against the
+    // stored passkey.
     private const byte UserPresent = 0x01;
     private const byte UserVerified = 0x04;
 
@@ -45,7 +47,7 @@ internal sealed class TestAuthenticator : IDisposable
     private static readonly string RpId = new Uri(Grow2NotesFactory.Origin).Host;
 
     private readonly ECDsa key = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-    private readonly byte[] credentialId = RandomNumberGenerator.GetBytes(16);
+    private readonly byte[] credentialId;
 
     // The user entity's ID that setup's creation options give the passkey: the user's ID in UTF-8, which the browser
     // hands back with every assertion, and by which Identity finds the account.
@@ -60,7 +62,17 @@ internal sealed class TestAuthenticator : IDisposable
     {
     }
 
-    private TestAuthenticator(string userId) => userHandle = Encoding.UTF8.GetBytes(userId);
+    private TestAuthenticator(string userId)
+        : this(RandomNumberGenerator.GetBytes(16), Encoding.UTF8.GetBytes(userId), signCount: 0)
+    {
+    }
+
+    private TestAuthenticator(byte[] credentialId, byte[] userHandle, uint signCount)
+    {
+        this.credentialId = credentialId;
+        this.userHandle = userHandle;
+        this.signCount = signCount;
+    }
 
     /// <summary>
     /// Makes an authenticator and stores its passkey for the user whose ID is <paramref name="userId"/>, through the
@@ -95,11 +107,18 @@ internal sealed class TestAuthenticator : IDisposable
     }
 
     /// <summary>
+    /// An authenticator that gives this one's passkey, by its ID and user handle, with its next signature count, but
+    /// signs with a key of its own, as one would that had copied the passkey's ID but not its private key.
+    /// </summary>
+    public TestAuthenticator WithAnotherKey() => new(credentialId, userHandle, signCount);
+
+    /// <summary>
     /// An assertion over <paramref name="challenge"/>, the base64url challenge of passkey request options, as the SPA
     /// sends it: the credential as <c>JSON.stringify</c> writes it, signed for <see cref="Grow2NotesFactory.Origin"/>
-    /// and its host, with the person verified.
+    /// and its host, with the person verified unless <paramref name="userVerified"/> is false, when the authenticator
+    /// says only that someone was present.
     /// </summary>
-    public string GetAssertion(string challenge)
+    public string GetAssertion(string challenge, bool userVerified = true)
     {
         // What the browser collects for the authenticator to sign (WebAuthn §5.8.1).
         var clientDataJson = JsonSerializer.SerializeToUtf8Bytes(new
@@ -113,7 +132,7 @@ internal sealed class TestAuthenticator : IDisposable
         // The relying party's hash, the flags and the signature counter, big-endian (WebAuthn §6.1).
         var authenticatorData = new byte[SHA256.HashSizeInBytes + 1 + sizeof(uint)];
         SHA256.HashData(Encoding.UTF8.GetBytes(RpId), authenticatorData);
-        authenticatorData[SHA256.HashSizeInBytes] = UserPresent | UserVerified;
+        authenticatorData[SHA256.HashSizeInBytes] = userVerified ? (byte)(UserPresent | UserVerified) : UserPresent;
         BinaryPrimitives.WriteUInt32BigEndian(authenticatorData.AsSpan(SHA256.HashSizeInBytes + 1), ++signCount);
 
         var signature = key.SignData(
