@@ -28,10 +28,6 @@ namespace Grow2Notes.Tests.Features.Auth;
 [Collection<SqlServerCollection>]
 public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
 {
-    // Made up (A35), and allowed by Identity's default password rules, which want 6 characters, a digit, a capital, a
-    // lowercase letter and a symbol, and by design.md §8.4's, which want 12 characters and nothing else.
-    private const string Password = "Made-up passw0rd";
-
     private const string WrongPassword = "Another passw0rd";
 
     private const string UnknownEmailMessage = "Password sign-in with an unknown email";
@@ -54,7 +50,7 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     public async Task The_right_password_gets_the_code_step_with_Identity_s_two_factor_cookie_and_no_session_or_event()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var (_, email) = await AddUserAsync(seeded.A);
+        var (_, email, _) = await app.AddPasswordUserAsync(seeded.A);
         var twoFactorCookie = app.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
             .Get(IdentityConstants.TwoFactorUserIdScheme).Cookie.Name;
         var lastEventId = await LastEventIdAsync();
@@ -63,7 +59,7 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
         {
             using var client = app.CreateHttpsClient();
 
-            using var response = await client.SendPasswordAsync(typed, Password);
+            using var response = await client.SendPasswordAsync(typed, PasswordSignIn.Password);
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
@@ -79,8 +75,8 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     [Fact]
     public async Task A_wrong_password_is_a_failed_sign_in_on_the_account_in_the_user_s_organisation()
     {
-        var (userOfA, emailOfA) = await AddUserAsync(seeded.A);
-        var (userOfB, emailOfB) = await AddUserAsync(seeded.B);
+        var (userOfA, emailOfA, _) = await app.AddPasswordUserAsync(seeded.A);
+        var (userOfB, emailOfB, _) = await app.AddPasswordUserAsync(seeded.B);
         using var clientOfA = app.CreateHttpsClient();
         using var clientOfB = app.CreateHttpsClient();
 
@@ -105,11 +101,11 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     [Fact]
     public async Task A_locked_out_user_s_right_password_is_refused_with_a_locked_out_event()
     {
-        var (userId, email) = await AddUserAsync(seeded.A);
+        var (userId, email, _) = await app.AddPasswordUserAsync(seeded.A);
         await LockOutAsync(userId);
         using var client = app.CreateHttpsClient();
 
-        using var response = await client.SendPasswordAsync(email, Password);
+        using var response = await client.SendPasswordAsync(email, PasswordSignIn.Password);
 
         await AssertFailedSignInAsync(response, userId, AuditEventTypes.Auth.LockedOut);
     }
@@ -122,7 +118,8 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
         using var client = app.CreateHttpsClient();
         var lastEventId = await LastEventIdAsync();
 
-        using var response = await client.SendPasswordAsync($"{Guid.NewGuid():N}@example.org", Password);
+        using var response = await client.SendPasswordAsync(
+            $"{Guid.NewGuid():N}@example.org", PasswordSignIn.Password);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Empty(response.SetCookies());
@@ -141,10 +138,10 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     [Fact]
     public async Task The_right_password_of_a_user_without_two_factor_is_a_failed_sign_in_with_no_session()
     {
-        var (userId, email) = await AddUserAsync(seeded.A, twoFactorEnabled: false);
+        var (userId, email, _) = await app.AddPasswordUserAsync(seeded.A, twoFactorEnabled: false);
         using var client = app.CreateHttpsClient();
 
-        using var response = await client.SendPasswordAsync(email, Password);
+        using var response = await client.SendPasswordAsync(email, PasswordSignIn.Password);
 
         await AssertFailedSignInAsync(response, userId, AuditEventTypes.Auth.SignInFailed);
     }
@@ -154,17 +151,17 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     [Fact]
     public async Task No_log_entry_holds_the_email_or_the_password()
     {
-        var (_, email) = await AddUserAsync(seeded.A);
-        var (lockedOutUserId, lockedOutEmail) = await AddUserAsync(seeded.A);
+        var (_, email, _) = await app.AddPasswordUserAsync(seeded.A);
+        var (lockedOutUserId, lockedOutEmail, _) = await app.AddPasswordUserAsync(seeded.A);
         await LockOutAsync(lockedOutUserId);
         var unknownEmail = $"{Guid.NewGuid():N}@example.org";
 
         foreach (var (typed, password, status) in new[]
         {
-            (email, Password, HttpStatusCode.OK),
+            (email, PasswordSignIn.Password, HttpStatusCode.OK),
             (email, WrongPassword, HttpStatusCode.Unauthorized),
-            (lockedOutEmail, Password, HttpStatusCode.Unauthorized),
-            (unknownEmail, Password, HttpStatusCode.Unauthorized),
+            (lockedOutEmail, PasswordSignIn.Password, HttpStatusCode.Unauthorized),
+            (unknownEmail, PasswordSignIn.Password, HttpStatusCode.Unauthorized),
         })
         {
             using var client = app.CreateHttpsClient();
@@ -173,7 +170,7 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
         }
 
         Assert.NotEmpty(logs.Entries);
-        string[] secrets = [email, lockedOutEmail, unknownEmail, Password, WrongPassword];
+        string[] secrets = [email, lockedOutEmail, unknownEmail, PasswordSignIn.Password, WrongPassword];
         Assert.All(logs.Entries, entry =>
         {
             string?[] logged =
@@ -215,42 +212,12 @@ public sealed class PasswordSignInEndpointTests : IClassFixture<Grow2NotesFactor
     // the right password.
     private async Task AssertStatusRefusesTheRightPasswordAsync(UserStatus status)
     {
-        var (userId, email) = await AddUserAsync(seeded.A, status);
+        var (userId, email, _) = await app.AddPasswordUserAsync(seeded.A, status);
         using var client = app.CreateHttpsClient();
 
-        using var response = await client.SendPasswordAsync(email, Password);
+        using var response = await client.SendPasswordAsync(email, PasswordSignIn.Password);
 
         await AssertFailedSignInAsync(response, userId, AuditEventTypes.Auth.SignInFailed);
-    }
-
-    // A user as setup's password path leaves one (design.md §8.1): a password, the authenticator key that the invite
-    // made, and two-factor on, unless the test turns it off; Active unless the test asks for another status; with an
-    // address of its own, which no other test or run of this one uses. The seeded users have no password, and other
-    // tests rely on their lockout (tests/README.md).
-    private async Task<(Guid UserId, string Email)> AddUserAsync(
-        SeededOrganisation organisation, UserStatus status = UserStatus.Active, bool twoFactorEnabled = true)
-    {
-        var email = $"{Guid.NewGuid():N}@example.org";
-        var now = clock.GetUtcNow().UtcDateTime;
-        var user = new ApplicationUser
-        {
-            OrganisationId = organisation.OrganisationId,
-            DisplayName = "Sam Taylor",
-            Role = UserRole.Worker,
-            Status = status,
-            InvitedAtUtc = now,
-            InvitedByUserId = organisation.ManagerId,
-            ActivatedAtUtc = now,
-            UserName = email,
-            Email = email,
-            EmailConfirmed = true,
-        };
-        await using var scope = app.Services.CreateAsyncScope();
-        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-        AssertSucceeded(await users.CreateAsync(user, Password));
-        AssertSucceeded(await users.ResetAuthenticatorKeyAsync(user));
-        AssertSucceeded(await users.SetTwoFactorEnabledAsync(user, twoFactorEnabled));
-        return (user.Id, email);
     }
 
     // Locked out as A25's lockout locks someone out, for 15 minutes. Identity's UserManager compares the lockout's end

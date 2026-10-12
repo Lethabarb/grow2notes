@@ -426,6 +426,50 @@ Each sign-in, and each failed one on a known account, commits an audit event abo
 events of a user it added, by the user's ID. `Grow2Notes.Tests/Features/Auth/PasskeySignInEndpointTests.cs` is the
 example.
 
+### Signing in with a password
+
+A test of the password sign-in signs in as the SPA does, with an email, a password and the code from an
+authenticator app (design.md §6.2, §8.2), for a user that it adds itself (the seeded-rows rule above), as its failures
+count towards the user's lockout.
+
+- `app.AddPasswordUserAsync(organisation)` (`Grow2Notes.Tests/Fixtures/PasswordSignIn.cs`) adds a worker through the
+  app's `UserManager`, as setup's password path leaves one: with `PasswordSignIn.Password`, an authenticator key and
+  two-factor on. It returns a `PasswordUser`, with the user's ID, address and key. `status` gives the user another
+  status, and `twoFactorEnabled: false` leaves two-factor off, as setup never does.
+- `AuthenticatorCodes.Now(key)` (`Grow2Notes.Tests/Fixtures/AuthenticatorCodes.cs`) computes the code that an
+  authenticator app holding the key shows now: RFC 6238's, as Identity's authenticator provider checks it, which
+  `AuthenticatorCodesTests` checks against the RFC's own test values. Identity checks a code against the system
+  clock, not the app's `TimeProvider`, so a test computes its codes from the real time, even when it hosts the app on
+  a fake clock. Identity accepts the codes of the steps either side of now, so a wrong code is the right key's code
+  for a step well away from them: `AuthenticatorCodes.At(key, DateTimeOffset.UtcNow.AddMinutes(10))`.
+- `SignInWithPasswordAsync(email, password, code)` signs in a client from `CreateHttpsClient()` as the SPA does: it
+  sends the email and the password to `POST /api/auth/login`, checks that the answer asks for the code, and sends the
+  code to `POST /api/auth/login/totp`, each with an antiforgery token that it fetches first. It returns the code
+  step's response. Between the two, the client keeps Identity's two-factor cookie, which holds the code step, and
+  then the session cookie, which it sends with every later request. `SendPasswordAsync(email, password)` and
+  `SendCodeAsync(code)` are its two requests, for a test that does something in between, such as changing the user
+  or asking for passkey options, which replace the code step.
+
+Host the app on a fake clock with `UseClock`, and move the clock a second before each later request of the session,
+as for the cookie sign-in above.
+
+```csharp
+private readonly FakeTimeProvider clock = new(TestClock.Start);
+
+// In the test:
+await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+var user = await app.AddPasswordUserAsync(sqlServer.Seeded.A);
+using var client = app.CreateHttpsClient();
+using var signIn = await client.SignInWithPasswordAsync(
+    user.Email, PasswordSignIn.Password, AuthenticatorCodes.Now(user.AuthenticatorKey));
+
+clock.Advance(TimeSpan.FromSeconds(1));
+using var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
+```
+
+As with a passkey, a test reads only the audit events of a user it added, by the user's ID.
+`Grow2Notes.Tests/Features/Auth/TotpSignInEndpointTests.cs` is the example.
+
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
