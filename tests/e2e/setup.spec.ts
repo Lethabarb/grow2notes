@@ -2,11 +2,6 @@ import type { Locator, Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 
-// The antiforgery, enrolment and session cookies are Secure, so the app issues them only on an HTTPS request
-// (design.md §8.4, §9.8). CI serves the app at http://localhost, so every request here says that it came over HTTPS,
-// as App Service's front end says it, which the app trusts from loopback; Chromium keeps Secure cookies from localhost.
-test.use({ extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } });
-
 const linkCheck = '**/api/auth/setup/start';
 
 // tokens.css's --colour-action, a primary button's fill, and --colour-surface, a secondary one's (Button.module.css).
@@ -39,7 +34,8 @@ function expectNoLinkIn(historyState: string, setupLink: string) {
 async function historyUrls(page: Page): Promise<string[]> {
   const devTools = await page.context().newCDPSession(page);
   const { entries } = await devTools.send('Page.getNavigationHistory');
-  await devTools.detach();
+  // Left attached until the page closes: detaching a DevTools session takes the page's virtual authenticator with it,
+  // and a later passkey prompt would then find none.
   return entries.map(({ url }) => url);
 }
 
@@ -101,7 +97,7 @@ test('a setup link leaves the address bar and the history before it is checked, 
   await expectAxeToPass(page);
 });
 
-test('the passkey path signs in at /, with no way Back to setup and nothing kept, and uses up the link', async ({
+test('the passkey path signs in at /, with no way Back and nothing kept, uses up the link and signs in again', async ({
   page,
   invite,
   authenticator,
@@ -165,6 +161,20 @@ test('the passkey path signs in at /, with no way Back to setup and nothing kept
   await expect(main).toContainText('Ask a manager to send a new one.');
   await expect(main.getByRole('button')).toHaveCount(0);
   await expectAxeToPass(page);
+
+  // Signing in a second time works (sign-in.md › Setup; S00.04.04): with the session gone, the address opened shows
+  // sign-in, where the passkey that setup made signs the new manager in, and the page they asked for takes its place.
+  await page.context().clearCookies();
+  await page.goto('/manage');
+  const signIn = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/auth/passkey');
+  await main.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  expect((await signIn).status()).toBe(200);
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Manage');
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+  await expect(page).toHaveURL((url) => url.pathname === '/manage');
+  await expect(page).toHaveTitle('Grow2Notes – Manage');
+  const again = await page.evaluate(async () => (await fetch('/api/auth/me')).json() as Promise<unknown>);
+  expect(again).toEqual(expect.objectContaining({ displayName: invite.displayName, role: 'Manager' }));
 });
 
 test('a passkey that the device did not verify is not set up, and both ways on still work', async ({

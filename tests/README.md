@@ -136,16 +136,19 @@ Two more fixtures are there for the tests that name them, and only those run the
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
-  and `credentials()` lists the passkeys that it holds.
+  `credentials()` lists the passkeys that it holds, and `addPasskey(rpId)` adds one that no account holds (below).
+  With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
+  it does.
 
-A test that sends a change through the SPA's `api()` wrapper sets `extraHTTPHeaders` to
-`{ 'X-Forwarded-Proto': 'https' }`, as `e2e/setup.spec.ts` does with `test.use`. The antiforgery, enrolment and session
-cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a request
-from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
+Every request that a test's browser sends says that it came over HTTPS: `playwright.config.ts` sets
+`extraHTTPHeaders` to `{ 'X-Forwarded-Proto': 'https' }` for every test, as every signed-out page sends a change
+through the SPA's `api()` wrapper, sign-in asking for passkey options as it shows. The antiforgery, enrolment and
+session cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a
+request from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
 
 ### Answering `/api/auth/me`
 
-Until the sign-in stories are built, the end-to-end run signs someone in only through setup (`e2e/setup.spec.ts`), so a
+The end-to-end run signs someone in only through setup and the passkey that setup makes (`e2e/setup.spec.ts`), so a
 test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts`
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
@@ -158,6 +161,25 @@ policy. A test that does not call it meets the app's real `401`, as a signed-out
 await serveMe(page, manager);
 await page.goto('/manage');
 ```
+
+### Signing in with a passkey, end to end
+
+A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
+dialog, as passkey-flows.md's *Tests* say.
+
+- `addPasskey(rpId)` adds a passkey through `WebAuthn.addCredential`: a discoverable credential for the domain
+  `rpId`, with a P-256 key, a credential ID and a user handle that the test makes, given to the protocol as base64.
+  The sign-in options name no credentials, so the next prompt for that domain signs with it. Pass the host of the
+  address that the test opened, `new URL(page.url()).hostname` once the page has loaded, as the options name
+  `App:Origin`'s host and `App__Origin` names that address (above).
+- No account holds a passkey added this way, so a sign-in with it fails, with the `401` that the API gives an unknown
+  credential. One that succeeds needs a passkey that the app's setup made with the same authenticator, as in
+  `e2e/setup.spec.ts`'s passkey path, which signs in again once its session is gone.
+
+An assertion that something is absent passes at once, before the page has handled the prompt's answer, so a test
+first waits for what the page does with it: its request to `POST /api/auth/passkey` (`page.waitForResponse`), or, for
+a failure that sends nothing, the fresh options that the sign-in view asks for after any failure.
+`e2e/sign-in.spec.ts` is the example.
 
 ## Writing integration tests
 
@@ -286,11 +308,11 @@ ignore the header. `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is th
 
 A test of the session itself signs in with the real session cookie, `__Host-grow2notes`, so its later requests meet
 the app's own session checks: the security stamp, the idle limit and the 12-hour limit (design.md §8.4, §8.5). The
-seeded users have no passkey or password to sign in with, so the test maps a test-only sign-in with `MapCookieSignIn()`
-(`Grow2Notes.Tests/Fixtures/CookieSignIn.cs`), which signs in the user whose ID it is given through the app's
-`SignInManager.SignInAsync(user, isPersistent: false)`, as setup does when it completes (§8.1 step 5). So the cookie is
-the one a real sign-in issues, `auth_time` included. That call does not ask `CanSignInAsync`, so sign in Active users
-only.
+seeded users have no passkey or password to sign in with (a test of a sign-in endpoint signs in with a passkey, below),
+so the test maps a test-only sign-in with `MapCookieSignIn()` (`Grow2Notes.Tests/Fixtures/CookieSignIn.cs`), which
+signs in the user whose ID it is given through the app's `SignInManager.SignInAsync(user, isPersistent: false)`, as
+setup does when it completes (§8.1 step 5). So the cookie is the one a real sign-in issues, `auth_time` included. That
+call does not ask `CanSignInAsync`, so sign in Active users only.
 
 The cookie is `Secure`, so the client calls `https://localhost`: `SignInWithCookieAsync` signs in a client from
 `CreateHttpsClient()`, which keeps the cookie and sends it with every later request, and returns the cookie that the
@@ -335,6 +357,55 @@ its two-factor cookie and ends it on the attempt, and the handler accepts any cr
 The test server gives a request no client address, so a test of an audit event's `IpAddress` gives each request one
 in a startup filter, ahead of the app's middleware. `Grow2Notes.Tests/Features/Auth/SetupPasskeyEndpointTests.cs` is
 the example of both.
+
+### Signing in with a passkey
+
+A test of a sign-in endpoint signs in as the SPA does, with a passkey (design.md §6.2, §8.2). The .NET tests run no
+browser, so `TestAuthenticator` (`Grow2Notes.Tests/Fixtures/TestAuthenticator.cs`) stands in for the browser's
+passkey prompt. It holds one passkey, an ES256 key pair that it makes, and signs assertions as a browser at the
+factory's `App:Origin`, `https://grow2notes.example`, would: for that origin's host, the domain that the passkey
+options name, with the person verified, and with its signature counter one higher each time, as Identity requires.
+Identity's own passkey handler verifies them, as it verifies a real one.
+
+- `TestAuthenticator.RegisterAsync(app.Services, userId)` makes an authenticator and stores its passkey for the user,
+  through the app's `UserManager.AddOrUpdatePasskeyAsync`, as setup stores one. The seeded users have no passkey, so
+  register it for a user the test adds itself (the seeded-rows rule above). A `new TestAuthenticator()` holds a
+  passkey that no account holds, as the endpoint matrix's row for `POST /api/auth/passkey` sends. For a sign-in that
+  fails, `GetAssertion(challenge, userVerified: false)` leaves the person unverified,
+  `GetAssertion(challenge, origin: …)` is asked for by a page at another origin, such as a subdomain's, and
+  `WithAnotherKey()` gives an authenticator that signs for the same passkey with a key of its own.
+- `SignInWithPasskeyAsync(authenticator)` (`Grow2Notes.Tests/Fixtures/PasskeySignIn.cs`) signs in a client from
+  `CreateHttpsClient()` as the SPA does: it fetches an antiforgery token, asks `POST /api/auth/passkey/options` for
+  the options, which set the ceremony's cookie, and sends the authenticator's assertion over their challenge to
+  `POST /api/auth/passkey`. It returns that response; the client keeps the session cookie it sets, and sends it with
+  every later request. The request carries the `Origin` header that a browser sends with every `POST`; the app takes
+  only an assertion asked for by a page at `App:Origin` itself (design.md A54).
+  `SignInWithPasskeyAsync(challenge => …)` sends the credential that the function gives for the challenge instead,
+  such as a failing assertion.
+- `FetchPasskeyChallengeAsync(token)` and `SendPasskeyCredentialAsync(credentialJson, token)` are its two requests,
+  for a test that sends a credential with no options asked for, after other options, after the clock has moved, or,
+  with an `origin`, from a page at another origin. `PasskeySignIn.Request(credentialJson)` is the second request
+  alone; the test adds the token.
+
+Host the app on a fake clock with `UseClock`, and move the clock a second before each later request of the session,
+as for the cookie sign-in above.
+
+```csharp
+private readonly FakeTimeProvider clock = new(TestClock.Start);
+
+// In the test, for a user that it added:
+await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+using var client = app.CreateHttpsClient();
+using var signIn = await client.SignInWithPasskeyAsync(authenticator);
+
+clock.Advance(TimeSpan.FromSeconds(1));
+using var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
+```
+
+Each sign-in, and each failed one on a known account, commits an audit event about its user, so a test reads only the
+events of a user it added, by the user's ID. `Grow2Notes.Tests/Features/Auth/PasskeySignInEndpointTests.cs` is the
+example.
 
 ### The endpoint matrix
 

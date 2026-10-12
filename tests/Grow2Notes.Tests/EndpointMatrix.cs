@@ -1,5 +1,7 @@
+using System.Buffers.Text;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using Grow2Notes.Tests.Fixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -75,6 +77,12 @@ internal static class EndpointMatrix
         new(Post,      "/api/auth/setup/passkey/options", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),
+
+        // Anyone may ask for the options to sign in with a passkey (§6.2), signed in or not: they name no user. Anyone
+        // may sign in with a passkey too, and a passkey that no account holds is refused, whoever sends it.
+        new(Post,      "/api/auth/passkey/options", OK,     OK,        OK,         OK),
+        new(Post,      "/api/auth/passkey",      Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithAPasskeyNoAccountHolds),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -128,6 +136,15 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
+    // the challenge, so a made-up one does, with no options asked for first, and the call changes nothing.
+    private static Task<HttpRequestMessage> WithAPasskeyNoAccountHolds(EndpointCall _)
+    {
+        using var authenticator = new TestAuthenticator();
+        return Task.FromResult(PasskeySignIn.Request(
+            authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
+    }
 }
 
 /// <summary>

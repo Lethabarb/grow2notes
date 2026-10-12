@@ -94,12 +94,25 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
 // verification (a face, fingerprint or device PIN) makes a passkey enough for MFA on its own (D23), and a discoverable
 // credential lets a person sign in without giving their email. AuthenticatorTimeout keeps Identity's 5 minutes, never
 // less (passkey-flows.md). App:Origin is read when the options are first used, not here, as the connection string is.
+//
+// A credential must also come from a page at App:Origin itself, not in a cross-origin frame (A54). A browser lets a
+// page on any subdomain of the passkey's domain use the passkey, and Identity's own check, which stays where App:Origin
+// is not set, only compares the credential's origin with the request's Origin header, which a server that relays a
+// credential from such a page sets as it likes. Identity checks a new passkey's origin the same way.
 builder.Services.AddOptions<IdentityPasskeyOptions>()
     .Configure<IConfiguration>((options, configuration) =>
     {
-        options.ServerDomain = AppOrigin.Find(configuration)?.Host;
+        var appOrigin = AppOrigin.Find(configuration);
+        options.ServerDomain = appOrigin?.Host;
         options.UserVerificationRequirement = "required";
         options.ResidentKeyRequirement = "required";
+        if (appOrigin is not null)
+        {
+            options.ValidateOrigin = context => ValueTask.FromResult(
+                !context.CrossOrigin
+                && Uri.TryCreate(context.Origin, UriKind.Absolute, out var origin)
+                && origin == appOrigin);
+        }
     });
 
 // The session is Identity's cookie (design.md §8.3, §8.4). Setup has a cookie of its own until it signs the person in
@@ -258,7 +271,9 @@ app.MapApiGroup()
     .MapMeEndpoint()
     .MapSetupStartEndpoint()
     .MapSetupPasskeyOptionsEndpoint()
-    .MapSetupPasskeyEndpoint();
+    .MapSetupPasskeyEndpoint()
+    .MapPasskeyOptionsEndpoint()
+    .MapPasskeySignInEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's
