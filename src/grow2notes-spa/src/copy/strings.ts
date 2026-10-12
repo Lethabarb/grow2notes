@@ -15,13 +15,19 @@ export const strings = {
   signingOut: 'Signing out…',
   /** The start-up message's `<h1>` for no connection or a timeout (app-shell.md component 4). */
   couldNotConnect: 'Could not connect to Grow2Notes',
-  /** The start-up message's `<h1>` for any other failure but a `401` (app-shell.md component 4). */
+  /**
+   * The `<h1>` of the start-up message for any other failure but a `401`, and of the crash pages (app-shell.md
+   * component 4).
+   */
   thereIsAProblem: 'There is a problem with Grow2Notes',
   /** Page not found's words under its heading (app-shell.md component 4). */
   pageNotFound: {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',
-    goToToday: 'Go to Today',
   },
+  /** The crash pages' words under their heading (app-shell.md component 4). */
+  savedIsKept: 'Anything already saved is kept.',
+  /** The link to Today on Page not found and the crash pages (app-shell.md component 4). */
+  goToToday: 'Go to Today',
   /**
    * Sign-in's views A and B (sign-in.md): A's `<h1>` is its page name, "Sign in", and B's, the code step's, is the code
    * field's label, `oneTimeCode.label`.

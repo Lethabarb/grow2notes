@@ -1,32 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useMatches, type UIMatch } from 'react-router';
 import { classify } from '../api/api.ts';
 import { meQuery } from '../api/me.ts';
 import { focusPageHeading } from '../components/focusPageHeading.ts';
-import { PageBarContext } from '../components/pageBarContext.ts';
-import { pageName } from '../copy/pageNames.ts';
-import { strings } from '../copy/strings.ts';
+import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
-import styles from './AppShell.module.css';
-import { Header } from './Header.tsx';
-import layout from './layout.module.css';
 import type { RouteHandle } from './routes.tsx';
+import { ShellFrame } from './ShellFrame.tsx';
 import { StartUp } from './StartUp.tsx';
 import { usePageTitle } from './usePageTitle.ts';
 import { useRefreshMe } from './useRefreshMe.ts';
-
-const mainId = 'main-content';
+import { WholePageMessageContext } from './wholePageMessage.ts';
 
 /**
- * The frame around every screen (app-shell.md components 1 to 3a): the skip link, the header, the before-main bar
- * slot and the one `<main>`, which holds the route's screen once `GET /api/auth/me` has answered `200`. Until then,
- * and after a failure, it is the signed-out frame, with the wordmark as plain text: from a `401` its `<main>` holds
- * sign-in's view A, at the address that was opened; otherwise it holds the start-up's loading line, or its message
- * for a failure, with Try again (component 4). A sign-in puts its `Me` in the same query, so the route's screen then
- * shows in sign-in's place, at the same address, with no new history entry. A route whose handle says
- * `signedOutFrame`, setup's, shows its page in the signed-out frame at once, whatever `/me` answers and whoever is
- * signed in (sign-in.md component 1).
+ * The shell around every screen, in its frame (app-shell.md components 1 to 3a), whose `<main>` holds the route's
+ * screen once `GET /api/auth/me` has answered `200`. Until then, and after a failure, it is the signed-out frame, with
+ * the wordmark as plain text: from a `401` its `<main>` holds sign-in's view A, at the address that was opened;
+ * otherwise it holds the start-up's loading line, or its message for a failure, with Try again (component 4). A
+ * sign-in puts its `Me` in the same query, so the route's screen then shows in sign-in's place, at the same address,
+ * with no new history entry. A route whose handle says `signedOutFrame`, setup's, shows its page in the signed-out
+ * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1).
  */
 export function AppShell() {
   useRefreshMe();
@@ -39,6 +33,10 @@ export function AppShell() {
   const handle = matches.findLast((match) => match.handle !== undefined)?.handle;
   const signedOutFrame = handle?.signedOutFrame === true;
   const shown = signedIn || signedOutFrame;
+  // The page name of a whole-page message in place of the route's screen, such as the crash page, which the title and
+  // the header take from the route's while it shows (useWholePageMessage).
+  const [message, setMessage] = useState<PageName>();
+  const page = message ?? handle?.pageName;
   // Sign-in's view A shows from the first `401`, while no answer has come, until one does: a refresh leaves it as it
   // was while in flight, when TanStack puts a query with no answer back to pending with no error, and when it fails in
   // any way (app-shell.md *Window regains focus*), so that a passkey prompt open in it is not cut short. Set during
@@ -76,40 +74,26 @@ export function AppShell() {
   }, [signedOut, signedIn]);
 
   // The signed-out frame has the bare title, but on a page shown in it, or sign-in's while view A shows (sign-in.md
-  // component 1). A page that sets its own, as Page not found does, sets it in a `useEffect`, which comes after this
-  // hook's layout effect (app-shell-nav.md *Titles*).
-  usePageTitle(shown ? handle?.pageName : signedOut ? pageName.signIn : undefined);
-  // The before-main bar slot once it is in the DOM, for a screen's PageBar. State, not a ref, so that a screen shown
-  // with the shell's first render, before the slot exists, renders again with it.
-  const [pageBar, setPageBar] = useState<HTMLDivElement | null>(null);
+  // component 1). A whole-page message in place of the screen names it while it shows. A page that sets its own, as
+  // Page not found does, sets it in a `useEffect`, which comes after this hook's layout effect (app-shell-nav.md
+  // *Titles*).
+  usePageTitle(shown ? page : signedOut ? pageName.signIn : undefined);
 
   return (
-    <>
-      <a href={`#${mainId}`} className={styles.skipLink} onClick={skipToMain}>
-        {strings.skipToMainContent}
-      </a>
-      <Header me={signedOutFrame ? undefined : me} page={handle?.pageName} />
-      <div id="page-bar" ref={setPageBar} className={styles.pageBar} />
-      <PageBarContext value={pageBar}>
-        <main id={mainId} tabIndex={-1} className={`${layout.container} ${styles.main}`}>
-          {shown && <Outlet />}
-          {signedOut && <SignIn />}
-          {startingUp && (
-            <StartUp
-              onTryAgainUsed={() => {
-                tryAgainUsed.current = true;
-              }}
-            />
-          )}
-        </main>
-      </PageBarContext>
-    </>
+    <ShellFrame me={signedOutFrame ? undefined : me} page={page}>
+      {shown && (
+        <WholePageMessageContext value={setMessage}>
+          <Outlet />
+        </WholePageMessageContext>
+      )}
+      {signedOut && <SignIn />}
+      {startingUp && (
+        <StartUp
+          onTryAgainUsed={() => {
+            tryAgainUsed.current = true;
+          }}
+        />
+      )}
+    </ShellFrame>
   );
-}
-
-// Focuses <main> without following the link, so that #main-content never enters the address or the history, and the
-// router sees no navigation (app-shell.md component 1).
-function skipToMain(event: MouseEvent<HTMLAnchorElement>) {
-  event.preventDefault();
-  document.getElementById(mainId)?.focus();
 }

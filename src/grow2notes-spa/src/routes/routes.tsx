@@ -1,6 +1,7 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { AppShell } from './AppShell.tsx';
+import { CrashPage, ShellCrashPage } from './CrashPage.tsx';
 import { ManagePage } from './ManagePage.tsx';
 import { ManagerOnly } from './ManagerOnly.tsx';
 import { PageNotFound } from './PageNotFound.tsx';
@@ -26,30 +27,39 @@ const setupHandle: RouteHandle = { pageName: pageName.setUpYourAccount, signedOu
 
 /**
  * The app's routes, which `main.tsx` gives to `createBrowserRouter` and the tests to `createMemoryRouter`: one root
- * layout, the shell, around every screen.
+ * layout, the shell, around every screen, with a crash page for each of its two route error boundaries (app-shell.md
+ * component 4). React Router clears a crash on the next location.
  */
 export const routes: AppRoute[] = [
   {
     element: <AppShell />,
+    // For a crash in the shell itself, which takes the header and nav with it.
+    errorElement: <ShellCrashPage />,
     children: [
-      // Beside the signed-in routes, not under them, so that a person with no session reaches setup.
       {
-        path: 'setup',
-        element: <SetupLayout />,
+        // For a screen that throws while rendering, in <main>, under the nav.
+        errorElement: <CrashPage />,
         children: [
-          { index: true, element: <SetupPage />, handle: setupHandle },
-          { path: 'password', element: <CreatePassword />, handle: setupHandle },
-          { path: 'app', element: <AuthenticatorSetup />, handle: setupHandle },
+          // Beside the signed-in routes, not under them, so that a person with no session reaches setup.
+          {
+            path: 'setup',
+            element: <SetupLayout />,
+            children: [
+              { index: true, element: <SetupPage />, handle: setupHandle },
+              { path: 'password', element: <CreatePassword />, handle: setupHandle },
+              { path: 'app', element: <AuthenticatorSetup />, handle: setupHandle },
+            ],
+          },
+          { index: true, element: <TodayPage />, handle: { pageName: pageName.today } },
+          // Every manager screen goes in here.
+          {
+            element: <ManagerOnly />,
+            children: [{ path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } }],
+          },
+          // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
+          { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
         ],
       },
-      { index: true, element: <TodayPage />, handle: { pageName: pageName.today } },
-      // Every manager screen goes in here.
-      {
-        element: <ManagerOnly />,
-        children: [{ path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } }],
-      },
-      // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
-      { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
     ],
   },
 ];

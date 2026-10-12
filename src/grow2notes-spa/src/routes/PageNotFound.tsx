@@ -27,7 +27,7 @@ export function PageNotFound() {
       <PageHeading>{pageName.pageNotFound}</PageHeading>
       <p>{strings.pageNotFound.checkAddress}</p>
       <p>
-        <Link to="/">{strings.pageNotFound.goToToday}</Link>
+        <Link to="/">{strings.goToToday}</Link>
       </p>
     </PageStatus>
   );
