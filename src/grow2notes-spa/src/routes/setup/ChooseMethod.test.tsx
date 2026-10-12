@@ -350,10 +350,10 @@ describe('ChooseMethod (view E)', () => {
     expect(window.history.length).toBe(entries);
     expect(router.state.location.state).toBeNull();
     expect(screen.queryByTestId('setup-memory')).not.toBeInTheDocument();
-    // The shell has the signed-in user from the answer, with no new /me, which it would not send by itself, and shows
-    // Today for its today in the signed-in frame (sign-in.md *Interactions* 5).
+    // The shell has the signed-in user from the answer, and shows Today for its today in the signed-in frame
+    // (sign-in.md *Interactions* 5), whatever the new location's one refresh of /me answers: here the test's 401.
     expect(client.getQueryData(meQuery.queryKey)).toEqual(me);
-    expect(sent(mePath)).toHaveLength(meRequests);
+    expect(sent(mePath)).toHaveLength(meRequests + 1);
     expect(heading()).toHaveAccessibleName(`Today, Monday 12${nbsp}October`);
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(document.title).toBe('Grow2Notes – Today');

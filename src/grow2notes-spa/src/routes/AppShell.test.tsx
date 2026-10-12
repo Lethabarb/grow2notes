@@ -1,4 +1,4 @@
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -139,7 +139,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  focusManager.setFocused(undefined);
   fetchMock.mockReset();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -367,20 +366,18 @@ describe('AppShell', () => {
   it.each([
     { answer: 'a 401', serveAnswer: () => problem(401) },
     { answer: 'a 200', serveAnswer: () => json(worker) },
-  ])('asks /me once after $answer, and not again when the window regains focus', async ({ serveAnswer }) => {
+  ])('asks /me once after $answer, and once more when the window regains focus', async ({ serveAnswer }) => {
     withWebAuthn();
     serveMe(serveAnswer);
     renderShell('/');
     await wait(0);
+    expect(meRequests()).toBe(1);
 
     act(() => {
-      focusManager.setFocused(false);
-    });
-    act(() => {
-      focusManager.setFocused(true);
+      window.dispatchEvent(new FocusEvent('focus'));
     });
     await wait(60_000);
 
-    expect(meRequests()).toBe(1);
+    expect(meRequests()).toBe(2);
   });
 });

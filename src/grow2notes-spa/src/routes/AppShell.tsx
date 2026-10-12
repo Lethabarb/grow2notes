@@ -13,19 +13,21 @@ import { Header } from './Header.tsx';
 import layout from './layout.module.css';
 import type { RouteHandle } from './routes.tsx';
 import { usePageTitle } from './usePageTitle.ts';
+import { useRefreshMe } from './useRefreshMe.ts';
 
 const mainId = 'main-content';
 
 /**
  * The frame around every screen (app-shell.md components 1 to 3a): the skip link, the header, the before-main bar
  * slot and the one `<main>`, which holds the route's screen once `GET /api/auth/me` has answered `200`. Until then,
- * and after a failure, it is the signed-out frame, with the wordmark as plain text: for a `401` its `<main>` holds
+ * and after a failure, it is the signed-out frame, with the wordmark as plain text: from a `401` its `<main>` holds
  * sign-in's view A, at the address that was opened (component 4); otherwise `<main>` is empty and the title bare. A
  * sign-in puts its `Me` in the same query, so the route's screen then shows in sign-in's place, at the same address,
  * with no new history entry. A route whose handle says `signedOutFrame`, setup's, shows its page in the signed-out
  * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1).
  */
 export function AppShell() {
+  useRefreshMe();
   const { data: me, error } = useQuery(meQuery);
   // Data first, as a refresh that fails keeps the data it had, so the person stays signed in on screen (app-shell.md
   // *Refresh*).
@@ -35,7 +37,15 @@ export function AppShell() {
   const handle = matches.findLast((match) => match.handle !== undefined)?.handle;
   const signedOutFrame = handle?.signedOutFrame === true;
   const shown = signedIn || signedOutFrame;
-  const signedOut = !shown && error !== null && classify(error) === 'signedOut';
+  // Sign-in's view A shows from the first `401`, while no answer has come, until one does: a refresh leaves it as it
+  // was while in flight, when TanStack puts a query with no answer back to pending with no error, and when it fails in
+  // any way (app-shell.md *Window regains focus*), so that a passkey prompt open in it is not cut short. Set during
+  // render, as an effect that set it would render twice.
+  const [answeredSignedOut, setAnsweredSignedOut] = useState(false);
+  if (!answeredSignedOut && !signedIn && error !== null && classify(error) === 'signedOut') {
+    setAnsweredSignedOut(true);
+  }
+  const signedOut = !shown && answeredSignedOut;
 
   // Whether sign-in has shown, so that the screen that a sign-in brings takes focus on its <h1>, as a new screen does
   // (sign-in.md *Success, fresh load*), while a screen shown on a first load moves no focus (app-shell.md component 7).
