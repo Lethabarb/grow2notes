@@ -396,9 +396,10 @@ Read-only does not apply to navigation.
 
 ### Implementation notes (React 19, React Router data router, TanStack Query 5, CSS Modules)
 
-- **Routing.** Use `createBrowserRouter` with one root layout route, `<AppShell>`, plus an `errorElement` that serves
-  as "Page not found". Wrap manager routes in a small `<ManagerOnly>` element that renders the not-found page for
-  workers.
+- **Routing.** Use `createBrowserRouter` with one root layout route, `<AppShell>`. "Page not found" is the route
+  table's `*` route, a child of that layout, so that the header and nav stay; the `errorElement` shows the crash page,
+  "There is a problem with Grow2Notes", when a screen throws while rendering (app-shell.md component 4). Wrap manager
+  routes in a small `<ManagerOnly>` layout route that renders the not-found page for workers.
 - **Do not use `NavLink`.** It always writes `"page"` and matches child routes. Use a 10-line `NavItem` that maps the
   URL to `'page' | 'true' | undefined` using the table above.
 - **Titles.** Keep `<title>Grow2Notes</title>` in `index.html` for the moment before JavaScript runs, and set
@@ -454,7 +455,7 @@ export function Header({ me }: { me?: Me }) {
   const brand = <Link to="/" className={s.brand}>Grow2Notes</Link>;
   if (!me) return <header className={s.header}><div className={s.inner}><span className={s.brand}>Grow2Notes</span></div></header>;
 
-  const isManager = me.role === 'manager';
+  const isManager = me.role === 'Manager';      // Me's role is 'Worker' | 'Manager', as the API gives it
   const nav = (
     <nav aria-label="Main">
       <ul className={s.navList}>

@@ -180,8 +180,8 @@ listed here.
 
 - `<h1 tabindex="-1">` **Today · Thursday 1 October** (V). Date from `me.today` through `dateToday()` (no year, as
   designed); non-breaking space between "1" and "October".
-- The " · " is `<span aria-hidden="true"> · </span>` + visually hidden ", " (microcopy.md separator rule), so it is
-  read "Today, Thursday 1 October, heading level 1".
+- The " · " is microcopy.md's `Sep` (its §7 separator rule and §8 sketch): `<span aria-hidden="true"> ·</span>`, a
+  visually hidden "," and a plain space after both, so it is read "Today, Thursday 1 October, heading level 1".
 - `--font-size-h1` (28/32 px), weight 700, `width: fit-content` so a focus box hugs the text. Renders at once (the
   shell already has `me`), before the list loads.
 
