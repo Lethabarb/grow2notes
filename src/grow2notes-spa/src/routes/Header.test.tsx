@@ -30,7 +30,6 @@ const noteAddress = '/participants/0c4f2a9e-6b13-4d7a-8e52-71f9b3d0a6c8/notes/20
 const madeUp: AppRoute[] = [
   { path: 'flagged', handle: { pageName: pageName.flaggedNotes } },
   { path: 'reports/daily/:date', handle: { pageName: pageName.dailyReport } },
-  { path: 'manage', handle: { pageName: pageName.manage } },
   { path: 'manage/users', handle: { pageName: pageName.users } },
   { path: 'participants/:participantId/notes/:noteDate', handle: { pageName: pageName.note } },
 ];

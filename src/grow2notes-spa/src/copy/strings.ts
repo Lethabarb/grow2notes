@@ -9,6 +9,11 @@ export const strings = {
   navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
+  /** Page not found's words under its heading (app-shell.md component 4). */
+  pageNotFound: {
+    checkAddress: 'If you typed or pasted the web address, check it is correct.',
+    goToToday: 'Go to Today',
+  },
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',

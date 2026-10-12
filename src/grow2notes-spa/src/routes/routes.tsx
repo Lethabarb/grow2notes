@@ -1,6 +1,10 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { AppShell } from './AppShell.tsx';
+import { ManagePage } from './ManagePage.tsx';
+import { ManagerOnly } from './ManagerOnly.tsx';
+import { PageNotFound } from './PageNotFound.tsx';
+import { TodayPage } from './TodayPage.tsx';
 
 /**
  * What a route declares for the shell: its page name, from which the shell sets the title (app-shell.md, 3) and, for
@@ -21,9 +25,14 @@ export const routes: AppRoute[] = [
   {
     element: <AppShell />,
     children: [
-      { index: true, handle: { pageName: pageName.today } },
+      { index: true, element: <TodayPage />, handle: { pageName: pageName.today } },
+      // Every manager screen goes in here.
+      {
+        element: <ManagerOnly />,
+        children: [{ path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } }],
+      },
       // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
-      { path: '*', handle: { pageName: pageName.pageNotFound } },
+      { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
     ],
   },
 ];

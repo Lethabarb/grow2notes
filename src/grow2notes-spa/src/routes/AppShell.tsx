@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, type MouseEvent } from 'react';
+import { useLayoutEffect, type MouseEvent } from 'react';
 import { Outlet, useLocation, useMatches, type UIMatch } from 'react-router';
 import { meQuery } from '../api/me.ts';
 import { msg } from '../copy/messages.ts';
@@ -26,8 +26,9 @@ export function AppShell() {
   const name = matches.findLast(({ handle }) => handle !== undefined)?.handle?.pageName;
 
   // Set again on each location change, not only when the name changes, so that a title a screen changed itself, such
-  // as a form's "Error: " in front, does not outlive the screen.
-  useEffect(() => {
+  // as a form's "Error: " in front, does not outlive the screen. In a layout effect, which React runs before any
+  // `useEffect` of the same render, so that a page that sets its own title in one, as Page not found does, comes last.
+  useLayoutEffect(() => {
     document.title = signedIn && name !== undefined ? msg.pageTitle(name) : strings.appName;
   }, [signedIn, name, key]);
 

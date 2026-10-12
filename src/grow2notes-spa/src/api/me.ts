@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import { api } from './api.ts';
 
 /**
@@ -27,3 +27,16 @@ export const meQuery = queryOptions({
   queryFn: ({ signal }) => api<Me>('/api/auth/me', { signal }),
   staleTime: Infinity,
 });
+
+/**
+ * The signed-in user, for a screen inside the shell, which shows its screens only once `['me']` holds an answer, and
+ * keeps that answer through a refresh that fails.
+ */
+export function useMe(): Me {
+  const { data } = useQuery(meQuery);
+  if (data === undefined) {
+    throw new Error('A screen rendered before GET /api/auth/me answered.');
+  }
+
+  return data;
+}
