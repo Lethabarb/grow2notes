@@ -323,7 +323,8 @@ is the design's sentence. The button is **Save**.
   person is how a manager withdraws an invite: it rotates the security stamp, so the setup link stops working (8.1, 8.6).
 - **Reactivate** (Deactivated): `POST …/reactivate` with `If-Match`. No dialog: it gives access back and can be undone
   with Deactivate. Busy "Reactivating…". On success, a focused success banner shows.
-- **After any action,** invalidate the users query. If the person is the signed-in manager, also refetch `/me`.
+- **After any action,** invalidate the users query. If the person is the signed-in manager, also call
+  `refreshMe(queryClient)` (app-shell.md *Refresh of `/api/auth/me`*).
 - **`412 precondition.failed`** (someone else changed this user first): refetch, show the message in the action area's
   alert (or in the dialog, as confirm-dialog.md does), and keep the page as it is now.
 - **`401`:** the app's sign-in-in-place flow (8.5). Dialogs close first (confirm-dialog.md).

@@ -1,4 +1,4 @@
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
@@ -139,7 +139,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  focusManager.setFocused(undefined);
   fetchMock.mockReset();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -155,21 +154,33 @@ describe('AppShell', () => {
       expect(within(screen.getByRole('banner')).getByText('Grow2Notes')).toBeInTheDocument();
     }
 
-    it('shows the signed-out frame, with an empty <main> and the bare title, while the answer is pending', async () => {
+    it("shows the signed-out frame, with the start-up's empty status line alone in <main>, while pending", async () => {
       serveMe(noAnswer);
       renderShell('/');
       await wait(0);
 
       expect(fetchMock).toHaveBeenCalledWith(mePath, expect.objectContaining({ method: 'GET' }));
       expectSignedOutFrame();
-      expect(screen.getByRole('main')).toBeEmptyDOMElement();
+      const main = screen.getByRole('main');
+      expect(main.children).toHaveLength(1);
+      expect(within(main).getByRole('status')).toBeEmptyDOMElement();
       expect(document.title).toBe('Grow2Notes');
     });
 
     it.each([
-      { failure: 'a 503', answer: () => problem(503) },
-      { failure: 'no connection', answer: noConnection },
-    ])('shows the signed-out frame, with an empty <main> and the bare title, after $failure', async ({ answer }) => {
+      {
+        failure: 'a 503',
+        answer: () => problem(503),
+        heading: 'There is a problem with Grow2Notes',
+        sentence: 'Grow2Notes did not load: something went wrong. Try again.',
+      },
+      {
+        failure: 'no connection',
+        answer: noConnection,
+        heading: 'Could not connect to Grow2Notes',
+        sentence: 'Grow2Notes did not load: no connection. Try again.',
+      },
+    ])('shows the signed-out frame, with its start-up message, after $failure', async ({ answer, ...message }) => {
       serveMe(answer);
       const { client } = renderShell('/');
       // Past the query client's one silent retry.
@@ -177,8 +188,10 @@ describe('AppShell', () => {
 
       expect(client.getQueryState(meQuery.queryKey)?.status).toBe('error');
       expectSignedOutFrame();
-      expect(screen.getByRole('main')).toBeEmptyDOMElement();
-      expect(document.title).toBe('Grow2Notes');
+      const main = within(screen.getByRole('main'));
+      expect(main.getByRole('heading', { level: 1 })).toHaveAccessibleName(message.heading);
+      expect(main.getByRole('status')).toHaveTextContent(message.sentence);
+      expect(main.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
 
     describe.each(['/', '/manage/anything'])('given a 401 at %s', (path) => {
@@ -367,20 +380,18 @@ describe('AppShell', () => {
   it.each([
     { answer: 'a 401', serveAnswer: () => problem(401) },
     { answer: 'a 200', serveAnswer: () => json(worker) },
-  ])('asks /me once after $answer, and not again when the window regains focus', async ({ serveAnswer }) => {
+  ])('asks /me once after $answer, and once more when the window regains focus', async ({ serveAnswer }) => {
     withWebAuthn();
     serveMe(serveAnswer);
     renderShell('/');
     await wait(0);
+    expect(meRequests()).toBe(1);
 
     act(() => {
-      focusManager.setFocused(false);
-    });
-    act(() => {
-      focusManager.setFocused(true);
+      window.dispatchEvent(new FocusEvent('focus'));
     });
     await wait(60_000);
 
-    expect(meRequests()).toBe(1);
+    expect(meRequests()).toBe(2);
   });
 });

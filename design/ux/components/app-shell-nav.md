@@ -155,9 +155,10 @@ owner can approve them.
 - **[Convention]** Apple: "Use badges to indicate critical information is available" and save them for critical
   information. AgDS: place the badge "next to associated content – for example, Messages (1)", at 4.5:1 text
   contrast. https://design-system.agriculture.gov.au/components/notification-badge
-- **[Convention, library behaviour]** TanStack Query 5 refetches on `visibilitychange` only by default. To also
-  refetch on window `focus`, as design.md §6.8 asks, use `focusManager.setEventListener`.
-  https://tanstack.com/query/v5/docs/framework/react/guides/window-focus-refetching
+- **[Convention, library behaviour]** TanStack Query 5's own focus refetching listens for `visibilitychange` only by
+  default; `focusManager.setEventListener` would add window `focus`. The shell uses neither for `/api/auth/me`: its
+  one `refreshMe()` has listeners of its own (*Implementation notes* › *Refresh* below; app-shell.md *Conflicts
+  resolved* 6). https://tanstack.com/query/v5/docs/framework/react/guides/window-focus-refetching
 
 **Targets**
 
@@ -239,14 +240,16 @@ In DOM order:
 | Skip link | Skip to main content | GOV.UK |
 | Manage page | `<h1>` Manage; links: Participants · Common items · Guide prompts · Users | §4.0 |
 | Shell loading (only after 1 s) | Loading… | **(new copy)** |
-| Shell error | Can't connect to Grow2Notes. Check your internet connection, then try again. [Try again] | **(new copy)** |
+| Shell error | No connection: `<h1>` Could not connect to Grow2Notes · Grow2Notes did not load: no connection. Try again. [Try again]. A server problem: `<h1>` There is a problem with Grow2Notes · Grow2Notes did not load: something went wrong. Try again. [Try again]. After a Try again that fails: Grow2Notes still did not load: … | **(new copy)**, the start-up words of app-shell.md component 4 and microcopy.md §9 (empty-loading-error.md *Consistency with other component specs*) |
 | Unknown route | `<h1>` Page not found · link "Go to Today" | **(new copy)** |
 | Page titles | `Grow2Notes – {Page name}`, with an en dash and spaces, exactly as in §4.0 | §4.0 |
 
-**Page names**, a fixed list typed as a TypeScript union so no name can ever reach a title: Sign in ·
-Set up your account · Today · Note · Past notes · Version history · Flagged notes · Daily report · Manage ·
-Participants · Participant · Common items · Guide prompts · Users · User · Export record · Page not found. After a
-failed submit, the form adds `Error: ` in front ("Error: Grow2Notes – Note") [Convention, GOV.UK/HMRC].
+**Page names**, a fixed list typed as a TypeScript union so no name can ever reach a title, as app-shell.md
+component 3 lists them (a screen that needs another adds it there first): Sign in · Set up your account · Today ·
+Note · Past notes · Version history · Flagged notes · Daily report · Manage · Participants · Add participant ·
+Participant · Write past-day note · Common items · Guide prompts · Users · Invite user · User · Edit user ·
+Export record · Page not found · There is a problem · Could not connect. After a failed submit, the form adds
+`Error: ` in front ("Error: Grow2Notes – Note") [Convention, GOV.UK/HMRC].
 
 ### Behaviour
 
@@ -274,14 +277,10 @@ failed submit, the form adds `Error: ` in front ("Error: Grow2Notes – Note") [
   refreshing on focus is not the result of an action and would talk over the page. The count is part of the link's
   name, so screen readers hear it when they reach the link. It is never shown by colour or a dot alone. Use the dark
   brand accent, not red, which this app keeps for errors such as "Not saved" [Opinion].
-- **When `/api/auth/me` is refreshed**, which refreshes the badge, `today`, the role and the name:
-  - on full page load;
-  - on every client-side screen change (the single-page-app meaning of "when a page loads", §4.6);
-  - on window `focus` and on `visibilitychange` to visible (§6.8);
-  - after a manager marks a note reviewed;
-  - after any submit or save that returns a `flagStatus`.
-
-  There is no polling (§8.5).
+- **When `/api/auth/me` is refreshed**, which refreshes the badge, `today`, the role and the name: through
+  `refreshMe()` alone, at the triggers that app-shell.md *Refresh of `/api/auth/me`* lists, the one list of them.
+  Among them are the start-up, every client-side screen change (the single-page-app meaning of "when a page loads",
+  §4.6), and window `focus` and `visibilitychange` to visible (§6.8). There is no polling (§8.5).
 - **Account menu**: an APG disclosure. Tapping Account toggles the panel. Escape, from the button or from inside the
   panel, closes it and returns focus to Account. Moving to another screen closes it. It needs no outside-click
   handling, because the panel is in the page flow rather than floating over it. It never opens on hover.
@@ -403,9 +402,13 @@ Read-only does not apply to navigation.
 
 ### Implementation notes (React 19, React Router data router, TanStack Query 5, CSS Modules)
 
-- **Routing.** Use `createBrowserRouter` with one root layout route, `<AppShell>`. "Page not found" is the route
-  table's `*` route, a child of that layout, so that the header and nav stay; the `errorElement` shows the crash page,
-  "There is a problem with Grow2Notes", when a screen throws while rendering (app-shell.md component 4). Wrap manager
+- **Routing.** Use `createBrowserRouter` with one root layout route, `<AppShell>`, and inside it a pathless layout
+  route around all of the shell's children. "Page not found" is the route table's `*` route, a child of that pathless
+  layout, so that the header and nav stay. The two layouts' `errorElement`s are the route error boundaries
+  (empty-loading-error.md *Implementation notes*; app-shell.md component 4): the root's shows the crash page, "There
+  is a problem with Grow2Notes", in the bare frame with no nav, for a crash in the shell itself; the pathless
+  layout's, the screens' boundary, shows it under the nav for a screen that throws while rendering, and "Page not
+  found" for a region that a `404`, or a `403` but `note.not_editable`, refuses on its first load. Wrap manager
   routes in a small `<ManagerOnly>` layout route that renders the not-found page for workers. The shell shows a
   route's screen once `/me` has answered `200`, but for setup's routes, whose `handle` says `signedOutFrame: true`:
   they show in the signed-out frame at once, whatever `/me` answers, so that a person with no session reaches them.
@@ -417,23 +420,35 @@ Read-only does not apply to navigation.
   signed-out frame but on a setup page; while that frame shows sign-in for a `401` from `/me`, the name is "Sign
   in" (app-shell.md component 4's `401` row). A screen does not call it. The hook sets the title in a layout effect
   when the name changes.
-  - A whole-page message shown in the shell, such as "Page not found" for a worker on a manager route, or the crash
-    page under the nav, sets its own title in a `useEffect` on each location change. React runs every layout effect
-    of a commit before any `useEffect`, so the message's title comes after the route's; in a layout effect of its
-    own it would run before its parent's, and lose. A message that can go while the route's name stays, such as
-    "Page not found" for a `404` in `LoadRegion` when the address moves to another of the same route, puts the route's
-    title back as it goes.
+  - A whole-page message in place of the route's screen, "Page not found" (an unknown address, a worker on a manager
+    route, a refused region) or the crash page under the nav, tells the shell that it shows, with its page name,
+    through a context that the shell provides (`useWholePageMessage(name)`, in a layout effect), and takes it back as
+    it goes. While it is set, the shell titles the page with that name and gives it to the header in place of the
+    route's, so "Page not found" marks no nav item. As it goes, the route's title comes back, also when the route's
+    name stays: another ID on the same route, a worker made a manager, or a link from a crashed screen to its own
+    address. Only the shell sets the title then. The start-up message, the shell's own `<main>` while `/me` has not
+    answered, sets its title in a `useEffect`, after the shell's layout effect; the shell's crash page, with no shell
+    around it, sets its own with `usePageTitle`.
   - "Error: " is put in front, and taken off, by the screen that shows the errors, also in a `useEffect`, through a
     hook of its own, `useErrorTitle(hasError)`, which `ErrorSummary` and every other failure line use, so that the app
     has one way to add it and `usePageTitle` has no `hasError`.
   - If React 19's `<title>` component were used as well, there would be two `<title>` elements, which React says gives
     undefined behaviour. Use one approach only.
-- **Refresh.**
-  - Call `focusManager.setEventListener` once, listening to both `focus` and `visibilitychange`.
-  - Because that makes every stale query refetch on focus, set `refetchOnWindowFocus: false` as the
-    `QueryClient` default and turn it on only for `['me']` and for the list queries whose specs ask for it. A draft
-    query must never refetch over the text on screen.
-  - Call `invalidateQueries({ queryKey: ['me'] })` on each `location.key` change.
+- **Refresh.** One module owns every `GET /api/auth/me`: `refreshMe(queryClient)`, beside `meQuery` (app-shell.md
+  *Refresh of `/api/auth/me`* and *Conflicts resolved* 6), which calls `fetchQuery` on `['me']` with `staleTime: 0`,
+  so that triggers that fire together share one request, and returns its promise. Its caller gives it the query
+  client from `useQueryClient()`.
+  - The shell calls it on each new `location.key`, the first being the start-up, and on window `focus`
+    (`useRefreshMe()`); the session clock calls it on `visibilitychange` to visible and holds on its promise
+    (`holdWhile(refreshMe(queryClient))`, session-timeout.md), so that one listener sends it. The start-up message's
+    Try again calls it too, and so does a screen that knows `/me` has changed, such as Mark reviewed (app-shell.md
+    lists them). A refresh that fails leaves the last answer in the query, so the screen, the nav and the title stay
+    as they were.
+  - `meQuery` has `enabled: false` and `staleTime: Infinity`, so no observer fetches it by itself and TanStack's own
+    refetching leaves it alone: no `focusManager` listener, no `refetchOnWindowFocus` and no `invalidateQueries` on
+    `['me']`, which would refetch nothing, as its observers are all disabled.
+  - `refetchOnWindowFocus: false` is the `QueryClient` default, turned on only for the queries whose specs ask for it
+    (app-shell.md lists them). A draft query must never refetch over the text on screen.
 - **ScrollRestoration (struck in the editorial pass).** It stores scroll offsets in `sessionStorage` under
   `react-router-scroll-positions`. app-shell.md replaces it with an in-memory `Map` keyed by `location.key` (or by a
   route's `handle.screenKey`), so nothing is stored on the device and Back still lands where the person was.
@@ -444,8 +459,8 @@ Read-only does not apply to navigation.
 ```tsx
 // AppShell.tsx — sketch
 export function AppShell() {
-  const me = useQuery(meQuery);               // ['me'], refetchOnWindowFocus: true
-  useMeRefreshOnRouteChange();                // invalidate ['me'] on location.key
+  const me = useQuery(meQuery);               // ['me'], enabled: false: only refreshMe() fetches it
+  useRefreshMe();                             // refreshMe() on each location.key and window focus
   useArrivalFocusTracker();                   // marks "focus pending" for each client-side navigation
   return (
     <>

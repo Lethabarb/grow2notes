@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { meQuery, type Me } from '../api/me.ts';
+import { refreshMe, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { onSessionEnded } from '../api/session.ts';
 import { buttonClass } from '../components/buttonClass.ts';
@@ -243,9 +243,9 @@ describe('Header', () => {
 
     expect(report).toHaveAttribute('href', '/reports/daily/2026-10-01');
 
-    // Past midnight in Melbourne, /me is asked again, as refreshMe() will be on a screen change or window focus.
+    // Past midnight in Melbourne, /me is asked again, as the shell asks on a screen change or window focus.
     today = '2026-10-02';
-    await act(() => client.fetchQuery({ ...meQuery, staleTime: 0 }));
+    await act(() => refreshMe(client));
     await settle();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

@@ -46,10 +46,10 @@ function jsonAfter(ms: number, body: unknown): Promise<Response> {
   });
 }
 
-/** An RFC 9457 problem with no `code`, as the API answers a failure (design.md §6.1). */
-function problem(status: number): Promise<Response> {
+/** An RFC 9457 problem, as the API answers a failure (design.md §6.1), with its `code` if it has one. */
+function problem(status: number, code?: string): Promise<Response> {
   return Promise.resolve(
-    new Response(JSON.stringify({ type: 'about:blank', title: 'Problem', status }), {
+    new Response(JSON.stringify({ type: 'about:blank', title: 'Problem', status, code }), {
       status,
       headers: { 'Content-Type': 'application/problem+json' },
     }),
@@ -263,8 +263,13 @@ describe('LoadRegion', () => {
       { failure: 'no connection', answer: noConnection, failsAfter: 1000, cause: 'no connection' },
       { failure: 'a timeout', answer: noAnswer, failsAfter: 21_000, cause: 'no connection' },
       { failure: 'a 503', answer: () => problem(503), failsAfter: 1000, cause: 'something went wrong' },
-      { failure: 'a 403', answer: () => problem(403), failsAfter: 0, cause: 'something went wrong' },
-      { failure: 'a 404', answer: () => problem(404), failsAfter: 0, cause: 'something went wrong' },
+      {
+        failure: 'a 403 note.not_editable',
+        answer: () => problem(403, 'note.not_editable'),
+        failsAfter: 0,
+        cause: 'something went wrong',
+      },
+      { failure: 'a 429', answer: () => problem(429), failsAfter: 0, cause: 'something went wrong' },
     ])('says what did not load and why, for $failure, with Try again', async ({ answer, failsAfter, cause }) => {
       serve(participantsPath, answer);
       renderPage(<ParticipantsPage />);
@@ -278,7 +283,7 @@ describe('LoadRegion', () => {
     });
 
     it('waits, with the loading line, until none of its queries is still fetching', async () => {
-      serve(todayPath, () => problem(404));
+      serve(todayPath, () => problem(429));
       serve(draftsPath, () => jsonAfter(3000, []));
       renderPage(<TodayPage />);
 

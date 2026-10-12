@@ -260,7 +260,9 @@ Never write a date as numbers only (01/10/2026) in app text. The reader's device
 - **Same `<a>` for both states of a step link** (sketch below). Swapping `<Link>` for a `<span>`, `<button>` or a different component remounts the node and drops focus. So does removing `href` without keeping `tabIndex={0}`.
 - **No `useSuspenseQuery` and no Suspense boundary around the report body.** A suspended render unmounts the links and drops focus. Use `useQuery`.
 - **No `placeholderData` / `keepPreviousData` for `has-notes`.** It would show yesterday's "has notes" while today's answer loads, and a fast press would download nothing (`404`).
-- **App shell coordination.** The arrival-focus tracker and scroll reset in app-shell-nav.md must ignore navigations whose `location.state?.inScreen` is `true`. The flag holds no personal data (4.0). Invalidating `['me']` on each `location.key` (app-shell-nav.md) still happens, which keeps `today` fresh.
+- **App shell coordination.** The arrival-focus tracker and scroll reset in app-shell-nav.md must ignore navigations
+  whose `location.state?.inScreen` is `true`. The flag holds no personal data (4.0). `refreshMe()` on each
+  `location.key` (app-shell.md *Refresh of `/api/auth/me`*) still happens, which keeps `today` fresh.
 - **`noValidate` on the past-day and export forms; no `required`; don't style `:invalid`** (form-validation.md). `max` stays on the inputs for the pickers, but with `noValidate` the browser never shows its own bubble.
 - **iOS styling of the date input.** `font-size: max(1rem, 16px)`, explicit `min-block-size` and `inline-size: 100%`, `text-align: start` on `::-webkit-date-and-time-value` (**unverified** need; harmless). Keep `appearance` as it is: removing it hides the calendar icon on desktop.
 - **Forced colours.** The unavailable dashed border and the error borders are real borders, so they survive. Give the unavailable link `color: GrayText`.

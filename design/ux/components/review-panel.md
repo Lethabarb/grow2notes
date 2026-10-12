@@ -233,8 +233,9 @@ Two variants come from the re-review rule (A15), and both stay inside the same c
      that was sent. Move focus to the "Reviewed by …" line (`tabindex="-1"`). The button that was pressed has gone,
      so focus must not fall back to `<body>` (`primary-actions.md` 5.4).
    - Show "Go to flagged notes" under the record.
-   - Invalidate the note, both review lists, `me` (the badge) and the participant's history, so every place that
-     shows To review or Reviewed agrees (`notification-badge.md`).
+   - Invalidate the note, both review lists and the participant's history, and call `refreshMe()` for the badge
+     (app-shell.md *Refresh of `/api/auth/me`*), so every place that shows To review or Reviewed agrees
+     (`notification-badge.md`).
    - Forget the unsent comment (see 8).
 5. **`409 review.not_current`.** Refetch the note, then:
    - **Already reviewed by someone else** (`flagStatus` is now `Reviewed`): show the other manager's record in place of
@@ -450,8 +451,11 @@ export function ReviewPanel(p: Props) {
 
   useEffect(() => { if (outcome.kind !== 'open') focusRef.current?.focus(); }, [outcome.kind]);
 
-  const refresh = () => ['note', 'reviews', 'me', 'history']
-    .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  // ['me'] is never invalidated, as its observers are all disabled: refreshMe() asks for it (app-shell.md *Refresh*).
+  const refresh = () => {
+    ['note', 'reviews', 'history'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    refreshMe(qc).catch(() => {});
+  };
 
   const finish = (review: Review) => { unsent.delete(p.noteId); setOutcome({ kind: 'done', review }); refresh(); };
 

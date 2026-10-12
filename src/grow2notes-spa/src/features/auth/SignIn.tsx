@@ -7,7 +7,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/api.ts';
-import { meQuery, type Me } from '../../api/me.ts';
+import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
@@ -181,7 +181,7 @@ export function SignIn() {
         method: 'POST',
         body: { credentialJson: JSON.stringify(credential) },
       });
-      queryClient.setQueryData(meQuery.queryKey, me);
+      await setMe(queryClient, me);
     } catch (error) {
       if (!mounted.current) {
         return;

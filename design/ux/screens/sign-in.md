@@ -351,7 +351,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Setup code rejected | `422 validation.failed` with `errors.totpCode` (D70) | Inline on the code field: "That code did not work. Enter the code the app shows for Grow2Notes now." (P). Code cleared, password kept in memory. | The field | Via `aria-describedby` |
 | Password rejected by server | `422` with `errors.password` (only if client and server rules ever drift) | Back one entry to view F, which shows its own words inline, "Password must be 12 characters or more" (P), not the server's, with the password still in the field | F's field | Via `aria-describedby` |
 | Too many tries | `429` on a setup call that a button sent (the key's is *Key did not load*) | Alert above the pressed button: "Too many tries. Wait 1 minute, then try again." (P) | Stays on the pressed button | The alert (assertive) |
-| Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5). The `Me` goes into `['me']` first (`queryClient.setQueryData`). From `/setup/passkey`, `navigate('/', { replace: true })`. From `/setup/password`, setup is marked finished in memory and G goes back two entries to `/setup`'s, which the setup layout replaces with `/` before anything renders (*Interactions* 12). Leaving `/setup*` clears setup state from memory | Today's `h1` | Heading on focus |
+| Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5). The `Me` goes into `['me']` first (`setMe`, *Interactions* 5). From `/setup/passkey`, `navigate('/', { replace: true })`. From `/setup/password`, setup is marked finished in memory and G goes back two entries to `/setup`'s, which the setup layout replaces with `/` before anything renders (*Interactions* 12). Leaving `/setup*` clears setup state from memory | Today's `h1` | Heading on focus |
 
 **Copy for view G, in order (all P except the button):** intro "An authenticator app is a free app on your phone. It
 shows a new 6-digit code every 30 seconds. You enter the code after your password each time you sign in." · step 1
@@ -401,7 +401,10 @@ back to this page." · field label and hint as in Components row 10 · button "F
    cookie's 5 minutes explicitly, with no sliding expiration, so a wrong code does not move the end (D69). [Product
    fact: Identity's two-factor cookie lasts 5 minutes by default and then every code fails without counting towards
    lockout, https://github.com/dotnet/aspnetcore/blob/main/src/Identity/Core/src/IdentityCookiesBuilderExtensions.cs]
-5. **Sign-in success (any method).** `queryClient.setQueryData(['me'], me)`, then: fresh load → render the requested
+5. **Sign-in success (any method).** `setMe(queryClient, me)` (`src/api/me.ts`), which cancels a refresh of
+   `/api/auth/me` still in flight, then calls `queryClient.setQueryData(['me'], me)`, TanStack's order for a write by
+   hand: that refresh went with the cookie from before, maybe another person's, and its answer would otherwise land
+   over this one (app-shell.md *Refresh of `/api/auth/me`*). Then: fresh load → render the requested
    route with `replace: true`; in place → same `userId`: unhide the route, refetch, resume autosave (same `clientId`,
    next `seq`), restore the page title; different `userId`: `location.replace('/')`. The screen fetches no antiforgery
    token: the `api()` wrapper drops its own on this `200 Me`, so its next change fetches a fresh one, bound to the
@@ -430,7 +433,7 @@ back to this page." · field label and hint as in Components row 10 · button "F
 11. **Setup key.** Shown as selectable text only. There is no Copy button, so the app never puts the key on the
     clipboard (D68); a person may still select and copy it by hand.
 12. **Finish setup.** Code checked as in step 4 (inline errors, nothing sent). `POST /api/auth/setup/password
-    {password, totpCode}` → `200 Me` → `queryClient.setQueryData(['me'], me)` (the wrapper drops its token, step 5),
+    {password, totpCode}` → `200 Me` → `setMe(queryClient, me)` (step 5; the wrapper drops its token),
     mark setup finished in the setup context, and go back two entries (`navigate(-2)`) to `/setup`'s entry, which F's
     and G's always follow while the context lives, as each is pushed so that Back on G returns to F. There the setup
     layout, finding setup finished, replaces the entry with `/` (`<Navigate to="/" replace />`) before anything

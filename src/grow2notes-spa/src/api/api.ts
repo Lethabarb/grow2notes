@@ -119,6 +119,17 @@ export function classify(error: unknown): Failure {
 }
 
 /**
+ * Whether `error` is a refusal that Page not found shows in place of the screen (app-shell.md component 4): a `404`,
+ * or a `403` from a manager-only request, which the app tells apart from a `404` no more than the API does (design.md
+ * §9.2). A `403 note.not_editable` is not one, as the note exists and the person may read it (D20).
+ */
+export function isNotFound(error: unknown): error is ApiError {
+  return (
+    error instanceof ApiError && (error.status === 404 || (error.status === 403 && error.code !== 'note.not_editable'))
+  );
+}
+
+/**
  * Sends a change with the antiforgery token. A `400` with no `code` is how the `/api` filter refuses a missing or
  * stale token, so such a change is sent once more, with the same body and a fresh token.
  */

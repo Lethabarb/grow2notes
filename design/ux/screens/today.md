@@ -424,7 +424,7 @@ and the banner after Submit always wins. Today does **not** use React Router `<S
 | Try again (load failed) | Refetch only the failed request(s) | Success: the `<h1>`. Failure: stays on Try again | Failure: "The participant list still did not load: …" (polite) |
 | Add participant (manager, empty state) | Navigate to the Add participant page (§4.8) | That page's `<h1>` | That page |
 | Window regains focus / tab becomes visible | `GET /api/auth/me` refetches (badge, `today`); the Today and drafts queries refetch silently. Rows update in place; no animation; scroll, focus and search text unchanged | Unchanged | No |
-| Submit on the note form (from this screen) | The form removes the cached `['today']` and drafts queries, invalidates `['me']` when the response has a `flagStatus`, writes the message to `messageStore`, closes the dialog, then returns to Today (pop if Today is the previous entry, otherwise replace; note-identity-header.md) | Success banner | Through focus: "Note for Jane Citizen submitted" |
+| Submit on the note form (from this screen) | The form removes the cached `['today']` and drafts queries, calls `refreshMe()` when the response has a `flagStatus`, writes the message to `messageStore`, closes the dialog, then returns to Today (pop if Today is the previous entry, otherwise replace; note-identity-header.md) | Success banner | Through focus: "Note for Jane Citizen submitted" |
 | Flagged / Report / Manage / Account / Sign out | Shell behaviour (app-shell-nav.md) | Shell | Shell |
 
 ### Tab order
@@ -607,9 +607,9 @@ export function TodayPage() {
   `participants.length > 0`), then the `ParticipantRow` list, the no-match text, or the empty state. It calls
   `useReturnFocusReady(true)` once the lists render, so the shell can return focus to the opened row on a pop.
 - The page also renders the shared `<PageStatus>` (app-shell.md component 3) for Try again's busy label.
-- If `today.data.date !== me.today`, invalidate `['me']` (exact) once, so the header and the links agree.
-- Invalidate `['me']` with `exact: true`: with prefix matching, the shell's `['me']` invalidation on every screen change
-  also invalidates `['me', 'drafts']`.
+- If `today.data.date !== me.today`, call `refreshMe(queryClient)` once, so the header and the links agree. Not
+  `invalidateQueries` on `['me']`: its observers are disabled, so that refetches nothing (app-shell.md *Refresh of
+  `/api/auth/me`*). `refreshMe()` fetches `['me']` alone, never `['me', 'drafts']`.
 
 ---
 
@@ -630,7 +630,7 @@ export function TodayPage() {
 | 11 | **Weights and breakpoint.** participant-list-rows.md: weight 600 and a 48rem list cap. foundations.md: weights 400/700 only, one 40rem breakpoint. | 700 and 40rem. | 600 renders differently on iPhone and Android ([Standard] CSS font matching); one breakpoint app-wide. |
 | 12 | **Refetch on focus.** app-shell-nav.md sets `refetchOnWindowFocus: false` as the default. participant-list-rows.md: Today refetches on focus. | Today's two queries opt in (`refetchOnWindowFocus: true`). | autosave-status.md confirms §6.8's focus refresh is "for Today and the badge"; Today has no editable server data that a refetch could overwrite. |
 | 13 | **Error test.** participant-list-rows.md: `isError`. empty-loading-error.md: `isLoadingError`. | `isLoadingError`. | `isError` also fires on a failed background refetch and would replace good rows with an error. |
-| 14 | **Header date vs list date.** The `<h1>` uses `me.today`; rows use `/api/today`'s `date`. | Query key `['today', me.today]`; if the response date differs, invalidate `['me']`. | They can never show two different days for long, including at midnight. |
+| 14 | **Header date vs list date.** The `<h1>` uses `me.today`; rows use `/api/today`'s `date`. | Query key `['today', me.today]`; if the response date differs, `refreshMe(queryClient)`. | They can never show two different days for long, including at midnight. |
 | 15 | **Separator in the `<h1>`.** Not covered by any spec. | The same hidden-dot plus spoken-comma separator as the status lines. | One rule for "·" across the app (microcopy.md). |
 
 ---

@@ -586,12 +586,20 @@ router-state `back` object the component specs proposed (note-identity-header.md
 
 ### Refresh of `/api/auth/me` (badge, `today`, role, name)
 
-One module owns every refresh: `refreshMe()` calls `queryClient.fetchQuery({ queryKey: ['me'], staleTime: 0 })`,
-which shares a request already in flight. It runs on: start-up; every `location.key` change; window `focus`;
-`visibilitychange` to visible (through the session clock's hold); and after Mark reviewed. The `['me']` observer uses
-`staleTime: Infinity` and `refetchOnWindowFocus: false` so nothing else triggers it. **No timer, no
-`refetchInterval`, no push** (§6.8). The `QueryClient` default is `refetchOnWindowFocus: false`, so a draft is never
-refetched over the text on screen.
+One module owns every refresh: `refreshMe(queryClient)` calls `queryClient.fetchQuery({ ...meQuery, staleTime: 0 })`,
+which shares a request already in flight, and returns the request's promise. It takes the query client from its
+caller, which has it from `useQueryClient()`, as there is no query client at module level (the app and each test make
+their own). It runs on: start-up; every `location.key` change; window `focus`; `visibilitychange` to visible (through
+the session clock's hold); the start-up message's Try again; and where a screen knows that `/me` has changed: after
+Mark reviewed (review-panel.md), a Submit that flags a note and Save changes (note-form.md), an action on the
+signed-in manager's own user (user-management.md), and Today's list answering for another date than `me.today`
+(today.md). The `['me']` observer (`meQuery`) has `enabled: false`, as one that mounts while `['me']` holds no answer
+would otherwise fetch by itself, and `staleTime: Infinity`, so nothing else triggers it; `fetchQuery` ignores
+`enabled`. So a refresh is always `refreshMe()`, never `invalidateQueries`, which refetches no query whose observers
+are all disabled. A sign-in or a setup puts its `Me` in `['me']` through `setMe()`, which cancels a refresh in flight
+first (sign-in.md *Interactions* 5), as that request went with the cookie from before and its answer could land after
+the new person's. **No timer, no `refetchInterval`, no push** (§6.8). The `QueryClient` default is
+`refetchOnWindowFocus: false`, so a draft is never refetched over the text on screen.
 
 **Queries that opt in to `refetchOnWindowFocus: true`** (the complete list; a screen that needs it adds itself here):
 Today's `['today', date]` and `['me', 'drafts']` (today.md); Flagged's `['reviews', 'toReview']` and

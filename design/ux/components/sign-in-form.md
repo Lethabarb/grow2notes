@@ -342,7 +342,7 @@ survives `forced-colors: active`.
   `onSubmit` + `preventDefault()` + controlled inputs.
 - **Don't route credentials through TanStack Query mutations.** The mutation cache keeps `variables`, which here would
   be the password, in memory after the call. Call the shared API client directly from the handler, then
-  `queryClient.setQueryData(['me'], me)`.
+  `setMe(queryClient, me)`, which puts the `Me` in `['me']` (sign-in.md *Interactions* 5).
 - **Passkeys:** `@simplewebauthn/browser` (already chosen in 7.5): `browserSupportsWebAuthn()`,
   `startAuthentication({ optionsJSON })`, `startRegistration({ optionsJSON })`. Errors arrive with `name` (for example
   `NotAllowedError`). Send `credentialJson` as `JSON.stringify(result)`. The setup call's `name` field: send a fixed

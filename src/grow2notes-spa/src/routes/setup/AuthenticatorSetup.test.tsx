@@ -49,6 +49,14 @@ const me = {
   organisationName: 'Example Care',
   today: '2026-10-13',
 };
+// A made-up worker (A35) whose session is live in the same browser, as setup's pages show whoever is signed in.
+const someoneElse = {
+  userId: '0c1d7e52-93a8-4b6f-a2d4-58e1f9c3b706',
+  displayName: 'Riley Ng',
+  role: 'Worker',
+  organisationName: 'Example Care',
+  today: '2026-10-13',
+};
 // Stands for what the tab showed before the emailed link, such as the email itself.
 const entryBefore = '/made-up-page-before-setup';
 
@@ -826,7 +834,7 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(codeField()).toHaveValue('123456');
   });
 
-  it('on 200, puts the Me in [\'me\'], then makes /setup\'s entry Today\'s, and sends nothing more', async () => {
+  it('on 200, puts the Me in [\'me\'], then makes /setup\'s entry Today\'s, which sends only its own /me', async () => {
     serve(passwordPath, () => json(me));
     const { router, client } = await openViewG([entryBefore]);
     await settle();
@@ -841,7 +849,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(router.state.historyAction).toBe('REPLACE');
     expect(router.state.location.pathname).toBe('/');
     expect(router.state.location.state).toBeNull();
-    // Today for the Me's today, in the signed-in frame, with no /me of its own (sign-in.md *Interactions* 12).
+    // Today for the Me's today, in the signed-in frame (sign-in.md *Interactions* 12), whatever the new location's one
+    // refresh of /me answers: here the test's 401.
     expect(heading()).toHaveAccessibleName(`Today, Tuesday 13${nbsp}October`);
     expect(heading().querySelector('time')).toHaveAttribute('datetime', me.today);
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
@@ -853,7 +862,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(shown.some((element) => element.textContent?.includes('Tuesday 13'))).toBe(true);
     expect(shown.filter((element) => element.textContent?.includes(chooseMethod))).toEqual([]);
     await wait(10 * 60_000);
-    expect(sentAfter(requests)).toEqual([passwordPath]);
+    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more.
+    expect(sentAfter(requests)).toEqual([passwordPath, mePath]);
 
     // The two entries after Today's are Forward's, where setup's memory has gone.
     await act(() => router.navigate(1));
@@ -893,5 +903,42 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(heading()).toHaveAccessibleName(`Today, Tuesday 13${nbsp}October`);
     await act(() => router.navigate(-1));
     expect(router.state.location.pathname).toBe(entryBefore);
+  });
+
+  it('keeps its Me in [\'me\'] when a refresh sent before its answer answers after it, for another', async () => {
+    // Another person is signed in, so /me answers them until setup's answer replaces the cookie.
+    let session = someoneElse;
+    serve(mePath, () => json(session));
+    const answer = later();
+    serve(passwordPath, () => answer.value);
+    const { router, client } = await openViewG();
+    await settle();
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(someoneElse);
+    finishWith('123456');
+    await wait(0);
+
+    // The window regains focus while Finish setup's request is out, and the shell's refresh goes with the other
+    // person's cookie; its answer is held until after setup's.
+    const stale = later();
+    serve(mePath, () => {
+      serve(mePath, () => json(session));
+      return stale.value;
+    });
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    session = me;
+    answer.give(new Response(JSON.stringify(me), { headers: { 'Content-Type': 'application/json' } }));
+    await wait(0);
+    stale.give(new Response(JSON.stringify(someoneElse), { headers: { 'Content-Type': 'application/json' } }));
+    await wait(0);
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(me);
+    expect(screen.getByText('Signed in as Sam Lee')).toBeInTheDocument();
+    expect(screen.queryByText('Signed in as Riley Ng')).not.toBeInTheDocument();
+    // A manager's nav, not the worker's.
+    expect(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name: 'Manage' }))
+      .toBeInTheDocument();
   });
 });

@@ -232,7 +232,7 @@ There is no illustration, icon, coloured box, status code or red text in any of 
 | Try again | Shared secondary button (`primary-actions.md`) | Darker border | 3 px outline, 2 px offset | Pressed tint | **Never `disabled`** | `aria-disabled="true"`, "Loading…" after 400 ms, same width | Back to "Try again", keeps focus | – | – |
 | Empty sentence | Body text, normal text colour | – | Not focusable | – | – | – | – | Shown | – |
 | Empty-state link (Today, managers) | Link style | Underline thickens | 3 px outline | Pressed tint | Never | – | – | Shown | – |
-| Whole-page `<h1>` | Page heading style | – | `tabindex="-1"`; takes focus on mount; outline on `:focus-visible` only | – | – | – | – | – | – |
+| Whole-page `<h1>` | Page heading style | – | `tabindex="-1"`; not focused by itself on mount: the shell's route-change rule (app-shell.md *The route-change rule (one owner)*) focuses it on arrival at a new screen, but not on a first load; the case with no location change, where the message takes the place of what had focus, is S00.05.02's to add to that rule; outline on `:focus-visible` only | – | – | – | – | – | – |
 | Whole-page link ("Go to Today", "Read the note") | Link style | Underline thickens | 3 px outline | Pressed tint | Never | – | – | – | – |
 
 Read-only does not apply: these states hold no data the person could change. The read-only screens (read view, a manager's view of a draft, an archived participant) use these same states while they load.
@@ -316,7 +316,8 @@ After a failed Try again, "did not load" becomes "**still did not load**", for e
 | Setup session timed out | Your setup session timed out | Open the link from your email again. | – | Grow2Notes – Set up your account | design §4.1, split as in `sign-in-form.md` |
 | JavaScript turned off (`<noscript>`) | – | Grow2Notes needs JavaScript. Turn it on in your browser settings, then reload this page. | – | Grow2Notes | proposed |
 
-The page title never contains a name (§4.0). "There is a problem" needs adding to `app-shell-nav.md`'s fixed list of page names.
+The page title never contains a name (§4.0). "There is a problem" and "Could not connect" are in the fixed list of page
+names (app-shell.md component 3; `app-shell-nav.md` *Copy*).
 
 ### Accessibility
 
@@ -353,18 +354,31 @@ The page title never contains a name (§4.0). "There is a problem" needs adding 
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
 - **No React Aria** is needed: a `<p role="status">`, a `<button>`, links and headings are all native.
-- **Use `useQuery`, not `useSuspenseQuery` or `<Suspense>`,** so every screen uses one visible pattern and errors stay as data, not thrown exceptions. [Opinion]
+- **Use `useQuery`, not `useSuspenseQuery` or `<Suspense>`,** so every screen uses one visible pattern and errors stay
+  as data, not thrown exceptions. [Opinion] The one exception is a refusal that shows "Page not found", which
+  `LoadRegion` throws for the screens' route error boundary (below).
 - **Tell a first-load failure from a background one with `isLoadingError`, never `isError`.** In TanStack Query 5 a failed background refetch also sets `status: 'error'` while the old data is kept, so testing `isError` would replace good data with an error.
-- **Keep the failure through Try again.** TanStack Query 5 puts a query that has no data back to `pending`, with no error, the moment it refetches, so a region that read its failure from `isLoadingError` alone would unmount Try again as it was pressed, and focus would fall to `<body>`. `LoadRegion` keeps a failed first load in its own state, set during render, until every failed query has loaded or they fail again: Try again stays mounted, focused and `aria-disabled` meanwhile, and the region's line stays empty.
+- **Keep the failure through Try again.** TanStack Query 5 puts a query that has no data back to `pending`, with no
+  error, the moment it refetches, so a region that read its failure from `isLoadingError` alone would unmount Try again
+  as it was pressed, and focus would fall to `<body>`. `LoadRegion` keeps a failed first load in state, set during
+  render, until every failed query has loaded or they fail again: Try again stays mounted, focused and `aria-disabled`
+  meanwhile, and the region's line stays empty. In the code that state is a hook, `useKeptFailure(queries)`, which the
+  shell's start-up message uses too, for `['me']`; the sketch below keeps it inline.
 - **One `api()` wrapper** (already shared with `session-timeout.md`) turns a rejected `fetch` or a timeout into an `ApiError` with `status: 0`, and any non-2xx into an `ApiError` with the status and the problem-details `code`. On a `401` it tells the session layer first, then throws, and the region shows nothing for it. Classify by **status**, not by `TypeError`, because a bug inside a query function also throws `TypeError`.
 - **No route-level code splitting.** The bundle is small, and with one bundle a deploy cannot leave an open tab asking for a chunk that no longer exists. If a lazy import is ever added, handle `vite:preloadError` by showing the "There is a problem" page, **not** by reloading automatically as Vite's example does: a reload drops unsaved text held in memory (§8.5).
-- **Route error boundary** (`errorElement` / `ErrorBoundary` on the root layout route and on the signed-in layout):
-  crashes inside a screen keep the shell and nav; a crash in the shell itself gets the bare page. An unknown route is
-  not the boundary's: the route table's `*` route, inside the root layout, shows "Page not found"
-  (`app-shell-nav.md`, *Routing*).
+- **Route error boundaries** (`errorElement`), on two routes. The root layout route's boundary catches a crash in the
+  shell itself and shows the bare page, with the wordmark as text and no nav. A pathless layout route around all of the
+  shell's children has the screens' boundary, which keeps the shell and nav: it shows "Page not found" for a `404`, or
+  a `403` but `note.not_editable`, that `LoadRegion` throws on a first load, in place of the whole screen, and the
+  crash page for anything a screen throws while rendering. React Router clears either on the next location, so a link
+  or Back shows the route again. An unknown route is not the boundary's: the route table's `*` route, inside the root
+  layout, shows "Page not found" (`app-shell-nav.md`, *Routing*).
 - **After signing in again** (`session-timeout.md`), invalidate the queries of the current screen, so a region that failed or was pending on the `401` loads again.
 - **Report screen:** key the empty sentence to the date in the URL, and clear it the moment the date changes, so "No submitted notes for Wednesday…" never shows under Thursday.
-- **The 1 s delay in `index.html`** uses a CSS animation delay in the bundled stylesheet (CSP `style-src 'self'` forbids inline styles, §9.7). If a global reduced-motion rule turns animations off, the text simply shows at once.
+- **The 1 s delay in `index.html`** uses a CSS animation delay in the bundled stylesheet (CSP `style-src 'self'`
+  forbids inline styles, §9.7). If a global reduced-motion rule turns animations off, the text simply shows at once.
+  With JavaScript off, `@media (scripting: none)` hides it, so only the `<noscript>` line shows; a browser without
+  that media feature (Safari before 17) shows "Loading…" above it.
 
 ```ts
 // api/errors.ts
@@ -378,16 +392,19 @@ export class ApiError extends Error {
     this.code = code;
   }
 }
-export type Failure = 'offline' | 'server' | 'notFound' | 'notEditable' | 'signedOut';
+export type Failure = 'offline' | 'server' | 'notEditable' | 'signedOut';
 
 export function classify(e: unknown): Failure {
   if (!(e instanceof ApiError)) return 'server';                 // a bug, not the network
   if (e.status === 0) return 'offline';                          // fetch rejected or 10 s timeout
   if (e.status === 401) return 'signedOut';                      // session-timeout.md shows sign-in
   if (e.status === 403 && e.code === 'note.not_editable') return 'notEditable';
-  if (e.status === 403 || e.status === 404) return 'notFound';   // §9.2: never reveal existence
   return 'server';                                               // 5xx, 429, anything unexpected
 }
+// The refusals that show "Page not found" in place of the whole screen (§9.2: never reveal existence). A
+// 403 note.not_editable is not one: the note exists and the person may read it (D20).
+export const isNotFound = (e: unknown): e is ApiError =>
+  e instanceof ApiError && (e.status === 404 || (e.status === 403 && e.code !== 'note.not_editable'));
 export const isTransient = (e: unknown) =>
   e instanceof ApiError && (e.status === 0 || e.status >= 500);
 
@@ -468,7 +485,7 @@ type Props = {
 };
 
 // A failed first load, kept through Try again; at: the latest errorUpdatedAt of its queries.
-type Shown = { kind: Failure; again: boolean; at: number };
+type Shown = { error: unknown; again: boolean; at: number };
 
 export function LoadRegion({ queries, loading, what, fallbackHeading, children }: Props) {
   const ready = queries.every(q => q.data !== undefined);       // a failed *background* refetch keeps its data
@@ -487,14 +504,15 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
     setShown(undefined);
     setRetrying(false);
   } else if (!ready && errored && !fetching && at !== shown?.at) {
-    setShown({ kind: classify(errored.error), again: retrying, at });
+    setShown({ error: errored.error, again: retrying, at });
     setRetrying(false);
   } else if (shown && at < shown.at) {
     setShown(undefined);
     setRetrying(false);
   }
 
-  const failed = shown !== undefined && shown.kind !== 'signedOut';  // a 401 waits for sign-in, silently
+  const kind = shown && classify(shown.error);
+  const failed = kind !== undefined && kind !== 'signedOut';     // a 401 waits for sign-in, silently
   const slow = useDelayed(!ready && fetching && !failed, 1000);
   const focusOnLoad = useRef(false);
 
@@ -507,8 +525,11 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
     }
   }, [ready]);
 
-  if (shown?.kind === 'notFound') return <NotFound />;           // its own <h1>, takes focus
-  if (shown?.kind === 'notEditable') return <EditRefused />;
+  // "Page not found" takes the whole screen's place, from the screens' route error boundary, so that a fixed <h1>
+  // shown at once does not stay beside its own. Thrown where the sentence would show, once no query is fetching, so
+  // that a 404 on one query waits for the others as the sentence does.
+  if (shown && isNotFound(shown.error)) throw shown.error;
+  if (kind === 'notEditable') return <EditRefused />;
 
   function tryAgain() {
     focusOnLoad.current = true;                                  // set before the data can land
@@ -516,9 +537,9 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
     for (const q of queries) if (q.isLoadingError) void q.refetch();  // only the failed ones
   }
 
-  const cause = CAUSE[shown?.kind === 'offline' ? 'offline' : 'server'];
+  const cause = CAUSE[kind === 'offline' ? 'offline' : 'server'];
   const line =
-    failed ? (retrying ? '' : `${what} ${shown.again ? 'still did not' : 'did not'} load: ${cause}. Try again.`)
+    failed ? (retrying ? '' : `${what} ${shown?.again ? 'still did not' : 'did not'} load: ${cause}. Try again.`)
     : slow ? loading : '';
 
   return (
@@ -536,6 +557,11 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
 
 The `<p role="status">` is rendered on every pass, so it exists before any text is written into it. On a data-`<h1>` screen whose load failed, the fallback `<PageHeading>` takes the pending focus. Try again stays mounted and focused while it runs, as the failure is kept in `shown`, so a failure that repeats leaves focus on it under the new "still did not load" sentence. When a retry succeeds, the effect runs after React has committed the new content, so `focusPageHeading()` finds the real heading (static, or the data heading inside `children()`) rather than the fallback heading that is about to unmount. A `401` shows nothing here: `api()` has already handed over to the signed-out state, and the region's queries are invalidated after sign-in.
 
+A `404`, or a `403` but `note.not_editable`, on a first load is thrown instead of shown, so that the screens' route
+error boundary shows "Page not found" in place of the whole screen, with the nav and the address kept; the next
+location shows the route again. One that answers Try again is thrown too, as the region still has no data, while one
+that answers a refetch in the background leaves the content, as any failed refetch does.
+
 ```tsx
 // ui/PageHeading.tsx: focus waits for the heading, in memory only (D22)
 let focusPending = false;
@@ -552,30 +578,37 @@ export function PageHeading({ children }: { children: ReactNode }) {
   return <h1 id="page-heading" tabIndex={-1} ref={ref} className={s.h1}>{children}</h1>;
 }
 
-// ui/ProblemPage.tsx: a whole-page message sets its own title in a useEffect, after the one the shell's
-// usePageTitle sets from the route in a layout effect (app-shell-nav.md, Titles)
+// ui/ProblemPage.tsx: whole-page messages in place of the route's screen, each in its own PageStatus. Each tells the
+// shell that it shows (useWholePageMessage), so that the shell titles the page with its name, and puts the route's
+// title back as it goes (app-shell-nav.md, Titles). Neither moves focus: the route-change rule does (app-shell.md).
 export function NotFound() {
-  const { key } = useLocation();
-  useEffect(() => { document.title = msg.pageTitle('Page not found'); }, [key]);
+  useWholePageMessage('Page not found');     // the header marks no nav item while it shows
   return (
-    <>
+    <PageStatus>
       <PageHeading>Page not found</PageHeading>
       <p>If you typed or pasted the web address, check it is correct.</p>
       <p><Link to="/">Go to Today</Link></p>
-    </>
+    </PageStatus>
   );
 }
 
-export function Crashed() {             // used by the route error boundary
-  const { key } = useLocation();
-  useEffect(() => { document.title = msg.pageTitle('There is a problem'); }, [key]);
+export function Crashed() {
+  useWholePageMessage('There is a problem');
   return (
-    <>
+    <PageStatus>
       <PageHeading>There is a problem with Grow2Notes</PageHeading>
       <p>Anything already saved is kept.</p>
       <p><a href="/">Go to Today</a></p>   {/* full page load: drops the broken state */}
-    </>
+    </PageStatus>
   );
+}
+
+// The screens' route error boundary, the errorElement of a pathless layout route around the shell's children:
+// "Page not found" for a refusal that LoadRegion throws, the crash page for anything else. The root route's
+// errorElement shows Crashed in the bare frame (wordmark as text, no nav) and titles it with usePageTitle, as no
+// shell is there to tell: outside the shell, useWholePageMessage does nothing.
+export function ScreenError() {
+  return isNotFound(useRouteError()) ? <NotFound /> : <Crashed />;
 }
 ```
 
@@ -587,6 +620,8 @@ export function Crashed() {             // used by the route error boundary
 /* global.css (bundled, linked from index.html): the pre-JavaScript line, shown after 1 s */
 .boot { animation: boot-show 0s linear 1s both; }
 @keyframes boot-show { from { visibility: hidden; } to { visibility: visible; } }
+/* With JavaScript off nothing replaces it, so only the <noscript> line shows (Safari before 17 shows both). */
+@media (scripting: none) { .boot { display: none; } }
 ```
 
 ```html

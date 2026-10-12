@@ -336,7 +336,9 @@ const shown = all.data?.filter(p => (view === 'archived') === (p.status === 'Arc
 
 **Flagged notes (4.6)**
 - Order: `<h1>` "Flagged notes", then `ViewLinks`, then the list. To review is the default and comes first (GOV.UK: the most relevant section first).
-- The "(n)" comes from the **To review list**, which is authoritative, not from `me.toReviewCount`. After Mark reviewed, the review panel invalidates `['reviews']` and `me` (notification-badge), so the tab and the badge agree when the manager comes back. If they differ for a moment, the list wins.
+- The "(n)" comes from the **To review list**, which is authoritative, not from `me.toReviewCount`. After Mark reviewed,
+  the review panel invalidates `['reviews']` and calls `refreshMe()` (notification-badge), so the tab and the badge
+  agree when the manager comes back. If they differ for a moment, the list wins.
 - Rows in either view carry no "To review" or "Reviewed" tag, because the current link already names the state (status-tags).
 - Coming back from a note's read view with Back lands on the same view, because it is in the URL. On the Reviewed view, the pages already loaded come back from the memory cache. "Show older" is **not** written to the URL. A reload starts again at the newest 30. **[Opinion]**: simple, and the design specifies nothing more.
 - On a phone, both labels fit side by side at 320px. At 200% text they wrap onto two rows.

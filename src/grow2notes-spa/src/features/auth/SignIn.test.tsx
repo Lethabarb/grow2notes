@@ -6,7 +6,7 @@ import {
   type AuthenticationResponseJSON,
   type PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter } from 'react-router';
@@ -37,6 +37,15 @@ const worker: Me = {
   userId: '5b0e7c3a-1f42-4d8e-9a61-2c7f0b9d4e13',
   displayName: 'Alex Pham',
   role: 'Worker',
+  organisationName: 'Riverbend Support',
+  today: '2026-10-01',
+};
+
+// A made-up manager (A35), signed in in another tab of the same browser.
+const someoneElse: Me = {
+  userId: '0c1d7e52-93a8-4b6f-a2d4-58e1f9c3b706',
+  displayName: 'Riley Ng',
+  role: 'Manager',
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };
@@ -117,6 +126,8 @@ function noAnswer(): Promise<Response> {
 }
 
 type Server = {
+  /** Each `/api/auth/me`'s answer, a `401` for nobody signed in unless given. */
+  me?: () => Promise<Response>;
   /** Each passkey sign-in's answer, a `200 Me` unless given. */
   passkey?: () => Promise<Response>;
   /** The answer to the `n`th request for passkey options, `passkeyOptions(n)` unless given. */
@@ -129,6 +140,7 @@ type Server = {
 
 /** Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, and the rest answer so. */
 function serve({
+  me = () => problem(401),
   passkey = () => json(worker),
   options = (n) => json(passkeyOptions(n)),
   password = () => json({ next: 'totp' }),
@@ -138,7 +150,7 @@ function serve({
   fetchMock.mockImplementation((path) => {
     switch (path) {
       case mePath:
-        return problem(401);
+        return me();
       case antiforgeryPath:
         return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } }));
       case optionsPath:
@@ -299,6 +311,39 @@ function expectInOrder(...elements: Element[]) {
   }
 }
 
+/**
+ * Serves `/api/auth/me` with a `401`, but for one request, sent by the window's focus once `holdNextRefresh` is
+ * called, as if with the cookie that another tab's sign-in left, whose answer the test gives when it chooses.
+ */
+function serveWithAHeldRefresh(server: Server = {}) {
+  let next = () => problem(401);
+  serve({ ...server, me: () => next() });
+  const stale = later();
+  return {
+    holdNextRefresh() {
+      next = () => {
+        next = () => problem(401);
+        return stale.promise;
+      };
+      act(() => {
+        window.dispatchEvent(new Event('focus'));
+      });
+    },
+    answerAsSomeoneElse() {
+      stale.resolve(new Response(JSON.stringify(someoneElse), { headers: { 'Content-Type': 'application/json' } }));
+    },
+  };
+}
+
+/** Its Me, the made-up worker's, is in `['me']` and on screen, not someone else's. */
+function expectTheWorkerSignedIn(queryClient: QueryClient) {
+  expect(queryClient.getQueryData(['me'])).toEqual(worker);
+  expect(screen.getByText('Signed in as Alex Pham')).toBeInTheDocument();
+  expect(screen.queryByText('Signed in as Riley Ng')).not.toBeInTheDocument();
+  // A worker's nav, not the manager's.
+  expect(within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('link')).toHaveLength(1);
+}
+
 /** An answer still on its way, which the test gives when it chooses. */
 function later() {
   let resolve!: (answer: Response) => void;
@@ -435,6 +480,19 @@ describe('signing in with a passkey', () => {
     expect(router.state.location).toBe(location);
     // The app took the sign-in's answer, with no second request.
     expect(requestsTo(mePath)).toHaveLength(1);
+  });
+
+  it('keeps its Me when a refresh sent before its answer answers after it, for someone else', async () => {
+    const server = serveWithAHeldRefresh();
+    const { queryClient } = await renderSignedOut();
+
+    server.holdNextRefresh();
+    press(passkeyButton());
+    await wait(0);
+    server.answerAsSomeoneElse();
+    await wait(0);
+
+    expectTheWorkerSignedIn(queryClient);
   });
 
   describe.each([401, 429])('given a %i from the sign-in', (status) => {
@@ -1511,6 +1569,20 @@ describe('the code step', () => {
   });
 
   // The code step lasts 5 minutes from the accepted password (D69); a refusal from 4 min 50 s on ends it.
+  it('keeps its Me when a refresh sent before its answer answers after it, for someone else', async () => {
+    const server = serveWithAHeldRefresh();
+    const { queryClient } = await renderCodeStep();
+    type(codeField(), '123456');
+
+    server.holdNextRefresh();
+    press(signInButton());
+    await wait(0);
+    server.answerAsSomeoneElse();
+    await wait(0);
+
+    expectTheWorkerSignedIn(queryClient);
+  });
+
   describe.each([401, 429])('given a %i for the code', (status) => {
     it('at 4 min 49 s shows the A25 message in the summary, which takes focus, and empties the code', async () => {
       serve({ code: () => problem(status) });
