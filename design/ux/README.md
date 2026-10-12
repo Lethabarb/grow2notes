@@ -180,6 +180,7 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
 
 1. **The Manage page.** Manage is reached through a `/manage` page holding four links. It could be read as an extra
    screen; the alternative is a disclosure in the nav. ([app-shell](screens/app-shell.md) Q1)
+   **Answered 12 October 2026 (D73):** the `/manage` page.
 2. **Success banners beyond Submit.** Not built: "Invite sent to …", "Changes saved", "Alex Park deactivated",
    "Alex Park reactivated", "Sign-in reset for …", "Changes saved. You are now a worker." and "Jane Citizen restored.
    They are back on Today." Focus moves to the heading or the changed Status row instead. Add any?

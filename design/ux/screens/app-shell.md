@@ -840,6 +840,7 @@ Recorded once each, with evidence. No change is recommended.
    through `/manage`, a page holding only the heading and the four links, because it needs no dropdown and Back works.
    It could be read as an extra screen. The alternative with no extra page is a "Manage" disclosure button in the nav
    that shows the four links in the flow underneath (APG disclosure navigation). Which do you prefer?
+   **Answered 12 October 2026 (D73):** the `/manage` page, as this spec has it; no disclosure.
 2. **New wording to approve:** "Account", "Signed in as {name}", "Signing out…", the three "Not signed out…" messages,
    "Loading…", "Could not connect to Grow2Notes" and "There is a problem with Grow2Notes" (start-up headings) with
    "Grow2Notes did not load: no connection. Try again." / "…: something went wrong. Try again." and their "still did
