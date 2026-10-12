@@ -83,7 +83,7 @@ internal static class ApiGroup
         var httpContext = context.HttpContext;
 
         // A request that changes nothing is let through: it needs no token, and is not handed to antiforgery, whose
-        // HTTPS check would otherwise refuse a GET over plain HTTP, as in CI's end-to-end run.
+        // HTTPS check would otherwise refuse a GET over plain HTTP.
         if (HttpMethods.IsGet(httpContext.Request.Method) || HttpMethods.IsHead(httpContext.Request.Method)
             || HttpMethods.IsOptions(httpContext.Request.Method) || HttpMethods.IsTrace(httpContext.Request.Method))
         {

@@ -2,11 +2,6 @@ import type { Locator, Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 
-// The antiforgery, enrolment and session cookies are Secure, so the app issues them only on an HTTPS request
-// (design.md §8.4, §9.8). CI serves the app at http://localhost, so every request here says that it came over HTTPS,
-// as App Service's front end says it, which the app trusts from loopback; Chromium keeps Secure cookies from localhost.
-test.use({ extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } });
-
 const linkCheck = '**/api/auth/setup/start';
 
 // tokens.css's --colour-action, a primary button's fill, and --colour-surface, a secondary one's (Button.module.css).
@@ -39,7 +34,8 @@ function expectNoLinkIn(historyState: string, setupLink: string) {
 async function historyUrls(page: Page): Promise<string[]> {
   const devTools = await page.context().newCDPSession(page);
   const { entries } = await devTools.send('Page.getNavigationHistory');
-  await devTools.detach();
+  // Left attached until the page closes: detaching a DevTools session takes the page's virtual authenticator with it,
+  // and a later passkey prompt would then find none.
   return entries.map(({ url }) => url);
 }
 

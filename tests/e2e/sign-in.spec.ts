@@ -4,11 +4,6 @@ import { expect, test } from './fixtures.ts';
 // Sign-in's view A with a passkey (sign-in.md), with Chromium's virtual authenticator in place of the device's passkey
 // prompt (fixtures.ts). As every test here does, each also fails if its page meets a Content Security Policy violation.
 
-// The antiforgery and session cookies are Secure, so the app issues them only on an HTTPS request (design.md §8.4,
-// §9.8), and every sign-in request needs the antiforgery token. CI serves the app at http://localhost, so every request
-// here says that it came over HTTPS, as App Service's front end says it, which the app trusts from loopback.
-test.use({ extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } });
-
 // A25's message, which says nothing of why a sign-in failed.
 const signInFailed =
   'Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes.';

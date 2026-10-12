@@ -140,10 +140,11 @@ Two more fixtures are there for the tests that name them, and only those run the
   With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
   it does.
 
-A test that sends a change through the SPA's `api()` wrapper sets `extraHTTPHeaders` to
-`{ 'X-Forwarded-Proto': 'https' }`, as `e2e/setup.spec.ts` does with `test.use`. The antiforgery, enrolment and session
-cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a request
-from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
+Every request that a test's browser sends says that it came over HTTPS: `playwright.config.ts` sets
+`extraHTTPHeaders` to `{ 'X-Forwarded-Proto': 'https' }` for every test, as every signed-out page sends a change
+through the SPA's `api()` wrapper, sign-in asking for passkey options as it shows. The antiforgery, enrolment and
+session cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a
+request from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
 
 ### Answering `/api/auth/me`
 
