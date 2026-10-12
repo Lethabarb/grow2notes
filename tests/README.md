@@ -116,6 +116,25 @@ as the one Chromium logs for a `401`, do not fail a test.
 `e2e/fixtures.spec.ts` shows that the fixture fails a test whose page meets a violation. It is marked `test.fail()`, so
 it passes by failing: the run marks it as failed, with a cross, and counts it as passed.
 
+A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
+width and then at a laptop's.
+
+### Answering `/api/auth/me`
+
+Nobody can sign in in the end-to-end run until the sign-in stories are built, so a test of a signed-in screen answers
+`GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts` routes the page's requests for it,
+through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker` and `manager` there (A35), in the
+JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call it before `page.goto`. To change
+who is signed in, call it again with the other person, whose answer then wins, and load the page again, so that the SPA
+starts with them. Everything else the page loads is the published app's, under its policy. A test that does not call
+it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`); `e2e/shell.spec.ts` is the example
+of one that does.
+
+```ts
+await serveMe(page, manager);
+await page.goto('/manage');
+```
+
 ## Writing integration tests
 
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
