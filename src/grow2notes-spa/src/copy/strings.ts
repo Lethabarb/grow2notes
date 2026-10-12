@@ -14,6 +14,18 @@ export const strings = {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',
     goToToday: 'Go to Today',
   },
+  /** Sign-in's view A (sign-in.md), whose `<h1>` is its page name, "Sign in". */
+  signIn: {
+    /** Under the `<h1>`. */
+    hint: 'Sign in the way you chose when you set up your account.',
+    passkey: 'Sign in with a passkey',
+    /** In place of the passkey button, in a browser with no WebAuthn (sign-in.md component 4). */
+    passkeysUnavailable:
+      'Passkeys do not work in this browser. To use your passkey, open Grow2Notes in your phone’s main browser, '
+      + 'such as Safari or Chrome.',
+    /** The help line (microcopy.md §9), plain text, not a link: recovery is always a manager's Reset sign-in. */
+    help: 'If you cannot sign in, ask a manager to reset your sign-in.',
+  },
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',

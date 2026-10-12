@@ -1,14 +1,21 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
+import { buttonClass } from '../components/buttonClass.ts';
 import { pageName } from '../copy/pageNames.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
 const mePath = '/api/auth/me';
+
+const hint = 'Sign in the way you chose when you set up your account.';
+const help = 'If you cannot sign in, ask a manager to reset your sign-in.';
+const notice =
+  'Passkeys do not work in this browser. To use your passkey, open Grow2Notes in your phone’s main browser, such as '
+  + 'Safari or Chrome.';
 
 // A made-up worker (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -88,9 +95,27 @@ async function wait(ms: number) {
   await act(() => vi.advanceTimersByTimeAsync(ms));
 }
 
-// The shell before /me answers, and once it has answered 200.
+/** A browser with WebAuthn, which jsdom is not: `browserSupportsWebAuthn()` asks only for the constructor. */
+function withWebAuthn() {
+  vi.stubGlobal('PublicKeyCredential', function PublicKeyCredential() {});
+}
+
+/** How many requests have gone to `GET /api/auth/me`. */
+function meRequests() {
+  return fetchMock.mock.calls.filter(([path, init]) => path === mePath && init?.method === 'GET').length;
+}
+
+/** Fails unless the elements come in the document in the order given. */
+function expectInOrder(...elements: HTMLElement[]) {
+  for (const [index, element] of elements.slice(1).entries()) {
+    expect(elements[index].compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  }
+}
+
+// The shell before /me answers, after its 401, and once it has answered 200.
 const states = [
   { state: 'before /me answers', answer: noAnswer },
+  { state: 'after a 401 from /me', answer: () => problem(401) },
   { state: 'once /me has answered 200', answer: () => json(worker) },
 ];
 
@@ -103,6 +128,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
   fetchMock.mockReset();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -110,35 +136,83 @@ afterEach(() => {
 
 describe('AppShell', () => {
   describe('until /me answers 200', () => {
+    /** Expects the signed-out frame: the wordmark as plain text, and no nav or Account. */
     function expectSignedOutFrame() {
       expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
       expect(screen.queryByRole('link', { name: 'Grow2Notes' })).not.toBeInTheDocument();
       expect(within(screen.getByRole('banner')).getByText('Grow2Notes')).toBeInTheDocument();
-      expect(document.title).toBe('Grow2Notes');
     }
 
-    it('shows the signed-out frame while the answer is pending', async () => {
+    it('shows the signed-out frame, with an empty <main> and the bare title, while the answer is pending', async () => {
       serveMe(noAnswer);
       renderShell('/');
       await wait(0);
 
       expect(fetchMock).toHaveBeenCalledWith(mePath, expect.objectContaining({ method: 'GET' }));
       expectSignedOutFrame();
+      expect(screen.getByRole('main')).toBeEmptyDOMElement();
+      expect(document.title).toBe('Grow2Notes');
     });
 
     it.each([
-      { failure: 'a 401', answer: () => problem(401) },
       { failure: 'a 503', answer: () => problem(503) },
       { failure: 'no connection', answer: noConnection },
-    ])('shows the signed-out frame after $failure', async ({ answer }) => {
+    ])('shows the signed-out frame, with an empty <main> and the bare title, after $failure', async ({ answer }) => {
       serveMe(answer);
       const { client } = renderShell('/');
-      // Past the query client's one silent retry, for the failures that get one.
+      // Past the query client's one silent retry.
       await wait(60_000);
 
       expect(client.getQueryState(meQuery.queryKey)?.status).toBe('error');
       expectSignedOutFrame();
+      expect(screen.getByRole('main')).toBeEmptyDOMElement();
+      expect(document.title).toBe('Grow2Notes');
+    });
+
+    describe.each(['/', '/manage/anything'])('given a 401 at %s', (path) => {
+      it('shows view A in the signed-out frame at that address, titled Sign in, with nothing focused', async () => {
+        withWebAuthn();
+        serveMe(() => problem(401));
+        const { router } = renderShell(path);
+        const { location } = router.state;
+        await wait(0);
+
+        expectSignedOutFrame();
+        const main = within(screen.getByRole('main'));
+        const heading = main.getByRole('heading', { level: 1, name: 'Sign in' });
+        const button = main.getByRole('button', { name: 'Sign in with a passkey' });
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button).toHaveClass(...buttonClass('primary').split(' '));
+        // The alert line is in the page, empty, before anything can fail (sign-in.md component 2a).
+        const alert = main.getByRole('alert');
+        expect(alert).toBeEmptyDOMElement();
+        expectInOrder(heading, main.getByText(hint), alert, button, main.getByText(help));
+        // No error summary until a sign-in fails.
+        expect(main.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
+        // The page's status region, empty (sign-in.md component 18).
+        expect(main.getByRole('status')).toBeEmptyDOMElement();
+
+        expect(document.title).toBe('Grow2Notes – Sign in');
+        expect(router.state.location).toBe(location);
+        expect(document.body).toHaveFocus();
+      });
+    });
+
+    it('shows the notice in place of the passkey button in a browser with no WebAuthn', async () => {
+      vi.stubGlobal('PublicKeyCredential', undefined);
+      serveMe(() => problem(401));
+      renderShell('/');
+      await wait(0);
+
+      const main = within(screen.getByRole('main'));
+      expect(main.queryByRole('button')).not.toBeInTheDocument();
+      expectInOrder(
+        main.getByRole('heading', { level: 1, name: 'Sign in' }),
+        main.getByText(hint),
+        main.getByText(notice),
+        main.getByText(help),
+      );
     });
   });
 
@@ -150,6 +224,19 @@ describe('AppShell', () => {
 
       expect(screen.getByRole('link', { name: 'Grow2Notes' })).toHaveAttribute('href', '/');
       expect(document.title).toBe('Grow2Notes – Today');
+    });
+
+    it('shows no sign-in, and moves no focus', async () => {
+      withWebAuthn();
+      serveMe(() => json(worker));
+      renderShell('/');
+      await wait(0);
+
+      const main = within(screen.getByRole('main'));
+      expect(main.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(main.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();
+      // A first load moves no focus (app-shell.md component 7).
+      expect(document.body).toHaveFocus();
     });
 
     it.each([
@@ -259,5 +346,25 @@ describe('AppShell', () => {
       expect(window.history.length).toBe(length);
       expect(router.state.location).toBe(location);
     });
+  });
+
+  it.each([
+    { answer: 'a 401', serveAnswer: () => problem(401) },
+    { answer: 'a 200', serveAnswer: () => json(worker) },
+  ])('asks /me once after $answer, and not again when the window regains focus', async ({ serveAnswer }) => {
+    withWebAuthn();
+    serveMe(serveAnswer);
+    renderShell('/');
+    await wait(0);
+
+    act(() => {
+      focusManager.setFocused(false);
+    });
+    act(() => {
+      focusManager.setFocused(true);
+    });
+    await wait(60_000);
+
+    expect(meRequests()).toBe(1);
   });
 });

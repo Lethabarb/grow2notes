@@ -1,0 +1,16 @@
+/* One reading column, left-aligned in the page's container, so that it shares a left edge with the wordmark. */
+.view {
+  max-inline-size: var(--measure);
+}
+
+/* Hints and help text in the smaller size and the secondary colour, never lighter (foundations.md). */
+.hint,
+.help {
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}
+
+/* The passkey button with its alert line, or the notice in their place. */
+.passkey {
+  margin-block-end: var(--space-6);
+}
