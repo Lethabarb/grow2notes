@@ -132,7 +132,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 2 | `sign-in.md › Sign in again, in place` | F00.04 | | |
 | 3 | `sign-in.md › Setup` | F00.04 | | |
 | 4 | `sign-in.md › Privacy and storage (D22, §9.6)` | DoD | | |
-| 5 | `sign-in.md › Layout and accessibility` | DoD | S06.02.02 (the go-live device check) | Checked on every story, except the go-live device check of passkey setup from phone email apps, which S06.02.02 does once |
+| 5 | `sign-in.md › Layout and accessibility` | DoD | S06.02.02 (the go-live device check); F00.04's feature check (the NVDA and VoiceOver pass) | Checked on every story, except the go-live device check of passkey setup from phone email apps, which S06.02.02 does once, and the NVDA and VoiceOver pass over views A to G, which F00.04's feature check does once before M0 closes |
 
 **ux/screens/app-shell.md** (`app-shell.md › Badge` is under E03)
 

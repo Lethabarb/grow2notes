@@ -358,7 +358,7 @@ src/copy/
   format.ts          // the five date/time tokens, names, numbers, plurals
   strings.ts         // fixed strings, `as const`
   messages.ts        // functions for strings with slots
-  apiErrors.ts       // design §6.9 error code -> message function
+  apiErrors.ts       // design §6.9 error code -> its words, in its screen's shape
   Sep.tsx            // the spoken-comma separator
   copy.test.ts       // banned words, US spellings, negative contractions
   format.test.ts     // the format snapshots, in jsdom and in WebKit
@@ -441,17 +441,27 @@ export const msg = {
 } as const;
 ```
 
-**API errors.** The server sends a code and parameters (§6.9); the client owns every word. One map, typed against the
-code union, so a new code without wording fails the build:
+**API errors.** The server sends a code and parameters (§6.9); the client owns every word. One map, checked against
+the union of the codes the app words, so a code in the union without wording fails the type check. The union does not
+start with all of §6.9: as the server's `ErrorCode` holds only the codes the app answers, the change that words a code
+adds it to the union and its words to the map. The map is checked with `satisfies` rather than typed as one `Record`,
+so that each entry keeps the shape its screen shows: a whole-page message is a heading and a sentence, and a message
+with slots is a function.
 
 ```ts
 // src/copy/apiErrors.ts
-// p = the server's parameters (§6.9) plus what the screen already knows (the participant's name).
-export const apiErrorCopy: Record<ApiErrorCode, (p: ApiErrorParams) => string> = {
-  'note.in_progress_by_other': p => msg.startedByOther(p.authorDisplayName, p.participantName, p.startedAtUtc),
-  'user.last_manager':         p => `${p.name} is the only active manager, so they cannot be ${p.action}. Make someone else a manager first.`,
-  // … one row per code in design §6.9
-};
+export type ApiErrorCode = 'auth.setup_link_invalid' | 'note.in_progress_by_other' | 'user.last_manager'; // …
+
+export const apiErrorCopy = {
+  // sign-in.md's Link expired, used or replaced: a whole-page message, an <h1> and one sentence.
+  'auth.setup_link_invalid': { heading: 'This link has expired', body: 'Ask a manager to send a new one.' },
+  // p = the server's parameters (§6.9) plus what the screen already knows (the participant's name).
+  'note.in_progress_by_other': (p: { authorDisplayName: string; participantName: string; startedAtUtc: string }) =>
+    msg.startedByOther(p.authorDisplayName, p.participantName, p.startedAtUtc),
+  'user.last_manager': (p: { name: string; action: string }) =>
+    `${p.name} is the only active manager, so they cannot be ${p.action}. Make someone else a manager first.`,
+  // … one entry per code in the union
+} as const satisfies Record<ApiErrorCode, unknown>;
 ```
 
 **Separator.**

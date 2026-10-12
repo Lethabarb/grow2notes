@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace Grow2Notes.Web.Platform;
 
@@ -8,16 +9,30 @@ namespace Grow2Notes.Web.Platform;
 /// </summary>
 /// <remarks>
 /// The validation filter answers <c>400</c> with an <see cref="HttpValidationProblemDetails"/>, which it writes
-/// through the problem details service, so the service's customisation is where the app can change it. Nothing else
-/// writes that type through the service. The filter keys each error by the C# path of the member that broke a rule,
-/// such as <c>Part.Value</c>, where the API's JSON is camelCase (design.md §6.1). The service writes only for a request
-/// whose <c>Accept</c> allows JSON, as the SPA's requests do; any other gets the filter's own <c>400</c>, unchanged.
+/// through the problem details service, so the service's customisation is where the app can change it. The only other
+/// writer of that type is <see cref="Field"/>, for a field that an endpoint itself refuses. The filter keys each error
+/// by the C# path of the member that broke a rule, such as <c>Part.Value</c>, where the API's JSON is camelCase
+/// (design.md §6.1). The service writes only for a request whose <c>Accept</c> allows JSON, as the SPA's requests do;
+/// any other gets the filter's own <c>400</c>, unchanged.
 /// </remarks>
 internal static class ValidationProblems
 {
     // ASP.NET Core's type for a 422, which ErrorCode.Problem gives any other 422 code. The service gave this problem
     // the type of a 400 before the customisation runs.
     private const string UnprocessableEntityType = "https://tools.ietf.org/html/rfc4918#section-11.2";
+
+    /// <summary>
+    /// Answers <c>422 validation.failed</c> with <paramref name="error"/> for one field, as the validation filter
+    /// answers a field that broke a rule, for a check that only the endpoint can make, such as setup's refused passkey
+    /// (S00.04.02). <paramref name="field"/> is the request member's C# name, as the filter gives it. The problem is
+    /// written through the problem details service, like the filter's, so <see cref="Customize"/> gives it the same
+    /// code and type, and the field's camelCase name.
+    /// </summary>
+    public static ProblemHttpResult Field(string field, string error) =>
+        TypedResults.Problem(new HttpValidationProblemDetails(new Dictionary<string, string[]> { [field] = [error] })
+        {
+            Status = ErrorCode.ValidationFailed.Status,
+        });
 
     /// <summary>
     /// For <see cref="ProblemDetailsOptions.CustomizeProblemDetails"/>. Leaves every other problem as it is.

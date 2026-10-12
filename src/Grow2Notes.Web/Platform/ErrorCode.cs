@@ -13,6 +13,9 @@ internal sealed class ErrorCode
     /// <summary>The problem details extension member that holds the code (design.md §6.1).</summary>
     public const string Extension = "code";
 
+    /// <summary>The setup link is expired, used or replaced.</summary>
+    public static readonly ErrorCode SetupLinkInvalid = new(StatusCodes.Status410Gone, "auth.setup_link_invalid");
+
     /// <summary>A stale <c>If-Match</c>.</summary>
     public static readonly ErrorCode PreconditionFailed =
         new(StatusCodes.Status412PreconditionFailed, "precondition.failed");

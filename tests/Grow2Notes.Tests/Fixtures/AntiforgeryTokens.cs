@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -34,6 +35,21 @@ internal static class AntiforgeryTokens
         using var response = await client.GetAsync("/api/auth/antiforgery", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         return Assert.Single(response.Headers.GetValues(Header));
+    }
+
+    /// <summary>
+    /// Posts to <paramref name="path"/> as the SPA does: with <paramref name="token"/> in the <see cref="Header"/>
+    /// header, and <paramref name="body"/>, if any, as JSON.
+    /// </summary>
+    public static async Task<HttpResponseMessage> PostWithTokenAsync(
+        this HttpClient client, string path, string token, object? body = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = body is null ? null : JsonContent.Create(body),
+        };
+        request.Headers.Add(Header, token);
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     /// <summary>

@@ -10,9 +10,9 @@ namespace Grow2Notes.Tests.Platform;
 /// <summary>
 /// The <c>/api</c> group's checks of a request that changes something (design.md §9.8 items 2 and 3), its antiforgery
 /// token and the type of its body, signed out, at a test-only endpoint in the group
-/// (<see cref="TestOnlyApiEndpoint"/>), which reads no body, over HTTPS. The app is hosted without a database, with its
-/// Data Protection keys in memory, so the tests run without Docker; <see cref="ApiGroupOnSqlServerTests"/> covers
-/// signing in.
+/// (<see cref="TestOnlyApiEndpoint"/>), which reads no body, and at the app's own <c>POST /api/auth/setup/start</c>,
+/// which reads a JSON body, over HTTPS. The app is hosted without a database, with its Data Protection keys in memory,
+/// so the tests run without Docker; <see cref="ApiGroupOnSqlServerTests"/> covers signing in.
 /// </summary>
 public sealed class ApiGroupTests : IAsyncDisposable
 {
@@ -201,6 +201,29 @@ public sealed class ApiGroupTests : IAsyncDisposable
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.BadRequest);
+    }
+
+    // At an endpoint of the app's own that reads a JSON body, which is routed beside the unknown-/api catch-all, as the
+    // test-only endpoint is not, so that routing must not pass it over for the catch-all's 404. Each body is JSON text,
+    // so only its declared type refuses it; the last declares none.
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("text/plain; charset=utf-8")]
+    [InlineData(null)]
+    public async Task A_body_not_declared_application_json_at_an_endpoint_that_reads_JSON_gets_a_415_problem(
+        string? contentType)
+    {
+        using var client = app.CreateHttpsClient();
+        var token = await client.FetchTokenAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/setup/start")
+        {
+            Content = Body(contentType, """{"userId":"made-up","token":"made-up"}"""),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, token);
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.UnsupportedMediaType);
     }
 
     // The unknown-/api catch-all is outside the group, so the group's filter never answers in its place.

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Grow2Notes.Tests.Fixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -32,6 +33,8 @@ internal static class EndpointMatrix
 
     private static readonly IReadOnlyList<string> GetOrHead = ["GET", "HEAD"];
 
+    private static readonly IReadOnlyList<string> Post = ["POST"];
+
     private static readonly HttpMethod[] CalledForAnyMethod =
         [HttpMethod.Get, HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete];
 
@@ -61,6 +64,17 @@ internal static class EndpointMatrix
         // signed in (§6.2). Each signed-in user gets themselves from /api/auth/me, in their own organisation.
         new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
         new(Get,       "/api/auth/me",           Unauthorized, OK,     OK,         OK),
+
+        // Setup starts from an invite's link, before anyone is signed in (§8.1 step 3), and a made-up link gets the
+        // one answer of a link that does not check, whoever calls.
+        new(Post,      "/api/auth/setup/start",  Gone,      Gone,      Gone,       Gone,
+            WithJson("/api/auth/setup/start", new { userId = Guid.NewGuid(), token = "made-up" })),
+
+        // Each later setup step needs the enrolment cookie that the start issues, which no caller here has: a session
+        // does not stand in for it (§8.1 step 3).
+        new(Post,      "/api/auth/setup/passkey/options", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -110,6 +124,10 @@ internal static class EndpointMatrix
     // For a route with parameters: a path that its endpoint answers.
     private static Func<EndpointCall, Task<HttpRequestMessage>> At(string path) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path));
+
+    // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
+    private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
+        call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -13,13 +14,15 @@ namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// Minimal APIs' built-in validation through the app's whole pipeline, at test-only endpoints: one whose body has
-/// required fields, and one whose parameter has a range. The tests host the app without a database, so they run
-/// without Docker.
+/// required fields, and one whose parameter has a range; and the same problem from an endpoint that refuses a field
+/// itself. The tests host the app without a database, so they run without Docker.
 /// </summary>
 public sealed class ValidationTests
 {
     // Under /api, as every endpoint with a request body will be.
     private const string Path = "/api/test-only/validated";
+
+    private const string RefusingPath = "/api/test-only/refusing";
 
     [Fact]
     public async Task A_body_without_its_required_fields_gets_a_422_validation_failed_problem_naming_each_field()
@@ -76,6 +79,28 @@ public sealed class ValidationTests
         Assert.Equal(JsonValueKind.String, Assert.Single(field.Value.EnumerateArray()).ValueKind);
     }
 
+    // As setup refuses a passkey that Identity does not accept (S00.04.02).
+    [Fact]
+    public async Task A_field_that_the_endpoint_refuses_gets_the_same_422_validation_failed_problem()
+    {
+        await using var app = new AppWithoutDatabase("Production");
+        using var client = app.WithWebHostBuilder(MapTestOnlyEndpoints).CreateClient();
+
+        using var response = await client.PostAsync(RefusingPath, content: null, TestContext.Current.CancellationToken);
+
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(HttpStatusCode.UnprocessableEntity));
+        var root = problem.RootElement;
+        Assert.Equal("validation.failed", root.GetProperty("code").GetString());
+        Assert.Equal(
+            TypedResults.Problem(statusCode: StatusCodes.Status422UnprocessableEntity).ProblemDetails.Type,
+            root.GetProperty("type").GetString());
+
+        // By the field's name in JSON, as the validation names a field.
+        var field = Assert.Single(root.GetProperty("errors").EnumerateObject());
+        Assert.Equal("refusedField", field.Name);
+        Assert.Equal("Refused by the endpoint.", Assert.Single(field.Value.EnumerateArray()).GetString());
+    }
+
     private static void MapTestOnlyEndpoints(IWebHostBuilder builder) =>
         builder.ConfigureServices(services => services.AddSingleton<IStartupFilter>(new TestOnlyEndpoints()));
 
@@ -108,6 +133,9 @@ public sealed class ValidationTests
             {
                 endpoints.MapPost(Path, (TestOnlyBody _) => TypedResults.NoContent()).AllowAnonymous();
                 endpoints.MapGet(Path, ([Range(1, 10)] int count) => TypedResults.NoContent()).AllowAnonymous();
+                endpoints.MapPost(
+                    RefusingPath, () => ValidationProblems.Field("RefusedField", "Refused by the endpoint."))
+                    .AllowAnonymous();
             });
         };
     }

@@ -1,6 +1,7 @@
 using System.Net.Mime;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Metadata;
 using MediaTypeHeaderValue = Microsoft.Net.Http.Headers.MediaTypeHeaderValue;
 
 namespace Grow2Notes.Web.Platform;
@@ -60,6 +61,19 @@ internal static class ApiGroup
     {
         var api = endpoints.MapGroup("/api");
         api.AddEndpointFilter(RefuseUnlessJsonWithTokenAsync);
+
+        // Minimal APIs mark an endpoint that reads a JSON body as accepting JSON only, so routing passes it over for a
+        // request with another Content-Type, such as a form post, and the unknown-path catch-all answers 404. Without
+        // the mark, routing chooses the endpoint, and its binding answers such a request 415, as this filter answers
+        // one at an endpoint that reads no body. It is removed in a finally convention, because minimal APIs add it
+        // after the group's other conventions have run.
+        ((IEndpointConventionBuilder)api).Finally(endpoint =>
+        {
+            foreach (var accepts in endpoint.Metadata.OfType<IAcceptsMetadata>().ToList())
+            {
+                endpoint.Metadata.Remove(accepts);
+            }
+        });
         return api;
     }
 
