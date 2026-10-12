@@ -633,8 +633,8 @@ Value · 4.1.3 Status Messages. https://www.w3.org/TR/WCAG22/
     tags keep their border and focus rings are visible in forced colours.
 34. Formats: "Thursday 1 October 2026" contains U+00A0 between "1" and "October"; times read "4:42 pm" with U+00A0;
     12:00 shows "midday". No "Sept", no comma after the weekday, no relative times.
-35. axe-core (Playwright) reports no violations for every state in States; no visible string contains the parent
-    company's name (D42), "delete", "log in" or a US spelling (`microcopy.md` copy test).
+35. axe-core (Playwright) reports no violations for every state in States; no visible string contains "delete",
+    "log in" or a US spelling (`microcopy.md` copy test), or the parent company's name (D42, checked by review: D72).
 
 ---
 

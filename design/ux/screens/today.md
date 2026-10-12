@@ -327,9 +327,9 @@ listed here.
 - [foundations](../components/foundations.md): system font stack; 18 px body, 16 px minimum; weights 400/700; the
   `--colour-*` tokens above; 3 px near-black focus ring with 2 px offset (`Highlight` in forced colours); no motion;
   light only.
-- [microcopy](../components/microcopy.md): every visible string comes from `src/copy` (`react/jsx-no-literals`);
-  `<html lang="en-AU">`; no negative contractions in new copy; glossary terms only (participant, draft, submitted,
-  Flagged).
+- [microcopy](../components/microcopy.md): every visible string comes from `src/copy` (§8's lint rule, ESLint's
+  `no-restricted-syntax`); `<html lang="en-AU">`; no negative contractions in new copy; glossary terms only
+  (participant, draft, submitted, Flagged).
 
 ---
 
@@ -508,7 +508,7 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
 - [ ] Times are Melbourne time, lower-case am/pm with a non-breaking space; 12:00 shows "midday" (test 02:00Z on
   1 October 2026), and a time just after the daylight-saving change on 4 October 2026 is correct.
 - [ ] Nowhere on the screen: a count of notes, "Not started", "Missing", "No note", "Overdue", progress, or the parent
-  company's name (the CI copy test from microcopy.md fails the build if it appears).
+  company's name (checked by review, D42, D72).
 - [ ] Long names (100 characters, unbroken strings, "O’Brien-Smith", "Zoë") wrap and are never truncated.
 
 **Order and layout**

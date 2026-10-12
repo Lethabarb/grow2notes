@@ -512,7 +512,8 @@ https://www.nngroup.com/articles/indicators-validations-notifications/.
 **Storage and naming**
 - [ ] Nothing is written to `localStorage`, `sessionStorage` or IndexedDB on any path (spy on `Storage.prototype.setItem`
   and `indexedDB.open`).
-- [ ] The copy test passes: no banned words, Australian spelling, no trace of the parent company's name (D42).
+- [ ] The copy test passes: no banned words, Australian spelling; and review finds no trace of the parent company's
+  name (D42, D72).
 
 **Effect on the note form** (cross-check at M2)
 - [ ] After a save, a newly opened note form's empty Guided notes box shows the prompts as its placeholder with the

@@ -17,11 +17,25 @@ Each is a separate step of CI's SPA checks (design.md §10.4 step 2). In `src/gr
 npm run typecheck           # tsc over the app, the tests, the config files and scripts/
 npm run lint                # ESLint; a warning fails it too
 npm test                    # Vitest, once
+npm run test:webkit         # the format tests again, in Playwright's WebKit (below)
 npm run build               # vite build into src/Grow2Notes.Web/wwwroot
 npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
 ```
 
 `npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
+
+`npm run test:webkit` runs `src/copy/format.test.ts` alone, headless in Playwright's WebKit, Safari's engine, through
+Vitest's browser mode (`vitest.webkit.config.ts`), because Safari's time-zone data can differ from Node's
+(microcopy.md §8). The browser's zone is set to America/Los_Angeles, behind UTC, whatever the machine's, so that a date
+read in the device's own time, which there falls on the day before, fails it. It needs the WebKit build that the SPA's
+`playwright` package drives, installed once per machine and again after that package is updated:
+
+```shell
+npx playwright install webkit              # Windows and macOS
+npx playwright install --with-deps webkit  # Linux, with WebKit's system packages, as CI installs it
+```
+
+`npm test` needs no browser: it runs every test, `format.test.ts` included, in jsdom.
 
 `npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
 `npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
@@ -37,6 +51,13 @@ npm run check:no-analytics  # no Application Insights JavaScript SDK or third-pa
 
 The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
 default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
+
+`npm test` also runs microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of its
+own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and the
+word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
+contraction outside design.md's two "can't" strings. With it, `src/copy/wordsInJsx.test.ts` lints sample components
+with `eslint.config.js` and checks which words in JSX its rule refuses, as no JSX in `src` holds one for
+`npm run lint` to refuse.
 
 ## Running the .NET tests
 

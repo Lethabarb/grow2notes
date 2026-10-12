@@ -621,8 +621,8 @@ is never cleared by the app) · 4.1.2 · 4.1.3. 3.3.4 does not apply: nothing is
       Storage by this screen (D22).
 
 **Copy and layout**
-- [ ] Every visible string matches this spec and comes from `src/copy`; microcopy.md's parent-company-name check (D42),
-      banned-word check and US-spelling check pass.
+- [ ] Every visible string matches this spec and comes from `src/copy`; microcopy.md's banned-word check and
+      US-spelling check pass, and review finds no trace of the parent company's name (D42, D72).
 - [ ] At 375 px the step links share a row; at 320 px they stack; no horizontal scroll at 320 px or 200% text.
 - [ ] axe (Playwright) reports no violations in S1, S2, S4, S7, S10 and S11.
 

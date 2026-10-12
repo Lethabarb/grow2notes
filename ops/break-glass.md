@@ -51,7 +51,8 @@ There is no sign-up screen (D23, A1), so this is how every organisation starts.
   opens the link and completes setup with it.
 - **In production,** once, for the provider, as S06.05.02 says: only when F06.01's list of high and critical findings
   is empty, because the first manager's name and address are the first real personal information in production (D1),
-  and with the provider's name checked by the same parent-company-name check as the rest of the app (D42).
+  and with the provider's name checked by hand for the parent company's name, as every change to the app is (D42,
+  D72).
 
 ### What to have ready
 

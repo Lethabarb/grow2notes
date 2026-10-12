@@ -575,7 +575,8 @@ Opinion].
 - [ ] **Privacy:**
   - no participant data or note content in logs or telemetry (design.md §9.5);
   - nothing stored on the device (D22);
-  - the parent company's name appears nowhere (D42), checked by hand on screens, page titles, emails and files;
+  - the parent company's name appears nowhere (D42), checked by hand on screens, page titles, emails and files, and
+    in the change's diff before each commit, as no automated check looks for it (D72);
   - **R2:** no note content in any tool reply (D49), with a test.
 - [ ] **Words on screen** match the UX spec and the microcopy glossary.
 - [ ] **Docs:**
