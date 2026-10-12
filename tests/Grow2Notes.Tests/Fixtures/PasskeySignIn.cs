@@ -62,31 +62,32 @@ internal static class PasskeySignIn
 
     /// <summary>
     /// Sends <paramref name="credentialJson"/> to the sign-in endpoint with <paramref name="token"/>, as the SPA sends
-    /// a credential, and returns the response.
+    /// a credential, from a page at <paramref name="origin"/>, and returns the response.
     /// </summary>
     public static async Task<HttpResponseMessage> SendPasskeyCredentialAsync(
-        this HttpClient client, string credentialJson, string token)
+        this HttpClient client, string credentialJson, string token, string origin = Grow2NotesFactory.Origin)
     {
-        using var request = Request(credentialJson);
+        using var request = Request(credentialJson, origin);
         request.Headers.Add(AntiforgeryTokens.Header, token);
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
     /// <summary>
     /// A request to the sign-in endpoint that sends <paramref name="credentialJson"/>, as the SPA sends a credential,
-    /// without the antiforgery token, which the caller adds.
+    /// from a page at <paramref name="origin"/>, without the antiforgery token, which the caller adds.
     /// </summary>
     /// <remarks>
-    /// It carries the <c>Origin</c> header that a browser sends with every <c>POST</c>, naming the page that the
-    /// credential was signed for, as Identity checks the one against the other.
+    /// It carries the <c>Origin</c> header that a browser sends with every <c>POST</c>, naming the page that asked for
+    /// the credential. Identity's own origin check compares the credential's origin with it; the app's compares it with
+    /// <c>App:Origin</c> (design.md A54).
     /// </remarks>
-    public static HttpRequestMessage Request(string credentialJson)
+    public static HttpRequestMessage Request(string credentialJson, string origin = Grow2NotesFactory.Origin)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, Path)
         {
             Content = JsonContent.Create(new { credentialJson }),
         };
-        request.Headers.Add(HeaderNames.Origin, Grow2NotesFactory.Origin);
+        request.Headers.Add(HeaderNames.Origin, origin);
         return request;
     }
 }

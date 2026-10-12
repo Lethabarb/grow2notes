@@ -19,7 +19,8 @@ namespace Grow2Notes.Tests.Fixtures;
 /// <remarks>
 /// A new authenticator's passkey belongs to no account; <see cref="RegisterAsync"/> makes one whose passkey a user
 /// holds. <see cref="PasskeySignIn"/> signs a client in with it. For a failed sign-in, an assertion can leave the
-/// person unverified, and <see cref="WithAnotherKey"/> signs for the passkey with a key that is not its own.
+/// person unverified or come from a page at another origin, and <see cref="WithAnotherKey"/> signs for the passkey with
+/// a key that is not its own.
 /// </remarks>
 internal sealed class TestAuthenticator : IDisposable
 {
@@ -114,18 +115,20 @@ internal sealed class TestAuthenticator : IDisposable
 
     /// <summary>
     /// An assertion over <paramref name="challenge"/>, the base64url challenge of passkey request options, as the SPA
-    /// sends it: the credential as <c>JSON.stringify</c> writes it, signed for <see cref="Grow2NotesFactory.Origin"/>
-    /// and its host, with the person verified unless <paramref name="userVerified"/> is false, when the authenticator
-    /// says only that someone was present.
+    /// sends it: the credential as <c>JSON.stringify</c> writes it, signed for <see cref="Grow2NotesFactory.Origin"/>'s
+    /// host, with the person verified unless <paramref name="userVerified"/> is false, when the authenticator says only
+    /// that someone was present. It was asked for by a page at <paramref name="origin"/>, by default
+    /// <see cref="Grow2NotesFactory.Origin"/> itself; a browser also lets a page on a subdomain of that host, or at
+    /// another port of it, ask for one.
     /// </summary>
-    public string GetAssertion(string challenge, bool userVerified = true)
+    public string GetAssertion(string challenge, bool userVerified = true, string origin = Grow2NotesFactory.Origin)
     {
         // What the browser collects for the authenticator to sign (WebAuthn §5.8.1).
         var clientDataJson = JsonSerializer.SerializeToUtf8Bytes(new
         {
             type = "webauthn.get",
             challenge,
-            origin = Grow2NotesFactory.Origin,
+            origin,
             crossOrigin = false,
         });
 

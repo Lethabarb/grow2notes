@@ -78,16 +78,29 @@ function problem(status: number): Promise<Response> {
   );
 }
 
+/** The error that SimpleWebAuthn gives for a prompt that the person dismissed, or that found no passkey. */
+function dismissal(): WebAuthnError {
+  return new WebAuthnError({
+    message: 'The operation either timed out or was not allowed.',
+    code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
+    cause: new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'),
+  });
+}
+
 /** Like `fetch` with no connection, which rejects at once. */
 function noConnection(): Promise<Response> {
   return Promise.reject(new TypeError('Failed to fetch'));
 }
 
 /**
- * Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, each request for passkey
- * options gets new ones, and each sign-in gets a new answer from `signIn`, a `200 Me` unless given.
+ * Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, each sign-in gets a new
+ * answer from `signIn`, a `200 Me` unless given, and the `n`th request for passkey options gets the answer that
+ * `options(n)` gives, `passkeyOptions(n)` unless given.
  */
-function serve(signIn: () => Promise<Response> = () => json(worker)) {
+function serve(
+  signIn: () => Promise<Response> = () => json(worker),
+  options: (n: number) => Promise<Response> = (n) => json(passkeyOptions(n)),
+) {
   let issued = 0;
   fetchMock.mockImplementation((path) => {
     switch (path) {
@@ -97,7 +110,7 @@ function serve(signIn: () => Promise<Response> = () => json(worker)) {
         return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } }));
       case optionsPath:
         issued += 1;
-        return json(passkeyOptions(issued));
+        return options(issued);
       case signInPath:
         return signIn();
       default:
@@ -334,13 +347,7 @@ describe('signing in with a passkey', () => {
   });
 
   it('says nothing when the prompt is dismissed, and leaves focus on the button', async () => {
-    ceremony.mockRejectedValue(
-      new WebAuthnError({
-        message: 'The operation either timed out or was not allowed.',
-        code: 'ERROR_PASSTHROUGH_SEE_CAUSE_PROPERTY',
-        cause: new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'),
-      }),
-    );
+    ceremony.mockRejectedValue(dismissal());
     serve();
     await renderSignedOut();
     const button = passkeyButton();
@@ -418,6 +425,36 @@ describe('signing in with a passkey', () => {
       await wait(0);
 
       expect(screen.getByRole('alert')).toHaveTextContent(message);
+    });
+  });
+
+  // Each request for options ends the ceremony of those before it, so a prompt opened with the old ones while new ones
+  // are on their way would sign a challenge the server no longer holds, and the sign-in would be refused.
+  describe.each([
+    { failure: 'a dismissed prompt', prompt: () => Promise.reject(dismissal()), signIn: () => json(worker) },
+    { failure: 'a refused sign-in', prompt: () => Promise.resolve(credential), signIn: () => problem(401) },
+  ])('after $failure', ({ prompt, signIn }) => {
+    it('a press while new options are on their way waits for them, and never uses the old', async () => {
+      ceremony.mockImplementationOnce(prompt);
+      const refetch = later();
+      serve(signIn, (n) => (n === 2 ? refetch.promise : json(passkeyOptions(n))));
+      await renderSignedOut();
+      const button = passkeyButton();
+      press(button);
+      await wait(0);
+      expect(requestsTo(optionsPath)).toHaveLength(2);
+
+      press(button);
+      await wait(0);
+
+      // The press joined the request on its way, and opened no prompt.
+      expect(requestsTo(optionsPath)).toHaveLength(2);
+      expect(ceremony).toHaveBeenCalledOnce();
+
+      refetch.resolve(await json(passkeyOptions(2)));
+      await wait(0);
+
+      expect(ceremony.mock.calls).toEqual([[{ optionsJSON: passkeyOptions(1) }], [{ optionsJSON: passkeyOptions(2) }]]);
     });
   });
 

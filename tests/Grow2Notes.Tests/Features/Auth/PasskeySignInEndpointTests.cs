@@ -194,6 +194,27 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         await AssertFailedSignInAsync(response, userId);
     }
 
+    // A browser lets a page on a subdomain of the passkey's domain, or at another port of it, ask for the passkey, and
+    // a server that relays the assertion sends that page's Origin header, which is all that Identity's own check
+    // compares the assertion's origin with. The app takes only an assertion asked for at App:Origin itself (A54).
+    [Theory]
+    [InlineData("https://www.grow2notes.example")]
+    [InlineData("https://grow2notes.example:8443")]
+    public async Task An_assertion_asked_for_at_another_origin_is_a_failed_sign_in_on_the_passkey_s_account(
+        string origin)
+    {
+        var userId = await AddUserAsync(seeded.A, UserRole.Worker, "Sam Taylor");
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        using var client = app.CreateHttpsClient();
+        var token = await client.FetchTokenAsync();
+        var challenge = await client.FetchPasskeyChallengeAsync(token);
+
+        using var response = await client.SendPasskeyCredentialAsync(
+            authenticator.GetAssertion(challenge, origin: origin), token, origin);
+
+        await AssertFailedSignInAsync(response, userId);
+    }
+
     // With no ceremony in Identity's two-factor cookie, Identity throws rather than fails, which the app's sign-in
     // manager makes a failed check (S00.04.04's Notes). With no options asked for, the challenge is one that no options
     // gave.
@@ -211,8 +232,25 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         await AssertFailedSignInAsync(response, userId);
     }
 
-    // The two-factor cookie that holds the ceremony lasts 5 minutes on the app's clock (D69), after which Identity
-    // finds no ceremony, as above.
+    // The two-factor cookie that holds the ceremony lasts 5 minutes on the app's clock (D69), so options still sign in
+    // a second before then, which the SPA relies on, as it uses options for up to 4 minutes (passkey.ts).
+    [Fact]
+    public async Task A_known_passkey_sent_4_minutes_and_59_seconds_after_its_options_signs_in()
+    {
+        var userId = await AddUserAsync(seeded.A, UserRole.Worker, "Sam Taylor");
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        using var client = app.CreateHttpsClient();
+        var token = await client.FetchTokenAsync();
+        var challenge = await client.FetchPasskeyChallengeAsync(token);
+        clock.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
+
+        using var response = await client.SendPasskeyCredentialAsync(authenticator.GetAssertion(challenge), token);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains(response.SetCookies(), cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
+    }
+
+    // A second after the ceremony's 5 minutes, Identity finds no ceremony, as above.
     [Fact]
     public async Task A_known_passkey_sent_5_minutes_and_1_second_after_its_options_is_a_failed_sign_in_not_a_500()
     {
