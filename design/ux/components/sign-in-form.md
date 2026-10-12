@@ -329,10 +329,11 @@ survives `forced-colors: active`.
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
 - **Files:** in `src/features/auth/`, `SignIn.tsx` (steps 1–2 as component state, with the email field; shown in the
-  shell's `<main>` for a `401` and by the in-place gate) and the parts that sign-in and setup share,
-  `PasswordInput.tsx`, `OneTimeCodeField.tsx`, `code.ts` (the code's check) and `passkey.ts`; in `src/routes/setup/`,
-  the setup layout and one route per view, with view G's `SetupKey.tsx` and `FinishSetup.tsx`; and `ErrorSummary.tsx`
-  in `src/components/`, which every form uses; each with a `.module.css` where it has styles of its own.
+  shell's `<main>` for a `401` and by the in-place gate), `CodeStep.tsx` (step 2, which `SignIn.tsx` shows in step
+  1's place) and the parts that sign-in and setup share, `PasswordInput.tsx`, `OneTimeCodeField.tsx`, `code.ts` (the
+  code's check) and `passkey.ts`; in `src/routes/setup/`, the setup layout and one route per view, with view G's
+  `SetupKey.tsx` and `FinishSetup.tsx`; and `ErrorSummary.tsx` in `src/components/`, which every form uses; each with
+  a `.module.css` where it has styles of its own.
 - **Memory only.** Email, password and setup state live in a React context above the routes. Never in
   `localStorage`/`sessionStorage`, the URL, or React Router `state` (which is written to `history.state` and can be
   saved by session restore). Clear the setup context on finish or when leaving `/setup*`.
