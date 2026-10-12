@@ -147,7 +147,12 @@ Sections 5–8 are separated by a 1 px rule and space, like the thin rule betwee
 5. **Past notes** opens the participant's history (4.4 "the 'Past notes' link in the note form and read view").
 6. **Mark reviewed** (managers, To review only). No confirmation dialog (`confirm-dialog.md`: Mark reviewed has none). It sends `{versionNumber: current.versionNumber, comment}` (6.4).
    - **While sending:** the button gets `aria-disabled="true"` (never `disabled`, which drops focus) and ignores taps. After 1 second, "Saving…" appears next to it in the panel's status region.
-   - **Success:** stay on the note. Invalidate the note, the reviews lists and `me` (the badge, `notification-badge.md`). The review panel goes. The status line changes from **To review** to **Reviewed** by {you}, {date}, {time}, with the comment. Focus moves to the `<h1>` and the page's status region announces "Note for Sam Taylor marked reviewed." The button that had focus has gone, so focus must move; the `<h1>` puts the manager at the top, next to the updated status and the back link to Flagged. This matches the design's "Note for Jane Citizen submitted" and the Deactivate pattern in `confirm-dialog.md`. [Opinion]
+   - **Success:** stay on the note. Invalidate the note and the reviews lists, and call `refreshMe()` for the badge
+     (`notification-badge.md`). The review panel goes. The status line changes from **To review** to **Reviewed** by
+     {you}, {date}, {time}, with the comment. Focus moves to the `<h1>` and the page's status region announces "Note for
+     Sam Taylor marked reviewed." The button that had focus has gone, so focus must move; the `<h1>` puts the manager at
+     the top, next to the updated status and the back link to Flagged. This matches the design's "Note for Jane Citizen
+     submitted" and the Deactivate pattern in `confirm-dialog.md`. [Opinion]
    - **Comment too long** (client check on tap, same rule as the flag reason): inline error "Comment must be 500 characters or less", focus to the field. One-field form, so no error summary (`form-validation.md`, AgDS).
    - **No connection or server error:** "Not marked reviewed: no connection. Check your connection and try again." in the panel's alert region above the button. Focus stays on the button. The comment stays.
    - **`409 review.not_current`:** refetch the note, keep the comment text.
@@ -400,7 +405,10 @@ const showPanel = me.role === 'Manager' && note?.flagStatus === 'ToReview';
 - **Line breaks.** Render the stored text unchanged. Don't trim, split into paragraphs or collapse blank lines: the report keeps them (11.3) and the screen should match.
 - **Keys and order.** `TickListRead` keys by index; the snapshot order is fixed (`checkbox-list.md`).
 - **Head.** The app's `index.html` must not block zoom (`width=device-width, initial-scale=1`, nothing else). Add `<meta name="format-detection" content="telephone=no">` so iOS Safari leaves numbers in notes as plain text, the way they were written. [Opinion] It is one global tag and adds nothing to the product.
-- **Mark reviewed mutation.** `onSuccess`: invalidate `['notes', …]` (superseded: the record replaces the form in place, participant-notes.md), invalidate `['reviews']` and `me`, then focus the `<h1>` through `titleRef` in an effect and write the message into the page status region. Keep the comment in component state until success, so an error never clears it.
+- **Mark reviewed mutation.** `onSuccess`: invalidate `['notes', …]` (superseded: the record replaces the form in place,
+  participant-notes.md), invalidate `['reviews']`, call `refreshMe(queryClient)` (app-shell.md *Refresh of
+  `/api/auth/me`*), then focus the `<h1>` through `titleRef` in an effect and write the message into the page status
+  region. Keep the comment in component state until success, so an error never clears it.
 
 ---
 

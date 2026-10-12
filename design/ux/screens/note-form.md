@@ -837,7 +837,8 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 2. Invalidate, then leave: `queryClient.removeQueries({ queryKey: ['today'] })` and
    `queryClient.removeQueries({ queryKey: ['me', 'drafts'], exact: true })` (no client-built row: Today shows only
    what the server returns, today.md Conflicts #2); when the `201` carries a `flagStatus`, also
-   `invalidateQueries({ queryKey: ['me'], exact: true })` so the Flagged badge updates. Close the dialog, then navigate
+   `refreshMe(queryClient)` so the Flagged badge updates (app-shell.md *Refresh of `/api/auth/me`*: `['me']` is never
+   invalidated, as its observers are disabled and that would refetch nothing). Close the dialog, then navigate
    to Today: pop if Today is the previous entry, otherwise replace (so browser Back never reopens the finished form).
 3. Today renders the success banner before its `<h1>` with `data-route-focus`; the shell focuses it on every arrival,
    including this pop (app-shell.md route-change rule); it has no live role (focus does the announcing)
@@ -855,8 +856,8 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 - **Invalidations after Save changes or Cancel** (one prefix for every note query, participant-notes.md):
   `['notes', participantId, noteDate]` (prefix: the note, its version list and each version), the participant's
   Past notes list `['pastNotes', participantId]` (its Edited tag), and `['reviews']` (prefix: both Flagged lists,
-  because an edit can re-queue or unflag a note, A15). After **Save changes** also `['me']` (exact), so the badge
-  follows a re-queue or unflag. Nothing is updated by hand from the response.
+  because an edit can re-queue or unflag a note, A15). After **Save changes** also `refreshMe(queryClient)`, not an
+  invalidation, so the badge follows a re-queue or unflag. Nothing is updated by hand from the response.
 - **Version conflict:** focus moves to the notice (scrolled into view). **Start again from the latest version** sends
   the `PUT` with the new `baseVersion`; the editor's picks, ticks, text and flag stay on screen; the caption becomes
   "Editing submitted note (version 3)"; the `<details>` closes but stays until Save changes succeeds; focus goes to the
@@ -1098,7 +1099,7 @@ keyboard open on Guided notes; Chrome page translation leaves names unchanged.
     pop), and the row reads Submitted once the fresh list arrives, never from a client-built row; reloading Today does
     not show the message again.
 30a. After Save changes, the read view, the participant's Past notes row (Edited tag), both Flagged lists and the
-    badge all show the new state without a reload (the invalidations under "Edit mode").
+    badge all show the new state without a reload (the invalidations and `refreshMe()` under "Edit mode").
 30b. Save changes and Cancel show their busy label only when the request takes more than 400 ms.
 
 **Common items and groups (D44–D47)**

@@ -81,8 +81,11 @@ The badge is a single component with one source of data: `toReviewCount` from `G
 1. **Source:** `toReviewCount` from `GET /api/auth/me`, held only in TanStack Query's memory cache. There is no persister and no browser storage, not even for this number (D22).
 2. **Refresh triggers, and nothing else:**
    - **Page load:** the first `me` call at sign-in or start-up, **and each time the manager opens a screen** in the single-page app (route change). In an SPA, a user who opens a screen experiences it as a page load, and without this the badge would stay stale for a whole visit. **[Opinion]**: this is how design.md 4.6/6.8 reads for an SPA; see Open questions in the summary.
-   - **Window focus:** TanStack's default `visibilitychange` handling, plus a `focus` listener (see code).
-   - **After this manager's own Mark reviewed succeeds:** invalidate `me` along with the reviews list, so the badge and the "To review (n)" tab never disagree because of the manager's own action. Mark reviewed is followed by a screen update, which is a page load in this sense.
+   - **Window focus:** window `focus` and `visibilitychange` to visible, each calling the shell's one `refreshMe()`
+     (app-shell.md *Refresh of `/api/auth/me`*; see code), not TanStack's own focus refetching.
+   - **After this manager's own Mark reviewed succeeds:** `refreshMe()` along with invalidating the reviews list, so
+     the badge and the "To review (n)" tab never disagree because of the manager's own action. Mark reviewed is
+     followed by a screen update, which is a page load in this sense.
    - **No** timers, no polling (6.8), no push, no WebSocket.
 3. **Show exactly the number, with no "99+" cap.** **[Opinion]** Caps are convention only (see Best practice). A 3-digit number is no wider than "99+", and an organisation with fewer than 20 workers will not plausibly reach 1,000 open flags. The exact number also matches the "To review (n)" tab, so the same queue never shows two numbers. The pill grows to fit.
 4. **Zero hides the pill and the hidden text.** The link reads "Flagged".
@@ -205,37 +208,60 @@ export function FlaggedNavLink({ toReviewCount }: { toReviewCount: number }) {
 ```
 
 ```ts
-// src/session/useSessionRefresh.ts: called once in the manager and worker app shell
+// src/api/me.ts: the one module that sends GET /api/auth/me (app-shell.md, Refresh of /api/auth/me)
+import { queryOptions, type QueryClient } from '@tanstack/react-query';
+
+export const meQuery = queryOptions({
+  queryKey: ['me'],
+  queryFn: () => api<Me>('/api/auth/me'),
+  enabled: false,                // no observer fetches it by itself
+  staleTime: Infinity,           // and TanStack's own refetching leaves it alone
+});
+
+// The caller gives the query client it has from useQueryClient(). A request already in flight is shared, so
+// triggers that fire together send one. A failure keeps the last answer, so the badge keeps its number.
+export function refreshMe(queryClient: QueryClient): Promise<Me> {
+  return queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
+}
+```
+
+```ts
+// src/routes/useRefreshMe.ts: called once by the app shell, for its whole life
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
+import { refreshMe } from '../api/me.ts';
 
-const ME = ['me'] as const;
-
-export function useSessionRefresh() {
+export function useRefreshMe() {
   const queryClient = useQueryClient();
-  const { pathname } = useLocation();
-  const refresh = () =>
-    void queryClient.invalidateQueries({ queryKey: ME }, { cancelRefetch: false }); // reuse an in-flight request
+  const { key } = useLocation();
 
-  // "when a page loads": each screen opened in the SPA
-  useEffect(refresh, [pathname]);
-
-  // "when the window regains focus": TanStack already handles visibilitychange; add focus
+  // "when a page loads": each screen opened in the SPA, every location.key, the first being the start-up
   useEffect(() => {
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, []);
+    refreshMe(queryClient).catch(() => {});
+  }, [queryClient, key]);
+
+  // "when the window regains focus": window focus here; the page becoming visible goes through the session clock,
+  // holdWhile(refreshMe(queryClient)) (session-timeout.md), so that one listener sends it
+  useEffect(() => {
+    const onFocus = () => {
+      refreshMe(queryClient).catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [queryClient]);
 }
 
 // In the Mark reviewed mutation (owned by the review panel):
 // onSuccess: () => {
-//   queryClient.invalidateQueries({ queryKey: ['reviews'] });
-//   queryClient.invalidateQueries({ queryKey: ME });
+//   void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+//   refreshMe(queryClient).catch(() => {});
 // }
 ```
 
-- Keep `refetchOnWindowFocus` at its default (`true`) and `staleTime` at `0` for the `me` query. Do not add `refetchInterval`.
+- Keep `['me']` at `enabled: false` and `staleTime: Infinity`, with the query client's default
+  `refetchOnWindowFocus: false`, so that only `refreshMe()` fetches it: `invalidateQueries` on it refetches nothing,
+  as its observers are all disabled. Do not add `refetchInterval`.
 - The route path `/flagged` is illustrative. Use whatever the router defines. Do not pass `end` if the Reviewed tab is a child route, so the item stays current on both tabs.
 - **Test:** with NVDA + Chrome and VoiceOver + Safari (iOS), check that the link reads "Flagged, n to review" as one item and is read only once. Check that the count is the same as "To review (n)" after Mark reviewed. Check that it disappears at 0. In Windows forced colours, the pill outline should show. At 320 px and 200% text, there should be no overlap or horizontal scroll.
 
@@ -254,7 +280,9 @@ export function useSessionRefresh() {
 
 **Flagged notes (4.6)**
 - The nav item is the current page (`aria-current="page"`). Keep showing the badge so the nav looks the same on every screen.
-- Two places show the same queue size: the badge (from `me`) and the tab "To review (n)" (from the list). Both refresh when this screen opens, and both are invalidated after Mark reviewed. If they differ for a moment, the list is authoritative. Do not compute one from the other.
+- Two places show the same queue size: the badge (from `me`) and the tab "To review (n)" (from the list). Both
+  refresh when this screen opens, and both again after Mark reviewed: the list invalidated, `me` through
+  `refreshMe()`. If they differ for a moment, the list is authoritative. Do not compute one from the other.
 - The tab's "(n)" stays plain text in brackets, as written in 4.6. Do not render it as a second pill. MoJ advises reserving the badge for navigation.
 - When the last flag is reviewed, the badge disappears silently and the screen shows "No flagged notes to review."
 
