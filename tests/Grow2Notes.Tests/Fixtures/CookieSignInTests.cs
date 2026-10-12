@@ -7,7 +7,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
-using Microsoft.Net.Http.Headers;
 
 namespace Grow2Notes.Tests.Fixtures;
 
@@ -44,7 +43,7 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
 
         var cookie = await client.SignInWithCookieAsync(seeded.A.WorkerId);
 
-        AssertIsTheSessionCookie(cookie);
+        cookie.AssertIsTheSessionCookie();
     }
 
     // Secure whatever the request's scheme (design.md §8.4). App Service's front end calls the app over HTTP, so were
@@ -57,7 +56,7 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
 
         var cookie = await client.SignInWithCookieAsync(seeded.A.WorkerId);
 
-        AssertIsTheSessionCookie(cookie);
+        cookie.AssertIsTheSessionCookie();
     }
 
     // The clock moves, so the stamp check runs and rebuilds the principal, which keeps the sign-in time.
@@ -78,7 +77,7 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(expected, await response.Content.ReadFromJsonAsync<string[]>(cancellationToken));
-        AssertIsTheSessionCookie(Assert.Single(response.SetCookies()));
+        Assert.Single(response.SetCookies()).AssertIsTheSessionCookie();
     }
 
     // A role header alone goes to the test-only sign-in, which fails to sign the request in, rather than to the cookie,
@@ -97,21 +96,6 @@ public sealed class CookieSignInTests : IClassFixture<Grow2NotesFactory>, IAsync
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
-
-    // A browser takes a __Host- cookie only when it is Secure, has Path=/ and names no Domain. HttpOnly keeps it from
-    // script (design.md §8.3), SameSite=Strict from other sites' requests (§9.8 item 1), and with neither Expires nor
-    // Max-Age it is a session cookie, which the browser drops when it closes (§8.5).
-    private static void AssertIsTheSessionCookie(SetCookieHeaderValue cookie)
-    {
-        Assert.Equal(CookieSignIn.SessionCookie, cookie.Name.Value);
-        Assert.True(cookie.Secure);
-        Assert.True(cookie.HttpOnly);
-        Assert.Equal(SameSiteMode.Strict, cookie.SameSite);
-        Assert.Equal("/", cookie.Path.Value);
-        Assert.False(cookie.Domain.HasValue);
-        Assert.Null(cookie.Expires);
-        Assert.Null(cookie.MaxAge);
-    }
 
     /// <summary>
     /// Maps an endpoint with no policy of its own, which the fallback policy covers, and which lists the claims of the

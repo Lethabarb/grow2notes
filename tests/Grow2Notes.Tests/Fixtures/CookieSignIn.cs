@@ -7,16 +7,18 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Net.Http.Headers;
+using SameSiteMode = Microsoft.Net.Http.Headers.SameSiteMode;
 
 namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
-/// Signing in, in tests, with the real session cookie, for the tests of the session itself (design.md §8.4, §8.5). No
-/// sign-in endpoint exists until S00.04.02, and the seeded users have no passkey or password, so a test maps a
-/// test-only endpoint (<see cref="MapCookieSignIn"/>) that signs a user in with the app's
-/// <c>SignInManager.SignInAsync(user, isPersistent: false)</c>: the call that ends setup (§8.1 step 5), which passes
-/// through the sign-in manager's <c>SignInWithClaimsAsync</c>, where every sign-in ends. So the client gets the cookie
-/// that a real sign-in issues, <c>auth_time</c> included, and its later requests meet the app's own session checks.
+/// Signing in, in tests, with the real session cookie, for the tests of the session itself (design.md §8.4, §8.5). The
+/// seeded users have no passkey or password to sign in with (<see cref="PasskeySignIn"/> signs in a user that a test
+/// has given a passkey), so a test maps a test-only endpoint (<see cref="MapCookieSignIn"/>) that signs a user in with
+/// the app's <c>SignInManager.SignInAsync(user, isPersistent: false)</c>: the call that ends setup (§8.1 step 5), which
+/// passes through the sign-in manager's <c>SignInWithClaimsAsync</c>, where every sign-in ends. So the client gets the
+/// cookie that a real sign-in issues, <c>auth_time</c> included, and its later requests meet the app's own session
+/// checks.
 /// </summary>
 internal static class CookieSignIn
 {
@@ -55,6 +57,28 @@ internal static class CookieSignIn
         response.Headers.TryGetValues(HeaderNames.SetCookie, out var values)
             ? SetCookieHeaderValue.ParseList([.. values])
             : [];
+
+    /// <summary>
+    /// Asserts that <paramref name="cookie"/> is the session cookie with design.md §8.4's attributes, as a sign-in or
+    /// a renewal sets it.
+    /// </summary>
+    /// <remarks>
+    /// A browser takes a <c>__Host-</c> cookie only when it is <c>Secure</c>, has <c>Path=/</c> and names no
+    /// <c>Domain</c>. <c>HttpOnly</c> keeps it from script (§8.3), <c>SameSite=Strict</c> from other sites' requests
+    /// (§9.8 item 1), and with neither <c>Expires</c> nor <c>Max-Age</c> it is a session cookie, which the browser
+    /// drops when it closes (§8.5).
+    /// </remarks>
+    public static void AssertIsTheSessionCookie(this SetCookieHeaderValue cookie)
+    {
+        Assert.Equal(SessionCookie, cookie.Name.Value);
+        Assert.True(cookie.Secure);
+        Assert.True(cookie.HttpOnly);
+        Assert.Equal(SameSiteMode.Strict, cookie.SameSite);
+        Assert.Equal("/", cookie.Path.Value);
+        Assert.False(cookie.Domain.HasValue);
+        Assert.Null(cookie.Expires);
+        Assert.Null(cookie.MaxAge);
+    }
 
     /// <summary>
     /// Asserts that <paramref name="response"/> deletes the session cookie, as signing out does when the session check
