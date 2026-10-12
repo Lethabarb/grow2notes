@@ -191,6 +191,27 @@ first waits for what the page does with it: its request to `POST /api/auth/passk
 a failure that sends nothing, the fresh options that the sign-in view asks for after any failure.
 `e2e/sign-in.spec.ts` is the example.
 
+### Signing in with a password, end to end
+
+No account in the end-to-end run has a password until setup's password path is on `main` (S00.04.03), so a test of
+the code step, sign-in's view B, answers the password step itself. Before `page.goto`, it routes the page's
+`POST /api/auth/login`, through `page.route`, to the `200 {"next":"totp"}` that the app gives a right password, so
+that Continue, with any email and password, shows view B in A's place. The pattern matches that path only, so the
+code then goes to the app's own `POST /api/auth/login/totp`, which answers `401`, as no code step is under way there:
+Identity's two-factor cookie holds at most the passkey ceremony of the options that view A asked for. A code that
+signs in needs an account set up on the password path, whose key gives the code.
+
+```ts
+await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
+await page.goto('/');
+```
+
+Without that route, Continue meets the app's own `POST /api/auth/login`, which answers an address that no account
+holds, such as a made-up `example.org` one (A35), with the `401` of any failed sign-in. A test that shows that a step
+starts no passkey prompt counts the page's calls of `navigator.credentials.get`, through an init script that wraps it
+before the app's own script runs (`countPasskeyPrompts`), and, so that the count is known to work, ends with a press of
+the passkey button, which the `authenticator` fixture ends at once. `e2e/sign-in.spec.ts` is the example.
+
 ## Writing integration tests
 
 - Put the test class in `[Collection<SqlServerCollection>]` and take `Grow2NotesFactory` as a class fixture. Every class
