@@ -36,6 +36,47 @@
 .account {
   inline-size: auto;
   margin-inline-start: auto;
+  /* The chevron stays on its word's line, where an inline SVG could otherwise wrap. */
+  white-space: nowrap;
+}
+
+.chevron {
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-start: var(--space-2);
+  vertical-align: middle;
+}
+
+/* Up while the panel is open, down while it is closed (Layout - phone). */
+.account[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+/* Its contents line up under the wordmark on a phone, and under Account from 40rem (Layout - laptop). */
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* The display above would otherwise outrank the hidden attribute's own display: none. */
+.panel[hidden] {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .panel {
+    justify-content: flex-end;
+  }
+}
+
+/* Anywhere, not break-word, so that a long display name (up to 100 characters) also narrows the line's minimum. */
+.signedInAs {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .navList {

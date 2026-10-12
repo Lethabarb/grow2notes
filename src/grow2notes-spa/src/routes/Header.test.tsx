@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -68,6 +68,16 @@ async function settle() {
 function headerTargets(): string[] {
   const targets = screen.getByRole('banner').querySelectorAll('a[href], button');
   return Array.from(targets, (target) => `${target.localName === 'a' ? 'link' : 'button'} ${target.textContent}`);
+}
+
+/** The Account panel, which has no role to find it by. */
+function accountPanel(): HTMLElement {
+  const panel = document.getElementById('account-panel');
+  if (panel === null) {
+    throw new Error('There is no #account-panel.');
+  }
+
+  return panel;
 }
 
 /** Each element of the header that has `aria-current`, as its text and the attribute's value. */
@@ -153,5 +163,112 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Report' })).toBe(report);
     expect(report).toHaveAttribute('href', '/reports/daily/2026-10-02');
     expect(router.state.location).toBe(location);
+  });
+});
+
+describe('the Account button and panel', () => {
+  /** Renders the shell at `path` for `me`, and gives the Account button once /me has answered. */
+  async function renderAccount(me: Me, path = '/') {
+    serveMe(() => me);
+    const { router } = renderShell(path);
+    await settle();
+    return { router, account: screen.getByRole('button', { name: 'Account' }) };
+  }
+
+  it.each([worker, manager])("toggles its panel, straight after Account's row, for a $role", async (me) => {
+    const { account } = await renderAccount(me);
+    const panel = accountPanel();
+
+    expect(account).toHaveAttribute('aria-controls', panel.id);
+    expect(panel.previousElementSibling).toContainElement(account);
+    expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).toHaveAttribute('hidden');
+
+    fireEvent.click(account);
+    expect(account).toHaveAttribute('aria-expanded', 'true');
+    expect(panel).not.toHaveAttribute('hidden');
+    expect(panel).toBeVisible();
+
+    fireEvent.click(account);
+    expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(panel).toHaveAttribute('hidden');
+  });
+
+  it.each([
+    { me: worker, text: 'Signed in as Alex Pham' },
+    { me: manager, text: 'Signed in as Sam Lee' },
+  ])('names the display name from /me: $text', async ({ me, text }) => {
+    const { account } = await renderAccount(me);
+
+    fireEvent.click(account);
+
+    expect(within(accountPanel()).getByText(text)).toBeVisible();
+  });
+
+  // The worker's Today is before Account, in row 1, and the manager's Report after the panel, in row 2.
+  it.each([
+    { me: worker, target: { role: 'button', name: 'Account' } },
+    { me: worker, target: { role: 'link', name: 'Today' } },
+    { me: manager, target: { role: 'button', name: 'Account' } },
+    { me: manager, target: { role: 'link', name: 'Report' } },
+  ] as const)('closes on Escape on $target.name for a $me.role, and focuses Account', async ({ me, target }) => {
+    const { account } = await renderAccount(me);
+    fireEvent.click(account);
+    const element = screen.getByRole(target.role, { name: target.name });
+    element.focus();
+
+    fireEvent.keyDown(element, { key: 'Escape' });
+
+    expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(accountPanel()).toHaveAttribute('hidden');
+    expect(account).toHaveFocus();
+  });
+
+  // Today at / goes nowhere new, but is still a location change.
+  it.each([
+    { me: manager, link: 'Flagged', path: '/flagged' },
+    { me: worker, link: 'Today', path: '/' },
+  ])('closes when a $me.role follows $link', async ({ me, link, path }) => {
+    const { router, account } = await renderAccount(me);
+    const { key } = router.state.location;
+    fireEvent.click(account);
+
+    fireEvent.click(screen.getByRole('link', { name: link }));
+    await settle();
+
+    expect(router.state.location).toMatchObject({ pathname: path });
+    expect(router.state.location.key).not.toBe(key);
+    expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(accountPanel()).toHaveAttribute('hidden');
+  });
+
+  it('stays closed on going back to where it was opened', async () => {
+    const { router, account } = await renderAccount(manager);
+    fireEvent.click(account);
+    fireEvent.click(screen.getByRole('link', { name: 'Flagged' }));
+    await settle();
+
+    await act(() => router.navigate(-1));
+
+    expect(router.state.location).toMatchObject({ pathname: '/' });
+    expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(accountPanel()).toHaveAttribute('hidden');
+  });
+
+  it('is named "Account", with a decorative chevron, and never has disabled', async () => {
+    const { account } = await renderAccount(manager);
+    const chevron = account.querySelector('svg');
+
+    expect(account).toHaveAccessibleName('Account');
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    expect(chevron).toHaveAttribute('focusable', 'false');
+    expect(chevron?.querySelector('path')).toHaveAttribute('stroke', 'currentColor');
+    expect(account).not.toHaveAttribute('disabled');
+
+    fireEvent.click(account);
+    expect(account).not.toHaveAttribute('disabled');
+
+    fireEvent.keyDown(account, { key: 'Escape' });
+    expect(account).not.toHaveAttribute('disabled');
   });
 });
