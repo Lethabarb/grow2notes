@@ -458,22 +458,27 @@ describe('Sign out', () => {
     expect(signOut).toHaveFocus();
   });
 
-  // A 401 is a sign-out that counts as done: there was no session left to end.
-  it.each([204, 401])('loads / afresh once after a %i, still busy and signed in until then', async (status) => {
+  // A 401 is a sign-out that counts as done: there was no session left to end. The checks come once React has
+  // rendered, as the mocked page never goes: what they find is what the person has while the new page loads.
+  it.each([204, 401])('loads / afresh once after a %i, busy and signed in until the page goes', async (status) => {
     serveSignOut(worker, answer(status));
     const ended = listenForSessionEnded();
     const { signOut } = await openPanel();
-    const atReload: { busy: string | null; signedIn: boolean }[] = [];
-    vi.mocked(fullPageLoad).mockImplementation(() => {
-      atReload.push({ busy: signOut.getAttribute('aria-disabled'), signedIn: headerSignedIn() });
-    });
 
     fireEvent.click(signOut);
     await settle();
     await act(() => vi.advanceTimersByTimeAsync(10_000));
 
-    expect(atReload).toEqual([{ busy: 'true', signedIn: true }]);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+    expect(headerSignedIn()).toBe(true);
     expect(ended).not.toHaveBeenCalled();
+
+    fireEvent.click(signOut);
+    await settle();
+
+    expect(logoutsSent()).toHaveLength(1);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
   });
 
   it.each([
