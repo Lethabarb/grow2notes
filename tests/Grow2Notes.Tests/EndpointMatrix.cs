@@ -75,6 +75,9 @@ internal static class EndpointMatrix
         new(Post,      "/api/auth/setup/passkey/options", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),
+
+        // Anyone may ask for the options to sign in with a passkey (§6.2), signed in or not: they name no user.
+        new(Post,      "/api/auth/passkey/options", OK,     OK,        OK,         OK),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
