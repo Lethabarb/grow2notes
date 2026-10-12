@@ -12,6 +12,7 @@ import styles from './AppShell.module.css';
 import { Header } from './Header.tsx';
 import layout from './layout.module.css';
 import type { RouteHandle } from './routes.tsx';
+import { StartUp } from './StartUp.tsx';
 import { usePageTitle } from './usePageTitle.ts';
 import { useRefreshMe } from './useRefreshMe.ts';
 
@@ -21,10 +22,11 @@ const mainId = 'main-content';
  * The frame around every screen (app-shell.md components 1 to 3a): the skip link, the header, the before-main bar
  * slot and the one `<main>`, which holds the route's screen once `GET /api/auth/me` has answered `200`. Until then,
  * and after a failure, it is the signed-out frame, with the wordmark as plain text: from a `401` its `<main>` holds
- * sign-in's view A, at the address that was opened (component 4); otherwise `<main>` is empty and the title bare. A
- * sign-in puts its `Me` in the same query, so the route's screen then shows in sign-in's place, at the same address,
- * with no new history entry. A route whose handle says `signedOutFrame`, setup's, shows its page in the signed-out
- * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1).
+ * sign-in's view A, at the address that was opened; otherwise it holds the start-up's loading line, or its message
+ * for a failure, with Try again (component 4). A sign-in puts its `Me` in the same query, so the route's screen then
+ * shows in sign-in's place, at the same address, with no new history entry. A route whose handle says
+ * `signedOutFrame`, setup's, shows its page in the signed-out frame at once, whatever `/me` answers and whoever is
+ * signed in (sign-in.md component 1).
  */
 export function AppShell() {
   useRefreshMe();
@@ -46,15 +48,29 @@ export function AppShell() {
     setAnsweredSignedOut(true);
   }
   const signedOut = !shown && answeredSignedOut;
+  const startingUp = !shown && !answeredSignedOut;
 
   // Whether sign-in has shown, so that the screen that a sign-in brings takes focus on its <h1>, as a new screen does
   // (sign-in.md *Success, fresh load*), while a screen shown on a first load moves no focus (app-shell.md component 7).
   const signInShown = useRef(false);
+  // Set once the start-up message's Try again has taken focus or been pressed, so that the screen or sign-in that the
+  // answer brings takes focus on its <h1>, as the button has gone (app-shell.md *Accessibility checklist*). Not cleared
+  // as focus leaves it, as a blur can come as the button itself goes.
+  const tryAgainUsed = useRef(false);
   useEffect(() => {
-    if (signedOut) {
-      signInShown.current = true;
-    } else if (signedIn && signInShown.current) {
-      signInShown.current = false;
+    if (!signedIn && !signedOut) {
+      return;
+    }
+
+    // Only when focus is on the page itself, where it falls as Try again goes, as LoadRegion's does: a person who has
+    // moved on to another control before the answer came stays there, while focus that a click on blank space left on
+    // the page goes to the <h1> too.
+    const afterTryAgain =
+      tryAgainUsed.current && (document.activeElement === document.body || document.activeElement === null);
+    const afterSignIn = signedIn && signInShown.current;
+    tryAgainUsed.current = false;
+    signInShown.current = signedOut;
+    if (afterTryAgain || afterSignIn) {
       focusPageHeading();
     }
   }, [signedOut, signedIn]);
@@ -78,6 +94,13 @@ export function AppShell() {
         <main id={mainId} tabIndex={-1} className={`${layout.container} ${styles.main}`}>
           {shown && <Outlet />}
           {signedOut && <SignIn />}
+          {startingUp && (
+            <StartUp
+              onTryAgainUsed={() => {
+                tryAgainUsed.current = true;
+              }}
+            />
+          )}
         </main>
       </PageBarContext>
     </>

@@ -154,21 +154,33 @@ describe('AppShell', () => {
       expect(within(screen.getByRole('banner')).getByText('Grow2Notes')).toBeInTheDocument();
     }
 
-    it('shows the signed-out frame, with an empty <main> and the bare title, while the answer is pending', async () => {
+    it("shows the signed-out frame, with the start-up's empty status line alone in <main>, while pending", async () => {
       serveMe(noAnswer);
       renderShell('/');
       await wait(0);
 
       expect(fetchMock).toHaveBeenCalledWith(mePath, expect.objectContaining({ method: 'GET' }));
       expectSignedOutFrame();
-      expect(screen.getByRole('main')).toBeEmptyDOMElement();
+      const main = screen.getByRole('main');
+      expect(main.children).toHaveLength(1);
+      expect(within(main).getByRole('status')).toBeEmptyDOMElement();
       expect(document.title).toBe('Grow2Notes');
     });
 
     it.each([
-      { failure: 'a 503', answer: () => problem(503) },
-      { failure: 'no connection', answer: noConnection },
-    ])('shows the signed-out frame, with an empty <main> and the bare title, after $failure', async ({ answer }) => {
+      {
+        failure: 'a 503',
+        answer: () => problem(503),
+        heading: 'There is a problem with Grow2Notes',
+        sentence: 'Grow2Notes did not load: something went wrong. Try again.',
+      },
+      {
+        failure: 'no connection',
+        answer: noConnection,
+        heading: 'Could not connect to Grow2Notes',
+        sentence: 'Grow2Notes did not load: no connection. Try again.',
+      },
+    ])('shows the signed-out frame, with its start-up message, after $failure', async ({ answer, ...message }) => {
       serveMe(answer);
       const { client } = renderShell('/');
       // Past the query client's one silent retry.
@@ -176,8 +188,10 @@ describe('AppShell', () => {
 
       expect(client.getQueryState(meQuery.queryKey)?.status).toBe('error');
       expectSignedOutFrame();
-      expect(screen.getByRole('main')).toBeEmptyDOMElement();
-      expect(document.title).toBe('Grow2Notes');
+      const main = within(screen.getByRole('main'));
+      expect(main.getByRole('heading', { level: 1 })).toHaveAccessibleName(message.heading);
+      expect(main.getByRole('status')).toHaveTextContent(message.sentence);
+      expect(main.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
 
     describe.each(['/', '/manage/anything'])('given a 401 at %s', (path) => {

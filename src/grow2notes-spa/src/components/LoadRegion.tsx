@@ -1,6 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { classify, type Failure } from '../api/api.ts';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { msg } from '../copy/messages.ts';
 import { strings } from '../copy/strings.ts';
 import { Button } from './Button.tsx';
@@ -8,6 +7,7 @@ import { focusPageHeading } from './focusPageHeading.ts';
 import styles from './LoadRegion.module.css';
 import { PageHeading } from './PageHeading.tsx';
 import { useDelayed } from './useDelayed.ts';
+import { useKeptFailure } from './useKeptFailure.ts';
 
 // A fast load shows nothing; one that takes longer shows the loading line (empty-loading-error.md *Timing*).
 const loadingLineDelay = 1000;
@@ -25,58 +25,15 @@ type LoadRegionProps = {
   children: () => ReactNode;
 };
 
-/** A failed first load, kept through Try again. */
-type Shown = {
-  failure: Failure;
-  /** After a Try again that failed. */
-  again: boolean;
-  /** When the queries last failed, as it was shown, which a refetch keeps and a new failure makes later. */
-  latest: number;
-};
-
 /**
  * A region of a screen that loads (empty-loading-error.md): nothing for 1 s, then the screen's loading line, then the
  * content; or, when the first load fails, the failure sentence with Try again, but nothing for a `401`, which the
  * session flow has. A failed refetch in the background leaves the content as it was.
  */
 export function LoadRegion({ queries, loading, what, fallbackHeading, children }: LoadRegionProps) {
-  // TanStack re-renders a screen only for the fields of its queries that have been read, so each is read every time.
-  const results = queries.map(({ data, error, errorUpdatedAt, isFetching, isLoadingError }) => ({
-    hasData: data !== undefined,
-    loadError: isLoadingError ? error : undefined,
-    errorUpdatedAt,
-    isFetching,
-  }));
-  const ready = results.every((result) => result.hasData);
-  const fetching = results.some((result) => result.isFetching);
-  const loadError = results.find((result) => result.loadError !== undefined)?.loadError;
-  const latest = Math.max(0, ...results.map((result) => result.errorUpdatedAt));
-
-  // TanStack puts a query with no data back to pending, with no error, when it fetches again, so the failure is kept
-  // here until the queries load or fail again. The queries passed in can still be those of the render before Try again
-  // was pressed, so a failure is new only when the time the queries last failed is not the one shown. A query keeps
-  // that time through a refetch, so an earlier one means other queries, as when a screen's query key changes
-  // (date-navigation.md's `?date=`), and they load as a first load does. Set during render, as an effect that set them
-  // would render twice.
-  const [shown, setShown] = useState<Shown>();
-  const [retrying, setRetrying] = useState(false);
-  if (ready) {
-    if (shown !== undefined) {
-      setShown(undefined);
-      setRetrying(false);
-    }
-  } else if (loadError !== undefined && !fetching && latest !== shown?.latest) {
-    setShown({ failure: classify(loadError), again: retrying, latest });
-    setRetrying(false);
-  } else if (shown !== undefined && latest < shown.latest) {
-    setShown(undefined);
-    setRetrying(false);
-  }
-
+  const { ready, fetching, failure, again, retrying, retry } = useKeptFailure(queries);
   const sentence =
-    shown === undefined || shown.failure === 'signedOut'
-      ? undefined
-      : msg.loadFailed(what, shown.failure, shown.again);
+    failure === undefined || failure === 'signedOut' ? undefined : msg.loadFailed(what, failure, again);
   const failed = sentence !== undefined;
   const slow = useDelayed(!ready && fetching && !failed, loadingLineDelay);
 
@@ -96,7 +53,7 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
 
   function tryAgain() {
     focusOnLoad.current = true;
-    setRetrying(true);
+    retry();
     for (const query of queries) {
       if (query.isLoadingError) {
         void query.refetch();

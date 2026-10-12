@@ -1,6 +1,6 @@
 /*
- * Element defaults, the focus ring, the visually hidden utility, and the reduced-motion and forced-colours rules
- * (foundations.md). It uses the tokens in tokens.css, which is imported before it.
+ * Element defaults, the focus ring, the visually hidden utility, index.html's lines, and the reduced-motion and
+ * forced-colours rules (foundations.md). It uses the tokens in tokens.css, which is imported before it.
  */
 *,
 *::before,
@@ -102,6 +102,38 @@ a {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* index.html's two lines, before the script runs and without it, in the page's gutter rather than at its edges. */
+.boot,
+.no-script {
+  margin: var(--space-5) var(--page-gutter);
+}
+
+/*
+ * index.html's "Loading…" while the script loads, which React replaces as it mounts (app-shell.md component 4): shown
+ * only from 1 s, as a load that ends sooner shows nothing, through an animation's delay rather than a script or an
+ * inline style, which the policy refuses (design.md §9.7).
+ */
+.boot {
+  animation: boot-show 0s linear 1s both;
+}
+
+@keyframes boot-show {
+  from {
+    visibility: hidden;
+  }
+
+  to {
+    visibility: visible;
+  }
+}
+
+/* With JavaScript off, nothing replaces it, so only the <noscript> line shows. */
+@media (scripting: none) {
+  .boot {
+    display: none;
+  }
 }
 
 /*

@@ -13,6 +13,10 @@ export const strings = {
   signOut: 'Sign out',
   /** Sign out's busy label. */
   signingOut: 'Signing out…',
+  /** The start-up message's `<h1>` for no connection or a timeout (app-shell.md component 4). */
+  couldNotConnect: 'Could not connect to Grow2Notes',
+  /** The start-up message's `<h1>` for any other failure but a `401` (app-shell.md component 4). */
+  thereIsAProblem: 'There is a problem with Grow2Notes',
   /** Page not found's words under its heading (app-shell.md component 4). */
   pageNotFound: {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',
@@ -53,7 +57,7 @@ export const strings = {
     help: 'If you cannot sign in, ask a manager to reset your sign-in.',
   },
   tryAgain: 'Try again',
-  /** Try again's busy label. */
+  /** Try again's busy label, and the start-up's loading line, as `index.html` has it before the script runs. */
   loading: 'Loading…',
   /** The busy label of sign-in's Continue and of the setup link check's Try again (sign-in.md components 8 and 12). */
   checking: 'Checking…',
