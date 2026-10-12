@@ -1,0 +1,72 @@
+/*
+ * The shell's frame (app-shell.md components 1 to 3a). Nothing in it is fixed or sticky: a fixed bar hides the focused
+ * field under a phone's keyboard and at 200% text (component 2).
+ */
+
+/* Hidden until it has focus, then shown top-left over the header with base.css's focus ring (component 1). */
+.skipLink {
+  position: absolute;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  z-index: 1;
+  padding: var(--space-3) var(--space-4);
+  background: var(--colour-surface);
+}
+
+.skipLink:not(:focus) {
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.header {
+  background: var(--colour-surface);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* The header's and <main>'s, so that the wordmark, the nav and the content share one left edge (Layout - laptop). */
+.container {
+  max-inline-size: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
+
+/* The same size as plain text and as a link, so that the header does not move once /me has answered. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-button);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--colour-text);
+  text-decoration: none;
+}
+
+/* With the element in the selector, so that base.css's a:hover colour does not win over the wordmark's own. */
+@media (hover: hover) {
+  a.wordmark:hover {
+    color: var(--colour-text);
+    text-decoration: underline;
+  }
+}
+
+a.wordmark:active {
+  background: var(--colour-pressed);
+}
+
+/* The before-main bar slot takes no space until a screen fills it (component 3a). */
+.pageBar:empty {
+  display: none;
+}
+
+.main {
+  padding-block: var(--space-5) var(--space-8);
+}
+
+/* Only the skip link focuses <main>, to move the reader to the content, which needs no ring round all of it. */
+.main:focus {
+  outline: none;
+}

@@ -8,15 +8,15 @@ import { describe, expect, it } from 'vitest';
 const eslint = new ESLint();
 
 /** The rule's messages on a component that returns `jsx`, linted as the file at `filePath`. */
-async function refusals(jsx: string, filePath = 'src/App.tsx'): Promise<string[]> {
+async function refusals(jsx: string, filePath = 'src/routes/AppShell.tsx'): Promise<string[]> {
   const code = [
-    "import { strings } from './copy/strings.ts';",
+    "import { strings } from '../copy/strings.ts';",
     'export function App({ busy }: { busy: boolean }) {',
     `  return ${jsx};`,
     '}',
     '',
   ].join('\n');
-  // typescript-eslint's project service parses only a file that a tsconfig includes, so the path is a real one.
+  // typescript-eslint's project service parses only a file that a tsconfig includes, so the path is a real file's.
   const [result] = await eslint.lintText(code, { filePath });
   // A sample that is not parsed gives one message with no rule, which would pass every "is not refused" case below.
   expect(result.messages.filter((message) => message.fatal)).toEqual([]);
@@ -51,6 +51,6 @@ describe('the lint rule on words in JSX', { timeout: 30_000 }, () => {
   });
 
   it("does not refuse a test's made-up words", async () => {
-    expect(await refusals('<p>Ready</p>', 'src/App.test.tsx')).toEqual([]);
+    expect(await refusals('<p>Ready</p>', 'src/routes/AppShell.test.tsx')).toEqual([]);
   });
 });

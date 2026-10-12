@@ -1,7 +1,10 @@
+import type { PageName } from './pageNames.ts';
 import { strings, type Cause } from './strings.ts';
 
 /** Words with slots (microcopy.md §8), each shape written here once. */
 export const msg = {
+  /** A page's title (app-shell.md component 3), "Grow2Notes – Today", with an en dash and a name from the list. */
+  pageTitle: (name: PageName) => `${strings.appName} – ${name}`,
   /**
    * microcopy.md §4's Load failed: "[Thing] did not load: [cause]. Try again.", or, `again` after a Try again that
    * failed, "[Thing] still did not load: [cause]. Try again.", new words that a screen reader announces again.
