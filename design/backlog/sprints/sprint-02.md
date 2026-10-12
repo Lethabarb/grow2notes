@@ -151,12 +151,15 @@ that day, its tasks were written in its own section, and it was taken into the s
 why they stand), to be built beside them on its own branch. Its 3 points are not added to `planned_points` either,
 which stays at 14, and count in `done_points` only if it is done by 18 October; otherwise it goes back to the backlog
 (README §7.2 step 4). Its tasks build on S00.04.01's `/api/auth/me` and on S00.01.03 to S00.01.05's shared parts and
-copy module, and add React Router to the SPA. They change the SPA and its tests, the end-to-end tests and
-tests/README.md, two UX files, and the Notes of S00.01.05, S00.06.01 and any setup story not yet built, and no server
-code; none of them needs the operator. The parts that the setup and sign-in stories need too (the route table, the
-page-name list, the `['me']` query and the signed-out frame) are built once, by whichever branch merges first, and
-reused by the other (its *Notes*). Whether both setup paths end on its `/` is checked by whichever of it and each setup
-story merges second.
+copy module, and add React Router to the SPA. As built, with its branch review, they change the SPA and its tests, the
+end-to-end tests and tests/README.md, five UX files (app-shell-nav.md, empty-loading-error.md, microcopy.md, today.md
+and daily-report.md), coverage.md, the Notes of S00.01.04, S00.01.05, S00.06.01 and the two setup stories not yet built
+(S00.04.02 and S00.04.03), and the criteria and Notes of S00.04.07 and S00.04.08, and no server code; none of them needs
+the operator. The parts that the setup and sign-in stories need too (the route table, the page-name list, the page-title
+hook, the `['me']` query and the signed-out frame) are built once, by whichever branch merges first, and reused by the
+other (its *Notes*). Whether both setup paths end on its `/` is checked by whichever of it and each setup story merges
+second. It is 16 in the *Plan* and in the list below, as S00.04.02 and S00.04.04, pulled in the same day on their own
+branches, are 14 and 15; at each of the three pull requests the numbers are made to follow what `main` has by then.
 
 ## Definition of Ready check
 
@@ -222,6 +225,9 @@ Each story's tasks are written once, in its own section, and ticked there (READM
     in F00.01, pulled in on 9 October 2026 after S00.01.03.
 13. [S00.01.05 Copy module, date formats and wording checks](../E00-skeleton-hosting-sign-in/F00.01-skeleton-and-continuous-integration.md#s000105-copy-module-date-formats-and-wording-checks),
     in F00.01, pulled in on 9 October 2026 after S00.01.04.
+
+14 and 15 are S00.04.02 and S00.04.04, pulled in on 12 October 2026 on their own branches (*Plan*).
+
 16. [S00.05.01 Navigation for my role](../E00-skeleton-hosting-sign-in/F00.05-app-shell.md#s000501-navigation-for-my-role),
     in F00.05, pulled in on 12 October 2026 after S00.01.05.
 

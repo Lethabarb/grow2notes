@@ -316,7 +316,7 @@ export function DailyReportScreen() {
 }
 
 function DailyReport({ date, today }: { date: IsoDate; today: IsoDate }) {
-  usePageTitle('Daily report');
+  // "Grow2Notes – Daily report" comes from the route's handle: { pageName: 'Daily report' } (app-shell-nav.md).
   const field = useReportDateField(date, today);  // date-navigation.md: draft, error, inputValue(), commit(), focus()
   const check = useQuery({ ...hasNotesQuery(date), refetchOnWindowFocus: true });   // no placeholderData
   const dl = useReportDownload(date);             // file-download.md: inFlight ref, busy, format, statusText, failure;

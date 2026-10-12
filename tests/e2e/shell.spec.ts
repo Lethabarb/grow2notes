@@ -15,6 +15,9 @@ const headerItems: Record<Me['role'], string[]> = {
   Manager: ['Grow2Notes', 'Account', 'Today', 'Flagged', 'Report', 'Manage'],
 };
 
+// Each role's rows in the header where nothing wraps: a worker's one, a manager's two (app-shell.md *Layout - phone*).
+const headerRows: Record<Me['role'], number> = { Worker: 1, Manager: 2 };
+
 for (const me of [worker, manager]) {
   const role = me.role.toLowerCase();
 
@@ -25,11 +28,11 @@ for (const me of [worker, manager]) {
     for (const width of [320, 375, 1280]) {
       await page.setViewportSize({ width, height: 800 });
 
-      // Exactly the role's items, so no menu button, each on screen rather than hidden at some width.
+      // Exactly the role's items, so no menu button, each on screen rather than hidden or pushed off it at some width.
       const items = page.getByRole('banner').locator('a, button');
       await expect(items).toHaveText(headerItems[me.role]);
       for (const item of await items.all()) {
-        await expect(item).toBeVisible();
+        await expect(item).toBeInViewport({ ratio: 1 });
       }
 
       // The skip link, the header, the before-main bar slot and the one <main> (app-shell.md › Structure).
@@ -93,22 +96,22 @@ for (const me of [worker, manager]) {
     await expect(panel).toHaveText(`Signed in as ${me.displayName}`);
     await expectAxeToPass(page);
   });
+
+  test(`as a ${role}, the header wraps at 320 px and 200% text, no sideways scroll or overlap`, async ({ page }) => {
+    await serveMe(page, me);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto('/');
+    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+    await expectHeaderToWrap(page, headerRows[me.role]);
+
+    // Text at 200%: Chromium's default text size at 32 px, where it is 16 (S00.05.01's Notes).
+    await page.setViewportSize({ width: 375, height: 800 });
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+    await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+    await expectHeaderToWrap(page, headerRows[me.role]);
+  });
 }
-
-test("the manager's header wraps at 320 px and at 200% text, with no sideways scroll or overlap", async ({ page }) => {
-  await serveMe(page, manager);
-  await page.setViewportSize({ width: 320, height: 800 });
-  await page.goto('/');
-  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-  await expectHeaderToWrap(page);
-
-  // Text at 200%: Chromium's default text size at 32 px, where it is 16 (S00.05.01's Notes).
-  await page.setViewportSize({ width: 375, height: 800 });
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
-  await expectHeaderToWrap(page);
-});
 
 test("Today's heading and the body text take the type scale, under index.html's head", async ({ page }) => {
   await serveMe(page, worker);
@@ -154,32 +157,35 @@ test("a worker's /manage shows Page not found, which passes the WCAG 2.2 AA chec
 
   await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Page not found');
   await expect(page).toHaveTitle(title('Page not found'));
-  // The nav stays, and marks nothing (app-shell.md component 4).
+  // The nav stays (app-shell.md component 4). That it marks nothing is shown in the manager's walk below, at addresses
+  // that the table marks, as a worker's nav has no item that /manage could mark.
   await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-  await expect(page.getByRole('banner').locator('[aria-current]')).toHaveCount(0);
 
   await expectAxeToPass(page);
 });
 
-/** A link that a walk follows, in the header or in `<main>`, with the address and the page it opens. */
-type Step = { region: 'banner' | 'main'; link: string; path: string; pageName: string };
+/**
+ * A link that a walk follows, in the header or in `<main>`, with the address and the page it opens, and the nav item
+ * marked current there, if any.
+ */
+type Step = { region: 'banner' | 'main'; link: string; path: string; pageName: string; current?: string };
 
 // Each role's header links, then, for the manager, each Manage link, going back to Manage through the nav between
 // them. Until they are built, Flagged, Report and the four Manage links open Page not found (S00.05.01's first two
-// criteria).
+// criteria), which marks no item, though component 2b's table marks Flagged, Report or Manage at its address.
 const walks: { me: Me; steps: Step[] }[] = [
   {
     me: worker,
     steps: [
-      { region: 'banner', link: 'Grow2Notes', path: '/', pageName: 'Today' },
-      { region: 'banner', link: 'Today', path: '/', pageName: 'Today' },
+      { region: 'banner', link: 'Grow2Notes', path: '/', pageName: 'Today', current: 'Today' },
+      { region: 'banner', link: 'Today', path: '/', pageName: 'Today', current: 'Today' },
     ],
   },
   {
     me: manager,
     steps: [
-      { region: 'banner', link: 'Grow2Notes', path: '/', pageName: 'Today' },
-      { region: 'banner', link: 'Today', path: '/', pageName: 'Today' },
+      { region: 'banner', link: 'Grow2Notes', path: '/', pageName: 'Today', current: 'Today' },
+      { region: 'banner', link: 'Today', path: '/', pageName: 'Today', current: 'Today' },
       { region: 'banner', link: 'Flagged', path: '/flagged', pageName: 'Page not found' },
       { region: 'banner', link: 'Report', path: `/reports/daily/${manager.today}`, pageName: 'Page not found' },
       ...[
@@ -188,21 +194,24 @@ const walks: { me: Me; steps: Step[] }[] = [
         ['Guide prompts', '/manage/guide-prompts'],
         ['Users', '/manage/users'],
       ].flatMap(([link, path]): Step[] => [
-        { region: 'banner', link: 'Manage', path: '/manage', pageName: 'Manage' },
+        { region: 'banner', link: 'Manage', path: '/manage', pageName: 'Manage', current: 'Manage' },
         { region: 'main', link, path, pageName: 'Page not found' },
       ]),
     ],
   },
 ];
 
-test('the walks put no name in a title, no app state in history and nothing in storage', async ({ page }) => {
+test('the walks mark the nav, name no one in titles, and keep no app state in history or storage', async ({ page }) => {
   for (const { me, steps } of walks) {
     await serveMe(page, me);
     await page.goto('/');
 
-    for (const { region, link, path, pageName } of steps) {
+    for (const { region, link, path, pageName, current } of steps) {
       await page.getByRole(region).getByRole('link', { name: link, exact: true }).click();
       await expect(page).toHaveURL(path);
+      // One item at most (app-shell.md component 2b), and none on Page not found (component 4).
+      const marked = page.getByRole('banner').locator('[aria-current]');
+      await expect(marked).toHaveText(current === undefined ? [] : [current]);
       // Exactly the page's name, which no made-up name, nor any other data, can reach (app-shell.md component 3).
       await expect(page).toHaveTitle(title(pageName));
       // React Router's own key and index, and nothing of the app's own in its usr (app-shell.md › Structure).
@@ -222,15 +231,17 @@ test('the walks put no name in a title, no app state in history and nothing in s
 });
 
 /**
- * Expects the manager's header to wrap, its targets on more lines than its two rows (app-shell.md *Layout - phone*),
- * with no two of them overlapping and no sideways scroll (app-shell.md › Navigation).
+ * Expects the header to wrap, its targets on more lines than its `rows` (app-shell.md *Layout - phone*), with every
+ * target inside the viewport, no two of them overlapping and no sideways scroll (app-shell.md › Navigation).
  */
-async function expectHeaderToWrap(page: Page) {
+async function expectHeaderToWrap(page: Page, rows: number) {
   const layout = await page.evaluate(() => {
+    const viewportWidth = document.documentElement.clientWidth;
     const targets = Array.from(document.querySelectorAll('header a, header button'), (target) => ({
       name: target.textContent,
       box: target.getBoundingClientRect(),
     }));
+    const outside = targets.filter(({ box }) => box.left < 0 || box.right > viewportWidth).map(({ name }) => name);
     const overlapping = targets.flatMap(({ name, box }, index) =>
       targets
         .slice(index + 1)
@@ -245,12 +256,14 @@ async function expectHeaderToWrap(page: Page) {
     );
     return {
       lines: new Set(targets.map(({ box }) => box.top)).size,
+      outside,
       overlapping,
-      scrollsSideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      scrollsSideways: document.documentElement.scrollWidth > viewportWidth,
     };
   });
 
-  expect(layout.lines, 'lines of targets').toBeGreaterThan(2);
-  expect(layout.overlapping).toEqual([]);
-  expect(layout.scrollsSideways).toBe(false);
+  expect(layout.lines, 'lines of targets').toBeGreaterThan(rows);
+  expect(layout.outside, 'targets outside the viewport').toEqual([]);
+  expect(layout.overlapping, 'overlapping targets').toEqual([]);
+  expect(layout.scrollsSideways, 'sideways scroll').toBe(false);
 }

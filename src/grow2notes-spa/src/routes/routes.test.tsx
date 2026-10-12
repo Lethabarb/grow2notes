@@ -48,15 +48,29 @@ function serveMe(me: Me | undefined) {
   );
 }
 
-/** Renders the app's routes at `path` on a memory router, under a query client of its own. */
-function renderApp(path: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+/** Renders the app's routes, or `table`, at `path` on a memory router, under a query client of its own. */
+function renderApp(path: string, table: AppRoute[] = routes) {
+  const router = createMemoryRouter(table, { initialEntries: [path] });
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return router;
+}
+
+/** `table` with a made-up manager screen, Users at `/manage/users`, beside Manage under `ManagerOnly`. */
+function withMadeUpUsers(table: AppRoute[]): AppRoute[] {
+  return table.map((route) => {
+    if (route.index || route.children === undefined) {
+      return route;
+    }
+
+    const children = route.children.some(({ path }) => path === 'manage')
+      ? [...route.children, { path: 'manage/users', handle: { pageName: pageName.users } }]
+      : withMadeUpUsers(route.children);
+    return { ...route, children };
+  });
 }
 
 /** Lets every request and render that falls due now run. */
@@ -190,13 +204,14 @@ describe('Page not found', () => {
     expectPageNotFound();
   });
 
-  // The shell sets the route's title, Manage, again on each location change, and Page not found its own after it.
-  it('keeps its title when a worker opens /manage again', async () => {
+  // ManagerOnly, and the Page not found it shows a worker, stay while the route under them changes, and the shell sets
+  // that route's title, Users, which Page not found must replace again.
+  it('keeps its title while a worker goes from one manager screen to another', async () => {
     serveMe(worker);
-    const router = renderApp('/manage');
+    const router = renderApp('/manage', withMadeUpUsers(routes));
     await settle();
 
-    await act(() => router.navigate('/manage'));
+    await act(() => router.navigate('/manage/users'));
 
     expectPageNotFound();
   });

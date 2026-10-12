@@ -402,10 +402,20 @@ Read-only does not apply to navigation.
   routes in a small `<ManagerOnly>` layout route that renders the not-found page for workers.
 - **Do not use `NavLink`.** It always writes `"page"` and matches child routes. Use a 10-line `NavItem` that maps the
   URL to `'page' | 'true' | undefined` using the table above.
-- **Titles.** Keep `<title>Grow2Notes</title>` in `index.html` for the moment before JavaScript runs, and set
-  `document.title` from a `usePageTitle(name: PageName, hasError?)` hook. If React 19's `<title>` component were
-  used as well, there would be two `<title>` elements, which React says gives undefined behaviour. Use one approach
-  only.
+- **Titles.** Keep `<title>Grow2Notes</title>` in `index.html` for the moment before JavaScript runs. The root
+  layout sets `document.title` with a `usePageTitle(name: PageName | undefined)` hook, from the `handle.pageName` of
+  the deepest matched route that has one (app-shell.md component 3), or to "Grow2Notes" for none, as in the
+  signed-out frame; a screen does not call it. The hook sets the title in a layout effect when the name changes.
+  - A whole-page message shown in the shell, such as "Page not found" for a worker on a manager route, or the crash
+    page under the nav, sets its own title in a `useEffect` on each location change. React runs every layout effect
+    of a commit before any `useEffect`, so the message's title comes after the route's; in a layout effect of its
+    own it would run before its parent's, and lose. A message that can go while the route's name stays, such as
+    "Page not found" for a `404` in `LoadRegion` when the address moves to another of the same route, puts the route's
+    title back as it goes.
+  - "Error: " is put in front, and taken off, by the screen that shows the errors (`ErrorSummary`), also in a
+    `useEffect`, so the hook has no `hasError`.
+  - If React 19's `<title>` component were used as well, there would be two `<title>` elements, which React says gives
+    undefined behaviour. Use one approach only.
 - **Refresh.**
   - Call `focusManager.setEventListener` once, listening to both `focus` and `visibilitychange`.
   - Because that makes every stale query refetch on focus, set `refetchOnWindowFocus: false` as the

@@ -164,7 +164,9 @@ describe('AppShell', () => {
       expect(document.title).toBe(title);
     });
 
-    it('sets the title again on each location change, even to the same page name', async () => {
+    // A screen that puts "Error: " in front takes it off itself, when its errors clear or it goes (ErrorSummary), so
+    // the shell must leave it while the screen may still show them.
+    it('sets the title when the page name changes, and leaves a change of its own while the name stays', async () => {
       serveMe(() => json(worker));
       const { router } = renderShell('/', madeUp);
       await wait(0);
@@ -175,7 +177,10 @@ describe('AppShell', () => {
       // As a form does after a failed submit.
       document.title = 'Error: Grow2Notes – Participants';
       await act(() => router.navigate('/made-up/unnamed'));
-      expect(document.title).toBe('Grow2Notes – Participants');
+      expect(document.title).toBe('Error: Grow2Notes – Participants');
+
+      await act(() => router.navigate('/made-up/named'));
+      expect(document.title).toBe('Grow2Notes – Participant');
     });
   });
 

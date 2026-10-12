@@ -53,6 +53,7 @@ releases.md.
 | M3 *Done when*: "A reviewed note… shows 'Reviewed by … on …' on the note and in the report" | F03.03 (Sprints 21–22) | S04.01.04 (Sprint 24) for the report part, so E03 cannot close at the end of M3 |
 | `participants.md › Archive and Restore` | F01.02 (Sprints 10–11) | The Today, Past notes and Export record bullets: S02.01.01 (Sprint 14), S02.04.02 (Sprint 18), S05.01.01 (Sprint 25) |
 | `app-shell.md › Screen changes, focus and scroll`, `› Account and Sign out`, `› Session` | F00.05 and F00.04 (Sprints 3–8) | Bullets that name Guide prompts, autosave, Submit, Discard or Today rows: S01.04.02 (Sprint 13) and E02's stories up to S02.02.05 and S02.02.08 (Sprint 16) |
+| `app-shell.md › Structure, privacy and naming` | F00.05 (Sprints 6–7) | The `dialog` after `main`: S00.04.07 (Sprint 07); the before-main bar `hidden` in the signed-out-in-place view: S00.04.08 (Sprint 08) |
 | mcp-server.md §1.2 *Users* | F07.02 (Sprints 33–34) | S07.04.03–S07.04.05, invite, reset and deactivate (Sprint 37) |
 | mcp-server.md §1.2 *Participants* | F07.02 (Sprints 33–34) | S07.03.01, add and correct (Sprint 35); S07.04.06, archive and restore (Sprint 38) |
 | mcp-server.md §10 automated item 7, *Rules through MCP* | F07.03 (Sprints 35–36) | S07.04.04 and S07.04.05, the last-manager rule and repeated deactivation (Sprint 37) |
@@ -137,7 +138,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | `app-shell.md › Structure, privacy and naming` | F00.05 | S00.01.01 (document head) | The D42 bullet is kept by review, with no automated check (D72, 12 October 2026) |
+| 1 | `app-shell.md › Structure, privacy and naming` | F00.05 | S00.01.01 (document head), S00.04.07 (the `dialog` after `main`), S00.04.08 (the before-main bar `hidden` in the signed-out-in-place view) | The D42 bullet is kept by review, with no automated check (D72, 12 October 2026). See *Rows to watch* |
 | 2 | `app-shell.md › Navigation` | F00.05 | | |
 | 3 | `app-shell.md › Refresh` | F00.05 | S03.03.03 adds `toReviewCount` | |
 | 4 | `app-shell.md › Account and Sign out` | F00.04 | S01.04.02 (Guide prompts bullet), S02.02.05 (autosave bullet) | See *Rows to watch* |

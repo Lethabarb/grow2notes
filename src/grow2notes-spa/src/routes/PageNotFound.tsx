@@ -13,8 +13,11 @@ import { strings } from '../copy/strings.ts';
 export function PageNotFound() {
   const { key } = useLocation();
 
-  // Its own title while it shows, after the one the shell sets from the route, which names Manage where a worker
-  // finds this page in its place. Again on each location change, as the shell's is.
+  // Its own title while it shows, in place of the route's, which names Manage where a worker finds this page in its
+  // place. In a `useEffect`, which React runs after the layout effect in which the shell sets the route's; a layout
+  // effect here would lose, as React runs a child's before its parent's. Again on each location change, as the page
+  // stays while the route under it, and so the shell's title, changes: a worker going from one manager screen to
+  // another.
   useEffect(() => {
     document.title = msg.pageTitle(pageName.pageNotFound);
   }, [key]);

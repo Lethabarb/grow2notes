@@ -578,7 +578,7 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
 ```tsx
 // src/today/TodayPage.tsx: composition only; each piece is specified in its component file
 export function TodayPage() {
-  usePageTitle('Today');                                      // "Grow2Notes – Today"
+  // "Grow2Notes – Today" comes from the route's handle: { pageName: 'Today' } (app-shell-nav.md, Titles).
   const me = useMe();                                         // shell's ['me'] query, already loaded
   const [submitted] = useState(messageStore.peek);            // status-messages.md (memory only)
   useEffect(() => { messageStore.clear(); }, []);

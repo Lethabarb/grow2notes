@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useLayoutEffect, type MouseEvent } from 'react';
-import { Outlet, useLocation, useMatches, type UIMatch } from 'react-router';
+import type { MouseEvent } from 'react';
+import { Outlet, useMatches, type UIMatch } from 'react-router';
 import { meQuery } from '../api/me.ts';
-import { msg } from '../copy/messages.ts';
 import { strings } from '../copy/strings.ts';
 import styles from './AppShell.module.css';
 import { Header } from './Header.tsx';
 import layout from './layout.module.css';
 import type { RouteHandle } from './routes.tsx';
+import { usePageTitle } from './usePageTitle.ts';
 
 const mainId = 'main-content';
 
@@ -20,17 +20,12 @@ export function AppShell() {
   // A later refresh that fails keeps the data it had, so the person stays signed in on screen (app-shell.md *Refresh*).
   const me = useQuery(meQuery).data;
   const signedIn = me !== undefined;
-  const { key } = useLocation();
   // The table's type gives every route's handle as a RouteHandle, or none.
   const matches = useMatches() as UIMatch<unknown, RouteHandle | undefined>[];
   const name = matches.findLast(({ handle }) => handle !== undefined)?.handle?.pageName;
-
-  // Set again on each location change, not only when the name changes, so that a title a screen changed itself, such
-  // as a form's "Error: " in front, does not outlive the screen. In a layout effect, which React runs before any
-  // `useEffect` of the same render, so that a page that sets its own title in one, as Page not found does, comes last.
-  useLayoutEffect(() => {
-    document.title = signedIn && name !== undefined ? msg.pageTitle(name) : strings.appName;
-  }, [signedIn, name, key]);
+  // The signed-out frame has the bare title. A page that sets its own, as Page not found does, sets it in a
+  // `useEffect`, which comes after this hook's layout effect (app-shell-nav.md *Titles*).
+  usePageTitle(signedIn ? name : undefined);
 
   return (
     <>

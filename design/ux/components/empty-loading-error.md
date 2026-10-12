@@ -552,9 +552,11 @@ export function PageHeading({ children }: { children: ReactNode }) {
   return <h1 id="page-heading" tabIndex={-1} ref={ref} className={s.h1}>{children}</h1>;
 }
 
-// ui/ProblemPage.tsx
+// ui/ProblemPage.tsx: a whole-page message sets its own title in a useEffect, after the one the shell's
+// usePageTitle sets from the route in a layout effect (app-shell-nav.md, Titles)
 export function NotFound() {
-  usePageTitle('Page not found');
+  const { key } = useLocation();
+  useEffect(() => { document.title = msg.pageTitle('Page not found'); }, [key]);
   return (
     <>
       <PageHeading>Page not found</PageHeading>
@@ -565,7 +567,8 @@ export function NotFound() {
 }
 
 export function Crashed() {             // used by the route error boundary
-  usePageTitle('There is a problem');
+  const { key } = useLocation();
+  useEffect(() => { document.title = msg.pageTitle('There is a problem'); }, [key]);
   return (
     <>
       <PageHeading>There is a problem with Grow2Notes</PageHeading>
