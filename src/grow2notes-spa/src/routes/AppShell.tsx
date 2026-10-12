@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Outlet, useMatches, type UIMatch } from 'react-router';
 import { classify } from '../api/api.ts';
 import { meQuery } from '../api/me.ts';
 import { focusPageHeading } from '../components/focusPageHeading.ts';
+import { PageBarContext } from '../components/pageBarContext.ts';
 import { pageName } from '../copy/pageNames.ts';
 import { strings } from '../copy/strings.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
@@ -52,6 +53,9 @@ export function AppShell() {
   // component 1). A page that sets its own, as Page not found does, sets it in a `useEffect`, which comes after this
   // hook's layout effect (app-shell-nav.md *Titles*).
   usePageTitle(shown ? handle?.pageName : signedOut ? pageName.signIn : undefined);
+  // The before-main bar slot once it is in the DOM, for a screen's PageBar. State, not a ref, so that a screen shown
+  // with the shell's first render, before the slot exists, renders again with it.
+  const [pageBar, setPageBar] = useState<HTMLDivElement | null>(null);
 
   return (
     <>
@@ -59,11 +63,13 @@ export function AppShell() {
         {strings.skipToMainContent}
       </a>
       <Header me={signedOutFrame ? undefined : me} page={handle?.pageName} />
-      <div id="page-bar" className={styles.pageBar} />
-      <main id={mainId} tabIndex={-1} className={`${layout.container} ${styles.main}`}>
-        {shown && <Outlet />}
-        {signedOut && <SignIn />}
-      </main>
+      <div id="page-bar" ref={setPageBar} className={styles.pageBar} />
+      <PageBarContext value={pageBar}>
+        <main id={mainId} tabIndex={-1} className={`${layout.container} ${styles.main}`}>
+          {shown && <Outlet />}
+          {signedOut && <SignIn />}
+        </main>
+      </PageBarContext>
     </>
   );
 }

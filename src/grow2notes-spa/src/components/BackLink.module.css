@@ -1,0 +1,24 @@
+/*
+ * The one back link (app-shell.md component 3a; note-identity-header.md): base.css's link colour, underline, hover
+ * and focus ring, in bold (foundations.md's 700 for the sketch's 600), on a hit area of at least 44 × 44 px (A32).
+ */
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-block-size: var(--target-min);
+  min-inline-size: var(--target-min);
+  padding-inline-end: var(--space-2);
+  font-weight: 700;
+}
+
+/* Its own size whatever the label's length, as a label that wraps at 200% text would otherwise squeeze it. */
+.chevron {
+  flex: none;
+  inline-size: 1em;
+  block-size: 1em;
+}
+
+.backLink:active {
+  color: var(--colour-action-pressed);
+}
