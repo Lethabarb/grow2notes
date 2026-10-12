@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 import { type ConsoleMessage, type Page, expect, test as base } from '@playwright/test';
 
@@ -59,7 +59,8 @@ async function adminBootstrap(baseURL: string | undefined): Promise<Invite> {
 /**
  * Chromium's virtual authenticator, through the DevTools protocol, in place of a phone (passkey-flows.md *Tests*): one
  * built into the device, which makes discoverable passkeys and verifies the person, as a face, fingerprint or PIN does,
- * and answers each prompt at once.
+ * and answers each prompt at once. With no passkey for the domain that a prompt names, the prompt fails at once with
+ * `NotAllowedError`, as a dismissed one does.
  */
 async function addVirtualAuthenticator(page: Page) {
   const devTools = await page.context().newCDPSession(page);
@@ -82,6 +83,25 @@ async function addVirtualAuthenticator(page: Page) {
     },
     /** The passkeys that it holds. */
     credentials: async () => (await devTools.send('WebAuthn.getCredentials', { authenticatorId })).credentials,
+    /**
+     * Adds a passkey for the domain `rpId` that no account holds, with a P-256 key, a credential ID and a user handle
+     * made here. The app's sign-in options name no credentials, so the next prompt for that domain signs with it.
+     */
+    addPasskey: async (rpId: string) => {
+      const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+      // The protocol takes binary values as base64.
+      await devTools.send('WebAuthn.addCredential', {
+        authenticatorId,
+        credential: {
+          credentialId: randomBytes(16).toString('base64'),
+          isResidentCredential: true,
+          rpId,
+          privateKey: privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64'),
+          userHandle: randomBytes(16).toString('base64'),
+          signCount: 0,
+        },
+      });
+    },
   };
 }
 
