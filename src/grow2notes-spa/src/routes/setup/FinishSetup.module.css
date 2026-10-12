@@ -1,0 +1,7 @@
+/*
+ * The alert and Finish setup, right under the code field, as a phone's number pad may have no Return key
+ * (totp-setup.md).
+ */
+.actions {
+  margin-block-start: var(--space-5);
+}

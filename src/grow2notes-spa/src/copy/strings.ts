@@ -58,6 +58,15 @@ export const strings = {
     visible: 'Your password is visible',
     hidden: 'Your password is hidden',
   },
+  /**
+   * The one-time code field (sign-in.md component 10), on setup's view G and sign-in's code step: its label, which is
+   * also its message when nothing is left once spaces and dashes are taken out (microcopy.md §9), and its message for
+   * a code that is not then 6 digits. Each view's hint is in that view's own group.
+   */
+  oneTimeCode: {
+    label: 'Enter the 6-digit code from your authenticator app',
+    wrongFormat: 'The code must be 6 digits',
+  },
   /** Why a request failed, as the failure sentences put it (microcopy.md §9). */
   cause: {
     /** `fetch` rejected, or no whole answer came in time. */
@@ -125,6 +134,13 @@ export const strings = {
       theSetupKey: 'The setup key',
       setupKeyNote: 'Your app might call this a ‘key’ or ‘secret key’. You do not need to type the spaces.',
       comeBack: 'Come back to this page.',
+      /** The code field's hint on view G; sign-in's code step has a hint of its own. */
+      codeHint: 'Find Grow2Notes in the app. If the code changes while you’re typing, you can still use it.',
+      /** On the code field, for a code that the server did not take (`422` with `errors.totpCode`, D70). */
+      codeRejected: 'That code did not work. Enter the code the app shows for Grow2Notes now.',
+      finishSetup: 'Finish setup',
+      /** Finish setup's busy label. */
+      finishingSetup: 'Finishing setup…',
     },
   },
   /** The error summary's heading (form-validation.md). */

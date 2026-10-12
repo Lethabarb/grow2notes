@@ -3,14 +3,26 @@ import { createContext, useContext } from 'react';
 /** The account a setup link names, as `POST /api/auth/setup/start` answers it (design.md §6.2). */
 export type SetupAccount = { email: string; displayName: string };
 
-/** What setup keeps between its views (sign-in.md *Interactions* 7 and 10). */
+/** What setup keeps between its views (sign-in.md *Interactions* 7, 10 and 12). */
 export type Setup = {
   /** The account the link check found, or `undefined` before it and once setup drops it. */
   account: SetupAccount | undefined;
   setAccount: (account: SetupAccount) => void;
   /** The password that view F took, as typed, never trimmed, for view G to send with the code. */
   password: string | undefined;
+  /** Holds the password that view F took, which ends the server's refusal of the one before. */
   setPassword: (password: string) => void;
+  /**
+   * The server refused the password that view G sent (sign-in.md *Password rejected by server*), so view F shows its
+   * message on it until it takes a password again.
+   */
+  passwordRefused: boolean;
+  refusePassword: () => void;
+  /**
+   * Marks setup finished, as view G does on its `200 Me` before it goes back to `/setup`'s entry, which the setup
+   * layout then replaces with Today's (sign-in.md *Interactions* 12). The same function on every render.
+   */
+  finish: () => void;
   /**
    * Drops everything setup holds, as a `401` from a setup call does (sign-in.md *Setup session timed out*). The same
    * function on every render.

@@ -44,25 +44,29 @@ export function CreatePassword() {
  * nowhere, which Continue puts in setup's memory for view G to send with the code. A hidden `username` field holding
  * the email tells a password manager whose password it is. Its back link to view E pops, as F's entry always follows
  * E's while setup's memory lives, and the `h1` takes focus as F shows, as the shell's focus on a new screen is
- * S00.05.02's.
+ * S00.05.02's. When view G has come back because the server refused the password, F shows the message for it on the
+ * field instead, which then takes focus (*Password rejected by server*).
  */
 function PasswordForm({ account }: { account: SetupAccount }) {
-  const { password: held, setPassword } = useSetup();
+  const { password: held, setPassword, passwordRefused } = useSetup();
   const navigate = useNavigate();
   // The password in memory when the person comes back from view G.
   const [password, setValue] = useState(held ?? '');
-  const [error, setError] = useState<string>();
-  // The number of refused presses, so that each moves focus to the field, even with the same message.
-  const [attempt, setAttempt] = useState(0);
+  // With design.md §8.4's options, Identity's one refusal is a password too short, worded as F's own check words it.
+  const [error, setError] = useState(() =>
+    passwordRefused ? msg.passwordTooShort(limits.passwordMinLength) : undefined,
+  );
+  // The number of refusals, the server's among them, so that each moves focus to the field, even with the same
+  // message.
+  const [attempt, setAttempt] = useState(passwordRefused ? 1 : 0);
   useErrorTitle(error !== undefined);
 
+  // The field after a refusal, once the render has named the message in its description, so that a screen reader
+  // reads it with focus; otherwise the h1.
   useEffect(() => {
-    focusPageHeading();
-  }, []);
-
-  // After the render that names the message in the field's description, so that a screen reader reads it with focus.
-  useEffect(() => {
-    if (attempt > 0) {
+    if (attempt === 0) {
+      focusPageHeading();
+    } else {
       document.getElementById(fieldId)?.focus();
     }
   }, [attempt]);

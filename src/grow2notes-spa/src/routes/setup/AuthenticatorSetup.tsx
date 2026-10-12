@@ -9,6 +9,7 @@ import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { strings } from '../../copy/strings.ts';
 import styles from './AuthenticatorSetup.module.css';
+import { FinishSetup } from './FinishSetup.tsx';
 import { NoLinkMessage, SetupMessage } from './SetupMessage.tsx';
 import { SetupKey } from './SetupKey.tsx';
 import { useSetup } from './setupContext.ts';
@@ -56,20 +57,27 @@ export function AuthenticatorSetup() {
   } else if (account === undefined || password === undefined) {
     content = <NoLinkMessage />;
   } else {
-    content = <AuthenticatorApp onTimedOut={timeOut} />;
+    content = <AuthenticatorApp password={password} onTimedOut={timeOut} />;
   }
 
   return <PageStatus>{content}</PageStatus>;
 }
 
+type AuthenticatorAppProps = {
+  /** The password that view F took, which the code step sends with the code. */
+  password: string;
+  /** Called for a `401` from a setup call, as the enrolment cookie has ended. */
+  onTimedOut: () => void;
+};
+
 /**
- * View G's setup block (sign-in.md view G and component 16; totp-setup.md): what an authenticator app is, and the
- * steps that add Grow2Notes to one, with the QR code to scan and the setup key to type, both shown on every screen, as
- * a person setting up on their phone cannot scan its own screen. Its back link to view F pops, as G's entry always
- * follows F's while setup's memory lives, and the `h1` takes focus as G shows, as the shell's focus on a new screen is
- * S00.05.02's.
+ * View G (sign-in.md view G and components 16 and 17; totp-setup.md): what an authenticator app is, and the steps that
+ * add Grow2Notes to one, with the QR code to scan and the setup key to type, both shown on every screen, as a person
+ * setting up on their phone cannot scan its own screen, then the code step that finishes setup. Its back link to view
+ * F pops, as G's entry always follows F's while setup's memory lives, and the `h1` takes focus as G shows, as the
+ * shell's focus on a new screen is S00.05.02's.
  */
-function AuthenticatorApp({ onTimedOut }: { onTimedOut: () => void }) {
+function AuthenticatorApp({ password, onTimedOut }: AuthenticatorAppProps) {
   const key = useQuery(setupKeyQuery);
   const [qrFailed, setQrFailed] = useState(false);
   // The key region says nothing for a 401, which is the page's to say.
@@ -123,6 +131,7 @@ function AuthenticatorApp({ onTimedOut }: { onTimedOut: () => void }) {
         </li>
         <li>
           <p>{words.comeBack}</p>
+          <FinishSetup password={password} onTimedOut={onTimedOut} />
         </li>
       </ol>
     </div>
