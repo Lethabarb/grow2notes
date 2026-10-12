@@ -4,7 +4,8 @@ import { classify, type Failure } from '../api/api.ts';
 
 /** A failed first load, as it is shown. */
 type Shown = {
-  failure: Failure;
+  /** What the queries failed with. */
+  error: unknown;
   /** After a Try again that failed. */
   again: boolean;
   /** When the queries last failed, as it was shown, which a refetch keeps and a new failure makes later. */
@@ -19,6 +20,8 @@ type KeptLoad = {
   fetching: boolean;
   /** Why the first load failed, kept until the queries load or a Try again fails; `undefined` while none has failed. */
   failure: Failure | undefined;
+  /** What the queries failed with, as the failure kept, which `LoadRegion` throws for Page not found. */
+  error: unknown;
   /** The failure came from a Try again, which says "still did not load". */
   again: boolean;
   /** A Try again is running: from its press until the queries load or fail again. */
@@ -65,7 +68,7 @@ export function useKeptFailure(queries: readonly UseQueryResult<unknown>[]): Kep
     // shown as it was, its cause and "still" with it, so that nothing the person did not ask for changes or is
     // announced (app-shell.md *States*: "keep everything as it was").
     const fresh = shown === undefined || retrying;
-    setShown(fresh ? { failure: classify(loadError), again: retrying, latest } : { ...shown, latest });
+    setShown(fresh ? { error: loadError, again: retrying, latest } : { ...shown, latest });
     setRetrying(false);
   } else if (shown !== undefined && latest < shown.latest) {
     setShown(undefined);
@@ -75,7 +78,8 @@ export function useKeptFailure(queries: readonly UseQueryResult<unknown>[]): Kep
   return {
     ready,
     fetching,
-    failure: shown?.failure,
+    failure: shown === undefined ? undefined : classify(shown.error),
+    error: shown?.error,
     again: shown?.again ?? false,
     retrying,
     retry: () => {

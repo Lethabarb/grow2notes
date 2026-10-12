@@ -1,10 +1,11 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { AppShell } from './AppShell.tsx';
-import { CrashPage, ShellCrashPage } from './CrashPage.tsx';
+import { ShellCrashPage } from './CrashPage.tsx';
 import { ManagePage } from './ManagePage.tsx';
 import { ManagerOnly } from './ManagerOnly.tsx';
 import { PageNotFound } from './PageNotFound.tsx';
+import { ScreenErrorPage } from './ScreenErrorPage.tsx';
 import { AuthenticatorSetup } from './setup/AuthenticatorSetup.tsx';
 import { CreatePassword } from './setup/CreatePassword.tsx';
 import { SetupLayout } from './setup/SetupLayout.tsx';
@@ -27,8 +28,9 @@ const setupHandle: RouteHandle = { pageName: pageName.setUpYourAccount, signedOu
 
 /**
  * The app's routes, which `main.tsx` gives to `createBrowserRouter` and the tests to `createMemoryRouter`: one root
- * layout, the shell, around every screen, with a crash page for each of its two route error boundaries (app-shell.md
- * component 4). React Router clears a crash on the next location.
+ * layout, the shell, around every screen, with a crash page for each of its two route error boundaries, and Page not
+ * found for a screen whose region was refused (app-shell.md component 4). React Router clears either on the next
+ * location.
  */
 export const routes: AppRoute[] = [
   {
@@ -37,8 +39,8 @@ export const routes: AppRoute[] = [
     errorElement: <ShellCrashPage />,
     children: [
       {
-        // For a screen that throws while rendering, in <main>, under the nav.
-        errorElement: <CrashPage />,
+        // For a screen that throws while rendering, in <main>, under the nav: a crash, or a region's refusal.
+        errorElement: <ScreenErrorPage />,
         children: [
           // Beside the signed-in routes, not under them, so that a person with no session reaches setup.
           {

@@ -1,5 +1,6 @@
 import type { UseQueryResult } from '@tanstack/react-query';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { isNotFound } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
 import { strings } from '../copy/strings.ts';
 import { Button } from './Button.tsx';
@@ -28,10 +29,11 @@ type LoadRegionProps = {
 /**
  * A region of a screen that loads (empty-loading-error.md): nothing for 1 s, then the screen's loading line, then the
  * content; or, when the first load fails, the failure sentence with Try again, but nothing for a `401`, which the
- * session flow has. A failed refetch in the background leaves the content as it was.
+ * session flow has, and Page not found in place of the whole screen for a `404` or a manager's `403`. A failed refetch
+ * in the background leaves the content as it was.
  */
 export function LoadRegion({ queries, loading, what, fallbackHeading, children }: LoadRegionProps) {
-  const { ready, fetching, failure, again, retrying, retry } = useKeptFailure(queries);
+  const { ready, fetching, failure, error, again, retrying, retry } = useKeptFailure(queries);
   const sentence =
     failure === undefined || failure === 'signedOut' ? undefined : msg.loadFailed(what, failure, again);
   const failed = sentence !== undefined;
@@ -50,6 +52,13 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
       }
     }
   }, [ready]);
+
+  // Thrown for the screens' route error boundary, which shows Page not found in place of the whole screen, so that a
+  // screen's <h1> shown at once does not stay beside Page not found's. Thrown where the failure sentence would show,
+  // once none of the queries is still fetching, so that a `404` waits for the others as the sentence does.
+  if (isNotFound(error)) {
+    throw error;
+  }
 
   function tryAgain() {
     focusOnLoad.current = true;

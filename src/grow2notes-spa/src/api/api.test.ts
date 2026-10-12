@@ -6,6 +6,7 @@ import type * as SessionModule from './session.ts';
 let api: typeof ApiModule.api;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
+let isNotFound: typeof ApiModule.isNotFound;
 let onSessionEnded: typeof SessionModule.onSessionEnded;
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -122,7 +123,7 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, ApiError, classify } = await import('./api.ts'));
+  ({ api, ApiError, classify, isNotFound } = await import('./api.ts'));
   ({ onSessionEnded } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -622,5 +623,27 @@ describe('classify', () => {
     { failed: 'something thrown that is not an error', error: () => 'failed', failure: 'server' },
   ])('gives $failure for $failed', ({ error, failure }) => {
     expect(classify(error())).toBe(failure);
+  });
+});
+
+describe('isNotFound', () => {
+  it.each([
+    { failed: 'a 404', error: () => new ApiError(404) },
+    { failed: 'a 403', error: () => new ApiError(403) },
+  ])('is true for $failed', ({ error }) => {
+    expect(isNotFound(error())).toBe(true);
+  });
+
+  it.each([
+    { failed: 'a 403 note.not_editable', error: () => new ApiError(403, 'note.not_editable') },
+    { failed: 'status 0', error: () => new ApiError(0) },
+    { failed: 'a 401', error: () => new ApiError(401) },
+    { failed: 'a 410', error: () => new ApiError(410) },
+    { failed: 'a 429', error: () => new ApiError(429) },
+    { failed: 'a 500', error: () => new ApiError(500) },
+    { failed: 'a TypeError from a bug', error: () => new TypeError('x is not a function') },
+    { failed: 'nothing', error: () => undefined },
+  ])('is false for $failed', ({ error }) => {
+    expect(isNotFound(error())).toBe(false);
   });
 });

@@ -7,10 +7,10 @@ import { usePageTitle } from './usePageTitle.ts';
 import { useWholePageMessage } from './wholePageMessage.ts';
 
 /**
- * The crash page under the nav (app-shell.md component 4): the error element of the layout route around the shell's
- * screens, in `<main>` in place of a screen that threw while rendering, with the nav and Account still there. It tells
- * the shell that it shows, for the title, which comes back as it goes on the next location. It leaves the header's
- * mark as the address gives it, as the screen that crashed is the one the address names.
+ * The crash page under the nav (app-shell.md component 4), which the screens' route error boundary shows in `<main>` in
+ * place of a screen that threw while rendering, with the nav and Account still there. It tells the shell that it
+ * shows, for the title, which comes back as it goes on the next location. It leaves the header's mark as the address
+ * gives it, as the screen that crashed is the one the address names.
  */
 export function CrashPage() {
   useWholePageMessage(pageName.thereIsAProblem);

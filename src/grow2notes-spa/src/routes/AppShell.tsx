@@ -74,9 +74,7 @@ export function AppShell() {
   }, [signedOut, signedIn]);
 
   // The signed-out frame has the bare title, but on a page shown in it, or sign-in's while view A shows (sign-in.md
-  // component 1). A whole-page message in place of the screen names it while it shows. A page that sets its own, as
-  // Page not found does, sets it in a `useEffect`, which comes after this hook's layout effect (app-shell-nav.md
-  // *Titles*).
+  // component 1). A whole-page message in place of the screen, such as Page not found, names it while it shows.
   usePageTitle(shown ? page : signedOut ? pageName.signIn : undefined);
 
   return (
