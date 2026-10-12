@@ -3,11 +3,9 @@ import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
+import { expectViewA } from './signedOut.ts';
 
-// Sign out in the published app (S00.04.06), against app-shell.md › Account and Sign out. The SPA fetches an
-// antiforgery token before it signs out, and the token's cookie is Secure, so the app issues it only on an HTTPS
-// request: every request here says that it came over HTTPS, as in setup.spec.ts (tests/README.md).
-test.use({ extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' } });
+// Sign out in the published app (S00.04.06), against app-shell.md › Account and Sign out.
 
 const isTo = (path: string) => (message: Request | Response) => new URL(message.url()).pathname === path;
 const isLogout = isTo('/api/auth/logout');
@@ -41,21 +39,10 @@ async function serveMeUntilLogout(page: Page, me: Me): Promise<Request[]> {
 const appSaysSignedOut = (page: Page) =>
   page.waitForResponse((response) => isMe(response) && response.status() === 401);
 
-/**
- * Expects no signed-in screen once the page has handled the app's `401` from `/api/auth/me`: the wordmark as text, with
- * no nav and no Account, as in the signed-out frame (smoke.spec.ts).
- */
+/** Expects the page to meet the app's `401` from `/api/auth/me` and show sign-in's view A, as smoke.spec.ts does. */
 async function expectSignedOut(page: Page, appMe: Promise<Response>) {
-  // The frame before /me answers looks the same as the one after its 401, so let the answer arrive whole and React draw
-  // what it gives first, as smoke.spec.ts does, so that a signed-in screen would fail the checks below every time.
-  await (await appMe).finished();
-  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-
-  const header = page.getByRole('banner');
-  await expect(header).toHaveText('Grow2Notes');
-  await expect(header.getByRole('link')).toHaveCount(0);
-  await expect(page.locator('nav')).toHaveCount(0);
-  await expect(account(page)).toHaveCount(0);
+  await appMe;
+  await expectViewA(page);
 }
 
 for (const me of [worker, manager]) {
