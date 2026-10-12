@@ -92,6 +92,11 @@ internal static class EndpointMatrix
         new(Post,      "/api/auth/passkey/options", OK,     OK,        OK,         OK),
         new(Post,      "/api/auth/passkey",      Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithAPasskeyNoAccountHolds),
+
+        // Anyone may sign in with a password too, and an email that no account holds is refused, whoever sends it,
+        // before any password is checked, so the call changes nothing.
+        new(Post,      "/api/auth/login",        Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/login", new { email = $"{Guid.NewGuid():N}@example.org", password = "made-up" })),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.

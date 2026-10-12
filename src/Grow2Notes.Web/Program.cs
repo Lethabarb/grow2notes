@@ -83,7 +83,8 @@ builder.Services.AddDataProtection()
 // digit, a capital, a lowercase letter and a symbol, are turned off; its default of one unique character stays.
 //
 // The default token providers include Identity's authenticator provider, which checks the codes of the authenticator
-// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2).
+// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2). Without it,
+// Identity finds no two-factor provider for anyone, and so two-factor off for everyone.
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -292,7 +293,8 @@ app.MapApiGroup()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
     .MapPasskeyOptionsEndpoint()
-    .MapPasskeySignInEndpoint();
+    .MapPasskeySignInEndpoint()
+    .MapPasswordSignInEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Grow2Notes.Tests.Features.Auth;
 
 /// <summary>
-/// Whom the app's sign-in manager lets sign in (design.md §8.1, §8.2): Active users only, and none who is locked out,
-/// whichever sign-in brings them. Each test adds its own user to seeded organisation A, as tests/README.md's
-/// seeded-rows rule asks.
+/// Whom the app's sign-in manager lets sign in (design.md §8.1, §8.2): Active users only, none who is locked out,
+/// whichever sign-in brings them, and no one with a password alone. Each test adds its own user to seeded organisation
+/// A, as tests/README.md's seeded-rows rule asks.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -56,6 +56,23 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
         Assert.True(result.IsLockedOut);
     }
 
+    // Identity would sign a password user whom it finds without two-factor straight in, with no code, so the check
+    // fails a sign-in that does not bypass two-factor, as a password's does not (design.md §8.1's invariant). The user
+    // is Active and not locked out, so nothing else refuses them, and a sign-in that went on would throw for want of a
+    // request.
+    [Fact]
+    public async Task The_check_before_signing_in_fails_a_password_user_without_two_factor()
+    {
+        var userId = await AddUserAsync(UserStatus.Active, password: "Made-up passw0rd");
+
+        var result = await SignInOrTwoFactorAsync(userId);
+
+        Assert.False(result.Succeeded);
+        Assert.False(result.RequiresTwoFactor);
+        Assert.False(result.IsNotAllowed);
+        Assert.False(result.IsLockedOut);
+    }
+
     // Asks the app's sign-in manager about the user as loaded afresh, as a sign-in loads the user it signs in. The
     // users differ in status alone, so nothing else can refuse them: an Invited user with a confirmed email and an
     // activation time is one whose sign-in a manager has reset (§8.6).
@@ -83,12 +100,12 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
         Assert.True(result.IsNotAllowed);
     }
 
-    // Calls SignInOrTwoFactorAsync, where Identity's sign-ins decide to sign someone in, for the user as loaded afresh.
-    // Identity's password sign-in checks the user before it calls it, and its passkey sign-in does too from ASP.NET
-    // Core 10.0.4, which CI runs, so there no sign-in reaches it unchecked, and only a direct call shows that the app's
-    // own check in it, for 10.0.0 to 10.0.3, still works (S00.04.04's Notes). It is protected, so the call is by
-    // reflection, which runs the app's override. The scope has no request, so a sign-in that went on would throw for
-    // want of one.
+    // Calls SignInOrTwoFactorAsync, where Identity's sign-ins decide to sign someone in, for the user as loaded afresh,
+    // without bypassing two-factor, as a password sign-in calls it. Identity's password sign-in checks the user before
+    // it calls it, and its passkey sign-in does too from ASP.NET Core 10.0.4, which CI runs, so there no sign-in
+    // reaches it unchecked, and only a direct call shows that the app's own check in it, for 10.0.0 to 10.0.3, still
+    // works (S00.04.04's Notes). It is protected, so the call is by reflection, which runs the app's override. The
+    // scope has no request, so a sign-in that went on would throw for want of one.
     private async Task<SignInResult> SignInOrTwoFactorAsync(Guid userId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -104,8 +121,9 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
     }
 
     // A user as setup completion leaves one (design.md §8.1), except for the status, with an address of its own, which
-    // no other test or run of this one uses.
-    private async Task<Guid> AddUserAsync(UserStatus status)
+    // no other test or run of this one uses. A test may give the user a password, which they then hold with two-factor
+    // off, as setup never leaves anyone.
+    private async Task<Guid> AddUserAsync(UserStatus status, string? password = null)
     {
         var organisation = sqlServer.Seeded.A;
         var email = $"{Guid.NewGuid():N}@example.org";
@@ -123,7 +141,8 @@ public sealed class Grow2NotesSignInManagerTests(Grow2NotesFactory factory, SqlS
             EmailConfirmed = true,
         };
         await using var scope = factory.Services.CreateAsyncScope();
-        var result = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>().CreateAsync(user);
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var result = password is null ? await users.CreateAsync(user) : await users.CreateAsync(user, password);
         Assert.True(result.Succeeded, string.Join(" ", result.Errors.Select(error => error.Code)));
         return user.Id;
     }

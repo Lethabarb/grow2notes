@@ -8,8 +8,9 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Web.Features.Auth;
 
 /// <summary>
-/// The app's sign-in manager (design.md §8.2, §8.4): only an Active user can sign in, and every sign-in records when
-/// it happened, in <see cref="AuthTimeClaimType"/>, for the 12-hour session limit (§8.5).
+/// The app's sign-in manager (design.md §8.2, §8.4): only an Active user can sign in, never with a password alone,
+/// and every sign-in records when it happened, in <see cref="AuthTimeClaimType"/>, for the 12-hour session limit
+/// (§8.5).
 /// </summary>
 internal sealed class Grow2NotesSignInManager(
     UserManager<ApplicationUser> userManager,
@@ -69,9 +70,17 @@ internal sealed class Grow2NotesSignInManager(
     /// a Deactivated, Invited or locked-out person's passkey from signing them in (S00.04.04's Notes). On a later
     /// runtime, the user is checked twice.
     /// </summary>
+    /// <remarks>
+    /// It then fails a sign-in that does not bypass two-factor, as a password's does not, when Identity finds the user
+    /// without two-factor (off, or with no two-factor provider registered), as Identity would then sign them straight
+    /// in; so no password alone signs anyone in (design.md §8.1's invariant). Setup and a sign-in reset keep a password
+    /// and the authenticator app together, so this matters only if a row ever breaks that rule. A passkey sign-in
+    /// bypasses two-factor, as a verified passkey is MFA on its own (D23), so it is unchanged.
+    /// </remarks>
     protected override async Task<SignInResult> SignInOrTwoFactorAsync(
         ApplicationUser user, bool isPersistent, string? loginProvider = null, bool bypassTwoFactor = false) =>
         await PreSignInCheck(user)
+            ?? (!bypassTwoFactor && !await IsTwoFactorEnabledAsync(user) ? SignInResult.Failed : null)
             ?? await base.SignInOrTwoFactorAsync(user, isPersistent, loginProvider, bypassTwoFactor);
 
     // Every sign-in ends here: SignInAsync, as setup completion calls it, and the password, two-factor and passkey
