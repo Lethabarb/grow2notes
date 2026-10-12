@@ -30,6 +30,7 @@ const antiforgeryPath = '/api/auth/antiforgery';
 const optionsPath = '/api/auth/passkey/options';
 const passkeyPath = '/api/auth/passkey';
 const passwordPath = '/api/auth/login';
+const codePath = '/api/auth/login/totp';
 
 // A made-up worker (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -74,6 +75,10 @@ const failedMessage =
 const enterEmail = 'Enter your email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
 const enterPassword = 'Enter your password';
+const codeLabel = 'Enter the 6-digit code from your authenticator app';
+const codeHint =
+  'Open your authenticator app and find Grow2Notes. If the code changes while you’re typing, you can still use it.';
+const codeFormat = 'The code must be 6 digits';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -118,6 +123,8 @@ type Server = {
   options?: (n: number) => Promise<Response>;
   /** Each password step's answer, the `200 {"next":"totp"}` of a right password unless given. */
   password?: () => Promise<Response>;
+  /** Each code step's answer, a `200 Me` unless given. */
+  code?: () => Promise<Response>;
 };
 
 /** Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, and the rest answer so. */
@@ -125,6 +132,7 @@ function serve({
   passkey = () => json(worker),
   options = (n) => json(passkeyOptions(n)),
   password = () => json({ next: 'totp' }),
+  code = () => json(worker),
 }: Server = {}) {
   let issued = 0;
   fetchMock.mockImplementation((path) => {
@@ -140,6 +148,8 @@ function serve({
         return passkey();
       case passwordPath:
         return password();
+      case codePath:
+        return code();
       default:
         throw new Error('The test gave no answer for this request.');
     }
@@ -211,6 +221,24 @@ function type(field: HTMLInputElement, value: string) {
 function fillIn() {
   type(emailField(), workerEmail);
   type(passwordField(), workerPassword);
+}
+
+function codeField(): HTMLInputElement {
+  return screen.getByRole<HTMLInputElement>('textbox', { name: codeLabel });
+}
+
+/** The code step's Sign in, by its name before any press, as its busy label renames it. */
+function signInButton() {
+  return screen.getByRole<HTMLButtonElement>('button', { name: 'Sign in' });
+}
+
+/** Renders view A at `path`, sends the made-up worker's password, and lets the code step show in its place. */
+async function renderCodeStep(path = '/') {
+  const rendered = await renderSignedOut(path);
+  fillIn();
+  press(continueButton());
+  await wait(0);
+  return rendered;
 }
 
 /**
@@ -1147,27 +1175,60 @@ describe('signing in with an email address and password', () => {
     });
   });
 
-  it('waits too for a request for options that starts as the one awaited ends, as after a dismissal', async () => {
-    ceremony.mockRejectedValue(dismissal());
-    const first = later();
-    const second = later();
-    serve({ options: (n) => (n === 1 ? first.promise : second.promise) });
-    await renderSignedOut();
-    fillIn();
-    // The press waits for the options on their way, and the prompt then fails, which asks for new ones.
-    press(passkeyButton());
-    press(continueButton());
+  // Nor may a request for options start while the password is out, as its answer could then come after the password's.
+  describe.each([
+    { answer: 'refused', password: () => problem(401), options: 2 },
+    { answer: 'accepted', password: () => json({ next: 'totp' }), options: 1 },
+  ])('while the password is out, and once it is $answer', ({ password, options }) => {
+    it('a passkey press with no fresh options asks for them only once the password\'s answer leaves A', async () => {
+      const answer = later();
+      serve({ password: () => answer.promise });
+      await renderSignedOut();
+      // Options this old are not used, so the press asks for new ones.
+      await wait(240_000);
+      fillIn();
+      press(continueButton());
+      await wait(0);
 
-    first.resolve(await json(passkeyOptions(1)));
-    await wait(0);
+      press(passkeyButton());
+      await wait(0);
 
-    expect(requestsTo(optionsPath)).toHaveLength(2);
-    expect(requestsTo(passwordPath)).toHaveLength(0);
+      expect(requestsTo(optionsPath)).toHaveLength(1);
+      expect(ceremony).not.toHaveBeenCalled();
 
-    second.resolve(await json(passkeyOptions(2)));
-    await wait(0);
+      answer.resolve(await password());
+      await wait(0);
 
-    expect(requestsTo(passwordPath)).toHaveLength(1);
+      expect(requestsTo(optionsPath)).toHaveLength(options);
+      expect(ceremony.mock.calls).toEqual(options === 2 ? [[{ optionsJSON: passkeyOptions(2) }]] : []);
+    });
+
+    it('a prompt that fails asks for new options only once the password\'s answer leaves A', async () => {
+      let dismiss!: (error: unknown) => void;
+      ceremony.mockReturnValue(
+        new Promise((_resolve, reject) => {
+          dismiss = reject;
+        }),
+      );
+      const answer = later();
+      serve({ password: () => answer.promise });
+      await renderSignedOut();
+      press(passkeyButton());
+      fillIn();
+      press(continueButton());
+      await wait(0);
+      expect(requestsTo(passwordPath)).toHaveLength(1);
+
+      dismiss(dismissal());
+      await wait(0);
+
+      expect(requestsTo(optionsPath)).toHaveLength(1);
+
+      answer.resolve(await password());
+      await wait(0);
+
+      expect(requestsTo(optionsPath)).toHaveLength(options);
+    });
   });
 
   it('sends nothing for a second press or Enter while busy, and keeps focus on Continue, never disabled', async () => {
@@ -1249,5 +1310,489 @@ describe('signing in with an email address and password', () => {
     const cached = JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey, state }) => [queryKey, state]));
     expect(cached).not.toContain(workerEmail);
     expect(cached).not.toContain(workerPassword);
+  });
+});
+
+describe('the code step', () => {
+  it('shows in view A\'s place, at the same address and with the same title, its field focused', async () => {
+    serve();
+    const { router } = await renderSignedOut();
+    const { location } = router.state;
+    const entries = window.history.length;
+    fillIn();
+
+    press(continueButton());
+    await wait(0);
+
+    const main = within(screen.getByRole('main'));
+    const heading = main.getByRole('heading', { level: 1 });
+    expect(heading).toHaveAccessibleName(codeLabel);
+    expect(heading.firstElementChild).toBe(main.getByText(codeLabel, { selector: 'label' }));
+    expect(codeField()).toHaveFocus();
+    expect(codeField()).toHaveAccessibleDescription(codeHint);
+    expectInOrder(
+      heading,
+      main.getByText(codeHint),
+      codeField(),
+      alertAbove(signInButton()),
+      signInButton(),
+      main.getByText(help),
+    );
+    // Nothing of A's is left.
+    expect(main.getAllByRole('heading')).toEqual([heading]);
+    expect(main.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();
+    expect(main.queryByRole('textbox', { name: 'Email address' })).not.toBeInTheDocument();
+    expect(main.queryByText('or')).not.toBeInTheDocument();
+    expect(summary()).toBeNull();
+    expect(alertAbove(signInButton())).toBeEmptyDOMElement();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+    expect(router.state.location).toBe(location);
+    expect(window.history.length).toBe(entries);
+  });
+
+  it('has one code field for a number pad and a filled-in code, in a form of its own with Sign in', async () => {
+    serve();
+    await renderCodeStep();
+    const field = codeField();
+    const form = signInButton().closest('form');
+
+    expect(field).toHaveAttribute('id', 'code');
+    expect(field).toHaveAttribute('name', 'code');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('inputmode', 'numeric');
+    expect(field).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(field).not.toHaveAttribute('maxlength');
+    expect(field).not.toHaveAttribute('placeholder');
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field).toHaveValue('');
+    expect(form).toHaveAttribute('novalidate');
+    expect(form).not.toHaveAttribute('action');
+    expect(field.form).toBe(form);
+    expect(alertAbove(signInButton()).closest('form')).toBe(form);
+    expect(signInButton()).toHaveAttribute('type', 'submit');
+    expect(screen.getByText(help, { selector: 'p' }).closest('form')).toBeNull();
+  });
+
+  it('takes Tab from the field to Sign in, the one button and primary, with no "remember this device"', async () => {
+    serve();
+    await renderCodeStep();
+    const main = within(screen.getByRole('main'));
+
+    expect(tabStops(screen.getByRole('main'))).toEqual([codeField(), signInButton()]);
+    expect(main.getAllByRole('button')).toEqual([signInButton()]);
+    expect(signInButton()).toHaveAttribute('class', buttonClass('primary'));
+    expect(main.queryByRole('checkbox')).not.toBeInTheDocument();
+    expect(main.queryByRole('link')).not.toBeInTheDocument();
+    expect(main.queryByText(/remember|forgot/i)).not.toBeInTheDocument();
+  });
+
+  describe('checked before anything is sent', () => {
+    describe.each([
+      { given: 'no code', typed: '', message: codeLabel },
+      { given: 'only spaces and a dash', typed: ' - ', message: codeLabel },
+      { given: 'five digits', typed: '12345', message: codeFormat },
+      { given: 'letters', typed: 'abc', message: codeFormat },
+    ])('given $given', ({ typed, message }) => {
+      it('shows the message on the field, which takes focus, and "Error: " in the title, sending nothing', async () => {
+        serve();
+        await renderCodeStep();
+        type(codeField(), typed);
+
+        press(signInButton());
+        await wait(0);
+
+        expect(codeField()).toHaveFocus();
+        expect(codeField()).toHaveAttribute('aria-invalid', 'true');
+        expect(codeField()).toHaveAccessibleDescription(`${codeHint} Error: ${message}`);
+        expectInOrder(screen.getByText(codeHint), screen.getByText(message, { selector: 'p' }), codeField());
+        // On the field only, as the code step's form has one field (form-validation.md rule 6).
+        expect(summary()).toBeNull();
+        expect(document.title).toBe('Error: Grow2Notes – Sign in');
+        expect(requestsTo(codePath)).toHaveLength(0);
+        expect(codeField()).toHaveValue(typed);
+        expect(alertAbove(signInButton())).toBeEmptyDOMElement();
+        expect(signInButton()).not.toHaveAttribute('aria-disabled');
+      });
+    });
+
+    it('focuses the field again on each press that finds the same message', async () => {
+      serve();
+      await renderCodeStep();
+      press(signInButton());
+      await wait(0);
+
+      press(signInButton());
+      await wait(0);
+
+      expect(codeField()).toHaveFocus();
+      expect(document.title).toBe('Error: Grow2Notes – Sign in');
+    });
+
+    it('takes the message, aria-invalid and "Error: " away as the code is fixed, focus left in the field', async () => {
+      serve();
+      await renderCodeStep();
+      type(codeField(), '12345');
+      press(signInButton());
+      await wait(0);
+
+      // Checked again at each change, so that the message says what is wrong now.
+      type(codeField(), '');
+
+      expect(codeField()).toHaveAccessibleDescription(`${codeHint} Error: ${codeLabel}`);
+
+      type(codeField(), '123 456');
+
+      expect(codeField()).not.toHaveAttribute('aria-invalid');
+      expect(codeField()).toHaveAccessibleDescription(codeHint);
+      expect(document.getElementById('code-error')).toBeNull();
+      expect(document.title).toBe('Grow2Notes – Sign in');
+      expect(codeField()).toHaveFocus();
+      expect(requestsTo(codePath)).toHaveLength(0);
+    });
+  });
+
+  it.each([
+    { kind: 'a space', typed: '123 456' },
+    { kind: 'a hyphen', typed: '123-456' },
+    { kind: 'full-width digits', typed: '１２３４５６' },
+  ])('sends a code typed with $kind as its six digits, with the antiforgery token', async ({ typed }) => {
+    serve();
+    await renderCodeStep();
+    type(codeField(), typed);
+
+    press(signInButton());
+    await wait(0);
+
+    const [init] = requestsTo(codePath);
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(init?.body as string)).toEqual({ code: '123456' });
+    const headers = new Headers(init?.headers);
+    expect(headers.get('Content-Type')).toBe('application/json');
+    expect(headers.get('X-XSRF-TOKEN')).toBe('token-1');
+  });
+
+  it('sends nothing as six digits are typed, however long they wait, and sends them for Enter', async () => {
+    serve();
+    await renderCodeStep();
+
+    type(codeField(), '123456');
+    await wait(60_000);
+
+    expect(requestsTo(codePath)).toHaveLength(0);
+
+    pressEnter(codeField());
+    await wait(0);
+
+    expect(requestsTo(codePath)).toHaveLength(1);
+  });
+
+  it('shows the screen in its place after a 200 Me, at the same address, its heading focused', async () => {
+    serve();
+    const { queryClient, router } = await renderSignedOut('/manage/anything');
+    const { location } = router.state;
+    const entries = window.history.length;
+    fillIn();
+    press(continueButton());
+    await wait(0);
+    type(codeField(), '123456');
+
+    press(signInButton());
+    await wait(0);
+
+    expect(queryClient.getQueryData(['me'])).toEqual(worker);
+    // The screen at that address, which no route matches.
+    expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toHaveFocus();
+    expect(screen.queryByRole('textbox', { name: codeLabel })).not.toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Page not found');
+    expect(router.state.location).toBe(location);
+    expect(window.history.length).toBe(entries);
+    // The app took the sign-in's answer, with no second request.
+    expect(requestsTo(mePath)).toHaveLength(1);
+  });
+
+  // The code step lasts 5 minutes from the accepted password (D69); a refusal from 4 min 50 s on ends it.
+  describe.each([401, 429])('given a %i for the code', (status) => {
+    it('at 4 min 49 s shows the A25 message in the summary, which takes focus, and empties the code', async () => {
+      serve({ code: () => problem(status) });
+      await renderCodeStep();
+      await wait(289_000);
+      type(codeField(), '123456');
+      const button = signInButton();
+
+      press(button);
+      await wait(0);
+
+      expect(summary()).toHaveFocus();
+      expect(summaryItems()).toEqual([{ text: failedMessage }]);
+      expectInOrder(
+        screen.getByRole('heading', { level: 2, name: 'There is a problem' }),
+        screen.getByRole('heading', { level: 1, name: codeLabel }),
+        codeField(),
+      );
+      expect(document.title).toBe('Error: Grow2Notes – Sign in');
+      expect(codeField()).toHaveValue('');
+      // It marks no field, which would say which part was wrong (A25).
+      expect(codeField()).not.toHaveAttribute('aria-invalid');
+      expect(codeField()).toHaveAccessibleDescription(codeHint);
+      expect(alertAbove(button)).toBeEmptyDOMElement();
+      expect(button).not.toHaveAttribute('aria-disabled');
+      expect(screen.queryByRole('textbox', { name: 'Email address' })).not.toBeInTheDocument();
+    });
+
+    it('at 4 min 50 s shows view A again, with the email, the summary focused and new passkey options', async () => {
+      serve({ code: () => problem(status) });
+      await renderCodeStep();
+      await wait(290_000);
+      type(codeField(), '123456');
+
+      press(signInButton());
+      await wait(0);
+
+      expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+      expect(screen.queryByRole('textbox', { name: codeLabel })).not.toBeInTheDocument();
+      expect(summary()).toHaveFocus();
+      expect(summaryItems()).toEqual([{ text: failedMessage }]);
+      expect(document.title).toBe('Error: Grow2Notes – Sign in');
+      expect(emailField()).toHaveValue(workerEmail);
+      expect(passwordField()).toHaveValue('');
+      expect(emailField()).not.toHaveAttribute('aria-invalid');
+      expect(passwordField()).not.toHaveAttribute('aria-invalid');
+      expect(alertAbove(continueButton())).toBeEmptyDOMElement();
+      expect(continueButton()).not.toHaveAttribute('aria-disabled');
+      expect(requestsTo(optionsPath)).toHaveLength(2);
+
+      // The new options open the prompt straight from the press.
+      press(passkeyButton());
+
+      expect(ceremony).toHaveBeenCalledExactlyOnceWith({ optionsJSON: passkeyOptions(2) });
+    });
+  });
+
+  it('leaves view A\'s passkey sign-in asking for options and saying what it must once A shows again', async () => {
+    serve({ code: () => problem(401), passkey: () => problem(401) });
+    await renderCodeStep();
+    await wait(290_000);
+    type(codeField(), '123456');
+    press(signInButton());
+    await wait(0);
+    expect(requestsTo(optionsPath)).toHaveLength(2);
+
+    // The options fetched as A showed again are now 4 minutes old, so the press asks for new ones first.
+    await wait(240_000);
+    press(passkeyButton());
+    await wait(0);
+
+    expect(requestsTo(optionsPath)).toHaveLength(4);
+    expect(ceremony).toHaveBeenCalledExactlyOnceWith({ optionsJSON: passkeyOptions(3) });
+    expect(requestsTo(passkeyPath)).toHaveLength(1);
+    expect(summary()).toHaveFocus();
+    expect(summaryItems()).toEqual([{ text: failedMessage }]);
+  });
+
+  it('shows a refusal after a fixed format error with no message on the field, which is not marked', async () => {
+    serve({ code: () => problem(401) });
+    await renderCodeStep();
+    type(codeField(), '12345');
+    press(signInButton());
+    await wait(0);
+    type(codeField(), '123456');
+
+    press(signInButton());
+    await wait(0);
+
+    expect(summary()).toHaveFocus();
+    expect(codeField()).not.toHaveAttribute('aria-invalid');
+    expect(codeField()).toHaveAccessibleDescription(codeHint);
+    expect(document.getElementById('code-error')).toBeNull();
+    // One "Error: ", the summary's.
+    expect(document.title).toBe('Error: Grow2Notes – Sign in');
+  });
+
+  it('empties the summary on the next press, and focuses it again when that code is refused too', async () => {
+    serve({ code: () => problem(401) });
+    await renderCodeStep();
+    type(codeField(), '123456');
+    press(signInButton());
+    await wait(0);
+
+    type(codeField(), '654321');
+    press(signInButton());
+
+    expect(summary()).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+
+    await wait(0);
+
+    expect(summary()).toHaveFocus();
+    expect(requestsTo(codePath)).toHaveLength(2);
+  });
+
+  describe.each([
+    { failure: 'no connection', answer: noConnection, message: 'Not signed in: no connection. Try again.' },
+    { failure: 'a 503', answer: () => problem(503), message: 'Not signed in: something went wrong. Try again.' },
+  ])('given $failure', ({ answer, message }) => {
+    // Only a refusal ends the step: a request that got no answer may be sent again.
+    it.each([
+      { at: '4 min 49 s', after: 289_000 },
+      { at: '4 min 50 s', after: 290_000 },
+    ])('at $at says so above Sign in, where focus stays, keeping the code, with no summary', async ({ after }) => {
+      serve({ code: answer });
+      await renderCodeStep();
+      await wait(after);
+      type(codeField(), '123456');
+      const button = signInButton();
+
+      press(button);
+      await wait(0);
+
+      expect(alertAbove(button)).toHaveTextContent(message);
+      expect(button).toHaveFocus();
+      expect(button).not.toHaveAttribute('aria-disabled');
+      expect(summary()).toBeNull();
+      expect(document.title).toBe('Grow2Notes – Sign in');
+      expect(codeField()).toHaveValue('123456');
+      expect(codeField()).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('empties the alert line on the next press, so that the same failure is announced again', async () => {
+      serve({ code: answer });
+      await renderCodeStep();
+      type(codeField(), '123456');
+      const button = signInButton();
+      press(button);
+      await wait(0);
+
+      press(button);
+
+      expect(alertAbove(button)).toBeEmptyDOMElement();
+
+      await wait(0);
+
+      expect(alertAbove(button)).toHaveTextContent(message);
+      expect(requestsTo(codePath)).toHaveLength(2);
+    });
+  });
+
+  it('asks for no passkey options while it shows, through refusals and failures', async () => {
+    serve({
+      code: vi
+        .fn<() => Promise<Response>>()
+        .mockImplementationOnce(() => problem(401))
+        .mockImplementationOnce(noConnection),
+    });
+    await renderCodeStep();
+
+    for (const sent of [1, 2]) {
+      await wait(60_000);
+      type(codeField(), '123456');
+      press(signInButton());
+      await wait(0);
+      expect(requestsTo(codePath)).toHaveLength(sent);
+    }
+    await wait(169_000);
+
+    expect(requestsTo(optionsPath)).toHaveLength(1);
+  });
+
+  it('cancels a passkey prompt still open as it shows, which then says and asks for nothing', async () => {
+    const signals = promptUntilCancelled();
+    const consoleError = vi.spyOn(console, 'error');
+    serve({ code: () => problem(401) });
+    await renderSignedOut();
+    press(passkeyButton());
+    fillIn();
+
+    press(continueButton());
+    await wait(0);
+
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(true);
+    expect(codeField()).toHaveFocus();
+    expect(summary()).toBeNull();
+    expect(alertAbove(signInButton())).toBeEmptyDOMElement();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+    expect(requestsTo(optionsPath)).toHaveLength(1);
+    expect(requestsTo(passkeyPath)).toHaveLength(0);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    // Nor does it say anything once A shows again.
+    await wait(290_000);
+    type(codeField(), '123456');
+    press(signInButton());
+    await wait(0);
+
+    expect(alertAbove(passkeyButton())).toBeEmptyDOMElement();
+    expect(passkeyButton()).not.toHaveAttribute('aria-disabled');
+    expect(summaryItems()).toEqual([{ text: failedMessage }]);
+  });
+
+  it('sends one request per press, nothing for a second press or Enter while busy, never disabled', async () => {
+    serve({ code: noAnswer });
+    await renderCodeStep();
+    type(codeField(), '123456');
+    const button = signInButton();
+
+    press(button);
+    press(button);
+    await wait(0);
+
+    expect(requestsTo(codePath)).toHaveLength(1);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('disabled');
+    expect(button).toHaveFocus();
+
+    pressEnter(codeField());
+    await wait(0);
+
+    expect(requestsTo(codePath)).toHaveLength(1);
+  });
+
+  it('shows the busy label "Signing in…" at 400 ms, not at 399 ms, and writes it to the status region', async () => {
+    serve({ code: noAnswer });
+    await renderCodeStep();
+    type(codeField(), '123456');
+    const button = signInButton();
+
+    press(button);
+    await wait(399);
+
+    expect(button).toHaveAccessibleName('Sign in');
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+
+    await wait(1);
+    act(() => {
+      vi.advanceTimersToNextFrame();
+    });
+
+    expect(button).toHaveAccessibleName('Signing in…');
+    expect(screen.getByRole('status')).toHaveTextContent('Signing in…');
+  });
+
+  it('leaves no email, password or code in localStorage, sessionStorage or the query client', async () => {
+    serve({
+      code: vi
+        .fn<() => Promise<Response>>()
+        .mockImplementationOnce(() => problem(401))
+        .mockImplementationOnce(() => json(worker)),
+    });
+    const { queryClient } = await renderCodeStep();
+    type(codeField(), '135 790');
+    press(signInButton());
+    await wait(0);
+    type(codeField(), '246 801');
+    press(signInButton());
+    await wait(0);
+
+    expect(queryClient.getQueryData(['me'])).toEqual(worker);
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+    // Not the times of the queries' updates, whose digits could hold a code by chance.
+    const cached = JSON.stringify(
+      queryClient.getQueryCache().getAll().map(({ queryKey, state }) => [queryKey, state.data, state.error]),
+    );
+    for (const typed of [workerEmail, workerPassword, '135 790', '135790', '246 801', '246801']) {
+      expect(cached).not.toContain(typed);
+    }
   });
 });

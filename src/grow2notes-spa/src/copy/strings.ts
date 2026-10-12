@@ -18,13 +18,22 @@ export const strings = {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',
     goToToday: 'Go to Today',
   },
-  /** Sign-in's view A (sign-in.md), whose `<h1>` is its page name, "Sign in". */
+  /**
+   * Sign-in's views A and B (sign-in.md): A's `<h1>` is its page name, "Sign in", and B's, the code step's, is the code
+   * field's label, `oneTimeCode.label`.
+   */
   signIn: {
-    /** Under the `<h1>`. */
+    /** Under A's `<h1>`. */
     hint: 'Sign in the way you chose when you set up your account.',
     passkey: 'Sign in with a passkey',
-    /** The passkey button's busy label. */
+    /** The busy label of the passkey button and of the code step's Sign in. */
     busy: 'Signing in…',
+    /** The code field's hint on the code step (sign-in.md component 10); setup's view G has a hint of its own. */
+    codeHint:
+      'Open your authenticator app and find Grow2Notes. If the code changes while you’re typing, you can still '
+      + 'use it.',
+    /** The code step's button, which sends the code (sign-in.md component 11). */
+    signIn: 'Sign in',
     /** The password field's label (the email field's is `emailAddress`). */
     password: 'Password',
     /** The email and password form's messages, inline and linked in the error summary (form-validation.md). */

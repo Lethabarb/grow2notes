@@ -20,9 +20,9 @@ export type OneOptions<T> = {
   /** Forgets the options held, once a credential made with them has gone to the server, which ends their ceremony. */
   spent: () => void;
   /**
-   * Settles once no request for options is on its way: at once when none is, or as the one on its way ends, however
-   * it ends. It starts none. The same cookie keeps a password sign-in's code step, which the answer to a request
-   * still on its way when the password was accepted would end (S00.04.05's Notes).
+   * Settles as the request for options on its way ends, however it ends, or at once when none is. It starts none.
+   * The same cookie keeps a password sign-in's code step, which the answer to a request still on its way when the
+   * password was accepted would end (S00.04.05's Notes).
    */
   idle: () => Promise<void>;
 };
@@ -60,10 +60,7 @@ function oneOptions<T>(fetchOptions: () => Promise<T>): OneOptions<T> {
       held = undefined;
     },
     async idle() {
-      // Again for a request that started as the one awaited ended, as a failed passkey sign-in starts one.
-      while (pending !== undefined) {
-        await pending.catch(() => {});
-      }
+      await pending?.catch(() => {});
     },
   };
 }
