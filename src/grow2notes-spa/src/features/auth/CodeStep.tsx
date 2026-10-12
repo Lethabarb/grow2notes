@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/api.ts';
-import { meQuery, type Me } from '../../api/me.ts';
+import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { ErrorSummary } from '../../components/ErrorSummary.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
@@ -82,7 +82,7 @@ export function CodeStep({ passwordAcceptedAt, onExpired }: CodeStepProps) {
       // A direct call, not a mutation, so that the code never sits in TanStack's mutation cache, and one request per
       // press, never retried, as each wrong code counts towards the lockout (sign-in.md *Interactions* 4).
       const me = await api<Me>('/api/auth/login/totp', { method: 'POST', body: { code: normaliseCode(code) } });
-      queryClient.setQueryData(meQuery.queryKey, me);
+      await setMe(queryClient, me);
     } catch (error) {
       if (!mounted.current) {
         return;

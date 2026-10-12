@@ -381,6 +381,28 @@ describe('the start-up', () => {
       expect(document.title).toBe('Grow2Notes – Today');
     });
 
+    // A click that leaves focus where it was, on <body>, as one does in Safari on macOS, so that Try again's own focus
+    // never marks it used (app-shell.md *Accessibility checklist*).
+    it.each([
+      { answered: '200', reply: answerWith(worker), heading: `Today, Thursday 1${nbsp}October` },
+      { answered: '401', reply: problem(401), heading: 'Sign in' },
+    ])('hands focus to the new <h1> after a click that does not focus it, answered $answered', async ({
+      reply,
+      heading,
+    }) => {
+      server = noConnection;
+      renderApp();
+      await wait(2_000);
+      expect(document.body).toHaveFocus();
+      server = reply;
+
+      fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName(heading);
+      expect(pageHeading()).toHaveFocus();
+    });
+
     it('hands focus to the <h1> when a refresh brings the screen while Try again has focus', async () => {
       server = noConnection;
       renderApp();

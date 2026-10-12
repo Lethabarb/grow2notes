@@ -271,10 +271,14 @@ S00.05.01's router and shell, and add `refreshMe()` with its four triggers, the 
 with `index.html`'s boot line and `<noscript>`, the crash pages through two route error boundaries, and Page not found
 for a region whose request is refused. They change the SPA and its tests, the end-to-end tests and tests/README.md,
 four UX files (app-shell.md, app-shell-nav.md, notification-badge.md and empty-loading-error.md) and the Notes of five
-later stories, and no server code; none of them needs the operator. app-shell.md's open question 3, whether "when a page
-loads" means every screen change, is built as specified (its *Notes*). It is 20 in the *Plan* and in the list below,
-as 17 and 18 are left for S00.04.03 and S00.04.05; at each pull request the numbers are made to follow what `main` has
-by then.
+later stories, and no server code; none of them needs the operator. As built, with its branch review, they change the
+SPA and its tests, the end-to-end tests and tests/README.md, 14 UX files (those four, date-navigation.md, note-form.md,
+note-read-view.md, participant-notes.md, review-panel.md, sign-in-form.md, sign-in.md, tabs-segmented.md, today.md and
+user-management.md), the Notes of S00.04.07, S00.04.08, S00.05.02, S00.06.01 and S02.06.01, and the criteria and Notes
+of S03.01.01, S03.01.02 and S03.02.01, which refresh `me` in place of invalidating it, and still no server code.
+app-shell.md's open question 3, whether "when a page loads" means every screen change, is built as specified (its
+*Notes*). It is 20 in the *Plan* and in the list below, as 17 and 18 are S00.04.03 and S00.04.05, pulled in the same
+day on their own branches; at each pull request the numbers are made to follow what `main` has by then.
 
 ## Definition of Ready check
 

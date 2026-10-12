@@ -38,6 +38,14 @@ const account = { email: 'sam.lee@example.org', displayName: 'Sam Lee' };
 const userId = '6f9619ff-8b86-d011-b42d-00cf4fc964ff';
 const setupLink = `/setup#u=${userId}&t=made-up-token`;
 const me = { userId, displayName: 'Sam Lee', role: 'Worker', organisationName: 'Example Care', today: '2026-10-12' };
+// A made-up manager (A35) whose session is live in the same browser, as setup's pages show whoever is signed in.
+const someoneElse = {
+  userId: '0c1d7e52-93a8-4b6f-a2d4-58e1f9c3b706',
+  displayName: 'Riley Ng',
+  role: 'Manager',
+  organisationName: 'Example Care',
+  today: '2026-10-12',
+};
 
 // Made-up creation options, each with a challenge of its own, and the passkey that the prompt makes with them.
 function creationOptions(challenge: string): SimpleWebAuthn.PublicKeyCredentialCreationOptionsJSON {
@@ -364,6 +372,52 @@ describe('ChooseMethod (view E)', () => {
 
     expect(localStorage).toHaveLength(0);
     expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('keeps its Me in [\'me\'] when a refresh sent before its answer answers after it, for another', async () => {
+    // Another person is signed in, so /me answers them until setup's answer replaces the cookie; the refresh that the
+    // window's focus sends as the prompt closes went with their cookie, and is held until after setup's answer.
+    let session = someoneElse;
+    const stale = later<Response>();
+    let holdNext = false;
+    const server = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((path, init) => {
+      if (path !== mePath) {
+        return server?.(path, init) ?? noConnection();
+      }
+
+      if (holdNext) {
+        holdNext = false;
+        return stale.value;
+      }
+
+      return json(session);
+    });
+    const prompt = later<SimpleWebAuthn.RegistrationResponseJSON>();
+    webAuthn.startRegistration.mockReturnValueOnce(prompt.value);
+    answers[passkeyPath].push(() => {
+      session = me;
+      return json(me);
+    });
+    const { client } = await openViewE();
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(someoneElse);
+
+    pressPasskey();
+    holdNext = true;
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    prompt.give(credential);
+    await wait(0);
+    stale.give(new Response(JSON.stringify(someoneElse), { headers: { 'Content-Type': 'application/json' } }));
+    await wait(0);
+
+    expect(window.location.pathname).toBe('/');
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(me);
+    expect(screen.getByText('Signed in as Sam Lee')).toBeInTheDocument();
+    expect(screen.queryByText('Signed in as Riley Ng')).not.toBeInTheDocument();
+    // A worker's nav, not the manager's.
+    expect(within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('link')).toHaveLength(1);
   });
 
   describe('when the passkey is not set up', () => {

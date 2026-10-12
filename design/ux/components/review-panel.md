@@ -451,8 +451,11 @@ export function ReviewPanel(p: Props) {
 
   useEffect(() => { if (outcome.kind !== 'open') focusRef.current?.focus(); }, [outcome.kind]);
 
-  const refresh = () => ['note', 'reviews', 'me', 'history']
-    .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+  // ['me'] is never invalidated, as its observers are all disabled: refreshMe() asks for it (app-shell.md *Refresh*).
+  const refresh = () => {
+    ['note', 'reviews', 'history'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    refreshMe(qc).catch(() => {});
+  };
 
   const finish = (review: Review) => { unsent.delete(p.noteId); setOutcome({ kind: 'done', review }); refresh(); };
 

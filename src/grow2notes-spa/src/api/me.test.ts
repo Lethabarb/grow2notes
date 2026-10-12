@@ -1,7 +1,7 @@
-import { QueryObserver } from '@tanstack/react-query';
+import { CancelledError, QueryObserver } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api.ts';
-import { meQuery, refreshMe, type Me } from './me.ts';
+import { meQuery, refreshMe, setMe, type Me } from './me.ts';
 import { createQueryClient } from './queryClient.ts';
 
 // A made-up manager (A35).
@@ -9,6 +9,15 @@ const manager: Me = {
   userId: '9d3a61f0-7c2b-4e58-b1a4-0f6e2d8c5b97',
   displayName: 'Sam Lee',
   role: 'Manager',
+  organisationName: 'Riverbend Support',
+  today: '2026-10-01',
+};
+
+// A made-up worker (A35), who signs in on the same browser.
+const worker: Me = {
+  userId: '2e7b9c14-5a03-4f6d-8b21-c9e0d4a7f315',
+  displayName: 'Alex Pham',
+  role: 'Worker',
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };
@@ -91,5 +100,46 @@ describe('refreshMe', () => {
 
     await expect(refreshMe(client)).rejects.toStrictEqual(new ApiError(401));
     expect(client.getQueryState(meQuery.queryKey)).toMatchObject({ status: 'error', data: manager });
+  });
+});
+
+describe('setMe', () => {
+  it("puts the Me in ['me'], where a refresh sent before it, answered after it for another, never lands", async () => {
+    let answerBefore: (response: Response) => void = () => undefined;
+    fetchMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            answerBefore = resolve;
+          }),
+      )
+      .mockImplementation(() => answerWith(worker));
+    const client = createQueryClient();
+    // Sent with the cookie from before the sign-in, and held. Its caller is told nothing of the other person.
+    const before = expect(refreshMe(client)).rejects.toBeInstanceOf(CancelledError);
+
+    await setMe(client, worker);
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(worker);
+
+    answerBefore(new Response(JSON.stringify(manager), { headers: { 'Content-Type': 'application/json' } }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(client.getQueryData(meQuery.queryKey)).toEqual(worker);
+    await before;
+    // The next refresh sends a request of its own, with the new cookie, rather than sharing the one cancelled.
+    await expect(refreshMe(client)).resolves.toEqual(worker);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("cancels only ['me'] itself, not a query under it such as Today's drafts", async () => {
+    fetchMock.mockImplementation(() => new Promise(() => {}));
+    const client = createQueryClient();
+    const drafts = new QueryObserver(client, { queryKey: ['me', 'drafts'], queryFn: () => fetch('/made-up') });
+    drafts.subscribe(() => {});
+    expect(client.getQueryState(['me', 'drafts'])?.fetchStatus).toBe('fetching');
+
+    await setMe(client, worker);
+
+    expect(client.getQueryState(['me', 'drafts'])?.fetchStatus).toBe('fetching');
   });
 });

@@ -232,7 +232,7 @@ There is no illustration, icon, coloured box, status code or red text in any of 
 | Try again | Shared secondary button (`primary-actions.md`) | Darker border | 3 px outline, 2 px offset | Pressed tint | **Never `disabled`** | `aria-disabled="true"`, "Loading…" after 400 ms, same width | Back to "Try again", keeps focus | – | – |
 | Empty sentence | Body text, normal text colour | – | Not focusable | – | – | – | – | Shown | – |
 | Empty-state link (Today, managers) | Link style | Underline thickens | 3 px outline | Pressed tint | Never | – | – | Shown | – |
-| Whole-page `<h1>` | Page heading style | – | `tabindex="-1"`; focused by the shell's route-change rule (app-shell.md), not by itself on mount: on arrival at a new screen but on a first load, and when the message takes the place of what had focus with no location change; outline on `:focus-visible` only | – | – | – | – | – | – |
+| Whole-page `<h1>` | Page heading style | – | `tabindex="-1"`; not focused by itself on mount: the shell's route-change rule (app-shell.md *The route-change rule (one owner)*) focuses it on arrival at a new screen, but not on a first load; the case with no location change, where the message takes the place of what had focus, is S00.05.02's to add to that rule; outline on `:focus-visible` only | – | – | – | – | – | – |
 | Whole-page link ("Go to Today", "Read the note") | Link style | Underline thickens | 3 px outline | Pressed tint | Never | – | – | – | – |
 
 Read-only does not apply: these states hold no data the person could change. The read-only screens (read view, a manager's view of a draft, an archived participant) use these same states while they load.

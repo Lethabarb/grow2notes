@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
-import { meQuery, type Me } from '../../api/me.ts';
+import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { useErrorTitle } from '../../components/useErrorTitle.ts';
@@ -83,9 +83,10 @@ export function FinishSetup({ password, onTimedOut }: FinishSetupProps) {
         method: 'POST',
         body: { password, totpCode: normaliseCode(code) },
       });
-      // The shell keeps the `401` that its `/me` got before setup and never asks again by itself, so it is given the
-      // signed-in user, which Today then shows with no request of its own (sign-in.md *Interactions* 12).
-      queryClient.setQueryData(meQuery.queryKey, me);
+      // Into `['me']` before the page goes to `/`, so that Today shows at once for the person now signed in, not what
+      // the shell's `/me` got before setup, a `401` and so sign-in, until the new location's refresh answers
+      // (sign-in.md *Interactions* 12).
+      await setMe(queryClient, me);
       finish();
       // Back to `/setup`'s entry, two before G's, which the setup layout replaces with Today's.
       if (mounted.current) {

@@ -155,9 +155,10 @@ owner can approve them.
 - **[Convention]** Apple: "Use badges to indicate critical information is available" and save them for critical
   information. AgDS: place the badge "next to associated content – for example, Messages (1)", at 4.5:1 text
   contrast. https://design-system.agriculture.gov.au/components/notification-badge
-- **[Convention, library behaviour]** TanStack Query 5 refetches on `visibilitychange` only by default. To also
-  refetch on window `focus`, as design.md §6.8 asks, use `focusManager.setEventListener`.
-  https://tanstack.com/query/v5/docs/framework/react/guides/window-focus-refetching
+- **[Convention, library behaviour]** TanStack Query 5's own focus refetching listens for `visibilitychange` only by
+  default; `focusManager.setEventListener` would add window `focus`. The shell uses neither for `/api/auth/me`: its
+  one `refreshMe()` has listeners of its own (*Implementation notes* › *Refresh* below; app-shell.md *Conflicts
+  resolved* 6). https://tanstack.com/query/v5/docs/framework/react/guides/window-focus-refetching
 
 **Targets**
 
@@ -276,14 +277,10 @@ Export record · Page not found · There is a problem · Could not connect. Afte
   refreshing on focus is not the result of an action and would talk over the page. The count is part of the link's
   name, so screen readers hear it when they reach the link. It is never shown by colour or a dot alone. Use the dark
   brand accent, not red, which this app keeps for errors such as "Not saved" [Opinion].
-- **When `/api/auth/me` is refreshed**, which refreshes the badge, `today`, the role and the name:
-  - on full page load;
-  - on every client-side screen change (the single-page-app meaning of "when a page loads", §4.6);
-  - on window `focus` and on `visibilitychange` to visible (§6.8);
-  - after a manager marks a note reviewed;
-  - after any submit or save that returns a `flagStatus`.
-
-  There is no polling (§8.5).
+- **When `/api/auth/me` is refreshed**, which refreshes the badge, `today`, the role and the name: through
+  `refreshMe()` alone, at the triggers that app-shell.md *Refresh of `/api/auth/me`* lists, the one list of them.
+  Among them are the start-up, every client-side screen change (the single-page-app meaning of "when a page loads",
+  §4.6), and window `focus` and `visibilitychange` to visible (§6.8). There is no polling (§8.5).
 - **Account menu**: an APG disclosure. Tapping Account toggles the panel. Escape, from the button or from inside the
   panel, closes it and returns focus to Account. Moving to another screen closes it. It needs no outside-click
   handling, because the panel is in the page flow rather than floating over it. It never opens on hover.

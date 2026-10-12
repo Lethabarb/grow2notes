@@ -596,7 +596,9 @@ signed-in manager's own user (user-management.md), and Today's list answering fo
 (today.md). The `['me']` observer (`meQuery`) has `enabled: false`, as one that mounts while `['me']` holds no answer
 would otherwise fetch by itself, and `staleTime: Infinity`, so nothing else triggers it; `fetchQuery` ignores
 `enabled`. So a refresh is always `refreshMe()`, never `invalidateQueries`, which refetches no query whose observers
-are all disabled. **No timer, no `refetchInterval`, no push** (§6.8). The `QueryClient` default is
+are all disabled. A sign-in or a setup puts its `Me` in `['me']` through `setMe()`, which cancels a refresh in flight
+first (sign-in.md *Interactions* 5), as that request went with the cookie from before and its answer could land after
+the new person's. **No timer, no `refetchInterval`, no push** (§6.8). The `QueryClient` default is
 `refetchOnWindowFocus: false`, so a draft is never refetched over the text on screen.
 
 **Queries that opt in to `refetchOnWindowFocus: true`** (the complete list; a screen that needs it adds itself here):

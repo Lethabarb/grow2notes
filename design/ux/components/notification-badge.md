@@ -79,13 +79,14 @@ The badge is a single component with one source of data: `toReviewCount` from `G
 ### Behaviour
 
 1. **Source:** `toReviewCount` from `GET /api/auth/me`, held only in TanStack Query's memory cache. There is no persister and no browser storage, not even for this number (D22).
-2. **Refresh triggers, and nothing else:**
+2. **Refresh triggers:** `refreshMe()` at the triggers that app-shell.md *Refresh of `/api/auth/me`* lists, the one
+   list of them, and nothing else. Those that matter most for the badge:
    - **Page load:** the first `me` call at sign-in or start-up, **and each time the manager opens a screen** in the single-page app (route change). In an SPA, a user who opens a screen experiences it as a page load, and without this the badge would stay stale for a whole visit. **[Opinion]**: this is how design.md 4.6/6.8 reads for an SPA; see Open questions in the summary.
    - **Window focus:** window `focus` and `visibilitychange` to visible, each calling the shell's one `refreshMe()`
      (app-shell.md *Refresh of `/api/auth/me`*; see code), not TanStack's own focus refetching.
    - **After this manager's own Mark reviewed succeeds:** `refreshMe()` along with invalidating the reviews list, so
-     the badge and the "To review (n)" tab never disagree because of the manager's own action. Mark reviewed is
-     followed by a screen update, which is a page load in this sense.
+     the badge and the "To review (n)" tab never disagree because of the manager's own action. Mark reviewed
+     changes no location, so no screen change refreshes `me` for it.
    - **No** timers, no polling (6.8), no push, no WebSocket.
 3. **Show exactly the number, with no "99+" cap.** **[Opinion]** Caps are convention only (see Best practice). A 3-digit number is no wider than "99+", and an organisation with fewer than 20 workers will not plausibly reach 1,000 open flags. The exact number also matches the "To review (n)" tab, so the same queue never shows two numbers. The pill grows to fit.
 4. **Zero hides the pill and the hidden text.** The link reads "Flagged".

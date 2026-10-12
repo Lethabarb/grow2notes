@@ -43,6 +43,17 @@ export function refreshMe(queryClient: QueryClient): Promise<Me> {
 }
 
 /**
+ * Puts the `Me` that a sign-in or a setup answered into the `['me']` query (sign-in.md *Interactions* 5). A refresh
+ * still in flight is cancelled first, TanStack's order for a write by hand: it went with the cookie from before, maybe
+ * another person's, and its answer, landing after this one, would put that person back on screen.
+ */
+export async function setMe(queryClient: QueryClient, me: Me): Promise<void> {
+  // Exact, so that a query under it, such as Today's `['me', 'drafts']`, is left alone.
+  await queryClient.cancelQueries({ queryKey: meQuery.queryKey, exact: true });
+  queryClient.setQueryData(meQuery.queryKey, me);
+}
+
+/**
  * The signed-in user, for a screen inside the shell, which shows its screens only once `['me']` holds an answer, and
  * keeps that answer through a refresh that fails.
  */

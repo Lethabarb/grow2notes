@@ -8,7 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
-import { meQuery, type Me } from '../../api/me.ts';
+import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { PageHeading } from '../../components/PageHeading.tsx';
@@ -110,9 +110,10 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
         method: 'POST',
         body: { credentialJson: JSON.stringify(credential), name: passkeyName },
       });
-      // The shell keeps the answer its `/me` got on this page, a `401` for a person with no session until now, and
-      // never asks again by itself, so it is given the signed-in user (sign-in.md *Interactions* 5).
-      queryClient.setQueryData(meQuery.queryKey, me);
+      // Into `['me']` before the page goes to `/`, so that Today shows at once for the person now signed in, not what
+      // the shell's `/me` got before setup, a `401` and so sign-in, until the new location's refresh answers
+      // (sign-in.md *Interactions* 5).
+      await setMe(queryClient, me);
       // Replaced, so that Back from Today does not come back to setup. Leaving the setup layout drops its memory.
       void navigate('/', { replace: true });
     } catch (error) {
