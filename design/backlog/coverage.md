@@ -137,7 +137,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | `app-shell.md › Structure, privacy and naming` | F00.05 | S00.01.05 (the D42 check), S00.01.01 (document head) | |
+| 1 | `app-shell.md › Structure, privacy and naming` | F00.05 | S00.01.01 (document head) | The D42 bullet is kept by review, with no automated check (D72, 12 October 2026) |
 | 2 | `app-shell.md › Navigation` | F00.05 | | |
 | 3 | `app-shell.md › Refresh` | F00.05 | S03.03.03 adds `toReviewCount` | |
 | 4 | `app-shell.md › Account and Sign out` | F00.04 | S01.04.02 (Guide prompts bullet), S02.02.05 (autosave bullet) | See *Rows to watch* |

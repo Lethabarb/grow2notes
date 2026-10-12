@@ -508,7 +508,7 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
 - [ ] Times are Melbourne time, lower-case am/pm with a non-breaking space; 12:00 shows "midday" (test 02:00Z on
   1 October 2026), and a time just after the daylight-saving change on 4 October 2026 is correct.
 - [ ] Nowhere on the screen: a count of notes, "Not started", "Missing", "No note", "Overdue", progress, or the parent
-  company's name (the CI copy test from microcopy.md fails the build if it appears).
+  company's name (checked by review, D42, D72).
 - [ ] Long names (100 characters, unbroken strings, "O’Brien-Smith", "Zoë") wrap and are never truncated.
 
 **Order and layout**

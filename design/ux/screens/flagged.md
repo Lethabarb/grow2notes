@@ -502,8 +502,8 @@ is checked before sending) · 4.1.2 Name, Role, Value · 4.1.3 Status Messages.
       Show older error, first-load error (the note's states are tested in participant-notes.md).
 - [ ] Manual pass with NVDA + Chrome, VoiceOver + iOS Safari and TalkBack + Android Chrome confirms the
       announcements in "Interactions and focus" and that nothing is read twice.
-- [ ] A copy test finds no parent company's name (CI secret, microcopy.md §8), no negative contractions in new strings, and no "resolved", "closed",
-      "actioned", "please", "sorry" or "click".
+- [ ] A copy test finds no negative contractions in new strings, and no "resolved", "closed", "actioned", "please",
+      "sorry" or "click"; review finds no trace of the parent company's name (D42, D72; microcopy.md §8).
 
 ---
 

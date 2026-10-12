@@ -713,7 +713,8 @@ Redundant Entry (values kept after any error; Edit prefilled) · 4.1.2 Name, Rol
 - AC2. A manager reaches the list from Manage > Users; Manage shows `aria-current="true"`.
 - AC3. No page title, URL, query string, router `state`, `localStorage`, `sessionStorage` or IndexedDB entry contains a
   user's name or email at any point (check DevTools Application tab and `history.state` after every flow).
-- AC4. The parent company's name appears nowhere on these pages or in the invite and reset emails (CI check).
+- AC4. The parent company's name appears nowhere on these pages or in the invite and reset emails (checked by review,
+  D72).
 
 **List**
 - AC5. With Sam Lee (Active Manager, the viewer), Jo Smith (Active Worker), Alex Park (Invited Worker) and Chris Ng

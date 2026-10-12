@@ -620,7 +620,7 @@ The `<h1>` and the summary container are focus targets (`tabIndex={-1}`), not ta
 - [ ] At 320 px wide, and at 200% text, there is no horizontal scroll, including with a `.docx` file name in the status line.
 - [ ] Measured target heights: date inputs and Export are at least 48 px, and radio and checkbox rows are at least 56 px.
 - [ ] Forced-colours emulation: field borders, radio and checkbox states, the error bar and the focus ring are all visible.
-- [ ] This screen's own copy test finds no "download" in its strings (except the shared ready line's "Look in your downloads."); microcopy.md's `copy.test.ts` finds no "please", "sorry" or "invalid" in them, and the D42 check (`ForbiddenNameTests`, microcopy.md §8) finds the parent company's name nowhere in them.
+- [ ] This screen's own copy test finds no "download" in its strings (except the shared ready line's "Look in your downloads."); microcopy.md's `copy.test.ts` finds no "please", "sorry" or "invalid" in them, and review finds the parent company's name nowhere in them (D42; no automated check, D72, microcopy.md §8).
 
 **Real devices** (test environment with the production CSP, before M5 sign-off; file-download.md, export-form.md)
 - [ ] iPhone Safari, iPhone Chrome, Android Chrome and Samsung Internet each save (or offer to save) the file for a fast export **and** for one taking more than 10 s, after the click's user activation has expired. If one cannot, apply file-download.md's plain-link contingency to this screen only.

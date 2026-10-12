@@ -462,7 +462,8 @@ import styles from './Sep.module.css';   // .vh = visually hidden
 export const Sep = () => (<><span aria-hidden="true"> · </span><span className={styles.vh}>, </span></>);
 ```
 
-**Keeping it consistent.** Four checks, each run by CI on every pull request:
+**Keeping it consistent.** Three checks, each run by CI on every pull request, and review for the parent company's
+name:
 
 - **No words typed into JSX.** ESLint's own `no-restricted-syntax` rule keeps them out, so that every visible string
   goes through `src/copy`. [Opinion: the cheapest way to make the glossary enforceable for a solo developer]
@@ -498,22 +499,11 @@ export const Sep = () => (<><span aria-hidden="true"> · </span><span className=
   because Safari's Intl data can differ. The WebKit run sets the browser's zone to America/Los_Angeles, so that CI
   runs the dates in a zone behind UTC, where a date read in the device's own time falls on the day before, as well
   as in jsdom under the job's `TZ=UTC`.
-- **The parent company's name (D42).** A .NET test, `ForbiddenNameTests` in `tests/Grow2Notes.Tests/Fixtures/`, rather
-  than a part of `copy.test.ts`, because the name must appear nowhere in the repository or the build, not just nowhere
-  in `src/copy`. It searches every file that `git ls-files` lists, each one's path, and every file of the SPA build in
-  `wwwroot`: so `src/copy`, `index.html`, the stylesheets, the file names and the bundle, and the API's setup email
-  template, the passkey domain and the authenticator issuer, which their stories keep in tracked files, never only in a
-  portal setting or a secret. E04's and E05's tests check each generated Word or PDF file's text and properties with
-  the same matcher, `ForbiddenName` (F04.01's criteria; S05.01.01's Notes). The match ignores case and takes the
-  name's words in order, with any run of characters other than letters and digits, or none, between them, so the name
-  is found wrapped across two lines of Markdown, hyphenated in a file name or run together in a domain; a match on an
-  innocent word fails too, to be looked at rather than passed. A failure names each file and line, never the name. It
-  searches the files in the pull request, not the history or commit messages. The name is never written into the
-  repository: the test reads it from the environment variable `FORBIDDEN_NAME`, which CI's Test step fills from the
-  repository's Actions secret of that name, and from a Dependabot secret of the same name on Dependabot's pull
-  requests (S06.01.03). With no name it fails where `CI` is set, so a missing secret cannot pass unseen (a fork's pull
-  request, which gets no secrets, fails it too), and is skipped elsewhere. tests/README.md says how to run it on a
-  machine, keeping the name out of every file and the shell's history.
+- **The parent company's name (D42).** No automated check searches for it, and no secret holds it (D72): review keeps
+  it out, as it has every change so far. The developer, and any agent working on the code, search each change's diff
+  for it before committing, ignoring case and allowing for the name wrapped across two lines of Markdown, hyphenated
+  in a file name or run together in a domain; the Definition of Done's check by hand covers screens, page titles,
+  emails and files, the setup email's template and the generated Word and PDF files among them.
 
 Server-side strings (setup email, report and export files) follow the same glossary and formats; §11 fixes their
 exact layout. In .NET, use the `Australia/Melbourne` time zone and compose the strings the same way rather than

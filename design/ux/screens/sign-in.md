@@ -610,9 +610,8 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
 - [ ] Credentials are sent by a direct API call, not through a TanStack `useMutation` (no password in the mutation
       cache); the setup key query is dropped from memory when view G unmounts.
 - [ ] No `<form action={…}>` is used; fields are controlled and submitted with `onSubmit` + `preventDefault`.
-- [ ] The D42 copy test (microcopy.md §8, case-insensitive match on the parent company's name) fails the build if
-      that name appears in any string, title, alt text, passkey relying-party name or
-      authenticator issuer (D42).
+- [ ] Review finds the parent company's name in no string, title, alt text, passkey relying-party name or
+      authenticator issuer (D42; no automated check, D72, microcopy.md §8).
 
 **Layout and accessibility**
 - [ ] At 320 px and at 200% text nothing scrolls sideways; Show/Hide wraps under the field.

@@ -764,7 +764,7 @@ content, not context) · 3.2.3 Consistent Navigation · 3.2.4 Consistent Identif
 - [ ] Page titles are exactly "Grow2Notes – Participants", "Grow2Notes – Add participant", "Grow2Notes – Participant"
       and "Grow2Notes – Write past-day note", with "Error: " in front only while a Details error is shown.
 - [ ] Every name and date input on these views has `autocomplete="off"`, no `name` attribute and no `maxlength`.
-- [ ] The parent company's name appears nowhere on these views (microcopy.md copy test, D42).
+- [ ] The parent company's name appears nowhere on these views (D42, checked by review: D72).
 
 **Participants list**
 - [ ] Rows are sorted by family name, then given name, in both views; filtering never re-orders them.
