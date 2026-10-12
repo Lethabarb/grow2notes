@@ -56,6 +56,13 @@ internal static class TotpSignInEndpoint
                 ? await signInManager.TwoFactorAuthenticatorSignInAsync(
                     code, isPersistent: false, rememberClient: false)
                 : SignInResult.Failed;
+            if (!result.Succeeded)
+            {
+                // As at the password step: a failed-attempt count, or a right code's reset of it, that Identity's
+                // concurrency check refused stays tracked, and the audit writer's save would send it again and throw.
+                db.ChangeTracker.Clear();
+            }
+
             await audit.WriteAsync(
                 user.OrganisationId,
                 actorUserId: user.Id,

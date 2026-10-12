@@ -391,7 +391,7 @@ test('view F refuses an empty password, one of only spaces and one of 11 charact
   await expect(said).toHaveText('Your password is hidden');
 });
 
-test('the password path signs in at /, with no way Back and nothing kept, and uses up the link', async ({
+test('the password path signs in at /, with no way Back and nothing kept, uses up the link and signs in again', async ({
   page,
   invite,
 }) => {
@@ -455,6 +455,30 @@ test('the password path signs in at /, with no way Back and nothing kept, and us
   await page.goto(invite.setupLink);
   await expect(main.getByRole('heading', { level: 1 })).toHaveText('This link has expired');
   await expect(main).toContainText('Ask a manager to send a new one.');
+
+  // Signing in a second time works (sign-in.md › Setup; S00.04.05): with the session gone, the address opened shows
+  // sign-in, where the email, the password and a fresh code from the key that view G showed sign the new manager in,
+  // and the page they asked for takes its place.
+  await page.context().clearCookies();
+  await page.goto('/manage');
+  await main.getByLabel('Email address').fill(invite.email);
+  await main.getByLabel('Password', { exact: true }).fill(password);
+  const passwordStep = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/auth/login');
+  await continueButton(page).click();
+  expect((await passwordStep).status()).toBe(200);
+  await expect(codeField(page)).toBeFocused();
+  const secondCode = authenticatorCode(key);
+  const codeStep = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/auth/login/totp');
+  await codeField(page).fill(secondCode);
+  await main.getByRole('button', { name: 'Sign in', exact: true }).click();
+  expect((await codeStep).status()).toBe(200);
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Manage');
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+  await expect(page).toHaveURL((url) => url.pathname === '/manage');
+  await expect(page).toHaveTitle('Grow2Notes – Manage');
+  const again = await page.evaluate(async () => (await fetch('/api/auth/me')).json() as Promise<unknown>);
+  expect(again).toEqual(expect.objectContaining({ displayName: invite.displayName, role: 'Manager' }));
+  await expectNothingKept(page, invite, [password, secondCode, key], /password|authenticator/i);
 });
 
 test('at 320 px with text at 200%, F and G fit, Show/Hide wraps under the field and the key between groups', async ({

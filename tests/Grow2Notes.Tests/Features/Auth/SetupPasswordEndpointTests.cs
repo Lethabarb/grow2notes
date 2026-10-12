@@ -7,8 +7,6 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -162,31 +160,26 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
         Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty("code").GetString());
     }
 
-    // design.md §8.1's invariant: a password alone signs no one in. The sign-in manager, with the password, asks for
-    // the code, so no session starts.
+    // design.md §8.1's invariant: a password alone signs no one in. The password step (S00.04.05), with the password,
+    // asks for the code, so no session starts.
     [Fact]
     public async Task After_completion_a_password_sign_in_requires_the_code_and_starts_no_session()
     {
-        await using var withSignIn = app.WithWebHostBuilder(builder => builder.ConfigureServices(
-            services => services.AddSingleton<IStartupFilter>(new PasswordSignInEndpoint())));
         var link = await InviteAsync();
-        using (var client = withSignIn.CreateHttpsClient())
+        using (var client = app.CreateHttpsClient())
         {
             var (token, _) = await client.StartSetupAsync(link);
             using var completion = await CompleteAsync(client, token, AuthenticatorCodes.Now(await KeyAsync(link)));
             Assert.Equal(HttpStatusCode.OK, completion.StatusCode);
         }
 
-        using var signIn = withSignIn.CreateHttpsClient();
-        using var response = await signIn.PostAsJsonAsync(
-            PasswordSignInEndpoint.Path,
-            new PasswordSignIn(link.Email, Password),
-            TestContext.Current.CancellationToken);
+        using var signIn = app.CreateHttpsClient();
+        using var response = await signIn.SendPasswordAsync(link.Email, Password);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(
-            nameof(SignInResult.RequiresTwoFactor),
-            await response.Content.ReadFromJsonAsync<string>(TestContext.Current.CancellationToken));
+            """{"next":"totp"}""",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.DoesNotContain(response.SetCookies(), cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
     }
 
@@ -471,8 +464,6 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
         string? Details,
         string? IpAddress);
 
-    private sealed record PasswordSignIn(string Email, string Password);
-
     // Writes the event, then throws, so that the event and everything saved before it are in the transaction.
     private sealed class FailsAfterWriting(IAuditWriter writer) : IAuditWriter
     {
@@ -522,29 +513,6 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
 
             return result;
         }
-    }
-
-    /// <summary>
-    /// Maps <c>POST</c> at <see cref="Path"/>, which signs in with an address and a password through the app's
-    /// <c>SignInManager.PasswordSignInAsync</c>, as design.md §6.2's password step calls it, and answers the result's
-    /// name. Anyone may call it, and it is outside the <c>/api</c> group, so it needs no antiforgery token. It is
-    /// routed ahead of the app's own routing, as <see cref="CookieSignIn"/>'s endpoint is.
-    /// </summary>
-    private sealed class PasswordSignInEndpoint : IStartupFilter
-    {
-        public const string Path = "/test-only/password-sign-in";
-
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-        {
-            app.UseRouting();
-            next(app);
-            app.UseEndpoints(endpoints => endpoints.MapPost(Path, SignInAsync).AllowAnonymous());
-        };
-
-        private static async Task<Ok<string>> SignInAsync(
-            PasswordSignIn body, SignInManager<ApplicationUser> signInManager) =>
-            TypedResults.Ok((await signInManager.PasswordSignInAsync(
-                body.Email, body.Password, isPersistent: false, lockoutOnFailure: true)).ToString());
     }
 
     /// <summary>

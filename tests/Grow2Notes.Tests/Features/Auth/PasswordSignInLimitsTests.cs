@@ -5,7 +5,9 @@ using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -13,17 +15,20 @@ namespace Grow2Notes.Tests.Features.Auth;
 
 /// <summary>
 /// The limits of a password sign-in (design.md §8, §8.4): the code step lasts 5 minutes from the accepted password,
-/// and a wrong code does not extend it (D69); and 5 failed attempts, wrong passwords and wrong codes together, lock
-/// sign-in for 15 minutes (A25, §9.9). The two steps are called as the SPA calls them (<see cref="PasswordSignIn"/>),
-/// for users that the test adds to seeded organisation A as setup's password path leaves them. The app runs on a fake
-/// clock (<see cref="TestClock"/>), which times Identity's two-factor cookie, and so the code step; Identity checks
-/// the codes and times the lockout on the system clock, so the codes are computed, and the lockout's end is read,
-/// against the real time.
+/// and a wrong code does not extend it (D69); 5 failed attempts, wrong passwords and wrong codes together, lock
+/// sign-in for 15 minutes (A25, §9.9), but wrong passwords for an account with no password lock nothing (A55); and
+/// failed attempts on one account at once are each refused and audited as one alone is. The two steps are called as
+/// the SPA calls them (<see cref="PasswordSignIn"/>), for users that the test adds to seeded organisation A as setup's
+/// password path leaves them, or its passkey path. The app runs on a fake clock (<see cref="TestClock"/>), which times
+/// Identity's two-factor cookie, and so the code step; Identity checks the codes and times the lockout on the system
+/// clock, so the codes are computed, and the lockout's end is read, against the real time.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class PasswordSignInLimitsTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
 {
     private const string WrongPassword = "Another passw0rd";
+
+    private const int MaxFailedAccessAttempts = 5;
 
     private static readonly TimeSpan LockoutTime = TimeSpan.FromMinutes(15);
 
@@ -131,6 +136,86 @@ public sealed class PasswordSignInLimitsTests : IClassFixture<Grow2NotesFactory>
             await StoredEventsAboutAsync(user.Id));
     }
 
+    // An account set up with a passkey has no password, so no password can be right for it, and counting guesses at
+    // it would let anyone who knows its email lock its passkey out (A55). Each guess is still a failed sign-in on it.
+    [Fact]
+    public async Task Wrong_passwords_for_an_account_with_no_password_lock_nothing_and_its_passkey_still_signs_in()
+    {
+        var (userId, email) = await AddUserWithNoPasswordAsync();
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        using var guesser = app.CreateHttpsClient();
+        for (var attempt = 1; attempt <= MaxFailedAccessAttempts; attempt++)
+        {
+            await SendRefusedAsync(() => guesser.SendPasswordAsync(email, WrongPassword));
+        }
+
+        await using (var scope = app.Services.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await users.FindByIdAsync(userId.ToString());
+            Assert.NotNull(user);
+            Assert.Equal(0, await users.GetAccessFailedCountAsync(user));
+            Assert.Null(await users.GetLockoutEndDateAsync(user));
+        }
+
+        using var client = app.CreateHttpsClient();
+        using var signIn = await client.SignInWithPasskeyAsync(authenticator);
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+        Assert.Equal(
+            [
+                .. Enumerable.Repeat(
+                    AboutTheUser(AuditEventTypes.Auth.SignInFailed, userId, TestClock.Start), MaxFailedAccessAttempts),
+                AboutTheUser(AuditEventTypes.Auth.SignInSucceeded, userId, TestClock.Start),
+            ],
+            await StoredEventsAboutAsync(userId));
+    }
+
+    // Attempts on one account at once each load the user before any saves its failed-attempt count, so Identity's
+    // concurrency check refuses every save but the first. Each is still the 401 of a failed sign-in, with its event,
+    // not a 500 from the audit writer's save sending the refused count again.
+    [Fact]
+    public async Task Wrong_passwords_sent_at_once_are_each_a_failed_sign_in_with_its_event()
+    {
+        const int atOnce = 4;
+        var user = await app.AddPasswordUserAsync(seeded.A);
+        var gate = new HoldsTheUsersSavesUntilAllArrive(user.Id, atOnce);
+        await using var gated = WithGate(gate);
+        gate.Arm();
+        var clients = Enumerable.Range(0, atOnce).Select(_ => gated.CreateHttpsClient()).ToList();
+        try
+        {
+            // One client each, as each fetches its own antiforgery cookie and token at once.
+            await SendRefusedAtOnceAsync(clients.Select(client => client.SendPasswordAsync(user.Email, WrongPassword)));
+        }
+        finally
+        {
+            clients.ForEach(client => client.Dispose());
+        }
+
+        Assert.Equal(
+            Enumerable.Repeat(AboutTheUser(AuditEventTypes.Auth.SignInFailed, user.Id, TestClock.Start), atOnce),
+            await StoredEventsAboutAsync(user.Id));
+    }
+
+    // As with the passwords above, for the codes of one code step, sent at once from the device that holds it.
+    [Fact]
+    public async Task Wrong_codes_sent_at_once_are_each_a_failed_code_with_its_event()
+    {
+        const int atOnce = 2;
+        var user = await app.AddPasswordUserAsync(seeded.A);
+        var gate = new HoldsTheUsersSavesUntilAllArrive(user.Id, atOnce);
+        await using var gated = WithGate(gate);
+        using var client = gated.CreateHttpsClient();
+        await SendRightPasswordAsync(client, user);
+        gate.Arm();
+
+        await SendRefusedAtOnceAsync(Enumerable.Range(0, atOnce).Select(_ => client.SendCodeAsync(WrongCodeOf(user))));
+
+        Assert.Equal(
+            Enumerable.Repeat(AboutTheUser(AuditEventTypes.Auth.MfaFailed, user.Id, TestClock.Start), atOnce),
+            await StoredEventsAboutAsync(user.Id));
+    }
+
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
     // Identity accepts the codes of the steps either side of now, so the right key's code for a step ten minutes away
@@ -145,10 +230,32 @@ public sealed class PasswordSignInLimitsTests : IClassFixture<Grow2NotesFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    // The 401 of a failed sign-in, which sets no cookie: no session, and no two-factor cookie, new or renewed.
     private static async Task SendRefusedAsync(Func<Task<HttpResponseMessage>> send)
     {
         using var response = await send();
+        await AssertRefusedAsync(response);
+    }
+
+    // Each request is sent before any answer is read, and each answer is refused as one alone is.
+    private static async Task SendRefusedAtOnceAsync(IEnumerable<Task<HttpResponseMessage>> send)
+    {
+        var responses = await Task.WhenAll(send);
+        try
+        {
+            foreach (var response in responses)
+            {
+                await AssertRefusedAsync(response);
+            }
+        }
+        finally
+        {
+            Array.ForEach(responses, response => response.Dispose());
+        }
+    }
+
+    // The 401 of a failed sign-in, which sets no cookie: no session, and no two-factor cookie, new or renewed.
+    private static async Task AssertRefusedAsync(HttpResponseMessage response)
+    {
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Empty(response.SetCookies());
     }
@@ -158,6 +265,40 @@ public sealed class PasswordSignInLimitsTests : IClassFixture<Grow2NotesFactory>
     private StoredEvent AboutTheUser(string eventType, Guid userId, DateTimeOffset at) =>
         new(seeded.A.OrganisationId, at.UtcDateTime, userId, eventType, AuditEntityTypes.User, userId,
             ParticipantId: null, Details: null);
+
+    // The app with each save of the user's row held by the gate.
+    private WebApplicationFactory<Program> WithGate(HoldsTheUsersSavesUntilAllArrive gate) =>
+        app.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(gate))));
+
+    // As the invite and setup's passkey path leave a person (design.md §8.1): Active, with the authenticator key that
+    // the invite stores, no password and two-factor off, and with an address that no other test or run uses.
+    private async Task<(Guid Id, string Email)> AddUserWithNoPasswordAsync()
+    {
+        var email = $"{Guid.NewGuid():N}@example.org";
+        await using var scope = app.Services.CreateAsyncScope();
+        var now = clock.GetUtcNow().UtcDateTime;
+        var user = new ApplicationUser
+        {
+            OrganisationId = seeded.A.OrganisationId,
+            DisplayName = PasswordSignIn.DisplayName,
+            Role = UserRole.Worker,
+            Status = UserStatus.Active,
+            InvitedAtUtc = now,
+            InvitedByUserId = seeded.A.ManagerId,
+            ActivatedAtUtc = now,
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+        };
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        AssertSucceeded(await users.CreateAsync(user));
+        AssertSucceeded(await users.ResetAuthenticatorKeyAsync(user));
+        return (user.Id, email);
+    }
+
+    private static void AssertSucceeded(IdentityResult result) =>
+        Assert.True(result.Succeeded, string.Join(" ", result.Errors.Select(error => error.Code)));
 
     // The fifth failed attempt, refused as the others are, locks the account until 15 minutes after it by the system
     // clock, on which Identity times the lockout.
@@ -189,6 +330,40 @@ public sealed class PasswordSignInLimitsTests : IClassFixture<Grow2NotesFactory>
                 ORDER BY [Id]
                 """)
             .ToListAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Holds each save that changes the row of the user whose ID it is given, once the test arms it, until
+    /// <paramref name="count"/> are waiting, then lets them all go, so that each attempt has loaded the user before any
+    /// saves, as when attempts on one account arrive at once. Every later save passes.
+    /// </summary>
+    private sealed class HoldsTheUsersSavesUntilAllArrive(Guid userId, int count) : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource allArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int arrived;
+        private volatile bool armed;
+
+        public void Arm() => armed = true;
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (armed
+                && !allArrived.Task.IsCompleted
+                && eventData.Context is { } context
+                && context.ChangeTracker.Entries<ApplicationUser>().Any(
+                    entry => entry.State == EntityState.Modified && entry.Entity.Id == userId))
+            {
+                if (Interlocked.Increment(ref arrived) == count)
+                {
+                    allArrived.SetResult();
+                }
+
+                await allArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            }
+
+            return result;
+        }
     }
 
     private sealed record StoredEvent(

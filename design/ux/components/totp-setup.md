@@ -222,7 +222,7 @@ saves a tired worker from using up their 5 attempts on a phone they no longer ha
 
 | Element | State | Treatment |
 |---|---|---|
-| Code input | Default | 2 px border at ≥ 3:1 against the page; text at least 1.5rem (24 px) and bold; tabular digits; slightly wider letter spacing; at least 44 px tall. |
+| Code input | Default | 2 px border at ≥ 3:1 against the page; text at `--font-size-h2` (22 px on a phone, 24 px from 40rem, foundations.md's tokens having no 24 px for every width) and bold; tabular digits; slightly wider letter spacing; at least 44 px tall. |
 | | Hover | No change. Inputs don't need a hover state, and adding one gives nothing extra. **[Opinion]** |
 | | Focus | The app's standard focus outline (`outline`, not `box-shadow`), at least 3:1 against both the input and the page. Always visible (A32, SC 2.4.7). |
 | | Active / typing | Same as focus. |
@@ -429,7 +429,7 @@ export function SetupKey({ sharedKey }: { sharedKey: string }) {
 /* OneTimeCodeField.module.css (tokens come from the app's theme) */
 .input {
   font: inherit;
-  font-size: 1.5rem;                 /* 16 px or more also stops iOS zooming on focus */
+  font-size: var(--font-size-h2);    /* 22 px on a phone, 24 px from 40rem; 16 px or more stops iOS zooming */
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.15em;

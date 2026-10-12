@@ -156,7 +156,7 @@ request from loopback, where CI's run serves `http://localhost`; Chromium keeps 
 
 ### Answering `/api/auth/me`
 
-The end-to-end run signs someone in only through setup and the passkey that setup makes (`e2e/setup.spec.ts`), so a
+The end-to-end run signs someone in only through setup and the passkey or password it makes (`e2e/setup.spec.ts`), so a
 test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts`
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
@@ -193,13 +193,16 @@ a failure that sends nothing, the fresh options that the sign-in view asks for a
 
 ### Signing in with a password, end to end
 
-No account in the end-to-end run has a password until setup's password path is on `main` (S00.04.03), so a test of
-the code step, sign-in's view B, answers the password step itself. Before `page.goto`, it routes the page's
-`POST /api/auth/login`, through `page.route`, to the `200 {"next":"totp"}` that the app gives a right password, so
-that Continue, with any email and password, shows view B in A's place. The pattern matches that path only, so the
-code then goes to the app's own `POST /api/auth/login/totp`, which answers `401`, as no code step is under way there:
-Identity's two-factor cookie holds at most the passkey ceremony of the options that view A asked for. A code that
-signs in needs an account set up on the password path, whose key gives the code.
+A password sign-in that succeeds needs an account set up on the password path, whose key gives the code:
+`e2e/setup.spec.ts`'s password path makes one, and then, with its session gone, signs in a second time with the email,
+the password and a code from the key that view G showed (`authenticatorCode`, above), ending on the page it opened.
+
+A test of the code step's layout and refusals, sign-in's view B, needs no such account: it answers the password step
+itself. Before `page.goto`, it routes the page's `POST /api/auth/login`, through `page.route`, to the
+`200 {"next":"totp"}` that the app gives a right password, so that Continue, with any email and password, shows view B
+in A's place. The pattern matches that path only, so the code then goes to the app's own
+`POST /api/auth/login/totp`, which answers `401`, as no code step is under way there: Identity's two-factor cookie
+holds at most the passkey ceremony of the options that view A asked for.
 
 ```ts
 await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));

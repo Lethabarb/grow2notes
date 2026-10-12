@@ -49,8 +49,9 @@ function requestsThat(page: Page, matches: (request: Request) => boolean): Reque
 
 /**
  * Answers the page's `POST /api/auth/login` with the `200 {"next":"totp"}` that the app gives a right password, in the
- * browser, so that the code step shows: no account in the run has a password (tests/README.md). The pattern matches
- * that path only, so the code still goes to the app's own `POST /api/auth/login/totp`.
+ * browser, so that the code step shows for any email and password, and its layout and refusals need no account with a
+ * password: a password sign-in that succeeds is setup.spec.ts's password path signing in again (tests/README.md). The
+ * pattern matches that path only, so the code still goes to the app's own `POST /api/auth/login/totp`.
  */
 async function acceptAnyPassword(page: Page): Promise<void> {
   await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
