@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -170,7 +171,8 @@ public sealed class SetupPasskeyEndpointTests : IClassFixture<Grow2NotesFactory>
 
     // View E sends options up to 4 minutes old to the prompt (passkey.ts), and the person takes some of the prompt's
     // time, so the ceremony that the options start must last the 5 minutes for which Identity keeps it in its
-    // two-factor cookie (D69), to the second. A refusal a second later changes nothing, and new options work.
+    // two-factor cookie (TwoFactorCookie, D69), to the second. A refusal a second later changes nothing, and new
+    // options work.
     [Fact]
     public async Task A_ceremony_completes_until_5_minutes_after_its_options_and_not_a_second_longer()
     {
@@ -179,7 +181,7 @@ public sealed class SetupPasskeyEndpointTests : IClassFixture<Grow2NotesFactory>
         using var client = app.CreateHttpsClient();
         var token = await StartWithOptionsAsync(client, link);
 
-        clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+        clock.Advance(TwoFactorCookie.Lifetime + TimeSpan.FromSeconds(1));
         using (var aSecondLonger = await CompleteAsync(client, token))
         {
             await AssertCredentialRefusedAsync(aSecondLonger);
@@ -191,7 +193,7 @@ public sealed class SetupPasskeyEndpointTests : IClassFixture<Grow2NotesFactory>
             Assert.Equal(HttpStatusCode.OK, options.StatusCode);
         }
 
-        clock.Advance(TimeSpan.FromMinutes(5));
+        clock.Advance(TwoFactorCookie.Lifetime);
         using var atFiveMinutes = await CompleteAsync(client, token);
 
         Assert.Equal(HttpStatusCode.OK, atFiveMinutes.StatusCode);

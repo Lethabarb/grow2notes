@@ -449,6 +449,11 @@ count towards the user's lockout.
   then the session cookie, which it sends with every later request. `SendPasswordAsync(email, password)` and
   `SendCodeAsync(code)` are its two requests, for a test that does something in between, such as changing the user
   or asking for passkey options, which replace the code step.
+- The code step lasts `TwoFactorCookie.Lifetime` on the app's clock, D69's 5 minutes, which Program.cs sets on
+  Identity's two-factor cookie, the one that holds a passkey ceremony too. A test of the code step's window, or of a
+  ceremony's, moves the fake clock by that constant, never by a number of its own, so the windows cannot drift apart.
+  Identity times the lockout on the system clock, so a test reads a lockout's end against `DateTimeOffset.UtcNow`.
+  `Grow2Notes.Tests/Features/Auth/PasswordSignInLimitsTests.cs` is the example of both.
 
 Host the app on a fake clock with `UseClock`, and move the clock a second before each later request of the session,
 as for the cookie sign-in above.
