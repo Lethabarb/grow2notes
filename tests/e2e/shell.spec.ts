@@ -28,8 +28,9 @@ for (const me of [worker, manager]) {
     for (const width of [320, 375, 1280]) {
       await page.setViewportSize({ width, height: 800 });
 
-      // Exactly the role's items, so no menu button, each on screen rather than hidden or pushed off it at some width.
-      const items = page.getByRole('banner').locator('a, button');
+      // Exactly the role's items among those that show, as Sign out in the closed panel does not, so no menu button,
+      // and each on screen rather than pushed off it at some width.
+      const items = page.getByRole('banner').locator('a, button').filter({ visible: true });
       await expect(items).toHaveText(headerItems[me.role]);
       for (const item of await items.all()) {
         await expect(item).toBeInViewport({ ratio: 1 });
@@ -93,7 +94,8 @@ for (const me of [worker, manager]) {
 
     await account.click();
     await expect(panel).toBeVisible();
-    await expect(panel).toHaveText(`Signed in as ${me.displayName}`);
+    await expect(panel.getByText(`Signed in as ${me.displayName}`, { exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Sign out' })).toBeVisible();
     await expectAxeToPass(page);
   });
 
@@ -231,16 +233,17 @@ test('the walks mark the nav, name no one in titles, and keep no app state in hi
 });
 
 /**
- * Expects the header to wrap, its targets on more lines than its `rows` (app-shell.md *Layout - phone*), with every
- * target inside the viewport, no two of them overlapping and no sideways scroll (app-shell.md › Navigation).
+ * Expects the header to wrap, the targets it shows on more lines than its `rows` (app-shell.md *Layout - phone*), with
+ * every one inside the viewport, no two of them overlapping and no sideways scroll (app-shell.md › Navigation). A
+ * hidden target, such as Sign out in the closed panel, has an empty box at the top left, which would count as a line.
  */
 async function expectHeaderToWrap(page: Page, rows: number) {
   const layout = await page.evaluate(() => {
     const viewportWidth = document.documentElement.clientWidth;
-    const targets = Array.from(document.querySelectorAll('header a, header button'), (target) => ({
-      name: target.textContent,
-      box: target.getBoundingClientRect(),
-    }));
+    const shown = Array.from(document.querySelectorAll('header a, header button')).filter((target) =>
+      target.checkVisibility(),
+    );
+    const targets = shown.map((target) => ({ name: target.textContent, box: target.getBoundingClientRect() }));
     const outside = targets.filter(({ box }) => box.left < 0 || box.right > viewportWidth).map(({ name }) => name);
     const overlapping = targets.flatMap(({ name, box }, index) =>
       targets

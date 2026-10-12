@@ -52,12 +52,14 @@
   transform: rotate(180deg);
 }
 
-/* Its contents line up under the wordmark on a phone, and under Account from 40rem (Layout - laptop). */
+/*
+ * Its contents stack, lined up under the wordmark on a phone, where Sign out takes the shared Button's full width, and
+ * under Account from 40rem, where the Button is as wide as its label (Layout - laptop).
+ */
 .panel {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2) var(--space-4);
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 /* The display above would otherwise outrank the hidden attribute's own display: none. */
@@ -67,16 +69,27 @@
 
 @media (min-width: 40rem) {
   .panel {
-    justify-content: flex-end;
+    align-items: flex-end;
   }
 }
 
 /* Anywhere, not break-word, so that a long display name (up to 100 characters) also narrows the line's minimum. */
 .signedInAs {
-  margin: 0;
+  margin: 0 0 var(--space-2);
   font-size: var(--font-size-small);
   color: var(--colour-text-secondary);
   overflow-wrap: anywhere;
+}
+
+/* In the text colour, not red, as a status line's failure is (empty-loading-error.md *Visual specification*). */
+.statusLine {
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.statusLine:not(:empty) {
+  margin-block-start: var(--space-2);
 }
 
 .navList {
