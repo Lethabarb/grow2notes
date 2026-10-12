@@ -72,6 +72,10 @@ internal static class EndpointMatrix
         // (tests/README.md).
         new(Post,      "/api/auth/logout",       Unauthorized, NoContent, NoContent, NoContent),
 
+        // Each signed-in user may press Stay signed in on the warning before the idle sign-out (§8.5): the ping changes
+        // nothing, and the session check renews the session as on any request.
+        new(Post,      "/api/auth/ping",         Unauthorized, NoContent, NoContent, NoContent),
+
         // Setup starts from an invite's link, before anyone is signed in (§8.1 step 3), and a made-up link gets the
         // one answer of a link that does not check, whoever calls.
         new(Post,      "/api/auth/setup/start",  Gone,      Gone,      Gone,       Gone,
