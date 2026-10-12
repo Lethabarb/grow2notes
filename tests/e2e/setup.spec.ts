@@ -101,7 +101,7 @@ test('a setup link leaves the address bar and the history before it is checked, 
   await expectAxeToPass(page);
 });
 
-test('the passkey path signs in at /, with no way Back to setup and nothing kept, and uses up the link', async ({
+test('the passkey path signs in at /, with no way Back and nothing kept, uses up the link and signs in again', async ({
   page,
   invite,
   authenticator,
@@ -165,6 +165,20 @@ test('the passkey path signs in at /, with no way Back to setup and nothing kept
   await expect(main).toContainText('Ask a manager to send a new one.');
   await expect(main.getByRole('button')).toHaveCount(0);
   await expectAxeToPass(page);
+
+  // Signing in a second time works (sign-in.md › Setup; S00.04.04): with the session gone, the address opened shows
+  // sign-in, where the passkey that setup made signs the new manager in, and the page they asked for takes its place.
+  await page.context().clearCookies();
+  await page.goto('/manage');
+  const signIn = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/auth/passkey');
+  await main.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  expect((await signIn).status()).toBe(200);
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Manage');
+  await expect(main.getByRole('heading', { level: 1 })).toBeFocused();
+  await expect(page).toHaveURL((url) => url.pathname === '/manage');
+  await expect(page).toHaveTitle('Grow2Notes – Manage');
+  const again = await page.evaluate(async () => (await fetch('/api/auth/me')).json() as Promise<unknown>);
+  expect(again).toEqual(expect.objectContaining({ displayName: invite.displayName, role: 'Manager' }));
 });
 
 test('a passkey that the device did not verify is not set up, and both ways on still work', async ({

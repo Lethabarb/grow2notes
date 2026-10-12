@@ -45,16 +45,11 @@ internal static class PasskeySignIn
     /// </summary>
     public static async Task<string> FetchPasskeyChallengeAsync(this HttpClient client, string token)
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-
         // With no body, as the SPA asks for them.
-        using var request = new HttpRequestMessage(HttpMethod.Post, OptionsPath);
-        request.Headers.Add(AntiforgeryTokens.Header, token);
-
-        using var response = await client.SendAsync(request, cancellationToken);
+        using var response = await client.PostWithTokenAsync(OptionsPath, token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var options = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var options = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         var challenge = options.GetProperty("challenge").GetString();
         Assert.NotNull(challenge);
         return challenge;

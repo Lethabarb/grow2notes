@@ -302,6 +302,8 @@ describe('AppShell', () => {
         const heading = within(screen.getByRole('main')).getByRole('heading', { level: 1 });
         expect(heading).toHaveTextContent('Set up your account');
         expect(document.title).toBe('Grow2Notes – Set up your account');
+        // Setup takes sign-in's place whatever /me answers, a 401 included.
+        expect(screen.queryByRole('heading', { name: 'Sign in' })).not.toBeInTheDocument();
       });
     });
 

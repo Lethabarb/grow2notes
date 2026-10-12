@@ -84,7 +84,7 @@ public sealed class PasskeyOptionsEndpointTests : IAsyncDisposable
         using var client = app.CreateHttpsClient();
         var token = await client.FetchTokenAsync();
 
-        using var response = await PostAsync(client, token);
+        using var response = await client.PostWithTokenAsync(Path, token);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
@@ -102,7 +102,7 @@ public sealed class PasskeyOptionsEndpointTests : IAsyncDisposable
     // The body is the options object itself, as SimpleWebAuthn's startAuthentication takes it, not a JSON string.
     private static async Task<JsonDocument> PostForOptionsAsync(HttpClient client)
     {
-        using var response = await PostAsync(client, await client.FetchTokenAsync());
+        using var response = await client.PostWithTokenAsync(Path, await client.FetchTokenAsync());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
@@ -110,13 +110,5 @@ public sealed class PasskeyOptionsEndpointTests : IAsyncDisposable
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(JsonValueKind.Object, options.RootElement.ValueKind);
         return options;
-    }
-
-    // With no body, as the SPA sends it.
-    private static async Task<HttpResponseMessage> PostAsync(HttpClient client, string token)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, Path);
-        request.Headers.Add(AntiforgeryTokens.Header, token);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 }

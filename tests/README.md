@@ -147,7 +147,7 @@ from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secur
 
 ### Answering `/api/auth/me`
 
-Until the sign-in stories are built, the end-to-end run signs someone in only through setup (`e2e/setup.spec.ts`), so a
+The end-to-end run signs someone in only through setup and the passkey that setup makes (`e2e/setup.spec.ts`), so a
 test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts`
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
@@ -172,7 +172,8 @@ dialog, as passkey-flows.md's *Tests* say.
   address that the test opened, `new URL(page.url()).hostname` once the page has loaded, as the options name
   `App:Origin`'s host and `App__Origin` names that address (above).
 - No account holds a passkey added this way, so a sign-in with it fails, with the `401` that the API gives an unknown
-  credential. One that succeeds needs a passkey that the app's setup made with the same authenticator.
+  credential. One that succeeds needs a passkey that the app's setup made with the same authenticator, as in
+  `e2e/setup.spec.ts`'s passkey path, which signs in again once its session is gone.
 
 An assertion that something is absent passes at once, before the page has handled the prompt's answer, so a test
 first waits for what the page does with it: its request to `POST /api/auth/passkey` (`page.waitForResponse`), or, for
