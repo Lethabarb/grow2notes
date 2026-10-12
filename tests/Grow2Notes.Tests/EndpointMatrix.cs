@@ -92,6 +92,16 @@ internal static class EndpointMatrix
         new(Post,      "/api/auth/passkey/options", OK,     OK,        OK,         OK),
         new(Post,      "/api/auth/passkey",      Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithAPasskeyNoAccountHolds),
+
+        // Anyone may sign in with a password too, and an email that no account holds is refused, whoever sends it,
+        // before any password is checked, so the call changes nothing.
+        new(Post,      "/api/auth/login",        Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/login", new { email = $"{Guid.NewGuid():N}@example.org", password = "made-up" })),
+
+        // The code step reads its account from the two-factor cookie that a password step sets, which no caller here
+        // has, so a made-up code is refused, whoever sends it, with nothing checked or written (§8.2).
+        new(Post,      "/api/auth/login/totp",   Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/login/totp", new { code = "123456" })),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.

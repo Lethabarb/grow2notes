@@ -141,7 +141,7 @@ export function SetupPage() {
             <Button
               variant="primary"
               busy={retrying}
-              busyLabel={strings.setup.checking}
+              busyLabel={strings.checking}
               onClick={() => {
                 setCheck({ state: 'checking', again: true });
               }}

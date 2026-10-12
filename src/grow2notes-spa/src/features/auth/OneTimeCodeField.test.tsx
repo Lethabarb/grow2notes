@@ -3,10 +3,15 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { OneTimeCodeField } from './OneTimeCodeField.tsx';
 
-type FormProps = { error?: string; onChange?: (value: string) => void; onSubmit?: () => void };
+type FormProps = {
+  labelIsHeading?: boolean;
+  error?: string;
+  onChange?: (value: string) => void;
+  onSubmit?: () => void;
+};
 
 /** A made-up one-field form round the field, as view G and sign-in's code step hold it. */
-function Form({ error, onChange, onSubmit }: FormProps) {
+function Form({ labelIsHeading, error, onChange, onSubmit }: FormProps) {
   const [value, setValue] = useState('');
   return (
     <form
@@ -19,6 +24,7 @@ function Form({ error, onChange, onSubmit }: FormProps) {
       <OneTimeCodeField
         id="code"
         label="Made-up label"
+        labelIsHeading={labelIsHeading}
         hint="Made-up hint"
         error={error}
         value={value}
@@ -105,5 +111,22 @@ describe('OneTimeCodeField', () => {
     expect(field()).toHaveAttribute('aria-describedby', 'code-hint code-error');
     expect(field()).toHaveAccessibleDescription('Made-up hint Error: Made-up message');
     expect(field()).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it("puts its label in the page's h1, which script can focus, before its hint and message", () => {
+    render(<Form labelIsHeading error="Made-up message" />);
+    const heading = screen.getByRole('heading', { level: 1, name: 'Made-up label' });
+
+    expect(heading).toHaveAttribute('id', 'page-heading');
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(heading.firstElementChild).toBe(screen.getByText('Made-up label', { selector: 'label' }));
+    expect(field()).toHaveAccessibleName('Made-up label');
+    expect(field()).toHaveAccessibleDescription('Made-up hint Error: Made-up message');
+    expect(Array.from(heading.parentElement?.children ?? [])).toEqual([
+      heading,
+      screen.getByText('Made-up hint'),
+      screen.getByText('Made-up message'),
+      field(),
+    ]);
   });
 });

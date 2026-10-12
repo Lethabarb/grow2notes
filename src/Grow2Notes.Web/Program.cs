@@ -4,6 +4,7 @@ using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.OperatorCommands;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -82,8 +83,12 @@ builder.Services.AddDataProtection()
 // A password is at least 12 characters, with no composition rules (A22, §8.4), so Identity's defaults, which want a
 // digit, a capital, a lowercase letter and a symbol, are turned off; its default of one unique character stays.
 //
+// A25's lockout: 5 failed attempts lock sign-in for 15 minutes, where Identity's default is 5 minutes. Identity counts
+// wrong passwords and wrong codes together (§9.9), and times the lockout on the system clock, not TimeProvider.
+//
 // The default token providers include Identity's authenticator provider, which checks the codes of the authenticator
-// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2).
+// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2). Without it,
+// Identity finds no two-factor provider for anyone, and so two-factor off for everyone.
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -94,6 +99,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
         o.Password.RequireLowercase = false;
         o.Password.RequireUppercase = false;
         o.Password.RequireNonAlphanumeric = false;
+        o.Lockout.MaxFailedAccessAttempts = 5;
+        o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
@@ -132,6 +139,15 @@ builder.Services.AddOptions<IdentityPasskeyOptions>()
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddEnrolmentCookie()
     .AddIdentityCookies();
+
+// Identity's two-factor cookie holds a password sign-in's code step and a passkey ceremony, for 5 minutes from when it
+// is set (TwoFactorCookie, D69). It does not slide, as Identity's cookies do by default, or a request after half that
+// time, such as a wrong code at 3 minutes, would renew it for another 5.
+builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, o =>
+{
+    o.ExpireTimeSpan = TwoFactorCookie.Lifetime;
+    o.SlidingExpiration = false;
+});
 
 // The security stamp is checked on every request that carries the cookie, rebuilding the principal from the user's
 // row, so deactivation, a sign-in reset and a role change apply on the user's next request (§8.4, §8.6).
@@ -292,7 +308,9 @@ app.MapApiGroup()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
     .MapPasskeyOptionsEndpoint()
-    .MapPasskeySignInEndpoint();
+    .MapPasskeySignInEndpoint()
+    .MapPasswordSignInEndpoint()
+    .MapTotpSignInEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

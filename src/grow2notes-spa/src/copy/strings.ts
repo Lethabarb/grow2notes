@@ -18,13 +18,28 @@ export const strings = {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',
     goToToday: 'Go to Today',
   },
-  /** Sign-in's view A (sign-in.md), whose `<h1>` is its page name, "Sign in". */
+  /**
+   * Sign-in's views A and B (sign-in.md): A's `<h1>` is its page name, "Sign in", and B's, the code step's, is the code
+   * field's label, `oneTimeCode.label`.
+   */
   signIn: {
-    /** Under the `<h1>`. */
+    /** Under A's `<h1>`. */
     hint: 'Sign in the way you chose when you set up your account.',
     passkey: 'Sign in with a passkey',
-    /** The passkey button's busy label. */
+    /** The busy label of the passkey button and of the code step's Sign in. */
     busy: 'Signing in…',
+    /** The code field's hint on the code step (sign-in.md component 10); setup's view G has a hint of its own. */
+    codeHint:
+      'Open your authenticator app and find Grow2Notes. If the code changes while you’re typing, you can still '
+      + 'use it.',
+    /** The code step's button, which sends the code (sign-in.md component 11). */
+    signIn: 'Sign in',
+    /** The password field's label (the email field's is `emailAddress`). */
+    password: 'Password',
+    /** The email and password form's messages, inline and linked in the error summary (form-validation.md). */
+    enterEmail: 'Enter your email address',
+    emailFormat: 'Enter an email address in the correct format, like name@example.com',
+    enterPassword: 'Enter your password',
     /** Every sign-in that the server refuses, in the error summary, which says nothing of why (A25). */
     failed:
       'Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes.',
@@ -40,6 +55,8 @@ export const strings = {
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',
+  /** The busy label of sign-in's Continue and of the setup link check's Try again (sign-in.md components 8 and 12). */
+  checking: 'Checking…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
@@ -78,8 +95,6 @@ export const strings = {
   setup: {
     /** The link check's status line, once the check has taken 1 s. */
     checkingLink: 'Checking your link…',
-    /** The link check's Try again, busy. */
-    checking: 'Checking…',
     /** A `429` on a setup call, where that call's failures show. */
     tooManyTries: 'Too many tries. Wait 1 minute, then try again.',
     /** The whole-page message for a `401` from a setup call: the enrolment cookie has ended. */

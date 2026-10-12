@@ -232,8 +232,9 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         await AssertFailedSignInAsync(response, userId);
     }
 
-    // The two-factor cookie that holds the ceremony lasts 5 minutes on the app's clock (D69), so options still sign in
-    // a second before then, which the SPA relies on, as it uses options for up to 4 minutes (passkey.ts).
+    // The two-factor cookie that holds the ceremony lasts 5 minutes on the app's clock (TwoFactorCookie, D69), so
+    // options still sign in a second before then, which the SPA relies on, as it uses options for up to 4 minutes
+    // (passkey.ts).
     [Fact]
     public async Task A_known_passkey_sent_4_minutes_and_59_seconds_after_its_options_signs_in()
     {
@@ -242,7 +243,7 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         using var client = app.CreateHttpsClient();
         var token = await client.FetchTokenAsync();
         var challenge = await client.FetchPasskeyChallengeAsync(token);
-        clock.Advance(TimeSpan.FromMinutes(5) - TimeSpan.FromSeconds(1));
+        clock.Advance(TwoFactorCookie.Lifetime - TimeSpan.FromSeconds(1));
 
         using var response = await client.SendPasskeyCredentialAsync(authenticator.GetAssertion(challenge), token);
 
@@ -259,7 +260,7 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         using var client = app.CreateHttpsClient();
         var token = await client.FetchTokenAsync();
         var challenge = await client.FetchPasskeyChallengeAsync(token);
-        clock.Advance(TimeSpan.FromMinutes(5) + TimeSpan.FromSeconds(1));
+        clock.Advance(TwoFactorCookie.Lifetime + TimeSpan.FromSeconds(1));
 
         using var response = await client.SendPasskeyCredentialAsync(authenticator.GetAssertion(challenge), token);
 

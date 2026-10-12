@@ -156,7 +156,7 @@ request from loopback, where CI's run serves `http://localhost`; Chromium keeps 
 
 ### Answering `/api/auth/me`
 
-The end-to-end run signs someone in only through setup and the passkey that setup makes (`e2e/setup.spec.ts`), so a
+The end-to-end run signs someone in only through setup and the passkey or password it makes (`e2e/setup.spec.ts`), so a
 test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts`
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
@@ -190,6 +190,30 @@ An assertion that something is absent passes at once, before the page has handle
 first waits for what the page does with it: its request to `POST /api/auth/passkey` (`page.waitForResponse`), or, for
 a failure that sends nothing, the fresh options that the sign-in view asks for after any failure.
 `e2e/sign-in.spec.ts` is the example.
+
+### Signing in with a password, end to end
+
+A password sign-in that succeeds needs an account set up on the password path, whose key gives the code:
+`e2e/setup.spec.ts`'s password path makes one, and then, with its session gone, signs in a second time with the email,
+the password and a code from the key that view G showed (`authenticatorCode`, above), ending on the page it opened.
+
+A test of the code step's layout and refusals, sign-in's view B, needs no such account: it answers the password step
+itself. Before `page.goto`, it routes the page's `POST /api/auth/login`, through `page.route`, to the
+`200 {"next":"totp"}` that the app gives a right password, so that Continue, with any email and password, shows view B
+in A's place. The pattern matches that path only, so the code then goes to the app's own
+`POST /api/auth/login/totp`, which answers `401`, as no code step is under way there: Identity's two-factor cookie
+holds at most the passkey ceremony of the options that view A asked for.
+
+```ts
+await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
+await page.goto('/');
+```
+
+Without that route, Continue meets the app's own `POST /api/auth/login`, which answers an address that no account
+holds, such as a made-up `example.org` one (A35), with the `401` of any failed sign-in. A test that shows that a step
+starts no passkey prompt counts the page's calls of `navigator.credentials.get`, through an init script that wraps it
+before the app's own script runs (`countPasskeyPrompts`), and, so that the count is known to work, ends with a press of
+the passkey button, which the `authenticator` fixture ends at once. `e2e/sign-in.spec.ts` is the example.
 
 ## Writing integration tests
 
@@ -425,6 +449,55 @@ using var response = await client.GetAsync("/api/auth/me", TestContext.Current.C
 Each sign-in, and each failed one on a known account, commits an audit event about its user, so a test reads only the
 events of a user it added, by the user's ID. `Grow2Notes.Tests/Features/Auth/PasskeySignInEndpointTests.cs` is the
 example.
+
+### Signing in with a password
+
+A test of the password sign-in signs in as the SPA does, with an email, a password and the code from an
+authenticator app (design.md §6.2, §8.2), for a user that it adds itself (the seeded-rows rule above), as its failures
+count towards the user's lockout.
+
+- `app.AddPasswordUserAsync(organisation)` (`Grow2Notes.Tests/Fixtures/PasswordSignIn.cs`) adds a worker through the
+  app's `UserManager`, as setup's password path leaves one: with `PasswordSignIn.Password`, an authenticator key and
+  two-factor on. It returns a `PasswordUser`, with the user's ID, address and key. `status` gives the user another
+  status, and `twoFactorEnabled: false` leaves two-factor off, as setup never does.
+- `AuthenticatorCodes.Now(key)` (`Grow2Notes.Tests/Fixtures/AuthenticatorCodes.cs`) computes the code that an
+  authenticator app holding the key shows now: RFC 6238's, as Identity's authenticator provider checks it, which
+  `AuthenticatorCodesTests` checks against the RFC's own test values. Identity checks a code against the system
+  clock, not the app's `TimeProvider`, so a test computes its codes from the real time, even when it hosts the app on
+  a fake clock. Identity accepts the codes of the steps either side of now, so a wrong code is the right key's code
+  for a step well away from them: `AuthenticatorCodes.At(key, DateTimeOffset.UtcNow.AddMinutes(10))`.
+- `SignInWithPasswordAsync(email, password, code)` signs in a client from `CreateHttpsClient()` as the SPA does: it
+  sends the email and the password to `POST /api/auth/login`, checks that the answer asks for the code, and sends the
+  code to `POST /api/auth/login/totp`, each with an antiforgery token that it fetches first. It returns the code
+  step's response. Between the two, the client keeps Identity's two-factor cookie, which holds the code step, and
+  then the session cookie, which it sends with every later request. `SendPasswordAsync(email, password)` and
+  `SendCodeAsync(code)` are its two requests, for a test that does something in between, such as changing the user
+  or asking for passkey options, which replace the code step.
+- The code step lasts `TwoFactorCookie.Lifetime` on the app's clock, D69's 5 minutes, which Program.cs sets on
+  Identity's two-factor cookie, the one that holds a passkey ceremony too. A test of the code step's window, or of a
+  ceremony's, moves the fake clock by that constant, never by a number of its own, so the windows cannot drift apart.
+  Identity times the lockout on the system clock, so a test reads a lockout's end against `DateTimeOffset.UtcNow`.
+  `Grow2Notes.Tests/Features/Auth/PasswordSignInLimitsTests.cs` is the example of both.
+
+Host the app on a fake clock with `UseClock`, and move the clock a second before each later request of the session,
+as for the cookie sign-in above.
+
+```csharp
+private readonly FakeTimeProvider clock = new(TestClock.Start);
+
+// In the test:
+await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+var user = await app.AddPasswordUserAsync(sqlServer.Seeded.A);
+using var client = app.CreateHttpsClient();
+using var signIn = await client.SignInWithPasswordAsync(
+    user.Email, PasswordSignIn.Password, AuthenticatorCodes.Now(user.AuthenticatorKey));
+
+clock.Advance(TimeSpan.FromSeconds(1));
+using var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
+```
+
+As with a passkey, a test reads only the audit events of a user it added, by the user's ID.
+`Grow2Notes.Tests/Features/Auth/TotpSignInEndpointTests.cs` is the example.
 
 ### The endpoint matrix
 

@@ -91,7 +91,7 @@ above the button that was pressed, and focus stays on that button.
 | Grow2Notes. If the code changes while   |
 | you're typing, you can still use it.    |
 | [Error: The code must be 6 digits]      |  inline, only for a format error
-| +------------+                          |  ~10ch wide, 24 px bold digits
+| +------------+                          |  ~10ch wide, bold --font-size-h2 digits
 | |  123 456   |                          |  inputmode=numeric
 | +------------+                          |
 | +-------------------------------------+ |
@@ -268,7 +268,7 @@ Every visible string lives in `src/copy`.
 | 7 | PasswordInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C (`current-password`); F (`new-password`) | One shared component. Label "Password" (A, C) or "Create a password" inside the `h1` (F). **Show/Hide on F only** (design 4.1: "set a password of at least 12 characters, with show/hide"): a 48 px "Show"/"Hide" button with accessible names "Show password"/"Hide password" (visible word first, SC 2.5.3), `aria-controls`, and a persistent visually hidden `aria-live="polite"` line saying "Your password is visible"/"Your password is hidden" (empty on mount); back to `type="password"` on form submit. On A and C the field has no toggle (D68). `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Never trimmed, no `maxLength`. F only: `minLength={12}` (guides password generators; `noValidate` stops it blocking) and a hidden `<input type="email" name="username" autoComplete="username" value={email} readOnly hidden>` inside the form. |
 | 8 | Continue button ([primary-actions.md](../components/primary-actions.md)) | A, C (secondary, busy "Checking…" (P)); F (primary, no request, no busy) | `type="submit"`. Never `disabled`. |
 | 9 | Help line ([microcopy.md](../components/microcopy.md) §9) | A, B, C | Plain `<p>`: "If you cannot sign in, ask a manager to reset your sign-in." (P). Not a link. |
-| 10 | OneTimeCodeField ([totp-setup.md](../components/totp-setup.md)) | B (label inside `h1`); C (plain label styled as h2); G (plain label inside step 3) | One `<input>`: `type="text"`, `id`/`name="code"`, `inputMode="numeric"`, `autoComplete="one-time-code"`, `enterKeyHint="go"`, `spellCheck={false}`, `autoCapitalize="off"`, `autoCorrect="off"`. No `maxLength`, `pattern` or placeholder; never auto-submits. 24 px bold tabular digits, letter-spacing 0.15em, `inline-size: 10ch`, 48 px tall, `scroll-margin-block` so it is never under anything. Label "Enter the 6-digit code from your authenticator app" (P). Hints: B/C "Open your authenticator app and find Grow2Notes. If the code changes while you're typing, you can still use it." (P); G "Find Grow2Notes in the app. If the code changes while you're typing, you can still use it." (P). |
+| 10 | OneTimeCodeField ([totp-setup.md](../components/totp-setup.md)) | B (label inside `h1`); C (plain label styled as h2); G (plain label inside step 3) | One `<input>`: `type="text"`, `id`/`name="code"`, `inputMode="numeric"`, `autoComplete="one-time-code"`, `enterKeyHint="go"`, `spellCheck={false}`, `autoCapitalize="off"`, `autoCorrect="off"`. No `maxLength`, `pattern` or placeholder; never auto-submits. Bold tabular digits at `--font-size-h2` (22 px on a phone, 24 px from 40rem), letter-spacing 0.15em, `inline-size: 10ch`, 48 px tall, `scroll-margin-block` so it is never under anything. Label "Enter the 6-digit code from your authenticator app" (P). Hints: B/C "Open your authenticator app and find Grow2Notes. If the code changes while you're typing, you can still use it." (P); G "Find Grow2Notes in the app. If the code changes while you're typing, you can still use it." (P). |
 | 11 | Code-step submit ([primary-actions.md](../components/primary-actions.md)) | B, C | Primary "Sign in" (V), busy "Signing in…" (P). |
 | 12 | Setup link check ([empty-loading-error.md](../components/empty-loading-error.md)) | D | One `<p role="status">` present from first render: "Checking your link…" (P) after 1 s, then the failure sentence. **Try again** (primary, busy "Checking…") sits outside it. Whole-page messages are an `h1` (`tabIndex={-1}`) and one sentence, with no button. |
 | 13 | Account summary | E | `<dl>`: "Name" / display name, "Email address" / email, as text (not disabled or read-only inputs). Hint "If these are wrong, ask a manager." (P). |
@@ -313,7 +313,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Default | No session (`/me` → `401` on start-up) | View A. No loading state: the screen loads no data. | Where the browser puts it on first load (no `autoFocus`: the keyboard would cover the passkey button) | Nothing |
 | Already signed in | `/me` → `200` | The requested route, not sign-in | — | — |
 | Passkeys unavailable | `browserSupportsWebAuthn()` false | Notice in place of the passkey button: "Passkeys do not work in this browser. To use your passkey, open Grow2Notes in your phone's main browser, such as Safari or Chrome." (P). Password form unchanged. | — | Read in normal order (static) |
-| Empty fields on Continue | Client check | Inline under each label and linked in the summary: "Enter your email address" (P) · "Enter your password" (P) | Summary | Summary on focus |
+| Empty fields on Continue | Client check: the email empty once trimmed, or the password empty or only whitespace (`value.trim() === ''`, as the server's `[Required]` refuses one), though the password itself is never trimmed | Inline under each label and linked in the summary: "Enter your email address" (P) · "Enter your password" (P) | Summary | Summary on focus |
 | Email has no "@" with text both sides | Client check | "Enter an email address in the correct format, like name@example.com" (P, GOV.UK) | Summary | Summary on focus |
 | Busy | Continue / passkey / Sign in pressed | Button `aria-disabled="true"`; after 400 ms its label becomes "Checking…" (Continue) or "Signing in…" (passkey, code step). No spinner. | Stays on the button | Busy label through the page status region (`PageStatus`) |
 | **Sign-in failed** (design) | `401` or `429` from `/api/auth/login`, `/api/auth/login/totp` or `/api/auth/passkey` | Summary, unlinked: **"Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes."** (V). No field marked invalid. Password step: email kept, **password cleared**. Code step: code cleared, stays on step B. | Summary | Summary on focus |
@@ -383,18 +383,24 @@ back to this page." · field label and hint as in Components row 10 · button "F
    ceremony state in one cookie and its `AuthenticatorTimeout` defaults to 5 minutes,
    https://learn.microsoft.com/en-us/aspnet/core/security/authentication/passkeys/?view=aspnetcore-10.0]
 3. **Continue (email and password).** `preventDefault`; if busy, ignore. Trim the email; never trim the password. Run
-   the client checks; if any fail, show inline errors plus the summary and send nothing. Otherwise
-   `POST /api/auth/login {email, password}`. `200 {next:"totp"}` → record `passwordAcceptedAt = Date.now()` in memory,
-   replace the form with step B (the form's removal also lets password managers offer to save). `401`/`429` → generic
-   message, clear the password, keep the email.
+   the client checks; if any fail, show inline errors plus the summary and send nothing. Otherwise wait until no
+   passkey options request (step 2) is in flight, then `POST /api/auth/login {email, password}`. The code step and a
+   passkey ceremony share Identity's two-factor cookie, and each answer that starts one replaces the other, so an
+   options answer arriving after the password was accepted would end the code step, and every code would then fail
+   until the person started again. For the same reason A asks for no options while the password is out: a passkey
+   press with no fresh options, and the prefetch after a failed passkey attempt, wait for its answer and ask only if A
+   still shows. `200 {next:"totp"}` → record `passwordAcceptedAt = Date.now()` in memory, cancel any passkey prompt
+   still open, and replace the form with step B (the form's removal also lets password managers offer to save), which
+   asks for no options. `401`/`429` → generic message, clear the password, keep the email.
 4. **Sign in (code).** Normalise (NFKC, remove spaces, hyphens, dashes and minus signs), require exactly 6 ASCII
    digits, else inline error and nothing sent. `POST /api/auth/login/totp {code}` with `retry: false` semantics (never
    retried automatically: every attempt counts towards lockout). `200 Me` → success path. `401`/`429` → if
-   `Date.now() − passwordAcceptedAt ≥ 4 min 50 s`, return to step A (email kept, password empty, generic message);
-   otherwise stay, clear the code, generic message. The server sets the two-factor cookie's 5 minutes explicitly,
-   with no sliding expiration, so a wrong code does not move the end (D69). [Product fact: Identity's two-factor
-   cookie lasts 5 minutes by default and then every code fails without counting towards lockout,
-   https://github.com/dotnet/aspnetcore/blob/main/src/Identity/Core/src/IdentityCookiesBuilderExtensions.cs]
+   `Date.now() − passwordAcceptedAt ≥ 4 min 50 s`, return to step A (email kept, password empty, generic message),
+   which asks for fresh passkey options as it shows, as on its first render (step 2), since the code step has ended
+   any ceremony that the cookie held; otherwise stay, clear the code, generic message. The server sets the two-factor
+   cookie's 5 minutes explicitly, with no sliding expiration, so a wrong code does not move the end (D69). [Product
+   fact: Identity's two-factor cookie lasts 5 minutes by default and then every code fails without counting towards
+   lockout, https://github.com/dotnet/aspnetcore/blob/main/src/Identity/Core/src/IdentityCookiesBuilderExtensions.cs]
 5. **Sign-in success (any method).** `queryClient.setQueryData(['me'], me)`, then: fresh load → render the requested
    route with `replace: true`; in place → same `userId`: unhide the route, refetch, resume autosave (same `clientId`,
    next `seq`), restore the page title; different `userId`: `location.replace('/')`. The screen fetches no antiforgery
@@ -666,7 +672,7 @@ orchestrator so the other files can be aligned.
 | 26 | **Sign-in URL:** `/sign-in` route (sign-in-form.md) vs sign-in rendered at the requested URL (app-shell-nav.md, session-timeout.md) | **Requested URL, no `/sign-in` route** | One mechanism for fresh load and in place; URLs hold only IDs (§4.0). |
 | 27 | **Back controls:** Back on the code step and setup views (sign-in-form.md) vs none (primary-actions.md) | **Back links on F and G only**, as the shared BackLink labelled with the destination ("‹ Set up your account", "‹ Create a password") in the shell's bar slot | They are real routes [Convention: GOV.UK question pages]; the code step is short-lived and returns to step A by itself after 5 minutes. One back-link label pattern app-wide (SC 3.2.4), instead of a bare "Back". |
 | 28 | **Pending state source:** `useMutation().isPending` (primary-actions.md) vs a direct API call (sign-in-form.md) | **Direct call with local `pending` state passed to `Button busy`** | The mutation cache would hold the password as `variables`. |
-| 29 | **Code input styling:** ~9ch (sign-in-form.md) vs 10ch, 24 px bold (totp-setup.md); error border 4 px (totp-setup.md) vs 4 px bar + 3 px border (form-validation.md) | **totp-setup.md size; form-validation.md error styling** | Each file owns its part. |
+| 29 | **Code input styling:** ~9ch (sign-in-form.md) vs 10ch, 24 px bold (totp-setup.md); error border 4 px (totp-setup.md) vs 4 px bar + 3 px border (form-validation.md) | **totp-setup.md size, its digits at `--font-size-h2`; form-validation.md error styling** | Each file owns its part. foundations.md keeps four type sizes, and components take theirs from its tokens, none of which is 24 px at every width, so the digits take h2's: 22 px on a phone, 24 px from 40rem, still over the 16 px at which iOS zooms (13 October 2026, S00.04.03 and S00.04.05). |
 | 30 | **Unrequested controls:** Show/Hide on the sign-in password and a Copy setup key button (sign-in-form.md, totp-setup.md) vs design 4.1 (show/hide only when creating a password; "type the setup key") | **Neither in the default build**; both described under "Optional, not built unless approved", and the owner declined both (D68) | The default build matches design 4.1 exactly (owner's simplicity rule); the clipboard concern is recorded with the Copy question. |
 
 ### Tensions with decisions (recorded once; no change proposed)
@@ -728,6 +734,10 @@ orchestrator so the other files can be aligned.
    signed in. So the A25 sentence is true for a passkey user only in part: a pause that failed passwords or codes start
    on the account also stops their passkey, but failed passkeys never start one. Whether a failed passkey should still
    show that sentence is the owner's call; until then it does.
+   **13 October 2026 (S00.04.05, design.md A55):** a wrong password counts only on an account that has a password, so
+   an account set up with a passkey, which has none, is never paused by failed sign-ins of any kind; otherwise anyone
+   who knew its email could pause its passkey with five wrong passwords. For a passkey user the A25 sentence therefore
+   describes a pause that failed sign-ins never start, which bears on the call above.
 9. **Oldest phones:** which iOS and Android versions may workers' own phones run? (Drives the prefetch rule and the
    CSS baseline.)
 10. **In-app browsers:** which email apps on staff phones can create passkeys (device check before go-live).

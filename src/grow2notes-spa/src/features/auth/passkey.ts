@@ -19,6 +19,12 @@ export type OneOptions<T> = {
   take: () => T | undefined;
   /** Forgets the options held, once a credential made with them has gone to the server, which ends their ceremony. */
   spent: () => void;
+  /**
+   * Settles as the request for options on its way ends, however it ends, or at once when none is. It starts none.
+   * The same cookie keeps a password sign-in's code step, which the answer to a request still on its way when the
+   * password was accepted would end (S00.04.05's Notes).
+   */
+  idle: () => Promise<void>;
 };
 
 /** The view's one set of passkey options, the same object on every render, fetched by `fetchOptions`. */
@@ -52,6 +58,9 @@ function oneOptions<T>(fetchOptions: () => Promise<T>): OneOptions<T> {
     take: () => (held !== undefined && Date.now() - held.at < maxAgeMs ? held.value : undefined),
     spent() {
       held = undefined;
+    },
+    async idle() {
+      await pending?.catch(() => {});
     },
   };
 }
