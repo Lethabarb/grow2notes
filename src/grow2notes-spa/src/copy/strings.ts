@@ -25,6 +25,12 @@ export const strings = {
     passkey: 'Sign in with a passkey',
     /** The passkey button's busy label. */
     busy: 'Signing in…',
+    /** The password field's label (the email field's is `emailAddress`). */
+    password: 'Password',
+    /** The email and password form's messages, inline and linked in the error summary (form-validation.md). */
+    enterEmail: 'Enter your email address',
+    emailFormat: 'Enter an email address in the correct format, like name@example.com',
+    enterPassword: 'Enter your password',
     /** Every sign-in that the server refuses, in the error summary, which says nothing of why (A25). */
     failed:
       'Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes.',
@@ -40,6 +46,8 @@ export const strings = {
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',
+  /** The busy label of sign-in's Continue and of the setup link check's Try again (sign-in.md components 8 and 12). */
+  checking: 'Checking…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
@@ -78,8 +86,6 @@ export const strings = {
   setup: {
     /** The link check's status line, once the check has taken 1 s. */
     checkingLink: 'Checking your link…',
-    /** The link check's Try again, busy. */
-    checking: 'Checking…',
     /** A `429` on a setup call, where that call's failures show. */
     tooManyTries: 'Too many tries. Wait 1 minute, then try again.',
     /** The whole-page message for a `401` from a setup call: the enrolment cookie has ended. */

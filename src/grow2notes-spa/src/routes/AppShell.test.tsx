@@ -195,10 +195,13 @@ describe('AppShell', () => {
         const button = main.getByRole('button', { name: 'Sign in with a passkey' });
         expect(button).toHaveAttribute('type', 'button');
         expect(button).toHaveClass(...buttonClass('primary').split(' '));
-        // The alert line is in the page, empty, before anything can fail (sign-in.md component 2a).
-        const alert = main.getByRole('alert');
-        expect(alert).toBeEmptyDOMElement();
-        expectInOrder(heading, main.getByText(hint), alert, button, main.getByText(help));
+        // The alert lines, the passkey button's first, are in the page, empty, before anything can fail (sign-in.md
+        // component 2a).
+        const alerts = main.getAllByRole('alert');
+        for (const alert of alerts) {
+          expect(alert).toBeEmptyDOMElement();
+        }
+        expectInOrder(heading, main.getByText(hint), alerts[0], button, main.getByText(help));
         // No error summary until a sign-in fails.
         expect(main.queryByRole('heading', { level: 2 })).not.toBeInTheDocument();
         // The page's status region, empty (sign-in.md component 18).
@@ -217,7 +220,7 @@ describe('AppShell', () => {
       await wait(0);
 
       const main = within(screen.getByRole('main'));
-      expect(main.queryByRole('button')).not.toBeInTheDocument();
+      expect(main.queryByRole('button', { name: 'Sign in with a passkey' })).not.toBeInTheDocument();
       expectInOrder(
         main.getByRole('heading', { level: 1, name: 'Sign in' }),
         main.getByText(hint),

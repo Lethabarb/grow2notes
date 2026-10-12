@@ -12,5 +12,25 @@
 
 /* The passkey button with its alert line, or the notice in their place. */
 .passkey {
+  margin-block-end: var(--space-4);
+}
+
+/* Between the two ways in, as on setup's view E. */
+.or {
+  margin-block: var(--space-4);
+}
+
+/*
+ * The two fields a field's gap apart, and a group's gap above Continue and its alert line (foundations.md *Spacing and
+ * layout*).
+ */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-block-end: var(--space-5);
+}
+
+.form {
   margin-block-end: var(--space-6);
 }

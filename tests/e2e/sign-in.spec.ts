@@ -1,4 +1,4 @@
-import type { Request } from '@playwright/test';
+import type { Locator, Request } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 
 // Sign-in's view A with a passkey (sign-in.md), with Chromium's virtual authenticator in place of the device's passkey
@@ -12,6 +12,10 @@ const postTo = (path: string) => (request: Request) =>
   request.method() === 'POST' && new URL(request.url()).pathname === path;
 const isOptionsRequest = postTo('/api/auth/passkey/options');
 const isSignInRequest = postTo('/api/auth/passkey');
+
+// The alert line directly above `button`, where its request's failures show (sign-in.md component 2a): view A has one
+// above the passkey button and one above Continue.
+const alertAbove = (button: Locator) => button.locator('xpath=preceding-sibling::*[1][@role="alert"]');
 
 test('with no passkey for Grow2Notes, a press shows no message and leaves focus on the button', async ({
   page,
@@ -37,7 +41,8 @@ test('with no passkey for Grow2Notes, a press shows no message and leaves focus 
   // The prompt failed as a dismissal does, which the prompt has already explained (sign-in.md *Passkey prompt
   // dismissed*), so the view says nothing and is ready for another press.
   expect(credentialSent).toBe(false);
-  await expect(page.getByRole('alert')).toBeEmpty();
+  await expect(alertAbove(button)).toBeEmpty();
+  await expect(alertAbove(page.getByRole('button', { name: 'Continue' }))).toBeEmpty();
   await expect(page.getByRole('heading', { name: 'There is a problem' })).toHaveCount(0);
   await expect(page).toHaveTitle('Grow2Notes – Sign in');
   await expect(button).not.toHaveAttribute('aria-disabled');
@@ -54,7 +59,8 @@ test('a passkey that no account holds gets the failed sign-in message, in the su
   await authenticator.addPasskey(new URL(page.url()).hostname);
 
   const signIn = page.waitForResponse((response) => isSignInRequest(response.request()));
-  await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  const button = page.getByRole('button', { name: 'Sign in with a passkey' });
+  await button.click();
   // The authenticator signed in with its passkey, whose credential matches no account (design.md §8.2).
   expect((await signIn).status()).toBe(401);
 
@@ -62,5 +68,6 @@ test('a passkey that no account holds gets the failed sign-in message, in the su
   const summary = page.getByRole('heading', { level: 2, name: 'There is a problem' }).locator('..');
   await expect(summary).toContainText(signInFailed);
   await expect(summary).toBeFocused();
-  await expect(page.getByRole('alert')).toBeEmpty();
+  await expect(alertAbove(button)).toBeEmpty();
+  await expect(alertAbove(page.getByRole('button', { name: 'Continue' }))).toBeEmpty();
 });

@@ -1,0 +1,13 @@
+/*
+ * A text field's look (foundations.md), which a field's own component puts on its <input>: as wide as its column,
+ * 48 px tall, with a 2 px near-black border, which FieldGroup thickens in the error colour while the field is in error.
+ * Its text is base.css's, 18 px, so that iOS does not zoom in on it.
+ */
+.input {
+  inline-size: 100%;
+  min-block-size: var(--target-button);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-control) solid var(--colour-border-control);
+  border-radius: var(--radius-s);
+  background: var(--colour-surface);
+}

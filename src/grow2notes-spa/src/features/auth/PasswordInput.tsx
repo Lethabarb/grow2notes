@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../components/Button.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
+import textInput from '../../components/textInput.module.css';
 import { strings } from '../../copy/strings.ts';
 import styles from './PasswordInput.module.css';
 
@@ -72,7 +73,7 @@ export function PasswordInput({
       id={id}
       name={id}
       type={shown ? 'text' : 'password'}
-      className={styles.input}
+      className={`${textInput.input} ${styles.input}`}
       autoComplete={autoComplete}
       minLength={minLength}
       spellCheck={false}
