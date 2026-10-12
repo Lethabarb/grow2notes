@@ -712,6 +712,13 @@ orchestrator so the other files can be aligned.
    shown; both are now in design.md §6.2.
 8. **Lockout and passkeys:** does Identity's lockout block `PasskeySignInAsync`, and do passkey failures count? This
    decides whether the A25 sentence is accurate for passkey users (M0 test).
+   **Tested 12 October 2026 (S00.04.04), for the owner:** the lockout blocks a passkey: a locked-out person's valid
+   passkey gets the A25 message and no session, as a Deactivated or Invited person's does. Identity checks this itself
+   from ASP.NET Core 10.0.4, and the app checks it as well, so it holds on every 10.0 runtime. Passkey failures do not
+   count: after five failed passkey sign-ins the account's failed-attempt count had not moved, and a sixth, valid,
+   signed in. So the A25 sentence is true for a passkey user only in part: a pause that failed passwords or codes start
+   on the account also stops their passkey, but failed passkeys never start one. Whether a failed passkey should still
+   show that sentence is the owner's call; until then it does.
 9. **Oldest phones:** which iOS and Android versions may workers' own phones run? (Drives the prefetch rule and the
    CSS baseline.)
 10. **In-app browsers:** which email apps on staff phones can create passkeys (device check before go-live).

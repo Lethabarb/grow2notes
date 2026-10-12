@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Net.Http.Headers;
 
@@ -22,9 +23,11 @@ namespace Grow2Notes.Tests.Features.Auth;
 /// <c>POST /api/auth/passkey</c> (design.md §6.2, §8.2) signing in an Active user, and failing to, called as the SPA
 /// calls it (<see cref="PasskeySignIn"/>): after the passkey options, with an assertion over their challenge that the
 /// test authenticator signs (<see cref="TestAuthenticator"/>), for a passkey stored for a user that the test adds to
-/// seeded organisation A or B. The app runs on a fake clock (<see cref="TestClock"/>), which moves a second before a
-/// later request of the session, and its log entries are recorded. The endpoint matrix covers who may call it, and
-/// <see cref="PasskeySignInRequestTests"/> a request without a credential.
+/// seeded organisation A or B. It also refuses a user who is not Active or is locked out, and the tests record that a
+/// failed passkey does not count towards the lockout (sign-in.md open question 8). The app runs on a fake clock
+/// (<see cref="TestClock"/>), which moves a second before a later request of the session, and its log entries are
+/// recorded. The endpoint matrix covers who may call it, and <see cref="PasskeySignInRequestTests"/> a request without
+/// a credential.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -225,6 +228,61 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         await AssertFailedSignInAsync(response, userId);
     }
 
+    // Only an Active user may sign in (design.md §8.2). A Deactivated person keeps their passkey (§8.6).
+    [Fact]
+    public Task A_Deactivated_user_s_valid_passkey_is_a_failed_sign_in_on_their_account() =>
+        AssertStatusRefusesAValidPasskeyAsync(UserStatus.Deactivated);
+
+    // An Invited user has not finished setup, or has had their sign-in reset.
+    [Fact]
+    public Task An_Invited_user_s_valid_passkey_is_a_failed_sign_in_on_their_account() =>
+        AssertStatusRefusesAValidPasskeyAsync(UserStatus.Invited);
+
+    // A lockout pauses a passkey sign-in too (A25). Identity's UserManager compares the lockout's end with
+    // DateTimeOffset.UtcNow, not the app's TimeProvider, so the end is set by the system clock, 15 minutes on, as A25's
+    // lockout sets it.
+    [Fact]
+    public async Task A_locked_out_user_s_valid_passkey_is_a_failed_sign_in_on_their_account()
+    {
+        var userId = await AddUserAsync(seeded.A, UserRole.Worker, "Sam Taylor");
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        var lockedOut = await WithUserAsync(
+            userId, (users, user) => users.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddMinutes(15)));
+        Assert.True(lockedOut.Succeeded, string.Join(" ", lockedOut.Errors.Select(error => error.Code)));
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.SignInWithPasskeyAsync(authenticator);
+
+        await AssertFailedSignInAsync(response, userId);
+    }
+
+    // As many failures as lock an account after wrong passwords or codes (A25's 5). The count is read after each, as
+    // Identity sets it back to 0 when it locks an account; had the last failure locked it, the valid assertion after
+    // them would fail.
+    [Fact]
+    public async Task Failed_passkey_sign_ins_do_not_count_towards_the_lockout()
+    {
+        var maxFailedAccessAttempts = app.Services.GetRequiredService<IOptions<IdentityOptions>>().Value.Lockout
+            .MaxFailedAccessAttempts;
+        var userId = await AddUserAsync(seeded.A, UserRole.Worker, "Sam Taylor");
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        var failedBefore = await AccessFailedCountAsync();
+        using var client = app.CreateHttpsClient();
+
+        for (var attempt = 0; attempt < maxFailedAccessAttempts; attempt++)
+        {
+            using var failed = await client.SignInWithPasskeyAsync(
+                challenge => authenticator.GetAssertion(challenge, userVerified: false));
+            await failed.ReadProblemAsync(HttpStatusCode.Unauthorized);
+            Assert.Equal(failedBefore, await AccessFailedCountAsync());
+        }
+
+        await SignInAsync(authenticator);
+
+        Task<int> AccessFailedCountAsync() =>
+            WithUserAsync(userId, (users, user) => users.GetAccessFailedCountAsync(user));
+    }
+
     [Fact]
     public async Task A_passkey_that_no_account_holds_gets_a_401_counted_by_one_log_entry_and_no_event()
     {
@@ -290,9 +348,25 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         Assert.Equal(lastEventId, await LastEventIdAsync());
     }
 
-    // An Active user, as setup leaves one (design.md §8.1), with an address of its own, which no other test or run of
-    // this one uses. The seeded users have no passkey, and other tests may rely on that (tests/README.md).
-    private async Task<Guid> AddUserAsync(SeededOrganisation organisation, UserRole role, string displayName)
+    // The user differs from an Active one in status alone and is not locked out, so the status is all that can refuse
+    // the valid assertion. Identity's passkey sign-in checks it only from ASP.NET Core 10.0.4, and the app's sign-in
+    // manager on every runtime (Grow2NotesSignInManager.SignInOrTwoFactorAsync).
+    private async Task AssertStatusRefusesAValidPasskeyAsync(UserStatus status)
+    {
+        var userId = await AddUserAsync(seeded.A, UserRole.Worker, "Sam Taylor", status);
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, userId);
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.SignInWithPasskeyAsync(authenticator);
+
+        await AssertFailedSignInAsync(response, userId);
+    }
+
+    // A user as setup leaves one (design.md §8.1), Active unless the test asks for another status, with an address of
+    // its own, which no other test or run of this one uses. The seeded users have no passkey, and other tests may rely
+    // on that (tests/README.md).
+    private async Task<Guid> AddUserAsync(
+        SeededOrganisation organisation, UserRole role, string displayName, UserStatus status = UserStatus.Active)
     {
         var email = $"{Guid.NewGuid():N}@example.org";
         var now = clock.GetUtcNow().UtcDateTime;
@@ -301,7 +375,7 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
             OrganisationId = organisation.OrganisationId,
             DisplayName = displayName,
             Role = role,
-            Status = UserStatus.Active,
+            Status = status,
             InvitedAtUtc = now,
             InvitedByUserId = organisation.ManagerId,
             ActivatedAtUtc = now,
@@ -320,6 +394,17 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
         using var client = app.CreateHttpsClient();
         using var response = await client.SignInWithPasskeyAsync(authenticator);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    // Runs work with the app's UserManager on the user, loaded afresh, as a sign-in loads the user it signs in.
+    private async Task<T> WithUserAsync<T>(
+        Guid userId, Func<UserManager<ApplicationUser>, ApplicationUser, Task<T>> work)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await users.FindByIdAsync(userId.ToString());
+        Assert.NotNull(user);
+        return await work(users, user);
     }
 
     // An organisation is the tenant, not tenant-owned, so reading one needs no tenant.

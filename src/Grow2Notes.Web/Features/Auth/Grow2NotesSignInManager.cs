@@ -62,6 +62,18 @@ internal sealed class Grow2NotesSignInManager(
         }
     }
 
+    /// <summary>
+    /// Checks that the user may sign in, by <see cref="CanSignInAsync"/> (Status Active) and the lockout, before
+    /// Identity's password and passkey sign-ins sign them in or ask for their code. Identity's password sign-in already
+    /// checks first, but its passkey sign-in does so only from ASP.NET Core 10.0.4, so on 10.0.0 to 10.0.3 this keeps
+    /// a Deactivated, Invited or locked-out person's passkey from signing them in (S00.04.04's Notes). On a later
+    /// runtime, the user is checked twice.
+    /// </summary>
+    protected override async Task<SignInResult> SignInOrTwoFactorAsync(
+        ApplicationUser user, bool isPersistent, string? loginProvider = null, bool bypassTwoFactor = false) =>
+        await PreSignInCheck(user)
+            ?? await base.SignInOrTwoFactorAsync(user, isPersistent, loginProvider, bypassTwoFactor);
+
     // Every sign-in ends here: SignInAsync, as setup completion calls it, and the password, two-factor and passkey
     // sign-ins.
     public override Task SignInWithClaimsAsync(

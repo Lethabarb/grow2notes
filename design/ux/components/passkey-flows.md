@@ -614,7 +614,9 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
   by autofill.
 - Passkey-only accounts have no password. Without autofill, they would type a password, fail with the A25 message and
   count towards the A25 lockout. Autofill and the hint line are the two cues that stop this.
-- Whether a lockout also blocks passkey sign-in in Identity is **unverified** (open question).
+- Tested on 12 October 2026 (S00.04.04): a lockout also blocks passkey sign-in, and failed passkey sign-ins never
+  count towards it. So five wrong passwords typed this way pause the person's passkey too, for 15 minutes. sign-in.md
+  open question 8 has the detail, for the owner.
 
 **5. Sign in, on a laptop or shared laptop (§8.2).**
 
