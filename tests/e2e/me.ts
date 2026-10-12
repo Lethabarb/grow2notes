@@ -1,3 +1,4 @@
+import { setTimeout as wait } from 'node:timers/promises';
 import type { Page } from '@playwright/test';
 
 /** The signed-in user, as `GET /api/auth/me` answers (design.md §6.2). */
@@ -35,4 +36,33 @@ export const manager: Me = {
  */
 export async function serveMe(page: Page, me: Me): Promise<void> {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: me }));
+}
+
+/**
+ * Fails each `GET /api/auth/me` that the page sends from now on, in the browser, as `serveMe` answers it.
+ * `'no connection'` aborts it, as a phone with no signal would, rather than `context.setOffline`, which would stop the
+ * page itself loading; a status answers it with that status and no body, such as `503` for a server problem.
+ */
+export async function failMe(page: Page, failure: 'no connection' | number): Promise<void> {
+  await page.route('**/api/auth/me', (route) =>
+    failure === 'no connection' ? route.abort('internetdisconnected') : route.fulfill({ status: failure }),
+  );
+}
+
+/** Answers each `GET /api/auth/me` that the page sends from now on with `me`, as `serveMe` does, but `ms` later. */
+export async function holdMe(page: Page, me: Me, ms: number): Promise<void> {
+  await page.route('**/api/auth/me', async (route) => {
+    await wait(ms);
+    await route.fulfill({ json: me });
+  });
+}
+
+/**
+ * Answers each `GET /api/auth/me` that the page sends from now on with `body` as JSON, as `serveMe` does, though it is
+ * not a `Me`, so that the page throws as it reads it: a `today` that is a number crashes Today, and `null` the shell.
+ */
+export async function answerMe(page: Page, body: unknown): Promise<void> {
+  await page.route('**/api/auth/me', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) }),
+  );
 }

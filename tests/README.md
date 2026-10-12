@@ -172,6 +172,39 @@ await serveMe(page, manager);
 await page.goto('/manage');
 ```
 
+### Making `/api/auth/me` fail, wait or crash the page
+
+Beside `serveMe`, `e2e/me.ts` answers `GET /api/auth/me` in the browser in three more ways, each through `page.route`
+and each overriding the answer before it, as `serveMe` does. `e2e/start-up.spec.ts` is the example of all three.
+
+- `failMe(page, 'no connection')` aborts each request, as a phone with no signal does, rather than
+  `context.setOffline(true)`, which would stop the page itself loading; `failMe(page, 503)` answers each with that
+  status and no body, for a server problem. The query client tries such a request once more, silently, 1 s later, so
+  the start-up message shows about 1 s after the page loads, and the "still" sentence about 1 s after Try again. For
+  the next Try again to bring the screen, the test then calls `serveMe`.
+- `holdMe(page, me, ms)` answers each with `me`, `ms` after the page sent it, for the start-up's "Loading…", which
+  shows from 1 s.
+- `answerMe(page, body)` answers each with JSON that is not a `Me`, so that the page throws as it renders. The worker
+  with a number for `today`, which Today's heading cannot read, crashes the screen, which shows the crash page under
+  the nav; `null`, which the header cannot read, crashes the shell, which shows its own crash page. React writes each
+  crash to the console as an error, which does not fail the test (above).
+
+```ts
+await answerMe(page, { ...worker, today: 20261001 });
+await page.goto('/');
+```
+
+To see `index.html`'s boot line, a test holds back the page's script with a route for `**/assets/*.js` that waits until
+the test lets it through, and opens the page with `page.goto('/', { waitUntil: 'commit' })`, as `DOMContentLoaded` and
+the load event wait for the script. With JavaScript off, through `test.use({ javaScriptEnabled: false })`, `getByText`
+does not find the `<noscript>` line, but `page.locator('noscript > p')` does.
+
+A test that counts the requests for `/api/auth/me` counts the `GET`s that `page.on('request')` reports. A request that
+a step sent may be reported after the step, so a count that should not have grown is checked once the test has the
+answer to a request of its own, `fetch('/healthz')` in `page.evaluate`: the browser reports a page's requests in the
+order that it sends them. Time with nothing done runs on Playwright's clock, installed with `page.clock.install()`
+before `page.goto` and moved on with `page.clock.runFor('30:00')`.
+
 ### Signing in with a passkey, end to end
 
 A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
