@@ -78,6 +78,9 @@ builder.Services.AddDataProtection()
 // kept, not cleared, because Identity compares addresses as they are written: a copy of one with a space or an
 // invisible character in it would be another address to Identity and to the index, and so a second account for the
 // same mailbox.
+//
+// The default token providers include Identity's authenticator provider, which checks the codes of the authenticator
+// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2).
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -87,6 +90,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
     .AddEntityFrameworkStores<Grow2NotesDbContext>()
+    .AddDefaultTokenProviders()
     .AddTokenProvider<SetupTokenProvider>(SetupTokenProvider.ProviderName);
 
 // A passkey is bound to the domain it was made for (design.md §8.4), so that domain is App:Origin's host, the one the
@@ -271,6 +275,7 @@ app.MapApiGroup()
     .MapMeEndpoint()
     .MapLogoutEndpoint()
     .MapSetupStartEndpoint()
+    .MapSetupAuthenticatorEndpoints()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
     .MapPasskeyOptionsEndpoint()
