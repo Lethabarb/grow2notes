@@ -1,6 +1,7 @@
 import type { Locator, Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { boxOf } from './layout.ts';
 
 const linkCheck = '**/api/auth/setup/start';
 
@@ -37,16 +38,6 @@ async function historyUrls(page: Page): Promise<string[]> {
   // Left attached until the page closes: detaching a DevTools session takes the page's virtual authenticator with it,
   // and a later passkey prompt would then find none.
   return entries.map(({ url }) => url);
-}
-
-/** Where the element shows on the page. */
-async function boxOf(locator: Locator) {
-  const box = await locator.boundingBox();
-  if (box === null) {
-    throw new Error(`${locator.toString()} is not shown.`);
-  }
-
-  return box;
 }
 
 /** How far the control's text reaches past either side of its box, in CSS pixels, or 0. */

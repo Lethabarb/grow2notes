@@ -52,6 +52,23 @@ public sealed class SignedOutTests : IAsyncDisposable
         Assert.Null(response.Headers.Location);
     }
 
+    // Over HTTPS, as the SPA calls it, with no antiforgery token, which the /api group's check would answer with a 400.
+    // The fallback policy refuses it first, so the endpoint, which would need the database that is not here, never
+    // runs and writes nothing; and with no session cookie, none is deleted.
+    [Fact]
+    public async Task Sign_out_with_no_session_gets_a_401_problem_with_no_Set_Cookie_or_Clear_Site_Data()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PostAsync(
+            "/api/auth/logout", content: null, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Empty(response.SetCookies());
+        Assert.False(response.Headers.Contains("Clear-Site-Data"));
+    }
+
     [Theory]
     [MemberData(nameof(NoSuchFiles))]
     public async Task A_path_with_a_file_extension_that_is_no_file_gets_a_404_problem(string method, string path)

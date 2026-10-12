@@ -1,10 +1,12 @@
 import { useRef, useState, type KeyboardEvent } from 'react';
 import { Link, matchPath, useLocation } from 'react-router';
+import { api, classify } from '../api/api.ts';
 import type { Me } from '../api/me.ts';
 import { Button } from '../components/Button.tsx';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { strings } from '../copy/strings.ts';
+import { fullPageLoad } from './fullPageLoad.ts';
 import styles from './Header.module.css';
 import layout from './layout.module.css';
 
@@ -72,8 +74,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
     page === pageName.pageNotFound ? undefined : markTable.find(({ path }) => matchPath(path, pathname) !== null);
   const isManager = me.role === 'Manager';
 
-  // On the whole header, so that Escape closes the panel from a nav link as well as from Account, and from the
-  // panel's own contents, which S00.04.06 adds.
+  // On the whole header, so that Escape closes the panel from a nav link and from Sign out as well as from Account.
   function closeOnEscape(event: KeyboardEvent<HTMLElement>) {
     if (event.key === 'Escape' && open) {
       setOpen(false);
@@ -100,11 +101,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
       </svg>
     </Button>
   );
-  const panel = (
-    <div id={accountPanelId} className={styles.panel} hidden={!open}>
-      <p className={styles.signedInAs}>{msg.signedInAs(me.displayName)}</p>
-    </div>
-  );
+  const panel = <AccountPanel open={open} displayName={me.displayName} />;
   // Report opens on the server's today in Melbourne (A33), so that the report needs no redirect to today's date.
   const nav = (
     <nav aria-label={strings.mainNavigation}>
@@ -145,6 +142,49 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
         )}
       </div>
     </header>
+  );
+}
+
+/**
+ * The Account panel (component 2d): whose session it is, Sign out, and the line that says why a sign-out failed. The
+ * line is in the panel from the first render, as a screen reader may not announce words written into a live region
+ * that was added with them.
+ */
+function AccountPanel({ open, displayName }: { open: boolean; displayName: string }) {
+  const [signingOut, setSigningOut] = useState(false);
+  // Emptied by each press, so that a failure that repeats is written into an empty line and announced again.
+  const [failure, setFailure] = useState('');
+
+  // *Press Sign out* and *Sign out fails* (app-shell.md), but for the leave guard's steps, which S01.04.02 adds with
+  // Guide prompts, and the autosave flush, which S02.02.05 adds with the note form.
+  async function signOut() {
+    setFailure('');
+    setSigningOut(true);
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch (error) {
+      const cause = classify(error);
+      // A 401 counts as done: there was no session left to end.
+      if (cause !== 'signedOut') {
+        setFailure(msg.notSignedOut(cause));
+        setSigningOut(false);
+        return;
+      }
+    }
+
+    // Still busy, so that nothing more is sent while the page goes.
+    fullPageLoad();
+  }
+
+  return (
+    <div id={accountPanelId} className={styles.panel} hidden={!open}>
+      <p className={styles.signedInAs}>{msg.signedInAs(displayName)}</p>
+      {/* Its busy label is not announced: the panel's line says only why a sign-out failed (app-shell.md). */}
+      <Button busy={signingOut} busyLabel={strings.signingOut} announceBusy={false} onClick={() => void signOut()}>
+        {strings.signOut}
+      </Button>
+      <p role="status" className={styles.statusLine}>{failure}</p>
+    </div>
   );
 }
 

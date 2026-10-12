@@ -23,4 +23,6 @@ export const msg = {
   setupLinkNotChecked: (cause: Cause) => `Your setup link was not checked: ${strings.cause[cause]}. Try again.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
+  /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */
+  notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
 } as const;

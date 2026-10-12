@@ -235,7 +235,7 @@ In DOM order:
 | Account button | Account | **(new copy)**: §4.0 says "account menu" |
 | Account panel | Signed in as {displayName} | **(new copy)**: [Convention], NHS and AgDS. Helps on shared org devices (D21) |
 | Sign-out button | Sign out / while working: Signing out… | §4.0; "Signing out…" **(new copy)** |
-| Sign-out errors | Not signed out. Your note isn't saved yet: no connection. Keep this page open; retrying. · Not signed out: no connection. Try again. | **(new copy)**, modelled on §4.3 "Not saved: no connection. Keep this page open; retrying." |
+| Sign-out errors | Not signed out: your note is not saved yet. Keep this page open; retrying. · Not signed out: no connection. Try again. · Not signed out: something went wrong. Try again. | **(new copy)**, as app-shell.md *Conflicts resolved* 13 and 14 word it (microcopy.md), modelled on §4.3 "Not saved: no connection. Keep this page open; retrying." |
 | Skip link | Skip to main content | GOV.UK |
 | Manage page | `<h1>` Manage; links: Participants · Common items · Guide prompts · Users | §4.0 |
 | Shell loading (only after 1 s) | Loading… | **(new copy)** |
@@ -285,16 +285,23 @@ failed submit, the form adds `Error: ` in front ("Error: Grow2Notes – Note") [
 - **Account menu**: an APG disclosure. Tapping Account toggles the panel. Escape, from the button or from inside the
   panel, closes it and returns focus to Account. Moving to another screen closes it. It needs no outside-click
   handling, because the panel is in the page flow rather than floating over it. It never opens on hover.
-- **Sign out**:
-  1. Set `aria-disabled="true"` and show "Signing out…". Never use `disabled`, which drops focus to `<body>`.
-  2. Wait for any pending autosave to finish (`flushPendingSaves()`, owned by the note-form spec), so nothing
-     typed is lost (I9).
-  3. `POST /api/auth/logout`. A `401` counts as success.
-  4. `window.location.replace('/')`. The full reload clears memory (§8.5), and `replace` keeps the signed-in screen
-     out of Back.
+- **Sign out** (app-shell.md *What happens on each action*, *Press Sign out* and *Sign out fails*):
 
-  If step 2 or 3 fails, show the error text in the panel's `role="status"` line and put the button back. There is
-  no "Are you sure?" dialog: drafts are already on the server, so signing out loses nothing [Convention].
+  0. `if (!(await leaveGuard.confirmLeave())) return;` (settings-textarea.md). It resolves `true` at once when no
+     page has registered a guard. On Guide prompts with unsaved text it opens that page's leave dialog, and **Stay**
+     cancels the sign-out with nothing sent and focus back on Sign out.
+  1. Set `aria-disabled="true"`, show "Signing out…" after 400 ms, and ignore repeat presses. Never use `disabled`,
+     which drops focus to `<body>`.
+  2. If a note form is mounted, `await autosave.flushNow()` (autosave-status.md), so nothing typed is lost (I9).
+  3. `disarmUnloadGuard()`, so no browser leave prompt fires on the reload.
+  4. `POST /api/auth/logout`, with the antiforgery header. A `204` or a `401` counts as success.
+  5. `window.location.replace('/')`. The full reload clears memory (§8.5), `replace` keeps the signed-in screen out
+     of Back, and the server's `Clear-Site-Data` clears cache, cookies and storage.
+
+  If step 2 or 4 fails, call `rearmUnloadGuard()` (unsaved Guide prompts text is still on screen), show the error in
+  the panel's `role="status"` line and make the button ready again, with focus kept on it. There is no "Are you
+  sure?" dialog, apart from a page's own leave guard: drafts are already on the server, so signing out loses nothing
+  [Convention].
 - **Screen change (client-side)**:
   - New screen (push or replace): scroll to the top.
   - Back or forward (pop): restore the scroll position from the shell's in-memory map (app-shell.md). ~~React Router
@@ -560,7 +567,8 @@ export function PageHeading({ children }: { children: React.ReactNode }) {
   and after a review or a flagged submit. It never polls.
 - Titles come only from the fixed `PageName` list. URLs hold only IDs and dates. Router state holds no names.
 - The session time-out dialog and "sign in again in place" are hosted here. Their content belongs to their own specs.
-- Sign-out waits for any pending autosave, then posts, then does a full reload with `replace`.
+- Sign-out asks a page's leave guard first, waits for any waiting autosave (`flushNow()`), then posts, then does a
+  full reload with `replace`.
 
 ### Today (design.md §4.2)
 
@@ -635,7 +643,7 @@ export function PageHeading({ children }: { children: React.ReactNode }) {
 **Other**
 
 - `user-scalable=no` or `maximum-scale=1`.
-- A confirmation dialog on Sign out.
+- A confirmation dialog on Sign out, apart from a page's own leave guard.
 
 ## Tensions with decisions
 

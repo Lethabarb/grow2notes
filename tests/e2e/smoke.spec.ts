@@ -1,5 +1,6 @@
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectViewA } from './signedOut.ts';
 
 // Signed out, the shell meets the app's real 401 from GET /api/auth/me and shows sign-in's view A in its signed-out
 // frame, at the address that was opened (sign-in.md *Routes* and component 1). A nested path also proves that the
@@ -15,16 +16,8 @@ for (const path of ['/', '/manage/anything']) {
     expect(await response?.headerValue('Content-Security-Policy')).toBeTruthy();
     expect((await me).status()).toBe(401);
 
-    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Sign in');
-    await expect(page).toHaveTitle('Grow2Notes – Sign in');
+    await expectViewA(page);
     expect(new URL(page.url()).pathname).toBe(path);
-    // The wordmark, as text.
-    const header = page.getByRole('banner');
-    await expect(header).toHaveText('Grow2Notes');
-    await expect(header.getByRole('link')).toHaveCount(0);
-    await expect(page.locator('nav')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Account' })).toHaveCount(0);
-    await expect(page.locator('main')).toHaveCount(1);
 
     await expectAxeToPass(page);
   });

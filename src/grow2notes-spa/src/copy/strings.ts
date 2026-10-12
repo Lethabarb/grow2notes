@@ -9,6 +9,10 @@ export const strings = {
   navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
+  /** The Account panel's Sign out button (component 2d). */
+  signOut: 'Sign out',
+  /** Sign out's busy label. */
+  signingOut: 'Signing out…',
   /** Page not found's words under its heading (app-shell.md component 4). */
   pageNotFound: {
     checkAddress: 'If you typed or pasted the web address, check it is correct.',

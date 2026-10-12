@@ -5,8 +5,14 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
+import { onSessionEnded } from '../api/session.ts';
+import { buttonClass } from '../components/buttonClass.ts';
 import { pageName } from '../copy/pageNames.ts';
+import { fullPageLoad } from './fullPageLoad.ts';
 import { routes, type AppRoute } from './routes.tsx';
+
+// jsdom does not navigate, so the full reload is a stand-in that counts its calls.
+vi.mock('./fullPageLoad.ts');
 
 // A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -36,11 +42,82 @@ const madeUp: AppRoute[] = [
 
 const fetchMock = vi.fn<typeof fetch>();
 
+/** `GET /api/auth/me`'s answer for `me`. */
+function meAnswer(me: Me): Response {
+  return new Response(JSON.stringify(me), { headers: { 'Content-Type': 'application/json' } });
+}
+
 /** Stubs `fetch` as the server, which answers `GET /api/auth/me` with `me()` each time it is asked. */
 function serveMe(me: () => Me) {
-  fetchMock.mockImplementation(() =>
-    Promise.resolve(new Response(JSON.stringify(me()), { headers: { 'Content-Type': 'application/json' } })),
-  );
+  fetchMock.mockImplementation(() => Promise.resolve(meAnswer(me())));
+}
+
+const logoutPath = '/api/auth/logout';
+const antiforgeryToken = 'made-up-token';
+
+/** How the server meets a `POST /api/auth/logout`: an answer, or a failure as `fetch` has one. */
+type Logout = (init?: RequestInit) => Promise<Response>;
+
+/**
+ * Stubs `fetch` as the server: `GET /api/auth/me` answers `me`, the antiforgery endpoint gives a token, and each
+ * `POST /api/auth/logout` meets the next of `logouts`, in turn.
+ */
+function serveSignOut(me: Me, ...logouts: Logout[]) {
+  fetchMock.mockImplementation((path, init) => {
+    if (path === '/api/auth/antiforgery') {
+      return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': antiforgeryToken } }));
+    }
+
+    if (path === logoutPath) {
+      const logout = logouts.shift();
+      if (logout === undefined) {
+        throw new Error('The test gave no answer for this logout.');
+      }
+
+      return logout(init);
+    }
+
+    return Promise.resolve(meAnswer(me));
+  });
+}
+
+/** A logout answered with `status`: a `204` with no body, or any other as a problem (design.md §6.1). */
+function answer(status: number): Logout {
+  const problem = JSON.stringify({ type: 'about:blank', title: 'Problem', status });
+  return () =>
+    Promise.resolve(
+      status === 204
+        ? new Response(null, { status })
+        : new Response(problem, { status, headers: { 'Content-Type': 'application/problem+json' } }),
+    );
+}
+
+/** A logout with no connection, which `fetch` rejects. */
+const offline: Logout = () => Promise.reject(new TypeError('Failed to fetch'));
+
+/** A logout that the server never answers: `fetch` rejects only when its signal aborts, with the signal's reason. */
+const noAnswer: Logout = (init) =>
+  new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      reject(signal.reason as Error);
+    });
+  });
+
+/** Each logout sent, as its method and the antiforgery token it carried. */
+function logoutsSent() {
+  return fetchMock.mock.calls
+    .filter(([path]) => path === logoutPath)
+    .map(([, init]) => ({ method: init?.method, token: new Headers(init?.headers).get('X-XSRF-TOKEN') }));
+}
+
+const removers: (() => void)[] = [];
+
+/** A listener for the session-ended event, removed after the test. */
+function listenForSessionEnded() {
+  const listener = vi.fn();
+  removers.push(onSessionEnded(listener));
+  return listener;
 }
 
 /** Renders the app with the made-up screens at `path` on a memory router, under a query client of its own. */
@@ -63,10 +140,18 @@ async function settle() {
   await act(() => vi.advanceTimersByTimeAsync(0));
 }
 
-/** The header's links and buttons, in DOM order, each as its role and text. */
-function headerTargets(): string[] {
+/**
+ * The header's links and buttons that Tab reaches, in DOM order, which is the order of Tab, as nothing in the header
+ * has a positive `tabindex`: those in the panel only while it is open.
+ */
+function reachableTargets(): Element[] {
   const targets = screen.getByRole('banner').querySelectorAll('a[href], button');
-  return Array.from(targets, (target) => `${target.localName === 'a' ? 'link' : 'button'} ${target.textContent}`);
+  return Array.from(targets).filter((target) => target.closest('[hidden]') === null);
+}
+
+/** The header's links and buttons that Tab reaches, in DOM order, each as its role and text. */
+function headerTargets(): string[] {
+  return reachableTargets().map((target) => `${target.localName === 'a' ? 'link' : 'button'} ${target.textContent}`);
 }
 
 /** The Account panel, which has no role to find it by. */
@@ -91,13 +176,19 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  for (const remove of removers.splice(0)) {
+    remove();
+  }
   fetchMock.mockReset();
+  vi.mocked(fullPageLoad).mockReset();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
 
 describe('Header', () => {
-  // Exactly these, in DOM order, which is the order on screen: the only button is Account, so there is no menu button.
+  // Exactly these, in DOM order, which is the order on screen: with the panel closed, the only button is Account, so
+  // there is no menu button.
   it.each([
     {
       me: worker,
@@ -204,11 +295,14 @@ describe('the Account button and panel', () => {
     expect(within(accountPanel()).getByText(text)).toBeVisible();
   });
 
-  // The worker's Today is before Account, in row 1, and the manager's Report after the panel, in row 2.
+  // The worker's Today is before Account, in row 1, Sign out in the panel, and the manager's Report after the panel, in
+  // row 2.
   it.each([
     { me: worker, target: { role: 'button', name: 'Account' } },
     { me: worker, target: { role: 'link', name: 'Today' } },
+    { me: worker, target: { role: 'button', name: 'Sign out' } },
     { me: manager, target: { role: 'button', name: 'Account' } },
+    { me: manager, target: { role: 'button', name: 'Sign out' } },
     { me: manager, target: { role: 'link', name: 'Report' } },
   ] as const)('closes on Escape on $target.name for a $me.role, and focuses Account', async ({ me, target }) => {
     const { account } = await renderAccount(me);
@@ -269,5 +363,163 @@ describe('the Account button and panel', () => {
 
     fireEvent.keyDown(account, { key: 'Escape' });
     expect(account).not.toHaveAttribute('disabled');
+  });
+});
+
+describe('Sign out', () => {
+  const noConnection = 'Not signed out: no connection. Try again.';
+  const serverFailure = 'Not signed out: something went wrong. Try again.';
+
+  /** Renders the shell for whoever the server answers, opens the Account panel, and focuses Sign out in it. */
+  async function openPanel() {
+    renderShell('/');
+    await settle();
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const panel = accountPanel();
+    const signOut = within(panel).getByRole('button', { name: 'Sign out' });
+    signOut.focus();
+    return { signOut, line: within(panel).getByRole('status') };
+  }
+
+  /** Whether the header is still signed in: the nav, and Account with its panel open. */
+  function headerSignedIn(): boolean {
+    return (
+      screen.queryByRole('navigation', { name: 'Main' }) !== null
+      && screen.queryByRole('button', { name: 'Account', expanded: true }) !== null
+    );
+  }
+
+  it.each([
+    { me: worker, signedInAs: 'Signed in as Alex Pham' },
+    { me: manager, signedInAs: 'Signed in as Sam Lee' },
+  ])('follows "$signedInAs", before an empty status line, and comes next after Account', async ({ me, signedInAs }) => {
+    serveMe(() => me);
+    renderShell('/');
+    await settle();
+    const panel = accountPanel();
+    // In the page before the panel first opens, so that the words later written into it are announced.
+    const line = panel.querySelector('[role="status"]');
+    expect(line).toBeEmptyDOMElement();
+
+    const account = screen.getByRole('button', { name: 'Account' });
+    fireEvent.click(account);
+    const signOut = within(panel).getByRole('button', { name: 'Sign out' });
+
+    const contents = panel.querySelectorAll('p, button');
+    expect(contents).toHaveLength(3);
+    expect(contents[0].textContent).toBe(signedInAs);
+    expect(contents[1]).toBe(signOut);
+    expect(contents[2]).toBe(line);
+    expect(within(panel).getByRole('status')).toBe(line);
+    expect(line).toBeEmptyDOMElement();
+    // The shared Button's secondary style and nothing of its own: the full width on a phone, as wide as its label from
+    // 40rem (Button.module.css).
+    expect(signOut).toHaveAttribute('class', buttonClass('secondary'));
+    const targets = reachableTargets();
+    expect(targets[targets.indexOf(account) + 1]).toBe(signOut);
+  });
+
+  it('sends one POST /api/auth/logout with the antiforgery token, and no dialog, and no more while busy', async () => {
+    serveSignOut(worker, noAnswer);
+    const confirm = vi.spyOn(window, 'confirm');
+    const { signOut } = await openPanel();
+
+    fireEvent.click(signOut);
+    await settle();
+    fireEvent.click(signOut);
+    fireEvent.click(signOut);
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+
+    expect(logoutsSent()).toEqual([{ method: 'POST', token: antiforgeryToken }]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('says "Signing out…" from 400 ms, aria-disabled but never disabled, and keeps focus', async () => {
+    serveSignOut(manager, noAnswer);
+    const { signOut } = await openPanel();
+    const busyLabel = within(signOut).getByText('Signing out…');
+
+    fireEvent.click(signOut);
+    await act(() => vi.advanceTimersByTimeAsync(399));
+
+    expect(signOut).toHaveAccessibleName('Sign out');
+    expect(busyLabel).not.toBeVisible();
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+    expect(signOut).not.toHaveAttribute('disabled');
+    expect(signOut).toHaveFocus();
+
+    await act(() => vi.advanceTimersByTimeAsync(1));
+
+    expect(signOut).toHaveAccessibleName('Signing out…');
+    expect(busyLabel).toBeVisible();
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+    expect(signOut).not.toHaveAttribute('disabled');
+    expect(signOut).toHaveFocus();
+  });
+
+  // A 401 is a sign-out that counts as done: there was no session left to end. The checks come once React has
+  // rendered, as the mocked page never goes: what they find is what the person has while the new page loads.
+  it.each([204, 401])('loads / afresh once after a %i, busy and signed in until the page goes', async (status) => {
+    serveSignOut(worker, answer(status));
+    const ended = listenForSessionEnded();
+    const { signOut } = await openPanel();
+
+    fireEvent.click(signOut);
+    await settle();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+    expect(headerSignedIn()).toBe(true);
+    expect(ended).not.toHaveBeenCalled();
+
+    fireEvent.click(signOut);
+    await settle();
+
+    expect(logoutsSent()).toHaveLength(1);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { failure: 'a network failure', logout: offline, wait: 0, sentence: noConnection },
+    { failure: 'no answer in 10 seconds', logout: noAnswer, wait: 10_000, sentence: noConnection },
+    { failure: 'a 503', logout: answer(503), wait: 0, sentence: serverFailure },
+  ])('after $failure, says "$sentence", with Sign out ready and focused', async ({ logout, wait, sentence }) => {
+    serveSignOut(manager, logout);
+    const { signOut, line } = await openPanel();
+
+    fireEvent.click(signOut);
+    await act(() => vi.advanceTimersByTimeAsync(wait));
+
+    expect(line.textContent).toBe(sentence);
+    expect(signOut).not.toHaveAttribute('aria-disabled');
+    expect(signOut).toHaveAccessibleName('Sign out');
+    expect(signOut).toHaveFocus();
+    expect(fullPageLoad).not.toHaveBeenCalled();
+    expect(headerSignedIn()).toBe(true);
+  });
+
+  it('empties the status line when pressed again, before the request, and says the new failure', async () => {
+    const linesWhenSent: (string | null)[] = [];
+    /** `logout`, noting the status line's words when the request is sent. */
+    function noting(logout: Logout): Logout {
+      return (init) => {
+        linesWhenSent.push(within(accountPanel()).getByRole('status').textContent);
+        return logout(init);
+      };
+    }
+    serveSignOut(worker, noting(answer(503)), noting(offline));
+    const { signOut, line } = await openPanel();
+    fireEvent.click(signOut);
+    await settle();
+    expect(line.textContent).toBe(serverFailure);
+
+    fireEvent.click(signOut);
+
+    expect(line).toBeEmptyDOMElement();
+    await settle();
+    expect(linesWhenSent).toEqual(['', '']);
+    expect(line.textContent).toBe(noConnection);
   });
 });
