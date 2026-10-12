@@ -190,7 +190,8 @@ saves a tired worker from using up their 5 attempts on a phone they no longer ha
   code input. The person pressed Continue, so moving focus is allowed. Because the label is the `<h1>`, a screen reader
   reads the step's purpose and the field together.
 - **Arriving at the setup block:** don't move focus. The person reads from the top. Fetch the key with
-  `GET /api/auth/setup/authenticator` as soon as "Use a password and authenticator app" is chosen.
+  `GET /api/auth/setup/authenticator` as the setup block shows, not before, so that `gcTime: 0` drops it from memory
+  once the block has gone (sign-in.md *Interactions* 9).
 - **Typing and pasting:** the value is whatever the person typed. Never reformat it, never block keys, and never call
   `preventDefault` on key presses, because that breaks dictation and IMEs. Pasting "123 456" or "123-456" works.
 - **Submitting (both):** check the code in the browser first: remove spaces and dashes, then require exactly 6 ASCII
@@ -331,8 +332,10 @@ regions).
 
 ### Implementation notes (React 19, native HTML, CSS Modules)
 
-- **Files:** `src/auth/code.ts` (normalise and check), `src/auth/OneTimeCodeField.tsx` + `.module.css`,
-  `src/auth/SetupKey.tsx` + `.module.css`, `src/auth/AuthenticatorSetup.tsx`.
+- **Files:** `src/features/auth/code.ts` (normalise and check) and `src/features/auth/OneTimeCodeField.tsx` +
+  `.module.css`, beside `passkey.ts`, as sign-in's code step uses them too; and view G in `src/routes/setup/`:
+  `AuthenticatorSetup.tsx` (the setup block), `SetupKey.tsx` and `FinishSetup.tsx` (the code step), each with a
+  `.module.css`.
 - **Use `onSubmit` with controlled state, not `<form action>`.** React resets uncontrolled fields after an `action`
   succeeds ([docs](https://react.dev/reference/react-dom/components/form)), and that would wipe the password when a
   setup code is wrong.
@@ -354,7 +357,7 @@ regions).
   **[Opinion]**
 
 ```ts
-// src/auth/code.ts
+// src/features/auth/code.ts
 const SEPARATORS = /[\s\-‐-―−]/g;              // spaces, hyphens, dashes, minus
 export const normaliseCode = (raw: string) => raw.normalize('NFKC').replace(SEPARATORS, '');
 
@@ -367,7 +370,7 @@ export function codeFormatError(raw: string): string | null {
 ```
 
 ```tsx
-// src/auth/OneTimeCodeField.tsx
+// src/features/auth/OneTimeCodeField.tsx
 type Props = {
   id: string; label: string; hint: string; error?: string; asPageHeading?: boolean;
   value: string; onChange: (v: string) => void; ref?: React.Ref<HTMLInputElement>;  // React 19: ref as a prop
@@ -399,7 +402,7 @@ export function OneTimeCodeField({ id, label, hint, error, asPageHeading, value,
 ```
 
 ```tsx
-// src/auth/SetupKey.tsx: key shown in groups, copied without spaces
+// src/routes/setup/SetupKey.tsx: key shown in groups, copied without spaces
 export function SetupKey({ sharedKey }: { sharedKey: string }) {
   const key = sharedKey.replace(/\s/g, '').toUpperCase();
   const groups = key.match(/.{1,4}/g) ?? [];
