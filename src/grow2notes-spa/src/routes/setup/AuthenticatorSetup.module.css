@@ -1,0 +1,21 @@
+/* View G (sign-in.md), in one column of the measure's width, on the wordmark's left edge (Layout - laptop). */
+.view {
+  max-inline-size: var(--measure);
+}
+
+/*
+ * The QR code on white, with the 4-module quiet zone that the image holds. `only light`, the app's one use of it,
+ * keeps a browser's automatic dark mode from inverting the code that an authenticator app must read (foundations.md).
+ */
+.qrPanel {
+  inline-size: fit-content;
+  margin-block-end: var(--space-4);
+  background: var(--colour-surface);
+  color-scheme: only light;
+}
+
+/* Sharp modules at whatever size the browser draws it, as when the page is zoomed. */
+.qr {
+  display: block;
+  image-rendering: pixelated;
+}

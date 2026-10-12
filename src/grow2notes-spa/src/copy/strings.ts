@@ -40,10 +40,33 @@ export const strings = {
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',
+  /** The button of a step that leads to the next (sign-in.md component 8). */
+  continue: 'Continue',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
   /** A person's email address, as a field's label or a summary's term (sign-in.md components 6 and 13). */
   emailAddress: 'Email address',
+  /**
+   * The Show/Hide button of a password field that has one (sign-in.md component 7, GOV.UK's words): its visible word,
+   * its name, which starts with that word, and what its polite line then says.
+   */
+  passwordToggle: {
+    show: 'Show',
+    hide: 'Hide',
+    showName: 'Show password',
+    hideName: 'Hide password',
+    visible: 'Your password is visible',
+    hidden: 'Your password is hidden',
+  },
+  /**
+   * The one-time code field (sign-in.md component 10), on setup's view G and sign-in's code step: its label, which is
+   * also its message when nothing is left once spaces and dashes are taken out (microcopy.md §9), and its message for
+   * a code that is not then 6 digits. Each view's hint is in that view's own group.
+   */
+  oneTimeCode: {
+    label: 'Enter the 6-digit code from your authenticator app',
+    wrongFormat: 'The code must be 6 digits',
+  },
   /** Why a request failed, as the failure sentences put it (microcopy.md §9). */
   cause: {
     /** `fetch` rejected, or no whole answer came in time. */
@@ -85,6 +108,39 @@ export const strings = {
       body:
         'Passkeys cannot be set up here. Go back to the email and open the link in your phone’s browser, such as '
         + 'Safari or Chrome.',
+    },
+    /** View F's `<h1>`, which is its field's label. */
+    createPassword: 'Create a password',
+    /** View F's message for a password that is empty or only spaces (its hint and length message are in `msg`). */
+    enterPassword: 'Enter a password',
+    /** View G's setup block (sign-in.md *Copy for view G*), in the order it shows them. */
+    authenticatorApp: {
+      heading: 'Set up your authenticator app',
+      intro:
+        'An authenticator app is a free app on your phone. It shows a new 6-digit code every 30 seconds. You enter '
+        + 'the code after your password each time you sign in.',
+      getApp:
+        'Get an authenticator app on your phone if you do not have one, for example Google Authenticator or '
+        + 'Microsoft Authenticator. Any authenticator app works.',
+      addGrow2Notes: 'Add Grow2Notes to the app. Scan the QR code, or use the setup key.',
+      /** The QR code's `alt`, which says what it is for; the setup key under it is its text equivalent. */
+      qrAlt: 'QR code for adding Grow2Notes to your authenticator app',
+      /** In place of the QR code, when it did not load. */
+      qrNotLoaded: 'The QR code did not load. Use the setup key instead.',
+      thisPhone: 'Using this phone? Type the setup key into the app. If the app asks for a name, type Grow2Notes.',
+      /** The key's term, in front of the key. */
+      setupKey: 'Setup key',
+      /** The key as its failure sentence names it, "The setup key did not load: …". */
+      theSetupKey: 'The setup key',
+      setupKeyNote: 'Your app might call this a ‘key’ or ‘secret key’. You do not need to type the spaces.',
+      comeBack: 'Come back to this page.',
+      /** The code field's hint on view G; sign-in's code step has a hint of its own. */
+      codeHint: 'Find Grow2Notes in the app. If the code changes while you’re typing, you can still use it.',
+      /** On the code field, for a code that the server did not take (`422` with `errors.totpCode`, D70). */
+      codeRejected: 'That code did not work. Enter the code the app shows for Grow2Notes now.',
+      finishSetup: 'Finish setup',
+      /** Finish setup's busy label. */
+      finishingSetup: 'Finishing setup…',
     },
   },
   /** The error summary's heading (form-validation.md). */

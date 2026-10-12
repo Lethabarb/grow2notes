@@ -41,7 +41,7 @@ type View = 'linkCheck' | 'expired' | 'timedOut' | 'noLink' | 'choose';
  * Try again can send it again (*Interactions* 7).
  */
 export function SetupPage() {
-  const { account, setAccount } = useSetup();
+  const { account, setAccount, drop } = useSetup();
   const { hash } = useLocation();
   const navigate = useNavigate();
   // Read once, so that StrictMode's second render still has the link after the address has lost it.
@@ -93,9 +93,9 @@ export function SetupPage() {
 
   // A 401 from view E's calls: the enrolment cookie has ended, and setup's memory goes with it (sign-in.md *Setup*).
   const timeOut = useCallback(() => {
-    setAccount(undefined);
+    drop();
     setCheck({ state: 'timedOut' });
-  }, [setAccount]);
+  }, [drop]);
 
   const failure = check?.state === 'failed' ? check.failure : undefined;
   useErrorTitle(failure !== undefined);

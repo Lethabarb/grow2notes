@@ -395,8 +395,9 @@ flagged note, the first marks it reviewed, and the second presses Mark reviewed 
   while the manager is reading it (keep `refetchOnWindowFocus: false` on that one query). A newer version then shows
   up as the `409` "edited" message, which tells the manager to re-read, instead of changing under them unnoticed.
   The badge's `me` query keeps its focus refetch (`notification-badge.md`).
-- **One length constant.** Read 500 from the shared `limits.ts` that mirrors A6 (`form-validation.md`). Count with
-  `value.length`, which is UTF-16 code units, the same as the server's .NET string length for `nvarchar(500)`.
+- **One length constant.** Read 500 as `limits.reviewComment` from the SPA's one `src/limits.ts`, which a .NET test
+  keeps equal to the server's `Limits.ReviewComment` (A6; `form-validation.md`, D71). Count with `value.length`, which
+  is UTF-16 code units, the same as the server's .NET string length for `nvarchar(500)`.
 - **Extract the count.** Move `countMessage(length, max)` and its live region out of `FlagForManager` into a shared
   `CharacterCount`, so Reason and Comment behave identically (SC 3.2.4).
 - **Times.** Format `reviewedAtUtc` in `Australia/Melbourne` with the app's shared formatter. Assert the exact output
@@ -412,7 +413,7 @@ import { Link } from 'react-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ActionButton } from '../ui/ActionButton';       // primary-actions.md
 import { CharacterCount } from '../ui/CharacterCount';   // extracted from conditional-reveal.md
-import { LIMITS } from '../lib/limits';                  // reviewComment: 500 (A6)
+import { limits } from '../limits';                      // src/limits.ts: reviewComment, 500 (A6)
 import { formatStamp } from '../lib/melbourneTime';      // "Fri 2 Oct 2026, 9:30 am"
 import { api, ApiError, noteQuery, type NoteKey, type Review } from '../api';
 import s from './ReviewPanel.module.css';
@@ -420,7 +421,7 @@ import s from './ReviewPanel.module.css';
 const unsent = new Map<string, string>();   // memory only (D22); gone on reload or sign-out
 
 const MSG = {
-  tooLong: `Comment must be ${LIMITS.reviewComment} characters or less`,
+  tooLong: `Comment must be ${limits.reviewComment} characters or less`,
   offline: 'Not saved: no connection. Try again.',
   server: 'Not saved: something went wrong. Try again.',
   edited: 'This note was edited after you opened it. Read the latest version, then mark it reviewed.',
@@ -480,7 +481,7 @@ export function ReviewPanel(p: Props) {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (mark.isPending) return;
-    if (comment.length > LIMITS.reviewComment) { setTooLong(true); fieldRef.current?.focus(); return; }
+    if (comment.length > limits.reviewComment) { setTooLong(true); fieldRef.current?.focus(); return; }
     setAlertText('');
     const c = comment.trim();
     mark.mutate(c === '' ? null : c);
@@ -488,7 +489,7 @@ export function ReviewPanel(p: Props) {
 
   function onChange(next: string) {
     setComment(next); unsent.set(p.noteId, next);
-    if (tooLong && next.length <= LIMITS.reviewComment) setTooLong(false);   // reward early
+    if (tooLong && next.length <= limits.reviewComment) setTooLong(false);   // reward early
   }
 
   const showForm = outcome.kind === 'open' && p.flagStatus === 'ToReview';
@@ -523,7 +524,7 @@ export function ReviewPanel(p: Props) {
             aria-invalid={tooLong || undefined}
             aria-describedby={[tooLong && `${id}-e`, `${id}-h`, `${id}-n`].filter(Boolean).join(' ')}
           />
-          <CharacterCount value={comment} max={LIMITS.reviewComment} hintId={`${id}-n`} />
+          <CharacterCount value={comment} max={limits.reviewComment} hintId={`${id}-n`} />
           <div role="alert" className={s.alert}>{alertText}</div>
           <ActionButton type="submit" variant="primary" busy={mark.isPending} busyLabel="Saving…">
             Mark reviewed

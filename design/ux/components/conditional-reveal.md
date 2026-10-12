@@ -171,19 +171,19 @@ Native HTML is enough here, so no React Aria. State lives in the note form (no f
 ```tsx
 // FlagForManager.tsx
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { limits } from '../limits'; // src/limits.ts: flagReason, 200 (A6)
 import styles from './FlagForManager.module.css';
 
-export const FLAG_REASON_MAX = 200; // same value as the server's A6 constant
 export type FlagReasonError = 'empty' | 'tooLong' | null;
 
 const ERROR_TEXT = {
   empty: 'Enter a reason for flagging this note',
-  tooLong: `Reason must be ${FLAG_REASON_MAX} characters or less`,
+  tooLong: `Reason must be ${limits.flagReason} characters or less`,
 } as const;
 
 export function countMessage(length: number): string {
-  if (length === 0) return `You can enter up to ${FLAG_REASON_MAX} characters`;
-  const left = FLAG_REASON_MAX - length;
+  if (length === 0) return `You can enter up to ${limits.flagReason} characters`;
+  const left = limits.flagReason - length;
   const n = Math.abs(left);
   const word = n === 1 ? 'character' : 'characters';
   return left >= 0 ? `You have ${n} ${word} remaining` : `You have ${n} ${word} too many`;
@@ -209,7 +209,7 @@ export function FlagForManager({ flagged, reason, error, onFlaggedChange, onReas
     timer.current = window.setTimeout(() => setSpoken(countMessage(next.length)), 1000);
   }
 
-  const over = reason.length > FLAG_REASON_MAX;
+  const over = reason.length > limits.flagReason;
   const describedBy = error ? 'flag-reason-error flag-reason-hint' : 'flag-reason-hint';
 
   return (
@@ -232,7 +232,7 @@ export function FlagForManager({ flagged, reason, error, onFlaggedChange, onReas
            data-error={error ? '' : undefined} hidden={!flagged}>
         <label className={styles.label} htmlFor="flag-reason">Reason</label>
         <p id="flag-reason-hint" className="visually-hidden">
-          You can enter up to {FLAG_REASON_MAX} characters
+          You can enter up to {limits.flagReason} characters
         </p>
         {error && (
           <p id="flag-reason-error" className={styles.error}>
@@ -267,14 +267,14 @@ In the note form (parent):
 export function validateFlag(flagged: boolean, reason: string): FlagReasonError {
   if (!flagged) return null;
   if (reason.trim() === '') return 'empty';
-  if (reason.length > FLAG_REASON_MAX) return 'tooLong';
+  if (reason.length > limits.flagReason) return 'tooLong';
   return null;
 }
 
 // Autosave (PUT …/draft): never send hidden text; never exceed the column
 export function draftReason(flagged: boolean, reason: string): string | null {
   if (!flagged || reason.trim() === '') return null;
-  let s = reason.slice(0, FLAG_REASON_MAX);
+  let s = reason.slice(0, limits.flagReason);
   if (/[\uD800-\uDBFF]$/.test(s)) s = s.slice(0, -1); // don't split an emoji's surrogate pair
   return s;
 }

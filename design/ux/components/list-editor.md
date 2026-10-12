@@ -438,8 +438,9 @@ Role, Value · 4.1.3 Status Messages (results that don't move focus go to the st
   focuses the item's **Edit** in its new group's list after the re-read (the focus map is shared by the page).
 - **Reuse the shared pieces:** the button with `unavailable`, `onUnavailablePress`, `busy` and `busyLabel`
   (`primary-actions.md`; imported as `ActionButton` in `review-panel.md`), `CharacterCount`
-  (`conditional-reveal.md`), the page status region (`PageStatus`, app-shell.md; `primary-actions.md`), `limits.ts` (200 for both,
-  A6), and the field and error markup from `form-validation.md`. No `maxLength` on the textareas.
+  (`conditional-reveal.md`), the page status region (`PageStatus`, app-shell.md; `primary-actions.md`),
+  `limits.itemText` from `src/limits.ts` (200 for both, A6), and the field and error markup from
+  `form-validation.md`. No `maxLength` on the textareas.
 - **Writes: one scope, send then re-read.** Every `useMutation` on a list shares `scope: { id: 'goals:<participantId>' }`
   (or `'common-items'`), so writes run one at a time. Each `mutationFn` reads the cache **when it runs**, sends, then
   `await queryClient.refetchQueries({ queryKey, exact: true })`. The re-read is needed because a reorder rewrites
@@ -489,7 +490,7 @@ import { useMutation, useMutationState, useQuery, useQueryClient } from '@tansta
 import { ActionButton } from '../ui/ActionButton';     // primary-actions.md
 import { CharacterCount } from '../ui/CharacterCount'; // conditional-reveal.md
 import { useAnnounce } from '../ui/PageStatus';        // this page's visually hidden role="status" (app-shell.md)
-import { LIMITS } from '../lib/limits';
+import { limits } from '../limits';                    // src/limits.ts: itemText, 200 (A6)
 import { isConflict, requestErrorText, type ListApi, type Row } from '../api';
 import { COPY, type Kind } from './listEditorCopy';
 import s from './ListEditor.module.css';
@@ -677,6 +678,7 @@ export function ListEditor({ kind, api, readOnly = false }: { kind: Kind; api: L
 //   role="alert" div and ActionButton type="submit" "Add goal". On success it clears the text, focuses its own
 //   textarea and calls onAdded().
 // Both validate on submit only (form-validation.md one-field pattern), send clean(text) and use the same scope.
+// Both count and check the length against limits.itemText, with no maxLength.
 ```
 
 ```tsx

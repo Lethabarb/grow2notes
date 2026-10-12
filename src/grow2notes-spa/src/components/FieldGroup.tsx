@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { FieldError } from './FieldError.tsx';
 import styles from './FieldGroup.module.css';
+import { PageHeading } from './PageHeading.tsx';
 
 type FieldGroupProps = {
   /**
@@ -10,15 +11,30 @@ type FieldGroupProps = {
   fieldId: string;
   /** The label's words, or a group's question, such as "Role". */
   label: ReactNode;
-  /** The controls are a group, such as a set of radios or a three-part date: a `<fieldset>` whose legend is `label`. */
-  group?: boolean;
   /** Under the label, such as "Up to 200 characters". */
   hint?: ReactNode;
   /** The field's error message once a submit has found one, in the same words as its link in the error summary. */
   error?: string;
   /** The control, whose id is `fieldId`, or a group's controls. */
   children: ReactNode;
-};
+} & (
+  | {
+      /**
+       * The controls are a group, such as a set of radios or a three-part date: a `<fieldset>` whose legend is
+       * `label`.
+       */
+      group: true;
+      labelIsHeading?: never;
+    }
+  | {
+      group?: false;
+      /**
+       * The label is the page's `<h1>`, as on a page whose one question is this field, such as Create a password
+       * (GOV.UK's label as page heading; sign-in.md components 7 and 10).
+       */
+      labelIsHeading?: boolean;
+    }
+);
 
 /**
  * A field's label, hint, error message and control, in that order (form-validation.md *Anatomy*), so the message sits
@@ -26,7 +42,15 @@ type FieldGroupProps = {
  * its side, and each control in it with `aria-invalid="true"` a 3 px border. The field component sets its control's
  * `aria-describedby` and `aria-invalid`; a group's `<fieldset>`, which only this renders, is described here.
  */
-export function FieldGroup({ fieldId, label, group = false, hint, error, children }: FieldGroupProps) {
+export function FieldGroup({
+  fieldId,
+  label,
+  group = false,
+  labelIsHeading = false,
+  hint,
+  error,
+  children,
+}: FieldGroupProps) {
   const hintId = `${fieldId}-hint`;
   const invalid = error !== undefined;
   const parts = (
@@ -38,9 +62,15 @@ export function FieldGroup({ fieldId, label, group = false, hint, error, childre
   );
 
   if (!group) {
+    // In the heading, the label takes the heading's look and the heading's margin.
+    const labelElement = (
+      <label htmlFor={fieldId} className={labelIsHeading ? undefined : styles.label}>
+        {label}
+      </label>
+    );
     return (
       <div className={styles.group} data-invalid={invalid || undefined}>
-        <label htmlFor={fieldId} className={styles.label}>{label}</label>
+        {labelIsHeading ? <PageHeading>{labelElement}</PageHeading> : labelElement}
         {parts}
       </div>
     );

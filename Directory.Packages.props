@@ -18,6 +18,7 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageVersion Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
   <ItemGroup Label="Tests">

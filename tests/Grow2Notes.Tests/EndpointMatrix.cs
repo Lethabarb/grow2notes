@@ -79,6 +79,10 @@ internal static class EndpointMatrix
 
         // Each later setup step needs the enrolment cookie that the start issues, which no caller here has: a session
         // does not stand in for it (§8.1 step 3).
+        new(Get,       "/api/auth/setup/authenticator", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Get,       "/api/auth/setup/authenticator/qr.png", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Post,      "/api/auth/setup/password", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+            WithJson("/api/auth/setup/password", new { password = "made-up password", totpCode = "123456" })),
         new(Post,      "/api/auth/setup/passkey/options", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
         new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),

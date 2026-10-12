@@ -273,7 +273,7 @@ Every visible string lives in `src/copy`.
 | 12 | Setup link check ([empty-loading-error.md](../components/empty-loading-error.md)) | D | One `<p role="status">` present from first render: "Checking your link…" (P) after 1 s, then the failure sentence. **Try again** (primary, busy "Checking…") sits outside it. Whole-page messages are an `h1` (`tabIndex={-1}`) and one sentence, with no button. |
 | 13 | Account summary | E | `<dl>`: "Name" / display name, "Email address" / email, as text (not disabled or read-only inputs). Hint "If these are wrong, ask a manager." (P). |
 | 14 | Method choice ([passkey-flows.md](../components/passkey-flows.md)) | E | `h2` "Choose how you'll sign in" (P, from design's "Choose"). Primary `<Button type="button">` "Use a passkey (recommended)" (V), busy "Setting up your account…" (P), `aria-describedby` its hint. Secondary router `<Link>` styled as a button, "Use a password and authenticator app" (V), `aria-describedby` its hint. Accessible names equal the visible labels (no `aria-label`). |
-| 15 | Back link (the shared BackLink, [app-shell.md](app-shell.md) component 3a) | F, G | Labelled with the destination: "‹ Set up your account" on F (to `/setup`), "‹ Create a password" on G (to `/setup/password`; the password is still in memory and shown again) (P). Rendered into the shell's before-main bar slot (GOV.UK back-link position), so the error summary or the `h1` is the first thing in `<main>`. Pops when the previous entry is the destination, otherwise pushes. |
+| 15 | Back link (the shared BackLink, [app-shell.md](app-shell.md) component 3a) | F, G | Labelled with the destination: "‹ Set up your account" on F (to `/setup`), "‹ Create a password" on G (to `/setup/password`; the password is still in memory and shown again) (P). Rendered into the shell's before-main bar slot (GOV.UK back-link position), so the error summary or the `h1` is the first thing in `<main>`. Pops when the previous entry is the destination, otherwise pushes. Until the shell's opened-from memory (S00.05.02) can tell it, the link pops on its page's word: F and G always give it, as while setup's memory lives F's entry always follows `/setup`'s, and G's follows F's. |
 | 16 | Authenticator setup block ([totp-setup.md](../components/totp-setup.md)) | G | `h1` "Set up your authenticator app" (P), intro, `<ol>` of 3 steps (copy in States). QR `<img src="/api/auth/setup/authenticator/qr.png" width="200" height="200" alt="QR code for adding Grow2Notes to your authenticator app">` on a white panel with the 4-module quiet zone, container `color-scheme: only light`, `image-rendering: pixelated`. SetupKey: term "Setup key", key in capitals, `--font-family-code`, groups of 4 as separate `<span>`s (no space characters), `user-select: all`, `translate="no"`. No Copy button (design 4.1: "type the setup key"; D68). |
 | 18 | Page status region ([app-shell.md](app-shell.md) component 3) | All views | The shared visually hidden `<p role="status">` (`PageStatus`), present from the first render. The shared Button writes its busy labels here ("Checking…", "Signing in…", "Setting up your account…", "Finishing setup…"). There is no app-level region. |
 | 17 | Finish setup ([primary-actions.md](../components/primary-actions.md)) | G | Primary "Finish setup" (V), busy "Finishing setup…" (P), `type="submit"` of the code form. |
@@ -342,17 +342,16 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Passkey busy | Tap "Use a passkey (recommended)" | Device prompt (Face ID, fingerprint, PIN, or "use a phone"); button `aria-disabled`, after 400 ms "Setting up your account…" (P) | Stays on the button | Busy label |
 | Passkey not set up | `NotAllowedError`, an `AbortError` we did not start, `InvalidStateError`, any other WebAuthn error, or `422 validation.failed` with `errors.credentialJson` from `/setup/passkey` (A52) | Alert above "Use a passkey (recommended)": "Your passkey was not set up. Try again, or open the link from your email in your phone's browser." (P). Both options stay usable; new options are prefetched. | Stays on the passkey button | The alert (assertive) |
 | No connection / server error (any setup action) | `fetch` rejects / `5xx` | Alert above the pressed button: "Not set up: no connection. Try again." or "Not set up: something went wrong. Try again." (P) | Stays on the pressed button | The alert (assertive) |
-| Create a password, empty | Continue with nothing typed | Inline: "Enter a password" (P) | The field | Via `aria-describedby` |
+| Create a password, empty | Continue with nothing typed, or with only whitespace (`value.trim() === ''`: spaces, tabs, no-break spaces and the other Unicode spaces, which the server's `[Required]` refuses as it refuses an empty password, with `422` and `errors.password`, before the enrolment check; Identity would refuse them too) | Inline: "Enter a password" (P) | The field | Via `aria-describedby` |
 | Create a password, too short | Fewer than 12 characters (`value.length`, matching Identity's `RequiredLength`) | Inline: "Password must be 12 characters or more" (P) | The field | Via `aria-describedby` |
 | Key loading | `GET /api/auth/setup/authenticator` in flight | After 1 s, a fixed-height "Loading…" line where the key goes; QR `<img>` reserves 200 × 200 | — | Status text |
-| Key did not load | Network failure / `5xx` on the key | "The setup key did not load: no connection. Try again." (or "…: something went wrong. Try again.") (P) with **Try again** | Stays on Try again | Status text |
+| Key did not load | Network failure, `5xx` or `429` on the key | "The setup key did not load: no connection. Try again." (or "…: something went wrong. Try again.", for a `5xx` or a `429`, as no button sent the request for "Too many tries" to show above) (P) with **Try again** | Stays on Try again | Status text |
 | QR image failed | `<img onError>` | Image hidden; "The QR code did not load. Use the setup key instead." (P) | — | Static |
-
 | Setup code empty / wrong format | Client check | Inline: "Enter the 6-digit code from your authenticator app" (P) · "The code must be 6 digits" (P) | The field | Via `aria-describedby` |
 | Setup code rejected | `422 validation.failed` with `errors.totpCode` (D70) | Inline on the code field: "That code did not work. Enter the code the app shows for Grow2Notes now." (P). Code cleared, password kept in memory. | The field | Via `aria-describedby` |
-| Password rejected by server | `422` with `errors.password` (only if client and server rules ever drift) | Navigate back to view F with that message inline | F's field | Via `aria-describedby` |
-| Too many tries | `429` on a setup call | Alert above the pressed button: "Too many tries. Wait 1 minute, then try again." (P) | Stays on the pressed button | The alert (assertive) |
-| Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5), `navigate('/', { replace: true })`; setup state cleared from memory | Today's `h1` | Heading on focus |
+| Password rejected by server | `422` with `errors.password` (only if client and server rules ever drift) | Back one entry to view F, which shows its own words inline, "Password must be 12 characters or more" (P), not the server's, with the password still in the field | F's field | Via `aria-describedby` |
+| Too many tries | `429` on a setup call that a button sent (the key's is *Key did not load*) | Alert above the pressed button: "Too many tries. Wait 1 minute, then try again." (P) | Stays on the pressed button | The alert (assertive) |
+| Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5). The `Me` goes into `['me']` first (`queryClient.setQueryData`). From `/setup/passkey`, `navigate('/', { replace: true })`. From `/setup/password`, setup is marked finished in memory and G goes back two entries to `/setup`'s, which the setup layout replaces with `/` before anything renders (*Interactions* 12). Leaving `/setup*` clears setup state from memory | Today's `h1` | Heading on focus |
 
 **Copy for view G, in order (all P except the button):** intro "An authenticator app is a free app on your phone. It
 shows a new 6-digit code every 30 seconds. You enter the code after your password each time you sign in." · step 1
@@ -414,17 +413,26 @@ back to this page." · field label and hint as in Components row 10 · button "F
    the tap → `POST /api/auth/setup/passkey {credentialJson, name}` with the fixed `name` "Grow2Notes" (D70; never
    shown, no UI asks for one) → `200 Me` → Today. Never start the prompt on page load (SC 3.2.1, 3.2.2; FIDO found
    jumping straight into the OS dialog "disorienting", https://www.passkeycentral.org/design-guidelines/principles).
-9. **Use a password and authenticator app.** A link to `/setup/password`. Start fetching the key
-   (`GET /api/auth/setup/authenticator`: `staleTime: Infinity`, `gcTime: 0`, `refetchOnWindowFocus: false`,
-   `retry: false`) so view G is ready.
-10. **Continue (Create a password).** Client check only (no request): empty → "Enter a password"; under 12 → "Password
-    must be 12 characters or more". Pass → store the password in the setup context (memory) and go to `/setup/app`.
+9. **Use a password and authenticator app.** A link to `/setup/password`, which fetches nothing. View G fetches the
+   key as it shows (`GET /api/auth/setup/authenticator`: `staleTime: Infinity`, `gcTime: 0`,
+   `refetchOnWindowFocus: false`, `retry: false`), not before: with `gcTime: 0` a key fetched while no view uses it
+   would be dropped at once, and one that view F used would stay in memory after G unmounts (*Privacy and storage*).
+   The answer is small, so G shows "Loading…" only on a slow connection.
+10. **Continue (Create a password).** Client check only (no request): empty or only whitespace
+    (`value.trim() === ''`) → "Enter a password"; under 12 (`value.length`) → "Password must be 12 characters or
+    more", the 12 from `limits.ts`. Pass → store the password in the setup context (memory) and push `/setup/app`.
 11. **Setup key.** Shown as selectable text only. There is no Copy button, so the app never puts the key on the
     clipboard (D68); a person may still select and copy it by hand.
 12. **Finish setup.** Code checked as in step 4 (inline errors, nothing sent). `POST /api/auth/setup/password
-    {password, totpCode}` → `200 Me` → `setQueryData` (the wrapper drops its token, step 5), clear the setup context,
-    navigate to Today with `replace: true`. A wrong code clears the code only; the password is never cleared on this
-    view.
+    {password, totpCode}` → `200 Me` → `queryClient.setQueryData(['me'], me)` (the wrapper drops its token, step 5),
+    mark setup finished in the setup context, and go back two entries (`navigate(-2)`) to `/setup`'s entry, which F's
+    and G's always follow while the context lives, as each is pushed so that Back on G returns to F. There the setup
+    layout, finding setup finished, replaces the entry with `/` (`<Navigate to="/" replace />`) before anything
+    renders, view E included, so the tab keeps one entry for all of setup and Back from Today leaves the app; leaving
+    `/setup*` clears the context (step 13). A `200 Me` that comes after G has gone, as when the back link was pressed
+    while it was on its way, still goes into `['me']` and marks setup finished, but moves nobody. A wrong code clears
+    the code only; the password is never cleared on this view. A `422` with `errors.password` goes back one entry to
+    F, which shows its own message on the field (*Password rejected by server*).
 13. **Leaving `/setup*`** for any reason clears the setup context (password, email, name) from memory.
 14. **Back links** (F, G): the shared BackLink pops when the previous entry is the destination (so it is the same as
     browser Back), otherwise it pushes the destination.
@@ -594,8 +602,9 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
       path ends on Today; with `isUserVerified: false` it shows "Your passkey was not set up…" in the alert above the
       passkey button, focus stays on that button, and both options still work.
 - [ ] With WebAuthn unavailable, view E shows "Open this link in your browser" and the password option is primary.
-- [ ] Create a password rejects an empty value and 11 characters with the inline messages; 12 characters (any
-      characters) continue; no confirm field, no strength meter, no rules list, no `maxLength`.
+- [ ] Create a password rejects an empty value, one of only whitespace (`value.trim() === ''`) and 11 characters with
+      the inline messages; 12 characters of any kind, but not all whitespace, continue; no confirm field, no strength
+      meter, no rules list, no `maxLength`.
 - [ ] The password form contains a hidden `username` field holding the email.
 - [ ] View G shows the QR code and the setup key on every screen size; there is no Copy button; the key can be selected
       by long press and copies with no spaces.

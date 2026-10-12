@@ -1,0 +1,7 @@
+/*
+ * The bar's contents, in the page's column (app-shell.md component 3a). The space above keeps the focus ring round a
+ * back link, which reaches 5 px outside it, off the header's divider.
+ */
+.bar {
+  padding-block-start: var(--space-2);
+}

@@ -15,7 +15,7 @@ that sign-in.md adopts as (P) were approved as written on 9 October 2026 (D67).
 
 ## Where it's used
 
-The component is a small kit, not one form: **EmailInput**, **PasswordInput** (with Show/Hide), **CodeInput**
+The component is a small kit, not one form: **EmailInput**, **PasswordInput** (with Show/Hide), **OneTimeCodeField**
 (6 digits), **ErrorSummary**, and two **method buttons**. Each view below uses some of them.
 
 | # | View | Where | What's on it | What differs |
@@ -328,9 +328,11 @@ survives `forced-colors: active`.
 
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
-- **Files:** `features/auth/SignIn.tsx` (steps 1–2 as component state; used by `/sign-in` and by the in-place gate),
-  `features/auth/setup/*.tsx` (one route per view), `components/form/PasswordInput.tsx`, `CodeInput.tsx`,
-  `EmailInput.tsx`, `ErrorSummary.tsx`, each with a `.module.css`.
+- **Files:** in `src/features/auth/`, `SignIn.tsx` (steps 1–2 as component state, with the email field; shown in the
+  shell's `<main>` for a `401` and by the in-place gate) and the parts that sign-in and setup share,
+  `PasswordInput.tsx`, `OneTimeCodeField.tsx`, `code.ts` (the code's check) and `passkey.ts`; in `src/routes/setup/`,
+  the setup layout and one route per view, with view G's `SetupKey.tsx` and `FinishSetup.tsx`; and `ErrorSummary.tsx`
+  in `src/components/`, which every form uses; each with a `.module.css` where it has styles of its own.
 - **Memory only.** Email, password and setup state live in a React context above the routes. Never in
   `localStorage`/`sessionStorage`, the URL, or React Router `state` (which is written to `history.state` and can be
   saved by session restore). Clear the setup context on finish or when leaving `/setup*`.
@@ -358,7 +360,7 @@ survives `forced-colors: active`.
   hidden />` inside the password form (Chromium guidance).
 
 ```tsx
-// components/form/PasswordInput.tsx
+// src/features/auth/PasswordInput.tsx
 export function PasswordInput({ id, label, hint, error, autoComplete, value, onChange, asHeading }: Props) {
   const [shown, setShown] = useState(false);
   const [said, setSaid] = useState('');               // empty until first toggle: nothing announced on mount

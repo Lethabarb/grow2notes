@@ -355,9 +355,10 @@ Value · 4.1.3 Status Messages (Saved, count, errors without moving focus).
 
 - **No form library and no `<form action>`.** React 19 resets uncontrolled fields after a form action succeeds, which
   would empty this box. Use `onSubmit` + `preventDefault()` (react.dev `<form>`).
-- **One `limits.ts`** holds `GUIDE_PROMPTS_MAX = 1000` next to the other A6 limits. A .NET test checks it against the
-  server's `Limits.GuidePrompts`, with no OpenAPI document (`form-validation.md`, D71). `value.length` counts UTF-16
-  code units, which matches .NET `string.Length` and `nvarchar(1000)`.
+- **One `limits.ts`:** the SPA's `src/limits.ts` holds `guidePrompts: 1_000` beside the other limits, and the form
+  reads it as `limits.guidePrompts`. A .NET test checks it against the server's `Limits.GuidePrompts`, with no OpenAPI
+  document (`form-validation.md`, D71). `value.length` counts UTF-16 code units, which matches .NET `string.Length` and
+  `nvarchar(1000)`.
 - **Share the count helper with Guided notes:** `countMessage(len, limit)`, plus a threshold of 90%.
 - **Query:** `useQuery({ queryKey: ['admin', 'guidePrompts'], refetchOnWindowFocus: false })`. The editor is mounted
   only once the query has data, and it reads that data once.
@@ -393,7 +394,7 @@ export const unloadGuardArmed = () => unloadArmed;
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useBlocker } from 'react-router';
 import { useMutation } from '@tanstack/react-query';
-import { GUIDE_PROMPTS_MAX } from '../limits';
+import { limits } from '../limits';                    // src/limits.ts: guidePrompts, 1,000 (A6)
 import { countMessage } from '../ui/countMessage';
 import { Button } from '../ui/Button';
 import { SaveStatus } from '../ui/SaveStatus';
@@ -444,7 +445,7 @@ export function GuidePromptsForm({ initial }: { initial: { text: string; etag: s
     e.preventDefault();
     if (save.isPending) return;
     const text = field.current!.value.trim();
-    if (text.length > GUIDE_PROMPTS_MAX) { setFieldError(true); field.current!.focus(); return; }
+    if (text.length > limits.guidePrompts) { setFieldError(true); field.current!.focus(); return; }
     setRequestError('');
     try {
       const res = await save.mutateAsync(text);            // { etag?, serverDateUtc? } from headers
@@ -488,17 +489,17 @@ export function GuidePromptsForm({ initial }: { initial: { text: string; etag: s
             onInput={(e) => {
               const n = e.currentTarget.value.trim().length;
               setLen(n); setDirty(isDirty()); setSavedAtUtc(null);
-              if (fieldError && n <= GUIDE_PROMPTS_MAX) setFieldError(false);   // clear on fix
+              if (fieldError && n <= limits.guidePrompts) setFieldError(false);   // clear on fix
               // + copy the value into the .grow wrapper's data-value for the non-field-sizing fallback,
               //   exactly as GuidedNotes does (omitted here for brevity)
             }}
           />
         </div>
         <p aria-hidden="true" hidden={!showCount}
-           className={len > GUIDE_PROMPTS_MAX ? box.countOver : box.count}>
-          {showCount ? countMessage(len, GUIDE_PROMPTS_MAX) : ''}
+           className={len > limits.guidePrompts ? box.countOver : box.count}>
+          {showCount ? countMessage(len, limits.guidePrompts) : ''}
         </p>
-        <PoliteCount len={len} limit={GUIDE_PROMPTS_MAX} from={900} /> {/* always in the DOM, 1 s debounce */}
+        <PoliteCount len={len} limit={limits.guidePrompts} from={900} /> {/* always in the DOM, 1 s debounce */}
       </div>
       <div role="alert" className="actionError">{requestError}</div>
       <div className="saveRow">

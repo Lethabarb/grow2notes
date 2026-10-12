@@ -1,0 +1,21 @@
+/*
+ * The code field (sign-in.md component 10): a text field's look (foundations.md), 48 px tall, with a 2 px near-black
+ * border that FieldGroup thickens in the error colour while the field is in error. It is about as wide as the code at
+ * every size, so that it reads as a short code, but never wider than its column, as at 320 px with text at 200%.
+ * The digits are large and bold, each as wide as the next, and spaced a little apart.
+ */
+.input {
+  inline-size: 10ch;
+  max-inline-size: 100%;
+  min-block-size: var(--target-button);
+  padding: var(--space-1) var(--space-2);
+  border: var(--border-control) solid var(--colour-border-control);
+  border-radius: 0;
+  background: var(--colour-surface);
+  font-size: var(--font-size-h2);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.15em;
+  /* Clear of the label, hint and message above it when focus scrolls it into view, as after a refused code. */
+  scroll-margin-block: 6rem;
+}

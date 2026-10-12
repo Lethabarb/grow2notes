@@ -78,15 +78,27 @@ builder.Services.AddDataProtection()
 // kept, not cleared, because Identity compares addresses as they are written: a copy of one with a space or an
 // invisible character in it would be another address to Identity and to the index, and so a second account for the
 // same mailbox.
+//
+// A password is at least 12 characters, with no composition rules (A22, §8.4), so Identity's defaults, which want a
+// digit, a capital, a lowercase letter and a symbol, are turned off; its default of one unique character stays.
+//
+// The default token providers include Identity's authenticator provider, which checks the codes of the authenticator
+// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2).
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
         o.User.RequireUniqueEmail = true;
         o.User.AllowedUserNameCharacters += "!#$%&'*/=?^`{|}~";
+        o.Password.RequiredLength = Limits.PasswordMinLength;
+        o.Password.RequireDigit = false;
+        o.Password.RequireLowercase = false;
+        o.Password.RequireUppercase = false;
+        o.Password.RequireNonAlphanumeric = false;
     })
     .AddSignInManager<Grow2NotesSignInManager>()
     .AddClaimsPrincipalFactory<Grow2NotesClaimsFactory>()
     .AddEntityFrameworkStores<Grow2NotesDbContext>()
+    .AddDefaultTokenProviders()
     .AddTokenProvider<SetupTokenProvider>(SetupTokenProvider.ProviderName);
 
 // A passkey is bound to the domain it was made for (design.md §8.4), so that domain is App:Origin's host, the one the
@@ -178,6 +190,10 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 // One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
 // transaction its caller opens there, with the audit event that records it.
 builder.Services.AddScoped<Invitations>();
+
+// One per scope, for the same reason: setup's completion opens its transaction on the scope's context, through which
+// the method that the endpoint adds, the user's changes and their audit event are all saved.
+builder.Services.AddScoped<SetupCompletion>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
 // its audit event's share the scope's context, and so the one transaction.
@@ -271,6 +287,8 @@ app.MapApiGroup()
     .MapMeEndpoint()
     .MapLogoutEndpoint()
     .MapSetupStartEndpoint()
+    .MapSetupAuthenticatorEndpoints()
+    .MapSetupPasswordEndpoint()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
     .MapPasskeyOptionsEndpoint()

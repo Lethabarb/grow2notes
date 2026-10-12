@@ -221,15 +221,15 @@ In the empty-error state the box has both an `aria-describedby` and a placeholde
 ```tsx
 // GuidedNotes.tsx
 import { useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react';
+import { limits } from '../limits'; // src/limits.ts: guidedNotes, 20,000 (A6)
 import styles from './GuidedNotes.module.css';
 
-export const NARRATIVE_LIMIT = 20_000;         // same value as the server's Limits class (A6)
 const SHOW_COUNT_FROM = 18_000;                // GOV.UK-style threshold, 90%
 const fmt = new Intl.NumberFormat('en-AU');
 const nativeGrow = CSS.supports('field-sizing', 'content');
 
 export function countMessage(len: number) {
-  const left = NARRATIVE_LIMIT - len;
+  const left = limits.guidedNotes - len;
   const n = Math.abs(left);
   const word = n === 1 ? 'character' : 'characters';
   return left >= 0 ? `You have ${fmt.format(n)} ${word} remaining`
@@ -291,7 +291,7 @@ export function GuidedNotes({ ref, initialText, prompts, error, readOnly, onEdit
           onInput={(e) => { const t = e.currentTarget.value; sync(t); onEdit(t); }}
         />
       </div>
-      <p className={len > NARRATIVE_LIMIT ? styles.countOver : styles.count} aria-hidden="true"
+      <p className={len > limits.guidedNotes ? styles.countOver : styles.count} aria-hidden="true"
          hidden={!showCount}>{showCount ? countMessage(len) : ''}</p>
       <div className="visually-hidden" aria-live="polite">{srCount}</div>
     </section>
@@ -350,7 +350,7 @@ The Dragon poll from Behaviour item 6 adds an `onFocus` that starts a 1 s interv
 - `onSubmit` with `e.preventDefault()`; read `notes.current.value()` at the moment of the check and again when the confirmation's submit button is pressed. The `POST {base}/versions` body "repeats the latest content" (6.3).
 - Capture `initialText` once and key the component by `participantId + noteDate`, so a different note remounts it cleanly.
 - If the session ends and sign-in appears "in place" (4.0, 5.6), keep the form mounted beneath it, or copy `value()` into memory before unmounting and pass it back as `initialText`. Otherwise the uncontrolled box loses the unsaved last seconds. Memory only, never device storage (D22).
-- Share `NARRATIVE_LIMIT` with the blank and length checks the server runs on submit (5.8 step 4), so client and server agree.
+- Read the limit as `limits.guidedNotes` from the SPA's one `src/limits.ts`, which a .NET test keeps equal to the server's `Limits.GuidedNotes`, the constant behind the length check the server runs on submit (5.8 step 4), so client and server agree (`form-validation.md`, D71).
 
 ---
 
