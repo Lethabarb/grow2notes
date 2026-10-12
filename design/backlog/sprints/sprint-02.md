@@ -223,7 +223,7 @@ Each story's tasks are written once, in its own section, and ticked there (READM
 13. [S00.01.05 Copy module, date formats and wording checks](../E00-skeleton-hosting-sign-in/F00.01-skeleton-and-continuous-integration.md#s000105-copy-module-date-formats-and-wording-checks),
     in F00.01, pulled in on 9 October 2026 after S00.01.04.
 16. [S00.05.01 Navigation for my role](../E00-skeleton-hosting-sign-in/F00.05-app-shell.md#s000501-navigation-for-my-role),
-    in F00.05, pulled in on 12 October 2026.
+    in F00.05, pulled in on 12 October 2026 after S00.01.05.
 
 ## Settled at planning
 
