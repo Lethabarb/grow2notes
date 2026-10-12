@@ -407,8 +407,9 @@ Read-only does not apply to navigation.
 - **Titles.** Keep `<title>Grow2Notes</title>` in `index.html` for the moment before JavaScript runs. The root
   layout sets `document.title` with a `usePageTitle(name: PageName | undefined)` hook, from the `handle.pageName` of
   the deepest matched route that has one (app-shell.md component 3), or to "Grow2Notes" for none, as in the
-  signed-out frame but on a setup page; a screen does not call it. The hook sets the title in a layout effect when the
-  name changes.
+  signed-out frame but on a setup page; while that frame shows sign-in for a `401` from `/me`, the name is "Sign
+  in" (app-shell.md component 4's `401` row). A screen does not call it. The hook sets the title in a layout effect
+  when the name changes.
   - A whole-page message shown in the shell, such as "Page not found" for a worker on a manager route, or the crash
     page under the nav, sets its own title in a `useEffect` on each location change. React runs every layout effect
     of a commit before any `useEffect`, so the message's title comes after the route's; in a layout effect of its
