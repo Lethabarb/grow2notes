@@ -22,41 +22,6 @@
   white-space: nowrap;
 }
 
-.header {
-  background: var(--colour-surface);
-  border-block-end: var(--border-divider) solid var(--colour-divider);
-}
-
-/* The header's and <main>'s, so that the wordmark, the nav and the content share one left edge (Layout - laptop). */
-.container {
-  max-inline-size: var(--page-max);
-  margin-inline: auto;
-  padding-inline: var(--page-gutter);
-}
-
-/* The same size as plain text and as a link, so that the header does not move once /me has answered. */
-.wordmark {
-  display: inline-flex;
-  align-items: center;
-  min-block-size: var(--target-button);
-  font-size: var(--font-size-body);
-  font-weight: 700;
-  color: var(--colour-text);
-  text-decoration: none;
-}
-
-/* With the element in the selector, so that base.css's a:hover colour does not win over the wordmark's own. */
-@media (hover: hover) {
-  a.wordmark:hover {
-    color: var(--colour-text);
-    text-decoration: underline;
-  }
-}
-
-a.wordmark:active {
-  background: var(--colour-pressed);
-}
-
 /* The before-main bar slot takes no space until a screen fills it (component 3a). */
 .pageBar:empty {
   display: none;

@@ -1,10 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, type MouseEvent } from 'react';
-import { Link, Outlet, useLocation, useMatches, type UIMatch } from 'react-router';
+import { Outlet, useLocation, useMatches, type UIMatch } from 'react-router';
 import { meQuery } from '../api/me.ts';
 import { msg } from '../copy/messages.ts';
 import { strings } from '../copy/strings.ts';
 import styles from './AppShell.module.css';
+import { Header } from './Header.tsx';
+import layout from './layout.module.css';
 import type { RouteHandle } from './routes.tsx';
 
 const mainId = 'main-content';
@@ -16,7 +18,8 @@ const mainId = 'main-content';
  */
 export function AppShell() {
   // A later refresh that fails keeps the data it had, so the person stays signed in on screen (app-shell.md *Refresh*).
-  const signedIn = useQuery(meQuery).data !== undefined;
+  const me = useQuery(meQuery).data;
+  const signedIn = me !== undefined;
   const { key } = useLocation();
   // The table's type gives every route's handle as a RouteHandle, or none.
   const matches = useMatches() as UIMatch<unknown, RouteHandle | undefined>[];
@@ -33,19 +36,9 @@ export function AppShell() {
       <a href={`#${mainId}`} className={styles.skipLink} onClick={skipToMain}>
         {strings.skipToMainContent}
       </a>
-      <header className={styles.header}>
-        <div className={styles.container}>
-          {signedIn ? (
-            <Link to="/" className={styles.wordmark}>
-              {strings.appName}
-            </Link>
-          ) : (
-            <span className={styles.wordmark}>{strings.appName}</span>
-          )}
-        </div>
-      </header>
+      <Header me={me} page={name} />
       <div id="page-bar" className={styles.pageBar} />
-      <main id={mainId} tabIndex={-1} className={`${styles.container} ${styles.main}`}>
+      <main id={mainId} tabIndex={-1} className={`${layout.container} ${styles.main}`}>
         {signedIn && <Outlet />}
       </main>
     </>

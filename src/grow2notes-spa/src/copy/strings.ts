@@ -3,6 +3,12 @@ export const strings = {
   appName: 'Grow2Notes',
   /** The shell's skip link (app-shell.md component 1), GOV.UK's words. */
   skipToMainContent: 'Skip to main content',
+  /** The main navigation's name, which screen readers say as "Main navigation" (app-shell.md component 2b). */
+  mainNavigation: 'Main',
+  /** The main navigation's items (app-shell.md component 2b), in design.md §4.0's words. */
+  navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
+  /** The header's Account button (app-shell.md component 2d). */
+  account: 'Account',
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',

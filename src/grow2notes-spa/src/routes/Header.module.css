@@ -1,0 +1,86 @@
+/*
+ * The header (app-shell.md component 2): static, never fixed or sticky, as a fixed bar hides the focused field under a
+ * phone's keyboard and at 200% text. Its rows wrap when space runs out, so it needs no breakpoint (SC 1.4.10).
+ */
+.header {
+  background: var(--colour-surface);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* Inside the page's container. The space round the rows keeps a focus ring off the top of the page and the next row. */
+.inner {
+  display: grid;
+  row-gap: var(--space-2);
+  padding-block: var(--space-2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* The same size as plain text and as a link, so that the header does not move once /me has answered. */
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-button);
+  font-size: var(--font-size-body);
+  font-weight: 700;
+  color: var(--colour-text);
+  text-decoration: none;
+}
+
+/* At the row's inline end, at its own width rather than the full width a phone gives the shared Button. */
+.account {
+  inline-size: auto;
+  margin-inline-start: auto;
+}
+
+.navList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The space under the text holds the place of the current item's bar, so that the text does not move when it shows. */
+.navLink {
+  --current-bar: 4px;
+
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-button);
+  padding: 0 var(--space-2) var(--current-bar);
+  color: var(--colour-text);
+  text-decoration: none;
+}
+
+/* Bold and a bar, not colour alone (SC 1.4.1); a real border on the current item only shows in forced colours. */
+.navLink[aria-current] {
+  padding-block-end: 0;
+  border-block-end: var(--current-bar) solid var(--colour-action);
+  font-weight: 700;
+}
+
+/* With the element in each selector, so that base.css's a:hover colour does not win over the header's own. */
+@media (hover: hover) {
+  a.wordmark:hover {
+    color: var(--colour-text);
+    text-decoration: underline;
+  }
+
+  a.navLink:hover {
+    color: var(--colour-text);
+    text-decoration-line: underline;
+    text-decoration-thickness: max(3px, 0.1875em);
+  }
+}
+
+a.wordmark:active,
+a.navLink:active {
+  background: var(--colour-pressed);
+}
