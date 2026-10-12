@@ -67,14 +67,12 @@ internal static class SetupPasskeyEndpoint
         }
 
         attestation.Passkey.Name = PasskeyName;
-        return await completion.CompleteAsync(
+        var me = await completion.CompleteAsync(
             invited,
             async user =>
-            {
-                SetupCompletion.ThrowIfRefused(await users.AddOrUpdatePasskeyAsync(user, attestation.Passkey));
-                return null;
-            },
+                SetupCompletion.ThrowIfRefused(await users.AddOrUpdatePasskeyAsync(user, attestation.Passkey)),
             cancellationToken);
+        return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
     }
 
     // The SPA shows its own words for it (sign-in.md's Passkey not set up), not these.

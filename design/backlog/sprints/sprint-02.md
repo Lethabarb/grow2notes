@@ -303,7 +303,7 @@ Each story's tasks are written once, in its own section, and ticked there (READM
 17. [S00.04.03 Set up my account with a password and authenticator app](../E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000403-set-up-my-account-with-a-password-and-authenticator-app),
     in F00.04, pulled in on 12 October 2026 after S00.04.02.
 
-17 and 18 are left for S00.04.03 and S00.04.05, which follow S00.04.02 and S00.04.04 on their own branches (*Plan*).
+18 is left for S00.04.05, which follows S00.04.04 on its own branch (*Plan*).
 
 19. [S00.04.06 Sign out](../E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000406-sign-out),
     in F00.04, pulled in on 12 October 2026 after S00.05.01.

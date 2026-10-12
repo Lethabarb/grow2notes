@@ -1,7 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,8 +10,8 @@ namespace Grow2Notes.Web.Features.Auth;
 /// Completion (design.md §8.1 step 5), which both ways to finish setup share once each has checked its method:
 /// <see cref="SetupPasskeyEndpoint"/> and <see cref="SetupPasswordEndpoint"/>. In one transaction, the method is added,
 /// and the user is made Active, with <c>ActivatedAtUtc</c> and <c>EmailConfirmed</c>, the security stamp rotated, which
-/// ends the setup link, and <c>auth.setup_completed</c> written; then the user is signed in and answered their
-/// <see cref="Me"/>.
+/// ends the setup link, and <c>auth.setup_completed</c> written; then the user is signed in, and their
+/// <see cref="Me"/> is the answer.
 /// </summary>
 /// <remarks>
 /// The transaction is in the user's organisation, the tenant from the user that the enrolment cookie names, never from
@@ -31,14 +30,14 @@ internal sealed class SetupCompletion(
 {
     /// <summary>
     /// Completes setup for <paramref name="invited"/>, the user that the enrolment check found, with
-    /// <paramref name="addMethodAsync"/>, which adds the method to the user loaded in the transaction and returns
-    /// <see langword="null"/>, or returns a refusal, having saved nothing, which is then the answer, with nothing of
-    /// the completion done. The answer is <c>401</c>, as the enrolment check gives, if the user is no longer Invited
-    /// with the cookie's stamp.
+    /// <paramref name="addMethodAsync"/>, which adds the method, checked before the transaction, to the user loaded in
+    /// it, and throws for any refusal (<see cref="ThrowIfRefused"/>). Returns the user's <see cref="Me"/>, or
+    /// <see langword="null"/> for the <c>401</c> that the enrolment check gives, if the user is no longer Invited with
+    /// the cookie's stamp.
     /// </summary>
-    public async Task<Results<Ok<Me>, UnauthorizedHttpResult, ProblemHttpResult>> CompleteAsync(
+    public async Task<Me?> CompleteAsync(
         ApplicationUser invited,
-        Func<ApplicationUser, Task<ProblemHttpResult?>> addMethodAsync,
+        Func<ApplicationUser, Task> addMethodAsync,
         CancellationToken cancellationToken)
     {
         var users = signInManager.UserManager;
@@ -48,9 +47,8 @@ internal sealed class SetupCompletion(
             // the row that committed, with the rotated stamp. Only while still Invited with the stamp that the
             // enrolment check matched: another device's completion, a deactivation, or a new link from a resend or a
             // reset (A53) may have committed since that check. One that commits after this load makes the save's
-            // concurrency check refuse it instead.
+            // concurrency check refuse it instead, and the method's step throws.
             ApplicationUser? user = null;
-            ProblemHttpResult? refusal = null;
             await db.InTransactionAsync(async ct =>
             {
                 user = await db.Users.SingleOrDefaultAsync(
@@ -63,12 +61,7 @@ internal sealed class SetupCompletion(
                     return;
                 }
 
-                refusal = await addMethodAsync(user);
-                if (refusal is not null)
-                {
-                    return;
-                }
-
+                await addMethodAsync(user);
                 user.Status = UserStatus.Active;
                 user.ActivatedAtUtc = timeProvider.GetUtcNow().UtcDateTime;
                 user.EmailConfirmed = true;
@@ -82,16 +75,11 @@ internal sealed class SetupCompletion(
 
             if (user is null)
             {
-                return TypedResults.Unauthorized();
-            }
-
-            if (refusal is not null)
-            {
-                return refusal;
+                return null;
             }
 
             await signInManager.SignInAsync(user, isPersistent: false);
-            return TypedResults.Ok(await MeEndpoint.OfUserAsync(user, db, clock, cancellationToken));
+            return await MeEndpoint.OfUserAsync(user, db, clock, cancellationToken);
         }
     }
 

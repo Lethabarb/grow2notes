@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -282,6 +283,46 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
         await AssertNothingChangedAsync(link, before);
     }
 
+    // Two devices finish setup from one link at once, as two tabs or a phone and a laptop can: the laptop's transaction
+    // loads the user, and the phone's completion commits before the laptop's first save, whose concurrency check then
+    // matches no row. That is no refused password, so it throws, as the passkey path's refusal does, rolling the
+    // laptop's transaction back, rather than send the laptop to view F with a password's message. The phone's stands.
+    [Fact]
+    public async Task A_completion_that_another_device_commits_first_gets_500_not_422_for_the_password()
+    {
+        var link = await InviteAsync();
+        var gate = new HoldsTheFirstSaveInATransaction(Guid.Parse(link.UserId));
+        await using var gated = app.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(gate))));
+        var code = AuthenticatorCodes.Now(await KeyAsync(link));
+        using var laptop = gated.CreateHttpsClient();
+        using var phone = gated.CreateHttpsClient();
+        var (laptopToken, _) = await laptop.StartSetupAsync(link);
+        var (phoneToken, _) = await phone.StartSetupAsync(link);
+
+        var laptopCompletion = CompleteAsync(laptop, laptopToken, code);
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            using var phoneCompletion = await CompleteAsync(phone, phoneToken, code);
+            Assert.Equal(HttpStatusCode.OK, phoneCompletion.StatusCode);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var response = await laptopCompletion;
+
+        await response.ReadProblemAsync(HttpStatusCode.InternalServerError);
+        Assert.DoesNotContain(response.SetCookies(), cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
+        var after = await ReadAsync(link);
+        Assert.Equal(UserStatus.Active, after.User.Status);
+        Assert.True(after.HasPassword);
+        Assert.True(after.User.TwoFactorEnabled);
+        Assert.Single(after.Events);
+    }
+
     // The request's own tenant is B's, from the session that the test-only sign-in gives it, so only a tenant taken
     // from the user that the enrolment cookie names puts the event in A.
     [Fact]
@@ -449,6 +490,37 @@ public sealed class SetupPasswordEndpointTests : IClassFixture<Grow2NotesFactory
                 organisationId, actorUserId, eventType, entityType, entityId, participantId, details,
                 cancellationToken);
             throw new InvalidOperationException("The audit writer failed after writing the event.");
+        }
+    }
+
+    /// <summary>
+    /// Holds back the first save, made inside a transaction, that changes the user whose ID it is given, until the test
+    /// lets it go: in completion, the password's, made once the transaction has loaded the user. Every other save
+    /// passes.
+    /// </summary>
+    private sealed class HoldsTheFirstSaveInATransaction(Guid userId) : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int held;
+
+        public Task Reached => reached.Task;
+
+        public void Release() => released.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { Database.CurrentTransaction: not null } context
+                && context.ChangeTracker.Entries<ApplicationUser>().Any(
+                    entry => entry.State == EntityState.Modified && entry.Entity.Id == userId)
+                && Interlocked.Exchange(ref held, 1) == 0)
+            {
+                reached.SetResult();
+                await released.Task.WaitAsync(cancellationToken);
+            }
+
+            return result;
         }
     }
 

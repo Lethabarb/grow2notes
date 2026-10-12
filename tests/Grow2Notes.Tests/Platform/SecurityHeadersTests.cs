@@ -57,6 +57,21 @@ public sealed class SecurityHeadersTests(Grow2NotesFactory factory, SqlServerFix
         AssertCarriesTheHeadersOfDesignMd(response);
     }
 
+    // The first image the app answers with, which only a setup under way can fetch (S00.04.03).
+    [Fact]
+    public async Task The_setup_QR_code_carries_the_headers_of_design_md_9_7_once_each_with_their_values()
+    {
+        using var client = CreateClient(Caller.SignedOut, role: null);
+        await client.StartSetupAsync(await factory.InviteAsync(sqlServer.Seeded.A));
+
+        using var response = await client.GetAsync(
+            "/api/auth/setup/authenticator/qr.png", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        AssertCarriesTheHeadersOfDesignMd(response);
+    }
+
     // Every value of each header, exactly as the app sent them, so a second one would show.
     private static void AssertCarriesTheHeadersOfDesignMd(HttpResponseMessage response) =>
         Assert.All(DesignedSecurityHeaders.Read(), header =>

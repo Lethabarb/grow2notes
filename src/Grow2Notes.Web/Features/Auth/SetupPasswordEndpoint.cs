@@ -15,11 +15,12 @@ namespace Grow2Notes.Web.Features.Auth;
 /// <c>401</c> without a valid one. The code is read by the one code check (<see cref="OneTimeCode"/>) and verified with
 /// Identity's authenticator provider, as Identity's own template does, so a wrong code counts towards no lockout and
 /// writes no audit event, design.md §5.4's <c>auth.mfa_failed</c> being a sign-in's. A badly formed code and a wrong
-/// one get the same <c>422 validation.failed</c> for <c>totpCode</c> (D70) and change nothing. The code is checked
-/// before completion's transaction, as it only reads the key. In the transaction (<see cref="SetupCompletion"/>), the
-/// password is added, and a password that Identity refuses gets <c>422 validation.failed</c> for <c>password</c>, with
-/// nothing committed; then two-factor sign-in is turned on, so no password ever signs anyone in alone (§8.1's
-/// invariant). No recovery codes are made (A22).
+/// one get the same <c>422 validation.failed</c> for <c>totpCode</c> (D70) and change nothing. Then Identity's password
+/// validators check the password, and one that they refuse gets <c>422 validation.failed</c> for <c>password</c> and
+/// changes nothing. Both checks come before completion's transaction, as they only read. In the transaction
+/// (<see cref="SetupCompletion"/>), the password is added and two-factor sign-in turned on, so no password ever signs
+/// anyone in alone (§8.1's invariant); a refusal there, such as the concurrency failure of a completion that another
+/// device committed first, throws, as the passkey path's does. No recovery codes are made (A22).
 /// </remarks>
 internal static class SetupPasswordEndpoint
 {
@@ -50,22 +51,30 @@ internal static class SetupPasswordEndpoint
             return ValidationProblems.Field(nameof(SetupPasswordRequest.TotpCode), "The code did not work.");
         }
 
-        return await completion.CompleteAsync(
+        // UserManager's own check, which AddPasswordAsync makes again in the transaction, is protected, so its
+        // validators run here as it runs them. Only their refusal is the password's: AddPasswordAsync's others, such as
+        // another completion committed since the transaction loaded the user, are no reason to ask for a new password.
+        List<IdentityResult> checks = [];
+        foreach (var validator in users.PasswordValidators)
+        {
+            checks.Add(await validator.ValidateAsync(users, invited, request.Password));
+        }
+
+        if (!checks.TrueForAll(check => check.Succeeded))
+        {
+            return ValidationProblems.Field(
+                nameof(SetupPasswordRequest.Password),
+                string.Join(" ", checks.SelectMany(check => check.Errors).Select(error => error.Description)));
+        }
+
+        var me = await completion.CompleteAsync(
             invited,
             async user =>
             {
-                // Identity checks the password before it saves anything, so a refusal leaves nothing to commit.
-                var added = await users.AddPasswordAsync(user, request.Password);
-                if (!added.Succeeded)
-                {
-                    return ValidationProblems.Field(
-                        nameof(SetupPasswordRequest.Password),
-                        string.Join(" ", added.Errors.Select(error => error.Description)));
-                }
-
+                SetupCompletion.ThrowIfRefused(await users.AddPasswordAsync(user, request.Password));
                 SetupCompletion.ThrowIfRefused(await users.SetTwoFactorEnabledAsync(user, enabled: true));
-                return null;
             },
             cancellationToken);
+        return me is null ? TypedResults.Unauthorized() : TypedResults.Ok(me);
     }
 }
