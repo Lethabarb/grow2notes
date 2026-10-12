@@ -305,7 +305,7 @@ and **[Convention]** (FIDO's "disorienting" finding).
 | Focus | Keyboard | 3 px solid outline, 2 px offset, at least 3:1 against both neighbouring colours | — | "Use a passkey (recommended), button" |
 | Active | Pressed | Background two steps darker. No movement. | — | — |
 | Busy | Tap until the server answers | Button keeps its look, with `aria-disabled="true"` and `cursor: progress`. Repeat taps are ignored. Status line: "Setting up your account…" | Stays on the button | Status text (polite) |
-| Not set up | `NotAllowedError`, `AbortError` not started by us, or a `400` from completion | Message above the buttons (see [Copy](#copy)). Both buttons usable. | Stays on the button | Message (assertive, `role="alert"`) |
+| Not set up | `NotAllowedError`, `AbortError` not started by us, or a `422 validation.failed` with `errors.credentialJson` from completion (A52) | Message above the buttons (see [Copy](#copy)). Both buttons usable. | Stays on the button | Message (assertive, `role="alert"`) |
 | Already on this device | `InvalidStateError` | Should not happen, because Reset sign-in removes server passkeys (§8.6). If it does, treat it as **Not set up**. | — | — |
 | Passkeys unavailable | Capability check fails | A notice replaces the explanation and the passkey button. "Use a password and authenticator app" becomes the **primary** button, because it is now the only action. | `h1` on load | Notice is read in normal order (static, not live) |
 | No connection | `fetch` throws `TypeError` | Message: "No connection…". Both buttons usable. | Stays on the button | Alert |

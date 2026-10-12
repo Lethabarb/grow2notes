@@ -340,7 +340,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Choose a method | `setup/start` → `{email, displayName}` | View E | `h1` | Heading on focus |
 | **In-app browser cannot create passkeys** (design) | `browserSupportsWebAuthn()` false | In place of the passkey button and its hint: heading (`h2`-styled `<p>` inside a bordered notice) **"Open this link in your browser"** (V), body "Passkeys cannot be set up here. Go back to the email and open the link in your phone's browser, such as Safari or Chrome." (P). "Use a password and authenticator app" becomes primary. | `h1` | Read in order (static) |
 | Passkey busy | Tap "Use a passkey (recommended)" | Device prompt (Face ID, fingerprint, PIN, or "use a phone"); button `aria-disabled`, after 400 ms "Setting up your account…" (P) | Stays on the button | Busy label |
-| Passkey not set up | `NotAllowedError`, an `AbortError` we did not start, `InvalidStateError`, any other WebAuthn error, or `400` from `/setup/passkey` | Alert above "Use a passkey (recommended)": "Your passkey was not set up. Try again, or open the link from your email in your phone's browser." (P). Both options stay usable; new options are prefetched. | Stays on the passkey button | The alert (assertive) |
+| Passkey not set up | `NotAllowedError`, an `AbortError` we did not start, `InvalidStateError`, any other WebAuthn error, or `422 validation.failed` with `errors.credentialJson` from `/setup/passkey` (A52) | Alert above "Use a passkey (recommended)": "Your passkey was not set up. Try again, or open the link from your email in your phone's browser." (P). Both options stay usable; new options are prefetched. | Stays on the passkey button | The alert (assertive) |
 | No connection / server error (any setup action) | `fetch` rejects / `5xx` | Alert above the pressed button: "Not set up: no connection. Try again." or "Not set up: something went wrong. Try again." (P) | Stays on the pressed button | The alert (assertive) |
 | Create a password, empty | Continue with nothing typed | Inline: "Enter a password" (P) | The field | Via `aria-describedby` |
 | Create a password, too short | Fewer than 12 characters (`value.length`, matching Identity's `RequiredLength`) | Inline: "Password must be 12 characters or more" (P) | The field | Via `aria-describedby` |
@@ -404,10 +404,11 @@ back to this page." · field label and hint as in Components row 10 · button "F
 6. **Show / Hide (view F).** Toggles `type`; writes the announcement into the field's polite live line. Focus stays
    on the toggle. On submit the field returns to hidden.
 7. **Setup arrival.** Read `u` and `t` from `location.hash` once (lazy `useState` initialiser, so StrictMode's second
-   run still has them), then `history.replaceState(null, '', '/setup')` at once (§8.1), then
-   `POST /api/auth/setup/start {userId, token}` with an `AbortController`. Keep the token in component memory only
-   until the check succeeds (so Try again works), then drop it. `{email, displayName}` go into a setup context in React
-   memory above the `/setup*` routes, never into storage, the URL or router `state`.
+   run still has them), then `navigate('/setup', { replace: true })` at once, which replaces the history entry as
+   §8.1's `history.replaceState` does while keeping React Router's own state, all that `history.state` may hold
+   (app-shell.md), then `POST /api/auth/setup/start {userId, token}` with an `AbortController`. Keep the token in
+   component memory only until the check succeeds (so Try again works), then drop it. `{email, displayName}` go into a
+   setup context in React memory above the `/setup*` routes, never into storage, the URL or router `state`.
 8. **Use a passkey (recommended).** When view E renders with passkeys offered, prefetch
    `POST /api/auth/setup/passkey/options` (one object, same 4-minute rule). Tap → `startRegistration` straight from
    the tap → `POST /api/auth/setup/passkey {credentialJson, name}` with the fixed `name` "Grow2Notes" (D70; never

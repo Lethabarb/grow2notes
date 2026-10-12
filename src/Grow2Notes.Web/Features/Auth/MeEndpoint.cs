@@ -28,6 +28,19 @@ internal static class MeEndpoint
         return api;
     }
 
+    /// <summary>
+    /// The <see cref="Me"/> of <paramref name="user"/>, from their row, with which setup and the sign-in endpoints
+    /// answer once they have signed the user in, as this endpoint answers from the session.
+    /// </summary>
+    public static async Task<Me> OfUserAsync(
+        ApplicationUser user, Grow2NotesDbContext db, MelbourneClock clock, CancellationToken cancellationToken) =>
+        new(
+            user.Id,
+            user.DisplayName,
+            user.Role.ToString(),
+            await OrganisationNameAsync(db, user.OrganisationId, cancellationToken),
+            clock.Today());
+
     private static async Task<Ok<Me>> GetAsync(
         ClaimsPrincipal user,
         IOptions<IdentityOptions> identityOptions,
@@ -36,22 +49,23 @@ internal static class MeEndpoint
         MelbourneClock clock,
         CancellationToken cancellationToken)
     {
-        // An organisation is the tenant, not tenant-owned, so no query filter keeps this to the tenant's row: the query
-        // names it.
-        var organisationId = tenant.OrganisationId;
-        var organisationName = await db.Organisations
-            .Where(organisation => organisation.Id == organisationId)
-            .Select(organisation => organisation.Name)
-            .SingleAsync(cancellationToken);
-
         var claimTypes = identityOptions.Value.ClaimsIdentity;
         return TypedResults.Ok(new Me(
             Guid.Parse(ClaimValue(user, claimTypes.UserIdClaimType)),
             ClaimValue(user, Grow2NotesClaimsFactory.DisplayNameClaimType),
             ClaimValue(user, claimTypes.RoleClaimType),
-            organisationName,
+            await OrganisationNameAsync(db, tenant.OrganisationId, cancellationToken),
             clock.Today()));
     }
+
+    // An organisation is the tenant, not tenant-owned, so no query filter keeps this to the tenant's row: the query
+    // names it.
+    private static Task<string> OrganisationNameAsync(
+        Grow2NotesDbContext db, Guid organisationId, CancellationToken cancellationToken) =>
+        db.Organisations
+            .Where(organisation => organisation.Id == organisationId)
+            .Select(organisation => organisation.Name)
+            .SingleAsync(cancellationToken);
 
     // The claims factory adds each of these claims to every principal it builds, and the fallback policy admits no user
     // without a role.

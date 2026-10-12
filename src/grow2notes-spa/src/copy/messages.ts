@@ -19,4 +19,8 @@ export const msg = {
    */
   notDone: (done: string, cause: Cause, safe?: string) =>
     `Not ${done}: ${strings.cause[cause]}.${safe === undefined ? '' : ` ${safe}`} Try again.`,
+  /** The setup link check's failure (sign-in.md *Setup*), with Try again, which sends the link held in memory. */
+  setupLinkNotChecked: (cause: Cause) => `Your setup link was not checked: ${strings.cause[cause]}. Try again.`,
+  /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
+  notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
 } as const;

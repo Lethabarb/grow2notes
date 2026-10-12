@@ -15,6 +15,12 @@
   font-weight: 700;
   line-height: 1.25;
   text-align: center;
+  /*
+   * Text in a grid wraps anywhere (foundations.md), so that a word longer than the button is wide, such as
+   * "authenticator" at 320 px with text at 200%, breaks inside it. With base.css's break-word, centring kept a label
+   * at least as wide as its longest word, which then ran out past the button's edges.
+   */
+  overflow-wrap: anywhere;
   text-decoration: none;
   cursor: pointer;
 }
@@ -33,7 +39,7 @@
 .label,
 .busyLabel {
   grid-area: 1 / 1;
-  /* A long word, such as a long name, wraps rather than widening the button past the page. */
+  /* With the button's overflow-wrap, as foundations.md has text in a grid. */
   min-inline-size: 0;
 }
 

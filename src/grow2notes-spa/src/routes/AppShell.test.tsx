@@ -184,18 +184,63 @@ describe('AppShell', () => {
     });
   });
 
-  describe.each(states)('$state', ({ answer }) => {
-    it('renders the skip link, <header>, #page-bar and one <main>, in that order', async () => {
-      serveMe(answer);
-      const { container } = renderShell('/');
+  describe('on a setup page', () => {
+    const setupPaths = ['/setup', '/setup/password', '/setup/app'];
+
+    describe.each([
+      { state: 'while /me is pending', answer: noAnswer },
+      { state: 'after a 401 from /me', answer: () => problem(401) },
+      { state: 'once /me has answered 200', answer: () => json(worker) },
+    ])('$state', ({ answer }) => {
+      it.each(setupPaths)('shows %s in the signed-out frame, titled with its page name', async (path) => {
+        serveMe(answer);
+        renderShell(path);
+        await wait(0);
+
+        expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('link', { name: 'Grow2Notes' })).not.toBeInTheDocument();
+        expect(within(screen.getByRole('banner')).getByText('Grow2Notes')).toBeInTheDocument();
+        const heading = within(screen.getByRole('main')).getByRole('heading', { level: 1 });
+        expect(heading).toHaveTextContent('Set up your account');
+        expect(document.title).toBe('Grow2Notes – Set up your account');
+      });
+    });
+
+    it('titles the page again on leaving setup for Today, and on coming back', async () => {
+      serveMe(() => json(worker));
+      const { router } = renderShell('/setup');
       await wait(0);
 
-      const order = Array.from(container.children, (element) => element.localName + (element.id && `#${element.id}`));
-      expect(order).toEqual(['a', 'header', 'div#page-bar', 'main#main-content']);
-      expect(container.firstElementChild).toBe(screen.getByRole('link', { name: 'Skip to main content' }));
-      expect(document.querySelectorAll('main')).toHaveLength(1);
-      expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');
+      await act(() => router.navigate('/'));
+      expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+      expect(document.title).toBe('Grow2Notes – Today');
+
+      await act(() => router.navigate(-1));
+      expect(router.state.location.pathname).toBe('/setup');
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+      expect(document.title).toBe('Grow2Notes – Set up your account');
     });
+  });
+
+  describe.each(states)('$state', ({ answer }) => {
+    it.each(['/', '/setup'])(
+      'renders the skip link, <header>, #page-bar and one <main>, in that order, at %s',
+      async (path) => {
+        serveMe(answer);
+        const { container } = renderShell(path);
+        await wait(0);
+
+        const order = Array.from(
+          container.children,
+          (element) => element.localName + (element.id && `#${element.id}`),
+        );
+        expect(order).toEqual(['a', 'header', 'div#page-bar', 'main#main-content']);
+        expect(container.firstElementChild).toBe(screen.getByRole('link', { name: 'Skip to main content' }));
+        expect(document.querySelectorAll('main')).toHaveLength(1);
+        expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');
+      },
+    );
 
     it('moves focus to <main> from the skip link, with no change of address or history', async () => {
       serveMe(answer);

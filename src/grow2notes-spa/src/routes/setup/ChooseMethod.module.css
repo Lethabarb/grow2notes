@@ -1,0 +1,62 @@
+/* View E (sign-in.md), in one column of the measure's width, on the wordmark's left edge (Layout - laptop). */
+.view {
+  max-inline-size: var(--measure);
+}
+
+/* The account summary (component 13): each term over its value on a phone, side by side from 40rem. */
+.account {
+  margin: 0;
+}
+
+.account dt {
+  font-weight: 700;
+}
+
+.account dd {
+  margin: 0 0 var(--space-3);
+}
+
+@media (min-width: 40rem) {
+  .account {
+    display: grid;
+    /* minmax(0, …), so that a long email address wraps rather than widening the column. */
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: var(--space-5);
+  }
+}
+
+/* Under what it describes, as a field's hint is (FieldGroup). */
+.hint {
+  margin: var(--space-2) 0 0;
+  color: var(--colour-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.choose {
+  margin-block-start: var(--section-gap);
+}
+
+/* The notice look (status-messages.md): a bar and a border in the action colour, on its tint. */
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-divider) solid var(--colour-action);
+  border-inline-start-width: 6px;
+  border-radius: var(--radius-s);
+  background: var(--colour-action-tint);
+}
+
+.notice > :last-child {
+  margin-block-end: 0;
+}
+
+/* An h2's look without an h2, which would add to the page's outline a heading that names no section. */
+.noticeHeading {
+  margin-block-end: var(--space-2);
+  font-size: var(--font-size-h2);
+  font-weight: 700;
+  line-height: var(--line-height-heading);
+}
+
+.or {
+  margin-block: var(--space-4);
+}

@@ -89,8 +89,23 @@ builder.Services.AddIdentityCore<ApplicationUser>(o =>
     .AddEntityFrameworkStores<Grow2NotesDbContext>()
     .AddTokenProvider<SetupTokenProvider>(SetupTokenProvider.ProviderName);
 
-// The session is Identity's cookie (design.md §8.3, §8.4).
+// A passkey is bound to the domain it was made for (design.md §8.4), so that domain is App:Origin's host, the one the
+// setup links name, whatever host a request came to; where App:Origin is not set, Identity takes the request's. User
+// verification (a face, fingerprint or device PIN) makes a passkey enough for MFA on its own (D23), and a discoverable
+// credential lets a person sign in without giving their email. AuthenticatorTimeout keeps Identity's 5 minutes, never
+// less (passkey-flows.md). App:Origin is read when the options are first used, not here, as the connection string is.
+builder.Services.AddOptions<IdentityPasskeyOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.ServerDomain = AppOrigin.Find(configuration)?.Host;
+        options.UserVerificationRequirement = "required";
+        options.ResidentKeyRequirement = "required";
+    });
+
+// The session is Identity's cookie (design.md §8.3, §8.4). Setup has a cookie of its own until it signs the person in
+// (EnrolmentCookie).
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddEnrolmentCookie()
     .AddIdentityCookies();
 
 // The security stamp is checked on every request that carries the cookie, rebuilding the principal from the user's
@@ -240,7 +255,10 @@ app.MapHealthEndpoints();
 // Every API endpoint is mapped in the /api group (ApiGroup).
 app.MapApiGroup()
     .MapAntiforgeryEndpoint()
-    .MapMeEndpoint();
+    .MapMeEndpoint()
+    .MapSetupStartEndpoint()
+    .MapSetupPasskeyOptionsEndpoint()
+    .MapSetupPasskeyEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

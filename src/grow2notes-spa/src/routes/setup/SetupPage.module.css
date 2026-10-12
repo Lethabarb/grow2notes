@@ -1,0 +1,9 @@
+/* The link check's status line (sign-in.md component 12), in the body text, within the column. */
+.line {
+  max-inline-size: var(--measure);
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.line:empty {
+  margin: 0;
+}

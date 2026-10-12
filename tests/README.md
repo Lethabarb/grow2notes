@@ -4,7 +4,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
-- `e2e/`: Playwright smoke tests with axe accessibility checks, run against the published app.
+- `e2e/`: Playwright smoke tests and end-to-end tests of account setup, with axe accessibility checks, run against the
+  published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -89,12 +90,16 @@ dotnet ef database update --project src/Grow2Notes.Web --context Grow2NotesDbCon
   --connection "$ConnectionStrings__Grow2Notes"
 dotnet publish src/Grow2Notes.Web --configuration Release --output artifacts/app
 cd artifacts/app
-ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 dotnet Grow2Notes.Web.dll
+ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 App__Origin=http://localhost:5000 \
+  dotnet Grow2Notes.Web.dll
 ```
 
-Then, in a second terminal:
+Then, in a second terminal, from the repository root:
 
 ```shell
+export ConnectionStrings__Grow2Notes="Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=Grow2Notes-CI-only-1;TrustServerCertificate=True"
+export App__Origin=http://localhost:5000
+export E2E_APP_DIR="$PWD/artifacts/app"
 cd tests/e2e
 npm ci
 npx playwright install chromium
@@ -102,9 +107,13 @@ npm run typecheck
 npm test
 ```
 
-The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. After a failure,
-`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
-`docker rm -f grow2notes-e2e-sql` when done.
+The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
+(`e2e/setup.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite` fixture,
+below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
+`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
+Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
+organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
+holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -119,16 +128,31 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
+Two more fixtures are there for the tests that name them, and only those run them:
+
+- `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
+  `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager with a new `example.org`
+  address (A35). It gives the manager's display name and address, and the setup link that the command printed.
+- `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
+  phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
+  at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
+  and `credentials()` lists the passkeys that it holds.
+
+A test that sends a change through the SPA's `api()` wrapper sets `extraHTTPHeaders` to
+`{ 'X-Forwarded-Proto': 'https' }`, as `e2e/setup.spec.ts` does with `test.use`. The antiforgery, enrolment and session
+cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a request
+from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
+
 ### Answering `/api/auth/me`
 
-Nobody can sign in in the end-to-end run until the sign-in stories are built, so a test of a signed-in screen answers
-`GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts` routes the page's requests for it,
-through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker` and `manager` there (A35), in the
-JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call it before `page.goto`. To change
-who is signed in, call it again with the other person, whose answer then wins, and load the page again, so that the SPA
-starts with them. Everything else the page loads is the published app's, under its policy. A test that does not call
-it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`); `e2e/shell.spec.ts` is the example
-of one that does.
+Until the sign-in stories are built, the end-to-end run signs someone in only through setup (`e2e/setup.spec.ts`), so a
+test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `serveMe(page, me)` from `e2e/me.ts`
+routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
+and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
+it before `page.goto`. To change who is signed in, call it again with the other person, whose answer then wins, and load
+the page again, so that the SPA starts with them. Everything else the page loads is the published app's, under its
+policy. A test that does not call it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`);
+`e2e/shell.spec.ts` is the example of one that does.
 
 ```ts
 await serveMe(page, manager);
@@ -261,8 +285,8 @@ ignore the header. `Grow2Notes.Tests/Platform/PoliciesOnSqlServerTests.cs` is th
 ### Signing in with the session cookie, on a fake clock
 
 A test of the session itself signs in with the real session cookie, `__Host-grow2notes`, so its later requests meet
-the app's own session checks: the security stamp, the idle limit and the 12-hour limit (design.md §8.4, §8.5). No
-sign-in endpoint exists yet, so the test maps a test-only one with `MapCookieSignIn()`
+the app's own session checks: the security stamp, the idle limit and the 12-hour limit (design.md §8.4, §8.5). The
+seeded users have no passkey or password to sign in with, so the test maps a test-only sign-in with `MapCookieSignIn()`
 (`Grow2Notes.Tests/Fixtures/CookieSignIn.cs`), which signs in the user whose ID it is given through the app's
 `SignInManager.SignInAsync(user, isPersistent: false)`, as setup does when it completes (§8.1 step 5). So the cookie is
 the one a real sign-in issues, `auth_time` included. That call does not ask `CanSignInAsync`, so sign in Active users
@@ -296,6 +320,22 @@ Signing in changes no row, so a test may sign in as a seeded user; one that then
 their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
 `Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
+### Setting up an account, with a test-only passkey handler
+
+A test of the setup endpoints (design.md §8.1) calls them as the SPA does, for a user of its own:
+`factory.InviteAsync(organisation)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) invites a worker through the invite core
+and returns the link's user ID and token, read from its fragment as the SPA reads them, and
+`client.StartSetupAsync(link)` fetches an antiforgery token, starts setup with it and returns it, for the later setup
+steps to send with `PostWithTokenAsync`. Identity's passkey handler verifies a real WebAuthn attestation, which a .NET
+test cannot easily make, so a test that completes setup with a passkey hosts the app with `UseTestPasskeyHandler()`
+(`Grow2Notes.Tests/Fixtures/TestPasskeyHandler.cs`) in its place. Identity's sign-in manager still keeps the ceremony in
+its two-factor cookie and ends it on the attempt, and the handler accepts any credential but
+`TestPasskeyHandler.RefusedCredential`, as a made-up passkey for the user whose options the client asked for.
+
+The test server gives a request no client address, so a test of an audit event's `IpAddress` gives each request one
+in a startup filter, ahead of the app's middleware. `Grow2Notes.Tests/Features/Auth/SetupPasskeyEndpointTests.cs` is
+the example of both.
+
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
@@ -313,10 +353,11 @@ maps for itself needs no row.
   for A's worker at one with the `Manager` policy, and, from the first endpoint that loads one of an organisation's
   records, `404` for B's manager at A's (§9.2).
 - By default the matrix calls an endpoint at its route pattern. A row whose route has parameters builds its own
-  request, such as `At("/api/no-such-path")`, and its builder is asked again for each call. A call commits, so a
-  row whose calls change something builds each call's request after adding the record that call acts on, in
-  organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's services and
-  the seeded organisations to do it with.
+  request, such as `At("/api/no-such-path")`, and one whose endpoint reads a JSON body gives it one with `WithJson`,
+  as `POST /api/auth/setup/start`'s gives a made-up link; a row's builder is asked again for each call. A call
+  commits, so a row whose calls change something builds each call's request after adding the record that call acts
+  on, in organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's
+  services and the seeded organisations to do it with.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,

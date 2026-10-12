@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { strings } from '../copy/strings.ts';
 import styles from './ErrorSummary.module.css';
+import { useErrorTitle } from './useErrorTitle.ts';
 
 export type FormError = {
   /** The same words as the field's own message. */
@@ -58,19 +59,7 @@ export function ErrorSummary({ errors, attempt }: ErrorSummaryProps) {
     }
   }, [attempt, hasErrors]);
 
-  useEffect(() => {
-    if (!hasErrors) {
-      return;
-    }
-
-    const prefix = `${strings.errorPrefix} `;
-    document.title = prefix + document.title;
-    return () => {
-      if (document.title.startsWith(prefix)) {
-        document.title = document.title.slice(prefix.length);
-      }
-    };
-  }, [hasErrors]);
+  useErrorTitle(hasErrors);
 
   if (!hasErrors) {
     return null;

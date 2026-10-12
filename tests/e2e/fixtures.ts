@@ -1,4 +1,7 @@
-import { type ConsoleMessage, expect, test as base } from '@playwright/test';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { promisify } from 'node:util';
+import { type ConsoleMessage, type Page, expect, test as base } from '@playwright/test';
 
 export { expect };
 
@@ -9,9 +12,85 @@ export { expect };
 const reportsCspViolation = (message: ConsoleMessage) =>
   message.type() === 'error' && message.text().includes('Content Security Policy');
 
+/** A first manager whom the published app's `admin bootstrap` invited, with the setup link that it printed. */
+export type Invite = {
+  displayName: string;
+  email: string;
+  /** The link as the command printed it, `…/setup#u=…&t=…`. */
+  setupLink: string;
+};
+
+// The published app's folder, which admin bootstrap runs from, and the two settings that it reads from the
+// environment, which the SSH console has from the app (tests/README.md).
+const bootstrapSettings = ['E2E_APP_DIR', 'ConnectionStrings__Grow2Notes', 'App__Origin'];
+
+/**
+ * Runs the published app's own `admin bootstrap` (ops/break-glass.md) as the SSH console runs it: from the app's
+ * folder, with the settings of the app under test, so that the link opens there. The organisation and manager are made
+ * up, and the address is new each time, as one address has one account across the app (A27, A35).
+ */
+async function adminBootstrap(baseURL: string | undefined): Promise<Invite> {
+  const missing = bootstrapSettings.filter((name) => !process.env[name]);
+  if (missing.length > 0) {
+    throw new Error(`admin bootstrap needs these settings, which tests/README.md describes: ${missing.join(', ')}.`);
+  }
+
+  const manager = { displayName: 'Alex Sample', email: `alex.sample.${randomUUID()}@example.org` };
+  const { stdout } = await promisify(execFile)(
+    'dotnet',
+    [
+      'Grow2Notes.Web.dll', 'admin', 'bootstrap',
+      '--organisation', 'Sample Support Services',
+      '--manager-name', manager.displayName,
+      '--manager-email', manager.email,
+    ],
+    // Production, as the app runs in CI and in App Service, so that no appsettings.Development.json is read.
+    { cwd: process.env.E2E_APP_DIR, env: { ...process.env, ASPNETCORE_ENVIRONMENT: 'Production' } },
+  );
+
+  // The command prints the link and nothing else.
+  const setupLink = stdout.trim();
+  expect(new URL(setupLink).origin, 'App__Origin is the address that the tests open').toBe(
+    new URL(baseURL ?? '').origin,
+  );
+  return { ...manager, setupLink };
+}
+
+/**
+ * Chromium's virtual authenticator, through the DevTools protocol, in place of a phone (passkey-flows.md *Tests*): one
+ * built into the device, which makes discoverable passkeys and verifies the person, as a face, fingerprint or PIN does,
+ * and answers each prompt at once.
+ */
+async function addVirtualAuthenticator(page: Page) {
+  const devTools = await page.context().newCDPSession(page);
+  await devTools.send('WebAuthn.enable');
+  const { authenticatorId } = await devTools.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  });
+
+  return {
+    /** Whether the person passes verification at the next prompt; with false, as when they fail, no passkey is made. */
+    setUserVerified: async (isUserVerified: boolean) => {
+      await devTools.send('WebAuthn.setUserVerified', { authenticatorId, isUserVerified });
+    },
+    /** The passkeys that it holds. */
+    credentials: async () => (await devTools.send('WebAuthn.getCredentials', { authenticatorId })).credentials,
+  };
+}
+
+export type VirtualAuthenticator = Awaited<ReturnType<typeof addVirtualAuthenticator>>;
+
 // Every end-to-end test imports test from here, not from @playwright/test (tests/README.md), so a screen that breaks
-// design.md §9.7's policy fails its test, whatever the test checks.
-export const test = base.extend({
+// design.md §9.7's policy fails its test, whatever the test checks. A test that names invite or authenticator gets
+// them; the others never run the command or add an authenticator.
+export const test = base.extend<{ invite: Invite; authenticator: VirtualAuthenticator }>({
   page: async ({ page }, use) => {
     const violations: string[] = [];
     page.on('console', (message) => {
@@ -21,5 +100,11 @@ export const test = base.extend({
     await use(page);
 
     expect(violations, 'The browser console reported a Content Security Policy violation').toEqual([]);
+  },
+  invite: async ({ baseURL }, use) => {
+    await use(await adminBootstrap(baseURL));
+  },
+  authenticator: async ({ page }, use) => {
+    await use(await addVirtualAuthenticator(page));
   },
 });

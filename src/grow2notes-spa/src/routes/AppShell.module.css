@@ -8,6 +8,8 @@
   position: absolute;
   inset-block-start: var(--space-2);
   inset-inline-start: var(--space-2);
+  /* As far from the right edge as from the left, so that its ring stays on screen when it wraps at 200% text. */
+  max-inline-size: calc(100% - 2 * var(--space-2));
   z-index: 1;
   padding: var(--space-3) var(--space-4);
   background: var(--colour-surface);
