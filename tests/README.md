@@ -4,8 +4,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
-- `e2e/`: Playwright smoke tests and end-to-end tests of account setup, with axe accessibility checks, run against the
-  published app.
+- `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup and sign-out, with axe
+  accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -108,12 +108,13 @@ npm test
 ```
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
-(`e2e/setup.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite` fixture,
-below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
-`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
-Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
-organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
-holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/setup.spec.ts`), and the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), get their setup
+links from the published app's own `admin bootstrap` (the `invite` fixture, below), so the second terminal gives them
+what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection string
+and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs a
+link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
+failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
+database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -155,7 +156,9 @@ and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that t
 it before `page.goto`. To change who is signed in, call it again with the other person, whose answer then wins, and load
 the page again, so that the SPA starts with them. Everything else the page loads is the published app's, under its
 policy. A test that does not call it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`);
-`e2e/shell.spec.ts` is the example of one that does.
+`e2e/shell.spec.ts` is the example of one that does. A test of signing out answers it only until the page sends the
+logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets the request through to the app from then on,
+so the page that the logout loads meets the app's `401`.
 
 ```ts
 await serveMe(page, manager);
