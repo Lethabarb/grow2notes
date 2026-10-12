@@ -141,6 +141,13 @@ Two more fixtures are there for the tests that name them, and only those run the
   With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
   it does.
 
+A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
+key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
+6238's code for the key at the current 30-second step, as Identity's authenticator provider checks it, and
+`authenticatorCode(key, time)` the code at another time. Identity accepts the codes of the steps either side of now, so
+a wrong code is the right key's code for a step ten minutes away. `e2e/authenticatorCode.spec.ts` checks the helper
+against RFC 6238's test values, and the password path's tests in `e2e/setup.spec.ts` are the example.
+
 Every request that a test's browser sends says that it came over HTTPS: `playwright.config.ts` sets
 `extraHTTPHeaders` to `{ 'X-Forwarded-Proto': 'https' }` for every test, as every signed-out page sends a change
 through the SPA's `api()` wrapper, sign-in asking for passkey options as it shows. The antiforgery, enrolment and
@@ -345,7 +352,7 @@ Signing in changes no row, so a test may sign in as a seeded user; one that then
 their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
 `Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
-### Setting up an account, with a test-only passkey handler
+### Setting up an account, with a test-only passkey handler or a computed code
 
 A test of the setup endpoints (design.md §8.1) calls them as the SPA does, for a user of its own:
 `factory.InviteAsync(organisation)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) invites a worker through the invite core
@@ -360,6 +367,15 @@ its two-factor cookie and ends it on the attempt, and the handler accepts any cr
 The test server gives a request no client address, so a test of an audit event's `IpAddress` gives each request one
 in a startup filter, ahead of the app's middleware. `Grow2Notes.Tests/Features/Auth/SetupPasskeyEndpointTests.cs` is
 the example of both.
+
+Identity's authenticator provider checks codes but makes none, so a test that completes setup with a password gets
+each code as a person's authenticator app would, from the key that the invite stored, which
+`UserManager.GetAuthenticatorKeyAsync` reads: `AuthenticatorCodes.Now(key)`
+(`Grow2Notes.Tests/Fixtures/AuthenticatorCodes.cs`) computes RFC 6238's code for the key at the current 30-second
+step, and `AuthenticatorCodes.At(key, time)` the code at another time, such as ten minutes away for a wrong one.
+Identity checks a code against the system clock, not the app's `TimeProvider`, so a test computes its codes from the
+real time even when it hosts the app on `UseClock`'s fake clock.
+`Grow2Notes.Tests/Features/Auth/SetupPasswordEndpointTests.cs` is the example.
 
 ### Signing in with a passkey
 
