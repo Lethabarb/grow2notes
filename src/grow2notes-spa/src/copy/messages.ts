@@ -25,4 +25,8 @@ export const msg = {
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
+  /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
+  passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
+  /** View F's message for a password shorter than `limits.passwordMinLength`. */
+  passwordTooShort: (minLength: number) => `Password must be ${minLength} characters or more`,
 } as const;

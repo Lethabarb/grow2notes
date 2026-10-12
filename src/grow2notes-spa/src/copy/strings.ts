@@ -40,10 +40,24 @@ export const strings = {
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',
+  /** The button of a step that leads to the next (sign-in.md component 8). */
+  continue: 'Continue',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
   /** A person's email address, as a field's label or a summary's term (sign-in.md components 6 and 13). */
   emailAddress: 'Email address',
+  /**
+   * The Show/Hide button of a password field that has one (sign-in.md component 7, GOV.UK's words): its visible word,
+   * its name, which starts with that word, and what its polite line then says.
+   */
+  passwordToggle: {
+    show: 'Show',
+    hide: 'Hide',
+    showName: 'Show password',
+    hideName: 'Hide password',
+    visible: 'Your password is visible',
+    hidden: 'Your password is hidden',
+  },
   /** Why a request failed, as the failure sentences put it (microcopy.md §9). */
   cause: {
     /** `fetch` rejected, or no whole answer came in time. */
@@ -86,6 +100,10 @@ export const strings = {
         'Passkeys cannot be set up here. Go back to the email and open the link in your phone’s browser, such as '
         + 'Safari or Chrome.',
     },
+    /** View F's `<h1>`, which is its field's label. */
+    createPassword: 'Create a password',
+    /** View F's message for a password that is empty or only spaces (its hint and length message are in `msg`). */
+    enterPassword: 'Enter a password',
   },
   /** The error summary's heading (form-validation.md). */
   errorSummaryHeading: 'There is a problem',

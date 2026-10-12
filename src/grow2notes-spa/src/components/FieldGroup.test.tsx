@@ -82,6 +82,26 @@ describe('FieldGroup', () => {
     expect(fieldset).toHaveAttribute('aria-describedby', 'invite-role-hint invite-role-error');
   });
 
+  it("puts a field's label in the page's h1, then its hint, message and control, when the label is the heading", () => {
+    render(
+      <FieldGroup fieldId="password" label="Create a password" labelIsHeading hint="Use a long one" error="Enter one">
+        <input id="password" type="password" />
+      </FieldGroup>,
+    );
+    const heading = screen.getByRole('heading', { level: 1, name: 'Create a password' });
+    const input = screen.getByLabelText('Create a password');
+
+    expect(heading).toHaveAttribute('id', 'page-heading');
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(heading.firstElementChild).toBe(screen.getByText('Create a password', { selector: 'label' }));
+    expect(Array.from(groupOf(heading).children)).toEqual([
+      heading,
+      screen.getByText('Use a long one'),
+      screen.getByText('Enter one'),
+      input,
+    ]);
+  });
+
   it("describes a group's fieldset by only the parts it has", () => {
     const { rerender } = render(<RoleField />);
     const fieldset = screen.getByRole('group', { name: 'Role' });

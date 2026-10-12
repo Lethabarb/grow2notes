@@ -7,20 +7,33 @@ import { createQueryClient } from '../../api/queryClient.ts';
 import { routes, type AppRoute } from '../routes.tsx';
 import { useSetup } from './setupContext.ts';
 
-// A made-up person (A35).
+// A made-up person and password (A35), the password with the spaces round it that setup keeps.
 const account = { email: 'sam.lee@example.org', displayName: 'Sam Lee' };
+const password = ' made-up password ';
 
-/** Shows what the setup layout holds, and puts the made-up account there. */
+/** Shows what the setup layout holds, puts the made-up account and password there, and drops them. */
 function Probe() {
   const setup = useSetup();
   return (
     <>
       <p>{setup.account === undefined ? 'Nothing in memory' : setup.account.email}</p>
+      <p data-testid="password">{setup.password ?? ''}</p>
       <button type="button" onClick={() => setup.setAccount(account)}>
         Remember
       </button>
+      <button type="button" onClick={() => setup.setPassword(password)}>
+        Remember password
+      </button>
+      <button type="button" onClick={setup.drop}>
+        Drop
+      </button>
     </>
   );
+}
+
+/** The password the setup layout holds, as it holds it. */
+function heldPassword() {
+  return screen.getByTestId('password').textContent;
 }
 
 /** The app's route table, with each page under the setup layout replaced by the probe. */
@@ -59,26 +72,42 @@ afterEach(() => {
 });
 
 describe('SetupLayout', () => {
-  it('keeps the account in memory between /setup, /setup/password and /setup/app', async () => {
+  it('keeps the account and the password in memory between /setup, /setup/password and /setup/app', async () => {
     const router = renderApp('/setup');
     expect(screen.getByText('Nothing in memory')).toBeInTheDocument();
+    expect(heldPassword()).toBe('');
 
     fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
     expect(screen.getByText(account.email)).toBeInTheDocument();
 
     await act(() => router.navigate('/setup/password'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remember password' }));
     expect(screen.getByText(account.email)).toBeInTheDocument();
     await act(() => router.navigate('/setup/app'));
     expect(screen.getByText(account.email)).toBeInTheDocument();
+    expect(heldPassword()).toBe(password);
     await act(() => router.navigate(-2));
     expect(router.state.location.pathname).toBe('/setup');
     expect(screen.getByText(account.email)).toBeInTheDocument();
+    expect(heldPassword()).toBe(password);
   });
 
-  it('drops the account when the person leaves the setup addresses, so that Back finds nothing in memory', async () => {
+  it('drops the account and the password together, as a 401 from a setup call does', () => {
+    renderApp('/setup/password');
+    fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remember password' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Drop' }));
+
+    expect(screen.getByText('Nothing in memory')).toBeInTheDocument();
+    expect(heldPassword()).toBe('');
+  });
+
+  it('drops the account and the password on leaving the setup addresses, so that Back finds nothing', async () => {
     const router = renderApp('/setup');
     fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
     await act(() => router.navigate('/setup/password'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remember password' }));
 
     await act(() => router.navigate('/'));
     expect(screen.queryByText(account.email)).not.toBeInTheDocument();
@@ -86,11 +115,13 @@ describe('SetupLayout', () => {
     await act(() => router.navigate(-1));
     expect(router.state.location.pathname).toBe('/setup/password');
     expect(screen.getByText('Nothing in memory')).toBeInTheDocument();
+    expect(heldPassword()).toBe('');
   });
 
-  it('keeps the account out of router state and browser storage', async () => {
+  it('keeps the account and the password out of router state and browser storage', async () => {
     const router = renderApp('/setup');
     fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remember password' }));
 
     await act(() => router.navigate('/setup/password'));
 

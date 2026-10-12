@@ -4,6 +4,7 @@ import { AppShell } from './AppShell.tsx';
 import { ManagePage } from './ManagePage.tsx';
 import { ManagerOnly } from './ManagerOnly.tsx';
 import { PageNotFound } from './PageNotFound.tsx';
+import { CreatePassword } from './setup/CreatePassword.tsx';
 import { NoLinkPage } from './setup/NoLinkPage.tsx';
 import { SetupLayout } from './setup/SetupLayout.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
@@ -37,7 +38,7 @@ export const routes: AppRoute[] = [
         element: <SetupLayout />,
         children: [
           { index: true, element: <SetupPage />, handle: setupHandle },
-          { path: 'password', element: <NoLinkPage />, handle: setupHandle },
+          { path: 'password', element: <CreatePassword />, handle: setupHandle },
           { path: 'app', element: <NoLinkPage />, handle: setupHandle },
         ],
       },

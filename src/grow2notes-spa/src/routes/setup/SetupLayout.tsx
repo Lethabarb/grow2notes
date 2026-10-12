@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Outlet } from 'react-router';
 import { SetupContext, type SetupAccount } from './setupContext.ts';
 
@@ -9,7 +9,13 @@ import { SetupContext, type SetupAccount } from './setupContext.ts';
  */
 export function SetupLayout() {
   const [account, setAccount] = useState<SetupAccount>();
-  const setup = useMemo(() => ({ account, setAccount }), [account]);
+  const [password, setPassword] = useState<string>();
+  // Stable, as view E's prompt and prefetch would start again for a new one.
+  const drop = useCallback(() => {
+    setAccount(undefined);
+    setPassword(undefined);
+  }, []);
+  const setup = useMemo(() => ({ account, setAccount, password, setPassword, drop }), [account, password, drop]);
 
   return (
     <SetupContext value={setup}>
