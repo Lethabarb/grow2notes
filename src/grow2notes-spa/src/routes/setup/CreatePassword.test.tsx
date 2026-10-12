@@ -12,6 +12,7 @@ import { useSetup } from './setupContext.ts';
 const antiforgeryPath = '/api/auth/antiforgery';
 const mePath = '/api/auth/me';
 const startPath = '/api/auth/setup/start';
+const keyPath = '/api/auth/setup/authenticator';
 const title = 'Grow2Notes – Set up your account';
 const hint = 'Use at least 12 characters.';
 const enterPassword = 'Enter a password';
@@ -23,9 +24,9 @@ const setupLink = '/setup#u=6f9619ff-8b86-d011-b42d-00cf4fc964ff&t=made-up-token
 
 const fetchMock = vi.fn<typeof fetch>();
 
-/** The path of each request sent, but the shell's own `GET /api/auth/me`, in order. */
+/** The path of each request sent, but the shell's own `GET /api/auth/me` and view G's `GET` of its key, in order. */
 function pageRequests(): unknown[] {
-  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath);
+  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath && path !== keyPath);
 }
 
 /** Shows what the setup layout holds: the account's email and the password, as held. */
@@ -156,6 +157,15 @@ beforeEach(() => {
     if (path === startPath) {
       return Promise.resolve(
         new Response(JSON.stringify(account), { headers: { 'Content-Type': 'application/json' } }),
+      );
+    }
+
+    // View G's, once Continue has gone on to it.
+    if (path === keyPath) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ sharedKey: 'GROWTWONOTESMADEUPSETUPKEY234567' }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
       );
     }
 

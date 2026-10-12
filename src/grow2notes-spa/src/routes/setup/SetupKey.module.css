@@ -1,0 +1,25 @@
+.setupKey {
+  margin: 0 0 var(--space-4);
+}
+
+.term {
+  font-weight: 700;
+}
+
+/* A touch or a click selects the whole key, for a person to copy it by hand. */
+.key {
+  margin: 0;
+  font-family: var(--font-family-code);
+  font-size: var(--font-size-h2);
+  user-select: all;
+}
+
+/*
+ * Each group a box of its own, so that the key wraps between groups and never inside one, with a margin, not a space,
+ * between them. Inline blocks copy as one word, where flex items, which are blocks, would copy with line breaks between
+ * them in Chromium and WebKit.
+ */
+.group {
+  display: inline-block;
+  margin-inline-end: var(--space-3);
+}

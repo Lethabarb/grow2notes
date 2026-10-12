@@ -104,6 +104,28 @@ export const strings = {
     createPassword: 'Create a password',
     /** View F's message for a password that is empty or only spaces (its hint and length message are in `msg`). */
     enterPassword: 'Enter a password',
+    /** View G's setup block (sign-in.md *Copy for view G*), in the order it shows them. */
+    authenticatorApp: {
+      heading: 'Set up your authenticator app',
+      intro:
+        'An authenticator app is a free app on your phone. It shows a new 6-digit code every 30 seconds. You enter '
+        + 'the code after your password each time you sign in.',
+      getApp:
+        'Get an authenticator app on your phone if you do not have one, for example Google Authenticator or '
+        + 'Microsoft Authenticator. Any authenticator app works.',
+      addGrow2Notes: 'Add Grow2Notes to the app. Scan the QR code, or use the setup key.',
+      /** The QR code's `alt`, which says what it is for; the setup key under it is its text equivalent. */
+      qrAlt: 'QR code for adding Grow2Notes to your authenticator app',
+      /** In place of the QR code, when it did not load. */
+      qrNotLoaded: 'The QR code did not load. Use the setup key instead.',
+      thisPhone: 'Using this phone? Type the setup key into the app. If the app asks for a name, type Grow2Notes.',
+      /** The key's term, in front of the key. */
+      setupKey: 'Setup key',
+      /** The key as its failure sentence names it, "The setup key did not load: …". */
+      theSetupKey: 'The setup key',
+      setupKeyNote: 'Your app might call this a ‘key’ or ‘secret key’. You do not need to type the spaces.',
+      comeBack: 'Come back to this page.',
+    },
   },
   /** The error summary's heading (form-validation.md). */
   errorSummaryHeading: 'There is a problem',

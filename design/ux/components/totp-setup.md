@@ -442,11 +442,11 @@ export function SetupKey({ sharedKey }: { sharedKey: string }) {
 
 /* SetupKey.module.css */
 .key {
-  display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem;   /* visual gaps, no space characters */
   font-family: ui-monospace, "Cascadia Mono", Menlo, Consolas, monospace;
   font-size: 1.25rem; user-select: all;
 }
-.group { white-space: nowrap; }
+/* Inline blocks wrap between groups and copy as one word; flex items would copy with line breaks between them. */
+.group { display: inline-block; margin-inline-end: 0.75rem; }   /* a visual gap, no space character */
 .copy { min-block-size: 2.75rem; min-inline-size: 2.75rem; }
 ```
 
