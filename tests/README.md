@@ -136,7 +136,9 @@ Two more fixtures are there for the tests that name them, and only those run the
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
-  and `credentials()` lists the passkeys that it holds.
+  `credentials()` lists the passkeys that it holds, and `addPasskey(rpId)` adds one that no account holds (below).
+  With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
+  it does.
 
 A test that sends a change through the SPA's `api()` wrapper sets `extraHTTPHeaders` to
 `{ 'X-Forwarded-Proto': 'https' }`, as `e2e/setup.spec.ts` does with `test.use`. The antiforgery, enrolment and session
@@ -158,6 +160,24 @@ policy. A test that does not call it meets the app's real `401`, as a signed-out
 await serveMe(page, manager);
 await page.goto('/manage');
 ```
+
+### Signing in with a passkey, end to end
+
+A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
+dialog, as passkey-flows.md's *Tests* say.
+
+- `addPasskey(rpId)` adds a passkey through `WebAuthn.addCredential`: a discoverable credential for the domain
+  `rpId`, with a P-256 key, a credential ID and a user handle that the test makes, given to the protocol as base64.
+  The sign-in options name no credentials, so the next prompt for that domain signs with it. Pass the host of the
+  address that the test opened, `new URL(page.url()).hostname` once the page has loaded, as the options name
+  `App:Origin`'s host and `App__Origin` names that address (above).
+- No account holds a passkey added this way, so a sign-in with it fails, with the `401` that the API gives an unknown
+  credential. One that succeeds needs a passkey that the app's setup made with the same authenticator.
+
+An assertion that something is absent passes at once, before the page has handled the prompt's answer, so a test
+first waits for what the page does with it: its request to `POST /api/auth/passkey` (`page.waitForResponse`), or, for
+a failure that sends nothing, the fresh options that the sign-in view asks for after any failure.
+`e2e/sign-in.spec.ts` is the example.
 
 ## Writing integration tests
 
