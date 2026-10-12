@@ -1,12 +1,14 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-// Before App, so that the build puts these first and a component's own stylesheet wins over them at equal specificity.
+import { createBrowserRouter } from 'react-router';
+import { RouterProvider } from 'react-router/dom';
+// Before the routes, so that the build puts these first and a component's own stylesheet wins over them at equal
+// specificity.
 import './styles/tokens.css';
 import './styles/base.css';
-import { App } from './App.tsx';
 import { createQueryClient } from './api/queryClient.ts';
-import { PageStatus } from './components/PageStatus.tsx';
+import { routes } from './routes/routes.tsx';
 
 const container = document.getElementById('root');
 if (container === null) {
@@ -14,15 +16,12 @@ if (container === null) {
 }
 
 const queryClient = createQueryClient();
+const router = createBrowserRouter(routes);
 
 createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      {/* The placeholder home page is the one page, so its status region is here until the shell gives each page its
-          own (app-shell.md component 3). */}
-      <PageStatus>
-        <App />
-      </PageStatus>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 );

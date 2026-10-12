@@ -1,6 +1,19 @@
 /** Words that have no slots (microcopy.md §8), each written here once. */
 export const strings = {
   appName: 'Grow2Notes',
+  /** The shell's skip link (app-shell.md component 1), GOV.UK's words. */
+  skipToMainContent: 'Skip to main content',
+  /** The main navigation's name, which screen readers say as "Main navigation" (app-shell.md component 2b). */
+  mainNavigation: 'Main',
+  /** The main navigation's items (app-shell.md component 2b), in design.md §4.0's words. */
+  navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
+  /** The header's Account button (app-shell.md component 2d). */
+  account: 'Account',
+  /** Page not found's words under its heading (app-shell.md component 4). */
+  pageNotFound: {
+    checkAddress: 'If you typed or pasted the web address, check it is correct.',
+    goToToday: 'Go to Today',
+  },
   tryAgain: 'Try again',
   /** Try again's busy label. */
   loading: 'Loading…',

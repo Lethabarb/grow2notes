@@ -1,0 +1,23 @@
+/* The links as full-width rows in the reading column, with a rule above, between and below them (foundations.md). */
+.list {
+  max-inline-size: var(--measure);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+}
+
+.list > li {
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* The whole row is the link, at least 48 px tall (app-shell.md component 5). */
+.row {
+  display: flex;
+  align-items: center;
+  min-block-size: var(--target-button);
+}
+
+.row:active {
+  background: var(--colour-pressed);
+}

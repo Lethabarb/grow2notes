@@ -334,9 +334,9 @@ on hover: there are no tooltips and no `title` attributes carrying information (
   sign-in message is the one deliberate exception: it must not say which part was wrong.
 - **Status Messages (SC 4.1.3).** Save indicator, success and count strings are announced through regions that exist
   before their text changes (owned by autosave-status.md and status-messages.md). This document only fixes their words.
-- **Separators.** Render the middle dot as `<span aria-hidden="true"> · </span>` followed by a visually hidden `, `,
-  so "Draft · You · saved 9:42 am" is read "Draft, You, saved 9:42 am" with pauses, not "Draft dot You". [Opinion;
-  verify with NVDA and VoiceOver]
+- **Separators.** Render the middle dot with `Sep` (§8): `<span aria-hidden="true"> ·</span>`, a visually hidden
+  `,`, then a plain space outside both spans, so "Draft · You · saved 9:42 am" is read "Draft, You, saved 9:42 am"
+  with pauses, not "Draft dot You". [Opinion; verify with NVDA and VoiceOver]
 - **Abbreviated dates** appear only next to times. How screen readers speak "Thu" and "Oct" varies (unverified), which
   is a further reason to keep long dates in every sentence and link.
 - **`<time dateTime>`** wraps every displayed date and time (`<time dateTime="2026-10-01">Thursday 1 October 2026</time>`).
@@ -457,9 +457,12 @@ export const apiErrorCopy: Record<ApiErrorCode, (p: ApiErrorParams) => string> =
 **Separator.**
 
 ```tsx
-// src/copy/Sep.tsx
-import styles from './Sep.module.css';   // .vh = visually hidden
-export const Sep = () => (<><span aria-hidden="true"> · </span><span className={styles.vh}>, </span></>);
+// src/copy/Sep.tsx: base.css's .visually-hidden, so no stylesheet of its own
+export function Sep() {
+  // The space after the dot is outside both spans: a name computed from the text, as Testing Library computes it,
+  // drops a space at the end of a hidden span, so a hidden ", " would give "Today,Thursday 1 October".
+  return (<><span aria-hidden="true"> ·</span><span className="visually-hidden">,</span>{' '}</>);
+}
 ```
 
 **Keeping it consistent.** Three checks, each run by CI on every pull request, and review for the parent company's

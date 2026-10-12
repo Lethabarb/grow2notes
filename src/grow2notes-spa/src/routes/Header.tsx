@@ -1,0 +1,163 @@
+import { useRef, useState, type KeyboardEvent } from 'react';
+import { Link, matchPath, useLocation } from 'react-router';
+import type { Me } from '../api/me.ts';
+import { Button } from '../components/Button.tsx';
+import { msg } from '../copy/messages.ts';
+import { pageName, type PageName } from '../copy/pageNames.ts';
+import { strings } from '../copy/strings.ts';
+import styles from './Header.module.css';
+import layout from './layout.module.css';
+
+type NavItemKey = keyof typeof strings.navItem;
+
+/** The item an address marks as current, with its `aria-current`. */
+type Mark = { item: NavItemKey; current: 'page' | 'true' };
+
+// app-shell.md component 2b's table, first match first. Flagged's views are query strings, so its path alone counts;
+// a note's address, and any other, marks nothing.
+const markTable: readonly (Mark & { path: string })[] = [
+  { path: '/', item: 'today', current: 'page' },
+  { path: '/flagged', item: 'flagged', current: 'page' },
+  { path: '/reports/daily/:date', item: 'report', current: 'page' },
+  { path: '/manage', item: 'manage', current: 'page' },
+  { path: '/manage/*', item: 'manage', current: 'true' },
+];
+
+const innerClass = `${layout.container} ${styles.inner}`;
+const accountPanelId = 'account-panel';
+
+type HeaderProps = {
+  /** The signed-in user, or `undefined` while `/me` is pending or has failed, which shows the signed-out frame. */
+  me: Me | undefined;
+  /** The name of the page the shell shows. */
+  page: PageName | undefined;
+};
+
+/**
+ * The header (app-shell.md component 2): the wordmark, then, once `/me` has answered, the navigation for the person's
+ * role and the Account button with its panel.
+ */
+export function Header({ me, page }: HeaderProps) {
+  return me === undefined ? (
+    <header className={styles.header}>
+      <div className={innerClass}>
+        <div className={styles.row}>
+          <span className={styles.wordmark}>{strings.appName}</span>
+        </div>
+      </div>
+    </header>
+  ) : (
+    <SignedInHeader me={me} page={page} />
+  );
+}
+
+/**
+ * A worker's one row, or a manager's two: the wordmark and Account, then the navigation; with the Account panel
+ * straight after Account's row, in the flow, so that it pushes the page down rather than covering it (component 2d).
+ */
+function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
+  const { pathname, key } = useLocation();
+  const accountRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  // Any location change closes the panel. It is closed during the render, as React advises for state that follows a
+  // value, so that the new screen never shows it open, as it would until an effect had run.
+  const [locationKey, setLocationKey] = useState(key);
+  if (locationKey !== key) {
+    setLocationKey(key);
+    setOpen(false);
+  }
+
+  // Page not found marks nothing, even at an address the table marks, such as /flagged until E03 builds Flagged.
+  const mark =
+    page === pageName.pageNotFound ? undefined : markTable.find(({ path }) => matchPath(path, pathname) !== null);
+  const isManager = me.role === 'Manager';
+
+  // On the whole header, so that Escape closes the panel from a nav link as well as from Account, and from the
+  // panel's own contents, which S00.04.06 adds.
+  function closeOnEscape(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === 'Escape' && open) {
+      setOpen(false);
+      accountRef.current?.focus();
+    }
+  }
+
+  const wordmark = (
+    <Link to="/" className={styles.wordmark}>
+      {strings.appName}
+    </Link>
+  );
+  const account = (
+    <Button
+      ref={accountRef}
+      className={styles.account}
+      aria-expanded={open}
+      aria-controls={accountPanelId}
+      onClick={() => setOpen(!open)}
+    >
+      {strings.account}
+      <svg className={styles.chevron} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M4.5 7.5 10 13l5.5-5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </Button>
+  );
+  const panel = (
+    <div id={accountPanelId} className={styles.panel} hidden={!open}>
+      <p className={styles.signedInAs}>{msg.signedInAs(me.displayName)}</p>
+    </div>
+  );
+  // Report opens on the server's today in Melbourne (A33), so that the report needs no redirect to today's date.
+  const nav = (
+    <nav aria-label={strings.mainNavigation}>
+      <ul className={styles.navList}>
+        <NavItem item="today" to="/" mark={mark} />
+        {isManager && (
+          <>
+            <NavItem item="flagged" to="/flagged" mark={mark} />
+            <NavItem item="report" to={`/reports/daily/${me.today}`} mark={mark} />
+            <NavItem item="manage" to="/manage" mark={mark} />
+          </>
+        )}
+      </ul>
+    </nav>
+  );
+
+  return (
+    <header className={styles.header} onKeyDown={closeOnEscape}>
+      <div className={innerClass}>
+        {isManager ? (
+          <>
+            <div className={styles.row}>
+              {wordmark}
+              {account}
+            </div>
+            {panel}
+            {nav}
+          </>
+        ) : (
+          <>
+            <div className={styles.row}>
+              {wordmark}
+              {nav}
+              {account}
+            </div>
+            {panel}
+          </>
+        )}
+      </div>
+    </header>
+  );
+}
+
+/**
+ * One item of the main navigation: a plain `Link`, not React Router's `NavLink`, which would say "page" on a page
+ * inside a section, where component 2b's table says "true".
+ */
+function NavItem({ item, to, mark }: { item: NavItemKey; to: string; mark: Mark | undefined }) {
+  return (
+    <li>
+      <Link to={to} className={styles.navLink} aria-current={mark?.item === item ? mark.current : undefined}>
+        {strings.navItem[item]}
+      </Link>
+    </li>
+  );
+}

@@ -1,0 +1,6 @@
+/* The header's and <main>'s, so that the wordmark, the nav and the content share one left edge (Layout - laptop). */
+.container {
+  max-inline-size: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--page-gutter);
+}
