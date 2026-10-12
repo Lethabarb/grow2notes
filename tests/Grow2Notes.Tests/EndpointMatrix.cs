@@ -67,6 +67,11 @@ internal static class EndpointMatrix
         new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
         new(Get,       "/api/auth/me",           Unauthorized, OK,     OK,         OK),
 
+        // Each signed-in user signs out of their own session (§8.5). The test-only sign-in has no session cookie, so a
+        // call ends nothing: it adds one auth.signed_out to the caller's organisation and changes no seeded row
+        // (tests/README.md).
+        new(Post,      "/api/auth/logout",       Unauthorized, NoContent, NoContent, NoContent),
+
         // Setup starts from an invite's link, before anyone is signed in (§8.1 step 3), and a made-up link gets the
         // one answer of a link that does not check, whoever calls.
         new(Post,      "/api/auth/setup/start",  Gone,      Gone,      Gone,       Gone,

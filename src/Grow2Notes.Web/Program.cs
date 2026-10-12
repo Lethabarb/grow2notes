@@ -269,6 +269,7 @@ app.MapHealthEndpoints();
 app.MapApiGroup()
     .MapAntiforgeryEndpoint()
     .MapMeEndpoint()
+    .MapLogoutEndpoint()
     .MapSetupStartEndpoint()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
