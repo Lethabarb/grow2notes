@@ -618,13 +618,13 @@ export function RoleRadios({ value, onChange, error }:
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { api, ApiError } from '../../api/api.ts';
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
-import { postWithEtag, problemCode } from '../../api';
-import { formatTime } from '../../time';
+import { time } from '../../copy/format.ts';
 import { allowedActions } from './userRules.ts';
-import type { AdminUser } from './usersQuery.ts';
+import { usersQuery, type AdminUser } from './usersQuery.ts';
 import styles from './UserActions.module.css';
 
 type Props = { user: AdminUser; onlyManager: boolean; isSelf: boolean;
@@ -639,19 +639,24 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   const [sent, setSent] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+  // Awaited inside each mutationFn, so the button stays busy until the new stamp has arrived (users.md E, Mutations).
+  const refresh = () => qc.refetchQueries({ queryKey: usersQuery.queryKey });
+  const sendSetupLink = () =>
+    api(`/api/admin/users/${user.id}/setup-link`, { method: 'POST', ifMatch: user.concurrencyStamp });
 
   const reset = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
+    mutationFn: async () => {
+      await sendSetupLink();
+      if (!isSelf) await refresh();                           // own sessions just ended: nothing to fetch
+    },
     retry: 0,
-    onSuccess: async () => {
-      if (isSelf) { window.location.replace('/'); return; }   // own sessions just ended
-      await refresh();
+    onSuccess: () => {
+      if (isSelf) { window.location.replace('/'); return; }
       setConfirmReset(false);
       showBanner(`Sign-in reset. A new setup link has been emailed to ${user.email}.`);
     },
     onError: (e) => {
-      const code = problemCode(e);
+      const code = e instanceof ApiError ? e.code : undefined;
       if (code === 'user.last_manager') {
         setDialogError(`${user.displayName} is the only active manager, so their sign-in cannot be reset here.`);
         setNoLongerPossible(true);
@@ -664,12 +669,11 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   });
 
   const resend = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
+    mutationFn: async () => { await sendSetupLink(); await refresh(); },
     retry: 0,
     onMutate: () => { setSent(''); setActionError(''); },
-    onSuccess: async () => {
-      await refresh();
-      setSent(`Setup link sent to ${user.email} at ${formatTime(new Date())}. The old link no longer works.`);
+    onSuccess: () => {
+      setSent(`Setup link sent to ${user.email} at ${time(new Date().toISOString())}. The old link no longer works.`);
     },
     onError: () => setActionError('Not sent: no connection. Try again.'),
   });

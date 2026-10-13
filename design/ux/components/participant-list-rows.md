@@ -407,15 +407,15 @@ export function NoteStatus({ note }: { note: TodayNote }) {
 
 /* src/today/NoteStatus.module.css (Today's status line; a sketch) */
 .part { white-space: nowrap; }        /* wrap only at separators */
-.state { font-weight: 600; color: var(--colour-text); }
-.tag {
+.state { font-weight: 700; color: var(--colour-text); }   /* today.md Conflicts resolved 9 */
+.tag {                                /* today.md's Flagged tag (Conflicts resolved 10) */
   display: inline-block;
-  padding: 0 0.375rem;
-  border: 1px solid var(--colour-tag-flag-border);
-  border-radius: 0.25rem;
-  background: var(--colour-tag-flag-bg);
-  color: var(--colour-text);
-  font-weight: 600;
+  padding: 0.125em 0.5em;
+  border: 1px solid var(--colour-attention-edge);
+  border-radius: var(--radius-s);
+  background: var(--colour-attention-tint-strong);
+  color: var(--colour-attention-text);
+  font-weight: 400;
   line-height: 1.4;
 }
 @media (forced-colors: active) {
