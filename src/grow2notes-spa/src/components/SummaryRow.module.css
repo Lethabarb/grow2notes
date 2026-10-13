@@ -1,0 +1,27 @@
+/*
+ * A row of the summary list (users.md component C item 4 and *Layout - laptop*), in foundations.md's tokens and two
+ * weights. Its border is a real one, so that forced colours draw it.
+ */
+.row {
+  padding-block: var(--space-3);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+.term {
+  font-weight: 700;
+}
+
+/* A long email wraps anywhere, which also lets the grid's column shrink below it (SC 1.4.10). */
+.value {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The one breakpoint, a media query rather than a container query (users.md *Conflicts resolved* 13). */
+@media (min-width: 40rem) {
+  .row {
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    gap: var(--space-4);
+  }
+}
