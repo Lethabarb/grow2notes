@@ -1,10 +1,12 @@
+using Grow2Notes.Web.Platform.Configuration;
+
 namespace Grow2Notes.Web.Data;
 
 /// <summary>
 /// The tenant (design.md §5.3, D3). It is not tenant-owned, because it is the tenant. The <c>admin bootstrap</c> command
 /// creates it; there is no sign-up. Its time zone is not stored, because it is always Australia/Melbourne (D37).
 /// </summary>
-internal sealed class Organisation
+internal sealed class Organisation : IVersionedRow
 {
     public Guid Id { get; set; }
 
@@ -20,7 +22,8 @@ internal sealed class Organisation
     public required DateTime CreatedAtUtc { get; set; }
 
     /// <summary>
-    /// The Guide prompts screen's ETag. SQL Server sets it on every insert and update, so EF Core never writes it.
+    /// The Guide prompts screen's ETag (<see cref="RowVersionToken"/>). SQL Server sets it on every insert and update,
+    /// so EF Core never writes it.
     /// </summary>
     public byte[] RowVersion { get; private set; } = [];
 }
