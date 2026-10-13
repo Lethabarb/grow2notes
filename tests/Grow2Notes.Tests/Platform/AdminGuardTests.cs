@@ -63,15 +63,11 @@ public sealed class AdminGuardTests : IAsyncDisposable
     private static List<string> BreachesOf(EndpointDataSource endpoints) =>
     [
         .. from endpoint in endpoints.Endpoints.OfType<RouteEndpoint>()
-           where IsAdmin(endpoint.RoutePattern.RawText ?? "")
+           where EndpointMatrix.IsAdmin(endpoint.RoutePattern.RawText ?? "")
            let broken = RulesBrokenBy(endpoint).ToList()
            where broken is not []
            select $"{NameOf(endpoint)}: {string.Join(", ", broken)}"
     ];
-
-    // Routing matches a path whatever its case, and with or without the pattern's leading slash.
-    private static bool IsAdmin(string route) =>
-        ("/" + route.TrimStart('/')).StartsWith("/api/admin", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> RulesBrokenBy(RouteEndpoint endpoint)
     {
