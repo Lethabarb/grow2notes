@@ -12,7 +12,8 @@ namespace Grow2Notes.Web.Platform;
 /// endpoint, and it sends a valid antiforgery token (item 2): one that <c>GET /api/auth/antiforgery</c> issued to the
 /// same user, in the <see cref="AntiforgeryHeader"/> header, with the cookie that holds its other half. A body that is
 /// not JSON gets a <c>415</c>, as minimal APIs answer one they would read as JSON, and a request without a valid token
-/// a <c>400</c>, ASP.NET Core's status for a failed check; neither has a design.md §6.9 code.
+/// a <c>400</c>, ASP.NET Core's status for a failed check; neither has a design.md §6.9 code. Inside it, the
+/// <c>/api/admin</c> group holds the managers' endpoints (<see cref="MapAdminGroup"/>).
 /// </summary>
 /// <remarks>
 /// Both checks cover every method but GET, HEAD, OPTIONS and TRACE, which antiforgery leaves unchecked, so every POST,
@@ -76,6 +77,15 @@ internal static class ApiGroup
         });
         return api;
     }
+
+    /// <summary>
+    /// Maps the <c>/api/admin</c> group inside <paramref name="api"/>, the <c>/api</c> group that
+    /// <see cref="MapApiGroup"/> returns, behind the <see cref="Policies.Manager"/> policy (design.md §2, §6.6).
+    /// Every endpoint for managing users and configuration is mapped in it with no policy of its own, as the group's
+    /// applies to each; and, being inside the <c>/api</c> group, each keeps that group's filter.
+    /// </summary>
+    public static RouteGroupBuilder MapAdminGroup(this RouteGroupBuilder api) =>
+        api.MapGroup("/admin").RequireAuthorization(Policies.Manager);
 
     private static async ValueTask<object?> RefuseUnlessJsonWithTokenAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)
