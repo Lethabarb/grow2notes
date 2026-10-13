@@ -1,3 +1,5 @@
+import { Pause } from './Pause.tsx';
+
 /**
  * The separator " · " between two parts of one line (microcopy.md §1 and §7). Screen readers skip the middle dot and
  * read a comma in its place, so "Today · Thursday 1 October" is read "Today, Thursday 1 October".
@@ -8,7 +10,7 @@ export function Sep() {
   return (
     <>
       <span aria-hidden="true"> ·</span>
-      <span className="visually-hidden">,</span>{' '}
+      <Pause />{' '}
     </>
   );
 }

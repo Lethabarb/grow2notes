@@ -1,0 +1,50 @@
+import { Fragment, useId, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { Pause } from '../copy/Pause.tsx';
+import styles from './LinkRow.module.css';
+
+type LinkRowProps = {
+  /** The address the row opens, which holds IDs and dates only (design.md §4.0). */
+  to: string;
+  /** The link's text, and so its whole accessible name, such as a person's name. */
+  name: string;
+  /** The lines under the name, which describe the link, each on a line of its own; none for a row with none. */
+  detail?: readonly ReactNode[];
+};
+
+/**
+ * A row of a `LinkRowList` (participant-list-rows.md): one link, whose text is the name alone and whose `::after`
+ * covers the whole row, so that a tap anywhere in it opens the same page, then the detail, which describes the link,
+ * and a decorative chevron. Nothing else in the row is interactive.
+ */
+export function LinkRow({ to, name, detail = [] }: LinkRowProps) {
+  const detailId = useId();
+  const hasDetail = detail.length > 0;
+
+  return (
+    <li className={styles.row}>
+      <div className={styles.text}>
+        <Link to={to} className={styles.link} aria-describedby={hasDetail ? detailId : undefined}>
+          {name}
+        </Link>
+        {hasDetail && (
+          <p id={detailId} className={styles.detail}>
+            {detail.map((line, index) => (
+              <Fragment key={index}>
+                {/* Between the lines, outside both, as Sep puts its space, so that the description reads "a, b". */}
+                {index > 0 && ' '}
+                <span className={styles.line}>
+                  {line}
+                  {index < detail.length - 1 && <Pause />}
+                </span>
+              </Fragment>
+            ))}
+          </p>
+        )}
+      </div>
+      <svg className={styles.chevron} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      </svg>
+    </li>
+  );
+}

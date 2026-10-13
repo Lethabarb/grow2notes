@@ -1,5 +1,6 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
+import { UsersPage } from '../features/users/UsersPage.tsx';
 import { AppShell } from './AppShell.tsx';
 import { ShellCrashPage } from './CrashPage.tsx';
 import { ManagePage } from './ManagePage.tsx';
@@ -56,7 +57,10 @@ export const routes: AppRoute[] = [
           // Every manager screen goes in here.
           {
             element: <ManagerOnly />,
-            children: [{ path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } }],
+            children: [
+              { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
+              { path: 'manage/users', element: <UsersPage />, handle: { pageName: pageName.users } },
+            ],
           },
           // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
           { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
