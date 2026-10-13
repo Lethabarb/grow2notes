@@ -90,4 +90,12 @@
   .link:focus-visible::after {
     outline-color: Highlight;
   }
+
+  /*
+   * An <svg> keeps a colour it is given under forced colours (its forced-color-adjust is preserve-parent-color), so
+   * the chevron, which signals that the row opens, would stay grey, faint on a dark contrast theme's black.
+   */
+  .chevron {
+    color: CanvasText;
+  }
 }

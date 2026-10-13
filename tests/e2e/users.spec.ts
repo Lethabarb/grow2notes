@@ -381,6 +381,26 @@ test('the Deactivated row looks as the others do: the same colours and opacity, 
   }
 });
 
+test("in a dark contrast theme, each row's chevron is drawn in the theme's text colour, as its divider is", async ({
+  page,
+}) => {
+  // A Windows contrast theme, as Chromium emulates one: a dark one, on whose black a chevron left grey is faint.
+  await page.emulateMedia({ forcedColors: 'active', colorScheme: 'dark' });
+  await serveMe(page, manager);
+  await serveUsers(page, people);
+  await page.goto('/manage/users');
+  await expectLists(page, sorted);
+
+  for (const row of await main(page).getByRole('listitem').all()) {
+    const { text, chevron, divider } = await row.evaluate((item) => ({
+      text: getComputedStyle(item).color,
+      chevron: getComputedStyle(item.querySelector('path')!).stroke,
+      divider: getComputedStyle(item).borderBlockEndColor,
+    }));
+    expect({ chevron, divider }).toEqual({ chevron: text, divider: text });
+  }
+});
+
 for (const user of [alex, jo, chris]) {
   test(`a user's page, ${user.status}, shows the name, the summary list and Edit alone, and passes axe`, async ({
     page,
