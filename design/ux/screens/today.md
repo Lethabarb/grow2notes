@@ -604,7 +604,7 @@ export function TodayPage() {
 ```
 
 - `TodayLists` renders the drafts section, the hidden heading, `FindParticipant` (only when
-  `participants.length > 0`), then the `ParticipantRow` list, the no-match text, or the empty state. It calls
+  `participants.length > 0`), then the `LinkRow` list, the no-match text, or the empty state. It calls
   `useReturnFocusReady(true)` once the lists render, so the shell can return focus to the opened row on a pop.
 - The page also renders the shared `<PageStatus>` (app-shell.md component 3) for Try again's busy label.
 - If `today.data.date !== me.today`, call `refreshMe(queryClient)` once, so the header and the links agree. Not

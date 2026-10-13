@@ -321,12 +321,13 @@ and end-to-end fixtures, S00.04.03's `PageBar` and `BackLink`, S00.05.01's route
 class and its endpoint matrix row, which gains a check of the answer, and the Users list and the user detail page, with
 Edit alone, with their tests and an end-to-end test; and they change users.md, user-management.md,
 participant-list-rows.md if it builds the row, tests/README.md, `ops/first-use-in-test.md` and the Notes of S00.05.02,
-S00.06.02 to S00.06.06, S01.01.01 and S01.02.01. Four parts are shared with E01's stories and built once, by whichever
-branch is first: S01.01.01's `/api/admin` group, the acting-user and channel types that its handler classes and this
-story's take (mcp-server.md §3.5 convention 1), the list row that S01.02.01 uses too, and the summary list (its
-*Notes*). There is no migration or audit event, and none of the tasks needs the operator: the first real list in test,
-account A's own row, is a step in `ops/first-use-in-test.md`, and the check after the deploy sends test only `GET`s. It
-is 22 in the *Plan* and in the list below; at its pull request the numbers are made to follow what `main` has by then.
+S00.06.02 to S00.06.06, S01.01.01, S01.02.01 and S02.01.01. Four parts are shared with E01's stories: S01.01.01's
+`/api/admin` group and the acting-user and channel types that its handler classes and this story's take (mcp-server.md
+§3.5 convention 1), which both branches built, so the second to merge makes the fold; and the list row that S01.02.01
+uses too and the summary list, built once, by whichever branch is first (its *Notes*). There is no migration or audit
+event, and none of the tasks needs the operator: the first real list in test, account A's own row, is a step in
+`ops/first-use-in-test.md`, and the check after the deploy sends test only `GET`s. It is 22 in the *Plan* and in the
+list below; at its pull request the numbers are made to follow what `main` has by then.
 
 **S01.01.01, pulled in on 13 October 2026.** S00.04.07, pulled in on 12 October, has merged (PR #48), been deployed to
 test and been closed (PR #49), and the last stories whose checks in test waited on a person were closed once those
