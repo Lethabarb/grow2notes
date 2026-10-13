@@ -471,7 +471,7 @@ export function AppShell() {
         <Outlet />
       </main>
       {/* No <ScrollRestoration />: it writes sessionStorage. Scroll lives in the shell's in-memory map (app-shell.md). */}
-      <SessionTimeoutDialog />
+      <SessionTimeoutWarning />
     </>
   );
 }
