@@ -571,10 +571,10 @@ As with a passkey, a test reads only the audit events of a user it added, by the
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
 `Caller`: signed out, A's worker, A's manager and B's manager (design.md §2, §9.2). Each must answer with the status in
-the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status only. An endpoint with no row
-fails the run, and so does a row with no endpoint, so a story that maps, changes or removes an endpoint changes its row
-in the same change. The app is hosted there with no test-only endpoints, as in production, so an endpoint that a test
-maps for itself needs no row.
+the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status, and the answer only where the
+row has a check of it (below). An endpoint with no row fails the run, and so does a row with no endpoint, so a story
+that maps, changes or removes an endpoint changes its row in the same change. The app is hosted there with no test-only
+endpoints, as in production, so an endpoint that a test maps for itself needs no row.
 
 - A row finds its endpoint by the methods it is mapped with and its route pattern as mapped, the `/api` group's prefix
   included: `["GET"]` for `MapGet`, and `AnyMethod` for an endpoint mapped with `Map` or `MapFallback`, which names no
@@ -589,6 +589,12 @@ maps for itself needs no row.
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
   on, in organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's
   services and the seeded organisations to do it with.
+- A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
+  caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
+  row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
+  from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
+  whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
+  organisation's seeded users and neither of the other's.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,
