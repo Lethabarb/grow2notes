@@ -433,6 +433,30 @@ describe('SessionTimeoutWarning', () => {
       expect(linesWhenSent).toEqual(['', '']);
       expect(line()).toHaveTextContent(noConnection);
     });
+
+    it('opens the next warning with an empty line after one that said "No connection" has closed', async () => {
+      pings = [offline];
+      await openWarning();
+      press();
+      await wait(0);
+      expect(line()).toHaveTextContent(noConnection);
+
+      // The connection is back, and the window's refresh as it regains focus is accepted, which closes the warning.
+      await at('28:30');
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      await wait(0);
+      expect(warning()).not.toHaveAttribute('open');
+      expect(getPhase()).toBe('active');
+
+      // 28 minutes from that refresh's send time.
+      await at('56:30');
+
+      expect(showModal).toHaveBeenCalledTimes(2);
+      expect(warning()).toHaveAttribute('open');
+      expect(line()).toBeEmptyDOMElement();
+    });
   });
 
   describe('Escape and Android back', () => {

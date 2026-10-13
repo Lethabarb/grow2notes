@@ -323,6 +323,27 @@ describe('the session clock', () => {
       expect(told).toEqual(['warn-2m']);
     });
 
+    it('keeps the newest send time when an earlier request is answered after a later one', async () => {
+      start();
+      const told = watch();
+      await at('10:00');
+      server = after(9_000, answer(200));
+      const earlier = api('/api/today');
+      await at('10:05');
+      server = after(1_000, answer(200));
+      const later = api('/api/today');
+
+      await at('10:09');
+      await Promise.all([earlier, later]);
+
+      // 28 minutes from the later send time, which the earlier request's answer, coming last, leaves as it is.
+      await at('38:04');
+      expect(getPhase()).toBe('active');
+      await at('38:05');
+      expect(getPhase()).toBe('warn-2m');
+      expect(told).toEqual(['warn-2m']);
+    });
+
     it('counts its holds, and decides once the last has settled', async () => {
       start();
       const told = watch();

@@ -97,10 +97,16 @@ nothing stored on the device):
 
 1. **Activity = a request the server accepted.** The shared `api()` fetch wrapper records the *send time* of every
    request whose answer comes and is not `401`, the antiforgery token's and a resent change's included. It counts
-   once the answer's head has come, as the renewed session cookie comes in it. Using the send time means the client
-   can only expire early, never late. Failed network requests do not count, because the server never saw them. Any
-   other answer counts, a `5xx` included, because the session check runs before the endpoint. Mouse movement,
-   scrolling and taps do **not** count, and nothing pings in the background (§6.8, §8.5).
+   once the answer's head has come, as the renewed session cookie comes in it. Using the send time means that a
+   request which renewed the session can only make the client expire early, never late. Failed network requests do
+   not count, because the server never saw them. Any other answer counts, a `5xx` included (step 6): the session
+   check runs before the endpoint and renews the session even when the endpoint then fails. Two answers renewed
+   nothing and count all the same, as the client cannot tell them from the rest: a `503` that App Service's front
+   end gives during a restart, which never reached the app, and a `500` from a database failure inside the session
+   check less than 15 minutes after the request that last renewed the cookie, before the cookie's own sliding renewal
+   starts. After either, the clock can be late until the server's next `401` ends it (step 7; A57, *Tensions with
+   decisions*). Mouse movement, scrolling and taps do **not** count, and nothing pings in the background (§6.8,
+   §8.5).
 2. **Times are measured, not counted.** On every wake-up the clock works out `Date.now() − lastAccepted`. It sets one `setTimeout` for the next mark: 28:00, 29:00, 29:20, 29:40, 30:00.
 3. **At 28:00**, if the note form has a change waiting for autosave, the clock asks autosave to send it now and waits,
    holding its phase on the save (`holdWhile`). If the save is accepted, the clock resets and no warning appears ("a
@@ -519,6 +525,16 @@ return (
 - **The 12-hour absolute limit (A24) has no warning and cannot be extended.** Under the Understanding document for SC 2.2.1, a security time limit is still a time limit. Only things like time-limited two-factor codes are named as possibly "essential", and the exemption applies only to limits over 20 hours. So a strict reading treats an unwarned 12-hour sign-out as a 2.2.1 issue. In practice, the design means nothing is lost: drafts are on the server and the person returns to the same note (SC 2.2.5). The limit can only be reached by someone continuously active for 12 hours. Recorded for awareness, not as a request to change.
 - **The warning text does not say the work is saved.** Home Office guidance says to tell users whether their progress will be saved, and its research found users hoped their input would be kept. HMRC's dialog also says what happens to answers. The design's copy is the countdown sentence and the button only. "Drafts are already saved on the server" appears in §4.0 as a design fact, not as dialog text. It would not always be true either: when the save indicator says "Not saved: no connection", the latest change is not yet saved. Recorded only.
 - **The setup page's 30-minute enrolment limit (§4.1, §8.1)** is also a time limit under SC 2.2.1 with no warning. It is outside this component (there is no session to extend) and belongs to the sign-in component. Recorded only.
+- **A `5xx` that renewed nothing still counts as activity (A57).** *The session clock* step 1 counts every answer but
+  a `401`, as the session check runs before the endpoint. Two answers renewed nothing, and the client cannot tell them
+  from an endpoint's failure: a `503` from App Service's front end during a restart, which never reached the app, and
+  a `500` from a database failure inside the session check less than 15 minutes after the request that last renewed
+  the cookie (later, the cookie's own sliding renewal comes with the `500`). After either, the clock can be late by up
+  to the time since that request, so the server can end the session before the warning that SC 2.2.1 asks for. The
+  person's next request then gets the `401` that ends the clock and shows sign-in in place, with nothing lost, as at
+  the 12-hour limit. Both come only while the app is failing, and not counting a `5xx` would make the clock early
+  after any endpoint's failure and leave Stay signed in's `5xx` needing words of its own. Recorded for awareness; A57
+  accepts it.
 
 ---
 

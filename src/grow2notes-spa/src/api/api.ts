@@ -210,13 +210,14 @@ async function exchange(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // The send time, not the answer's, as the server's 30 minutes start no earlier, so that the clock can end early
-    // but never late (session-timeout.md *The session clock* step 1).
+    // The send time, not the answer's, as the server's 30 minutes start no earlier, so that a request that renewed the
+    // session can make the clock end early but never late (session-timeout.md *The session clock* step 1).
     const sentAt = Date.now();
     const response = await fetch(path, { ...init, signal: controller.signal });
     // Counted once its head has come, whatever the body does: the session check runs before the endpoint and renews
-    // the session cookie in the head (design.md §8.4), so a 5xx counts too. One that App Service's front end gives
-    // without reaching the app counts as well, and the server's next 401 then puts the clock right.
+    // the session cookie in the head (design.md §8.4), so a 5xx counts too. A 5xx that renewed nothing, from App
+    // Service's front end or from a database failure in the session check itself, cannot be told apart and counts as
+    // well, and the server's next 401 then puts the clock right (A57).
     if (response.status !== 401) {
       requestAccepted(sentAt);
     }
