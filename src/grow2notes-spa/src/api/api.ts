@@ -1,4 +1,4 @@
-import { sessionEnded } from './session.ts';
+import { holdWhile, requestAccepted, sessionEnded } from './session.ts';
 
 /** A `422`'s field errors (design.md §6.1), each keyed by the field's name in the request's JSON. */
 export type FieldErrors = Readonly<Record<string, readonly string[]>>;
@@ -62,9 +62,16 @@ type Answer = { response: Response; text: string };
  * Sends a request to the API and gives the JSON of its `2xx` answer, or nothing when that answer has no body. A
  * `POST`, `PUT` or `DELETE` carries the antiforgery token, fetched first when none is held. Throws `ApiError` for any
  * other answer, and with status `0` when no whole answer came within `timeoutMs`; a `401` that means the session has
- * ended raises the session-ended event first.
+ * ended raises the session-ended event first. The session clock holds while the call is out, as its answer may start
+ * the clock afresh or end it (session-timeout.md *The session clock*).
  */
-export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+export function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const call = request<T>(path, options);
+  holdWhile(call);
+  return call;
+}
+
+async function request<T>(path: string, options: ApiOptions): Promise<T> {
   const { method = 'GET', body, ifMatch, timeoutMs = defaultTimeoutMs, signal } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) {
@@ -184,7 +191,8 @@ async function requestToken(): Promise<string> {
 /**
  * Sends the request and reads its whole body, or throws `ApiError` with status `0` when `fetch` or the reading
  * rejects, or the body is not all read after `timeoutMs`, so that an answer that stalls half-way fails too. An abort
- * by the caller's own `signal` is rethrown as it came.
+ * by the caller's own `signal` is rethrown as it came. A request answered with anything but a `401` is activity to
+ * the session clock, as the server accepted it.
  */
 async function exchange(
   path: string,
@@ -202,7 +210,17 @@ async function exchange(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    // The send time, not the answer's, as the server's 30 minutes start no earlier, so that the clock can end early
+    // but never late (session-timeout.md *The session clock* step 1).
+    const sentAt = Date.now();
     const response = await fetch(path, { ...init, signal: controller.signal });
+    // Counted once its head has come, whatever the body does: the session check runs before the endpoint and renews
+    // the session cookie in the head (design.md §8.4), so a 5xx counts too. One that App Service's front end gives
+    // without reaching the app counts as well, and the server's next 401 then puts the clock right.
+    if (response.status !== 401) {
+      requestAccepted(sentAt);
+    }
+
     return { response, text: await response.text() };
   } catch (error) {
     if (signal?.aborted) {
