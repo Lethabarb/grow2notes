@@ -319,8 +319,9 @@ new values, and the reorder, end-of-list, archive and restore helpers, with thei
 the §6.9 code; they map no endpoint of the app's own and add no table, migration or screen, so the save is proven on the
 organisation's guide prompts through test-only endpoints, and the list helpers on stand-in rows (its *Notes*). They
 change the server, the .NET tests and tests/README.md, and no SPA code; and the Notes of the stories that take its
-parts, as each is built from its own section: S00.06.01 to S00.06.03, S01.02.01 to S01.02.08, S01.03.01 to
-S01.03.08, S01.04.01, S07.03.01 and S07.03.02. None of them needs the operator, and nothing goes on
+parts, as each is built from its own section: S00.06.01 to S00.06.06, S01.02.01 to S01.02.08, S01.03.01 to
+S01.03.08, S01.04.01 and S07.03.01 to S07.03.08, with a criterion for a reorder's missing, extra, archived or
+repeated ID added to S01.02.07 and S01.03.06. None of them needs the operator, and nothing goes on
 `ops/first-use-in-test.md`. The group, which F00.06's endpoints go in too, and the acting user and channel, which every
 F00.06 handler takes, S00.06.01's users list included, are each built once, by whichever branch merges first, and
 reused by the others. S00.06.01's branch builds its acting user as `ActingUser(UserId, OrganisationId)`, so whichever

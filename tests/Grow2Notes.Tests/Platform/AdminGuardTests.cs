@@ -14,11 +14,18 @@ namespace Grow2Notes.Tests.Platform;
 /// The admin guard (design.md §2, §6.6, §14 M1): every endpoint in the app's <c>EndpointDataSource</c> whose route
 /// starts with <c>/api/admin</c> must name its methods, none of them <c>DELETE</c>, as one that names none answers
 /// <c>DELETE</c> too; must carry the <see cref="Policies.Manager"/> policy, which the <c>/api/admin</c> group
-/// (<see cref="ApiGroup.MapAdminGroup"/>) gives each endpoint in it; and must not be <c>AllowAnonymous</c>, which lets
-/// any caller past every policy. The app is hosted as it is mapped in production, without a database, so the tests run
-/// without Docker. Until the first admin endpoint, the app maps none, so test-only endpoints show the guard finding
-/// each rule broken.
+/// (<see cref="ApiGroup.MapAdminGroup"/>) gives each endpoint in it, and that alone, which an endpoint in the group
+/// given a policy of its own, even the same one, does not; and must not be <c>AllowAnonymous</c>, which lets any caller
+/// past every policy. The app is hosted as it is mapped in production, without a database, so the tests run without
+/// Docker. Until the first admin endpoint, the app maps none, so test-only endpoints show the guard finding each rule
+/// broken.
 /// </summary>
+/// <remarks>
+/// The guard reads each endpoint's metadata, which does not say where the endpoint was mapped, so one mapped outside
+/// the group with a <c>Manager</c> policy of its own passes it: that every admin endpoint is in the group is for review
+/// to see. One that changes something outside the <c>/api</c> group fails the endpoint matrix, whose calls without the
+/// antiforgery token and with a form body expect that group's <c>400</c> and <c>415</c>.
+/// </remarks>
 public sealed class AdminGuardTests : IAsyncDisposable
 {
     private readonly AppWithoutDatabase app = new("Production");
@@ -46,6 +53,7 @@ public sealed class AdminGuardTests : IAsyncDisposable
                 "DELETE /api/admin/test-only/delete: names DELETE",
                 "GET /api/admin/test-only/anonymous: is AllowAnonymous",
                 "PUT /api/admin/test-only/outside-the-group: lacks the Manager policy",
+                "PUT /api/admin/test-only/own-policy: has a policy of its own beside the group's",
                 "any method /api/admin/test-only/any-method: names no method, so answers DELETE too",
             ],
             breaches.Order(StringComparer.Ordinal));
@@ -82,9 +90,16 @@ public sealed class AdminGuardTests : IAsyncDisposable
             yield return "names DELETE";
         }
 
-        if (!endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Any(data => data.Policy == Policies.Manager))
+        var authorizeData = endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        if (!authorizeData.Any(data => data.Policy == Policies.Manager))
         {
             yield return "lacks the Manager policy";
+        }
+
+        // The group adds one; a second, even the same policy, is the endpoint's own.
+        if (authorizeData.Count > 1)
+        {
+            yield return "has a policy of its own beside the group's";
         }
 
         if (endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
@@ -103,9 +118,9 @@ public sealed class AdminGuardTests : IAsyncDisposable
     /// Maps, beside the app's endpoints, one that breaks each rule, as a story that got its admin endpoint wrong would:
     /// a <c>DELETE</c> in the <c>/api/admin</c> group; a <c>PUT</c> at an <c>/api/admin</c> path in the <c>/api</c>
     /// group but outside the admin one, with no policy of its own; a <c>GET</c> in the admin group marked
-    /// <c>AllowAnonymous</c>; and one in the admin group mapped with <c>Map</c>, which names no method. Beside them, a
-    /// <c>PUT</c> in the admin group, mapped as every admin endpoint should be, which the guard passes over. They are
-    /// listed, never called.
+    /// <c>AllowAnonymous</c>; one in the admin group mapped with <c>Map</c>, which names no method; and a <c>PUT</c> in
+    /// the admin group given the <c>Manager</c> policy of its own too. Beside them, a <c>PUT</c> in the admin group,
+    /// mapped as every admin endpoint should be, which the guard passes over. They are listed, never called.
     /// </summary>
     private sealed class TestOnlyEndpoints : IStartupFilter
     {
@@ -121,6 +136,8 @@ public sealed class AdminGuardTests : IAsyncDisposable
                 api.MapPut("/admin/test-only/outside-the-group", () => TypedResults.NoContent());
                 admin.MapGet("/test-only/anonymous", () => TypedResults.NoContent()).AllowAnonymous();
                 admin.Map("/test-only/any-method", () => TypedResults.NoContent());
+                admin.MapPut("/test-only/own-policy", () => TypedResults.NoContent())
+                    .RequireAuthorization(Policies.Manager);
                 admin.MapPut("/test-only/as-it-should-be", () => TypedResults.NoContent());
             });
         };

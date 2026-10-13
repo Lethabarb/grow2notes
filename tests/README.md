@@ -618,7 +618,13 @@ story adds one as follows.
   own. The first admin endpoint maps the group in `Program.cs`, and the others are mapped in the same group. Name its
   methods with `MapGet`, `MapPost` or `MapPut`: never `MapDelete`, nor `Map`, which names none and so answers
   `DELETE` too; and never mark it `AllowAnonymous`. `Grow2Notes.Tests/Platform/AdminGuardTests.cs` reads every
-  endpoint under `/api/admin` from the app's `EndpointDataSource` and fails, naming it, if it breaks any of these.
+  endpoint under `/api/admin` from the app's `EndpointDataSource` and fails, naming it, if it names no method or names
+  `DELETE`, lacks the `Manager` policy, has a policy of its own beside the group's (one given in the group, even the
+  same policy), or is `AllowAnonymous`. That is all it checks: it reads each endpoint's metadata, which does not say
+  where the endpoint was mapped, so one mapped outside the group with a `Manager` policy of its own passes it, and
+  that the endpoint is in the group is for review to see. One that changes something outside the `/api` group still
+  fails the endpoint matrix, whose calls without the token and with a form body expect that group's `400` and `415`
+  (above).
 - Add its row to the endpoint matrix (above) in the same change, with `401` signed out and `403` for A's worker, as
   the group's policy answers them: `Grow2Notes.Tests/Platform/AdminMatrixRowsTests.cs` fails, naming the row, if a
   row under `/api/admin` expects anything else, and the matrix then checks that the endpoint answers as its row says.
