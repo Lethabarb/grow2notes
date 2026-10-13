@@ -629,3 +629,6 @@ story adds one as follows.
 - Give its handler its own tests on the SQL Server container: what it changes and the audit event it writes, each
   §6.9 code it answers, and that it reaches nothing of B's (§5.9 item 7). The matrix checks the status only, and the
   two tests above only how the endpoint is mapped and what its row expects.
+  `Grow2Notes.Tests/Platform/Configuration/ConfigurationChangesOnSqlServerTests.cs` is the example for a change sent
+  with `If-Match`: in an organisation the test adds with two managers, the `200` with its new `ETag` and audit event,
+  the second manager's `412`, the `428`, and a save of the stored values that writes nothing.

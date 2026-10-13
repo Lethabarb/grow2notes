@@ -15,7 +15,8 @@ namespace Grow2Notes.Tests.Platform.Configuration;
 /// <summary>
 /// The one save of a configuration change as the app registers it, with no database:
 /// <see cref="WrittenInsteadOfTheDatabase"/> ends each save where the database would take over and keeps its audit
-/// events. The save's tests on SQL Server show the change and its event stored together, or neither.
+/// events. <see cref="ConfigurationChangesOnSqlServerTests"/> shows the change and its event stored together, or
+/// neither, end to end.
 /// </summary>
 public sealed class ConfigurationChangesTests : IAsyncDisposable
 {
