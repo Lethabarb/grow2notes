@@ -41,6 +41,14 @@ const phases = ['active', 'warn-2m', 'warn-1m', 'warn-40s', 'warn-20s', 'expired
 /** Where the session stands: active, at one of the warning's four countdown steps, or expired. */
 export type Phase = (typeof phases)[number];
 
+/** One of the warning's four countdown steps. */
+export type WarningPhase = Exclude<Phase, 'active' | 'expired'>;
+
+/** Whether `phase` is one of the warning's countdown steps, in which the warning shows. */
+export function isWarning(phase: Phase): phase is WarningPhase {
+  return phase !== 'active' && phase !== 'expired';
+}
+
 type Clock = {
   phase: Phase;
   /** The send time of the newest request that the server accepted, or the start's time. */

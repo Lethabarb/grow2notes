@@ -298,10 +298,15 @@ function cacheHoldsKey(client: QueryClient) {
     .some((query) => JSON.stringify(query.state.data ?? null).includes(sharedKey));
 }
 
-/** The elements that Tab reaches, in order: what is focusable, not hidden and not taken out with `tabindex="-1"`. */
+/**
+ * The elements that Tab reaches, in order: what is focusable, neither hidden nor in a closed dialog, such as the
+ * session warning, and not taken out with `tabindex="-1"`.
+ */
 function tabStops(): Element[] {
   const focusable = document.body.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, [tabindex]');
-  return Array.from(focusable).filter((element) => element.closest('[hidden]') === null && element.tabIndex >= 0);
+  return Array.from(focusable).filter(
+    (element) => element.closest('[hidden], dialog:not([open])') === null && element.tabIndex >= 0,
+  );
 }
 
 /** Each element comes after the one before it in the page. */

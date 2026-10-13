@@ -2,7 +2,9 @@
  * The design tokens (foundations.md). Components take their colours and font sizes from these and nothing else, so
  * tokens.test.ts can check every colour's contrast in one place.
  */
-:root {
+/* On ::backdrop too, which inherits nothing from the page before Safari 17.4, Chrome 122 and Firefox 120. */
+:root,
+::backdrop {
   /* Light only, but not `only light`: a user who has asked their browser to darken pages still gets that. */
   color-scheme: light;
   /* For any native radio or checkbox that a component does not draw itself. */

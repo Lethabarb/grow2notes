@@ -7,6 +7,7 @@ import { focusPageHeading } from '../components/focusPageHeading.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
 import type { RouteHandle } from './routes.tsx';
+import { SessionTimeoutWarning } from './SessionTimeoutWarning.tsx';
 import { ShellFrame } from './ShellFrame.tsx';
 import { StartUp } from './StartUp.tsx';
 import { usePageTitle } from './usePageTitle.ts';
@@ -20,7 +21,8 @@ import { WholePageMessageContext } from './wholePageMessage.ts';
  * otherwise it holds the start-up's loading line, or its message for a failure, with Try again (component 4). A
  * sign-in puts its `Me` in the same query, so the route's screen then shows in sign-in's place, at the same address,
  * with no new history entry. A route whose handle says `signedOutFrame`, setup's, shows its page in the signed-out
- * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1).
+ * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1). After the frame comes the
+ * warning before the idle sign-out, which opens over a signed-in screen only (component 6).
  */
 export function AppShell() {
   useRefreshMe();
@@ -77,21 +79,28 @@ export function AppShell() {
   // component 1). A whole-page message in place of the screen, such as Page not found, names it while it shows.
   usePageTitle(shown ? page : signedOut ? pageName.signIn : undefined);
 
+  // The signed-in user while the shell shows a signed-in screen, which a page shown in the signed-out frame is not.
+  const frameMe = signedOutFrame ? undefined : me;
+
+  // The warning comes after <main>, outside anything that can be made hidden or inert (app-shell.md component 6).
   return (
-    <ShellFrame me={signedOutFrame ? undefined : me} page={page}>
-      {shown && (
-        <WholePageMessageContext value={setMessage}>
-          <Outlet />
-        </WholePageMessageContext>
-      )}
-      {signedOut && <SignIn />}
-      {startingUp && (
-        <StartUp
-          onTryAgainUsed={() => {
-            tryAgainUsed.current = true;
-          }}
-        />
-      )}
-    </ShellFrame>
+    <>
+      <ShellFrame me={frameMe} page={page}>
+        {shown && (
+          <WholePageMessageContext value={setMessage}>
+            <Outlet />
+          </WholePageMessageContext>
+        )}
+        {signedOut && <SignIn />}
+        {startingUp && (
+          <StartUp
+            onTryAgainUsed={() => {
+              tryAgainUsed.current = true;
+            }}
+          />
+        )}
+      </ShellFrame>
+      <SessionTimeoutWarning signedIn={frameMe !== undefined} />
+    </>
   );
 }
