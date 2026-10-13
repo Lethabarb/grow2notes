@@ -187,7 +187,7 @@ Uses [app-shell-nav.md](../components/app-shell-nav.md) and [empty-loading-error
 | Page title | **Grow2Notes – Export record** (fixed list in app-shell.md). After a failed Export: **Error: Grow2Notes – Export record** |
 | Nav "current" item | **Manage**, with `aria-current="true"`: the route is under `/manage/…`, so app-shell.md's URL table gives Manage, the same as the past-day page at `/manage/participants/{id}/past-day-note`. (An earlier draft said "none", citing app-shell-nav.md; app-shell.md's table is the one the shell builds.) |
 | Role guard | Workers get the shared "Page not found" page |
-| Data needed before the form renders | (a) the participant's given and family name (`GET /api/participants/{id}`, §6.3); (b) the date of the participant's **earliest submitted note**. No API in §6 returns (b) yet (see Open questions). It is written `firstNoteDate` below, and it is `null` when there are no submitted notes |
+| Data needed before the form renders | (a) the participant's given and family name (`GET /api/participants/{id}`, §6.3); (b) the date of the participant's **earliest submitted note**. The same response gives (b) as `firstNoteDate`, `null` when there are no submitted notes (§6.3, D80) |
 | Today | `me.today` from `GET /api/auth/me`. This is the server's Melbourne date, never the device clock (§3.3, A33) [Standard: design] |
 | Loading | Nothing for 1 s, then **"Loading participant…"** **(P)**, the same line as Participant detail in empty-loading-error.md. It sits in that region's own `role="status"` |
 | Load failed | **"The export form did not load: no connection. Try again."** or **"The export form did not load: something went wrong. Try again."** **(P)**, using microcopy.md's canonical "[Thing] did not load: [cause]. Try again.", plus a **Try again** button. The `<h1>` "Export record" shows as the fallback heading |
@@ -362,7 +362,7 @@ const IDS: Record<Field, string> = { from: 'export-from', to: 'export-to', forma
 
 export function ExportRecordForm({ participant, firstNoteDate, today }: {
   participant: { id: string; fullName: string };   // "Jane Citizen", exactly as stored
-  firstNoteDate: string | null;                    // earliest SUBMITTED note (API gap, see Open questions)
+  firstNoteDate: string | null;                    // earliest SUBMITTED note (§6.3, D80)
   today: string;                                   // me.today: server, Melbourne
 }) {
   const [from, setFrom] = useState(firstNoteDate ?? today);   // defaults set once
@@ -460,7 +460,7 @@ The page title is "Grow2Notes – Export record" in every state except validatio
 | **Busy, under 400 ms** | Request in flight | No visible change apart from the pressed state. Export is `aria-disabled` | Stays on Export | Nothing |
 | **Busy, 400 ms or more** | Still in flight | Button **"Exporting…"** **(P)**. Status line **"Preparing the PDF file… Keep this page open."** or **"Preparing the Word file… Keep this page open."** **(P)**. Fields stay editable | Stays on Export | The preparing line (polite) |
 | **Exported** | `200`, file handed to the browser | Status line **"participant-record_2026-01-01_to_2026-10-01.pdf is ready. Look in your downloads."** **(P)**, the same shape as the Daily report, using the server's file name from `Content-Disposition`. Form values unchanged. Next comes the browser's own download UI or prompt (iPhone Safari asks first, and for PDFs offers View) | Stays on Export | "Exported: participant-record…pdf" (polite) |
-| **No notes in range** | `404 report.no_notes` (assumed code, see Open questions) | Status line **"No submitted notes for Jane Citizen between 1 January 2026 and 1 October 2026."** **(N: design wording, `datePlain` dates)**. Not red, not in the summary. Dates are those **sent**, not the current field values | Stays on Export | The sentence (polite) |
+| **No notes in range** | `404 report.no_notes` (§6.5, D80) | Status line **"No submitted notes for Jane Citizen between 1 January 2026 and 1 October 2026."** **(N: design wording, `datePlain` dates)**. Not red, not in the summary. Dates are those **sent**, not the current field values | Stays on Export | The sentence (polite) |
 | **Failed: no connection** | `fetch` rejects, or the connection drops mid-file | Alert **"Not exported: no connection. Try again."** **(P)** | Stays on Export | The alert (assertive) |
 | **Failed: server** | `5xx`, an unexpected `4xx`, or a `404` with no `report.no_notes` code | Alert **"Not exported: something went wrong. Try again."** **(P)** | Stays on Export | The alert |
 | **Failed: rate limit** | `429` (10 exports a minute per user, shared with Daily report downloads, §9.9) | Alert **"Not exported: too many exports in the last minute. Wait a minute, then try again."** **(P)** | Stays on Export | The alert |
@@ -683,7 +683,10 @@ Each is recorded once. No change is proposed.
    - add the earliest **submitted** note date to an existing response;
    - restate the default;
    - page through the history endpoint, which is wasteful: about 13 requests for a year of notes.
+
+   **Answered 13 October 2026 (D80):** the first option, the simplest: `GET /api/participants/{id}` adds `firstNoteDate`, the earliest submitted note's date or `null`, and this screen's `firstNoteDate` comes from it (design.md §6.3).
 2. **API gap: the no-notes response.** §6.5 and §6.9 define no response for a participant export with no submitted notes in the range. This spec assumes `404 report.no_notes`, the daily report's code. Confirm it in M5.
+   **Answered 13 October 2026 (D80):** confirmed, `404 report.no_notes` with no file (design.md §6.5, §6.9).
 3. **Future To date.** The server's behaviour is undefined: reject with `422`, clamp to today, or accept. If it accepts, the file's title block prints a future end date.
 4. **Same-day wording.** For From = To, should "No submitted notes for Jane Citizen between 1 October 2026 and 1 October 2026." become "…on Thursday 1 October 2026."? This is the owner's call. It is not built.
 5. **Owner sign-off on every (P) string:** the busy label, the preparing and exported lines, the four failure lines, the load lines, the field errors, and the three hints.

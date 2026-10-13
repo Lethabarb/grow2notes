@@ -8,8 +8,7 @@ at the end.
 
 **Common item groups: assumed defaults this file builds on.** They are shared by every file that touches groups, are
 stated in full in [group-picker.md](../components/group-picker.md) and are recorded in design.md §13 as A41–A47 (with
-A2, A3, A4 and A6 extended). They are assumed defaults, not decisions: the owner can override any of them by adding a
-decision.
+A2, A3, A4 and A6 extended). On 13 October 2026 the owner confirmed A41–A46 (D82) and dropped A47 (D83).
 
 - **A41** Groups are organisation-wide; managers add, rename, reorder, archive and restore them; nothing is deleted;
   no new screens, notifications or settings.
@@ -22,8 +21,7 @@ decision.
   active items is not offered on the note.
 - **A46** Unpicking a group clears that group's ticks on this note, with no confirmation; picking it again shows its
   items unticked.
-- **A47** When at least one group was copied, the new note and its draft show the copied line naming the source
-  note's date. It is an addition, not part of D46; dropping it removes `picksCopiedFrom` and the copied-line rows.
+- **A47** Dropped (D83): no line names the source note's date, and there is no `picksCopiedFrom`.
 - **A3** (extended) The snapshot holds Every note and every active group with their items' wording and order. The
   picks are part of the note: they autosave with the draft, and an edit after submit can change them (versioned like
   ticks).
@@ -84,10 +82,8 @@ participants.md link to it. URLs hold IDs and dates only, and no route pushes ro
   router state or device storage (D22). They change the payloads, not the routes or caches:
   - `GET {base}/draft` returns the whole snapshot as `commonItemGroups: [{id, name, isEveryNote, isPicked, items}]`
     (Every note first, then every group in order, picked or not; on a new note `isPicked` holds the copied picks, with
-    archived or empty groups left out) and `picksCopiedFrom` (the source note's date, or `null`), kept with the draft
-    so the copied line survives a reload (design.md §5.7, §6.3).
-  - The first autosave `PUT {base}/draft` of a new note sends `listsVersion` back (the server works out and stores
-    `picksCopiedFrom` itself; the client never sends it); every `PUT`
+    archived or empty groups left out; design.md §5.7, §6.3).
+  - The first autosave `PUT {base}/draft` of a new note sends `listsVersion` back; every `PUT`
     and the `POST {base}/versions` send `pickedGroupIds[]` beside `tickedCommonItemIds[]`. The server refuses a pick
     of Every note or of an empty group, and a tick outside Every note and the picked groups (`422`).
   - No new query keys and no new invalidations: the draft query keeps `staleTime: Infinity`, and the existing
@@ -190,10 +186,7 @@ h2 22 px, small 16 px; 56 px tick rows; 48 px buttons). Only the top bar is stic
 |                                       |
 | Which of these happened?              |
 | Tick all that happened. Their items   |
-| show below.                           |
-| These ticks are copied from the note  |  copied line (V): 18 px, full text colour,
-| for Wednesday 30 September 2026.      |  no icon, no bar, no dismiss; only when at
-| Untick any that did not happen.       |  least one group was pre-picked
+| show below.                           |  nothing says where the picks came from (D83)
 |---------------------------------------|
 | [x]  Community outing                 |  copied pick
 |---------------------------------------|
@@ -471,19 +464,14 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
   holding `<h2>2. Common items</h2>` (V) and `<p id="common-hint">` **Ticked means done.** (V).
 - **Every note** (D45): `TickListField` with `headingLevel={3}`, heading **Every note** (V), `hintId="common-hint"`,
   ids `common-{itemId}`. Always first. Not rendered when the snapshot's Every note group has no items.
-- **Group picker:** one `<fieldset>` (`border: 0; padding: 0; margin: 0; min-inline-size: 0`) with
-  `<legend><h3>Which of these happened?</h3></legend>` (V), hint `<p id="picker-hint">` **Tick all that happened. Their
-  items show below.** (V), then the copied line (below), then one tick row per group that has at least one item, in
-  the manager's order. Each row is the checkbox-list row: `<label for>` wrapping `<input type="checkbox"
-  id="pick-{groupId}">` with the shared `.box` class, the group name as a text child (never truncated), plus
-  `aria-controls="group-{groupId}"` and `aria-expanded={picked}`, the same pattern as Flag for manager. Fieldset
-  `aria-describedby="picker-hint picker-copied"` (the second id only while the copied line shows). Not rendered when
-  no group other than Every note has items. Every note is never a row here (not even a ticked, disabled one).
-- **Copied line** (D46): `<p id="picker-copied">` **These ticks are copied from the note for Wednesday 30 September
-  2026. Untick any that did not happen.** (V). The date is the source note's date, `dateLong` in `<time dateTime>`.
-  Body size, `--colour-text`, no icon, no bar, no dismiss. Shown on a new note or a draft whenever at least one group
-  was pre-picked (`picksCopiedFrom` is set), including after the writer changes picks and after a reload. Never in
-  edit mode.
+- **Group picker:** one `<fieldset>` (`border: 0; padding: 0; margin: 0; min-inline-size: 0`) with `<legend><h3>Which of
+  these happened?</h3></legend>` (V), hint `<p id="picker-hint">` **Tick all that happened. Their items show below.**
+  (V), then one tick row per group that has at least one item, in the manager's order. Each row is the checkbox-list
+  row: `<label for>` wrapping `<input type="checkbox" id="pick-{groupId}">` with the shared `.box` class, the group name
+  as a text child (never truncated), plus `aria-controls="group-{groupId}"` and `aria-expanded={picked}`, the same
+  pattern as Flag for manager. Fieldset `aria-describedby="picker-hint"`. Not rendered when no group other than Every
+  note has items. Every note is never a row here (not even a ticked, disabled one). No line says where copied picks came
+  from (D83).
 - **Picked groups:** one wrapper `<div id="group-{groupId}">` per offered group, **always in the DOM** (keeps
   `aria-controls` valid), `hidden` when not picked. Inside it, `TickListField` with `headingLevel={3}`, the group's
   name as stored in the snapshot as the heading, `hintId="common-hint"`, ids `common-{itemId}`. All wrappers follow
@@ -617,18 +605,18 @@ Interactions; "unavailable" means `aria-disabled` with the reason in `#save-stat
 
 | State | Identity and notice | Indicator | Other differences |
 |---|---|---|---|
-| **New** (no note yet, design "New: nothing saved yet") | Name, date. | Empty (element present). | Lists from the live template, all unticked. Groups picked as on the participant's most recent submitted note (D46), with the copied line; nothing picked if there is none. No More actions. First change creates the draft (3.3) with every on-screen pick, pre-picks included. |
-| **Draft** (own, today) | Name, date. | **Draft · saved 9:42 am** (V) until the next change. | The draft's snapshot groups and saved picks; the copied line if `picksCopiedFrom` is set. More actions shown. |
+| **New** (no note yet, design "New: nothing saved yet") | Name, date. | Empty (element present). | Lists from the live template, all unticked. Groups picked as on the participant's most recent submitted note (D46); nothing picked if there is none. No More actions. First change creates the draft (3.3) with every on-screen pick, pre-picks included. |
+| **Draft** (own, today) | Name, date. | **Draft · saved 9:42 am** (V) until the next change. | The draft's snapshot groups and saved picks. More actions shown. |
 | **Draft from an earlier day** | Notice (N): **This draft is for Wednesday 30 September 2026. Submitting it now keeps that date.** Date line shows the draft's own date. | **Draft · saved Wed 30 Sep 2026, 9:42 am** (N, `stamp`) when saved on another Melbourne day. | As Draft. Confirmation title **Submit the note for** (P/D). |
 | **Manager's past-day note** (new or draft) | Notice (N): **Past-day note for Monday 28 September 2026, written on Thursday 1 October 2026.** ("written on" is the Melbourne date of `Note.CreatedAtUtc`, or server today before the first save.) | As New or Draft. | Starting picks from the most recent submitted note **before** the note date. Back link **Participant** or **Past notes** (D). Confirmation title **Submit the note for**. |
-| **Editing a submitted note** | Caption **Editing submitted note (version 2)** (V) inside the `<h1>` (the number is the version being edited; open question). Past-day notice still shown for a past-day note. | Never says "Draft". Reopened pending edit: **Saved 9:42 am**. | **Save changes** / **Cancel**; no More actions; the version's snapshot groups (including any archived since, A3) and its picks; no copied line; empty lists use "No goals set" / "No common items set". |
+| **Editing a submitted note** | Caption **Editing submitted note (version 2)** (V) inside the `<h1>` (the number is the version being edited; open question). Past-day notice still shown for a past-day note. | Never says "Draft". Reopened pending edit: **Saved 9:42 am**. | **Save changes** / **Cancel**; no More actions; the version's snapshot groups (including any archived since, A3) and its picks; empty lists use "No goals set" / "No common items set". |
 
 ### Common items and groups (D44–D47; behaviour owned by group-picker.md)
 
 | State | What shows | Focus and announcements |
 |---|---|---|
-| **Picks copied from the last note** (new note or draft) | Every note; the picker with the copied groups ticked; the copied line naming the source note's date; those groups' items below, **all unticked**. | Nothing announced on load. Tabbing into the picker reads the legend, hint and copied line once. |
-| **Nothing to copy** (no earlier submitted note, it picked nothing, or none of its groups is still offered: archived or without items) | Every note; the picker with nothing ticked; no copied line; no group lists. | — |
+| **Picks copied from the last note** (new note or draft) | Every note; the picker with the copied groups ticked; those groups' items below, **all unticked**. Nothing says where the picks came from (D83). | Nothing announced on load. Tabbing into the picker reads the legend and hint once. |
+| **Nothing to copy** (no earlier submitted note, it picked nothing, or none of its groups is still offered: archived or without items) | Every note; the picker with nothing ticked; no group lists. | — |
 | **A group picked** | Its heading and unticked items appear below the picker, in the manager's order. No scroll. | Focus stays on the tick box; native "checked, expanded". |
 | **A group unpicked that had ticks** | Its list is hidden and **its ticks are cleared**: no confirmation, no undo, no message (A46; hidden ticks are never kept or sent, like the hidden flag reason). Picking it again shows its items unticked. | Focus stays; native "not checked, collapsed". |
 | **No group picked at Submit** | Allowed. Nothing about groups is validated; Guided notes is still required (A8, A45). | — |
@@ -638,7 +626,7 @@ Interactions; "unavailable" means `aria-disabled` with the reason in `#save-stat
 | **No common items at all** | `<h2>2. Common items</h2>` and **No common items set up.** (V); edit mode **No common items set** (D, 11.3). No fieldset. | — |
 | **Many groups** | All listed vertically in the manager's order. No cap, "Show more", search, "Select all" or "None". | — |
 | **Lists changed before the first save** (`409 note.lists_changed`) | Groups reload; picks re-applied by group ID (an archived group drops out); ticks re-applied by item ID and kept only for Every note and picked groups, so an item moved into an unpicked group loses its tick; the lists-changed notice above **1. Goals**. | As for any lists change: focus stays, unless the focused box was removed, then the notice. |
-| **Editing a submitted note** | The version's snapshot groups and picks. Picks can be changed; Save changes records them in the new version. No copied line. | — |
+| **Editing a submitted note** | The version's snapshot groups and picks. Picks can be changed; Save changes records them in the new version. | — |
 | **Save failed / dead-end refusal** | Picks and ticks stay on screen; nothing is unticked or unpicked. | As for the form. |
 | **Loading** | Nothing rendered until `GET {base}/draft` returns: no placeholder rows that could be tapped. | — |
 
@@ -763,9 +751,8 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
   confirmation, no undo, no message**: the loss is one group's ticks, re-ticked in a few taps, and correcting a copied
   pick is routine; a dialog here would be dismissed by habit (group-picker.md). Heard: "not checked, collapsed".
 - **Tick it again:** its items show again, unticked.
-- **Copied picks (D46, A44):** opening a new note saves nothing. The copied picks and the copied line are shown but
-  not saved until the first change creates the draft, which then stores the picks and `picksCopiedFrom`. Item ticks
-  are never copied.
+- **Copied picks (D46, A44):** opening a new note saves nothing. The copied picks are shown but not saved until the
+  first change creates the draft, which then stores the picks. Item ticks are never copied.
 
 ### Typing and dictation
 
@@ -945,7 +932,7 @@ the version-conflict notice. No positive `tabindex`. DOM order equals visual ord
 | Arrive | "Jane Citizen Thursday 1 October 2026, heading level 1" (edit: "Editing submitted note (version 2) Jane Citizen Thursday 1 October 2026, heading level 1") | Focus |
 | Tab into Goals | "1. Goals, grouping, Ticked means reached. Makes own breakfast, check box, not checked" | Native |
 | Tab into Every note | "Every note, grouping, Ticked means done. Medication prompted, check box, not checked" | Native |
-| Tab into the group picker | "Which of these happened?, grouping, Tick all that happened. Their items show below. These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen. Community outing, check box, checked, expanded" (the copied line only when it shows) | Native + `aria-describedby`, `aria-expanded` |
+| Tab into the group picker | "Which of these happened?, grouping, Tick all that happened. Their items show below. Community outing, check box, checked, expanded" | Native + `aria-describedby`, `aria-expanded` |
 | Tick / untick a group | "checked, expanded" / "not checked, collapsed" | Native + `aria-expanded`; no live region |
 | Typing | "Saving…" once per burst, then "Saved 9:42 am" | `#save-status`, polite |
 | Save changes or Cancel slower than 400 ms | "Saving changes…" / "Cancelling…" | Page status region (component 16, polite) |
@@ -975,7 +962,7 @@ conditionally mounted live region (`{x && <p role="status">}` is silent in NVDA 
   these happened?" and each picked group's name, so heading navigation reaches every group. No heading inside
   notices. SC 1.3.1, 2.4.6.
 - [ ] Group picker: no nested fieldsets (H71); each group tick box has `aria-controls` and `aria-expanded`; unpicked
-  groups are `hidden` (out of view, Tab order and the accessibility tree); the copied line is in the picker's
+  groups are `hidden` (out of view, Tab order and the accessibility tree); the hint is the picker's
   `aria-describedby`; no live region per pick (group-picker.md).
 - [ ] Landmarks: `<header>` (banner), `<nav aria-label="Main">`, `<main id="main-content" tabindex="-1">`. The top bar
   sits in the shell's before-main bar slot, between the header and main (GOV.UK back-link placement; app-shell.md
@@ -1028,7 +1015,7 @@ conditionally mounted live region (`{x && <p role="status">}` is silent in NVDA 
 Reason and each picked group's items) are listed by GOV.UK and NHS as a 4.1.2 risk (see Tensions).
 
 **Manual test passes (M6):** NVDA + Chrome, VoiceOver + iOS Safari, TalkBack + Android Chrome; Voice Control "Tap
-Makes own breakfast" and "Tap Community outing"; the picker's legend, hint and copied line spoken on entry;
+Makes own breakfast" and "Tap Community outing"; the picker's legend and hint spoken on entry;
 "expanded/collapsed" on a group tick box (TalkBack support unverified); unpicked groups skipped by Tab and by swipe;
 Windows contrast theme; 200% and 400% zoom; landscape phone; outdoor daylight check; the sticky bar with the iOS
 keyboard open on Guided notes; Chrome page translation leaves names unchanged.
@@ -1110,12 +1097,11 @@ keyboard open on Guided notes; Chrome page translation leaves names unchanged.
     there is no picker; with no items at all the section is the heading and "No common items set up." (edit mode "No
     common items set") with no fieldset.
 30e. A new note for a participant whose most recent submitted note picked Community outing and an archived group
-    opens with Community outing ticked, the archived group absent, every item unticked, and the copied line naming
-    that note's date in `dateLong`. A manager's past-day note copies from the most recent submitted note before its
-    note date. With no earlier submitted note, nothing is ticked and there is no copied line.
+    opens with Community outing ticked, the archived group absent and every item unticked, with no line about where
+    the picks came from (D83). A manager's past-day note copies from the most recent submitted note before its note
+    date. With no earlier submitted note, nothing is ticked.
 30f. Opening a new note with copied picks sends nothing; the first change of any kind sends a `PUT` whose
-    `pickedGroupIds` includes the copied picks and which stores `picksCopiedFrom`. Reloading the draft shows the same
-    picks and the copied line; edit mode never shows the copied line.
+    `pickedGroupIds` includes the copied picks. Reloading the draft shows the same picks.
 30g. Ticking a group keeps focus on its tick box, scrolls nothing, sets `aria-expanded="true"` and shows its items
     unticked below the picker. Unticking a group that has ticked items opens no dialog, hides its items, and the next
     `PUT` contains neither the group's ID nor any of its item IDs; ticking it again shows its items unticked.
@@ -1143,8 +1129,7 @@ keyboard open on Guided notes; Chrome page translation leaves names unchanged.
 39. Every tick row is at least 56 px tall and toggles when the text is tapped; every other target is at least 44 px.
 40. The top bar is sticky above 30rem viewport height and static below it; a focused tick row is never hidden under it.
 41. axe (Playwright) reports no WCAG violations in each state: default, flag ticked, errors, Not saved, takeover,
-    lists changed, edit mode, both dialogs, picks copied with the copied line, a group ticked, only Every note, no
-    common items.
+    lists changed, edit mode, both dialogs, picks copied, a group ticked, only Every note, no common items.
 42. The placeholder colour is #626262 (or the token) with `opacity: 1`, checked by hand (axe may not check
     `::placeholder`).
 43. The Vitest copy check (`copy.test.ts`, `microcopy.md` §8) finds no banned words and no US spellings in this
@@ -1185,7 +1170,7 @@ keyboard open on Guided notes; Chrome page translation leaves names unchanged.
 | 25 | **Earlier-day indicator format.** `autosave-status.md`: "Saved Wed 30 Sep, 9:42 am". `microcopy.md`: `stamp` "Wed 30 Sep 2026, 9:42 am". | `microcopy.md` `stamp`. | One shared formatter, one `dateTime` token. |
 | 26 | **Dialog buttons on a laptop.** `primary-actions.md`: side by side, label width. `confirm-dialog.md`: stacked full width on every size. | Stacked full width. | Same place on phone and laptop for managers who use both; long names wrap instead of squeezing a pair. `confirm-dialog.md` owns dialogs. |
 | 29 | **Section 2 markup.** `checkbox-list.md`: one `<fieldset>` whose legend is `<h2>2. Common items</h2>`. `group-picker.md`: a plain `<div>` with the `<h2>` and hint, then separate fieldsets with `<h3>` legends for Every note, the question and each picked group. | `group-picker.md`. `TickListField` gains `headingLevel` and `hintId` (checkbox-list.md). | One fieldset cannot hold several groups without nesting fieldsets (H71); heading legends let screen-reader users jump between groups (WebAIM #10). Goals is unchanged. |
-| 30 | **Pre-ticking.** `checkbox-list.md`: never pre-tick (GOV.UK, NHS). `group-picker.md` and D46: start with the last note's group picks. | D46 for group picks only; items are never pre-ticked. | D46 is a decision. The copied line names the source date (Joint Commission copy-forward practice), and the tension is recorded below. |
+| 30 | **Pre-ticking.** `checkbox-list.md`: never pre-tick (GOV.UK, NHS). `group-picker.md` and D46: start with the last note's group picks. | D46 for group picks only; items are never pre-ticked. | D46 is a decision. The owner dropped the line naming the source date (D83), and the tension is recorded below. |
 | 31 | **Hidden input when a reveal closes.** `conditional-reveal.md`: the typed flag reason is kept in memory and comes back on re-tick. `group-picker.md`: an unpicked group's ticks are cleared. | Clear the group's ticks (A46). | What is on screen is what is saved; hidden ticks are never sent (as `flagReason: null` is sent while unticked). Re-ticking a few boxes is quick. Recorded as a tension for the owner. |
 
 ---
@@ -1226,8 +1211,8 @@ Each is recorded once, with the evidence in the cited component file.
     for word; new strings avoid both (`microcopy.md`).
 13. **D46, the last note's group picks copied onto a new note.** GOV.UK and NHS say not to pre-select checkboxes, and
     defaults tend to stay (Johnson and Goldstein 2003) [Research]. A stale pick prints its group's items unticked
-    under its name. Mitigated by the copied line with the source date and by putting the items, unticked, in the
-    writer's path; a daily line will fade (Anderson 2015) (`group-picker.md`).
+    under its name. Mitigated by putting the items, unticked, in the writer's path; the owner dropped the line naming
+    the source date (D83), which would have faded as a daily line (Anderson 2015) (`group-picker.md`).
 14. **D44, groups and their items on one page.** GOV.UK and NHS put multi-part follow-ups on a later page, and
     multi-field reveals "complicated the relationship between the question and revealed content" (GOV.UK 2021).
     Placing the lists after the whole question (AgDS), with headings, a hint and `aria-expanded`, narrows the 4.1.2 gap
@@ -1273,9 +1258,12 @@ Each is recorded once, with the evidence in the cited component file.
     particular A44, where picks are copied from; A45, nothing has to be picked; A46, unpicking clears ticks; and A47,
     the copied line, which can be dropped on its own without changing where picks are copied from). The
     picker's three strings are now in design.md 4.3, so they are marked (V) here.
-14. **API (closed):** the group fields group-picker.md listed as gaps (`commonItemGroups` and `picksCopiedFrom` on
-    the draft `GET`, `pickedGroupIds[]` on the draft `PUT` and the version `POST`, `listsVersion` covering groups, the read API's shown
-    groups) are now in design.md §5.7 and §6.3. Nothing further is needed from this screen.
+    **Answered 13 October 2026 (D82, D83):** A41–A46 are confirmed (D82); A47's copied line is dropped, so the
+    picker has two strings, the question and its hint, and picks are still copied as A44 says (D83).
+14. **API (closed):** the group fields group-picker.md listed as gaps (`commonItemGroups` on the draft `GET`,
+    `pickedGroupIds[]` on the draft `PUT` and the version `POST`, `listsVersion` covering groups, the read API's shown
+    groups) are now in design.md §5.7 and §6.3. Nothing further is needed from this screen. (`picksCopiedFrom` was
+    dropped with the copied line, D83.)
 
 ---
 

@@ -19,7 +19,7 @@ question 2); a (P) string added later still needs the owner's sign-off. Evidence
 
 **Assumed defaults this screen builds on** (design.md §13; shared with every file that touches groups and stated in
 full in group-picker.md). They are assumed defaults, not decisions: the owner can override any of them by adding a
-decision.
+decision. The owner confirmed A41–A46 and the 200-character group name on 13 October 2026 (D82).
 
 - **A41** Groups are organisation-wide. Managers add, rename, reorder, archive and restore them on this screen;
   nothing is deleted. Groups bring no new screens, notifications or settings.
@@ -830,7 +830,10 @@ contract, not a conflict with a decision.
    A (P) string added after that date still needs the owner's approval.
 3. **Assumed defaults:** confirm or override A41, A42, A43 and the 200-character group name (A6), as listed at the top.
    The group name limit is set in one place (design.md A6) so every spec uses the same number.
+   **Answered 13 October 2026 (D82):** all confirmed as written.
 4. **Group button order and the radios rule** (Conflicts resolved 15 and 18) are this file's own choices. Confirm.
+   **Answered 13 October 2026 (D82):** confirmed: Move up, Move down, Rename, Archive, and the Group radios only with
+   two or more active groups.
 5. **Lost response on Add.** If the network drops after the server has added an item or group, the manager sees "Not
    added: no connection" while it exists, and may add it twice. It shows up on the next re-read and can be archived.
    Accept this (rare, reversible), or give the add endpoints an idempotency key as the note-version endpoint has?

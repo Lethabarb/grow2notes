@@ -226,7 +226,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | The Today list (all participants, D20), "Your unfinished drafts", and participant history | F02.01 | F02.04 (participant history) | See *Rows to watch* |
 | 2 | The note form: Goals, Common items with the Every note group and the group picker (D44, D45), Guided notes with placeholder prompts, Flag for manager with reason, and Submit | F02.03 | F02.02 (Goals, Guided notes), F02.05 (Common items, group picker) | See *Rows to watch* |
-| 3 | Starting picks copied from the participant's most recent submitted note (D46, A44), with the line naming its date (A47) | F02.05 | | A47 may be dropped by the owner (S02.05.03 Notes) |
+| 3 | Starting picks copied from the participant's most recent submitted note (D46, A44), with no line naming its date (A47 dropped, D83) | F02.05 | | The owner dropped A47 on 13 October 2026 (S02.05.03 Notes) |
 | 4 | Autosave with `clientId` and `seq`; snapshot (goals, groups and items) at draft creation with the `listsVersion` check; picks autosaved and versioned with the ticks; discard as a status change | F02.02 | F02.05 (picks and the groups snapshot) | |
 | 5 | One live note per participant per day, enforced by the filtered unique index | F02.02 | | |
 | 6 | Submit creates version 1; Save changes by the author or a manager creates the next version; pending edits and Cancel; version history for managers | F02.06 | F02.03 (version 1), F02.07 (version history) | |

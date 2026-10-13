@@ -547,7 +547,7 @@ export function DateOfBirthField({ value, onChange, error, invalid }: Props) {
   template)? Not added without a decision.
 - **Where the edit ETag comes from.** §6.6 says every `PUT` needs `If-Match` from the row's `RowVersion`, but the
   `GET /api/admin/participants` response shape lists no ETag. Confirm in M1 how the client receives it (for example, a
-  field per row).
+  field per row). **Answered 13 October 2026 (D78):** a field per row, `rowVersion`, now in design.md §6.6.
 - **Unsaved changes on Details.** design.md asks for a leaving-with-unsaved-changes warning only on Guide prompts
   (4.10). None is added for the three Details fields.
 - **Proposed strings:** the date hint "For example, 27 3 1987", the read-only date format "7 March 1987", and the

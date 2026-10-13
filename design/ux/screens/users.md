@@ -437,8 +437,8 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
   [Convention https://tanstack.com/query/latest/docs/framework/react/guides/mutations]); the manager retries. Each
   action's `mutationFn` does the request **and then awaits `refetchQueries(['admin','users'])`**, so the button stays
   busy until the new ETag has arrived and a quick second press cannot hit a stale `If-Match`.
-- **`If-Match`** on every `PUT` and state-changing `POST` on a user, from the user's `ConcurrencyStamp` (6.6). The list
-  shape in 6.6 has no such field yet (open question). The Edit form captures the ETag **when it first fills the
+- **`If-Match`** on every `PUT` and state-changing `POST` on a user, from the user's `ConcurrencyStamp`, which the list
+  gives each user as `concurrencyStamp` (6.6, D78). The Edit form captures the ETag **when it first fills the
   fields** and does not silently take a newer one from a background refetch; it takes the new one only after a `412`.
 - **Helpers** in `src/manage/users/userRules.ts` (user-management.md): `byName`, `isOnlyActiveManager(users, viewerId)`
   (exactly one user with `role = Manager` and `status = Active`, and it is the viewer), `allowedActions(user,
@@ -507,7 +507,7 @@ Shared failure shapes (S, microcopy.md §9, used for loads and actions alike; a 
 | Resend invite sent | `204` | Inline `role="status"`: "Setup link sent to alex.park@example.org at 4:12 pm. The old link no longer works." (P). The time is the `204` response's `Date` header (the server clock) in Melbourne time through `time()`; if the header is missing, the sentence leaves out "at …". Never the device clock (microcopy.md). The line is cleared, then rewritten on the next frame, so a second send is always announced. The button stays. |
 | Resend failed | Network / server | Alert: "Not sent: no connection. Try again." / "Not sent: something went wrong. Try again." (S) |
 | Reactivate busy / failed | | "Reactivating…" (S) / alert "Not reactivated: no connection. Try again." or "…something went wrong. Try again." (S pattern) |
-| Reactivated | `204` | Status "Active" (or whatever the API returns; see open questions); Deactivate and the matching group 1 action appear. Focus on the Status row. No banner. |
+| Reactivated | `204` | Status "Active", or "Invited" for someone with no way to sign in (D75); Deactivate and the matching group 1 action (Reset sign-in or Resend invite) appear. Focus on the Status row. No banner. |
 | Deactivated (just now) | Dialog `204` | Status "Deactivated"; Reactivate replaces Deactivate; Resend invite / Reset sign-in disappear. Focus on the Status row. No banner. |
 | Sign-in reset (just now) | Dialog `204` | Status "Invited"; Resend invite replaces Reset sign-in. Focus on the Status row. No banner. (The dialog already said a new setup link will be emailed.) |
 | Arrived from Edit | Save `200` | The detail page with the new values; focus on the `<h1>`. No banner. After an email change the Status row shows what the API returns. |
@@ -585,7 +585,7 @@ Shared failure shapes (S, microcopy.md §9, used for loads and actions alike; a 
 | Deactivate: confirm | `POST …/deactivate` with `If-Match` | Someone else: refetch; unmount the dialog; Reactivate replaces Deactivate. Yourself: `window.location.replace('/')`. | The Status row | "Status, Deactivated", through focus |
 | Dialog: Go back / Escape / Android Back | none | Dialog closes, nothing changed | The trigger button | — |
 | Dialog: confirm pressed | | Both buttons `aria-disabled`; Escape and Back blocked while busy | Stays | "Deactivating…" / "Resetting sign-in…" after 1 s (polite, inside the dialog) |
-| **Reactivate** | `POST …/reactivate` with `If-Match` | Refetch; Deactivate replaces Reactivate | The Status row (the trigger is gone) | "Status, Active", through focus |
+| **Reactivate** | `POST …/reactivate` with `If-Match` | Refetch; Deactivate replaces Reactivate | The Status row (the trigger is gone) | "Status, Active" (or "Status, Invited", D75), through focus |
 | **Try again** (load failure) | Refetch the failed query | Content replaces the message | Page `<h1>` (the button has gone) | The heading |
 | Try again fails | | "… still did not load: …" | Stays on Try again | The new text (polite) |
 | Any `401` | | Sign-in in place (8.5); dialogs close first; typed values stay in memory | Owned by session-timeout.md | Owned there |
@@ -772,6 +772,8 @@ Redundant Entry (values kept after any error; Edit prefilled) · 4.1.2 Name, Rol
 - AC27. Deactivating an Invited person makes their old setup link show "This link has expired. Ask a manager to send a
   new one." (4.1).
 - AC28. Reactivate has no dialog; on success focus is on the Status row, which reads "Active", and Deactivate returns.
+  For someone with no way to sign in (deactivated while still Invited, or whose email was changed while Deactivated),
+  the Status row reads "Invited" and Resend invite appears (D75).
 - AC29. Deactivating or resetting **yourself** (with another active manager present) uses the "your own" copy and, on
   success, reloads the app to the sign-in page.
 - AC30. A `412` while confirming a dialog removes the confirm button, shows "Someone else has just changed {name}'s
@@ -788,7 +790,8 @@ Redundant Entry (values kept after any error; Edit prefilled) · 4.1.2 Name, Rol
 - AC35. As the only active manager, choosing Worker or changing your email and pressing Save shows the matching "You
   are the only active manager…" error inline and in a focused summary, and sends nothing.
 - AC36. Saving someone else's changes lands on their detail page (a replace) with focus on its `<h1>` and no banner;
-  Status reads "Invited" after an email change if the API sets it.
+  Status reads "Invited" after an email change, but "Deactivated" for a Deactivated person (D75), and is unchanged
+  after a change of letter case only (D76).
 - AC37. A `412` on Save shows the stale-save sentence in the alert above Save (not the summary), keeps every typed
   value and focus on Save, and a second Save succeeds with the new ETag.
 - AC38. Saving your own role as Worker lands on Today with focus on its `<h1>`, no banner, and a nav without Manage;
@@ -896,17 +899,25 @@ change recommended.
 
 1. **Reset sign-in confirmation.** 4.11 says the manager confirms who is asking, but specifies no on-screen
    confirmation for an action that cannot be undone. This spec uses the shared dialog (SC 3.3.4 "Confirmed"). Approve?
+   **Answered 13 October 2026 (D74):** approved; Reset sign-in uses the dialog as this spec has it.
 2. **Changing an email resets sign-in, with no confirmation** (4.11). This spec relies on the always-visible hint (V)
    and the Status row on the detail page afterwards (arguably SC 3.3.4 "Checked"). Approve, or should Save reuse the
    Reset sign-in dialog when the email has changed?
+   **Answered 13 October 2026 (D74):** approved; Save opens no dialog when the email has changed.
 3. **Email change on a Deactivated person.** If the reset sets `Status = Invited` (8.6), it would undo the deactivation
    without Reactivate. What should the API do? The UI follows the returned status.
+   **Answered 13 October 2026 (D75):** the email change resets sign-in but sends no link, and the person stays
+   Deactivated; after Save the Status row reads "Deactivated" and Reactivate is still the way back.
 4. **Reactivating someone who was deactivated while still Invited.** 6.6 says they "sign in with their existing
    methods", but they have none. Return to Invited (with Resend invite) or Active? The Reactivate description "Lets
    them sign in again." assumes the second.
+   **Answered 13 October 2026 (D75):** Invited, with Resend invite. Reactivate gives Active only to someone with a
+   password or a passkey; the description stays as written, as no new string is added.
 5. **Does a case-only email change** (Alex@ to alex@) count as an email change that resets sign-in? Recommended: no
    (Identity compares the normalised email); the client compares case-insensitively.
+   **Answered 13 October 2026 (D76):** no, as recommended; the new spelling is saved and nothing is reset.
 6. **API gap:** `GET /api/admin/users` needs a per-user ETag (`ConcurrencyStamp`) for `If-Match` (6.6).
+   **Answered 13 October 2026 (D78):** each user in the list carries `concurrencyStamp`; design.md §6.6 has it.
 7. **Success banners (not built).** design.md gives a success message only for Submit, so none of these is built:
    "Invite sent to {email}" (on the list), "Changes saved" and "Changes saved. Sign-in reset. A new setup link was
    emailed to {email}." (after Edit), "Alex Park deactivated", "Alex Park reactivated", "Sign-in reset for Alex Park.
@@ -923,3 +934,4 @@ change recommended.
 10. **Worker preselected on Invite.** GOV.UK says not to preselect radios; this form preselects Worker (least
     privilege; most invites are workers). It is the one stated exception to the app's no-preselection rule
     (form-validation.md). Keep it?
+    **Answered 13 October 2026 (D77):** keep it.

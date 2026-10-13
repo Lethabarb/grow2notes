@@ -116,7 +116,7 @@ Everything sits in one `<form noValidate>` in one column. The error summary is t
 
 ### Behaviour
 
-**On arrival.** The page loads the participant's name and the first-note date (see Open questions: §6 has no field for the date yet). Until both arrive, the shell's loading pattern shows. The form appears with the defaults filled in, no format chosen, and the box unticked. If the participant has **no submitted notes**, From also defaults to today, and Export will then return the no-notes message. That is honest, and it needs no extra state. Archived participants can be exported: "History, reports and exports are unchanged" (§3.7).
+**On arrival.** The page loads the participant's name and the first-note date, both from `GET /api/participants/{id}` (`firstNoteDate`, design.md §6.3, D80). Until both arrive, the shell's loading pattern shows. The form appears with the defaults filled in, no format chosen, and the box unticked. If the participant has **no submitted notes**, From also defaults to today, and Export will then return the no-notes message. That is honest, and it needs no extra state. Archived participants can be exported: "History, reports and exports are unchanged" (§3.7).
 
 **Editing the dates.** Native typing (desktop: segmented fields), or the platform picker (iOS compact calendar or wheels, Android calendar dialog). An incomplete date gives `value === ""`. Changing either date **clears the status line** without an announcement, because the old sentence named the old dates. If a date field already shows an error, changing either date re-checks it ("reward early", `form-validation.md`).
 
@@ -256,7 +256,7 @@ function validate(from: string, to: string, format: Format | null): Errors {
 
 export function ExportRecordForm({ participant, firstNoteDate, today }: {
   participant: { id: string; fullName: string };
-  firstNoteDate: string | null;   // earliest SUBMITTED note (see Open questions)
+  firstNoteDate: string | null;   // earliest SUBMITTED note (§6.3, D80)
   today: string;                  // /api/auth/me — Melbourne, never the device clock
 }) {
   const [from, setFrom] = useState(firstNoteDate ?? today);

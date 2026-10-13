@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D73 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A57), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D86 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A57), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -269,7 +269,7 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 3. **1. Goals.** The participant's goals as full-width tick-box rows. Ticked means reached.
 4. **2. Common items.** "Ticked means done." Then, in this order, all as full-width tick-box rows (`ux/components/group-picker.md`):
    - **Every note:** that group's items, always shown (D45).
-   - **The groups:** the question "Which of these happened?" with the hint "Tick all that happened. Their items show below.", then one tick box per group that has items, in the managers' order. On a new note the groups picked on the participant's most recent submitted note are already ticked (D46, A44), with a line naming that note's date (A47), for example "These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen." Only group picks are copied; item ticks never are.
+   - **The groups:** the question "Which of these happened?" with the hint "Tick all that happened. Their items show below.", then one tick box per group that has items, in the managers' order. On a new note the groups picked on the participant's most recent submitted note are already ticked (D46, A44), with no line about where they came from (D83). Only group picks are copied; item ticks never are.
    - **Each picked group's items,** as its own list under the group's name, in the managers' order (never the order they were ticked).
 
    Ticking a group shows its items, unticked. Unticking it hides them and clears their ticks, with no confirmation (A46). Focus stays on the tick box and nothing scrolls. Workers never see the word "group".
@@ -283,13 +283,13 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 - **New:** nothing saved yet.
 - **Draft:** "Draft · saved 9:42 am".
 - **Draft from an earlier day:** banner "This draft is for Wed 30 Sep. Submitting it now keeps that date."
-- **Group picks copied from the last note** (A47): the copied-picks line shows on a new note, and on a draft, whenever at least one group was ticked from the participant's most recent submitted note. It stays after the writer changes picks and after a reload. It never shows when editing a submitted note or in the read view. With no earlier submitted note, or none of its groups still offered, nothing is ticked and the line does not show.
+- **Group picks copied from the last note** (D46, A44): the groups picked on the participant's most recent submitted note start ticked, with their items unticked. With no earlier submitted note, or none of its groups still offered, nothing is ticked. Nothing says where the picks came from (D83).
 - **Lists changed before the first save:** if a manager changed the goals, the common items or their groups between the form opening and the first change, the form reloads the lists, keeps the text and any picks and ticks that still apply (a tick on an item moved into an unpicked group is dropped), and says "The goal or common-item list was just changed. Please check your ticks."
 - **Changed on another device or tab:** banner "This note was changed on another device or tab." with **Keep the text on this screen** or **Load the other version**. The text on screen is never replaced without asking.
 - **Validation:** an empty Guided notes box or a missing flag reason shows an error next to the field, plus a summary at the top when Submit is tapped.
 - **No goals set up:** "No goals set up for Jane yet. A manager can add them." The note can still be submitted.
 - **No common items set up:** "No common items set up." If only the Every note group has items, there is no question. If the Every note group has no items, it is not shown. A group with no items is not offered (A45).
-- **Editing a submitted note** (author or manager): the same form, headed "Editing submitted note (version 2)", with **Save changes** and **Cancel**. It shows the version's groups and picks, including a group archived since, and the picks can be changed. No copied-picks line. With no common items: "No common items set".
+- **Editing a submitted note** (author or manager): the same form, headed "Editing submitted note (version 2)", with **Save changes** and **Cancel**. It shows the version's groups and picks, including a group archived since, and the picks can be changed. With no common items: "No common items set".
 - **Discard draft:** asks "Discard the draft note for Jane Citizen?" first.
 
 **Primary action:** Submit note, which opens the confirmation below.
@@ -318,10 +318,6 @@ Draft --Discard (author or manager)--> Discarded (kept, hidden, audited; frees t
 | Which of these happened?          |
 | Tick all that happened. Their     |
 | items show below.                 |
-| These ticks are copied from the   |
-| note for Wednesday 30 September   |
-| 2026. Untick any that did not     |
-| happen.                           |
 | [x] Community outing              |
 | [ ] In-home support               |
 | [ ] Personal care                 |
@@ -374,11 +370,11 @@ After submitting, the user returns to Today with "Note for Jane Citizen submitte
 
 **On screen, in order:**
 1. Participant name. Managers also see Write past-day note, Export record and Edit participant.
-2. Notes, newest first: date, author, status (Draft or Submitted) and tags (Edited, Flagged; managers also see To review or Reviewed). 30 at a time, then "Show older".
+2. Notes, newest first: date, author, status (Draft or Submitted) and tags (Edited, Flagged; managers also see To review or Reviewed). No Past-day note tag on these rows: the read view shows the past-day line (D81). 30 at a time, then "Show older".
 
 **Read view of one note:**
 - Every goal from the note's snapshot, shown as ticked or not ticked.
-- Common items (D47): the Every note group, then each group picked on the note, under the group's name in the managers' order, each item shown as ticked or not ticked. Groups not picked, the "Which of these happened?" question and the copied-picks line do not appear. If no common items are shown: "No common items set".
+- Common items (D47): the Every note group, then each group picked on the note, under the group's name in the managers' order, each item shown as ticked or not ticked. Groups not picked and the "Which of these happened?" question do not appear. If no common items are shown: "No common items set".
 - The Guided notes text, the flag and its reason, the author, and the submitted time (with its date when it was a later day).
 - "Past-day note, written on … by …" where it applies, and the "Edited" label.
 - Managers also see the review status and comment, and a "Version history" link.
@@ -448,7 +444,7 @@ The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and
 
 **States:**
 - No goals yet: "Notes will show an empty Goals section."
-- Archived participant: a read-only banner with Restore.
+- Archived participant: a read-only banner with Restore. The page is read-only on screen only: Release 1's server does not refuse detail or goal changes for an archived participant, and Release 2 adds that refusal (D86).
 
 **Primary action:** Save / Add goal.
 
@@ -494,14 +490,14 @@ Changes apply straight away to every empty Guided notes box, including open draf
 
 **List:** name, email, role, status (Invited / Active / Deactivated), and "Invite user".
 
-**Invite user:** name, email and role (Worker or Manager), then "Send invite". The email contains a setup link that works once and lasts 7 days.
+**Invite user:** name, email and role (Worker or Manager, starting on Worker, D77), then "Send invite". The email contains a setup link that works once and lasts 7 days.
 
 **User detail actions:**
-- **Edit** name, email or role. Changing the email resets sign-in and sends a setup link to the new address.
+- **Edit** name, email or role. Changing the email resets sign-in and sends a setup link to the new address, with no confirmation dialog (D74). A change of letter case only is not an email change (D76). On a Deactivated person the reset is made but no link is sent, and they stay Deactivated (D75).
 - **Resend invite** (while Invited).
-- **Reset sign-in** (while Active): removes the password, authenticator and passkeys, ends every session, and emails a new setup link. The manager confirms who is asking before doing this, by phone or in person.
+- **Reset sign-in** (while Active): removes the password, authenticator and passkeys, ends every session, and emails a new setup link. The manager confirms who is asking before doing this, by phone or in person, and confirms the reset in a dialog (D74).
 - **Deactivate.** The confirmation says: "[Name] will be signed out everywhere now and can't sign in. Their notes stay."
-- **Reactivate.**
+- **Reactivate.** The person is Active again if they have a way to sign in, otherwise Invited, ready for Resend invite (D75).
 
 **Rules:**
 - An email address can be used for only one account in the whole app (A27).
@@ -516,7 +512,7 @@ Changes apply straight away to every empty Guided notes box, including open draf
 
 **On screen (participant detail > Export record):**
 1. Participant (fixed).
-2. From date and To date. Defaults: the participant's first note to today.
+2. From date and To date. Defaults: the participant's first note (`firstNoteDate`, §6.3, D80) to today.
 3. Format: PDF or Word.
 4. "Include earlier versions of edited notes", off by default (A20).
 5. Export.
@@ -670,7 +666,6 @@ erDiagram
         int BaseVersionNumber
         json Groups "group snapshot with picks"
         json Items "snapshot with ticks"
-        date PicksCopiedFrom "nullable"
         string Narrative
         bool IsFlagged
         string FlagReason "nullable"
@@ -765,7 +760,7 @@ How the inherited Identity columns are used:
 - `PasswordHash` is null for passkey-only users.
 - `TwoFactorEnabled` becomes true when a password user enrols TOTP. No endpoint turns it off, except a sign-in reset.
 - `SecurityStamp` is rotated on deactivation, sign-in reset and setup completion. This ends sessions and invalidates setup links (§8).
-- `LockoutEnd` and `AccessFailedCount` drive lockout. `ConcurrencyStamp` is the user-admin ETag. `EmailConfirmed` is set at setup completion. `PhoneNumber*` columns are unused.
+- `LockoutEnd` and `AccessFailedCount` drive lockout. `ConcurrencyStamp` is the user-admin ETag, returned as `concurrencyStamp` in the user list (§6.6, D78). `EmailConfirmed` is set at setup completion. `PhoneNumber*` columns are unused.
 
 Index: `(OrganisationId, Status)`.
 
@@ -830,7 +825,7 @@ The organisation-wide groups of common items, for example Community outing, In-h
 | RowVersion | byte[] | rowversion | no | |
 
 Constraints:
-- **Exactly one Every note group per organisation.** A unique index on `(OrganisationId)` filtered `WHERE [IsEveryNote] = 1` allows at most one. `admin bootstrap` creates it in the same transaction as the organisation, and rows are never deleted (5.8), so there is always exactly one. No endpoint creates a group with `IsEveryNote = 1`.
+- **Exactly one Every note group per organisation.** A unique index on `(OrganisationId)` filtered `WHERE [IsEveryNote] = 1` allows at most one. `admin bootstrap` creates it in the same transaction as the organisation, the migration that adds this table gives every organisation that already exists (such as those bootstrapped in test) its Every note group (D82), and rows are never deleted (5.8), so there is always exactly one. No endpoint creates a group with `IsEveryNote = 1`.
 - **Every note is fixed.** Check constraint `IsEveryNote = 0 OR ArchivedAtUtc IS NULL`, so it can never be archived. The rename and archive endpoints refuse it (`422 config.every_note_fixed`), and the reorder endpoint does not accept its ID (`422 config.order_mismatch`).
 
 Index: `(OrganisationId, ArchivedAtUtc, SortOrder)`.
@@ -901,7 +896,6 @@ A working copy is either a **draft** (`BaseVersionNumber = 0`, the author's unsu
 | BaseVersionNumber | int | int | no | `0` for a draft; `n` for a pending edit on version n. |
 | Groups | List\<DraftGroup\> | nvarchar(max) | no | JSON array of `{groupId, name, isEveryNote, isPicked}`: the common item group snapshot taken when the working copy was created (the Every note group first, then every active group in order), with the current picks. `isPicked` is always false for Every note, which is always shown. EF Core complex collection mapped with `ToJson`. |
 | Items | List\<DraftItem\> | nvarchar(max) | no | JSON array of `{section, sourceId, groupId, text, isTicked}`: the goal and common-item snapshot taken when the working copy was created, with current ticks (`groupId` for common items only). EF Core complex collection mapped with `ToJson`. |
-| PicksCopiedFrom | DateOnly? | date | yes | The note date of the submitted note the starting picks were copied from (D46, A44), kept so the copied-picks line (A47) survives a reload. Set by the server when the draft is created (5.7), never taken from the request. Null when nothing was copied, and always null for a pending edit. Not copied into versions. |
 | Narrative | string | nvarchar(max) | no | May be empty in a draft. |
 | IsFlagged | bool | bit | no | |
 | FlagReason | string? | nvarchar(200) | yes | |
@@ -1008,7 +1002,7 @@ Audit rows for changes are written in the same transaction as the change (5.9). 
 |---|---|
 | Sign-in | `auth.signin_succeeded`, `auth.signin_failed` (known accounts only; failures for unknown emails go to telemetry as a count, with no email), `auth.mfa_failed`, `auth.locked_out`, `auth.signed_out`, `auth.setup_completed` |
 | Users | `user.invited`, `user.updated` (name, email or role; old and new values), `user.setup_link_sent` (invite resent or sign-in reset), `user.deactivated`, `user.reactivated` |
-| Configuration | `participant.created`, `participant.updated`, `participant.archived`, `participant.restored`; `goal.created`, `goal.updated`, `goal.archived`, `goal.restored`, `goal.reordered`; the same five with a `common_item.` prefix (`common_item.updated` also records a move to another group, with the old and new group); the same five with a `common_item_group.` prefix; `guide_prompts.updated` |
+| Configuration | `participant.created`, `participant.updated`, `participant.archived`, `participant.restored`; `goal.created`, `goal.updated`, `goal.archived`, `goal.restored`, `goal.reordered`; the same five with a `common_item.` prefix (`common_item.updated` also records a move to another group, with the old and new group); the same five with a `common_item_group.` prefix; `guide_prompts.updated` (only when the text changes, D84) |
 | Notes | `note.draft_started`, `note.discarded`, `note.submitted` (v1), `note.edited` (v2 and later), `note.reviewed` |
 | Reports | `report.downloaded` (date, format), `participant.exported` (date range, format, earlier versions included or not) |
 | Operator | `admin.bootstrap`, `admin.signin_reset`, `admin.signout_all` |
@@ -1051,10 +1045,10 @@ Reading a note, a participant's history or version history is **not** audited (A
 
 ### 5.7 Which items a note shows (the snapshot)
 
-- **New draft.** `GET …/draft` returns an unsaved template: the participant's active goals in `SortOrder`; then the common item groups (the Every note group first, then every active group in `SortOrder`), each with its active items in `SortOrder`; all unticked. It also returns the starting picks (below), `picksCopiedFrom` and `listsVersion` (a hash of the IDs, wording and order of the goals and of every snapshot common item, each item's group, and the groups' IDs, names and order). The first `PUT` sends `listsVersion` back. If `listsVersion` no longer matches, the server returns `409 note.lists_changed` and the client reloads the template, re-applies picks by group ID and ticks by item ID (keeping ticks only for Every note and picked groups), keeps the text and asks the user to check the ticks. If it matches, the server stores the snapshot, with the picks, in `NoteDraft.Groups` and `NoteDraft.Items`. It also works out the starting picks' source note again by the rule below and stores its date in `NoteDraft.PicksCopiedFrom` (A47); the client never sends this date.
-- **Starting picks** (D46, A44). The server finds the participant's most recent submitted note dated before the note date (`Status = 1 AND NoteDate < @noteDate ORDER BY NoteDate DESC`, one row, on the one-live-note index), by any author. For a worker's note that is the latest note before today; for a manager's past-day note, the latest before that date. The groups picked in its current version become the starting picks, leaving out any group that is now archived or has no active items. `picksCopiedFrom` is that note's date when at least one pick remains, otherwise null (A47). Only picks are copied, never ticks. With no such note, nothing is picked.
+- **New draft.** `GET …/draft` returns an unsaved template: the participant's active goals in `SortOrder`; then the common item groups (the Every note group first, then every active group in `SortOrder`), each with its active items in `SortOrder`; all unticked. It also returns the starting picks (below) and `listsVersion` (a hash of the IDs, wording and order of the goals and of every snapshot common item, each item's group, and the groups' IDs, names and order). The first `PUT` sends `listsVersion` back. If `listsVersion` no longer matches, the server returns `409 note.lists_changed` and the client reloads the template, re-applies picks by group ID and ticks by item ID (keeping ticks only for Every note and picked groups), keeps the text and asks the user to check the ticks. If it matches, the server stores the snapshot, with the picks, in `NoteDraft.Groups` and `NoteDraft.Items`. Nothing records which note the starting picks came from (D83).
+- **Starting picks** (D46, A44). The server finds the participant's most recent submitted note dated before the note date (`Status = 1 AND NoteDate < @noteDate ORDER BY NoteDate DESC`, one row, on the one-live-note index), by any author. For a worker's note that is the latest note before today; for a manager's past-day note, the latest before that date. The groups picked in its current version become the starting picks, leaving out any group that is now archived or has no active items. Only picks are copied, never ticks. With no such note, nothing is picked.
 - **Later saves** send ticks as item IDs and picks as group IDs. Every picked ID must be a group in the stored snapshot other than Every note, with at least one item. Every ticked common item must belong to the Every note group or a picked group. Every ticked ID must be in the stored snapshot (`422` otherwise).
-- **Pending edit on version n.** The working copy is created from version n: its group rows (same names, order, source IDs and picks), its item rows (same wording, order and source IDs), text and flag. `PicksCopiedFrom` is null.
+- **Pending edit on version n.** The working copy is created from version n: its group rows (same names, order, source IDs and picks), its item rows (same wording, order and source IDs), text and flag.
 - **Save a version.** The `NoteVersionGroup` and `NoteVersionItem` rows are copied from the working copy's snapshot, with the picks and tick states from the request.
 
 So every note records exactly the wording the writer saw, and a list change made while a draft is open never alters that draft.
@@ -1244,12 +1238,12 @@ Every note path uses the base `/api/participants/{participantId}/notes/{noteDate
 | Method | Path | Role | Purpose | Request → response |
 |---|---|---|---|---|
 | GET | /api/today | Any | The Today list: active participants, sorted by family then given name, each with today's live note or `null`. No "missing" indicator (D25). | → `{date, participants: [{id, givenName, familyName, note: null \| {status, authorDisplayName, isMine, startedAtUtc, savedAtUtc?, firstSubmittedAtUtc?, isFlagged}}]}` (`savedAtUtc` only on the caller's own draft) |
-| GET | /api/participants/{participantId} | Any | Participant header for any user. Date of birth is left out (managers get it from the admin endpoints). | → `{id, givenName, familyName, status}` |
-| GET | /api/participants/{participantId}/notes?before= | Any | Participant history (D20): up to 30 live notes dated before `before` (default: tomorrow), newest first. | → `{notes: [{noteDate, status, authorDisplayName, currentVersionNumber, isEdited, isFlagged, flagStatus?}], hasMore}` (`flagStatus` for managers) |
+| GET | /api/participants/{participantId} | Any | Participant header for any user. Date of birth is left out (managers get it from the admin endpoints). `firstNoteDate` is the note date of the participant's earliest submitted note, or `null` when there is none: the record export's default From date (4.12, D80). | → `{id, givenName, familyName, status, firstNoteDate}` |
+| GET | /api/participants/{participantId}/notes?before= | Any | Participant history (D20): up to 30 live notes dated before `before` (default: tomorrow), newest first. Rows carry no `isPastDayNote`, as they show no Past-day note tag (4.4, D81). | → `{notes: [{noteDate, status, authorDisplayName, currentVersionNumber, isEdited, isFlagged, flagStatus?}], hasMore}` (`flagStatus` for managers) |
 | GET | /api/me/drafts | Any | The caller's working copies (drafts and pending edits). The client lists those not already on today's list. | → `[{participantId, givenName, familyName, noteDate, kind: "draft" \| "pendingEdit", savedAtUtc}]` |
 | GET | {base} | Any | Read a note. **Submitted:** the current version for everyone; managers also get `flagStatus`, `reviews[]` and `versionCount`. **Draft:** header only (`status`, `authorDisplayName`, `startedAtUtc`); managers also get the draft content, read-only. | → `{noteId, noteDate, status, author: {id, displayName}, startedAtUtc, firstSubmittedAtUtc, isPastDayNote, isEdited, lastEdit?: {by, atUtc}, current: {versionNumber, narrative, isFlagged, flagReason, goals: [{text, isTicked}], commonItemGroups: [{name, isEveryNote, items: [{text, isTicked}]}]}, flagStatus?, reviews?, versionCount?}` or `404`. `commonItemGroups` holds only the Every note group and the groups picked in that version, in order (D47); an Every note group with no items is left out. For a draft, managers get the working copy in the same `current` shape; `commonItemGroups` holds the Every note group (if it has items) and the groups picked in the working copy, in snapshot order. |
-| GET | {base}/draft | Any (rules below) | Load the caller's working copy with the form definition. Without one: an unsaved template for a new note (live lists, unticked, with `listsVersion`, and the starting picks copied from the participant's most recent submitted note before the note date, 5.7), or the current version's groups, picks, items, text and flag for a pending edit. `commonItemGroups` is the whole snapshot (the Every note group first, then every group in order, including those not picked); `picksCopiedFrom` is the date for the copied-picks line (A47), or null. | → `{baseVersion, isSaved, listsVersion?, guidePrompts, goals: [{id, text, isTicked}], commonItemGroups: [{id, name, isEveryNote, isPicked, items: [{id, text, isTicked}]}], picksCopiedFrom, narrative, isFlagged, flagReason, savedAtUtc?}` |
-| PUT | {base}/draft | Any (rules below) | **Autosave.** Full replacement of the caller's working copy (5.6). The first call for a new note also creates the `Note`, subject to the date rules (5.5). | `{baseVersion, clientId, seq, listsVersion?, narrative, tickedGoalIds[], pickedGroupIds[], tickedCommonItemIds[], isFlagged, flagReason}` (`listsVersion` on the first call for a new note; the server sets `PicksCopiedFrom` itself, 5.7) → `200`/`201 {savedAtUtc}`; `409 note.in_progress_by_other`; `409 note.lists_changed`; `409 draft.taken_over`; `422` |
+| GET | {base}/draft | Any (rules below) | Load the caller's working copy with the form definition. Without one: an unsaved template for a new note (live lists, unticked, with `listsVersion`, and the starting picks copied from the participant's most recent submitted note before the note date, 5.7), or the current version's groups, picks, items, text and flag for a pending edit. `commonItemGroups` is the whole snapshot (the Every note group first, then every group in order, including those not picked). | → `{baseVersion, isSaved, listsVersion?, guidePrompts, goals: [{id, text, isTicked}], commonItemGroups: [{id, name, isEveryNote, isPicked, items: [{id, text, isTicked}]}], narrative, isFlagged, flagReason, savedAtUtc?}` |
+| PUT | {base}/draft | Any (rules below) | **Autosave.** Full replacement of the caller's working copy (5.6). The first call for a new note also creates the `Note`, subject to the date rules (5.5). | `{baseVersion, clientId, seq, listsVersion?, narrative, tickedGoalIds[], pickedGroupIds[], tickedCommonItemIds[], isFlagged, flagReason}` (`listsVersion` on the first call for a new note) → `200`/`201 {savedAtUtc}`; `409 note.in_progress_by_other`; `409 note.lists_changed`; `409 draft.taken_over`; `422` |
 | DELETE | {base}/draft | Author or Manager | Cancel the caller's own pending edit on a submitted note. The submitted note is unchanged. | → `204`; `404` if the caller has no pending edit |
 | POST | {base}/discard | Author or Manager | Discard an unsubmitted note: `Status = Discarded`, content kept, day freed (5.5). | → `204`; `409 note.not_a_draft` |
 | POST | {base}/versions | Author (v1); Author or Manager (v2+) | **Submit** (`baseVersion = 0`) or **Save changes** (`baseVersion = n`). Appends an immutable version (5.8). The body repeats the latest content, so a lagging autosave is never lost. Header `Idempotency-Key: <uuid>`. | `{baseVersion, narrative, tickedGoalIds[], pickedGroupIds[], tickedCommonItemIds[], isFlagged, flagReason}` → `201 {versionNumber, createdAtUtc, flagStatus}`; `200` on a retry with the same key; `409 note.version_conflict {currentVersion, createdBy, createdAtUtc}`; `422` |
@@ -1283,22 +1277,22 @@ Spot-checks (D17) need no endpoint: managers read notes and the downloaded daily
 |---|---|---|---|---|
 | GET | /api/reports/daily/{date}/has-notes | Manager | Whether the date has at least one submitted note, so the Report screen can enable or disable its download buttons (4.7). Returns no note content and no count (D26). | → `{date, hasNotes}` |
 | GET | /api/reports/daily/{date}/export?format=pdf\|docx | Manager | Download the daily report file (§11): every **submitted** note with `NoteDate = date`, each as its current version, sorted by family then given name. No counts or statistics (D26). Built fresh on every request and rendered on the server. Audited as `report.downloaded`. | → `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `Content-Disposition: attachment; filename="daily-notes_2026-10-01.pdf"`; `404 report.no_notes` when the date has no submitted notes (this includes any future date) |
-| GET | /api/reports/participants/{participantId}/export?from=&to=&includeHistory=&format=pdf\|docx | Manager | Participant record export (APP 12, HPP 6; §11.6). Audited as `participant.exported` with the range, format and `includeHistory`. | → file, `participant-record_2026-01-01_to_2026-09-30.pdf` (dates only, no names) |
+| GET | /api/reports/participants/{participantId}/export?from=&to=&includeHistory=&format=pdf\|docx | Manager | Participant record export (APP 12, HPP 6; §11.6). Audited as `participant.exported` with the range, format and `includeHistory`. | → file, `participant-record_2026-01-01_to_2026-09-30.pdf` (dates only, no names); `404 report.no_notes` and no file when the range holds no submitted note (D80) |
 
 ### 6.6 Configuration (managers)
 
-Every `PUT` (except the reorder endpoints, which check the set of IDs instead), and every state-changing `POST` on an existing row, needs `If-Match` (from the row's `RowVersion`, or `ConcurrencyStamp` for users). A missing header returns `428 precondition.required`; a stale one returns `412 precondition.failed`. Every change writes an audit event with old and new values.
+Every `PUT` (except the reorder endpoints, which check the set of IDs instead), and every state-changing `POST` on an existing row, needs `If-Match` (from the row's `RowVersion`, or `ConcurrencyStamp` for users). Each list gives every row its token for this: `rowVersion` (the `RowVersion` as base64) on participants, goals, common items and their groups, and `concurrencyStamp` on users (D78). A missing header returns `428 precondition.required`; a stale one returns `412 precondition.failed`. Every change writes an audit event with old and new values. These `PUT`s return no time; a screen that shows "Saved 4:12 pm" reads the response's `Date` header in Melbourne time (D79).
 
 | Method | Path | Purpose | Request → response |
 |---|---|---|---|
-| GET | /api/admin/users | List users. | → `[{id, email, displayName, role, status, invitedAtUtc, activatedAtUtc, deactivatedAtUtc}]` |
+| GET | /api/admin/users | List users. `concurrencyStamp` is the user's `ConcurrencyStamp`, for `If-Match` (D78). | → `[{id, email, displayName, role, status, invitedAtUtc, activatedAtUtc, deactivatedAtUtc, concurrencyStamp}]` |
 | POST | /api/admin/users | Invite a user (D23): creates the user as Invited and emails a setup link. The email holds no participant data. | `{email, displayName, role}` → `201`; `409 user.email_in_use` |
-| PUT | /api/admin/users/{id} | Change name, email or role. A changed email resets sign-in and sends a setup link to the new address. Role changes apply on the user's next request. | `{displayName, email, role}` → `200`; `409 user.email_in_use`; `409 user.last_manager` |
+| PUT | /api/admin/users/{id} | Change name, email or role. A changed email resets sign-in and sends a setup link to the new address; a change of letter case only is not an email change, so it is saved as typed and resets nothing (the normalised emails are compared, D76). On a Deactivated person, a changed email resets sign-in but sends no link, and the person stays Deactivated (D75). Role changes apply on the user's next request. | `{displayName, email, role}` → `200`; `409 user.email_in_use`; `409 user.last_manager` |
 | POST | /api/admin/users/{id}/deactivate | Deactivate; rotates the security stamp, so every session ends on its next request. | → `204`; `409 user.last_manager` |
-| POST | /api/admin/users/{id}/reactivate | Reactivate. The user signs in with their existing methods. | → `204` |
+| POST | /api/admin/users/{id}/reactivate | Reactivate: ends the lockout and sends no email. The user is Active and signs in with their existing method if they have a password or a passkey; with neither (deactivated while Invited, or reset by an email change while Deactivated) they are Invited, and Resend invite sends their link (D75). | → `204` |
 | POST | /api/admin/users/{id}/setup-link | Resend an invite (Invited), or reset sign-in (Active): removes the password, authenticator key and passkeys, sets `Status = Invited`, rotates the stamp and emails a new link (§8.6). | → `204`; `409 user.last_manager` |
-| GET | /api/admin/participants?includeArchived= | Full participant records. | → `[{id, givenName, familyName, dateOfBirth, status}]` |
-| POST | /api/admin/participants | Add a participant. | `{givenName, familyName, dateOfBirth}` → `201` |
+| GET | /api/admin/participants?includeArchived= | Full participant records, sorted by family name, then given name (A5). `rowVersion` is the row's `RowVersion` as base64, for `If-Match` (D78). There is no single-participant admin `GET`: the detail page reads this list (D79). | → `[{id, givenName, familyName, dateOfBirth, status, rowVersion}]` |
+| POST | /api/admin/participants | Add a participant. The new participant's ID comes back in the body (D79). | `{givenName, familyName, dateOfBirth}` → `201 {id}` |
 | PUT | /api/admin/participants/{id} | Update a participant. | same body → `200` |
 | POST | /api/admin/participants/{id}/archive · /restore | Archive or restore. Never deleted. | → `204` |
 | GET | /api/admin/participants/{participantId}/goals?includeArchived= | The participant's goals. `rowVersion` is the row's `RowVersion` as base64, for `If-Match`. | → `[{id, text, sortOrder, archivedAtUtc, rowVersion}]` |
@@ -1315,7 +1309,7 @@ Every `PUT` (except the reorder endpoints, which check the set of IDs instead), 
 | PUT | /api/admin/common-items/{id} | Reword a common item, or move it to another active group, where it goes to the end (A42). Refused if the item's own group or the chosen group is archived (restore the group first). | `{text, groupId}` → `200`; `409 config.group_archived` |
 | POST | /api/admin/common-items/{id}/archive · /restore | Archive or restore; a restored item goes to the end of its group. | → `204` |
 | PUT | /api/admin/common-item-groups/{groupId}/items/order | Reorder the active items in one group. | `{commonItemIds: [...]}` → `204`; `422 config.order_mismatch` |
-| GET · PUT | /api/admin/guide-prompts | The guide prompts for Guided notes. | `{text}` → `200` |
+| GET · PUT | /api/admin/guide-prompts | The guide prompts for Guided notes. The `PUT`'s `200` carries the new `ETag`, so the next `If-Match` needs no refetch. A `PUT` of the text already stored changes nothing and writes no `guide_prompts.updated`, and answers `200` with the same `ETag` (D84). | `{text}` → `200` |
 
 ### 6.7 Concurrency summary
 
@@ -1339,7 +1333,7 @@ The SPA never polls in the background. `GET /api/auth/me` is called on page load
 |---|---|---|
 | 401 | (none) | Not signed in, session ended, or enrolment cookie expired or from an older link (A53). |
 | 403 | `note.not_editable` | A worker who is not the author tries to edit a submitted note. |
-| 404 | `report.no_notes` | A daily report is requested for a date with no submitted notes, including any future date. No file is returned. |
+| 404 | `report.no_notes` | A daily report is requested for a date with no submitted notes, including any future date, or a participant record export for a range with none (D80). No file is returned. |
 | 409 | `note.in_progress_by_other` | Another user started this participant's note for that day. Includes `{authorDisplayName, startedAtUtc}`. |
 | 409 | `note.lists_changed` | The goals, the common items or their groups changed between opening the form and the first save. |
 | 409 | `note.version_conflict` | `baseVersion` is stale. |
@@ -1550,7 +1544,7 @@ Accounts are created only by a manager's invitation; there is no self-registrati
 ### 8.1 Invite and mandatory MFA enrolment
 
 1. **Invite.** The manager enters name, email and role. In one transaction the API creates the user as Invited (no password, cannot sign in), generates the authenticator key (`ResetAuthenticatorKeyAsync`, which also rotates the security stamp), creates a setup token, and writes `user.invited`. Generating the key now means the setup steps never change the security stamp, so the link stays valid until setup completes.
-2. **Email.** The link is `https://<domain>/setup#u=<userId>&t=<token>`. The token is in the URL **fragment**, so it never reaches server logs, telemetry or `Referer` headers. The SPA reads it and immediately removes it from the address bar with `history.replaceState`, so it does not stay in browser history. The email contains no participant data.
+2. **Email.** The link is `https://<domain>/setup#u=<userId>&t=<token>`. The token is in the URL **fragment**, so it never reaches server logs, telemetry or `Referer` headers. The SPA reads it and immediately removes it from the address bar with `history.replaceState`, so it does not stay in browser history. The email contains no participant data. Its wording is the one S00.02.07 proposes, approved as proposed (D85).
 3. **Start.** `POST /api/auth/setup/start` validates the token once (it embeds the security stamp and lasts 7 days) and issues the 30-minute enrolment cookie, which holds the user's ID and security stamp. Later steps check that cookie, `Status = Invited` and that the stamp is still the cookie's (A53), not the token. If the cookie expires, the person opens the link again; it is still valid because nothing has rotated the stamp.
 4. **Choose a method:**
    - **Passkey (recommended, especially on phones).** WebAuthn registration with user verification required (Face ID, fingerprint or device PIN) and a discoverable credential. The account stays passwordless.
@@ -1658,8 +1652,9 @@ builder.Services.ConfigureApplicationCookie(o =>
 
 ### 8.6 Deactivation, reset and recovery
 
-- **Deactivate:** `Status = Deactivated`, lockout set to the maximum, security stamp rotated. Every open session on every device gets `401` on its next request. Reactivation is a manager action and is audited.
-- **Reset sign-in** (lost phone, new phone without a synced passkey, forgotten password): the person contacts a manager by phone or in person, and the manager confirms who they are; in an organisation this size the manager knows them. The manager taps Reset sign-in. In one transaction the app removes the password and passkeys, turns off TOTP, generates a new authenticator key (rotating the stamp, which ends every session, invalidates older links and ends any setup started from them, A53), sets `Status = Invited`, and emails a new setup link. The person then repeats 8.1 steps 3–5.
+- **Deactivate:** `Status = Deactivated`, lockout set to the maximum, security stamp rotated. Every open session on every device gets `401` on its next request. Reactivation is a manager action and is audited. It ends the lockout and sets `Status = Active` for a person who has a password or a passkey, and `Status = Invited` for one with neither, who then gets a link through Resend invite (D75).
+- **An email change on a Deactivated person** removes the sign-in methods and rotates the stamp, as any email change does, but sets no status and sends no link: the person stays Deactivated until a manager reactivates them (D75).
+- **Reset sign-in** (lost phone, new phone without a synced passkey, forgotten password): the person contacts a manager by phone or in person, and the manager confirms who they are; in an organisation this size the manager knows them. The manager taps Reset sign-in and confirms it in a dialog that asks them to check who is asking (D74). In one transaction the app removes the password and passkeys, turns off TOTP, generates a new authenticator key (rotating the stamp, which ends every session, invalidates older links and ends any setup started from them, A53), sets `Status = Invited`, and emails a new setup link. The person then repeats 8.1 steps 3–5.
 - **Last active manager:** cannot be deactivated, made a worker or reset in the app (A26). With at least two active managers (go-live checklist) one can always reset the other.
 - **Break-glass** when no manager can sign in: `admin reset-signin <email>` (7.4).
 
@@ -2089,7 +2084,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A3 | Snapshot | A note stores the wording and order of the goals, and the common item groups (the Every note group and every active group, each with its name and its items' wording and order), as shown when its draft was created (the first change). Which groups are picked is part of the note: the picks autosave with the draft, and an edit after submit can change them, saved as a new version like the ticks. An edit keeps the groups and items of the version being edited. Old notes keep their groups and wording. If the lists change between opening the form and the first change, the writer is asked to check the ticks. |
 | A4 | What shows | The form shows every goal, the Every note group's items, the groups to tick, and the items of each picked group. The read view, reports and exports show every goal and, for common items, only the Every note group and the picked groups, by group name in the configured order, with every item in those groups ticked or not ticked (D47). Groups not picked do not appear. Ticks are optional; unticked means not reached or not done. |
 | A5 | Participant details | Given name, family name and date of birth (needed for the under-25 retention rule). No NDIS number. Sorted by family name, then given name, everywhere. |
-| A6 | Length limits | Goal and common item 200 characters; common item group name 200; flag reason 200; review comment 500; guide prompts 1,000; Guided notes 20,000. |
+| A6 | Length limits | Goal and common item 200 characters; common item group name 200 (confirmed by the owner on 13 October 2026, D82); flag reason 200; review comment 500; guide prompts 1,000; Guided notes 20,000. |
 | A7 | Managers writing notes | Managers can write today's notes with the same form as workers. |
 | A8 | Note lifecycle | Draft (autosaved to the server) → Submitted. The draft is created at the first change, and its note date is fixed then from the server's Melbourne clock. A draft can be submitted on a later day; it keeps its note date and records the real submit time. Submit requires Guided notes text; a flagged note requires a reason. |
 | A9 | Drafts | Only the author edits a draft. Other workers see "Draft · name · started time"; managers can read any draft. The author or a manager can discard a draft: it is kept, hidden and audited, and frees the day. |
@@ -2110,7 +2105,7 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A24 | Sessions | 30 minutes idle, with a warning at 28 minutes; 12 hours absolute; no "keep me signed in". Deactivation and reset take effect on the next request. |
 | A25 | Lockout | 5 failed attempts lock sign-in for 15 minutes. |
 | A26 | Last manager | The last active manager cannot be deactivated, made a worker or reset in the app. Break-glass is through the developer. |
-| A27 | Email addresses | One account per email address across the whole app. (If the product is later sold to other providers, a person working for two of them would need two addresses.) Managers can change a user's email, which resets sign-in. |
+| A27 | Email addresses | One account per email address across the whole app. (If the product is later sold to other providers, a person working for two of them would need two addresses.) Managers can change a user's email, which resets sign-in; a change of letter case only is not an email change (D76). |
 | A28 | Audit log | Append-only. Records sign-ins, note writes (draft started, submitted, edited, discarded), flag reviews, configuration and user changes, and report downloads and participant record exports: who, when and what, by ID, never note text. Opening a note or a participant's history is not recorded. No audit screen in v1; the operator extracts entries when a manager asks. |
 | A29 | Retention | No hard delete: participants are archived and users deactivated. Records are kept until the latest of: 7 years after the participant's last service; age 25 if any note was written while they were under 18; 7 years after the last NDIS claim for their supports. The developer provides a yearly list of participants who may have reached that point; destruction is then a manual task outside the app, logged with name, period covered and date. |
 | A30 | Access and correction | A manager exports one participant's notes for a date range as PDF or Word. Corrections are made as edits, and the history is kept. |
@@ -2124,13 +2119,13 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A38 | Domain | One product domain for all future tenants: a Grow2Notes domain, not the parent company's domain or a subdomain of it (D42). Fixed before the first passkey is enrolled. |
 | A39 | Historical Word notes | Not imported. They are on workers' own laptops, so before go-live they are gathered into organisation-controlled storage (D41). Default beyond D41: once copied and checked, they are removed from the laptops. They are the record for dates before go-live, under the same retention rules. |
 | A40 | Cut-over | Everyone switches on one set date; no double entry. A short pilot with a few workers is available if the owner wants one. |
-| A41 | Common item groups | Groups are organisation-wide. Managers add, rename, reorder, archive and restore them on the Common items screen; nothing is deleted. Any group can be picked for any participant (D44). Groups bring no new screens, notifications or settings. |
-| A42 | An item's group | Each common item belongs to exactly one group. A manager moves an item to another group from the item's Edit; it goes to the end of that group. |
-| A43 | Every note group | Built in and created with the organisation: always first, always shown on every note (D45), and it cannot be renamed, moved or archived. If it has no items, it is not shown on the note. |
-| A44 | Starting picks | A new note starts with the groups picked on the participant's most recent submitted note, by any author (D46). For a manager's past-day note, that is the most recent submitted note before that date. Archived groups are skipped. With no earlier note, nothing is picked. Only group picks are copied, never item ticks. |
-| A45 | Picking groups | No group has to be picked to submit. Ticks stay optional; Guided notes is still required. A group with no active items is not offered on the note. |
-| A46 | Unpicking a group | Unpicking a group clears that group's ticks on this note, with no confirmation. Picking it again shows its items unticked. |
-| A47 | Copied-picks line | When at least one group was copied (A44), the new note and its draft show one line naming the date of the note the picks came from: "These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen." Edit mode, the read view and the files do not. This line is not part of D46; dropping it also removes `NoteDraft.PicksCopiedFrom`, the `picksCopiedFrom` field on `GET …/draft`, and the copied-line rows in the note form and group picker specs. |
+| A41 | Common item groups | Groups are organisation-wide. Managers add, rename, reorder, archive and restore them on the Common items screen; nothing is deleted. Any group can be picked for any participant (D44). Groups bring no new screens, notifications or settings. Confirmed by the owner on 13 October 2026 (D82). |
+| A42 | An item's group | Each common item belongs to exactly one group. A manager moves an item to another group from the item's Edit; it goes to the end of that group. Confirmed by the owner on 13 October 2026 (D82). |
+| A43 | Every note group | Built in and created with the organisation: always first, always shown on every note (D45), and it cannot be renamed, moved or archived. If it has no items, it is not shown on the note. Confirmed by the owner on 13 October 2026 (D82). |
+| A44 | Starting picks | A new note starts with the groups picked on the participant's most recent submitted note, by any author (D46). For a manager's past-day note, that is the most recent submitted note before that date. Archived groups are skipped. With no earlier note, nothing is picked. Only group picks are copied, never item ticks. Confirmed by the owner on 13 October 2026 (D82). |
+| A45 | Picking groups | No group has to be picked to submit. Ticks stay optional; Guided notes is still required. A group with no active items is not offered on the note. Confirmed by the owner on 13 October 2026 (D82). |
+| A46 | Unpicking a group | Unpicking a group clears that group's ticks on this note, with no confirmation. Picking it again shows its items unticked. Confirmed by the owner on 13 October 2026 (D82). |
+| A47 | Copied-picks line | **Dropped** by the owner on 13 October 2026 (D83). It was a line on a new note and its draft naming the date of the note the picks came from. There is no such line, no `NoteDraft.PicksCopiedFrom` and no `picksCopiedFrom` field; picks are still copied as D46 and A44 say. |
 | A48 | Tenant concurrency token | `OrganisationId` is a concurrency token on every `ITenantOwned` entity, so EF Core's updates and deletes match the row's original organisation as well as its key: a row made up with another organisation's key and the tenant's ID, which the `SaveChanges` interceptor cannot tell from one of the tenant's, matches no row, and the save throws and writes nothing (§5.9 item 3). Taken by the developer on 8 October 2026, when a test found that gap (S00.03.02); the owner may overturn it. |
 | A49 | Deploying the app | Both environments run the app from its deployed zip (`WEBSITE_RUN_FROM_PACKAGE=1`): App Service mounts `app.zip` read-only as `wwwroot`, so a running build never loads a later build's files, and it sends traffic to a newly started build only once `/healthz` answers `200` (`WEBSITE_WARMUP_PATH=/healthz`, `WEBSITE_WARMUP_STATUSES=200`; `/healthz` never touches the database, §10.8). The pipeline deploys with `az webapp deploy --track-status true`, which waits until the new build has started, and the smoke test waits until `/index.html` carries the `Last-Modified` that the build's static asset manifest in `app.zip` gives it before checking `/healthz` (§10.4 steps 7 and 8). Taken by the developer on 9 October 2026, after a deploy unpacked the new build under the running app and the old process answered `500` while it loaded the new files (S00.02.03); the owner may overturn it. On 11 October 2026 the developer added a recovery to the smoke test, after App Service's restart for changed app settings swallowed the recycle Kudu asks for to start the new package, so `az webapp deploy` reported success while the old build kept answering (S00.02.03): when `/index.html` is not the new build's within five minutes, the step restarts the app once (`az webapp restart`, which mounts the newest package) and waits up to five minutes more before it fails. |
 | A50 | Caching a response that renews the session | The session check renews the session cookie on every request that carries it (§8.4), so a page or asset response can carry a `Set-Cookie`. Such a response is `Cache-Control: private` (`private, max-age=31536000, immutable` for a hashed asset, `private, no-cache` for `index.html`), because a `Set-Cookie` does not stop a shared cache from storing a response and serving it, cookie and all, to someone else (RFC 9111 §7.3); and an asset's response drops the `Pragma: no-cache` and past `Expires` that the cookie handler adds, which Chromium and WebKit would otherwise read as `no-cache`, revalidating the bundle on every signed-in load. A response that sets no cookie keeps §7.2's `public` and `no-cache`. Taken by the developer on 9 October 2026, after the PR #28 review found those headers on a signed-in asset response (S00.04.01); the owner may overturn it. |
@@ -2188,7 +2183,7 @@ For every milestone:
 **Scope:**
 - The Today list (all participants, D20), "Your unfinished drafts", and participant history.
 - The note form: Goals, Common items with the Every note group and the group picker (D44, D45), Guided notes with placeholder prompts, Flag for manager with reason, and Submit.
-- Starting picks copied from the participant's most recent submitted note (D46, A44), with the line naming its date (A47).
+- Starting picks copied from the participant's most recent submitted note (D46, A44), with no line naming its date (A47 dropped, D83).
 - Autosave with `clientId` and `seq`; snapshot (goals, groups and items) at draft creation with the `listsVersion` check; picks autosaved and versioned with the ticks; discard as a status change.
 - One live note per participant per day, enforced by the filtered unique index.
 - Submit creates version 1; Save changes by the author or a manager creates the next version; pending edits and Cancel; version history for managers.

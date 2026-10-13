@@ -208,7 +208,7 @@ Proposed text is marked. Every busy label is proposed.
 | 4.11 | Invite form | "Send invite" | Primary | "Sending…" | — |
 | 4.11 | User detail | "Edit" | Secondary (link) | — | — |
 | 4.11 | User detail | "Resend invite" | Secondary | "Sending…" | — |
-| 4.11 | User detail | "Reset sign-in" | Secondary (trigger) | — | Proposed; see Open questions |
+| 4.11 | User detail | "Reset sign-in" | Secondary (trigger) | — | Dialog confirmed (D74) |
 | 4.11 | Confirm reset | "Reset sign-in for Alex Park" / "Go back" (proposed) | **Warning** / Secondary | "Resetting…" | — |
 | 4.11 | User detail | "Deactivate" | Secondary (trigger) | — | Heading "Deactivate Alex Park?" (proposed); body "Alex Park will be signed out everywhere now and can't sign in. Their notes stay." |
 | 4.11 | Confirm deactivate | "Deactivate Alex Park" / "Go back" (proposed) | **Warning** / Secondary | "Deactivating…" | — |
@@ -454,7 +454,7 @@ const unsaved = !save.isLatestSaved;                 // pending, in flight, fail
   2. Under a separating rule: "Deactivate" (while Active or Invited) or "Reactivate" (while Deactivated).
   Show only the actions valid for the current status. Hide the rest rather than showing them unavailable.
 - **Deactivate** → dialog. Heading "Deactivate Alex Park?" (proposed), the design's body text, then **"Deactivate Alex Park"** (standard primary style, not warning: Reactivate undoes it; users.md) and **"Go back"**, focus on the title. On `409 user.last_manager`, the proposed message appears in the dialog, and the commit button returns to default.
-- **Reset sign-in** removes the password, authenticator and passkeys and ends every session. It can't be undone, and SC 3.3.4 calls for a confirmation (see Open questions). Recommended dialog, all proposed: heading "Reset sign-in for Alex Park?"; body "Alex Park will be signed out everywhere now. Their passkey, password and authenticator app will stop working, and a new setup link will be emailed to alex.park@example.org. Only do this after confirming who is asking."; buttons **"Reset sign-in for Alex Park"** (warning) and **"Go back"**.
+- **Reset sign-in** removes the password, authenticator and passkeys and ends every session. It can't be undone, and SC 3.3.4 calls for a confirmation, which the owner confirmed (D74); users.md, which wins, has the dialog's final copy. Recommended dialog, all proposed: heading "Reset sign-in for Alex Park?"; body "Alex Park will be signed out everywhere now. Their passkey, password and authenticator app will stop working, and a new setup link will be emailed to alex.park@example.org. Only do this after confirming who is asking."; buttons **"Reset sign-in for Alex Park"** (warning) and **"Go back"**.
 - **Edit user:** the form's button is "Save" (same word as the other set-up forms, SC 3.2.4). Show the design's sentence "Changing the email resets sign-in and sends a setup link to the new address." as hint text under the email field, so the consequence is visible before Save is pressed.
 - **Reactivate** and **Resend invite** need no confirmation: both are easily reversed or harmless.
 
@@ -496,6 +496,7 @@ These are recorded once, with the evidence. None is a push to change the design.
 ### Open questions for the owner (gaps, not conflicts)
 
 - **Reset sign-in confirmation (4.11).** The design specifies a confirmation for Deactivate but says nothing for Reset sign-in, which can't be undone. SC 3.3.4 (A32's AA target) is met by a confirmation. Recommended: reuse the Deactivate dialog with the proposed copy in Per-screen notes. Please confirm.
+  **Answered 13 October 2026 (D74):** confirmed; Reset sign-in uses the shared dialog as users.md specifies it.
 - **Confirmation heading for notes that aren't today's.** "Submit today's note for" is wrong for a manager's past-day note and for an earlier-day draft. Proposed: "Submit the note for" + name + the note's date in those cases.
 - **Save changes when nothing has changed, or before the first autosave of the pending edit.** 5.8 needs a saved working copy for every version. Proposed: Save changes follows Submit's availability rule, with no change being "nothing to save". The owner should decide whether pressing it then simply returns to the read view.
 - **Every string marked (proposed):** busy labels, error and success messages, "Continue" on the password steps, "More actions", the unsaved-changes dialog, and the Deactivate and Reset sign-in button labels.
