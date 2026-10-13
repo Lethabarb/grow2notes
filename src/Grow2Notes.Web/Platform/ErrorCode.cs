@@ -20,6 +20,13 @@ internal sealed class ErrorCode
     public static readonly ErrorCode PreconditionFailed =
         new(StatusCodes.Status412PreconditionFailed, "precondition.failed");
 
+    /// <summary>
+    /// A reorder's IDs are not the list's active rows, each exactly once
+    /// (<see cref="Configuration.ListOrder.Reorder"/>), or a row of the list changed while it was being reordered.
+    /// </summary>
+    public static readonly ErrorCode OrderMismatch =
+        new(StatusCodes.Status422UnprocessableEntity, "config.order_mismatch");
+
     /// <summary>Field errors, in the problem's <c>errors</c> (<see cref="ValidationProblems"/>).</summary>
     public static readonly ErrorCode ValidationFailed =
         new(StatusCodes.Status422UnprocessableEntity, "validation.failed");
