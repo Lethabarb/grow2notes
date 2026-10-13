@@ -1,0 +1,9 @@
+/* Invite user, then the region, with more than the 8 px between separate targets (A32). */
+.invite {
+  margin-block-end: var(--space-5);
+}
+
+/* The Deactivated section, a section gap below the current users (foundations.md). */
+.section {
+  margin-block-start: var(--section-gap);
+}

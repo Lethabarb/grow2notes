@@ -181,6 +181,29 @@ export const strings = {
       finishingSetup: 'Finishing setup…',
     },
   },
+  /**
+   * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
+   * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md); then the
+   * user detail's own words.
+   */
+  users: {
+    listLoading: 'Loading users…',
+    theList: 'The user list',
+    userLoading: 'Loading user…',
+    thisUser: 'This user',
+    /** The terms of the user detail's summary list, after `emailAddress` (users.md component C item 4). */
+    role: 'Role',
+    status: 'Status',
+    /** The user detail's link to the Edit user page. */
+    edit: 'Edit',
+  },
+  /**
+   * A user's status, by its name in the API (status-tags.md): plain words, never a tag. "Deactivated" also heads the
+   * Users list's second section (users.md component A).
+   */
+  userStatus: { Invited: 'Invited', Active: 'Active', Deactivated: 'Deactivated' },
+  /** A user's role, by its name in the API (design.md §2). */
+  role: { Worker: 'Worker', Manager: 'Manager' },
   /** The error summary's heading (form-validation.md). */
   errorSummaryHeading: 'There is a problem',
   /**

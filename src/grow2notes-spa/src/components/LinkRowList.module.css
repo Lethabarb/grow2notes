@@ -1,0 +1,18 @@
+/*
+ * On a phone, full-bleed: the list reaches into the page gutter, so that each row is a target from edge to edge, and
+ * the rows pad their text back to it. From 40rem, in the reading column (participant-list-rows.md *Phone vs laptop*).
+ * A rule above the first row; each row draws the one below itself (foundations.md).
+ */
+.list {
+  margin: 0 calc(-1 * var(--page-gutter));
+  padding: 0;
+  list-style: none;
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+}
+
+@media (min-width: 40rem) {
+  .list {
+    margin-inline: 0;
+    max-inline-size: var(--measure);
+  }
+}

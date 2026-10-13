@@ -49,7 +49,14 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
    summary, and `POST /api/auth/login` answering `401` problem+json with `no-store`. (S00.04.04; S00.04.05.)
 9. Sign in as account A with Sign in with a passkey. Look for Today, and NVDA reading the sign-in page as sign-in.md's
    *Accessibility checklist* says. (S00.04.04; F00.04's feature check, the second sign-in on the passkey path.)
-10. Leave Today untouched for 28 minutes, in front and with the screen kept awake. Look for: the warning opens with
+10. Choose Manage, then Users, with NVDA running. Look for: `GET /api/admin/users` answering `200`; the page titled
+    "Grow2Notes – Users", with Manage marked; one row, account A's own, with its name, its address and "Active ·
+    Manager", and no "Deactivated" heading; and NVDA, tabbing to the row, reading it as users.md's *Accessibility
+    checklist* says, the name, "link", then the address, "Active" and "Manager", with no middle dot. Press the row. Look
+    for its detail page, titled "Grow2Notes – User", with the name as its heading, then Email address, Role "Manager",
+    Status "Active" and Edit, and neither the name nor the address in the title or the address bar. Then choose Today.
+    (S00.06.01, the first real list in test; users.md's screen-reader pass over the list.)
+11. Leave Today untouched for 28 minutes, in front and with the screen kept awake. Look for: the warning opens with
     focus on Stay signed in; NVDA says "You'll be signed out in 2 minutes", "dialog" and Stay signed in; left open, its
     sentence changes at 29:00, 29:20 and 29:40. Before 30:00 press Stay signed in. Look for `POST /api/auth/ping`
     answering `204`, the warning closing and focus back where it was. Then sign out as in step 7. (S00.04.07; its
@@ -57,21 +64,21 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 
 ### The second account: a password and an authenticator app
 
-11. Until Invite user is in test (S00.06.02), run `admin bootstrap` once more, as in steps 1 to 3, for a second
+12. Until Invite user is in test (S00.06.02), run `admin bootstrap` once more, as in steps 1 to 3, for a second
     made-up organisation and manager (account B), with a new `example.org` address, and leave the console open. The
     organisation stays in test for good, as every test organisation does.
-12. Open account B's link in Chrome on the laptop, with NVDA running. Choose Use a password and authenticator app,
+13. Open account B's link in Chrome on the laptop, with NVDA running. Choose Use a password and authenticator app,
     create a password, then scan the QR code with the phone's authenticator app and enter its 6-digit code. Look for:
     setup ends on Today, and NVDA reads views D to G as sign-in.md's *Accessibility checklist* says. Reopen the link and
     look for "This link has expired", then close the console as in step 5, and sign out as in step 7. (S00.04.03's and
     S00.04.05's screen-reader spot checks, handed to F00.04's feature check.)
-13. On the iPhone, with VoiceOver on, sign in as account B with email, password and a 6-digit code. Look for Today,
+14. On the iPhone, with VoiceOver on, sign in as account B with email, password and a 6-digit code. Look for Today,
     and VoiceOver reading the sign-in page and the code step as sign-in.md's *Accessibility checklist* says. Sign out
     with Sign out. (S00.04.05; F00.04's feature check, the phone, and the second sign-in on the password path.)
 
 ### What the developer reads afterwards (read-only)
 
-14. The audit rows, as the Entra admin, through a temporary firewall rule for your own address on
+15. The audit rows, as the Entra admin, through a temporary firewall rule for your own address on
     `sql-grow2notes-test`, deleted straight after, as `infra/sql/check-database.sql` describes:
 
     ```sql
@@ -85,21 +92,21 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     your own address, the one the firewall rule names, not a private or `169.254.` address of App Service's front end;
     and one `auth.signed_out` row for each sign-out, with the person as actor. Do not write the addresses down.
     (S00.03.03's `IpAddress` criterion; S00.03.05's first criterion; S00.04.06.)
-15. The telemetry, which an agent can query: from step 8's time, the workspace holds its `POST /api/auth/login` `401`
+16. The telemetry, which an agent can query: from step 8's time, the workspace holds its `POST /api/auth/login` `401`
     and one "Password sign-in with an unknown email" entry holding no address, and no `400`, `415` or `5xx` on
     `/api/auth/*`, and no exception. (S00.04.05.)
 
 ### Later, once Invite user is in test
 
-16. F00.04's feature check also asks for a worker on each setup path, and for a manager's passkey on a phone, since
+17. F00.04's feature check also asks for a worker on each setup path, and for a manager's passkey on a phone, since
     account A's is on the laptop, each setting up and signing in a second time on a phone and a laptop. As account A,
     invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a new made-up
     `example.org` address, with the setup link as S00.02.07 and S00.06.02 make it reach a made-up address in test.
-17. On the iPhone, with VoiceOver on, set up account C and one worker with Use a passkey (recommended), and the other
+18. On the iPhone, with VoiceOver on, set up account C and one worker with Use a passkey (recommended), and the other
     worker with Use a password and authenticator app, typing the setup key into the phone's authenticator app. Look
     for: each setup ends on Today, and VoiceOver reads views D to G as sign-in.md's *Accessibility checklist* says.
     Sign each out with Sign out. (F00.04's feature check: setup on the phone, and its VoiceOver pass over views D to G.)
-18. Sign each of the three in a second time on the laptop: the passkey ones with Sign in with a passkey, choosing the
+19. Sign each of the three in a second time on the laptop: the passkey ones with Sign in with a passkey, choosing the
     iPhone when Chrome offers it, and the password worker with email, password and a 6-digit code. Look for Today each
-    time, then sign out as in step 7, and repeat step 14's query for their `auth.setup_completed` and
+    time, then sign out as in step 7, and repeat step 15's query for their `auth.setup_completed` and
     `auth.signed_out` rows. (F00.04's feature check: the second sign-ins, on the laptop.)

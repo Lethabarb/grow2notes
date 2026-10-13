@@ -1,0 +1,101 @@
+/*
+ * A row whose whole area is one link (participant-list-rows.md *Visual specification* and *States*), in
+ * foundations.md's tokens and two weights. Nothing truncates: names and emails wrap, and the row grows (SC 1.4.4,
+ * 1.4.10, 1.4.12).
+ */
+.row {
+  /* The containing block of the link's ::after, which covers the whole row. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: var(--target-row);
+  /*
+   * The page gutter inline: on a phone, where the list reaches into the gutter, it lines the text up with the page's;
+   * from 40rem it keeps the focus ring, inset on the row's edge, clear of the text.
+   */
+  padding: var(--space-3) var(--page-gutter);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* Shrinks below its text's width, so that a long name or email wraps rather than pushing the chevron out. */
+.text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+/* The name, the link's only text, in the text colour, visited or not, with no underline at rest. */
+.link {
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--colour-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+/* Over the whole row, so that a tap on the name, the detail, the chevron or the space between opens the link. */
+.link::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+/* base.css's ring, moved from the name to the whole row, inset so that the next row cannot cover it. */
+.link:focus-visible {
+  outline: none;
+}
+
+.link:focus-visible::after {
+  outline: var(--focus-width) solid var(--colour-focus);
+  outline-offset: calc(-1 * var(--focus-width));
+}
+
+.detail {
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-small);
+  line-height: 1.4;
+  color: var(--colour-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.line {
+  display: block;
+}
+
+.chevron {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  color: var(--colour-text-secondary);
+}
+
+/* Only where a pointer can hover, so that a tap on a phone does not leave a tint stuck. */
+@media (hover: hover) {
+  .row:has(.link:hover) {
+    background: var(--colour-hover);
+  }
+
+  /* Two classes' weight, so that base.css's a:hover colour does not win. */
+  .link:hover {
+    color: var(--colour-text);
+    text-decoration: underline;
+  }
+}
+
+.row:has(.link:active) {
+  background: var(--colour-pressed);
+}
+
+@media (forced-colors: active) {
+  .link:focus-visible::after {
+    outline-color: Highlight;
+  }
+
+  /*
+   * An <svg> keeps a colour it is given under forced colours (its forced-color-adjust is preserve-parent-color), so
+   * the chevron, which signals that the row opens, would stay grey, faint on a dark contrast theme's black.
+   */
+  .chevron {
+    color: CanvasText;
+  }
+}

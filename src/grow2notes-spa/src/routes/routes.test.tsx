@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { pageName } from '../copy/pageNames.ts';
+import type { AdminUser } from '../features/users/usersQuery.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
 // A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
@@ -24,6 +25,21 @@ const manager: Me = {
   today: '2026-10-01',
 };
 
+// The manager's own row, the one user on the made-up list.
+const users: AdminUser[] = [
+  {
+    id: manager.userId,
+    email: 'sam.lee@example.org',
+    displayName: manager.displayName,
+    role: 'Manager',
+    status: 'Active',
+    invitedAtUtc: '2026-09-01T00:00:00Z',
+    activatedAtUtc: '2026-09-02T00:00:00Z',
+    deactivatedAtUtc: null,
+    concurrencyStamp: 'b7e0c2d4-1a95-4f36-8c2e-6d9a3f1b0e57',
+  },
+];
+
 // Between a day and its month, so that the two never split across lines (microcopy.md §3).
 const nbsp = ' ';
 
@@ -39,38 +55,31 @@ function noAnswer(init?: RequestInit): Promise<Response> {
   });
 }
 
-/** Stubs `fetch` as the server, which answers `GET /api/auth/me` with `me`, or, for none, never answers. */
+/**
+ * Stubs `fetch` as the server, which answers `GET /api/admin/users` with the made-up list and any other request,
+ * `GET /api/auth/me`, with `me`, or, for none, never answers.
+ */
 function serveMe(me: Me | undefined) {
-  fetchMock.mockImplementation((_path, init) =>
+  fetchMock.mockImplementation((path, init) =>
     me === undefined
       ? noAnswer(init)
-      : Promise.resolve(new Response(JSON.stringify(me), { headers: { 'Content-Type': 'application/json' } })),
+      : Promise.resolve(
+          new Response(JSON.stringify(path === '/api/admin/users' ? users : me), {
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ),
   );
 }
 
-/** Renders the app's routes, or `table`, at `path` on a memory router, under a query client of its own. */
-function renderApp(path: string, table: AppRoute[] = routes) {
-  const router = createMemoryRouter(table, { initialEntries: [path] });
+/** Renders the app's routes at `path` on a memory router, under a query client of its own. */
+function renderApp(path: string) {
+  const router = createMemoryRouter(routes, { initialEntries: [path] });
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return router;
-}
-
-/** `table` with a made-up manager screen, Users at `/manage/users`, beside Manage under `ManagerOnly`. */
-function withMadeUpUsers(table: AppRoute[]): AppRoute[] {
-  return table.map((route) => {
-    if (route.index || route.children === undefined) {
-      return route;
-    }
-
-    const children = route.children.some(({ path }) => path === 'manage')
-      ? [...route.children, { path: 'manage/users', handle: { pageName: pageName.users } }]
-      : withMadeUpUsers(route.children);
-    return { ...route, children };
-  });
 }
 
 /** Lets every request and render that falls due now run. */
@@ -165,16 +174,34 @@ describe('Manage', () => {
     expect(within(main).getAllByRole('link')).toEqual(listed);
   });
 
-  it.each(links)('opens Page not found from $name, until its screen is built', async ({ name, address }) => {
+  it.each(links.filter(({ name }) => name !== 'Users'))(
+    'opens Page not found from $name, until its screen is built',
+    async ({ name, address }) => {
+      serveMe(manager);
+      const router = renderApp('/manage');
+      await settle();
+
+      fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name }));
+      await settle();
+
+      expect(router.state.location.pathname).toBe(address);
+      expectPageNotFound();
+    },
+  );
+
+  it('opens the user list from Users, not Page not found, with Manage still marked', async () => {
     serveMe(manager);
     const router = renderApp('/manage');
     await settle();
 
-    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name }));
+    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Users' }));
     await settle();
 
-    expect(router.state.location.pathname).toBe(address);
-    expectPageNotFound();
+    expect(router.state.location.pathname).toBe('/manage/users');
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Sam Lee' })).toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Users');
+    expect(currentItems()).toEqual(['Manage true']);
   });
 });
 
@@ -208,7 +235,7 @@ describe('Page not found', () => {
   // that route's title, Users, which Page not found must replace again.
   it('keeps its title while a worker goes from one manager screen to another', async () => {
     serveMe(worker);
-    const router = renderApp('/manage', withMadeUpUsers(routes));
+    const router = renderApp('/manage');
     await settle();
 
     await act(() => router.navigate('/manage/users'));

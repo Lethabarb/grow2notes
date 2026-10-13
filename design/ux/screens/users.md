@@ -424,11 +424,20 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
 
 ### E. Data and helpers (not visual)
 
-- **One query** `['admin', 'users']` from `GET /api/admin/users` (lists are returned whole, 6.1). Detail and Edit
-  `select` one user from it with `staleTime: 0` and **`refetchOnWindowFocus: true` set explicitly** (the app default
-  is off; app-shell.md lists this query among the opt-ins), so they refetch on mount and on window focus (6.8). The
-  Edit form copies the values once and is never overwritten by a refetch. No polling. There is no single-user
-  endpoint and none is needed.
+- **Files** (design.md §7.3, as built by S00.06.01): the screens in `src/features/users/`, beside `src/features/auth/`:
+  `UsersPage.tsx` (the list), `UserPage.tsx` (the detail), `usersQuery.ts` (the query below, with the `AdminUser` type
+  of each user in the answer and its `UserStatus`; `Role` is `src/api/me.ts`'s) and `userRules.ts` (the helpers
+  below). The list's row, `LinkRow` in a `LinkRowList`, and the detail's summary list, `SummaryList` of `SummaryRow`s,
+  are shared with participants.md's screens and Today, so they are in `src/components/`.
+- **One query** `['admin', 'users']` from `GET /api/admin/users` (lists are returned whole, 6.1), `usersQuery`, with
+  `staleTime: 0` and **`refetchOnWindowFocus: true` set explicitly** (the app default is off; app-shell.md lists this
+  query among the opt-ins), so the list, the detail page and Edit refetch it on mount and on window focus (6.8).
+  Detail and Edit read the same query and find their user in the list it holds, with a `find` by ID, and show that
+  user in `LoadRegion`'s content; never through a `select` of one user, as `LoadRegion` reads a query whose `data` is
+  `undefined` as not loaded yet, so a `select` that gives `undefined` would keep the region loading (S00.05.03). An
+  ID not on the loaded list renders `PageNotFound` in place of the whole page, its back link included (*States* ›
+  User detail, Not found). The Edit form copies the values once and is never overwritten by a refetch. No polling.
+  There is no single-user endpoint and none is needed.
 - **Query defaults** (empty-loading-error.md): `networkMode: 'always'`, the `api()` wrapper's own 10 s timeout (the
   query passes TanStack's `signal`, never `AbortSignal.timeout`, whose abort the wrapper would rethrow as it came, not
   as a timeout; empty-loading-error.md *Timing*), one silent retry for network, timeout or 5xx only. Use
@@ -440,13 +449,16 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
 - **`If-Match`** on every `PUT` and state-changing `POST` on a user, from the user's `ConcurrencyStamp`, which the list
   gives each user as `concurrencyStamp` (6.6, D78). The Edit form captures the ETag **when it first fills the
   fields** and does not silently take a newer one from a background refetch; it takes the new one only after a `412`.
-- **Helpers** in `src/manage/users/userRules.ts` (user-management.md): `byName`, `isOnlyActiveManager(users, viewerId)`
-  (exactly one user with `role = Manager` and `status = Active`, and it is the viewer), `allowedActions(user,
-  onlyManager)`, and one `validateUser()` shared by Invite and Edit. The server is still the gate (`409
-  user.last_manager`).
+- **Helpers** in `src/features/users/userRules.ts` (user-management.md). It holds `byName`, which the list sorts with,
+  alone until the later stories add theirs: `isOnlyActiveManager(users, viewerId)` (exactly one user with `role =
+  Manager` and `status = Active`, and it is the viewer), `allowedActions(user, onlyManager)`, and one `validateUser()`
+  shared by Invite and Edit. The server is still the gate (`409 user.last_manager`).
 - **No React Aria, no form library, no React 19 `<form action>`** (it resets uncontrolled fields after the action,
   react#29034). Controlled inputs, `<form noValidate onSubmit>` + `preventDefault()`, `useMutation`.
-- **Strings** live in `src/copy` (microcopy.md); API error codes map through `apiErrors.ts`.
+- **Strings** live in `src/copy` (microcopy.md): the page names in `pageNames.ts`, which also give the list's `<h1>`
+  "Users", Invite user's text, the back link "Users" and the detail's fallback `<h1>` "User"; the rest in `strings.ts`,
+  as `strings.users`, `strings.userStatus` and `strings.role`, the last two by the API's names, with the shared
+  `strings.emailAddress`. API error codes map through `apiErrors.ts`.
 
 ---
 

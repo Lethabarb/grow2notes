@@ -1,0 +1,9 @@
+/*
+ * A rule above the first row; each row draws the one below itself (foundations.md). From 40rem, in the reading
+ * column (users.md *Layout - laptop*).
+ */
+.list {
+  margin: 0;
+  max-inline-size: var(--measure);
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+}

@@ -2,6 +2,7 @@ using System.Buffers.Text;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -13,9 +14,9 @@ namespace Grow2Notes.Tests;
 /// <summary>
 /// The endpoint matrix (design.md §2, §9.1, §9.2): a row for each endpoint the app maps, with the status that each
 /// <see cref="Caller"/> gets from it. <see cref="EndpointMatrixTests"/> calls every endpoint in the app's
-/// <c>EndpointDataSource</c> as each caller and checks the status against the endpoint's row, and an endpoint with no
-/// row, or a row with no endpoint, fails the run. So each story that maps an endpoint adds its row here
-/// (tests/README.md).
+/// <c>EndpointDataSource</c> as each caller and checks the status against the endpoint's row, and the answer too for a
+/// row that checks it, and an endpoint with no row, or a row with no endpoint, fails the run. So each story that maps
+/// an endpoint adds its row here (tests/README.md).
 /// </summary>
 internal static class EndpointMatrix
 {
@@ -106,6 +107,11 @@ internal static class EndpointMatrix
         // has, so a made-up code is refused, whoever sends it, with nothing checked or written (§8.2).
         new(Post,      "/api/auth/login/totp",   Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login/totp", new { code = "123456" })),
+
+        // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
+        // their own organisation's users and none of the other's (§5.9 items 5 and 7).
+        new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
+            Answer: HoldsTheCallersOwnSeededUsersOnly),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -179,6 +185,29 @@ internal static class EndpointMatrix
         return Task.FromResult(PasskeySignIn.Request(
             authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
     }
+
+    // For an endpoint that lists an organisation's users: a JSON array of users, each with its id, that holds both of
+    // the caller's own organisation's seeded users and neither of the other's. Tests add users to the seeded
+    // organisations, so it may hold others of the caller's own.
+    private static async Task<IReadOnlyList<string>> HoldsTheCallersOwnSeededUsersOnly(
+        HttpResponseMessage response, Caller caller, SeededOrganisations seeded)
+    {
+        var (own, other) = caller switch
+        {
+            Caller.WorkerOfA or Caller.ManagerOfA => (seeded.A, seeded.B),
+            Caller.ManagerOfB => (seeded.B, seeded.A),
+            _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "A signed-out caller has no users."),
+        };
+        var users = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var ids = users.EnumerateArray().Select(user => user.GetProperty("id").GetGuid()).ToHashSet();
+        return
+        [
+            .. new[] { own.ManagerId, own.WorkerId }.Where(id => !ids.Contains(id))
+                .Select(id => $"lacks the caller's own organisation's user {id}"),
+            .. new[] { other.ManagerId, other.WorkerId }.Where(ids.Contains)
+                .Select(id => $"holds the other organisation's user {id}"),
+        ];
+    }
 }
 
 /// <summary>
@@ -191,6 +220,9 @@ internal static class EndpointMatrix
 /// must then have no parameters, so a row whose route has them builds a request to a path its endpoint answers. It is
 /// asked again for each call, and may first add the record that a call acts on: a call commits, so a row whose calls
 /// change something gives each call a record of its own (tests/README.md).
+/// <paramref name="Answer"/> checks the answer to a call that gets the row's status when that is a success, given the
+/// caller and the seeded organisations, and lists how it differs from what the row expects; it is for an endpoint
+/// that lists an organisation's rows, whose list must hold none of the other organisation's (design.md §5.9 item 7).
 /// </remarks>
 internal sealed record EndpointRow(
     IReadOnlyList<string> Methods,
@@ -199,7 +231,8 @@ internal sealed record EndpointRow(
     HttpStatusCode WorkerOfA,
     HttpStatusCode ManagerOfA,
     HttpStatusCode ManagerOfB,
-    Func<EndpointCall, Task<HttpRequestMessage>>? Request = null)
+    Func<EndpointCall, Task<HttpRequestMessage>>? Request = null,
+    Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>? Answer = null)
 {
     /// <summary>The status that <paramref name="caller"/> gets from the endpoint.</summary>
     public HttpStatusCode StatusFor(Caller caller) => caller switch

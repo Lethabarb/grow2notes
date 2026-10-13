@@ -234,35 +234,71 @@ Times are Melbourne time, in the form `9:42 am`, lower case, with a non-breaking
 
 No React Aria is needed. A link, a list, a paragraph and an SVG are all native.
 
-```tsx
-// src/today/ParticipantRow.tsx
-import { useId, type ReactNode, type Ref } from 'react';
-import { Link } from 'react-router';
-import styles from './ParticipantRow.module.css';
+**The row is built and shared** (S00.06.01, which built it for the Users list first, users.md component A item 6):
+`LinkRowList`, the list, and `LinkRow`, one row, in `src/components/`, which Today, the participants list
+(participants.md) and the Users list share, each giving its own address, name and detail. The row's sketches below are
+the built files, but for some comments; Today's status line, its tag and its two lists are sketches still.
 
-type Props = {
-  to: string;                 // IDs and dates only (4.0)
-  name: string;               // "Jane Citizen"
-  detail?: ReactNode;         // status line or note date; omitted when there is no note
-  onOpen?: () => void;        // remembers the row for focus on return (memory only)
-  linkRef?: Ref<HTMLAnchorElement>;
+- `LinkRow` takes `to`, `name` and `detail`: the lines under the name, each a `<span>` shown as a block. Every line but
+  the last ends in `Pause` (`src/copy/Pause.tsx`), the visually hidden "," that `Sep` (`src/copy/Sep.tsx`) uses too,
+  with a space between the lines outside both, so that two lines are described "a, b": the Users list gives two, the
+  email and `{Status}<Sep/>{Role}`, and Today one, the status line or the note date. A row given no detail, as Today's
+  with no note and participants.md's are, has no `<p>` and no `aria-describedby`.
+- It has no `onOpen` or `linkRef`: focus on return is the shell's (the editorial note at the top, and app-shell.md's
+  route-change rule), and S00.05.02 adds the link's `data-return-key` to the row, as a prop that each list gives.
+- Its tokens are foundations.md's, where the sketches here named others: `--colour-hover` and `--colour-pressed` for
+  *States*' `--colour-row-hover` and `--colour-row-active`, and `--colour-text-secondary`, at 3:1 or better, for the
+  chevron's `--colour-icon`. The name is at weight 700 and the list changes at 40rem, foundations.md's two weights and
+  one breakpoint (today.md *Conflicts resolved* 11), in place of 600 and 48rem.
+- Under forced colours the ring is `Highlight` and the chevron `CanvasText`. An `<svg>`'s `forced-color-adjust` is
+  `preserve-parent-color`, which keeps a colour it is given, so without the rule the chevron would stay
+  `--colour-text-secondary`, below 3:1 on a dark contrast theme's black (found in S00.06.01's check by hand).
+
+```tsx
+// src/components/LinkRowList.tsx
+import type { ReactNode } from 'react';
+import styles from './LinkRowList.module.css';
+
+export function LinkRowList({ children }: { children: ReactNode }) {
+  return <ul role="list" className={styles.list}>{children}</ul>;   // role: Safari drops it under list-style: none
+}
+```
+
+```tsx
+// src/components/LinkRow.tsx
+import { Fragment, useId, type ReactNode } from 'react';
+import { Link } from 'react-router';
+import { Pause } from '../copy/Pause.tsx';
+import styles from './LinkRow.module.css';
+
+type LinkRowProps = {
+  to: string;                          // IDs and dates only (4.0)
+  name: string;                        // "Jane Citizen": the link's text, so its whole accessible name
+  detail?: readonly ReactNode[];       // the lines under the name; none for a row with none
 };
 
-export function ParticipantRow({ to, name, detail, onOpen, linkRef }: Props) {
+export function LinkRow({ to, name, detail = [] }: LinkRowProps) {
   const detailId = useId();
+  const hasDetail = detail.length > 0;
   return (
     <li className={styles.row}>
       <div className={styles.text}>
-        <Link
-          ref={linkRef}
-          to={to}
-          className={styles.link}
-          onClick={onOpen}
-          aria-describedby={detail ? detailId : undefined}
-        >
+        <Link to={to} className={styles.link} aria-describedby={hasDetail ? detailId : undefined}>
           {name}
         </Link>
-        {detail && <p id={detailId} className={styles.detail}>{detail}</p>}
+        {hasDetail && (
+          <p id={detailId} className={styles.detail}>
+            {detail.map((line, index) => (
+              <Fragment key={index}>
+                {index > 0 && ' '}
+                <span className={styles.line}>
+                  {line}
+                  {index < detail.length - 1 && <Pause />}
+                </span>
+              </Fragment>
+            ))}
+          </p>
+        )}
       </div>
       <svg className={styles.chevron} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
         <path d="M7.5 4.5 13 10l-5.5 5.5" fill="none" stroke="currentColor" strokeWidth="2" />
@@ -272,19 +308,15 @@ export function ParticipantRow({ to, name, detail, onOpen, linkRef }: Props) {
 }
 ```
 
+Today gives each row its one line: `<LinkRow to={…} name={…} detail={note ? [<NoteStatus note={note} />] : []} />`.
+
 ```tsx
 // src/today/NoteStatus.tsx  (main-list detail line)
-import a11y from '../styles/a11y.module.css';
-import styles from './ParticipantRow.module.css';
+import { Pause } from '../copy/Pause.tsx';
+import { Sep } from '../copy/Sep.tsx';            // the dot, aria-hidden, then a hidden "," and a space
+import styles from './NoteStatus.module.css';
 import { melbourneTime } from '../lib/time';
 import type { TodayNote } from '../api/types';
-
-const Sep = () => (
-  <>
-    <span className={styles.sep} aria-hidden="true">{' ·'}</span>
-    <span className={a11y.visuallyHidden}>,</span>{' '}
-  </>
-);
 
 export function NoteStatus({ note }: { note: TodayNote }) {
   const isDraft = note.status === 'Draft';
@@ -300,7 +332,7 @@ export function NoteStatus({ note }: { note: TodayNote }) {
       <span className={styles.part}>{verb}<time dateTime={iso}>{melbourneTime(iso)}</time></span>
       {!isDraft && note.isFlagged && (
         <>
-          <span className={a11y.visuallyHidden}>,</span>{' '}
+          <Pause />{' '}
           <span className={styles.tag}>Flagged</span>
         </>
       )}
@@ -310,38 +342,35 @@ export function NoteStatus({ note }: { note: TodayNote }) {
 ```
 
 ```css
-/* ParticipantRow.module.css */
+/* src/components/LinkRowList.module.css */
 .list {
-  list-style: none;
-  margin: 0;
+  margin: 0 calc(-1 * var(--page-gutter));        /* phone: full-bleed rows */
   padding: 0;
-  margin-inline: calc(-1 * var(--page-gutter));   /* phone: full-bleed rows */
-  border-block-start: 1px solid var(--colour-divider);
+  list-style: none;
+  border-block-start: var(--border-divider) solid var(--colour-divider);
 }
-@media (min-width: 48rem) {
-  .list { margin-inline: 0; max-inline-size: 40rem; }
+@media (min-width: 40rem) {
+  .list { margin-inline: 0; max-inline-size: var(--measure); }
 }
+
+/* src/components/LinkRow.module.css */
 .row {
   position: relative;                 /* containing block for .link::after */
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-block-size: 3.5rem;
-  padding-block: 0.75rem;
-  padding-inline: var(--page-gutter);
-  border-block-end: 1px solid var(--colour-divider);
+  gap: var(--space-3);
+  min-block-size: var(--target-row);  /* 3.5rem */
+  padding: var(--space-3) var(--page-gutter);   /* from 40rem, keeps the inset ring clear of the text */
+  border-block-end: var(--border-divider) solid var(--colour-divider);
 }
 .text { flex: 1; min-inline-size: 0; }
-.link {
-  font-size: 1.125rem;
-  font-weight: 600;
+.link {                               /* --colour-text, visited or not: base.css sets no a:visited */
+  font-weight: 700;
   line-height: 1.35;
   color: var(--colour-text);
   text-decoration: none;
   overflow-wrap: anywhere;
-  hyphens: manual;
 }
-.link:visited { color: var(--colour-text); }
 .link::after {                        /* stretches the target over the whole row */
   content: "";
   position: absolute;
@@ -349,35 +378,46 @@ export function NoteStatus({ note }: { note: TodayNote }) {
 }
 .link:focus-visible { outline: none; }            /* moved, not removed: */
 .link:focus-visible::after {
-  outline: 3px solid var(--colour-focus);
-  outline-offset: -3px;
+  outline: var(--focus-width) solid var(--colour-focus);
+  outline-offset: calc(-1 * var(--focus-width));
 }
 .detail {
-  margin: 0.125rem 0 0;
-  font-size: 1rem;
+  margin: var(--space-1) 0 0;
+  font-size: var(--font-size-small);
   line-height: 1.4;
   color: var(--colour-text-secondary);
+  overflow-wrap: anywhere;
 }
+.line { display: block; }
+.chevron {
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  color: var(--colour-text-secondary);
+}
+@media (hover: hover) {
+  .row:has(.link:hover) { background: var(--colour-hover); }
+  .link:hover { color: var(--colour-text); text-decoration: underline; }   /* two classes beat base.css's a:hover */
+}
+.row:has(.link:active) { background: var(--colour-pressed); }
+@media (forced-colors: active) {
+  .link:focus-visible::after { outline-color: Highlight; }
+  .chevron { color: CanvasText; }     /* an <svg> keeps a colour it is given (preserve-parent-color) */
+}
+
+/* src/today/NoteStatus.module.css (Today's status line; a sketch) */
 .part { white-space: nowrap; }        /* wrap only at separators */
-.state { font-weight: 600; color: var(--colour-text); }
-.tag {
+.state { font-weight: 700; color: var(--colour-text); }   /* today.md Conflicts resolved 9 */
+.tag {                                /* today.md's Flagged tag (Conflicts resolved 10) */
   display: inline-block;
-  padding: 0 0.375rem;
-  border: 1px solid var(--colour-tag-flag-border);
-  border-radius: 0.25rem;
-  background: var(--colour-tag-flag-bg);
-  color: var(--colour-text);
-  font-weight: 600;
+  padding: 0.125em 0.5em;
+  border: 1px solid var(--colour-attention-edge);
+  border-radius: var(--radius-s);
+  background: var(--colour-attention-tint-strong);
+  color: var(--colour-attention-text);
+  font-weight: 400;
   line-height: 1.4;
 }
-.chevron { flex: none; inline-size: 1.25rem; block-size: 1.25rem; color: var(--colour-icon); }
-
-@media (hover: hover) {
-  .row:has(.link:hover) { background: var(--colour-row-hover); }
-  .row:has(.link:hover) .link { text-decoration: underline; text-underline-offset: 0.15em; }
-}
-.row:has(.link:active) { background: var(--colour-row-active); }
-
 @media (forced-colors: active) {
   .tag { border-color: CanvasText; }   /* the fill is dropped; the border keeps it a tag */
 }

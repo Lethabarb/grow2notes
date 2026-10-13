@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,11 @@ namespace Grow2Notes.Tests;
 /// <summary>
 /// The endpoint matrix (design.md §2, §9.1, §9.2): every endpoint in the app's <c>EndpointDataSource</c>, called
 /// signed out, as seeded organisation A's worker and manager, and as B's manager, answers each with the status in its
-/// row of <see cref="EndpointMatrix"/>; and an endpoint with no row, or a row with no endpoint, fails the run. A call
-/// that changes something sends the caller's antiforgery token, and is made twice more, without it and with a
-/// form-encoded body, which the <c>/api</c> group refuses (§9.8). The app is hosted with no test-only endpoint, so the
-/// matrix calls the endpoints that it maps in production.
+/// row of <see cref="EndpointMatrix"/>, and, where the row checks it, with the answer that the row expects; and an
+/// endpoint with no row, or a row with no endpoint, fails the run. A call that changes something sends the caller's
+/// antiforgery token, and is made twice more, without it and with a form-encoded body, which the <c>/api</c> group
+/// refuses (§9.8). The app is hosted with no test-only endpoint, so the matrix calls the endpoints that it maps in
+/// production.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -55,6 +57,29 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
         Assert.Empty(rowsWithNoEndpoint);
     }
 
+    // A made-up answer, as a list that forgot the organisation could give A's manager: it lacks A's worker and holds
+    // B's, and the row's check names both.
+    [Fact]
+    public async Task A_user_list_that_lacks_one_of_the_caller_s_users_or_holds_another_organisation_s_fails_the_run()
+    {
+        var (a, b) = sqlServer.Seeded;
+        var check = Assert.Single(EndpointMatrix.Rows, candidate => candidate.Route == "/api/admin/users").Answer;
+        Assert.NotNull(check);
+        using var answer = new HttpResponseMessage
+        {
+            Content = JsonContent.Create(new[] { new { id = a.ManagerId }, new { id = b.WorkerId } }),
+        };
+
+        var differences = await check(answer, Caller.ManagerOfA, sqlServer.Seeded);
+
+        Assert.Equal(
+            [
+                $"lacks the caller's own organisation's user {a.WorkerId}",
+                $"holds the other organisation's user {b.WorkerId}",
+            ],
+            differences);
+    }
+
     [Theory]
     [MemberData(nameof(Callers))]
     public async Task Every_endpoint_answers_the_caller_with_the_status_in_its_row(Caller caller)
@@ -67,7 +92,12 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
         {
             if (EndpointMatrix.RowOf(call.Endpoint) is { } row)
             {
-                differences.AddRange(await DifferencesAsync(client, token, call, row.StatusFor(caller)));
+                differences.AddRange(await DifferencesAsync(
+                    client,
+                    token,
+                    call,
+                    row.StatusFor(caller),
+                    row.Answer is { } answer ? response => answer(response, caller, sqlServer.Seeded) : null));
             }
             else
             {
@@ -132,13 +162,19 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
     /// as minimal APIs' binding does first at an endpoint that reads JSON. Of a row's statuses only authorization's
     /// come before both (binding and validation run first too, but a row's requests are valid), so at an endpoint that
     /// is not <c>AllowAnonymous</c>, a row's <c>401</c> or <c>403</c> is the answer to both calls too; at one that is,
-    /// such as sign-in (design.md §6.2), the endpoint gives it, after the filter.
+    /// such as sign-in (design.md §6.2), the endpoint gives it, after the filter. When the first call gets
+    /// <paramref name="expected"/> and that is a success, <paramref name="checkAnswer"/>, if given, lists how its
+    /// answer differs from the row's.
     /// </summary>
     private static async Task<List<string>> DifferencesAsync(
-        HttpClient client, string token, EndpointCall call, HttpStatusCode expected)
+        HttpClient client,
+        string token,
+        EndpointCall call,
+        HttpStatusCode expected,
+        Func<HttpResponseMessage, Task<IReadOnlyList<string>>>? checkAnswer = null)
     {
         List<string> differences = [];
-        await SendAsync(call.ChangesState ? token : null, expected, "");
+        await SendAsync(call.ChangesState ? token : null, expected, "", check: checkAnswer);
         if (call.ChangesState)
         {
             var refusedByAuthorization = expected is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
@@ -155,7 +191,12 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
         return differences;
 
         // The row's builder is asked again for each request, so each gets a record of its own to act on.
-        async Task SendAsync(string? withToken, HttpStatusCode status, string how, HttpContent? body = null)
+        async Task SendAsync(
+            string? withToken,
+            HttpStatusCode status,
+            string how,
+            HttpContent? body = null,
+            Func<HttpResponseMessage, Task<IReadOnlyList<string>>>? check = null)
         {
             using var request = await call.RequestAsync();
             if (withToken is not null)
@@ -177,6 +218,10 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
             if (response.StatusCode != status)
             {
                 differences.Add($"{name}: {(int)response.StatusCode}, not {(int)status}");
+            }
+            else if (check is not null && response.IsSuccessStatusCode)
+            {
+                differences.AddRange((await check(response)).Select(difference => $"{name}: {difference}"));
             }
         }
     }

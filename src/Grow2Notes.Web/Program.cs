@@ -216,6 +216,10 @@ builder.Services.AddScoped<Invitations>();
 // the method that the endpoint adds, the user's changes and their audit event are all saved.
 builder.Services.AddScoped<SetupCompletion>();
 
+// The admin handler classes (mcp-server.md §3.5, convention 1), one per scope, as each reads and writes through the
+// scope's context.
+builder.Services.AddScoped<UserList>();
+
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
 // its audit event's share the scope's context, and so the one transaction.
 builder.Services.AddScoped<AdminCommands>();
@@ -302,8 +306,9 @@ app.MapStaticAssets().AllowAnonymous();
 
 app.MapHealthEndpoints();
 
-// Every API endpoint is mapped in the /api group (ApiGroup).
-app.MapApiGroup()
+// Every API endpoint is mapped in the /api group (ApiGroup), and every manager-only one in the /api/admin group inside
+// it, whose policy covers them all.
+var api = app.MapApiGroup()
     .MapAntiforgeryEndpoint()
     .MapMeEndpoint()
     .MapLogoutEndpoint()
@@ -317,6 +322,9 @@ app.MapApiGroup()
     .MapPasskeySignInEndpoint()
     .MapPasswordSignInEndpoint()
     .MapTotpSignInEndpoint();
+
+api.MapAdminGroup()
+    .MapUserListEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

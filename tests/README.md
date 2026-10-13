@@ -4,8 +4,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
-- `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out and the warning
-  before the idle sign-out, with axe accessibility checks, run against the published app.
+- `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
+  the idle sign-out and the Users screens, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -108,13 +108,14 @@ npm test
 ```
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
-(`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`) and the session warning's
-tests (`e2e/session-warning.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite`
-fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
-`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open. Without
-one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up organisation and
-manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of
-each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
+tests (`e2e/session-warning.spec.ts`) and the Users test that meets the app's own list (`e2e/users.spec.ts`) get their
+setup links from the published app's own `admin bootstrap` (the `invite` fixture, below), so the second terminal gives
+them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection string
+and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs a link
+fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a failure,
+`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
+`docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -205,6 +206,39 @@ answer to a request of its own, `fetch('/healthz')` in `page.evaluate`: the brow
 order that it sends them. Time with nothing done runs on Playwright's clock, installed with `page.clock.install()`
 before `page.goto` and moved on with `page.clock.runFor('30:00')`.
 
+### Answering `/api/admin/users`
+
+The Users screens list the organisation's users from `GET /api/admin/users`, which needs a manager's session, so a test
+of them answers it in the browser, as it answers `/api/auth/me`. `e2e/users.ts`, beside `e2e/me.ts`, has users.md's
+made-up people (A35), in the JSON that `UserListEndpointTests` asserts: Sam Lee, who is `me.ts`'s `manager`, with the
+same user ID, Jo Smith, Alex Park, who is Invited, and Chris Ng, who is Deactivated, together in `people`, in no
+particular order, as the API sorts nothing (design.md §6.6). `madeUpUser` makes others, such as a name with an accent or
+an 80-character email. Each of its two helpers routes the page's requests through `page.route`, overriding the answer
+before it, as `serveMe` does, so that the request never reaches the app. Call them before `page.goto`.
+
+- `serveUsers(page, users)` answers each request with `users`.
+- `failUsers(page)` aborts each, as `failMe(page, 'no connection')` does. The list's failure then shows about 1 s after
+  the page loads, after the query client's silent retry, and the "still" sentence about 1 s after Try again. For the
+  next Try again to bring the list, the test then calls `serveUsers`.
+
+```ts
+await serveMe(page, manager);
+await serveUsers(page, people);
+await page.goto('/manage/users');
+```
+
+A test of the region's loading line holds the list's request with `holdNext(page, '**/api/admin/users')` from
+`e2e/requests.ts`, a route for the page's next request alone, which hands the test that request to answer or let
+through, while Playwright's clock, paused before the test opens the list, runs the page on to each mark: nothing at
+999 ms, and "Loading users…" at 1,000 ms. A test of the Tab stops reads each with `whereFocusIs(page)` from
+`e2e/focus.ts`, which gives the focused element's text, "the page itself" for `<body>`, or "outside the page" once focus
+has gone to the browser. `toHaveAccessibleDescription` gives a row's description as Chromium computes it, with a space
+before each comma that only screen readers get, "alex.park@example.org , Invited , Worker", which they do not voice
+(S00.05.01's Notes). The one test that meets the app's own list signs in for real, through the `invite` fixture and
+setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made lists its
+first manager alone. `e2e/users.spec.ts` is the example of each, and `e2e/shell.spec.ts`'s walk, whose Users link opens
+the list, answers it too.
+
 ### Signing in with a passkey, end to end
 
 A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
@@ -281,7 +315,7 @@ await page.clock.runFor('28:00'); // the warning opens
   `page.route`, lets a first ping through, so that the page then holds a token.
 - From the warning's one button, Tab and Shift+Tab take focus out of the page, to the browser, and the next brings it
   back. As it comes back, the window's `focus` refreshes `/api/auth/me`, which closes the warning as any accepted
-  request does, so a test of the keys holds that request with `page.route` until it has pressed them.
+  request does, so a test of the keys holds that request with `holdNext` (above) until it has pressed them.
 
 ## Writing integration tests
 
@@ -571,10 +605,10 @@ As with a passkey, a test reads only the audit events of a user it added, by the
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
 `Caller`: signed out, A's worker, A's manager and B's manager (design.md §2, §9.2). Each must answer with the status in
-the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status only. An endpoint with no row
-fails the run, and so does a row with no endpoint, so a story that maps, changes or removes an endpoint changes its row
-in the same change. The app is hosted there with no test-only endpoints, as in production, so an endpoint that a test
-maps for itself needs no row.
+the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status, and the answer only where the
+row has a check of it (below). An endpoint with no row fails the run, and so does a row with no endpoint, so a story
+that maps, changes or removes an endpoint changes its row in the same change. The app is hosted there with no test-only
+endpoints, as in production, so an endpoint that a test maps for itself needs no row.
 
 - A row finds its endpoint by the methods it is mapped with and its route pattern as mapped, the `/api` group's prefix
   included: `["GET"]` for `MapGet`, and `AnyMethod` for an endpoint mapped with `Map` or `MapFallback`, which names no
@@ -589,6 +623,12 @@ maps for itself needs no row.
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
   on, in organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's
   services and the seeded organisations to do it with.
+- A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
+  caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
+  row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
+  from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
+  whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
+  organisation's seeded users and neither of the other's.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,

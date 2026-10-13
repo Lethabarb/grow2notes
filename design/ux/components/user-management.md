@@ -491,13 +491,29 @@ Status Messages. **1.3.5 Identify Input Purpose does not apply:** the fields des
 - **No form library** (design.md §7). Controlled inputs with `useState`, `onSubmit` + `preventDefault()`, one
   `validateUser()` shared by Invite and Edit, and `useMutation` for the request. Don't use React 19 `<form action>`:
   it resets uncontrolled fields after success and adds a second pending system (primary-actions.md).
-- **One query:** `['admin', 'users']` from `GET /api/admin/users` (lists are returned whole, 6.1). The detail and edit
-  pages `select` one user from it, with `staleTime: 0` so they refetch on mount. There is no `GET /api/admin/users/{id}`
-  in 6.6, and none is needed.
+- **Files** (design.md §7.3, as built by S00.06.01): `src/features/users/`, beside `src/features/auth/`, holds the
+  screens (`UsersPage.tsx`, `UserPage.tsx`), `usersQuery.ts`, with the query and the `AdminUser` type of each user in
+  its answer, and `userRules.ts`, with the helpers, `byName` alone until the stories that need the others add them.
+  `Role` is `src/api/me.ts`'s, as `/api/auth/me` gives the role too. The list's row (`LinkRow` in a `LinkRowList`,
+  participant-list-rows.md) and the detail's summary list (`SummaryList` of `SummaryRow`s) are shared with
+  participants.md's screens and Today, so they are in `src/components/`, with `Button` and `buttonClass`. The sketches
+  below name these files; what they import that is not built yet is a sketch still.
+- **One query:** `['admin', 'users']` from `GET /api/admin/users` (lists are returned whole, 6.1), with `staleTime: 0`
+  and `refetchOnWindowFocus: true` (app-shell.md's opt-ins), so the list, the detail and edit pages refetch it on mount
+  and on window focus. The detail and edit pages read the same query and find their user in the list it holds, with a
+  `find` by ID, and show that user in `LoadRegion`'s content, never through a `select` of one user: `LoadRegion` reads
+  a query whose `data` is `undefined` as not loaded yet, so a `select` that gives `undefined` for an ID not on the list
+  would keep the region loading (S00.05.03). An ID not on the loaded list renders `PageNotFound` in place of the whole
+  page, its back link included. There is no `GET /api/admin/users/{id}` in 6.6, and none is needed.
 - **`If-Match`:** every `PUT` and state-changing `POST` on a user needs the user's `ConcurrencyStamp` as an ETag (6.6).
   The list gives it to each user as `concurrencyStamp` (D78).
 - **Mutations:** `retry: 0` for the user actions (the person retries), and network-only retries elsewhere, as in
   form-validation.md. Map the problem `code` to the copy table.
+- **The time a link was sent:** Resend invite's sentence takes it from the `204`'s `Date` header, the server clock,
+  through `time()`, and leaves out "at …" when the header is missing; never from the device clock (users.md *States*,
+  Resend invite sent; microcopy.md §3). `api()` returns only the body, so S00.06.03 adds a way for it to give the
+  response's `Date` header, unless a screen that shows "Saved 4:12 pm" from it (participants.md, guide-prompts.md) is
+  built first and has added one.
 - **Inputs:** Full name `type="text" autocomplete="off" spellCheck={false} autoCapitalize="words"`. Email `type="email"
   autocomplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"`. Don't use `maxLength`: it cuts off
   pasted text without saying so, so length is checked on submit instead. Some browsers may still offer saved-profile
@@ -505,13 +521,25 @@ Status Messages. **1.3.5 Identify Input Purpose does not apply:** the fields des
 - **Messages travel in memory** (the status-messages.md store), never in router `state`, the URL or storage (D22).
 
 ```ts
-// src/manage/users/userRules.ts
-export type Role = 'Worker' | 'Manager';
-export type Status = 'Invited' | 'Active' | 'Deactivated';
+// src/features/users/usersQuery.ts: built (S00.06.01), the query with the type of each user in its answer
+export type UserStatus = 'Invited' | 'Active' | 'Deactivated';
 export type AdminUser = {
-  id: string; email: string; displayName: string; role: Role; status: Status;
+  id: string; email: string; displayName: string; role: Role; status: UserStatus;   // Role from src/api/me.ts
+  invitedAtUtc: string; activatedAtUtc: string | null; deactivatedAtUtc: string | null;   // UTC, with Z
   concurrencyStamp: string; // for If-Match (6.6, D78)
 };
+export const usersQuery = queryOptions({
+  queryKey: ['admin', 'users'],
+  queryFn: ({ signal }) => api<AdminUser[]>('/api/admin/users', { signal }),
+  staleTime: 0,
+  refetchOnWindowFocus: true,
+});
+```
+
+```ts
+// src/features/users/userRules.ts: byName is built (S00.06.01); the stories that need the others add them
+import type { Role } from '../../api/me.ts';
+import type { AdminUser } from './usersQuery.ts';
 
 const collator = new Intl.Collator('en-AU', { sensitivity: 'base' });
 export const byName = (a: AdminUser, b: AdminUser) => collator.compare(a.displayName, b.displayName);
@@ -552,9 +580,9 @@ export function validateUser(v: { displayName: string; email: string; role: Role
 ```
 
 ```tsx
-// src/manage/users/RoleRadios.tsx
+// src/features/users/RoleRadios.tsx
 import { useId } from 'react';
-import type { Role } from './userRules';
+import type { Role } from '../../api/me.ts';
 import styles from './RoleRadios.module.css';
 
 const ROLES: { value: Role; hint: string }[] = [
@@ -591,14 +619,17 @@ export function RoleRadios({ value, onChange, error }:
 ```
 
 ```tsx
-// src/manage/users/UserActions.tsx (sketch: Reset sign-in and Resend invite; Deactivate and Reactivate follow the same shape)
+// src/features/users/UserActions.tsx (sketch: Reset sign-in and Resend invite; Deactivate and Reactivate alike)
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ConfirmDialog } from '../../ui/ConfirmDialog';
-import { Button } from '../../ui/Button';
-import { postWithEtag, problemCode } from '../../api';
-import { formatTime } from '../../time';
-import { allowedActions, type AdminUser } from './userRules';
+import { Link } from 'react-router';
+import { api, ApiError } from '../../api/api.ts';
+import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
+import { Button } from '../../components/Button.tsx';
+import { buttonClass } from '../../components/buttonClass.ts';
+import { time } from '../../copy/format.ts';
+import { allowedActions } from './userRules.ts';
+import { usersQuery, type AdminUser } from './usersQuery.ts';
 import styles from './UserActions.module.css';
 
 type Props = { user: AdminUser; onlyManager: boolean; isSelf: boolean;
@@ -613,19 +644,27 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   const [sent, setSent] = useState('');
   const [actionError, setActionError] = useState('');
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
+  // Awaited inside each mutationFn, so the button stays busy until the new stamp has arrived (users.md E, Mutations).
+  const refresh = () => qc.refetchQueries({ queryKey: usersQuery.queryKey });
+  const sendSetupLink = () =>
+    api(`/api/admin/users/${user.id}/setup-link`, { method: 'POST', ifMatch: user.concurrencyStamp });
+  // The same POST, resolving to the 204's `Date` header (the server clock), or null when it has none. api() returns
+  // only the body, so a way for it to give the response's `Date` header is still to be added (Implementation notes).
+  const sendSetupLinkWithDate = (): Promise<string | null> => …;
 
   const reset = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
+    mutationFn: async () => {
+      await sendSetupLink();
+      if (!isSelf) await refresh();                           // own sessions just ended: nothing to fetch
+    },
     retry: 0,
-    onSuccess: async () => {
-      if (isSelf) { window.location.replace('/'); return; }   // own sessions just ended
-      await refresh();
+    onSuccess: () => {
+      if (isSelf) { window.location.replace('/'); return; }
       setConfirmReset(false);
       showBanner(`Sign-in reset. A new setup link has been emailed to ${user.email}.`);
     },
     onError: (e) => {
-      const code = problemCode(e);
+      const code = e instanceof ApiError ? e.code : undefined;
       if (code === 'user.last_manager') {
         setDialogError(`${user.displayName} is the only active manager, so their sign-in cannot be reset here.`);
         setNoLongerPossible(true);
@@ -638,12 +677,13 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   });
 
   const resend = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
+    mutationFn: async () => { const date = await sendSetupLinkWithDate(); await refresh(); return date; },
     retry: 0,
     onMutate: () => { setSent(''); setActionError(''); },
-    onSuccess: async () => {
-      await refresh();
-      setSent(`Setup link sent to ${user.email} at ${formatTime(new Date())}. The old link no longer works.`);
+    onSuccess: (date) => {
+      // Never the device clock: with no `Date` header, the sentence leaves out "at …" (users.md States).
+      const at = date === null ? '' : ` at ${time(new Date(date).toISOString())}`;
+      setSent(`Setup link sent to ${user.email}${at}. The old link no longer works.`);
     },
     onError: () => setActionError('Not sent: no connection. Try again.'),
   });
@@ -652,7 +692,7 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
     <div className={styles.actions}>
       <div role="alert" className={styles.error}>{actionError}</div>
       <div className={styles.group}>
-        <Button as="link" to="edit" variant="secondary">Edit</Button>
+        <Link to="edit" className={buttonClass('secondary')}>Edit</Link>
         {can.resendInvite && (<>
           <p id="resend-desc" className={styles.desc}>Sends a new setup link. The old link stops working.</p>
           <Button variant="secondary" pending={resend.isPending} pendingLabel="Sending…"
@@ -695,8 +735,9 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
 
 Notes on the sketch: the `role="status"` and `role="alert"` containers are always rendered, empty until needed (a live
 region must exist before text is written into it). The `id`s are fixed because there is one user per page; use `useId`
-if the component is ever repeated. `Button` is the shared component from primary-actions.md, including its `as="link"`
-form for Edit.
+if the component is ever repeated. `Button` is the shared component from primary-actions.md, and Edit, a link, takes
+its look from `buttonClass`, as primary-actions.md has links do. Edit is built (S00.06.01): in `UserPage.tsx`, alone
+in a `<div>` a group's space below the summary list, until the actions come and that `<div>` becomes group 1.
 
 ```css
 /* RoleRadios.module.css: same box size and drawing technique as the tick list (checkbox-list.md) */
@@ -722,16 +763,23 @@ form for Edit.
 .hint { margin: 0; padding-inline-start: 3.25rem; color: var(--colour-text-secondary); }  /* 4.5:1 or more */
 @media (hover: hover) { .item:hover { background: var(--colour-row-hover); } }
 
-/* UserDetail.module.css (summary list and wrapping) */
-.summary { margin: 0; border-block-start: 1px solid var(--colour-border); container-type: inline-size; }
-.summary > div { padding-block: 0.75rem; border-block-end: 1px solid var(--colour-border); }
-.summary dt { font-weight: 700; }
-.summary dd { margin: 0; overflow-wrap: anywhere; }   /* long emails wrap (SC 1.4.10, C33) */
-@container (min-width: 32rem) {
-  .summary > div { display: grid; grid-template-columns: 10rem 1fr; gap: 1rem; }
+/* src/components/SummaryList.module.css and SummaryRow.module.css: the summary list, built (S00.06.01) */
+.list { margin: 0; max-inline-size: var(--measure);
+        border-block-start: var(--border-divider) solid var(--colour-divider); }
+.row { padding-block: var(--space-3); border-block-end: var(--border-divider) solid var(--colour-divider); }
+.term { font-weight: 700; }
+.value { margin: 0; overflow-wrap: anywhere; }   /* long emails wrap (SC 1.4.10, C33) */
+@media (min-width: 40rem) {   /* the one breakpoint, not a container query (users.md *Conflicts resolved* 13) */
+  .row { display: grid; grid-template-columns: 10rem 1fr; gap: var(--space-4); }
 }
-.divider { border: 0; border-block-start: 1px solid var(--colour-border); margin-block: 1.5rem; }
+
+/* UserActions.module.css: the rule between the two groups (sketch) */
+.divider { border: 0; margin-block: var(--space-5);
+           border-block-start: var(--border-divider) solid var(--colour-divider); }
 ```
+
+The summary list is `SummaryList`, a `<dl>`, holding a `SummaryRow` for each fact, a `<div>` of a `<dt>` and its
+`<dd>`, in `src/components/`, as participants.md's read-only Details use it too.
 
 `overflow-wrap: anywhere` is used rather than C33's `break-word`, because `anywhere` also shrinks the min-content width
 inside flex and grid items, which is where the email sits.
