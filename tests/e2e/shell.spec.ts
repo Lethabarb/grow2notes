@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
+import { people, serveUsers } from './users.ts';
 
 // The shell of the published app, signed in as a made-up worker and manager, whose GET /api/auth/me the tests answer
 // themselves (me.ts), against app-shell.md's acceptance criteria (S00.05.01).
@@ -174,8 +175,9 @@ test("a worker's /manage shows Page not found, which passes the WCAG 2.2 AA chec
 type Step = { region: 'banner' | 'main'; link: string; path: string; pageName: string; current?: string };
 
 // Each role's header links, then, for the manager, each Manage link, going back to Manage through the nav between
-// them. Until they are built, Flagged, Report and the four Manage links open Page not found (S00.05.01's first two
-// criteria), which marks no item, though component 2b's table marks Flagged, Report or Manage at its address.
+// them. Until they are built, Flagged, Report and the first three Manage links open Page not found (S00.05.01's first
+// two criteria), which marks no item, though component 2b's table marks Flagged, Report or Manage at its address. Users
+// opens the Users list (S00.06.01), a child page of Manage, which marks Manage.
 const walks: { me: Me; steps: Step[] }[] = [
   {
     me: worker,
@@ -195,16 +197,19 @@ const walks: { me: Me; steps: Step[] }[] = [
         ['Participants', '/manage/participants'],
         ['Common items', '/manage/common-items'],
         ['Guide prompts', '/manage/guide-prompts'],
-        ['Users', '/manage/users'],
       ].flatMap(([link, path]): Step[] => [
         { region: 'banner', link: 'Manage', path: '/manage', pageName: 'Manage', current: 'Manage' },
         { region: 'main', link, path, pageName: 'Page not found' },
       ]),
+      { region: 'banner', link: 'Manage', path: '/manage', pageName: 'Manage', current: 'Manage' },
+      { region: 'main', link: 'Users', path: '/manage/users', pageName: 'Users', current: 'Manage' },
     ],
   },
 ];
 
 test('the walks mark the nav, name no one in titles, and keep no app state in history or storage', async ({ page }) => {
+  // The Users list's request, answered in the browser with made-up people, as no made-up manager has a session.
+  await serveUsers(page, people);
   for (const { me, steps } of walks) {
     await serveMe(page, me);
     await page.goto('/');

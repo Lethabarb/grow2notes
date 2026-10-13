@@ -1,7 +1,9 @@
-import type { Page, Request, Response, Route } from '@playwright/test';
+import type { Page, Request, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
+import { whereFocusIs } from './focus.ts';
 import { boxOf } from './layout.ts';
+import { holdNext } from './requests.ts';
 
 // The warning before the idle sign-out in the published app (S00.04.07), against app-shell.md component 6 and its
 // Session criteria. Each test signs in for real, through setup with a passkey on the virtual authenticator, so that
@@ -102,30 +104,6 @@ function recordRequests(page: Page): () => Promise<string[]> {
     });
     return sent.splice(0);
   };
-}
-
-/** Where focus is: outside the page, on the page itself, or on the element that has it, by its text. */
-const whereFocusIs = (page: Page) =>
-  page.evaluate(() => {
-    const element = document.activeElement;
-    if (!document.hasFocus()) {
-      return 'outside the page';
-    }
-
-    return element === null || element === document.body ? 'the page itself' : (element.textContent ?? '');
-  });
-
-/**
- * Holds the page's next request for `pattern` until the test lets it go on to the app. Gives a function that waits for
- * the request and gives its route.
- */
-async function holdNext(page: Page, pattern: string): Promise<() => Promise<Route>> {
-  let hold: (route: Route) => void = () => undefined;
-  const held = new Promise<Route>((resolve) => {
-    hold = resolve;
-  });
-  await page.route(pattern, (route) => hold(route), { times: 1 });
-  return () => held;
 }
 
 test('the warning opens at 28:00 over the page, counts down, closes on its ping, and at 30:00 sends nothing', async ({
