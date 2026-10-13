@@ -173,7 +173,7 @@ For the read view (4.4), a manager reading someone else's draft (4.2), one versi
 | Common items hint | Ticked means done. |
 | Built-in group legend / heading | Every note (D45) |
 | Other group legends / headings | The group's name, as stored in the snapshot |
-| Group picker question, hint and copied line | See group-picker.md |
+| Group picker question and hint | See group-picker.md |
 | Empty goals (new note or draft) | No goals set up for Jane yet. A manager can add them. |
 | Empty common items (new note or draft) | No common items set up. |
 | Empty goals / common items (editing a submitted note; read-only) | No goals set / No common items set |

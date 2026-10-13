@@ -888,6 +888,11 @@ content, not context) · 3.2.3 Consistent Navigation · 3.2.4 Consistent Identif
    - The admin participant list's sort order is not stated in 6.6; A5 says family then given name everywhere.
    - None of the admin `PUT`s return a time. This spec proposes reading the response's `Date` header (same origin, so
      readable) to show "Saved 4:12 pm" in Melbourne time without the device clock. [Opinion: verify in M1]
+
+   **Answered 13 October 2026 (D78, D79):** as proposed, each row of `GET /api/admin/participants` carries
+   `rowVersion` (D78), and the list is sorted by family name, then given name (A5); there is no single-participant
+   admin GET; the time comes from the `Date` header. `POST /api/admin/participants` answers `201 {id}`, the simplest
+   answer (D79). All are now in design.md §6.6.
 3. **Unsaved values when archiving** are dropped (no warning, as design asks for none outside Guide prompts). Confirm.
 4. **Duplicate participant warning** and an **earliest date of birth**: neither is in design.md, so neither is built.
 5. **Success banner after Restore.** A focused banner "Jane Citizen restored. They are back on Today." was proposed.

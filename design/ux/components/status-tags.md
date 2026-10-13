@@ -352,7 +352,7 @@ function TodayRow({ p, href }: { p: TodayParticipant; href: string }) {
 
 These are for the owner or the named component. They are not recommendations to add anything.
 
-1. **Past-day note in list rows.** A11 says the past-day line shows "everywhere it appears". But the 4.4 list spec names only Edited, Flagged, To review and Reviewed, and the history API (6.3) returns no `isPastDayNote`. Default here: read view only, following 4.4 as written.
+1. **Past-day note in list rows.** A11 says the past-day line shows "everywhere it appears". But the 4.4 list spec names only Edited, Flagged, To review and Reviewed, and the history API (6.3) returns no `isPastDayNote`. Default here: read view only, following 4.4 as written. **Answered 13 October 2026 (D81):** read view only, as here.
 2. **Flagged on version rows.** `GET {base}/versions` returns `isFlagged` per version, but 4.5 doesn't show a flag on version rows. Default: no tag.
 3. **Pending edits in "Your unfinished drafts".** `/api/me/drafts` returns `kind: draft | pendingEdit`, but 4.2 shows only the participant and date. If the owner wants the two told apart, the existing string "Editing submitted note" could be reused. Default: nothing added.
 4. **Date and time formats** differ between design.md strings: "1 Oct 2026, 5:03 pm", "Fri 2 Oct 9:30 am", "Sat 3 Oct 2026, 10:14 am", and the brief's "Thursday 1 October 2026". The shared date formatter should settle one pattern for lines with a date and time. This file uses design.md's strings as written.

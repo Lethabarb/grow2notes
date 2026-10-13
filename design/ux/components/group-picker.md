@@ -14,7 +14,7 @@ from design.md or decisions.md · **(D)** derived from existing design wording �
 here on 9 October 2026 was approved as written (D67); a (P) string added later still needs the owner's sign-off.
 
 **Assumed defaults this file builds on** (shared by every file that touches groups, and recorded in design.md §13 as
-A41–A47 with A2, A3, A4 and A6 extended; the owner can override any of them by adding a decision):
+A41–A46 with A2, A3, A4 and A6 extended; the owner confirmed them on 13 October 2026, D82):
 
 1. Groups are organisation-wide. Managers add, rename, reorder, archive and restore them; nothing is deleted.
 2. Each common item belongs to exactly one group. A manager moves an item to another group from the item's Edit.
@@ -33,9 +33,10 @@ A41–A47 with A2, A3, A4 and A6 extended; the owner can override any of them by
    shown groups.
 9. No new screens, notifications or settings.
 
-Three further defaults started in this file and are now in design.md §13: a group with no items is not offered in
-the picker (A45), the group name limit is 200 characters (A6), and the copied line naming the source note's date
-(A47). A47 is an addition, not part of D46: dropping it removes `picksCopiedFrom` and the cue rows below.
+Two further defaults started in this file and are now in design.md §13: a group with no items is not offered in
+the picker (A45), and the group name limit is 200 characters (A6). A third, a line naming the source note's date
+(A47), was dropped by the owner on 13 October 2026 (D83): nothing on the form says where copied picks came from, and
+there is no `picksCopiedFrom`.
 
 ---
 
@@ -43,11 +44,11 @@ the picker (A45), the group name limit is 200 characters (A6), and the copied li
 
 | Screen (design.md) | Variant | What differs |
 |---|---|---|
-| **Note form, new note** (4.3; worker or manager, today) | Picker, editable | Groups from the live lists. Starting picks copied from the participant's most recent submitted note (D46), with the one-line cue naming that note's date. Nothing is saved by opening: the first tick or pick creates the draft with the picks on screen (3.3). |
-| **Note form, manager's past-day note** (4.3, 3.8) | Picker, editable | Starting picks come from the most recent submitted note **before** the note date. Same cue. |
-| **Note form, continuing a draft** (including "This draft is for Wednesday 30 September 2026…") | Picker, editable | The draft's snapshot groups and saved picks. The cue still shows if the starting picks were copied (the date is kept with the draft). |
+| **Note form, new note** (4.3; worker or manager, today) | Picker, editable | Groups from the live lists. Starting picks copied from the participant's most recent submitted note (D46), with nothing saying where they came from (D83). Nothing is saved by opening: the first tick or pick creates the draft with the picks on screen (3.3). |
+| **Note form, manager's past-day note** (4.3, 3.8) | Picker, editable | Starting picks come from the most recent submitted note **before** the note date. |
+| **Note form, continuing a draft** (including "This draft is for Wednesday 30 September 2026…") | Picker, editable | The draft's snapshot groups and saved picks. |
 | **Note form, lists changed before the first save** (4.3, 5.7) | Picker, editable | Groups reload; picks re-applied by group ID, ticks by item ID; the existing notice (V) "The goal or common-item list was just changed. Please check your ticks." |
-| **Note form, editing a submitted note** (4.3, 3.5) | Picker, editable | The version's snapshot groups (including any archived since) and its picks. No cue: nothing is copied in edit mode. Empty text "No common items set" (D, 11.3). |
+| **Note form, editing a submitted note** (4.3, 3.5) | Picker, editable | The version's snapshot groups (including any archived since) and its picks. Nothing is copied in edit mode. Empty text "No common items set" (D, 11.3). |
 | **Note form, changed on another device or tab** (4.3, 5.6) | Picker, editable | **Load the other version** replaces picks with ticks and text. **Keep the text on this screen** re-sends the on-screen picks too. |
 | **Submit confirmation** (4.3) | Not shown | The dialog shows only name, date and "Flagged for manager: No". |
 | *Read view, manager's read-only draft, one version, flagged review (4.4, 4.2, 4.5, 4.6)* | Not the picker | `TickListRead` per shown group under a group-name heading: Every note, then the picked groups in configured order (D47). The question and unpicked groups never appear. |
@@ -149,6 +150,8 @@ Evidence:
 - **A repeated warning fades.** Warnings lose effect from the second exposure (Anderson et al., CHI 2015, already in
   `confirm-dialog.md`). A daily cue will be skimmed, so it cannot be the only safeguard. **[Research]**
   [Anderson et al. 2015](https://scholarsarchive.byu.edu/facpub/9306/)
+- The owner dropped the line that would have named the source note's date (A47, D83), so the structural safeguard
+  below is the one left (see **Tensions**).
 
 ### Unpicking a group that has ticks
 
@@ -170,8 +173,8 @@ with the same 40 px box and 56 px row as the rest of the form.
 
 Why (b), in one line each:
 
-- **Phones:** the picks sit together in one short list, so a carried-over pick (D46) can be checked at a glance next
-  to the cue. Under (a) the picks would be spread down the page between item lists.
+- **Phones:** the picks sit together in one short list, so a carried-over pick (D46) can be checked at a glance.
+  Under (a) the picks would be spread down the page between item lists.
 - **Screen readers:** one question fieldset, then one fieldset per group with a heading. No nested fieldsets (H71),
   no multi-field reveal (GOV.UK 2021), and each group can be reached by heading.
 - **Tired readers, and readers with English as a second language:** a question, then lists, the same shape as
@@ -193,12 +196,9 @@ Why (b), in one line each:
 | [ ]  Meal prepared                    |
 |---------------------------------------|
 |                                       |  24 px (--space-5)
-| Which of these happened?              |  <fieldset aria-describedby="picker-hint picker-copied">
+| Which of these happened?              |  <fieldset aria-describedby="picker-hint">
 | Tick all that happened. Their items   |    <legend><h3> · hint <p id="picker-hint">, 16 px secondary
 | show below.                           |
-| These ticks are copied from the note  |  <p id="picker-copied">, 18 px, full text colour;
-| for Wednesday 30 September 2026.      |  only when at least one group was pre-picked (D46)
-| Untick any that did not happen.       |
 |---------------------------------------|
 | [x]  Community outing                 |  same rows; aria-controls + aria-expanded
 |---------------------------------------|
@@ -226,8 +226,7 @@ Why (b), in one line each:
 |---|---|
 | Section | A plain `<div>` holding `<h2>2. Common items</h2>` (V) and `<p id="common-hint">Ticked means done.</p>` (V). Not a `<section>` with a name (that would add a region landmark), and not a fieldset (it now holds several). |
 | Every note | `TickListField` with `headingLevel={3}`, heading **Every note** (V, D45), `aria-describedby="common-hint"`. First, always. Not rendered when the snapshot's Every note group has no items. |
-| Picker | One `<fieldset>`, `border: 0; padding: 0; margin: 0; min-inline-size: 0` (checkbox-list rule). `<legend><h3>Which of these happened?</h3></legend>` (V). Hint `<p id="picker-hint">` **Tick all that happened. Their items show below.** (V), in the checkbox-list hint style. Then the cue (below), then one tick row per group with at least one item, in configured order. |
-| Cue (D46, A47) | `<p id="picker-copied">` **These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen.** (V). The date is the source note's date, `dateLong` in a `<time dateTime>`. Body size, `--colour-text` (not the secondary grey), no icon, no bar, no dismiss. Included in the fieldset's `aria-describedby`. |
+| Picker | One `<fieldset>`, `border: 0; padding: 0; margin: 0; min-inline-size: 0` (checkbox-list rule). `<legend><h3>Which of these happened?</h3></legend>` (V). Hint `<p id="picker-hint">` **Tick all that happened. Their items show below.** (V), in the checkbox-list hint style, the fieldset's only `aria-describedby`. Then one tick row per group with at least one item, in configured order. Nothing says where copied picks came from (D83). |
 | Group tick row | The checkbox-list row: `<label for>` wrapping `<input type="checkbox" id="pick-{groupId}">` with the shared `.box` class, the group name as a text child, `overflow-wrap: anywhere`, never truncated. Plus `aria-controls="group-{groupId}"` and `aria-expanded={picked}` (the Flag for manager pattern). |
 | Picked group | A wrapper `<div id="group-{groupId}">`, **always in the DOM**, `hidden` when not picked. Inside it, `TickListField` with `headingLevel={3}`, the group name as heading, `aria-describedby="common-hint"`, item ids `common-{itemId}`. All wrappers follow the picker, in configured order, never in pick order. |
 | Spacing | `--space-5` (24 px) between Every note, the picker and each picked group; `--section-gap` before and after the section, as today. |
@@ -236,37 +235,27 @@ Why (b), in one line each:
 
 | Action | What happens | Focus | Heard (native) |
 |---|---|---|---|
-| **Open a new note** | Picks copied per default 4; their groups' items show, **all unticked** (items are never copied). The cue shows if at least one group was pre-picked. Nothing is saved (3.3). | `<h1>` (form rule) | — |
+| **Open a new note** | Picks copied per default 4; their groups' items show, **all unticked** (items are never copied). Nothing is saved (3.3). | `<h1>` (form rule) | — |
 | **Pick a group** | The tick shows at once. Its wrapper loses `hidden`: heading and unticked items appear below the picker. `markChanged()`; the first change creates the draft with all on-screen picks, pre-picks included. No scroll. | Stays on the tick box (3.2.2) | "checked, expanded" |
 | **Unpick a group** | The tick clears; the wrapper gets `hidden`; that group's item ticks are removed from form state at once (default 6). `markChanged()`. **No confirmation, no undo, no message.** | Stays on the tick box | "not checked, collapsed" |
 | **Pick it again** | Its items show again, unticked. | Stays | "checked, expanded" |
 | **Tick an item** | As checkbox-list. | Stays | "checked" |
-| **Tab** | Every note items → picker boxes → each picked group's items (DOM order = visual order) → Guided notes. | — | "Which of these happened?, grouping, Tick all that happened. Their items show below. These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen. Community outing, check box, checked, expanded" |
+| **Tab** | Every note items → picker boxes → each picked group's items (DOM order = visual order) → Guided notes. | — | "Which of these happened?, grouping, Tick all that happened. Their items show below. Community outing, check box, checked, expanded" |
 | **Submit note / Save changes** | Picks and ticks are sent with the version. Nothing about groups is validated. The confirmation dialog shows nothing about groups. | As the form | — |
 
 **Why no confirmation when unpicking a group with ticks.** The loss is small and bounded (one group's ticks, re-ticked
 in a few taps), it shows straight away where the writer is looking when the group's list is in view, and unpicking
-is routine: correcting a carried-over pick is exactly what the cue asks for. A dialog here would fire on ordinary use
+is routine: it is how a carried-over pick that did not happen is corrected. A dialog here would fire on ordinary use
 and train people to dismiss it (NN/g; Anderson 2015), and the app's dialog list is closed (README: Submit, Discard
 draft, Deactivate, Reset sign-in, Guide prompts' leave warning, session warning). Clearing also keeps one rule true:
 what is on screen is what is saved. Hidden ticks are never kept or sent, like the hidden flag reason (`flagReason:
 null`). **[Opinion]**, on **[Convention]** NN/g.
 
-**Why one line for D46, and not a dialog, tags or "Same as last time?".** The Joint Commission's two asks are
-identifiable copied material and visible provenance. The cue does both in one line: it says the ticks are copied and
-names the source note's date, so a writer can see a two-week-old pick for what it is. Per-row tags would repeat it on
-every row; a dialog would add a screen element and habituate (README dialog list). The real safeguard is structural:
-each pre-picked group puts its items in the writer's path, unticked, where a group that did not happen looks wrong.
-**[Opinion]**, on **[Convention]** Joint Commission and **[Research]** Tsou 2017.
-
-**Cue rules.**
-- Shown on a new note, and on a draft, whenever at least one group was pre-picked (A47). The server works out the
-  source date itself and keeps it with the draft (`picksCopiedFrom`, a date or null; the client never sends it), so
-  the cue survives the first save and a reload. The worker may
-  tick Every note items first and reach the picker later.
-- It stays after the writer changes picks: "copied from" stays true, and the second sentence covers the change.
-- Never shown in edit mode, the read view, the report or the export.
-- No pre-picks (no earlier submitted note, the earlier note picked nothing, or every copied group is archived): no cue.
+**Why nothing marks copied picks (D46, D83).** The owner dropped the one line that would have said the ticks are
+copied and named the source note's date (A47). Per-row tags would repeat that on every row, and a dialog would add a
+screen element and habituate (README dialog list), so none is added either. The safeguard is structural: each
+pre-picked group puts its items in the writer's path, unticked, where a group that did not happen looks wrong.
+**[Opinion]**, against **[Convention]** Joint Commission and **[Research]** Tsou 2017 (see **Tensions**).
 
 **Data.**
 - Form state: `pickedGroupIds: Set<string>` beside `tickedCommonItemIds: Set<string>`.
@@ -279,10 +268,10 @@ each pre-picked group puts its items in the writer's path, unticked, where a gro
 
 | State | What shows |
 |---|---|
-| **New note, picks copied** | Every note; picker with the copied groups ticked; the cue; those groups' items below, unticked. |
-| **New note, nothing copied** | Every note; picker with nothing ticked; no cue; no group lists. |
-| **Draft reopened** | The draft's snapshot groups and saved picks; the cue if `picksCopiedFrom` is set. |
-| **Editing a submitted note** | The version's snapshot groups (including any archived since; A3), its picks, no cue. |
+| **New note, picks copied** | Every note; picker with the copied groups ticked; those groups' items below, unticked. |
+| **New note, nothing copied** | Every note; picker with nothing ticked; no group lists. |
+| **Draft reopened** | The draft's snapshot groups and saved picks. |
+| **Editing a submitted note** | The version's snapshot groups (including any archived since; A3) and its picks. |
 | **Every note has no items** | Every note not rendered; the picker comes first in the section. |
 | **Only Every note has items** | No picker; Every note only, with its heading (it matches the report, D47). |
 | **No items anywhere** | `<h2>2. Common items</h2>` and **No common items set up.** (V); edit mode **No common items set** (D, 11.3). No fieldset. |
@@ -305,22 +294,17 @@ each pre-picked group puts its items in the writer's path, unticked, where a gro
 | Built-in group heading | Every note | (V) D45 |
 | Picker legend (`<h3>`) | Which of these happened? | (V) 4.3 |
 | Picker hint | Tick all that happened. Their items show below. | (V) 4.3 |
-| Cue (only when groups were pre-picked) | These ticks are copied from the note for Wednesday 30 September 2026. Untick any that did not happen. | (V) 4.3, A47 |
 | Picked group heading | The group's name, exactly as in the snapshot | — |
 | No items anywhere (new note, draft) | No common items set up. | (V) |
 | No items (edit mode; read view, report) | No common items set | (D) 11.3 |
 | Lists changed | The goal or common-item list was just changed. Please check your ticks. | (V) |
 
 Copy notes:
-- **Date-neutral on purpose.** No "today" in the legend or cue: a manager's past-day note and an earlier-day draft are
-  not about today. The note date is in the `<h1>`.
-- **No name in the cue.** The page is about one participant, the `<h1>` names them, and leaving the name out keeps
-  the sentence at 12 words (microcopy: about 15 words, at most 2 sentences, for worker strings).
+- **Date-neutral on purpose.** No "today" in the legend: a manager's past-day note and an earlier-day draft are not
+  about today. The note date is in the `<h1>`.
 - **"Tick", not "pick" or "select", on screen.** Tick is the app's word for a tick box (glossary; "select" is banned).
   "Pick" stays the design's word for the concept. Workers never see the word "group": it is not needed to answer the
   question, and in NDIS work "group" also means group supports (D36).
-- **"Untick any that did not happen."** The carry-over risk is a stale pick, not a missing one, so the cue names that
-  action. It is literal (COGA 4.4.4) and has no negative contraction.
 
 ### Accessibility
 
@@ -341,7 +325,7 @@ Copy notes:
   (1.4.4, 1.4.10, 1.4.12, 2.5.8). Forced colours: the border-drawn tick survives; no new colour meaning (1.4.1).
 - **WCAG 2.2 criteria:** 1.3.1, 1.3.2, 1.4.1, 1.4.3, 1.4.4, 1.4.10, 1.4.11, 1.4.12, 2.1.1, 2.4.3, 2.4.6, 2.4.7, 2.4.11
   (the form's `scroll-padding`), 2.5.3, 2.5.8, 3.2.2, 3.3.2, 4.1.2 (known gap).
-- **Test (M6):** NVDA + Chrome, VoiceOver + iOS Safari, TalkBack + Android Chrome: the spoken legend, hint and cue on
+- **Test (M6):** NVDA + Chrome, VoiceOver + iOS Safari, TalkBack + Android Chrome: the spoken legend and hint on
   entering the picker; "expanded/collapsed" on a checkbox (TalkBack support unverified); hidden groups skipped by Tab
   and by swipe. Also 320 px, 200% text, a Windows contrast theme, and "Tap [group name]".
 
@@ -354,16 +338,14 @@ fieldset is described by). Nothing else in it changes.
 // CommonItemsField.tsx: section 2 of the note form
 import s from './TickList.module.css';
 import { TickListField } from './TickListField';
-import { dateLong } from '../copy/format';
 
 type Item = { id: string; text: string };
 type Group = { id: string; name: string; isEveryNote: boolean; items: Item[] }; // snapshot order
 
-export function CommonItemsField({ groups, picked, ticked, copiedFrom, editMode, onPick, onToggle }: {
+export function CommonItemsField({ groups, picked, ticked, editMode, onPick, onToggle }: {
   groups: Group[];
   picked: ReadonlySet<string>;
   ticked: ReadonlySet<string>;
-  copiedFrom: string | null;          // 'yyyy-mm-dd' of the source note, or null
   editMode: boolean;
   onPick: (group: Group, isPicked: boolean) => void;
   onToggle: (itemId: string, isTicked: boolean) => void;
@@ -380,7 +362,6 @@ export function CommonItemsField({ groups, picked, ticked, copiedFrom, editMode,
     );
   }
 
-  const showCue = !editMode && copiedFrom !== null;
   return (
     <div className={s.section}>
       <h2 className={s.heading}>2. Common items</h2>
@@ -392,15 +373,9 @@ export function CommonItemsField({ groups, picked, ticked, copiedFrom, editMode,
       )}
 
       {others.length > 0 && (
-        <fieldset className={s.group} aria-describedby={showCue ? 'picker-hint picker-copied' : 'picker-hint'}>
+        <fieldset className={s.group} aria-describedby="picker-hint">
           <legend className={s.legend}><h3 className={s.subheading}>Which of these happened?</h3></legend>
           <p id="picker-hint" className={s.hint}>Tick all that happened. Their items show below.</p>
-          {showCue && (
-            <p id="picker-copied" className={s.copied}>
-              These ticks are copied from the note for{' '}
-              <time dateTime={copiedFrom!}>{dateLong(copiedFrom!)}</time>. Untick any that did not happen.
-            </p>
-          )}
           {others.map((g) => {
             const id = `pick-${g.id}`;
             const isPicked = picked.has(g.id);
@@ -453,17 +428,15 @@ function pickGroup(group: Group, isPicked: boolean) {
 /* Additions to TickList.module.css */
 .section > * + * { margin-block-start: var(--space-5); }        /* 24 px between the sub-blocks */
 .subheading { font-size: var(--font-size-body); font-weight: 700; margin: 0 0 var(--space-1); }
-.copied { color: var(--colour-text); margin: 0 0 var(--space-2); max-inline-size: var(--measure); }
 [hidden] { display: none !important; }                          /* global base stylesheet, not the module: never let a display rule beat hidden */
 ```
 
-**API (design.md §5.7, §6.3, §6.6; no gaps left):** the draft response carries the whole snapshot as
-`commonItemGroups: [{id, name, isEveryNote, isPicked, items}]` (Every note first, then every group in order, picked or
-not); on a new note `isPicked` holds the copied picks, with archived or empty groups skipped. It also carries
-`picksCopiedFrom`, which the server works out and stores itself. The `PUT` and the version `POST` send
-`pickedGroupIds`. The read API returns only the shown groups as `commonItemGroups: [{name, isEveryNote, items: [{text,
-isTicked}]}]`. `listsVersion` covers the common items and their groups, so a group rename, archive, add or item move
-before the first save gives `409 note.lists_changed`.
+**API (design.md §5.7, §6.3, §6.6; no gaps left):** the draft response carries the whole snapshot as `commonItemGroups:
+[{id, name, isEveryNote, isPicked, items}]` (Every note first, then every group in order, picked or not); on a new note
+`isPicked` holds the copied picks, with archived or empty groups skipped. Nothing says which note they came from (D83).
+The `PUT` and the version `POST` send `pickedGroupIds`. The read API returns only the shown groups as `commonItemGroups:
+[{name, isEveryNote, items: [{text, isTicked}]}]`. `listsVersion` covers the common items and their groups, so a group
+rename, archive, add or item move before the first save gives `409 note.lists_changed`.
 
 ### Per-screen notes
 
@@ -472,7 +445,7 @@ before the first save gives `409 note.lists_changed`.
   over this file.
 - **Read view, read-only draft, one version, flagged review (4.4, 4.2, 4.5, 4.6).** `<h2>2. Common items</h2>`, then
   `<h3>Every note</h3>` + `TickListRead`, then `<h3>[group name]</h3>` + `TickListRead` for each picked group in
-  configured order. No question, no unpicked groups, no cue. If nothing is shown: **No common items set** (D, 11.3).
+  configured order. No question and no unpicked groups. If nothing is shown: **No common items set** (D, 11.3).
 - **Daily report and record export (11.3, 11.6).** Under "Common items", each shown group's name as a sub-heading,
   then its items with ☑/☐, in the same order (D47).
 - **Version history.** A version shows the groups picked in that version, so a change of picks between versions is
@@ -622,9 +595,10 @@ Recorded with evidence only; **no change is recommended**. The build follows the
 1. **D46 (start with the last note's picks) vs "do not pre-select".** GOV.UK and NHS: pre-selection "makes it more
    likely that users will: not realise they've missed a question [or] submit the wrong answer" **[Convention]**.
    Defaults stick (Johnson and Goldstein 2003: 42% vs 82%, n=161) **[Research]**. The risk is a stale pick that stays:
-   its items print unticked under its name, which reads as "the outing happened and nothing was done". The cue
-   follows the copy-forward safe practice (identifiable, with provenance; Tsou 2017, Joint Commission) and the items
-   sit in the writer's path, but a daily cue fades (Anderson 2015).
+   its items print unticked under its name, which reads as "the outing happened and nothing was done". Copy-forward
+   safe practice asks for copied material to be identifiable, with its provenance (Tsou 2017, Joint Commission); the
+   owner dropped the line that did that (A47, D83), which would have faded as a daily cue anyway (Anderson 2015). The
+   safeguard left is that the items sit in the writer's path, unticked.
 2. **D44 on one page vs "show complicated follow-ups on the next page".** GOV.UK and NHS say multi-part follow-ups
    belong on a later page, and that conditional reveals are a known WCAG 4.1.2 gap **[Convention]**. Multi-field
    reveals "complicated the relationship between the question and revealed content" (GOV.UK 2021) **[Research]**.
@@ -632,7 +606,7 @@ Recorded with evidence only; **no change is recommended**. The build follows the
    `aria-expanded`, narrows the gap without closing it.
 3. **Assumed default 6 (unpicking clears ticks) vs the flag reason precedent.** The Reason text is kept in memory and
    comes back on re-tick, following SC 3.3.7's intent (`conditional-reveal.md`). Group ticks do not come back. Ticks
-   are optional, so 3.3.7 does not strictly apply. This is an assumed default, not a decision, recorded for the owner.
+   are optional, so 3.3.7 does not strictly apply. The owner confirmed this default (A46) on 13 October 2026, D82.
 4. **D47 (unpicked groups do not appear).** A missing group cannot show "did not happen" apart from "forgot to tick
    it". This extends the existing "unticked can mean no or missed" tension (D7, D10, A4; README tension 2).
 

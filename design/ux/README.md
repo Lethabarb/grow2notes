@@ -13,7 +13,8 @@ module; a (P) string added after that date still needs the owner's approval. App
 marked "not built unless approved". The editorial pass of 1 October 2026 settled the cross-screen rules below once,
 for every screen. The update of 3 October 2026 added common-item groups (D44–D47) across the note form, read view,
 version history, files and the Common items screen; their assumed defaults (design.md A41–A47, with A2, A3, A4 and A6
-extended) are stated in [group-picker](components/group-picker.md) and can be overridden by the owner.
+extended) are stated in [group-picker](components/group-picker.md). On 13 October 2026 the owner confirmed A41–A46
+and the 200-character group name (D82) and dropped A47's copied-picks line (D83).
 
 ## Global conventions
 
@@ -35,7 +36,7 @@ extended) are stated in [group-picker](components/group-picker.md) and can be ov
 | Page titles | "Grow2Notes – [page name]" from one typed list; "Error: " in front after a failed submit; never a name or data. | [app-shell §3](screens/app-shell.md) |
 | Device and data | Nothing stored on the device: no `localStorage`, `sessionStorage`, IndexedDB or `<ScrollRestoration>`; `history.state` holds only React Router's key and `inScreen`. Queries: one silent retry, 10 s timeout (30 s for the two file downloads), `refetchOnWindowFocus` off except the listed opt-ins. Mutations: `retry: 0`. | [app-shell](screens/app-shell.md), [empty-loading-error](components/empty-loading-error.md), [form-validation](components/form-validation.md) |
 | Names | The parent company's name never appears anywhere (D42); review keeps it out, with no automated check and no secret (D72). | [microcopy §8](components/microcopy.md) |
-| Common item groups | On the note form, "2. Common items" holds **Every note** (always first, never in the picker), then "Which of these happened?" with one tick per group, then each picked group's items under its name, in the manager's order. Picks start from the participant's last submitted note (D46) with a line naming its date; items never start ticked. Picking never moves focus or scrolls; unpicking clears that group's ticks with no confirmation. The read view, version pages, daily report and record export show Every note and the picked groups only, by name, each item ticked or not ticked (D47). Workers never see the word "group". No new screen, dialog, notification or setting. | [group-picker](components/group-picker.md) |
+| Common item groups | On the note form, "2. Common items" holds **Every note** (always first, never in the picker), then "Which of these happened?" with one tick per group, then each picked group's items under its name, in the manager's order. Picks start from the participant's last submitted note (D46), with no line naming its date (D83); items never start ticked. Picking never moves focus or scrolls; unpicking clears that group's ticks with no confirmation. The read view, version pages, daily report and record export show Every note and the picked groups only, by name, each item ticked or not ticked (D47). Workers never see the word "group". No new screen, dialog, notification or setting. | [group-picker](components/group-picker.md) |
 
 **Terminology** (full glossary in [microcopy §2](components/microcopy.md); one term per concept):
 
@@ -163,8 +164,9 @@ recommended**, and every spec builds the decision as written. Details and links 
     time, then Show older" is weak for finding old notes (NN/g). ([version-history](components/version-history.md),
     [chronological-list](components/chronological-list.md))
 18. **Starting with the last note's group picks (D46).** GOV.UK and NHS advise against pre-selecting checkboxes, and
-    defaults tend to stay (Johnson and Goldstein 2003). The line naming the source note's date follows copy-forward
-    safe practice (Joint Commission), but a daily line fades (Anderson et al. 2015). ([group-picker](components/group-picker.md))
+    defaults tend to stay (Johnson and Goldstein 2003). Copy-forward safe practice (Joint Commission) asks for a line
+    naming the source note's date; the owner dropped that line (D83), which would in any case fade as a daily line
+    (Anderson et al. 2015). ([group-picker](components/group-picker.md))
 19. **Groups and their items on one page (D44, no new screens).** GOV.UK and NHS put multi-part follow-ups on a later
     page; GOV.UK's 2021 testing found multi-field reveals confusing, and conditional reveals remain a known WCAG 4.1.2
     gap. Lists placed after the whole question (AgDS), with headings, a hint and `aria-expanded`, narrow the gap.
@@ -197,10 +199,16 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
 6. **Reset sign-in and email changes.** Approve the confirmation dialog for Reset sign-in (design asks the manager to
    check who is asking but specifies no on-screen confirmation)? Should changing an email, which also resets sign-in,
    get the same dialog? ([users](screens/users.md) Q1, Q2)
+   **Answered 13 October 2026 (D74):** yes to the Reset sign-in dialog, as users.md specifies it; an email change
+   gets no dialog, as users.md proposes (the hint, then the Status row).
 7. **Status after edge cases.** An email change on a deactivated person, and reactivating someone deactivated while
    still Invited: which status should the API return? ([users](screens/users.md) Q3, Q4)
+   **Answered 13 October 2026 (D75):** a person is Active only while they have a way to sign in. An email change on
+   a Deactivated person resets sign-in, sends no link and leaves them Deactivated; Reactivate gives Active to someone
+   with a password or a passkey and Invited, ready for Resend invite, to someone with neither.
 8. **Worker pre-selected on Invite user**, the one exception to the no-preselection rule apart from D46's copied
    group picks (a decision, tension 18). Keep? ([users](screens/users.md) Q10)
+   **Answered 13 October 2026 (D77):** keep it.
 9. **Small design readings to confirm:** the number in "Editing submitted note (version 2)"; "Submit the note for"
    when the note is not today's; whether pending edits in "Your unfinished drafts" say "Editing submitted note"; the
    download "ready" line on both download screens; "when a page loads" meaning every screen change for the badge.
@@ -214,6 +222,11 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
     their groups.
     ([participants](screens/participants.md) Q2, [record-export](screens/record-export.md) Q1, Q2,
     [participant-notes](screens/participant-notes.md) Q3)
+    **Answered 13 October 2026 (D78–D81):** each participant row gives `rowVersion` and each user `concurrencyStamp`
+    (D78); `GET /api/participants/{id}` gives `firstNoteDate`, and an export with no submitted note answers
+    `404 report.no_notes` (D80); `POST /api/admin/participants` answers `201 {id}`, and the admin list is sorted by
+    family then given name (D79); Past notes rows carry no `isPastDayNote` and show no Past-day note tag (D81). All
+    are now in design.md §6.
 11. **Common item groups (D44–D47).** Confirm or override the assumed defaults A41–A47 (in particular where picks are
     copied from, that no group has to be picked, and that unpicking clears ticks) and the 200-character group name
     (A6, set in one place so every spec uses the same number). Separately, keep or drop the copied-picks line
@@ -225,3 +238,7 @@ Only the ones that need the owner. Each screen file also asks for sign-off on it
     ([common-items](screens/common-items.md) Q2–Q4, [note-form](screens/note-form.md) Q13)
     **Partly answered 9 October 2026 (D67):** the proposed manager-side strings are approved as written
     (common-items.md Q2); the rest of this question is still open.
+    **Answered 13 October 2026 (D82, D83):** A41–A46 and the 200-character group name are confirmed, both Common
+    items choices stand as proposed (common-items.md Q3 and Q4), and S01.03.01's migration gives every organisation
+    already in test its Every note group (D82). The copied-picks line is dropped, with `NoteDraft.PicksCopiedFrom`,
+    `picksCopiedFrom` and the copied-line rows; picks are still copied as D46 says (D83).

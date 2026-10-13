@@ -495,7 +495,7 @@ Status Messages. **1.3.5 Identify Input Purpose does not apply:** the fields des
   pages `select` one user from it, with `staleTime: 0` so they refetch on mount. There is no `GET /api/admin/users/{id}`
   in 6.6, and none is needed.
 - **`If-Match`:** every `PUT` and state-changing `POST` on a user needs the user's `ConcurrencyStamp` as an ETag (6.6).
-  The list response in 6.6 doesn't show that field. It needs one (called `etag` below). See Points left open.
+  The list gives it to each user as `concurrencyStamp` (D78).
 - **Mutations:** `retry: 0` for the user actions (the person retries), and network-only retries elsewhere, as in
   form-validation.md. Map the problem `code` to the copy table.
 - **Inputs:** Full name `type="text" autocomplete="off" spellCheck={false} autoCapitalize="words"`. Email `type="email"
@@ -510,7 +510,7 @@ export type Role = 'Worker' | 'Manager';
 export type Status = 'Invited' | 'Active' | 'Deactivated';
 export type AdminUser = {
   id: string; email: string; displayName: string; role: Role; status: Status;
-  etag: string; // ConcurrencyStamp; not yet in the 6.6 list shape
+  concurrencyStamp: string; // for If-Match (6.6, D78)
 };
 
 const collator = new Intl.Collator('en-AU', { sensitivity: 'base' });
@@ -616,7 +616,7 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   const refresh = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
 
   const reset = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.etag),
+    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
     retry: 0,
     onSuccess: async () => {
       if (isSelf) { window.location.replace('/'); return; }   // own sessions just ended
@@ -638,7 +638,7 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   });
 
   const resend = useMutation({
-    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.etag),
+    mutationFn: () => postWithEtag(`/api/admin/users/${user.id}/setup-link`, user.concurrencyStamp),
     retry: 0,
     onMutate: () => { setSent(''); setActionError(''); },
     onSuccess: async () => {
@@ -783,17 +783,22 @@ inside flex and grid items, which is where the email sits.
 1. **Email change has no confirmation** (4.11) although it resets sign-in, which cannot be undone. This file relies on
    the always-visible hint (V) plus the success banner. SC 3.3.4 is arguably met by "Checked" (the form is validated
    before it is saved). Owner to confirm. confirm-dialog.md raises the same point.
+   **Answered 13 October 2026 (D74):** confirmed, no dialog; users.md (which wins) shows no banner either.
 2. **Deactivated person + Edit email.** 4.11 lets Edit change any user's email, and an email change "resets sign-in and
    sends a setup link". For a Deactivated person, that would send a setup link to someone who can't sign in. If the
    reset also sets `Status = Invited` (8.6), it would undo the deactivation without Reactivate. The UI follows whatever
    the API decides.
+   **Answered 13 October 2026 (D75):** the reset is made, no link is sent, and the person stays Deactivated.
 3. **Reactivating someone who never set up.** 6.6 says a reactivated user "signs in with their existing methods". A
    person deactivated while Invited has none. Should Reactivate return them to Invited (with Resend invite), or to
    Active?
+   **Answered 13 October 2026 (D75):** to Invited, with Resend invite; only someone with a password or a passkey
+   returns to Active.
 4. **Deactivate copy for an Invited person.** The design's body ("signed out everywhere … Their notes stay") assumes an
    Active person. A variant is proposed above.
 5. **ETag in the user list.** 6.6 requires `If-Match` from `ConcurrencyStamp`, but the `GET /api/admin/users` shape has
    no such field. Add one per user.
+   **Answered 13 October 2026 (D78):** each user carries `concurrencyStamp`, now in design.md §6.6.
 6. **Page titles.** app-shell-nav.md's fixed list of page names has "Users" and "User" but no "Invite user" or "Edit
    user". Add both, or use "User" for them.
 7. **What managers type as the name.** Today shows "Alex P." (4.2) and version history shows "Sam Lee" (4.5) for the same

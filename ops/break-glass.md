@@ -47,8 +47,8 @@ There is no sign-up screen (D23, A1), so this is how every organisation starts.
   it is refused or fails*.
 - **In test,** only with made-up names and an `example.org` address (A35), such as `Sample Support Services`,
   `Alex Sample` and `alex.sample.20261012@example.org`, with a new address each time, and only when a test
-  organisation is needed, since it stays for good. The first run in test is S00.04.02's after-deploy check, which
-  opens the link and completes setup with it.
+  organisation is needed, since it stays for good. The first run in test is step 3 of
+  [first-use-in-test.md](first-use-in-test.md), which opens the link and completes setup with it.
 - **In production,** once, for the provider, as S06.05.02 says: only when F06.01's list of high and critical findings
   is empty, because the first manager's name and address are the first real personal information in production (D1),
   and with the provider's name checked by hand for the parent company's name, as every change to the app is (D42,

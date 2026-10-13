@@ -535,8 +535,8 @@ const name = `${p.givenName} ${p.familyName}`;
   appear at all for the last manager belongs to the user detail spec.
 - After success, the Deactivate or Reset button is replaced (by Reactivate or Resend invite), so the trigger is gone.
   Focus goes to the page heading, and the page's status region announces the result.
-- Not covered by design.md: changing a user's **email** also resets sign-in (4.11) but has no confirmation. See
-  open questions.
+- Changing a user's **email** also resets sign-in (4.11) but has no confirmation: the owner confirmed that on 13
+  October 2026 (D74), as users.md proposed.
 
 ---
 

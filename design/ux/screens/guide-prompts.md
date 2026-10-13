@@ -365,7 +365,7 @@ The `<h1>` (`tabindex="-1"`), help text, limit hint, count and status lines are 
 | **Enter in the field** | Inserts a new line. A textarea never submits on Enter | In the field | – |
 | **Save, too long** | `text = field.value.trim()`; over 1,000, so the error shows and nothing is sent | **The field** | "Guide prompts, invalid entry, …, Error: Guide prompts must be 1,000 characters or less" (wording varies by reader) |
 | **Save, valid** | Status and alert cleared. `PUT /api/admin/guide-prompts {text}` with `If-Match: <base ETag>`. Busy from the press | Stays on Save | "Saving…" only if slower than 400 ms |
-| **→ `200`** | Base text = sent text; base ETag = response `ETag` (or refetch if the header is absent); dirty recomputed (still dirty if typed during the save); unload listener removed when clean | Stays on Save | "Saved 4:12 pm" |
+| **→ `200`** | Base text = sent text; base ETag = response `ETag`, which the `200` always carries (D84); dirty recomputed (still dirty if typed during the save); unload listener removed when clean | Stays on Save | "Saved 4:12 pm" |
 | **→ `412`** | Refetch (bypassing cache) for the new base text and ETag; field untouched | Stays on Save | The conflict message (alert) |
 | **→ `422`** | Same as Save, too long | The field | As Save, too long |
 | **→ network / `5xx`** | Nothing changes; the manager presses Save again (`retry: false`, because a retried PUT whose first response was lost would return a false `412`) | Stays on Save | The error message (alert) |
@@ -495,7 +495,8 @@ https://www.nngroup.com/articles/indicators-validations-notifications/.
   again." Exactly one PUT is sent per press. The text is unchanged.
 - [ ] Two managers: A loads, B saves, A saves → A sees the conflict message, A's text is unchanged, and A's next Save
   succeeds with the new ETag. B's version is in the audit log.
-- [ ] Every successful save writes one `guide_prompts.updated` audit event with old and new values (§6.6, M1).
+- [ ] Every successful save that changes the text writes one `guide_prompts.updated` audit event with old and new
+  values (§6.6, M1); a save of unchanged text writes none and answers `200` with the same `ETag` (D84).
 
 **Leaving**
 - [ ] Dirty + select Today → the dialog opens with focus on "Stay on this page". Escape → still on the page, URL
@@ -590,6 +591,8 @@ off-screen, for whoever enters the prompts (`microcopy.md` 4.10) [Opinion]:
 - **API at M1:** should the PUT `200` carry the new `ETag` header? (Otherwise the client refetches after every
   save.) Should saving unchanged text still write a `guide_prompts.updated` audit event? Save is deliberately never
   unavailable.
+  **Answered 13 October 2026 (D84):** the `200` carries the new `ETag`; saving unchanged text changes nothing and
+  writes no `guide_prompts.updated`, answering `200` with the same `ETag`. Both are now in design.md §6.6.
 - **The conflict message** lets the manager overwrite another manager's version without seeing it on this page. The
   design gives no way to show it, and none is added. The other version can be seen by opening any note form in
   another tab. Is that acceptable to the owner?

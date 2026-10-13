@@ -245,7 +245,7 @@ Each entry names the component spec, then the settings for this screen only. Sha
      Reviewed → Edited. Amber for Flagged and To review, neutral grey for Reviewed and Edited. One tag style app-wide
      (`status-tags.md`): attention tags carry the 1 px `--colour-attention-edge` border, the same Flagged tag as Today,
      and every tag keeps its border in forced colours.
-   - No "Past-day note" tag on rows (the history API returns no `isPastDayNote`; Open questions).
+   - No "Past-day note" tag on rows (the history API returns no `isPastDayNote`; D81).
    - The row link has `aria-describedby` pointing at the meta line; separators are `aria-hidden` with a visually
      hidden comma.
 
@@ -301,7 +301,7 @@ Each entry names the component spec, then the settings for this screen only. Sha
    - **Common items (D47):** under the `<h2>`, `<h3>` **Every note** (V) and its `TickListRead` (only when its
      snapshot has items, A43), then `<h3>` with the group's name as stored and its `TickListRead` for **each group
      picked on the version shown**, in configured (snapshot) order. Every item in a shown group appears, ticked or not
-     ticked (A4). Groups not picked, the "Which of these happened?" question and the copied-picks line never appear.
+     ticked (A4). Groups not picked and the "Which of these happened?" question never appear.
      `TickListRead` takes `headingLevel={3}` for these (checkbox-list.md).
    - Empty: **No goals set** / **No common items set** (V, 11.3); the second when no group is shown at all. No hints,
      no form controls, keyed by index (groups too: the read API gives names, not IDs).
@@ -591,8 +591,8 @@ Value · 4.1.3 Status Messages. https://www.w3.org/TR/WCAG22/
     screen reader reads "{item}, ticked" or "{item}, not ticked".
 17a. Common items show Every note (when it has items) and only the groups picked on the version shown, each under an
     `<h3>` with its name, in configured order, with every item in those groups ticked or not ticked. A fixture with
-    an unpicked group shows no trace of it; the question "Which of these happened?" and the copied-picks line never
-    appear. With no group shown, the section reads "No common items set".
+    an unpicked group shows no trace of it, and the question "Which of these happened?" never appears. With no group
+    shown, the section reads "No common items set".
 18. A 20,000-character note with blank lines, long unbroken strings and the text `<b>hi</b>` shows in full, keeps every
     line break, shows the tags literally and causes no horizontal scroll at 320 px.
 19. "Submitted" shows the time alone when the Melbourne date of `firstSubmittedAtUtc` equals the note date, otherwise
@@ -794,6 +794,7 @@ Recorded once; no change recommended.
 3. **Past-day note on Past notes rows.** A11 says the past-day line shows "everywhere it appears", but the history
    API (6.3) returns no `isPastDayNote`, so list rows show no Past-day note tag; the read view shows the line. Keep it
    that way, or add the field to the history response?
+   **Answered 13 October 2026 (D81):** keep it that way, as this spec builds it; design.md §4.4 and §6.3 now say so.
 4. **Proposed strings:** "Review", the comment hint, "Marking reviewed…", the 409 messages, "Your comment was not
    saved:", "Nothing written yet.", "There is no note for this day.", "Loading notes…", "Loading note…", the load and
    Show older failure lines.

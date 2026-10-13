@@ -529,7 +529,7 @@ A story is ready to plan into a sprint when all of these are true:
 - [ ] Any copy it uses that is marked **(P)** may ship: (P) copy in the UX specs that existed on 9 October 2026 is
   approved (D67), and any (P) string added to them later is approved by the owner before Ready. (P) wording outside
   the UX specs (mcp-server.md's texts, the setup-link email) is either approved, or the story notes that it ships with
-  the proposed wording.
+  the proposed wording. The setup-link email's (P) wording is approved as S00.02.07 proposes it (D85).
 - [ ] Acceptance criteria are written: linked groups plus story-specific checks, all testable.
 - [ ] It is sized at 1–5 points.
 - [ ] Everything in `depends_on` is done, or planned earlier in the same sprint.
@@ -585,6 +585,13 @@ Opinion].
 - [ ] **Deployed to the test environment** (this happens automatically on merge), and the acceptance criteria checked
   there with made-up data (A35).
 - [ ] **Story section:** tasks ticked, `status: done` and `sprint` set in its fields block.
+
+**By-hand checks in test do not hold a story open** (owner, 12 October 2026). A check that needs a person rather than
+an agent, such as a sign-in in test, a real phone or laptop, a screen reader, or the operator's Azure access, is a
+nice-to-have: it goes on the one ordered checklist in [ops/first-use-in-test.md](../../ops/first-use-in-test.md),
+which the owner works through the first time they sign in to the test site, and the story is done once its criteria
+are proven in CI and its after-deploy checks that change nothing have passed. A criterion that only such a check can
+prove stays unticked, with a dated Note pointing to the checklist.
 
 **Short variants.** Some items can't produce tested code, so they use a shorter list:
 

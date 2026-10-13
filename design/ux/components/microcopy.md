@@ -196,7 +196,7 @@ managers.
 | **Every note** | The built-in group whose items show on every note (D45). Always first; it cannot be renamed, moved or archived (A43). | Its heading on the note form, the read view, the files and the Common items screen; "Always shown first, on every note." | Always, Default, General, Standard, Core, Daily, All notes, Every day | W M |
 | **Guided notes** | The one free-text box | "3. Guided notes" | narrative, comments, description, free text | W M |
 | **guide prompts** | The grey text in the empty Guided notes box. Not saved into notes. | Manager screen name; workers see the prompts, never the term (an error calls it "the grey text") | template, questions, hints | M |
-| **tick / ticked / not ticked** | The state of a goal or common item, and of a group under "Which of these happened?" (the design calls ticking a group "picking" it; screens always say tick) | "Ticked means reached.", "Tick all that happened.", "These ticks are copied from the note for …", read view "ticked / not ticked" | check, checked, select, selected, completed; "pick" or "picked" on screen | W M |
+| **tick / ticked / not ticked** | The state of a goal or common item, and of a group under "Which of these happened?" (the design calls ticking a group "picking" it; screens always say tick) | "Ticked means reached.", "Tick all that happened.", read view "ticked / not ticked" | check, checked, select, selected, completed; "pick" or "picked" on screen | W M |
 | **Flag for manager / flagged / Flagged** | Ask a manager to look at a note, with a reason (D18) | Tick box "Flag for manager", "Reason", "Flagged for manager: Yes", tag and nav item "Flagged" | escalate, report, alert, concern, issue | W M |
 | **To review / Reviewed / Mark reviewed** | A flagged note waiting for a manager, or one a manager has dealt with | Tabs, tags and the button, exactly | resolved, closed, actioned, approved, checked | M |
 | **Comment** | A manager’s optional note when marking reviewed | "Comment (optional)" | note (that is a different concept), feedback, remarks | M |
@@ -225,7 +225,7 @@ Rules that follow from the glossary:
   each group by its own name and Every note by "Every note"; the question "Which of these happened?" needs no
   category word (group-picker.md).
 - **"Pick" is a design word, "tick" is the screen word.** Specs say a group is "picked"; screens say "Tick all that
-  happened." and "These ticks are copied…". One action, one visible verb.
+  happened.". One action, one visible verb.
 - **"Your unfinished drafts" can hold a pending edit** (4.2, A17), which is not a draft in the glossary sense. (P) A
   pending-edit row reuses design.md's own words under the participant's name: "Editing submitted note", then the note
   date. A draft row shows the note date only, as designed. [Opinion: reuses existing copy; adds no data]
@@ -626,11 +626,10 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
   **(V)**. Version conflict button "Start again from the latest version" **(V, §6.3)**.
 - "It's now after midnight, so this note can't be started for yesterday. Ask a manager to record it." **(V)**
 - Empty lists: "No goals set up for Jane yet. A manager can add them." / "No common items set up." **(V)**
-- Common item groups (D44–D46, group-picker.md): group heading "Every note"; question "Which of these happened?";
-  hint "Tick all that happened. Their items show below."; copied line "These ticks are copied from the note for
-  Wednesday 30 September 2026. Untick any that did not happen." (the source note's date in `dateLong`) **(V, design.md
-  4.3)**. Each other group's heading is its name as stored. None of these say "today", because a past-day note is not
-  about today, or "group".
+- Common item groups (D44–D46, group-picker.md): group heading "Every note"; question "Which of these happened?"; hint
+  "Tick all that happened. Their items show below." **(V, design.md 4.3)**. There is no line about where copied picks
+  came from (D83). Each other group's heading is its name as stored. None of these say "today", because a past-day note
+  is not about today, or "group".
 - "Flag for manager", "Reason" **(V)**, hint "You can enter up to 200 characters" then the GOV.UK count strings.
 - Edit mode: heading "Editing submitted note (version 2)" **(V)**, where the number is the version being edited (it
   updates after "Start again from the latest version", per autosave-status.md). Buttons "Save changes" / "Cancel"

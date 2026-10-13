@@ -204,11 +204,12 @@ You have 80 characters remaining              count, only from 900 characters (a
    - **Save is never unavailable**, even with no changes. Sending the same text is harmless (`primary-actions.md`).
    - **No automatic retry** (`retry: false`). A retried `PUT` whose first response was lost would come back `412`,
      because the `ETag` has moved on, and show a false conflict. The manager presses Save again. [Opinion]
-6. **On `200`:** base text = `text`, base `ETag` = the response `ETag`. If the response carries no `ETag` header,
-   refetch to get one. Recompute dirty: it stays dirty if the manager typed during the save. Show "Saved 4:12 pm" in
-   the status line. Focus stays on Save. Take the time from the response's `Date` header, which is the server
-   clock and readable on a same-origin response, and format it for Australia/Melbourne with the shared formatter.
-   Fall back to the device clock only if the header is missing. The PUT body returns no `savedAtUtc`. [Opinion]
+6. **On `200`:** base text = `text`, base `ETag` = the response `ETag`, which the `200` always carries, also for
+   unchanged text (design.md §6.6, D84). Recompute dirty: it stays dirty if the manager typed during the save. Show
+   "Saved 4:12 pm" in the status line. Focus stays on Save. Take the time from the response's `Date` header, which is
+   the server clock and readable on a same-origin response, and format it for Australia/Melbourne with the shared
+   formatter. Fall back to the device clock only if the header is missing. The PUT body returns no `savedAtUtc`.
+   [Opinion]
 7. **On `422 validation.failed`** (`errors.text`): show the same field error, focus the field.
 8. **On `412 precondition.failed`** (another manager saved first): refetch, then set the base text and `ETag` from the
    fresh copy. **Keep the manager's typed text in the field.** Show the conflict message in the alert above Save.
@@ -448,8 +449,8 @@ export function GuidePromptsForm({ initial }: { initial: { text: string; etag: s
     if (text.length > limits.guidePrompts) { setFieldError(true); field.current!.focus(); return; }
     setRequestError('');
     try {
-      const res = await save.mutateAsync(text);            // { etag?, serverDateUtc? } from headers
-      etag.current = res.etag ?? (await getGuidePrompts()).etag;
+      const res = await save.mutateAsync(text);            // { etag, serverDateUtc? } from headers
+      etag.current = res.etag;                              // the 200 always carries it (D84)
       savedText.current = text;
       setDirty(isDirty());                                  // still dirty if typed during the save
       setSavedAtUtc(res.serverDateUtc ?? new Date().toISOString());
