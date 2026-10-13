@@ -324,6 +324,36 @@ describe('Users', () => {
     expect(expected.map((names) => names.toSorted())).not.toEqual(expected);
   });
 
+  it('keeps the API order of names that differ only in letter case or an accent, which the collator ties', async () => {
+    const accent = madeUp('4a8e2c6f-1b39-4d57-9f0a-7c3e5b1d8a26', 'Zoë Hill', 'zoe.hill@example.org', 'Active');
+    const lower = madeUp('8d1f5b3a-6c24-4e98-a7b0-2e9c4f6a1d53', 'zoe hill', 'z.hill@example.org', 'Active');
+    const upper = madeUp('2b7d9e4c-3f15-4a60-8c2b-5d8a1e7f3c09', 'Zoe Hill', 'zoe.h@example.org', 'Active');
+    serve(usersPath, json([accent, lower, sam, upper]));
+    renderApp('/manage/users');
+    await settle();
+
+    const ties = ['Zoë Hill', 'zoe hill', 'Zoe Hill'];
+    expect(listedNames()).toEqual([['Sam Lee', ...ties]]);
+    // Without `sensitivity: 'base'`, or with localeCompare, case and accent would order them.
+    expect(ties.toSorted(new Intl.Collator('en-AU').compare)).not.toEqual(ties);
+  });
+
+  // Vite lowers syntax to its build targets but adds no built-in method, and Firefox 114, one of those targets, has no
+  // Array.prototype.toSorted, which came in Firefox 115.
+  it('lists the users in a browser with no Array.prototype.toSorted, as Firefox 114, a build target, is', async () => {
+    const toSorted = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted');
+    Reflect.deleteProperty(Array.prototype, 'toSorted');
+    try {
+      serve(usersPath, json(people));
+      renderApp('/manage/users');
+      await settle();
+
+      expect(listedNames()).toEqual([['Alex Park', 'Jo Smith', 'Sam Lee'], ['Chris Ng']]);
+    } finally {
+      Object.defineProperty(Array.prototype, 'toSorted', toSorted!);
+    }
+  });
+
   it('shows one list and no <h2> when nobody is Deactivated', async () => {
     serve(usersPath, json([sam, jo, alex]));
     renderApp('/manage/users');

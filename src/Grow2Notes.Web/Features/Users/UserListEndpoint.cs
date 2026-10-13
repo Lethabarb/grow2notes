@@ -29,9 +29,7 @@ internal static class UserListEndpoint
     private static async Task<Ok<IReadOnlyList<AdminUser>>> ListAsync(
         ClaimsPrincipal user,
         IOptions<IdentityOptions> identityOptions,
-        ITenantContext tenant,
         UserList users,
         CancellationToken cancellationToken) =>
-        TypedResults.Ok(await users.ListAsync(
-            ActingUser.FromSession(user, identityOptions.Value, tenant), Channel.App, cancellationToken));
+        TypedResults.Ok(await users.ListAsync(Actor.InApp(user, identityOptions.Value), cancellationToken));
 }

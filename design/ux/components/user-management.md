@@ -509,6 +509,11 @@ Status Messages. **1.3.5 Identify Input Purpose does not apply:** the fields des
   The list gives it to each user as `concurrencyStamp` (D78).
 - **Mutations:** `retry: 0` for the user actions (the person retries), and network-only retries elsewhere, as in
   form-validation.md. Map the problem `code` to the copy table.
+- **The time a link was sent:** Resend invite's sentence takes it from the `204`'s `Date` header, the server clock,
+  through `time()`, and leaves out "at …" when the header is missing; never from the device clock (users.md *States*,
+  Resend invite sent; microcopy.md §3). `api()` returns only the body, so S00.06.03 adds a way for it to give the
+  response's `Date` header, unless a screen that shows "Saved 4:12 pm" from it (participants.md, guide-prompts.md) is
+  built first and has added one.
 - **Inputs:** Full name `type="text" autocomplete="off" spellCheck={false} autoCapitalize="words"`. Email `type="email"
   autocomplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"`. Don't use `maxLength`: it cuts off
   pasted text without saying so, so length is checked on submit instead. Some browsers may still offer saved-profile
@@ -643,6 +648,9 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   const refresh = () => qc.refetchQueries({ queryKey: usersQuery.queryKey });
   const sendSetupLink = () =>
     api(`/api/admin/users/${user.id}/setup-link`, { method: 'POST', ifMatch: user.concurrencyStamp });
+  // The same POST, resolving to the 204's `Date` header (the server clock), or null when it has none. api() returns
+  // only the body, so a way for it to give the response's `Date` header is still to be added (Implementation notes).
+  const sendSetupLinkWithDate = (): Promise<string | null> => …;
 
   const reset = useMutation({
     mutationFn: async () => {
@@ -669,11 +677,13 @@ export function UserActions({ user, onlyManager, isSelf, showBanner }: Props) {
   });
 
   const resend = useMutation({
-    mutationFn: async () => { await sendSetupLink(); await refresh(); },
+    mutationFn: async () => { const date = await sendSetupLinkWithDate(); await refresh(); return date; },
     retry: 0,
     onMutate: () => { setSent(''); setActionError(''); },
-    onSuccess: () => {
-      setSent(`Setup link sent to ${user.email} at ${time(new Date().toISOString())}. The old link no longer works.`);
+    onSuccess: (date) => {
+      // Never the device clock: with no `Date` header, the sentence leaves out "at …" (users.md States).
+      const at = date === null ? '' : ` at ${time(new Date(date).toISOString())}`;
+      setSent(`Setup link sent to ${user.email}${at}. The old link no longer works.`);
     },
     onError: () => setActionError('Not sent: no connection. Try again.'),
   });

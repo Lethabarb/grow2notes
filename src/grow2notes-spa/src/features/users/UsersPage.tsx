@@ -39,7 +39,9 @@ export function UsersPage() {
 
 /** The current users, then the Deactivated under their `<h2>`, each sorted by name. */
 function UserLists({ users }: { users: readonly AdminUser[] }) {
-  const sorted = users.toSorted(byName);
+  // Not toSorted, which Firefox 114, one of Vite's default build targets, lacks: the build lowers syntax to its
+  // targets but adds no built-in method.
+  const sorted = [...users].sort(byName);
   const current = sorted.filter(({ status }) => status !== 'Deactivated');
   const deactivated = sorted.filter(({ status }) => status === 'Deactivated');
 
