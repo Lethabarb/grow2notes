@@ -45,6 +45,16 @@ internal static class ListOrder
         return new ReorderResult(Error: null, Order(storedIds), Order(requestedIds));
     }
 
+    /// <summary>
+    /// The <c>SortOrder</c> of a row put at the end of the list, as an added row, a restored one and an item moved to
+    /// another group are (A2, A42): one more than the highest active <c>SortOrder</c>, or 0 when the list has no active
+    /// row. Archiving leaves gaps, which only a reorder closes, so a row put at the count of active rows could share
+    /// its <c>SortOrder</c> with one already there.
+    /// </summary>
+    /// <param name="rows">The list's rows, in any order; the archived ones are not counted.</param>
+    public static int End(IEnumerable<IOrderedRow> rows) =>
+        rows.Where(row => row.ArchivedAtUtc is null).Select(row => row.SortOrder + 1).DefaultIfEmpty(0).Max();
+
     // A list's order as a *.reordered event's Details give it, old and new (design.md §5.4, §6.6).
     private static JsonObject Order(IEnumerable<Guid> ids) =>
         new() { ["order"] = new JsonArray([.. ids.Select(id => JsonValue.Create(id))]) };

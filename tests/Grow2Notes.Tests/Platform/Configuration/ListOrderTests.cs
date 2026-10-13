@@ -1,11 +1,13 @@
+using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Configuration;
 
 namespace Grow2Notes.Tests.Platform.Configuration;
 
 /// <summary>
-/// The reorder of a list, on stand-in rows: a participant's goals, the active ones as the list's query gives them.
-/// Each endpoint that reorders (S01.02.07, S01.03.03, S01.03.06) shows it again on its own table.
+/// The reorder and the end of a list, on stand-in rows: a participant's goals, the active ones as the list's query
+/// gives them. Each endpoint that reorders (S01.02.07, S01.03.03, S01.03.06) or puts a row at the end shows it again
+/// on its own table.
 /// </summary>
 public sealed class ListOrderTests
 {
@@ -60,7 +62,7 @@ public sealed class ListOrderTests
     [Fact]
     public void Rows_with_the_same_SortOrder_keep_in_the_old_order_the_order_they_were_given_in()
     {
-        Row[] goals = [new(WalkId, 0), new(LunchId, 1), new(BusId, 1)];
+        StandInRow[] goals = [new(WalkId, 0), new(LunchId, 1), new(BusId, 1)];
 
         var result = ListOrder.Reorder(goals, [WalkId, BusId, LunchId]);
 
@@ -83,6 +85,19 @@ public sealed class ListOrderTests
         Assert.Null(ChangeDetails.Of(result.Before, result.After));
     }
 
+    // Shopping's archive left the gap at 2, so a goal put at the count of active goals, 3, would share the bus's.
+    [Fact]
+    public void The_end_after_a_gap_is_one_more_than_the_highest_active_SortOrder() =>
+        Assert.Equal(4, ListOrder.End(Goals()));
+
+    [Fact]
+    public void The_end_of_an_empty_list_is_0() =>
+        Assert.Equal(0, ListOrder.End([]));
+
+    [Fact]
+    public void The_end_does_not_count_an_archived_row_higher_than_every_active_one() =>
+        Assert.Equal(2, ListOrder.End([new StandInRow(WalkId, 0), new StandInRow(LunchId, 1), Archived(BusId, 3)]));
+
     private static void AssertMismatch(Guid[] requestedIds)
     {
         var goals = Goals();
@@ -96,24 +111,18 @@ public sealed class ListOrderTests
     }
 
     // A participant's goals as the list gives them, the archived one among them.
-    private static Row[] Goals() =>
-        [new(WalkId, 0), new(LunchId, 1), new(ShoppingId, 2) { Archived = true }, new(BusId, 3)];
+    private static StandInRow[] Goals() => [new(WalkId, 0), new(LunchId, 1), Archived(ShoppingId, 2), new(BusId, 3)];
+
+    private static StandInRow Archived(Guid id, int sortOrder) =>
+        new(id, sortOrder) { ArchivedAtUtc = TestClock.Start.UtcDateTime };
 
     // What the reorder's query gives: the active goals, in the list's order.
-    private static Row[] Active(Row[] goals) => [.. goals.Where(goal => !goal.Archived)];
+    private static StandInRow[] Active(StandInRow[] goals) => [.. goals.Where(goal => goal.ArchivedAtUtc is null)];
 
-    private static (Guid, int)[] SortOrders(Row[] goals) => [.. goals.Select(goal => (goal.Id, goal.SortOrder))];
+    private static (Guid, int)[] SortOrders(StandInRow[] goals) =>
+        [.. goals.Select(goal => (goal.Id, goal.SortOrder))];
 
     // A *.reordered event's old or new order, its IDs written as design.md §6.6's lists write them.
     private static string Order(params Guid[] ids) =>
         $$"""{"order":[{{string.Join(',', ids.Select(id => $"\"{id:D}\""))}}]}""";
-
-    private sealed class Row(Guid id, int sortOrder) : IOrderedRow
-    {
-        public Guid Id { get; } = id;
-
-        public int SortOrder { get; set; } = sortOrder;
-
-        public bool Archived { get; init; }
-    }
 }
