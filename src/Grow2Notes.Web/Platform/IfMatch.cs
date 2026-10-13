@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.Primitives;
 
 namespace Grow2Notes.Web.Platform;
@@ -6,34 +5,38 @@ namespace Grow2Notes.Web.Platform;
 /// <summary>
 /// The <c>If-Match</c> check of design.md §6.6 and §6.7: a change to an existing row must send the ETag of the row as
 /// the client loaded it, and is refused when the row has changed since. A row's token is its <c>RowVersion</c> as
-/// base64, or a user's <c>ConcurrencyStamp</c>, and its ETag is that token as an RFC 9110 strong entity tag, in quotes.
+/// base64 (<see cref="Configuration.RowVersionToken"/>), or a user's <c>ConcurrencyStamp</c>, and its ETag is that
+/// token as an RFC 9110 strong entity tag, in quotes.
 /// </summary>
 /// <remarks>
 /// Only the current ETag itself matches. <c>*</c>, a weak tag (<c>W/"…"</c>) and an unquoted value never do, and nor
 /// does a list of tags, even one that holds it: a client that loaded the row has one ETag for it, and anything else
-/// shows nothing about which version it saw. This check runs before the change is saved; a save that still throws
-/// <c>DbUpdateConcurrencyException</c>, because the row changed after it was loaded, is answered <c>412</c> by its
-/// endpoint.
+/// shows nothing about which version it saw. The check gives a design.md §6.9 code rather than an HTTP result, so that
+/// a handler gives the same code to the app's endpoint, which answers the code's <see cref="ErrorCode.Problem"/>, and
+/// to Release 2's tools, which pass their <c>expectedVersion</c> through <see cref="ETag"/> (mcp-server.md §5.1, §5.5).
+/// It runs before the change is saved; a save that still throws <c>DbUpdateConcurrencyException</c>, because the row
+/// changed after it was loaded, gives <see cref="ErrorCode.PreconditionFailed"/> too.
 /// </remarks>
 internal static class IfMatch
 {
     /// <summary>
-    /// Answers <c>428 precondition.required</c> when the request has no <c>If-Match</c>, <c>412 precondition.failed</c>
-    /// when its <c>If-Match</c> is not the <see cref="ETag"/> of <paramref name="currentToken"/>, and
-    /// <see langword="null"/> when it is, so the endpoint goes on.
+    /// Gives <see cref="ErrorCode.PreconditionRequired"/> when the request sent no <c>If-Match</c>,
+    /// <see cref="ErrorCode.PreconditionFailed"/> when its <c>If-Match</c> is not the <see cref="ETag"/> of
+    /// <paramref name="currentToken"/>, and <see langword="null"/> when it is, so the change goes on.
     /// </summary>
-    public static ProblemHttpResult? Check(HttpRequest request, string currentToken)
+    /// <param name="ifMatch">The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them.</param>
+    /// <param name="currentToken">The token of the row as it is stored now.</param>
+    public static ErrorCode? Check(StringValues ifMatch, string currentToken)
     {
         var current = ETag(currentToken);
-        var ifMatch = request.Headers.IfMatch;
 
         // An empty If-Match names no version, like a missing one: the client's fault, not a row that changed.
         if (StringValues.IsNullOrEmpty(ifMatch))
         {
-            return ErrorCode.PreconditionRequired.Problem();
+            return ErrorCode.PreconditionRequired;
         }
 
-        return ifMatch.Count == 1 && ifMatch[0] == current ? null : ErrorCode.PreconditionFailed.Problem();
+        return ifMatch.Count == 1 && ifMatch[0] == current ? null : ErrorCode.PreconditionFailed;
     }
 
     /// <summary>

@@ -606,3 +606,35 @@ maps for itself needs no row.
 - `EndpointMatrix.CallsTo` lists every call the matrix makes, and `EndpointCall.RequestAsync` builds the request as
   the endpoint's row does, so a test of every endpoint, such as `PoliciesOnSqlServerTests`' role test, uses them. An
   endpoint with no row, such as one the test maps for itself, gets a request to its route pattern.
+
+### Adding an admin endpoint
+
+Every endpoint that manages users or configuration (design.md §6.6) is under `/api/admin`, which only managers may
+call, and none of them deletes anything (§2, §14 M1, A29). Two tests that need no Docker hold each one to that, so a
+story adds one as follows.
+
+- Map it in the `/api/admin` group, which `ApiGroup.MapAdminGroup` maps inside the `/api` group, so the group's
+  `Manager` policy applies to it, as do the `/api` group's antiforgery and JSON checks; never give it a policy of its
+  own. The first admin endpoint maps the group in `Program.cs`, and the others are mapped in the same group. Name its
+  methods with `MapGet`, `MapPost` or `MapPut`: never `MapDelete`, nor `Map`, which names none and so answers
+  `DELETE` too; and never mark it `AllowAnonymous`. `Grow2Notes.Tests/Platform/AdminGuardTests.cs` reads every
+  endpoint under `/api/admin` from the app's `EndpointDataSource` and fails, naming it, if it names no method or names
+  `DELETE`, lacks the `Manager` policy, has a policy of its own beside the group's (one given in the group, even the
+  same policy), or is `AllowAnonymous`. That is all it checks: it reads each endpoint's metadata, which does not say
+  where the endpoint was mapped, so one mapped outside the group with a `Manager` policy of its own passes it, and
+  that the endpoint is in the group is for review to see. One that changes something outside the `/api` group still
+  fails the endpoint matrix, whose calls without the token and with a form body expect that group's `400` and `415`
+  (above).
+- Add its row to the endpoint matrix (above) in the same change, with `401` signed out and `403` for A's worker, as
+  the group's policy answers them: `Grow2Notes.Tests/Platform/AdminMatrixRowsTests.cs` fails, naming the row, if a
+  row under `/api/admin` expects anything else, and the matrix then checks that the endpoint answers as its row says.
+  A's manager's status is the endpoint's own. Where the endpoint loads one of A's records, such as
+  `PUT /api/admin/goals/{goalId}`, the row's request names one of A's, and B's manager gets `404`, as for any record
+  in another organisation (§9.2); at one that loads none, such as a list or an add, B's manager acts in B and gets
+  what A's manager gets.
+- Give its handler its own tests on the SQL Server container: what it changes and the audit event it writes, each
+  §6.9 code it answers, and that it reaches nothing of B's (§5.9 item 7). The matrix checks the status only, and the
+  two tests above only how the endpoint is mapped and what its row expects.
+  `Grow2Notes.Tests/Platform/Configuration/ConfigurationChangesOnSqlServerTests.cs` is the example for a change sent
+  with `If-Match`: in an organisation the test adds with two managers, the `200` with its new `ETag` and audit event,
+  the second manager's `412`, the `428`, and a save of the stored values that writes nothing.

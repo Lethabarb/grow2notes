@@ -140,6 +140,17 @@ internal static class EndpointMatrix
     public static IReadOnlyList<string> MethodsOf(RouteEndpoint endpoint) =>
         endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods ?? AnyMethod;
 
+    /// <summary><paramref name="row"/>'s methods and route, as <see cref="Gaps"/> names it.</summary>
+    public static string NameOf(EndpointRow row) => KeyOf(row.Methods, row.Route);
+
+    /// <summary>
+    /// Whether <paramref name="route"/>, an endpoint's route pattern or a row's route, starts with <c>/api/admin</c>,
+    /// under which only managers may call (design.md §2, §6.6). It is compared whatever its case, and with or without
+    /// a leading slash, as routing matches a path.
+    /// </summary>
+    public static bool IsAdmin(string route) =>
+        ("/" + route.TrimStart('/')).StartsWith("/api/admin", StringComparison.OrdinalIgnoreCase);
+
     private static string KeyOf(RouteEndpoint endpoint) => KeyOf(
         MethodsOf(endpoint),
         endpoint.Metadata.GetMetadata<StaticAssetDescriptor>() is null

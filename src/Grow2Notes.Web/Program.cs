@@ -3,6 +3,7 @@ using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Grow2Notes.Web.Platform.Configuration;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -202,6 +203,10 @@ builder.Services.AddSingleton<MelbourneClock>();
 // One per scope, so each event is saved through the scope's context and joins the transaction open there, committing
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
+
+// One per scope, for the same reason: it saves a configuration change through the scope's audit writer, so the change
+// and its event are saved by one SaveChanges on the scope's context.
+builder.Services.AddScoped<ConfigurationChanges>();
 
 // One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
 // transaction its caller opens there, with the audit event that records it.
