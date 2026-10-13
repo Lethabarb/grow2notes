@@ -101,9 +101,10 @@ export function SessionTimeoutWarning({ signedIn }: SessionTimeoutWarningProps) 
         event.preventDefault();
         void staySignedIn();
       }}
-      // Chromium may close it with no `cancel` when there has been no user activation since it opened.
-      onClose={() => {
-        if (open) {
+      // Chromium may close it with no `cancel` when there has been no user activation since it opened. The event comes
+      // a frame or more after the close, so one that finds the dialog open again is from an earlier close.
+      onClose={(event) => {
+        if (open && !event.currentTarget.open) {
           void staySignedIn();
         }
       }}

@@ -492,6 +492,21 @@ describe('SessionTimeoutWarning', () => {
       expect(warning()).not.toHaveAttribute('open');
       expect(getPhase()).toBe('active');
     });
+
+    // The browser fires `close` a frame or more after the close, so a clock that runs on at once, as Playwright's does
+    // in the end-to-end test, can open the warning again before the event of the close before comes.
+    it('take a close that finds it open again as nothing', async () => {
+      await openWarning();
+
+      act(() => {
+        warning().dispatchEvent(new Event('close'));
+      });
+      await wait(0);
+
+      expect(pingsSent()).toEqual([]);
+      expect(warning()).toHaveAttribute('open');
+      expect(close).not.toHaveBeenCalled();
+    });
   });
 
   // The 12-hour limit is the session's whole length, which Stay signed in cannot extend (app-shell.md *Tensions* 2).
