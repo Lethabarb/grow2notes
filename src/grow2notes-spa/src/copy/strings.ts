@@ -13,6 +13,19 @@ export const strings = {
   signOut: 'Sign out',
   /** Sign out's busy label. */
   signingOut: 'Signing out…',
+  /** The warning before the idle sign-out (app-shell.md component 6). */
+  sessionWarning: {
+    /** Its heading at each step of the countdown, from 28:00, 29:00, 29:20 and 29:40 with no request accepted. */
+    twoMinutes: 'You’ll be signed out in 2 minutes',
+    oneMinute: 'You’ll be signed out in 1 minute',
+    fortySeconds: 'You’ll be signed out in 40 seconds',
+    twentySeconds: 'You’ll be signed out in 20 seconds',
+    staySignedIn: 'Stay signed in',
+    /** Its status line, once Stay signed in's request has taken 1 s. */
+    connecting: 'Connecting…',
+    /** Its status line when that request got no answer: the dialog has one button, so the cause and the next step. */
+    noConnection: 'No connection. Try again.',
+  },
   /** The start-up message's `<h1>` for no connection or a timeout (app-shell.md component 4). */
   couldNotConnect: 'Could not connect to Grow2Notes',
   /**

@@ -1,0 +1,55 @@
+/*
+ * The warning before the idle sign-out (app-shell.md component 6), in foundations.md's dialog: no shadow, and no
+ * animation, so that it opens and closes at once (Conflicts resolved 17). The focus ring is base.css's.
+ */
+.dialog {
+  /* The window less 16 px a side on a phone, 28rem from there up, with no cap from the browser's own max-width. */
+  inline-size: min(100% - 2rem, 28rem);
+  max-inline-size: none;
+  max-block-size: calc(100dvh - 2rem);
+  /* It scrolls inside itself at 200% text, and a scroll that reaches its end does not move the page behind. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-4);
+  border: var(--border-divider) solid var(--colour-text);
+  border-radius: var(--radius-m);
+  background: var(--colour-surface);
+  color: var(--colour-text);
+}
+
+@media (min-width: 40rem) {
+  .dialog {
+    padding: var(--space-6);
+  }
+}
+
+.dialog::backdrop {
+  background: var(--colour-backdrop);
+}
+
+/* An <h2>, so at --font-size-h2, by base.css. */
+.heading {
+  margin: 0;
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.statusLine {
+  margin: 0;
+}
+
+.statusLine:not(:empty) {
+  margin-block-start: var(--space-3);
+}
+
+/* The full width at every size, where the shared Button is as wide as its label from 40rem. */
+.staySignedIn {
+  inline-size: 100%;
+  margin-block-start: var(--space-5);
+}
+
+/* Forced colours draw the border in CanvasText, twice as thick, so that the dialog stands out from the page. */
+@media (forced-colors: active) {
+  .dialog {
+    border: 2px solid CanvasText;
+  }
+}

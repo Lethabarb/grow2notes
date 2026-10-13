@@ -4,8 +4,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
-- `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup and sign-out, with axe
-  accessibility checks, run against the published app.
+- `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out and the warning
+  before the idle sign-out, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -108,13 +108,13 @@ npm test
 ```
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
-(`e2e/setup.spec.ts`), and the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), get their setup
-links from the published app's own `admin bootstrap` (the `invite` fixture, below), so the second terminal gives them
-what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection string
-and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs a
-link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
-failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
-database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`) and the session warning's
+tests (`e2e/session-warning.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite`
+fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
+`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open. Without
+one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up organisation and
+manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of
+each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -247,6 +247,41 @@ holds, such as a made-up `example.org` one (A35), with the `401` of any failed s
 starts no passkey prompt counts the page's calls of `navigator.credentials.get`, through an init script that wraps it
 before the app's own script runs (`countPasskeyPrompts`), and, so that the count is known to work, ends with a press of
 the passkey button, which the `authenticator` fixture ends at once. `e2e/sign-in.spec.ts` is the example.
+
+### Running 28 idle minutes on `page.clock`, over a real session
+
+The warning before the idle sign-out opens after 28 minutes with no request that the app accepted, and its Stay signed
+in sends `POST /api/auth/ping`, which needs a session that the app still holds. So a test of it signs in for real,
+through setup with a passkey on the `authenticator` fixture, as `e2e/setup.spec.ts`'s passkey path does, and runs the
+28 minutes on Playwright's clock. Only the page's timers and `Date` run on that clock: the app's own runs in real time,
+so its 30 idle minutes have barely begun when the page warns. `e2e/session-warning.spec.ts` is the example.
+
+```ts
+await page.clock.install();
+await page.goto(invite.setupLink);
+// Set up with a passkey; once Today shows:
+await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Today', exact: true }).click();
+await page.clock.runFor('28:00'); // the warning opens
+```
+
+- Install the clock before `page.goto`, so that the app's script starts on its timers. It then runs as the real clock,
+  as setup's requests and passkey prompt need.
+- Once Today shows, pause it, a second ahead of the page's `Date.now()`, so that the page's time moves only as the test
+  runs it on with `page.clock.runFor`, and each mark falls exactly where the test puts it. While it is paused, none of
+  the page's timers fires until `runFor`, `api()`'s 10-second timeout and the 1 s before "Connecting…" included.
+- The page's idle time counts from the send time of the newest request that the app accepted, which on the paused
+  clock is where the clock stands. So the test sends one at a known time, through the nav's Today link, once setup's
+  own refresh of `/api/auth/me` has its answer, and runs the clock on from there: `runFor('27:59')` leaves the warning
+  closed, and one more second opens it. Each ping that the app answers starts the idle time again.
+- axe runs its own timers on the page's clock, so resume it (`page.clock.resume()`) before `expectAxeToPass`; from then
+  on, the marks fall where the real time since puts them.
+- The page's first change after a sign-in fetches an antiforgery token for the person now signed in, itself a request
+  that the app accepts, which closes the warning however its ping went. A test of a ping that fails, aborted with
+  `page.route`, lets a first ping through, so that the page then holds a token.
+- From the warning's one button, Tab and Shift+Tab take focus out of the page, to the browser, and the next brings it
+  back. As it comes back, the window's `focus` refreshes `/api/auth/me`, which closes the warning as any accepted
+  request does, so a test of the keys holds that request with `page.route` until it has pressed them.
 
 ## Writing integration tests
 

@@ -36,11 +36,12 @@ for (const me of [worker, manager]) {
         await expect(item).toBeInViewport({ ratio: 1 });
       }
 
-      // The skip link, the header, the before-main bar slot and the one <main> (app-shell.md › Structure).
+      // The skip link, the header, the before-main bar slot, the one <main> and the session warning's <dialog>
+      // (app-shell.md › Structure).
       const frame = await page
         .locator('#root > *')
         .evaluateAll((elements) => elements.map(({ localName, id }) => (id === '' ? localName : `${localName}#${id}`)));
-      expect(frame).toEqual(['a', 'header', 'div#page-bar', 'main#main-content']);
+      expect(frame).toEqual(['a', 'header', 'div#page-bar', 'main#main-content', 'dialog']);
       await expect(page.locator('#root > a')).toHaveText('Skip to main content');
       await expect(page.locator('main')).toHaveCount(1);
 

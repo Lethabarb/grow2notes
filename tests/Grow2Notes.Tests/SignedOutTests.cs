@@ -69,6 +69,21 @@ public sealed class SignedOutTests : IAsyncDisposable
         Assert.False(response.Headers.Contains("Clear-Site-Data"));
     }
 
+    // As Sign out's, over HTTPS with no antiforgery token: the fallback policy refuses it before the /api group's
+    // check, and with no session cookie, none is renewed or deleted.
+    [Fact]
+    public async Task Stay_signed_in_with_no_session_gets_a_401_problem_with_no_Set_Cookie()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PostAsync(
+            "/api/auth/ping", content: null, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Empty(response.SetCookies());
+    }
+
     [Theory]
     [MemberData(nameof(NoSuchFiles))]
     public async Task A_path_with_a_file_extension_that_is_no_file_gets_a_404_problem(string method, string path)

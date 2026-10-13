@@ -18,7 +18,7 @@ It also has an invisible part, the **session clock**: a small module that predic
 
 | Screen | Where it is | What differs |
 |---|---|---|
-| **App shell, every signed-in screen** (§4.0): Today, read view and history, Flagged, Report, Manage | Mounted once in the signed-in layout, outside the routes, so it survives navigation. Workers and managers get the same component. | "Activity" means a request the server accepted: page loads, `GET /api/auth/me` on focus and on becoming visible (§6.8), saves, and manager actions. Reading a long note or history without loading anything for 28 minutes brings up the warning. This is correct: the design says idle means the person is idle (§8.5). |
+| **App shell, every signed-in screen** (§4.0): Today, read view and history, Flagged, Report, Manage | Mounted once by the shell, after `<main>` and outside the routes, so it survives navigation. It opens only while the shell shows a signed-in screen. Workers and managers get the same component. | "Activity" means a request the server accepted: page loads, `GET /api/auth/me` on focus and on becoming visible (§6.8), saves, and manager actions. Reading a long note or history without loading anything for 28 minutes brings up the warning. This is correct: the design says idle means the person is idle (§8.5). |
 | **Note form** (§4.3), including a past-day note, an earlier-day draft and "Editing submitted note" | Same component | Typing keeps the session alive, because autosave runs about 2 seconds after typing stops (§5.6). The warning can only appear after the person has stopped changing the note. A change still waiting for its autosave is sent at 28 minutes instead of showing the warning. If the save indicator already says "Not saved: no connection…", the warning can still appear, and Stay signed in can fail for the same reason. |
 | **Submit confirmation** and **Discard draft** confirmation (§4.3) | Same component | Before the warning opens, an open confirmation is closed as if **Go back** or Cancel was chosen. Nothing is submitted or discarded. After the warning, the person taps Submit note again and sees the participant's name again. |
 | Not used: sign-in and account setup (§4.1) | No session exists | The setup page has its own 30-minute enrolment cookie and its own message: "Your setup session timed out. Open the link from your email again." That belongs to the sign-in component. |
@@ -92,25 +92,72 @@ It also has an invisible part, the **session clock**: a small module that predic
 
 ### Behaviour
 
-**The session clock** (a plain TypeScript module, not React, nothing stored on the device):
+**The session clock** (`src/api/session.ts`, beside the session-ended event: a plain TypeScript module, not React,
+nothing stored on the device):
 
-1. **Activity = a request the server accepted.** The shared `api()` fetch wrapper records the *send time* of every request whose response is not `401`. Using the send time means the client can only expire early, never late. Failed network requests do not count, because the server never saw them. Mouse movement, scrolling and taps do **not** count, and nothing pings in the background (§6.8, §8.5).
+1. **Activity = a request the server accepted.** The shared `api()` fetch wrapper records the *send time* of every
+   request whose answer comes and is not `401`, the antiforgery token's and a resent change's included. It counts
+   once the answer's head has come, as the renewed session cookie comes in it. Using the send time means that a
+   request which renewed the session can only make the client expire early, never late. Failed network requests do
+   not count, because the server never saw them. Any other answer counts, a `5xx` included (step 6): the session
+   check runs before the endpoint and renews the session even when the endpoint then fails. Two answers renewed
+   nothing and count all the same, as the client cannot tell them from the rest: a `503` that App Service's front
+   end gives during a restart, which never reached the app, and a `500` from a database failure inside the session
+   check less than 15 minutes after the request that last renewed the cookie, before the cookie's own sliding renewal
+   starts. After either, the clock can be late until the server's next `401` ends it (step 7; A57, *Tensions with
+   decisions*). Mouse movement, scrolling and taps do **not** count, and nothing pings in the background (§6.8,
+   §8.5).
 2. **Times are measured, not counted.** On every wake-up the clock works out `Date.now() − lastAccepted`. It sets one `setTimeout` for the next mark: 28:00, 29:00, 29:20, 29:40, 30:00.
-3. **At 28:00**, if the note form has a change waiting for autosave, the clock asks autosave to send it now and waits. If the save is accepted, the clock resets and no warning appears ("a person typing is never timed out", §8.5). Otherwise the warning opens.
+3. **At 28:00**, if the note form has a change waiting for autosave, the clock asks autosave to send it now and waits,
+   holding its phase on the save (`holdWhile`). If the save is accepted, the clock resets and no warning appears ("a
+   person typing is never timed out", §8.5). Otherwise the warning opens.
 4. **While the page is hidden, the clock changes nothing.** Nobody can see a hidden tab's warning.
-5. **When the page becomes visible**, the app already calls `GET /api/auth/me` (§6.8). The clock holds its current state until that call settles. `200` means the session is alive (perhaps kept alive by another tab): reset the clock, and close the warning or the signed-out view if either is showing. `401` means signed out. If the call fails for network reasons, fall back to the clock. Holding avoids the warning flashing up for a moment and then closing.
+5. **When the page becomes visible**, the clock's one `visibilitychange` listener calls `GET /api/auth/me` through the
+   shell's `refreshMe()` (§6.8) and holds its current state until that call settles, so one listener sends the
+   request and the clock holds on that very promise (app-shell.md *Conflicts resolved* 6). `200` means the session is
+   alive (perhaps kept alive by another tab): reset the clock, and close the warning or the signed-out view if either
+   is showing. `401` means signed out. If the call fails for network reasons, fall back to the clock. Holding avoids
+   the warning flashing up for a moment and then closing.
 6. **Any non-`401` response at any time** resets the clock and closes the warning. The session really was extended. Focus goes back to where it was.
-7. **At 30:00 on a visible page, or on any `401`**, the clock goes to *expired*. It never sends a request to "check" at 30:00, because a request would extend the session.
+7. **At 30:00 on a visible page, or on any `401` that ends the session** (not a failed sign-in's, an ended setup's or
+   logout's), the clock goes to *expired*. It never sends a request to "check" at 30:00, because a request would
+   extend the session.
 
-**The warning:**
+**Holds, and the clock's life.** `api()` holds the clock (`holdWhile`) while each call is out, as its answer may
+reset the clock or end it ("If a request is in flight, wait for it", app-shell.md *28:00 idle on a visible page*).
+Holds are counted, so two at once, such as the visible page's `/me` and a save, both settle before the clock decides.
+While held, the phase neither opens the warning, nor steps, nor ends; then it takes the step that the time gives. So
+Stay signed in's ping keeps the dialog open until it is answered. `startClock(checkSession)` starts the clock, active
+from that moment, and returns the function that stops it. The shell starts it once, for its whole life, signed in or
+not, with `() => refreshMe(queryClient)` as `checkSession`; a sign-in is an accepted request, which resets it. Its
+state (the phase, the newest accepted send time, whether a `401` ended it, the count of holds and the timer) belongs
+to one start and is kept only while it is started: the stop removes the listener and the timer and drops that state,
+so a hold that settles afterwards changes nothing. While it is stopped, `getPhase()` gives `active`, and
+`requestAccepted` and `holdWhile` do nothing.
 
-1. When opening, first close any other open `<dialog>` with a plain `close()`. Every Grow2Notes confirmation treats a plain close as Go back or Cancel. Also close any open menu (the note form's "Discard draft" menu). Then call `showModal()`.
+**The warning** (`src/routes/SessionTimeoutWarning.tsx`, mounted once by the shell after `<main>`). It opens only
+while the shell shows a signed-in screen: `/me` has answered and the page is not a setup page. So it never opens over
+the start-up message, sign-in or setup, whose requests still move the clock.
+
+1. When opening, the header first closes the Account panel and, if focus was in the panel, moves it to Account, so
+   the warning gives focus back to Account and never to a hidden Sign out. Then close any other open `<dialog>` with
+   a plain `close()`. Every Grow2Notes confirmation treats a plain close as Go back or Cancel. Also close any open
+   menu (the note form's "Discard draft" menu). Then call `showModal()`.
 2. Focus lands on **Stay signed in**, the only focusable element.
-3. **Stay signed in** → `POST /api/auth/ping` (with the `X-XSRF-TOKEN` header, §6.1). The dialog **stays open until the server answers**:
-   - `204`: the clock resets, the dialog closes, and focus returns to the element focused before.
-   - `401` (the session had already ended, or the 12-hour limit was reached): go to the signed-out state.
-   - Network failure or a 10-second timeout: keep the dialog open, show the connection error, and leave the button ready. The countdown keeps running.
-4. **Escape or the Android back gesture = Stay signed in.** Handle `cancel` with `preventDefault()` and run the same ping. Chromium may skip `cancel` and close the dialog straight away, so `close` is handled too. If the warning closes while still in a warning phase, send the ping. If that ping fails, reopen the warning with the connection error.
+3. **Stay signed in** → `POST /api/auth/ping` (with the `X-XSRF-TOKEN` header, §6.1). The press first empties the
+   status line, so a failure that repeats is announced again. The button is `aria-disabled` until the answer, and the
+   dialog **stays open until the server answers**:
+   - `204`, or any other answer but a `401`: the clock resets, the dialog closes, and focus returns to the element
+     focused before.
+   - `401` (the session had already ended, or the 12-hour limit was reached): the clock ends, the dialog closes, and
+     the signed-out state follows.
+   - Network failure or a 10-second timeout: keep the dialog open, show the connection error ("No connection. Try
+     again."), and leave the button ready. The countdown keeps running.
+4. **Escape or the Android back gesture = Stay signed in.** Handle `cancel` with `preventDefault()` and run the same
+   ping. Chromium may skip `cancel` and close the dialog straight away, so `close` is handled too. If the warning
+   closes while still in a warning phase, send the ping. If that ping fails, reopen the warning with the connection
+   error. Chromium fires `close` a frame or more after the dialog closes, so a `close` that finds the dialog open
+   again belongs to an earlier closing and is ignored.
 5. Clicking the backdrop does nothing (`closedby` stays at its `showModal()` default, which ignores clicks outside).
 6. The countdown updates **only at 2 minutes → 1 minute → 40 seconds → 20 seconds**, on screen and in the announcement at the same time. It never ticks every second.
 
@@ -133,10 +180,10 @@ It also has an invisible part, the **session clock**: a small module that predic
 | **Warning: open** | Heading "You'll be signed out in 2 minutes", Stay signed in focused | Modal, page inert, backdrop dims. |
 | **Warning: countdown** | Heading text changes to 1 minute, then 40 seconds, then 20 seconds | Polite announcement at each change. |
 | **Hover** (laptop) | Button uses the shared primary hover colour | Only under `@media (hover: hover)`, so taps don't leave a sticky hover. |
-| **Focus** | Focus ring on the button: 3 px outline, 3 px offset, at least 3:1 against the dialog surface | Always visible (A32). Uses `outline`, never only `box-shadow`. |
+| **Focus** | Focus ring on the button: 3 px outline, 2 px offset, at least 3:1 against the dialog surface | Always visible (A32). Uses `outline`, never only `box-shadow`. foundations.md's ring (app-shell.md *Conflicts resolved* 17). |
 | **Active** (pressed) | Shared primary pressed colour | No movement. |
 | **Loading** (ping sent) | Up to 1 s: no change (repeat taps ignored). After 1 s: status line "Connecting…" | `aria-disabled="true"` on the button, **never `disabled`**, which would push focus out of the dialog. |
-| **Error** (network) | Status line "No connection. Check your internet connection and try again." The button is ready again. | Error text in words (A32). Countdown continues. |
+| **Error** (network) | Status line "No connection. Try again." The button is ready again. | Error text in words (A32). Countdown continues. |
 | **Disabled** | Never | |
 | **Expired / signed out** | §4.1 sign-in screen in place of the page, with the signed-out heading and line above it | Route kept mounted and hidden. |
 | **Empty / read-only** | Not applicable | |
@@ -159,7 +206,7 @@ It also has an invisible part, the **session clock**: a small module that predic
 | 29:20 | You'll be signed out in 40 seconds | Same |
 | 29:40 | You'll be signed out in 20 seconds | Same |
 | Ping slower than 1 s | Connecting… | Proposed, **not in design.md** |
-| Ping failed (network) | No connection. Check your internet connection and try again. | Proposed, **not in design.md** |
+| Ping failed (network) | No connection. Try again. | Proposed, **not in design.md** (app-shell.md *Conflicts resolved* 15) |
 | Signed out (30:00 or any `401`) | Heading **You've been signed out**, then "Sign in to go back to where you were.", then the §4.1 sign-in controls | Proposed, **not in design.md** |
 | Page title while signed out | Grow2Notes – Sign in | Follows the §4.0 title pattern |
 
@@ -199,94 +246,154 @@ All proposed strings use sentence case and no negative contractions, so they sui
 - **No React Aria needed.** Native `<dialog>` covers focus, inertness, Escape and the top layer.
 - Render the `<dialog>` **always**, and open and close it with `showModal()` and `close()` in an effect. Never use `{open && <dialog>}`, which loses the live region and the focus return. Don't rely on React's `autoFocus` prop for dialog contents. The button is the first focusable element, so `showModal()` focuses it natively.
 - Read the clock with `useSyncExternalStore`. The phase is a string, so the snapshot stays stable between renders.
-- The shared `api()` wrapper (also used by TanStack Query's `queryFn`s and mutations) is the only place that calls `requestAccepted(sentAt)` and `sessionEnded()`. Turn off TanStack retries for `401`.
-- Keep the client limits as constants beside a comment pointing to §8.4 (`ExpireTimeSpan = 30 min`). For testing, shorten the server's idle timeout and the client constants together in the test environment only. Nothing here is a user setting.
+- The shared `api()` wrapper (also used by TanStack Query's `queryFn`s and mutations) is the only place that calls
+  `requestAccepted(sentAt)` and `sessionEnded()`, and it holds the clock (`holdWhile`) while each call is out. Turn
+  off TanStack retries for `401`.
+- Keep the client limits as constants beside a comment pointing to §8.4 (`ExpireTimeSpan = 30 min`). Nothing is
+  shortened for tests: the clock's tests use fake timers and a fake system time, and the end-to-end test runs the
+  28 minutes on Playwright's `page.clock` over a real session (tests/README.md). Nothing here is a user setting.
 - Unit-test the clock with fake timers and a fake system time: 28:00 opens, the countdown steps are right, 30:00 expires, a visible-page `/me` returning `200` clears an expiry, and a pending autosave holds the warning. The design's M2 acceptance test applies: "After an idle timeout and signing back in, the draft is intact" (§14).
 
 ```ts
-// src/session/sessionClock.ts: no React, nothing stored on the device.
+// src/api/session.ts, beside the session-ended event: no React, nothing stored on the device.
 // Mirrors the server: 30 min idle (design.md §8.4), warning at 28 (A24).
 const WARN = 28 * 60_000, END = 30 * 60_000;
-export type Phase = 'active' | 'warn-2m' | 'warn-1m' | 'warn-40s' | 'warn-20s' | 'expired';
+const MARKS = [WARN, END - 60_000, END - 40_000, END - 20_000, END];
+const PHASES = ['active', 'warn-2m', 'warn-1m', 'warn-40s', 'warn-20s', 'expired'] as const;  // after 0 to 5 marks
+export type Phase = (typeof PHASES)[number];
+export type WarningPhase = Exclude<Phase, 'active' | 'expired'>;
+export const isWarning = (p: Phase): p is WarningPhase => p !== 'active' && p !== 'expired';
 
-let lastAccepted = Date.now();  // send time of the newest request the server accepted
-let expired = false, held = false, phase: Phase = 'active';
-let timer: ReturnType<typeof setTimeout> | undefined;
+// One start's state, kept only while it is started: its stop drops it.
+type Clock = {
+  phase: Phase;
+  lastAccepted: number;                      // send time of the newest request the server accepted, or the start's
+  ended: boolean;                            // a 401 has ended the session since
+  holds: number;                             // promises holding the phase as it is
+  timer?: ReturnType<typeof setTimeout>;
+};
+let clock: Clock | undefined;
 const listeners = new Set<() => void>();
+const tell = () => listeners.forEach((l) => l());
 
-function compute(): Phase {
-  if (held) return phase;                    // waiting for the server's answer
-  if (expired) return 'expired';
-  const left = END - (Date.now() - lastAccepted);
-  if (left <= 0) { expired = true; return 'expired'; }
-  if (left > END - WARN) return 'active';
-  return left > 60_000 ? 'warn-2m' : left > 40_000 ? 'warn-1m' : left > 20_000 ? 'warn-40s' : 'warn-20s';
+function update(c: Clock) {
+  if (clock !== c) return;                   // stopped since: a late hold changes nothing
+  clearTimeout(c.timer);
+  if (c.holds > 0 || document.visibilityState === 'hidden') return;  // waiting for an answer, or nobody can see it
+  const idle = Date.now() - c.lastAccepted;
+  const passed = c.ended ? MARKS.length : MARKS.filter((m) => m <= idle).length;
+  if (PHASES[passed] !== c.phase) { c.phase = PHASES[passed]; tell(); }
+  if (passed < MARKS.length) c.timer = setTimeout(() => update(c), MARKS[passed] - idle);  // the next mark only
 }
 
-function update() {
-  clearTimeout(timer);
-  if (document.visibilityState === 'hidden') return;   // nobody can see it; /me decides on return
-  const next = compute();
-  if (next !== phase) { phase = next; listeners.forEach((l) => l()); }
-  if (phase === 'expired' || held) return;
-  const idle = Date.now() - lastAccepted;
-  const mark = [WARN, END - 60_000, END - 40_000, END - 20_000, END].find((m) => m > idle)!;
-  timer = setTimeout(update, mark - idle + 50);
+/** api() only: a request sent at sentAt got an answer that was not a 401. */
+export function requestAccepted(sentAt: number) {
+  if (!clock) return;
+  clock.ended = false;
+  clock.lastAccepted = Math.max(clock.lastAccepted, sentAt);
+  update(clock);
 }
-
-export function requestAccepted(sentAt: number) { expired = false; lastAccepted = Math.max(lastAccepted, sentAt); update(); }
-export function sessionEnded() { expired = true; update(); }
-/** Hold the phase while a request that will decide it is in flight (the /me on becoming visible, a flushed autosave). */
-export function holdWhile(p: Promise<unknown>) { held = true; void p.finally(() => { held = false; update(); }); }
+/** api() only, on a 401 that ends the session: ends the clock, then raises the session-ended event. */
+export function sessionEnded() {
+  if (clock) { clock.ended = true; update(clock); }
+  // …then calls the event's listeners (onSessionEnded)
+}
+/** Holds the phase until p settles: every api() call while it is out, the /me on becoming visible. Counted. */
+export function holdWhile(p: Promise<unknown>) {
+  const c = clock;
+  if (!c) return;
+  c.holds += 1;
+  const release = () => { c.holds -= 1; update(c); };
+  void p.then(release, release);
+}
 export const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
-export const getPhase = () => phase;
+export const getPhase = (): Phase => clock?.phase ?? 'active';  // active while stopped
 
-/** Call once after sign-in. `checkSession` is the app's existing /me refetch (§6.8), e.g.
- *  () => queryClient.fetchQuery({ queryKey: ['me'], ... }), so the request is shared, not doubled. */
-export function startClock(checkSession: () => Promise<unknown>) {
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') holdWhile(checkSession()); else clearTimeout(timer);
-  });
-  update();
+/** Starts the clock, active from now, and returns its stop. The shell starts it once, for its whole life, with
+ *  () => refreshMe(queryClient), so the request is shared, not doubled (app-shell.md Conflicts resolved 6). */
+export function startClock(checkSession: () => Promise<unknown>): () => void {
+  const c: Clock = { phase: 'active', lastAccepted: Date.now(), ended: false, holds: 0 };
+  clock = c;
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') holdWhile(checkSession()); else clearTimeout(c.timer);
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  update(c);
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    clearTimeout(c.timer);
+    clock = undefined;
+    if (c.phase !== 'active') tell();       // getPhase() gives active from now on
+  };
 }
 ```
 
-```tsx
-// src/session/SessionTimeoutWarning.tsx: rendered once in the signed-in layout.
-const LEFT = { 'warn-2m': '2 minutes', 'warn-1m': '1 minute', 'warn-40s': '40 seconds', 'warn-20s': '20 seconds' } as const;
-const isWarning = (p: string): p is keyof typeof LEFT => p in LEFT;
+```ts
+// src/api/api.ts: the clock's part of the shared wrapper.
+export function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  const call = request<T>(path, options);
+  holdWhile(call);                           // its answer may reset the clock or end it
+  return call;
+}
+// For every request it sends, the antiforgery token's and a resent change's included:
+const sentAt = Date.now();
+const response = await fetch(path, { ...init, signal: controller.signal });
+if (response.status !== 401) requestAccepted(sentAt);  // once the head has come, whatever the body then does
+// And a 401 that ends the session, but not a failed sign-in's, an ended setup's or logout's:
+if (response.status === 401 && endsSession(path)) sessionEnded();
 
-export function SessionTimeoutWarning() {
+// src/routes/useRefreshMe.ts, in the shell: the clock's visibilitychange listener is the only one.
+useEffect(() => {
+  const onFocus = () => { refreshMe(queryClient).catch(() => {}); };
+  window.addEventListener('focus', onFocus);
+  const stopClock = startClock(() => refreshMe(queryClient));
+  return () => { window.removeEventListener('focus', onFocus); stopClock(); };
+}, [queryClient]);
+```
+
+```tsx
+// src/routes/SessionTimeoutWarning.tsx: rendered once by AppShell, after <main>, always in the DOM.
+const countdown: Readonly<Record<WarningPhase, string>> = {
+  'warn-2m': strings.sessionWarning.twoMinutes,     // "You’ll be signed out in 2 minutes", in src/copy
+  'warn-1m': strings.sessionWarning.oneMinute,
+  'warn-40s': strings.sessionWarning.fortySeconds,
+  'warn-20s': strings.sessionWarning.twentySeconds,
+};
+
+/** signedIn: the shell shows a signed-in screen (/me has answered, and it is not a setup page). */
+export function SessionTimeoutWarning({ signedIn }: { signedIn: boolean }) {
   const phase = useSyncExternalStore(subscribe, getPhase);
+  const open = signedIn && isWarning(phase);
   const ref = useRef<HTMLDialogElement>(null);
-  const [ping, setPing] = useState<'ready' | 'busy' | 'slow' | 'failed'>('ready');
-  const warning = isWarning(phase);
+  const [pinging, setPinging] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const connecting = useDelayed(pinging, 1_000);    // "Connecting…" from 1 s
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) { setWasOpen(open); setFailed(false); }  // each warning opens with an empty line
 
   useEffect(() => {
     const dialog = ref.current!;
-    if (warning && !dialog.open) {
-      // Every app dialog treats a plain close() as Go back / Cancel, so nothing is committed.
-      document.querySelectorAll<HTMLDialogElement>('dialog[open]').forEach((d) => d.close());
-      setPing('ready');
-      dialog.showModal();                    // focuses the only button
-    } else if (!warning && dialog.open) {
-      dialog.close();                         // focus returns to where it was
-    }
-  }, [warning]);
+    // The header has already closed the Account panel, moving focus to Account if it was in it. Closing any other
+    // open <dialog> with a plain close() (= Go back) and the note form's menu comes with the first of them.
+    if (open && !dialog.open) dialog.showModal();   // focuses the only button
+    else if (!open && dialog.open) dialog.close();  // focus returns to where it was
+  }, [open]);
 
-  async function stay() {
-    if (ping === 'busy' || ping === 'slow') return;
-    setPing('busy');
-    const slow = setTimeout(() => setPing('slow'), 1000);
+  async function staySignedIn() {
+    if (pinging) return;
+    setFailed(false);                               // a failure that repeats is announced again
+    setPinging(true);
     try {
-      await api('/api/auth/ping', { method: 'POST' }); // api()'s own 10 s timeout (empty-loading-error.md)
-      setPing('ready');                       // api() → requestAccepted() → phase 'active' → effect closes
+      await api('/api/auth/ping', { method: 'POST' });  // api() holds the clock: the dialog stays open until answered
     } catch (e) {
-      if (!isUnauthorised(e)) {               // a 401 → api() → sessionEnded() → sign-in in place
-        setPing('failed');
-        if (!ref.current!.open) ref.current!.showModal();
+      if (classify(e) === 'offline') {              // a 401 has ended the clock, which closes the dialog
+        setFailed(true);
+        const dialog = ref.current!;
+        if (!dialog.open && isWarning(getPhase())) dialog.showModal();  // the browser closed it with no cancel
       }
-    } finally { clearTimeout(slow); }
+    } finally {
+      setPinging(false);
+    }
   }
 
   return (
@@ -294,65 +401,70 @@ export function SessionTimeoutWarning() {
       ref={ref}
       className={s.dialog}
       aria-labelledby="session-timeout-heading"
-      onCancel={(e) => { e.preventDefault(); void stay(); }}       // Escape / Android back
-      onClose={() => { if (isWarning(getPhase())) void stay(); }}  // Chromium may skip cancel
+      onCancel={(e) => { e.preventDefault(); void staySignedIn(); }}            // Escape / Android back
+      onClose={(e) => { if (open && !e.currentTarget.open) void staySignedIn(); }}  // Chromium may skip cancel
     >
+      {/* Closed, it holds the first step's sentence, so opening it writes nothing into its live region. */}
       <h2 id="session-timeout-heading" className={s.heading} aria-live="polite" aria-atomic="true">
-        You'll be signed out in {isWarning(phase) ? LEFT[phase] : LEFT['warn-2m']}
+        {countdown[isWarning(phase) ? phase : 'warn-2m']}
       </h2>
-      <p role="status" className={s.status}>
-        {ping === 'slow' ? 'Connecting…' : ping === 'failed' ? 'No connection. Check your internet connection and try again.' : ''}
+      <p role="status" className={s.statusLine}>
+        {connecting ? strings.sessionWarning.connecting : failed ? strings.sessionWarning.noConnection : ''}
       </p>
-      <button type="button" className={s.button} onClick={stay}
-        aria-disabled={ping === 'busy' || ping === 'slow' || undefined}>
-        Stay signed in
-      </button>
+      {/* The shared Button: aria-disabled while busy, never disabled. */}
+      <Button variant="primary" busy={pinging} className={s.staySignedIn} onClick={() => void staySignedIn()}>
+        {strings.sessionWarning.staySignedIn}
+      </Button>
     </dialog>
   );
 }
 ```
 
 ```tsx
-// In the signed-in layout: the route stays mounted (unsaved text survives) but hidden.
-const expired = useSyncExternalStore(subscribe, getPhase) === 'expired';
+// src/routes/Header.tsx, the signed-in header: the Account panel closes as the phase becomes a warning.
+const warning = useSyncExternalStore(subscribe, () => isWarning(getPhase()));
+const [warned, setWarned] = useState(warning);
+if (warned !== warning) { setWarned(warning); if (warning) setOpen(false); }  // during render, as a location change
+useLayoutEffect(() => {                             // runs before the warning's effect opens it
+  if (warning && panelRef.current?.contains(document.activeElement)) accountRef.current?.focus();
+}, [warning]);
+
+// src/routes/AppShell.tsx: the warning after the frame, so after <main>, outside anything made hidden or inert.
+useRefreshMe();                                     // starts the clock, for the shell's whole life
+const frameMe = signedOutFrame ? undefined : me;    // a signed-in screen: /me has answered, not a setup page
 return (
   <>
-    {expired && <SignedOutInPlace />}  {/* §4.1 sign-in + heading; focuses heading; same/different-user check */}
-    <div hidden={expired}><AppShell><Outlet /></AppShell></div>
-    <SessionTimeoutWarning />
+    <ShellFrame me={frameMe} page={page}>{/* the route's screen, sign-in or the start-up message */}</ShellFrame>
+    <SessionTimeoutWarning signedIn={frameMe !== undefined} />
   </>
 );
+// The signed-out view (app-shell.md component 7) goes inside <main>, with the route kept mounted and hidden beside
+// it, never by hiding the whole shell (app-shell.md Conflicts resolved 10).
 ```
 
 ```css
-/* SessionTimeoutWarning.module.css */
+/* SessionTimeoutWarning.module.css: foundations.md's dialog, with no shadow and no open or close animation
+   (app-shell.md Conflicts resolved 17). The focus ring is base.css's: 3 px --colour-focus, 2 px outside. */
 .dialog {
   inline-size: min(100% - 2rem, 28rem);
+  max-inline-size: none;                            /* the browser's own cap would leave less than 16 px a side */
   max-block-size: calc(100dvh - 2rem);
-  overflow-y: auto;
-  padding: 1.5rem;
-  border: 1px solid var(--color-border-strong);  /* ≥3:1 boundary (SC 1.4.11) */
+  overflow-y: auto;                                 /* scrolls inside itself at 200% text */
+  overscroll-behavior: contain;
+  padding: var(--space-5) var(--space-4);           /* confirm-dialog.md's padding */
+  border: var(--border-divider) solid var(--colour-text);  /* 1 px, ≥3:1 boundary (SC 1.4.11) */
   border-radius: var(--radius-m);
-  background: var(--color-surface);
-  color: var(--color-text);
+  background: var(--colour-surface);
+  color: var(--colour-text);
 }
-/* No open animation (foundations.md: no motion; app-shell.md Conflicts #17). The earlier fade-in is struck. */
-.dialog::backdrop { background: rgb(0 0 0 / 0.55); }
-.heading { margin: 0; font-size: var(--font-size-h2); line-height: 1.3; }
-.status { margin: 0; }                                /* never display:none: it is a live region */
-.status:not(:empty) { margin-block-start: 0.75rem; }
-.button {
-  margin-block-start: 1.5rem;
-  inline-size: 100%;
-  min-block-size: 3rem;                               /* 48 px: above A32's 44 px */
-  font: inherit;
-  font-weight: 600;
-  /* colours from the shared primary button tokens */
-}
-.button:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 3px; }
-.button[aria-disabled='true'] { cursor: progress; }
-@media (hover: hover) { .button:hover { background: var(--color-primary-hover); } }
-.button:active { background: var(--color-primary-active); }
+@media (min-width: 40rem) { .dialog { padding: var(--space-6); } }
+/* tokens.css declares its tokens on ::backdrop as well as :root: older browsers' backdrops inherit nothing. */
+.dialog::backdrop { background: var(--colour-backdrop); }
+.heading { margin: 0; }                             /* an <h2>: --font-size-h2, bold, from base.css */
+.statusLine { margin: 0; }                          /* never display:none: it is a live region */
+.statusLine:not(:empty) { margin-block-start: var(--space-3); }
+/* The shared primary Button: 48 px, weight 700, its hover and pressed colours; full width at every size here. */
+.staySignedIn { inline-size: 100%; margin-block-start: var(--space-5); }
 @media (forced-colors: active) { .dialog { border: 2px solid CanvasText; } }
 ```
 
@@ -361,7 +473,8 @@ return (
 ## Per-screen notes
 
 **App shell (§4.0), all signed-in screens**
-- Mount it once, inside the signed-in layout and outside any element that is made `hidden` or `inert`.
+- Mount it once, in the shell after `<main>` and outside any element that is made `hidden` or `inert`. It opens only
+  over a signed-in screen, never over the start-up message, sign-in or setup.
 - Workers and managers get the same dialog, copy and timing.
 - The manager's Flagged badge and `today` are refreshed by the same `/me` call that decides the session when a page becomes visible. One request does both jobs, and there is no new polling.
 - Manage screens and the review panel's comment box have no autosave. Text typed there survives a sign-out because the route stays mounted and hidden, and is lost only if a different person signs in.
@@ -412,6 +525,16 @@ return (
 - **The 12-hour absolute limit (A24) has no warning and cannot be extended.** Under the Understanding document for SC 2.2.1, a security time limit is still a time limit. Only things like time-limited two-factor codes are named as possibly "essential", and the exemption applies only to limits over 20 hours. So a strict reading treats an unwarned 12-hour sign-out as a 2.2.1 issue. In practice, the design means nothing is lost: drafts are on the server and the person returns to the same note (SC 2.2.5). The limit can only be reached by someone continuously active for 12 hours. Recorded for awareness, not as a request to change.
 - **The warning text does not say the work is saved.** Home Office guidance says to tell users whether their progress will be saved, and its research found users hoped their input would be kept. HMRC's dialog also says what happens to answers. The design's copy is the countdown sentence and the button only. "Drafts are already saved on the server" appears in §4.0 as a design fact, not as dialog text. It would not always be true either: when the save indicator says "Not saved: no connection", the latest change is not yet saved. Recorded only.
 - **The setup page's 30-minute enrolment limit (§4.1, §8.1)** is also a time limit under SC 2.2.1 with no warning. It is outside this component (there is no session to extend) and belongs to the sign-in component. Recorded only.
+- **A `5xx` that renewed nothing still counts as activity (A57).** *The session clock* step 1 counts every answer but
+  a `401`, as the session check runs before the endpoint. Two answers renewed nothing, and the client cannot tell them
+  from an endpoint's failure: a `503` from App Service's front end during a restart, which never reached the app, and
+  a `500` from a database failure inside the session check less than 15 minutes after the request that last renewed
+  the cookie (later, the cookie's own sliding renewal comes with the `500`). After either, the clock can be late by up
+  to the time since that request, so the server can end the session before the warning that SC 2.2.1 asks for. The
+  person's next request then gets the `401` that ends the clock and shows sign-in in place, with nothing lost, as at
+  the 12-hour limit. Both come only while the app is failing, and not counting a `5xx` would make the clock early
+  after any endpoint's failure and leave Stay signed in's `5xx` needing words of its own. Recorded for awareness; A57
+  accepts it.
 
 ---
 

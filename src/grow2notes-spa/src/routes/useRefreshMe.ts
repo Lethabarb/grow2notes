@@ -2,11 +2,13 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
 import { refreshMe } from '../api/me.ts';
+import { startClock } from '../api/session.ts';
 
 /**
  * The shell's triggers for `refreshMe()`, for its whole life (app-shell.md *Refresh of `/api/auth/me`*): each new
- * `location.key`, the first being the start-up, window `focus`, and `visibilitychange` to visible. There is no timer,
- * so a page left alone sends nothing (design.md §6.8).
+ * `location.key`, the first being the start-up, window `focus`, and `visibilitychange` to visible, which the session
+ * clock listens for, so that it holds on that very refresh (app-shell.md *Page visible again*); the clock runs for the
+ * shell's whole life too. No timer sends a refresh, so a page left alone sends nothing (design.md §6.8).
  */
 export function useRefreshMe(): void {
   const queryClient = useQueryClient();
@@ -21,17 +23,12 @@ export function useRefreshMe(): void {
     const onFocus = () => {
       refresh(queryClient);
     };
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        refresh(queryClient);
-      }
-    };
 
     window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onVisibilityChange);
+    const stopClock = startClock(() => refreshMe(queryClient));
     return () => {
       window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stopClock();
     };
   }, [queryClient]);
 }

@@ -1,11 +1,12 @@
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
+import { getPhase, subscribe, type Phase } from '../api/session.ts';
 import { routes } from './routes.tsx';
 
 const mePath = '/api/auth/me';
@@ -386,5 +387,45 @@ describe('the refresh of /api/auth/me', () => {
     expect(navItems()).toEqual(['Today']);
     expect(currentItems()).toEqual([]);
     expect(router.state.location).toBe(location);
+  });
+});
+
+describe('the session clock', () => {
+  it("runs for the shell's whole life, held on the visible trigger's refresh and its silent retry", async () => {
+    server = answerWith(worker);
+    renderApp('/');
+    await wait(0);
+    const told: Phase[] = [];
+    const unsubscribe = subscribe(() => {
+      told.push(getPhase());
+    });
+
+    act(() => {
+      becomes('hidden');
+    });
+    await wait(28 * 60_000 + 30_000);
+    const held = heldBack(noConnection);
+    server = held.answer;
+    act(() => {
+      becomes('visible');
+    });
+    await wait(5_000);
+    held.release();
+    await wait(0);
+
+    expect(meRequests()).toBe(2);
+    expect(getPhase()).toBe('active');
+
+    // The query client's silent retry, after which the time decides.
+    await wait(1_000);
+
+    expect(meRequests()).toBe(3);
+    expect(getPhase()).toBe('warn-2m');
+
+    cleanup();
+
+    expect(getPhase()).toBe('active');
+    expect(told).toEqual(['warn-2m', 'active']);
+    unsubscribe();
   });
 });

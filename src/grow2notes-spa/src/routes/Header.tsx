@@ -1,7 +1,8 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type Ref } from 'react';
 import { Link, matchPath, useLocation } from 'react-router';
 import { api, classify } from '../api/api.ts';
 import type { Me } from '../api/me.ts';
+import { getPhase, isWarning, subscribe } from '../api/session.ts';
 import { Button } from '../components/Button.tsx';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
@@ -60,6 +61,7 @@ export function Header({ me, page }: HeaderProps) {
 function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
   const { pathname, key } = useLocation();
   const accountRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   // Any location change closes the panel. It is closed during the render, as React advises for state that follows a
   // value, so that the new screen never shows it open, as it would until an effect had run.
@@ -68,6 +70,26 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
     setLocationKey(key);
     setOpen(false);
   }
+
+  // So does the warning before the idle sign-out, as it opens (app-shell.md *28:00 idle on a visible page*): during the
+  // render too, so that the panel is closed before the warning's effect opens it.
+  const warning = useSyncExternalStore(subscribe, () => isWarning(getPhase()));
+  const [warned, setWarned] = useState(warning);
+  if (warned !== warning) {
+    setWarned(warning);
+    if (warning) {
+      setOpen(false);
+    }
+  }
+
+  // And focus in the panel goes to Account, as Escape takes it, so that the warning gives focus back to Account as it
+  // closes, never to a hidden Sign out. A layout effect runs before the warning's effect, and the browser leaves focus
+  // on a control just hidden until its next focus fix-up, so focus is still found in the panel here.
+  useLayoutEffect(() => {
+    if (warning && panelRef.current?.contains(document.activeElement)) {
+      accountRef.current?.focus();
+    }
+  }, [warning]);
 
   // Page not found marks nothing, even at an address the table marks, such as /flagged until E03 builds Flagged.
   const mark =
@@ -101,7 +123,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
       </svg>
     </Button>
   );
-  const panel = <AccountPanel open={open} displayName={me.displayName} />;
+  const panel = <AccountPanel ref={panelRef} open={open} displayName={me.displayName} />;
   // Report opens on the server's today in Melbourne (A33), so that the report needs no redirect to today's date.
   const nav = (
     <nav aria-label={strings.mainNavigation}>
@@ -150,7 +172,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
  * line is in the panel from the first render, as a screen reader may not announce words written into a live region
  * that was added with them.
  */
-function AccountPanel({ open, displayName }: { open: boolean; displayName: string }) {
+function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; open: boolean; displayName: string }) {
   const [signingOut, setSigningOut] = useState(false);
   // Emptied by each press, so that a failure that repeats is written into an empty line and announced again.
   const [failure, setFailure] = useState('');
@@ -177,7 +199,7 @@ function AccountPanel({ open, displayName }: { open: boolean; displayName: strin
   }
 
   return (
-    <div id={accountPanelId} className={styles.panel} hidden={!open}>
+    <div ref={ref} id={accountPanelId} className={styles.panel} hidden={!open}>
       <p className={styles.signedInAs}>{msg.signedInAs(displayName)}</p>
       {/* Its busy label is not announced: the panel's line says only why a sign-out failed (app-shell.md). */}
       <Button busy={signingOut} busyLabel={strings.signingOut} announceBusy={false} onClick={() => void signOut()}>

@@ -341,7 +341,7 @@ describe('AppShell', () => {
 
   describe.each(states)('$state', ({ answer }) => {
     it.each(['/', '/setup'])(
-      'renders the skip link, <header>, #page-bar and one <main>, in that order, at %s',
+      "renders the skip link, <header>, #page-bar, one <main> and the warning's <dialog>, in that order, at %s",
       async (path) => {
         serveMe(answer);
         const { container } = renderShell(path);
@@ -351,7 +351,7 @@ describe('AppShell', () => {
           container.children,
           (element) => element.localName + (element.id && `#${element.id}`),
         );
-        expect(order).toEqual(['a', 'header', 'div#page-bar', 'main#main-content']);
+        expect(order).toEqual(['a', 'header', 'div#page-bar', 'main#main-content', 'dialog']);
         expect(container.firstElementChild).toBe(screen.getByRole('link', { name: 'Skip to main content' }));
         expect(document.querySelectorAll('main')).toHaveLength(1);
         expect(screen.getByRole('main')).toHaveAttribute('tabindex', '-1');

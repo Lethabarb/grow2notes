@@ -144,7 +144,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 4 | `app-shell.md › Account and Sign out` | F00.04 | S01.04.02 (Guide prompts bullet), S02.02.05 (autosave bullet) | See *Rows to watch* |
 | 5 | `app-shell.md › Screen changes, focus and scroll` | F00.05 | S02.01.01, S02.02.08, S02.03.01 (the Today row, Discard and Submit bullets) | See *Rows to watch* |
 | 6 | `app-shell.md › Start-up and whole-page messages` | F00.05 | | |
-| 7 | `app-shell.md › Session` | F00.04 | S02.02.05 (autosave and Submit confirmation bullets) | "After timing out mid-note" is M2 *Done when* row 3 (F02.02) |
+| 7 | `app-shell.md › Session` | F00.04 | S02.02.05 (autosave bullet), S02.03.01 (Submit confirmation bullet) | "After timing out mid-note" is M2 *Done when* row 3 (F02.02) |
 | 8 | `app-shell.md › Visual and settings` | DoD | | |
 
 **ux/screens/users.md**
