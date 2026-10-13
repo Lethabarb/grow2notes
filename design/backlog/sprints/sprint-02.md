@@ -318,13 +318,16 @@ guard tests, the acting user and channel, each row's version token, one save of 
 new values, and the reorder, end-of-list, archive and restore helpers, with their tests, and make `IfMatch.Check` give
 the §6.9 code; they map no endpoint of the app's own and add no table, migration or screen, so the save is proven on the
 organisation's guide prompts through test-only endpoints, and the list helpers on stand-in rows (its *Notes*). They
-change the server, the .NET tests and tests/README.md, and no SPA code. None of them needs the operator, and nothing
-goes on `ops/first-use-in-test.md`. The group, which F00.06's endpoints go in too, and the acting user and channel,
-which F00.06's user changes need (S00.06.01 needs the group alone), are each built once, by whichever branch merges
-first, and reused by the others; any F00.06 endpoint already on `main` moves into the group, and any caller of
-`IfMatch.Check` there is changed to take the code (its *Notes*). It is 25 in the *Plan* and in the list below, as 22 to
-24 are left for the stories pulled in the same day on their own branches; at its pull request the numbers are made to
-follow what `main` has by then.
+change the server, the .NET tests and tests/README.md, and no SPA code; and the Notes of the stories that take its
+parts, as each is built from its own section: S00.06.01 to S00.06.03, S01.02.01 to S01.02.08, S01.03.01 to
+S01.03.08, S01.04.01, S07.03.01 and S07.03.02. None of them needs the operator, and nothing goes on
+`ops/first-use-in-test.md`. The group, which F00.06's endpoints go in too, and the acting user and channel, which every
+F00.06 handler takes, S00.06.01's users list included, are each built once, by whichever branch merges first, and
+reused by the others. S00.06.01's branch builds its acting user as `ActingUser(UserId, OrganisationId)`, so whichever
+of the two merges second folds it into this story's `Actor`, leaving one type; any F00.06 endpoint already on `main`
+moves into the group, and any caller of `IfMatch.Check` there is changed to take the code (its *Notes*). It is 25 in
+the *Plan* and in the list below, as 22 to 24 are left for the stories pulled in the same day on their own branches;
+at its pull request the numbers are made to follow what `main` has by then.
 
 ## Definition of Ready check
 

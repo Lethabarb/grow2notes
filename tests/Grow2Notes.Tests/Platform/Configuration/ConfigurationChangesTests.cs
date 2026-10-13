@@ -105,18 +105,27 @@ public sealed class ConfigurationChangesTests : IAsyncDisposable
         Assert.Empty(store.Written);
     }
 
+    // Only the first save fails, so the store would keep the event if the service saved it again, or left it tracked
+    // for the handler's next save in the scope. ConfigurationChangesOnSqlServerTests shows the change unwritten too.
     [Fact]
-    public async Task When_the_save_finds_the_row_changed_since_it_was_loaded_it_gives_PreconditionFailed()
+    public async Task A_row_changed_since_it_was_loaded_gives_PreconditionFailed_and_no_later_save_writes_the_event()
     {
         var conflicting = app.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.ConfigureDbContext<Grow2NotesDbContext>(options =>
-                options.AddInterceptors(new RowChangedSinceItWasLoaded()))));
+                options.AddInterceptors(new FirstSaveFindsTheRowChanged()))));
+        await using var scope = conflicting.Services.CreateAsyncScope();
 
-        var result = await RewordGoalAsync(conflicting, "Made lunch with help");
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(OrganisationId))
+        {
+            var result = await RewordGoalInScopeAsync(scope.ServiceProvider, "Made lunch with help");
 
-        Assert.Same(ConfigurationSaveResult.PreconditionFailed, result);
-        Assert.False(result.Changed);
-        Assert.Same(ErrorCode.PreconditionFailed, result.Error);
+            Assert.Same(ConfigurationSaveResult.PreconditionFailed, result);
+            Assert.False(result.Changed);
+            Assert.Same(ErrorCode.PreconditionFailed, result.Error);
+            await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>()
+                .SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
         Assert.Empty(store.Written);
     }
 
@@ -130,19 +139,32 @@ public sealed class ConfigurationChangesTests : IAsyncDisposable
         await using var scope = app.Services.CreateAsyncScope();
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(OrganisationId))
         {
-            return await scope.ServiceProvider.GetRequiredService<ConfigurationChanges>().SaveAsync(
-                Manager, AuditEventTypes.Goal.Updated, AuditEntityTypes.Goal, GoalId, ParticipantId,
-                new JsonObject { ["text"] = "Made lunch" }, new JsonObject { ["text"] = text }, extraDetails,
-                TestContext.Current.CancellationToken);
+            return await RewordGoalInScopeAsync(scope.ServiceProvider, text, extraDetails);
         }
     }
 
-    // As EF Core does when an update's concurrency token matches no row.
-    private sealed class RowChangedSinceItWasLoaded : SaveChangesInterceptor
+    private static Task<ConfigurationSaveResult> RewordGoalInScopeAsync(
+        IServiceProvider scope, string text, JsonObject? extraDetails = null) =>
+        scope.GetRequiredService<ConfigurationChanges>().SaveAsync(
+            Manager, AuditEventTypes.Goal.Updated, AuditEntityTypes.Goal, GoalId, ParticipantId,
+            new JsonObject { ["text"] = "Made lunch" }, new JsonObject { ["text"] = text }, extraDetails,
+            TestContext.Current.CancellationToken);
+
+    // As EF Core does when an update's concurrency token matches no row, but for the first save only, so that a later
+    // save reaches the store.
+    private sealed class FirstSaveFindsTheRowChanged : SaveChangesInterceptor
     {
+        private bool failed;
+
         public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
             DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
         {
+            if (failed)
+            {
+                return ValueTask.FromResult(result);
+            }
+
+            failed = true;
             throw new DbUpdateConcurrencyException("The row changed since it was loaded.");
         }
     }
