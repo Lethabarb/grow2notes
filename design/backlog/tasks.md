@@ -260,7 +260,7 @@ changes by a link, Back, reload or Sign out.
       in the DOM while empty, and a time of 06:12 UTC on 1 October 2026 shown as "Saved 4:12 pm"; and
       `apiWithHeaders()` giving the body, the `ETag`'s token without its quotes and the `Date` as UTC, `undefined` for
       either header when it is missing, and failing as `api()` does
-- [ ] Make Sign out ask the leave guard (app-shell.md *Account and Sign out*'s Guide prompts bullet, in the order of
+- [x] Make Sign out ask the leave guard (app-shell.md *Account and Sign out*'s Guide prompts bullet, in the order of
       *Press Sign out* and *Sign out fails*): in `AccountPanel`'s `signOut()`, `await confirmLeave()` before any
       request and before the button goes busy, so that Stay sends nothing; `disarmUnloadGuard()` just before the logout
       request; `rearmUnloadGuard()` after a failed logout; the comment over `signOut()` drops this part; and, if T01's
