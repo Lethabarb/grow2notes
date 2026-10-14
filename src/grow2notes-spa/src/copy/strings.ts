@@ -77,6 +77,14 @@ export const strings = {
     /** The help line (microcopy.md §9), plain text, not a link: recovery is always a manager's Reset sign-in. */
     help: 'If you cannot sign in, ask a manager to reset your sign-in.',
   },
+  /**
+   * Sign-in's view C, signed out in place (sign-in.md; app-shell.md component 7): its `<h1>` in place of A's, and the
+   * sentence under it (microcopy.md's), over A's hint and controls.
+   */
+  signedOut: {
+    heading: 'You’ve been signed out',
+    sentence: 'Sign in again to go back to where you were.',
+  },
   tryAgain: 'Try again',
   /** Try again's busy label, and the start-up's loading line, as `index.html` has it before the script runs. */
   loading: 'Loading…',

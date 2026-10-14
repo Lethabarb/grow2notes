@@ -34,7 +34,8 @@ Up to four lanes run at once, each one task at a time:
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
-- **D:** T22 (once the production domain is set) and T23, alongside the note and report work, then T27 and T28.
+- **D:** T22 (once the production domain is set and Q13 is answered) and T23, alongside the note and report work,
+  then T27 and T28.
 
 Some pairs run one after the other on purpose: T12, T13 and T14 all change the note form, the draft save and Today;
 T16 and T18 both change the read view and the version-saving code; and T15 holds both download buttons, so T17 and
@@ -143,8 +144,12 @@ with their typing kept (checked with a half-filled Invite form), and a different
   created but that this may change at any time. It also says that from 23 October 2026 it starts limiting onboarding
   to retiring services, and that a customer with a Communication Services resource created before then can keep using
   it. The data-location page that `email.bicep` cites carries the same warning. A58 and `email.bicep` stand, as new
-  resources can still be created; whether A58 holds, and what sends production's email (S00.02.04, in T22), is a
-  question for the owner. No other provider is chosen or built here.
+  resources can still be created; whether A58 holds, and what sends production's email (S00.02.04, in T22), is owner
+  question Q13. No other provider is chosen or built here. So that `acs-grow2notes-test` exists before the limits
+  start, T01 should merge, and so deploy to test, before 23 October 2026. If it cannot, the deploy that first creates
+  the resource may be refused: it would stop at its `Deploy main.bicep` step, before the migration and the app, and as
+  every merge to `main` deploys the same `main.bicep`, every lane's deploy to test would stop with it. T01 then waits
+  for the owner's answer to Q13 before it merges.
 - `allowedActions(user)` in `userRules.ts` gives Edit and, while Invited, Resend invite. T04 adds its `onlyManager`
   argument with `isOnlyActiveManager`, Reset sign-in, Deactivate and Reactivate, so no argument goes unused before then.
   Invite user and T04's Edit user share `validateUser()` and the Role radios (`RoleField`, in `src/features/users/`).
@@ -215,6 +220,28 @@ with their typing kept (checked with a half-filled Invite form), and a different
   Try again.", and a `401` nothing. The sentence's address and the alert's name are the user's as the page showed them
   at the press. NVDA's reading after Resend invite, and a resent email arriving, are by hand (ops/first-use-in-test.md
   step 17).
+- Where design.md is silent (step 7), the simplest options: the shell holds the route in a `<div>` in `<main>` at all
+  times, which view C makes `hidden`, so that it hides the screen rather than mounting it again; a test that read
+  `<main>`'s children reads that `<div>`'s. View C opens as the session clock is `expired` over a signed-in screen, and
+  stays though the clock starts again, as the passkey options that it asks for are an accepted request; it closes on
+  the next answer that `['me']` takes for the same `userId` (`useMeAnswers()`, which counts answers, as one equal to
+  the last leaves the same object), once the clock is `active` again. It tells a sign-in from a refresh by
+  `signInCount()` (`src/api/session.ts`), which `api()` raises on each sign-in's `200`, and by which `api()` raises no
+  session-ended event for a `401` to a request sent before the newest sign-in; after a sign-in the shell invalidates
+  every query, which refetches the screen's, as `['me']` has no observer that fetches. The shell remembers whose
+  screens it shows, and a `Me` for any other `userId`, from a sign-in in view C or from a refresh, calls
+  `fullPageLoad()`, `disarmUnloadGuard()` not being on `main`. View C's `<h1>` has the id `signed-out-heading`
+  (`PageHeading` takes an `id`); the shell focuses that `<h1>` once the warning has closed, as a page behind an open
+  modal cannot take focus. The code step's label is in an `<h2>` (`FieldGroup`'s `headingLevel`), which is both
+  sign-in.md's label styled as h2 and app-shell.md's headings as `<h2>`. View C sets the title "Grow2Notes – Sign in"
+  and, as it closes, gives the screen back its own, any "Error: " included, unless Back has moved the screen on
+  meanwhile. Autosave, which view C pauses, comes with T10. The app's own 30 idle minutes, with NVDA's reading of view
+  C, are by hand (ops/first-use-in-test.md step 11).
+- A departure from sign-in.md (step 7), kept on purpose: its components 6 and 10 give the email and code fields the
+  `id` and `name` `email` and `code` in view C as in view A, but view C's page also holds the signed-in screen hidden
+  under it, which may have a field with the same id, such as Invite user's `email`, and ids must be unique in a page.
+  So view C's fields are `signed-out-email`, `signed-out-password` and `signed-out-code`, with the same `autoComplete`
+  values as view A's; view A keeps `email`, `password` and `code`.
 
 ### Steps
 
@@ -313,7 +340,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       user's page has no Resend invite, no element is `disabled` (AC21), and the tests that held Edit as the one action
       follow users.md's table for the actions T01 builds; signed in for real in the published app, a worker invited
       through the page gets the sentence; and axe passes with the sentence and with each failure
-- [ ] Show sign-in again in place, checked with a half-filled Invite user form (S00.04.08, every criterion; design.md
+- [x] Show sign-in again in place, checked with a half-filled Invite user form (S00.04.08, every criterion; design.md
       §8.5 *No work is lost*; sign-in.md *Sign in again, in place*; app-shell.md component 7 and its Session and
       Structure bullets; session-timeout.md *The signed-out state*; S00.04.08's Notes; see Notes): while the shell shows
       a signed-in screen and the session clock is `expired` (30:00 idle, or a `401` that ends the session, a refresh's
@@ -1378,7 +1405,7 @@ status: new
 release: R1
 lane: D
 size: M
-depends_on: [T01, Q2]
+depends_on: [T01, Q2, Q13]
 stories: [S00.02.04, S00.02.05, S06.03.01, S06.04.01, S06.05.01]
 ```
 
@@ -1407,6 +1434,8 @@ product-domain email sender, and a read-only production check.
   five-worker words check (S06.02.05, cut) for the managers to arrange.
 - Its product-domain sender replaces, in production, the test environment's azurecomm.net sender (A58).
 - Waits for owner question Q2, the production domain (A38).
+- Waits for owner question Q13, what sends production's email, as Communication Services' Email retires on
+  30 September 2028 (T01's Notes).
 
 ### Steps
 
@@ -2097,6 +2126,13 @@ only the tasks named. Everything else still open in the specs is built as they s
 - **Q12. Do the by-hand accessibility checks hold go-live?** design.md §14 M6 names VoiceOver and TalkBack, and
   microcopy.md asks for the five-worker words check before go-live. Affects T28 only. Suggested: no, under the
   owner's rule of 12 October 2026: do them in test when possible, and turn any failure into a bug.
+- **Q13. What sends production's email (A58, S00.02.04), as Communication Services' Email retires on 30 September
+  2028?** Blocks T22, and so T27 and T28. Added on 14 October 2026 by T01's plan. design.md §10.1 has production
+  send from `acs-grow2notes-prod` on the product domain, but Microsoft Learn (updated 8 October 2026) puts the Email
+  service in maintenance mode, advises migrating rather than onboarding new solutions, and starts limiting onboarding
+  to retiring services on 23 October 2026, likely before T22, which also waits for Q2, creates that resource (T01's
+  Notes). Whether A58, the test sender, holds is part of the same question. No answer is suggested, as each one
+  chooses a provider.
 
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:

@@ -1,7 +1,9 @@
-import { CancelledError, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
+import { act, renderHook } from '@testing-library/react';
+import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from './api.ts';
-import { meQuery, refreshMe, setMe, type Me } from './me.ts';
+import { meQuery, refreshMe, setMe, useMeAnswers, type Me } from './me.ts';
 import { createQueryClient } from './queryClient.ts';
 
 // A made-up manager (A35).
@@ -141,5 +143,32 @@ describe('setMe', () => {
     await setMe(client, worker);
 
     expect(client.getQueryState(['me', 'drafts'])?.fetchStatus).toBe('fetching');
+  });
+});
+
+describe('useMeAnswers', () => {
+  it("counts each answer that ['me'] takes, one equal to the answer held and a sign-in's included", async () => {
+    fetchMock.mockImplementation(() => answerWith(manager));
+    const client = createQueryClient();
+    const { result } = renderHook(() => useMeAnswers(), {
+      wrapper: ({ children }) => createElement(QueryClientProvider, { client }, children),
+    });
+    expect(result.current).toBe(0);
+
+    await act(() => refreshMe(client));
+    expect(result.current).toBe(1);
+
+    // The same object as before, which only the count tells apart.
+    const held = client.getQueryData(meQuery.queryKey);
+    await act(() => refreshMe(client));
+    expect(client.getQueryData(meQuery.queryKey)).toBe(held);
+    expect(result.current).toBe(2);
+
+    await act(() => setMe(client, manager));
+    expect(result.current).toBe(3);
+
+    fetchMock.mockImplementation(() => problem(401));
+    await act(() => refreshMe(client).catch(() => undefined));
+    expect(result.current).toBe(3);
   });
 });

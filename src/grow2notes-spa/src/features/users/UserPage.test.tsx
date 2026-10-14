@@ -172,6 +172,14 @@ function main(): HTMLElement {
   return screen.getByRole('main');
 }
 
+/**
+ * The `<div>` of `<main>` that the shell holds the screen in, which the signed-out-in-place view hides (app-shell.md
+ * component 7).
+ */
+function screenContainer(): Element | null {
+  return main().firstElementChild;
+}
+
 /** The page's `<h1>`, which must be in `<main>`. */
 function pageHeading(): HTMLElement {
   return within(main()).getByRole('heading', { level: 1 });
@@ -193,13 +201,15 @@ function backLink(): HTMLElement | null {
 }
 
 /**
- * The region's line: the status region straight under `<main>` that shows, beside the page's visually hidden one and
- * apart from Resend invite's, which is among the actions.
+ * The region's line: the status region straight under the screen's container that shows, beside the page's visually
+ * hidden one and apart from Resend invite's, which is among the actions.
  */
 function line(): HTMLElement {
   const shown = within(main())
     .getAllByRole('status')
-    .filter((region) => region.parentElement === main() && !region.classList.contains('visually-hidden'));
+    .filter(
+      (region) => region.parentElement === screenContainer() && !region.classList.contains('visually-hidden'),
+    );
   expect(shown).toHaveLength(1);
   return shown[0];
 }
@@ -222,12 +232,13 @@ function currentItems(): string[] {
 }
 
 /**
- * Expects Page not found alone in `<main>`, in order: its `<h1>`, its sentence, Go to Today and its status region,
- * empty; with no back link in the page bar; under the nav, which marks no item; titled "Page not found".
+ * Expects Page not found alone in the screen's container, in order: its `<h1>`, its sentence, Go to Today and its
+ * status region, empty; with no back link in the page bar; under the nav, which marks no item; titled "Page not
+ * found".
  */
 function expectPageNotFound() {
   expect(pageHeading()).toHaveAccessibleName('Page not found');
-  expect(Array.from(main().children, (element) => element.textContent)).toEqual([
+  expect(Array.from(screenContainer()?.children ?? [], (element) => element.textContent)).toEqual([
     'Page not found',
     'If you typed or pasted the web address, check it is correct.',
     'Go to Today',
@@ -727,15 +738,25 @@ describe('Resend invite', () => {
     expect(resendButton()).not.toHaveAttribute('aria-disabled');
   });
 
-  it('says nothing of a 401, which the session flow has', async () => {
+  it('says nothing of a 401, which the session flow has: sign-in again, over the page', async () => {
     await openAlex();
     serve(setupLinkPath, problem(401));
 
     pressResend();
     await answered();
 
-    expect(actionAlert()).toBeEmptyDOMElement();
-    expect(resendLine()).toBeEmptyDOMElement();
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    // The page, hidden under it as it was, with nothing in its error region or Resend invite's line.
+    const hiddenPage = main().querySelector<HTMLElement>(':scope > [hidden]');
+    if (hiddenPage === null) {
+      throw new Error('No page is hidden in <main>.');
+    }
+
+    const kept = within(hiddenPage);
+    expect(kept.getByRole('alert', { hidden: true })).toBeEmptyDOMElement();
+    const resend = kept.getByRole('button', { name: 'Resend invite', hidden: true });
+    expect(resend).not.toHaveAttribute('aria-disabled');
+    expect(resend.nextElementSibling).toBeEmptyDOMElement();
   });
 
   it('drops its sentence once the list shows Alex no longer Invited, never to come back with it', async () => {

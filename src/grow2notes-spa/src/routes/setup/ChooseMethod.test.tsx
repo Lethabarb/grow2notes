@@ -77,6 +77,9 @@ const answers: Record<string, Answer[]> = { [startPath]: [], [optionsPath]: [], 
 /** The number of creation options served, from which each new one takes its challenge. */
 let served = 0;
 
+/** Whom the app's session is for, and so whom `/api/auth/me` answers: nobody, until a test's setup ends. */
+let session: typeof me | undefined;
+
 /** A `200` with a JSON body. */
 function json(body: unknown): Promise<Response> {
   return Promise.resolve(new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } }));
@@ -199,6 +202,7 @@ function expectInOrder(...elements: Element[]) {
 beforeEach(() => {
   vi.useFakeTimers();
   served = 0;
+  session = undefined;
   webAuthn.supported = true;
   // A prompt still open, unless a test answers it.
   webAuthn.startRegistration.mockReturnValue(new Promise(() => undefined));
@@ -211,7 +215,7 @@ beforeEach(() => {
 
     // The shell's, for a person with no session until setup ends.
     if (path === mePath) {
-      return problem(401);
+      return session === undefined ? problem(401) : json(session);
     }
 
     const answer = answers[path as string]?.shift();
@@ -344,7 +348,10 @@ describe('ChooseMethod (view E)', () => {
 
   it('sends the passkey with the name Grow2Notes, and on 200 replaces /setup with Today and drops setup', async () => {
     webAuthn.startRegistration.mockResolvedValueOnce(credential);
-    answers[passkeyPath].push(() => json(me));
+    answers[passkeyPath].push(() => {
+      session = me;
+      return json(me);
+    });
     const { router, client } = await openViewE();
     const entries = window.history.length;
     const meRequests = sent(mePath).length;
@@ -359,7 +366,8 @@ describe('ChooseMethod (view E)', () => {
     expect(router.state.location.state).toBeNull();
     expect(screen.queryByTestId('setup-memory')).not.toBeInTheDocument();
     // The shell has the signed-in user from the answer, and shows Today for its today in the signed-in frame
-    // (sign-in.md *Interactions* 5), whatever the new location's one refresh of /me answers: here the test's 401.
+    // (sign-in.md *Interactions* 5), which the new location's one refresh of /me, for the session that setup started,
+    // leaves as it is.
     expect(client.getQueryData(meQuery.queryKey)).toEqual(me);
     expect(sent(mePath)).toHaveLength(meRequests + 1);
     expect(heading()).toHaveAccessibleName(`Today, Monday 12${nbsp}October`);

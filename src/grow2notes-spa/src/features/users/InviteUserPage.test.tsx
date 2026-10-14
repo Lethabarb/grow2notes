@@ -773,7 +773,7 @@ describe('Invite user, refused by the server', () => {
     expect(invitesSent()).toHaveLength(2);
   });
 
-  it('says nothing of a 401, which the session flow has, and keeps every value', async () => {
+  it('says nothing of a 401, which the session flow has, and keeps every value under sign-in again', async () => {
     serve('POST', usersPath, problem(401));
     renderApp(['/manage/users/new']);
     await settle();
@@ -782,9 +782,20 @@ describe('Invite user, refused by the server', () => {
     pressSend();
     await settle();
 
-    expect(alertLine()).toBeEmptyDOMElement();
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    // The form, hidden under it, as it was, with nothing in its alert line and no summary.
+    const hiddenForm = main().querySelector<HTMLElement>(':scope > [hidden]');
+    if (hiddenForm === null) {
+      throw new Error('No page is hidden in <main>.');
+    }
+
+    const kept = within(hiddenForm);
+    expect(kept.getByRole('alert', { hidden: true })).toBeEmptyDOMElement();
     expect(summary()).toBeNull();
-    expectKept(' Alex Park ', 'alex.park@example.org');
+    expect(kept.getByRole('textbox', { name: 'Name', hidden: true })).toHaveValue(' Alex Park ');
+    expect(kept.getByRole('textbox', { name: 'Email address', hidden: true })).toHaveValue('alex.park@example.org');
+    expect(kept.getByRole('radio', { name: 'Worker', hidden: true })).toBeChecked();
+    expect(kept.getByRole('button', { name: 'Send invite', hidden: true })).not.toHaveAttribute('aria-disabled');
   });
 });
 

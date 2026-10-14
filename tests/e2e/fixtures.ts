@@ -26,16 +26,20 @@ const bootstrapSettings = ['E2E_APP_DIR', 'ConnectionStrings__Grow2Notes', 'App_
 
 /**
  * Runs the published app's own `admin bootstrap` (ops/break-glass.md) as the SSH console runs it: from the app's
- * folder, with the settings of the app under test, so that the link opens there. The organisation and manager are made
- * up, and the address is new each time, as one address has one account across the app (A27, A35).
+ * folder, with the settings of the app under test, so that the link opens there, for a made-up manager of a made-up
+ * organisation, called `firstName` Sample, with an address that is new each time, as one address has one account
+ * across the app (A27, A35).
  */
-async function adminBootstrap(baseURL: string | undefined): Promise<Invite> {
+async function adminBootstrap(baseURL: string | undefined, firstName: string): Promise<Invite> {
   const missing = bootstrapSettings.filter((name) => !process.env[name]);
   if (missing.length > 0) {
     throw new Error(`admin bootstrap needs these settings, which tests/README.md describes: ${missing.join(', ')}.`);
   }
 
-  const manager = { displayName: 'Alex Sample', email: `alex.sample.${randomUUID()}@example.org` };
+  const manager = {
+    displayName: `${firstName} Sample`,
+    email: `${firstName.toLowerCase()}.sample.${randomUUID()}@example.org`,
+  };
   const { stdout } = await promisify(execFile)(
     'dotnet',
     [
@@ -108,9 +112,9 @@ async function addVirtualAuthenticator(page: Page) {
 export type VirtualAuthenticator = Awaited<ReturnType<typeof addVirtualAuthenticator>>;
 
 // Every end-to-end test imports test from here, not from @playwright/test (tests/README.md), so a screen that breaks
-// design.md §9.7's policy fails its test, whatever the test checks. A test that names invite or authenticator gets
-// them; the others never run the command or add an authenticator.
-export const test = base.extend<{ invite: Invite; authenticator: VirtualAuthenticator }>({
+// design.md §9.7's policy fails its test, whatever the test checks. A test that names invite, secondInvite or
+// authenticator gets them; the others never run the command or add an authenticator.
+export const test = base.extend<{ invite: Invite; secondInvite: Invite; authenticator: VirtualAuthenticator }>({
   page: async ({ page }, use) => {
     const violations: string[] = [];
     page.on('console', (message) => {
@@ -122,7 +126,11 @@ export const test = base.extend<{ invite: Invite; authenticator: VirtualAuthenti
     expect(violations, 'The browser console reported a Content Security Policy violation').toEqual([]);
   },
   invite: async ({ baseURL }, use) => {
-    await use(await adminBootstrap(baseURL));
+    await use(await adminBootstrap(baseURL, 'Alex'));
+  },
+  // Another person, of an organisation of their own, for a test of two people on one browser.
+  secondInvite: async ({ baseURL }, use) => {
+    await use(await adminBootstrap(baseURL, 'Jordan'));
   },
   authenticator: async ({ page }, use) => {
     await use(await addVirtualAuthenticator(page));

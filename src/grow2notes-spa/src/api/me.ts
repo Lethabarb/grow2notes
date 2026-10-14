@@ -1,4 +1,5 @@
-import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useCallback, useSyncExternalStore } from 'react';
 import { api } from './api.ts';
 
 /**
@@ -51,6 +52,20 @@ export async function setMe(queryClient: QueryClient, me: Me): Promise<void> {
   // Exact, so that a query under it, such as Today's `['me', 'drafts']`, is left alone.
   await queryClient.cancelQueries({ queryKey: meQuery.queryKey, exact: true });
   queryClient.setQueryData(meQuery.queryKey, me);
+}
+
+/**
+ * How many answers `['me']` has taken, a refresh's or a sign-in's, so that the shell can tell a new one from the one
+ * it held: an answer equal to the one held leaves the query's data the same object, and two can come in the same
+ * millisecond, so neither the data nor `dataUpdatedAt` tells.
+ */
+export function useMeAnswers(): number {
+  const queryClient = useQueryClient();
+  const subscribe = useCallback(
+    (onChange: () => void) => queryClient.getQueryCache().subscribe(onChange),
+    [queryClient],
+  );
+  return useSyncExternalStore(subscribe, () => queryClient.getQueryState(meQuery.queryKey)?.dataUpdateCount ?? 0);
 }
 
 /**

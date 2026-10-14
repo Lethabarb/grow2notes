@@ -154,6 +154,15 @@ function main(): HTMLElement {
   return screen.getByRole('main');
 }
 
+/**
+ * What `<main>` shows: the screen's elements, in the `<div>` that the shell holds the route in, which the
+ * signed-out-in-place view hides (app-shell.md component 7), or the shell's own crash page's, which has none.
+ */
+function mainContent(): Element[] {
+  const children = Array.from(main().children);
+  return children.length === 1 && children[0].localName === 'div' ? Array.from(children[0].children) : children;
+}
+
 /** The page's `<h1>`, which must be in `<main>`. */
 function pageHeading(): HTMLElement {
   return within(main()).getByRole('heading', { level: 1 });
@@ -177,7 +186,7 @@ function currentItems(): string[] {
 function expectCrashPage() {
   const heading = pageHeading();
   expect(heading).toHaveAccessibleName('There is a problem with Grow2Notes');
-  expect(Array.from(main().children, (element) => element.textContent)).toEqual([
+  expect(mainContent().map((element) => element.textContent)).toEqual([
     'There is a problem with Grow2Notes',
     'Anything already saved is kept.',
     'Go to Today',

@@ -25,6 +25,21 @@ export function sessionEnded(): void {
   }
 }
 
+// How many sign-ins the server has answered `200` since the page loaded, each with a new session cookie. A request sent
+// before the newest went with the cookie from before, so its `401` says nothing of the session now held (S00.04.08's
+// Notes); and the signed-out-in-place view tells by it whether the `Me` that closes it came from a sign-in.
+let signIns = 0;
+
+/** For `api()` only: a sign-in, or a setup, has been answered `200`, with a new session cookie. */
+export function signedIn(): void {
+  signIns += 1;
+}
+
+/** How many sign-ins the server has answered `200` since the page loaded. */
+export function signInCount(): number {
+  return signIns;
+}
+
 // The session clock (session-timeout.md *The session clock*) predicts when the server will end the session for being
 // idle: 30 minutes after the newest request that it accepted, the session cookie's `ExpireTimeSpan` (design.md §8.4),
 // with the warning from 28 minutes (A24). It never sends a request, which would extend the session, and the server's

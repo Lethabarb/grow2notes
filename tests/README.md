@@ -5,7 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, the Users screens and Guide prompts, with axe accessibility checks, run against the published app.
+  the idle sign-out, signing in again in place, the Users screens and Guide prompts, with axe accessibility checks,
+  run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -111,13 +112,14 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
-app's own resend (`e2e/resend-invite.spec.ts`) and the Guide prompts test that saves to the app
-(`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite`
-fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder,
-in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
-Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
-organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
-holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
+(`e2e/sign-in-again.spec.ts`) and the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their
+setup links from the published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the
+second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
+app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
+database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
+Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -132,11 +134,14 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Two more fixtures are there for the tests that name them, and only those run them:
+Three more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
-  `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager with a new `example.org`
-  address (A35). It gives the manager's display name and address, and the setup link that the command printed.
+  `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
+  `example.org` address (A35). It gives the manager's display name and address, and the setup link that the command
+  printed.
+- `secondInvite` runs it once more, for another made-up organisation and manager, Jordan Sample, for a test of two
+  people on one browser.
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
@@ -387,6 +392,28 @@ await page.clock.runFor('28:00'); // the warning opens
 - From the warning's one button, Tab and Shift+Tab take focus out of the page, to the browser, and the next brings it
   back. As it comes back, the window's `focus` refreshes `/api/auth/me`, which closes the warning as any accepted
   request does, so a test of the keys holds that request with `holdNext` (above) until it has pressed them.
+- At 30:00 the signed-out-in-place view shows, and the app, whose session has not ended, answers the window's next
+  refresh of `/api/auth/me` with `200`, which brings the screen back, as when another tab kept the session alive.
+
+### Ending a session in place, and signing in again
+
+A test of signing in again in place (S00.04.08) ends a real session, which it signed in through setup, by removing the
+session cookie, `__Host-grow2notes`, with `page.context().clearCookies({ name })`, as the app's own 30 idle minutes
+would. The window's `focus`, dispatched in the page, then refreshes `/api/auth/me`, whose `401` shows the
+signed-out-in-place view at the same address; a change sent then, such as Send invite, meets the `401` too. The passkey
+that setup made on the `authenticator` fixture signs the same person in again. To sign in as another person, a test
+sets that person up first, with `secondInvite` on the password path, so that the virtual authenticator holds one
+passkey only, and clears the browser's cookies before the first person's setup.
+
+```ts
+await page.context().clearCookies({ name: '__Host-grow2notes' });
+await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+```
+
+A test that answers `/api/auth/me` in the browser shows the view with a change that it answers `401`, such as Resend
+invite with `answerSetupLinks(page, { status: 401 })`, after `failMe(page, 401)`, so that the window's focus, which Tab
+out of the page and back gives, finds no session and leaves the view up. It calls `serveMe` again before it signs in
+again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec.ts` is the example of each.
 
 ## Writing integration tests
 

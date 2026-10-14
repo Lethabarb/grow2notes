@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { focusPageHeading } from './focusPageHeading.ts';
+import { focusPageHeading, signedOutHeadingId } from './focusPageHeading.ts';
 import { PageHeading } from './PageHeading.tsx';
 
 describe('PageHeading', () => {
@@ -11,6 +11,22 @@ describe('PageHeading', () => {
     expect(heading).toHaveAttribute('id', 'page-heading');
     expect(heading).toHaveAttribute('tabindex', '-1');
     expect(heading).toHaveStyle({ inlineSize: 'fit-content', maxInlineSize: '100%' });
+  });
+
+  it("takes the signed-out-in-place view's own id, which focusPageHeading leaves for the page's", () => {
+    render(
+      <>
+        <PageHeading id={signedOutHeadingId}>You’ve been signed out</PageHeading>
+        <PageHeading>Participants</PageHeading>
+      </>,
+    );
+    const signedOut = screen.getByRole('heading', { level: 1, name: 'You’ve been signed out' });
+
+    focusPageHeading();
+
+    expect(signedOut).toHaveAttribute('id', 'signed-out-heading');
+    expect(signedOut).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('heading', { level: 1, name: 'Participants' })).toHaveFocus();
   });
 });
 

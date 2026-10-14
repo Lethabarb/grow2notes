@@ -181,6 +181,14 @@ function main(): HTMLElement {
   return screen.getByRole('main');
 }
 
+/**
+ * The screen's elements, in the `<div>` of `<main>` that the shell holds the route in, which the signed-out-in-place
+ * view hides (app-shell.md component 7).
+ */
+function screenElements(): Element[] {
+  return Array.from(main().firstElementChild?.children ?? []);
+}
+
 /** The page's `<h1>`, which must be in `<main>`. */
 function pageHeading(): HTMLElement {
   return within(main()).getByRole('heading', { level: 1 });
@@ -211,7 +219,7 @@ function currentItems(): string[] {
 function expectPageNotFound() {
   const heading = pageHeading();
   expect(heading).toHaveAccessibleName('Page not found');
-  expect(Array.from(main().children, (element) => element.textContent)).toEqual([
+  expect(screenElements().map((element) => element.textContent)).toEqual([
     'Page not found',
     'If you typed or pasted the web address, check it is correct.',
     'Go to Today',
@@ -313,15 +321,23 @@ describe('Page not found for a refused region', () => {
     expectRecordScreen();
   });
 
-  it('shows nothing in the region for a 401, which the session flow has', async () => {
+  it('shows nothing in the region for a 401, which the session flow has: sign-in again, over the screen', async () => {
     serveRecord(refusedId, problem(401));
     renderApp(refusedAddress);
 
     await wait(60_000);
 
-    expect(line()).toBeEmptyDOMElement();
-    expect(within(main()).queryByRole('button')).not.toBeInTheDocument();
-    expectRecordScreen();
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    // The screen, hidden under it as it was, with its region's line empty and no Try again.
+    const hiddenScreen = main().querySelector<HTMLElement>(':scope > [hidden]');
+    if (hiddenScreen === null) {
+      throw new Error('No screen is hidden in <main>.');
+    }
+
+    const kept = within(hiddenScreen);
+    expect(kept.getByRole('heading', { level: 1, hidden: true })).toHaveAccessibleName('Made-up record');
+    expect(kept.getByRole('status', { hidden: true })).toBeEmptyDOMElement();
+    expect(kept.queryByRole('button', { hidden: true })).not.toBeInTheDocument();
   });
 
   it("shows the screen of an ID answered 200 next, with Manage marked and the route's title back", async () => {

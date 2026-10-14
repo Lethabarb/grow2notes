@@ -64,8 +64,12 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 11. Leave Today untouched for 28 minutes, in front and with the screen kept awake. Look for: the warning opens with
     focus on Stay signed in; NVDA says "You'll be signed out in 2 minutes", "dialog" and Stay signed in; left open, its
     sentence changes at 29:00, 29:20 and 29:40. Before 30:00 press Stay signed in. Look for `POST /api/auth/ping`
-    answering `204`, the warning closing and focus back where it was. Then sign out as in step 7. (S00.04.07; its
-    screen-reader spot check.)
+    answering `204`, the warning closing and focus back where it was. Then choose Manage, Users and Invite user, type a
+    made-up name and address, and leave the page untouched for 31 minutes. Look for: at 30:00, "You've been signed
+    out" in the form's place, at the same address, with no nav or Account, and NVDA saying "You've been signed out,
+    heading level 1"; then, after Sign in with a passkey, Invite user again, with what you typed, NVDA on its heading
+    and the address unchanged. Sign out as in step 7. (S00.04.07 and S00.04.08; their screen-reader spot checks, and
+    the session that the app itself ends after 30 idle minutes.)
 
 ### The second account: a password and an authenticator app
 
