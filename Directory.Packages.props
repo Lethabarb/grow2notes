@@ -2,6 +2,9 @@
 
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- A version below also applies where the package comes in only transitively, so the Security group's pins
+         reach the packages that ask for older versions. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +22,15 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
     <PackageVersion Include="QRCoder" Version="1.8.0" />
+  </ItemGroup>
+
+  <!-- Transitive packages pinned past high-severity advisories, which fail the restore (Directory.Build.props).
+       Microsoft.Data.SqlClient 6.1.7, the newest 6.1, asks for Pkcs 9.0.11, and Microsoft.AspNetCore.DataProtection
+       10.0.12 for Xml and Pkcs 10.0.12; 10.0.13 fixes GHSA-846f-f764-76mx, GHSA-7hqp-7c5m-4vq6,
+       GHSA-c399-9853-6jmj and GHSA-r955-8q5j-3h83. -->
+  <ItemGroup Label="Security">
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup Label="Tests">

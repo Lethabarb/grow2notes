@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D86 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A57), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D87 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A60), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1277,7 +1277,7 @@ Spot-checks (D17) need no endpoint: managers read notes and the downloaded daily
 |---|---|---|---|---|
 | GET | /api/reports/daily/{date}/has-notes | Manager | Whether the date has at least one submitted note, so the Report screen can enable or disable its download buttons (4.7). Returns no note content and no count (D26). | → `{date, hasNotes}` |
 | GET | /api/reports/daily/{date}/export?format=pdf\|docx | Manager | Download the daily report file (§11): every **submitted** note with `NoteDate = date`, each as its current version, sorted by family then given name. No counts or statistics (D26). Built fresh on every request and rendered on the server. Audited as `report.downloaded`. | → `application/pdf` or `application/vnd.openxmlformats-officedocument.wordprocessingml.document`, `Content-Disposition: attachment; filename="daily-notes_2026-10-01.pdf"`; `404 report.no_notes` when the date has no submitted notes (this includes any future date) |
-| GET | /api/reports/participants/{participantId}/export?from=&to=&includeHistory=&format=pdf\|docx | Manager | Participant record export (APP 12, HPP 6; §11.6). Audited as `participant.exported` with the range, format and `includeHistory`. | → file, `participant-record_2026-01-01_to_2026-09-30.pdf` (dates only, no names); `404 report.no_notes` and no file when the range holds no submitted note (D80) |
+| GET | /api/reports/participants/{participantId}/export?from=&to=&includeHistory=&format=pdf\|docx | Manager | Participant record export (APP 12, HPP 6; §11.6). Audited as `participant.exported` with the range, format and `includeHistory`. | → file, `participant-record_2026-01-01_to_2026-09-30.pdf` (dates only, no names); `404 report.no_notes` and no file when the range holds no submitted note (D80); a `to` after today is accepted as sent (A60) |
 
 ### 6.6 Configuration (managers)
 
@@ -1789,7 +1789,7 @@ Australia Southeast has no availability zones. Nothing here depends on them: the
 | Azure SQL database | `sqldb-grow2notes` | **Standard S0** (10 DTU, 250 GB); geo-redundant backup storage; 35-day point-in-time restore; long-term retention of monthly backups for 12 months; `CanNotDelete` lock on the **database** |
 | Key Vault | `kv-grow2notes-prod` | Standard; RBAC; soft delete + purge protection; firewall allows the VNet only; one RSA key |
 | Log Analytics + Application Insights | `log-` / `appi-grow2notes-prod` | Pay-as-you-go; 30-day retention; daily cap 0.5 GB |
-| Communication Services + Email | `acs-grow2notes` / `ecs-grow2notes` | Data location Australia (a geography; cannot be set to Victoria); sender on the product domain with SPF, DKIM and DMARC |
+| Communication Services + Email | `acs-grow2notes` / `ecs-grow2notes` | Data location Australia (a geography; cannot be set to Victoria); sender on the product domain with SPF, DKIM and DMARC (test sends from the free Azure-managed `azurecomm.net` domain instead, A58) |
 | Alerts | — | HTTP 5xx, health-check failure and DTU above 80%. The action group emails the developer; these are operations alerts, not app emails. |
 | Governance | the two Grow2Notes resource groups | Azure Policy *Allowed locations* = Australia Southeast and Australia East (Australia East only for geo-restore and the disaster-recovery redeploy, §10.7), assigned to each of the two resource groups; a Cost Management budget alert inside each resource group, emailing the developer: AUD 30/month for test and AUD 70/month for prod (AUD 100 in total). Neither applies to the rest of the operator's shared subscription, so its other workloads are unaffected (D60, D61, D63) |
 
@@ -1819,7 +1819,7 @@ That is **about AUD 62–65 a month ex GST (about AUD 68–72 including GST) for
 | Environment | Purpose | Data | Differences from prod |
 |---|---|---|---|
 | **Local** | Development on Windows | Made-up seed data | SQL Server LocalDB or Developer edition; emails written to the console; no Azure resources |
-| **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its default `*.azurewebsites.net` address with App Service's built-in HTTPS, so no custom domain or managed certificate for now (D62); its own identities and passkeys |
+| **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its default `*.azurewebsites.net` address with App Service's built-in HTTPS, so no custom domain or managed certificate for now (D62); setup-link email from the free Azure-managed `azurecomm.net` domain, with SPF, DKIM and DMARC set by Azure (A58); its own identities and passkeys |
 | **Prod** | Real use | Real | — |
 
 There are no deployment slots. A production deploy restarts the app for a few seconds; autosave retries with backoff and unsaved text stays in memory. Production deploys are run by hand at an agreed time outside the usual note-writing hours (A35).
@@ -1865,7 +1865,7 @@ infra/
 │  ├─ sql.bicep           # server (Entra-only admin group), database, VNet rule, PITR and LTR policies
 │  ├─ keyvault.bicep      # vault, network rules, Data Protection key
 │  ├─ monitoring.bicep    # Log Analytics, App Insights, alerts, daily cap
-│  └─ email.bicep         # Communication Services, Email service, domain
+│  └─ email.bicep         # Communication Services, Email service, domain (Azure-managed in test, A58)
 ├─ sql/grant-identities.sql   # one-off, run as Entra admin: CREATE USER ... FROM EXTERNAL PROVIDER for the app and
 │                             #   deployment identities; ALTER ROLE grow2notes_runtime ADD MEMBER for the app identity,
 │                             #   first creating the role with the first migration's guard if it is missing
@@ -2010,7 +2010,7 @@ Both files have the same content and order (11.3). One `DailyReportModel` feeds 
 | File name | `daily-notes_2026-10-01.pdf` | `daily-notes_2026-10-01.docx` |
 | Metadata | Title and organisation only; no participant names | Same |
 
-- **Libraries:** PDFsharp-MigraDoc and the Open XML SDK (§7.5). MigraDoc does no per-character font fallback, so an M4 test checks that every character in a rendered report exists in the embedded font.
+- **Libraries:** PDFsharp-MigraDoc and the Open XML SDK (§7.5). MigraDoc does no per-character font fallback, so an M4 test checks that every character in a rendered report exists in the embedded font. A character the font cannot draw, such as an emoji, is printed as the replacement mark U+FFFD in the PDF only; the Word file keeps the text as written (A59).
 - **Files are not stored:** each file is generated on request and sent straight to the manager's browser (A19). Each download is audited with who, when, which date and which format.
 - **Accessibility:** the Word file is the accessible version, with real headings and lists. The PDF is for printing and filing.
 
@@ -2018,7 +2018,7 @@ Both files have the same content and order (11.3). One `DailyReportModel` feeds 
 
 Managers only, from participant detail > Export record (4.12).
 
-- **Choices:** From and To dates (default: the participant's first note to today); **Include earlier versions** (off by default, A20); PDF or Word.
+- **Choices:** From and To dates (default: the participant's first note to today; a To date after today is accepted as sent, A60); **Include earlier versions** (off by default, A20); PDF or Word.
 - **Title block:** "Progress notes record", the participant's name and date of birth, the date range, the organisation, who exported it and when, and "Earlier versions: included" or "not included".
 - **Body:** one block per submitted note, oldest first, headed with the note date and laid out like the daily-report block (written by, submitted, goals, common items with the Every note group and the picked groups only (D47), guided notes, flag and review, edited marker). Flag reasons and review comments are included, because they are information about the participant (A20). Drafts are excluded.
 - **With earlier versions:** each edited note is followed by "Earlier versions", newest to oldest, each printed in full with the groups picked in that version, for example "Version 2: saved by Jo Smith, Fri 2 Oct 2026, 9:01 am" or "Version 1: submitted by Priya Nair, …".
@@ -2136,10 +2136,15 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A55 | A password attempt on an account with no password | `POST /api/auth/login` counts a wrong password towards the lockout (A25, §9.9) only for an account that has a password. An account set up with a passkey has none (`PasswordHash` is null), so no password can be right for it and counting guesses at it protects nothing, while five requests with its email, which anyone can send, would lock its passkey out for 15 minutes, again and again, as a lockout refuses every way in (A25). Such an attempt still gets the `401` and `auth.signin_failed`, and an account that is locked out, Invited or Deactivated is still refused. A failed passkey counts towards no lockout either. Taken by the developer on 13 October 2026, after the branch review of S00.04.05 found the gap; the owner may overturn it. |
 | A56 | How soon the password step answers | `POST /api/auth/login` answers an email of no account after one lookup, while a known account also costs Identity's checks and the audit event of the failure (§5.4), and one with a password costs a password hash, tens of milliseconds, and a save of its failed-attempt count too. So the time an answer takes can show whether an account exists, though its words never do (§4.1). That is accepted for now: equal times would need the same hash and writes for every kind of account and for no account, and a hash run for an unknown email alone would only make an account with no password, set up with a passkey, the quick answer instead. §9.9's limits bound how many emails one client address can try, though not someone with many addresses, and F06.01's security review weighs the rest (S06.01.01). Taken by the developer on 13 October 2026, after the branch review of S00.04.05 found the gap; the owner may overturn it. |
 | A57 | Activity that renewed nothing | The SPA's session clock counts as activity every request answered with anything but a `401`, a `5xx` included (§8.5; session-timeout.md *The session clock* steps 1 and 6), as the session check runs before the endpoint and renews the session cookie (§8.4), so an endpoint's failure has still moved the server's 30 minutes. Two answers renewed nothing, and the client cannot tell them from the rest: a `503` that App Service's front end gives during a restart, which never reached the app, and a `500` from a database failure inside the session check less than 15 minutes after the request that last renewed the cookie (later, the cookie's own sliding renewal comes with the `500`). After either, the clock is late by up to the time since that request, so the server can end the session before the warning that WCAG 2.2.1 asks for, and the person's next request gets the `401` that ends the clock and shows sign-in in place, with nothing lost (§8.5). That is accepted: both come only while the app is failing, and not counting a `5xx` would make the clock early after any endpoint's failure and leave Stay signed in's `5xx` needing words of its own. Taken by the developer on 13 October 2026, after the branch review of S00.04.07 found session-timeout.md promising a clock that is never late; the owner may overturn it. |
+| A58 | Setup-link email in test | The test environment sends the setup-link email (A23) from Azure Communication Services' free Azure-managed domain, a subdomain of `azurecomm.net` whose SPF, DKIM and DMARC Azure sets, so test needs no domain of its own (D62). The Email service's data location stays Australia (§10). The sender on the product domain (A38), with SPF, DKIM and DMARC, comes with production (§10.1). Tests and CI never send real email; they use a fake sender. Taken by the developer on 14 October 2026 from the condensed plan's suggestions; the owner may overturn it. |
+| A59 | A character the PDF's font cannot draw | A character that DejaVu Sans, the PDF's embedded font, cannot draw, such as an emoji typed on a phone keyboard, is printed as the replacement mark U+FFFD in the PDF only (§11.5), so U+FFFD must itself be in the font, which the M4 font test checks. The Word file keeps the text as written, and every page's footer already says the record in Grow2Notes is authoritative (A19). Taken by the developer on 14 October 2026 from the condensed plan's suggestions; the owner may overturn it. |
+| A60 | A record export's To date after today | `GET /api/reports/participants/{participantId}/export` accepts a `to` after today in Melbourne as sent: it is neither refused nor moved back to today, as no note can exist after today, and the file prints the range as entered (§4.12, §6.5, §11.6). The export screen shows no error for it (record-export.md). Taken by the developer on 14 October 2026 from the condensed plan's suggestions; the owner may overturn it. |
 
 ---
 
 ## 14. Delivery plan
+
+The milestones below set the scope. From 14 October 2026 the remaining work is built as the tasks in [backlog/tasks.md](backlog/tasks.md), one pull request each, with the backlog's stories as their acceptance criteria (D87).
 
 For every milestone:
 - It ends with a working build deployed to the test environment in Azure Australia Southeast.
