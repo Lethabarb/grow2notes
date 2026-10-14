@@ -6,6 +6,12 @@ importable later), D53 (2-week sprints), D54 (about 20 hours a week, one develop
 R2 is the admin MCP server, after go-live). It adds no feature. A decision in [decisions.md](../decisions.md) can
 override anything here.
 
+**From 14 October 2026 the remaining work is delivered as tasks** (D87): the 39 tasks in [tasks.md](tasks.md), one
+pull request each, in that file's order and lanes, which supersede the numbered backlog order in releases.md. The
+stories each task absorbs stay in their epic files as its acceptance criteria. Per-story refinement, pull-in rows in
+sprint files and per-story close-outs no longer apply to tasks: a task is planned briefly into its *Steps* when its
+lane starts it, and its stories become `done` with it. The Definition of Done (§9) applies to each task.
+
 Evidence grades: **[Standard]** a published standard; **[Vendor]** the tool maker's own documentation;
 **[Convention]** widely used practitioner practice; **[Opinion]** one expert's view, or this method's own choice.
 Numbers in brackets point to [Sources](#12-sources).
@@ -232,9 +238,9 @@ Word (M4) · **E05** Participant export, audit completeness and retention (M5) �
 - **Moving an item:** set the old one to `dropped`, give it the note "moved to …", and create the new one under its new
   parent. That way an ID always shows its parent.
 - **Backlog order is held separately from IDs.** Near the top of releases.md is one ordered list of the IDs not yet
-  done: the Product Backlog order. The owner reorders it at refinement, because the Product Owner is accountable for
-  ordering the backlog [1, Standard]. IDs stay stable; add `depends_on` only where the order really matters. Don't
-  renumber.
+  done: the Product Backlog order (from 14 October 2026, the task order in [tasks.md](tasks.md) instead, D87). The
+  owner reorders it at refinement, because the Product Owner is accountable for ordering the backlog [1, Standard].
+  IDs stay stable; add `depends_on` only where the order really matters. Don't renumber.
 - **Use the story ID in every pull request description.** Branch names follow the git rules: before import,
   `feat/invite-user`; after import to GitHub, `feat/123-invite-user`, using the issue number.
 
@@ -248,6 +254,7 @@ design/backlog/
 ├─ releases.md                                the backlog order; per release: goal, epics, reference stories,
 │                                             velocity, burn-up
 ├─ coverage.md                                the coverage matrix: every scope row and its owner (§2.3)
+├─ tasks.md                                   the tasks the remaining stories are delivered as (D87)
 ├─ E00-skeleton-hosting-sign-in/              one folder per epic
 │  ├─ E00-skeleton-hosting-sign-in.md         the epic: goal, features, link to its coverage rows
 │  ├─ F00.01-deployment.md                    a feature: outcome, and each of its stories as a section
@@ -298,6 +305,7 @@ design/backlog/
 | `doing` | Started in the current sprint | Open | Active |
 | `done` | Meets the Definition of Done (§9) | Closed as completed | Closed |
 | `dropped` | Out of scope; file kept for the record | Closed as not planned | Removed |
+| `cut` | Taken out of the build by D87: already built, or by-hand checks only, which moved to a checklist | Closed as not planned | Removed |
 
 An epic's or feature's status is derived, not stored (unless it is `dropped`): it is `doing` while any child is doing,
 and `done` under §2.3 rule 4.
@@ -370,7 +378,7 @@ sub-headings become `###`.
 id: S07.04.01
 type: story           # story | enabler | spike | bug
 title: Invite a user
-status: new           # new | ready | doing | done | dropped
+status: new           # new | ready | doing | done | dropped | cut
 points:               # 1, 2, 3 or 5
 sprint:
 depends_on: [S07.01.02]

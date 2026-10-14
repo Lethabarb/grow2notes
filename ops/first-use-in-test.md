@@ -110,3 +110,31 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     iPhone when Chrome offers it, and the password worker with email, password and a 6-digit code. Look for Today each
     time, then sign out as in step 7, and repeat step 15's query for their `auth.setup_completed` and
     `auth.signed_out` rows. (F00.04's feature check: the second sign-ins, on the laptop.)
+
+### Later, once the note form and the Report screen are in test
+
+These steps hold the by-hand checks of four stories cut on 14 October 2026 (D87, [tasks.md](../design/backlog/tasks.md)
+*Cut stories*); T26 orders them with the other by-hand accessibility steps. Besides the kit in *Before you start*,
+they need an Android phone with Chrome, Samsung Internet and TalkBack, and Dragon on the laptop if you have it.
+
+20. As a manager, on the Report screen, download a day's Word file and PDF on each of iPhone Safari, iPhone Chrome,
+    Android Chrome and Samsung Internet. Look for each file saved. On the iPhone, choose a future date in the picker
+    and look for the error once you leave the field; on Android, pick a date in the dialog and look for it to take
+    effect within about a second, without leaving the field. If a browser cannot save a file, tell the developer: the
+    plain-link contingency in file-download.md is then built for that case. (S04.02.05; daily-report.md's *Real
+    devices* criteria.)
+21. With VoiceOver on the iPhone (Safari), TalkBack on the Android phone (Chrome) and NVDA on the laptop (Chrome), step
+    through the days on the Report screen, download on a day with notes and press a download on a day without. Look
+    for each item of daily-report.md's *Accessibility checklist*, *Screen reader*, heard as written. (S04.02.05,
+    S06.02.04.)
+22. With the same three screen readers, write, check and submit a note, and discard a draft, going through the items
+    of note-form.md's *Accessibility checklist*, *Manual test passes (M6)*, and group-picker.md's *Test (M6)*. Look
+    for each item heard as written, the Submit and Discard dialog titles read once, and the loading, error and retry
+    states announced. On the laptop, dictate into Guided notes with Windows voice typing (Windows key + H) and with
+    Dragon, and look for the note's save status saying it saved while the cursor stays in the box. If it does not,
+    tell the developer: guided-notes-textarea.md's 1-second check (*Behaviour* item 6) is then added. (S06.02.03.)
+23. The managers arrange five of the provider's workers, including some who write in English as an additional
+    language. In test, with made-up data (A35), each says what every primary button will do before pressing it.
+    Record, for each button, how many understood it; a button that fewer than 4 of the 5 understood goes to the owner
+    as a wording question, and no wording changes without the owner's approval. This step is also on the go-live run
+    sheet that T22 writes. (S06.02.05; microcopy.md §8 *Testing the words*.)

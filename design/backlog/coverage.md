@@ -356,7 +356,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | An automated test confirms the PDF text and the Word text both match the stored notes | F04.01 | | |
-| 2 | Every character in a rendered PDF exists in the embedded font, including ☐ and ☑ (automated test) | F04.01 | | Open question on characters the font lacks (S04.01.02 Notes) |
+| 2 | Every character in a rendered PDF exists in the embedded font, including ☐ and ☑ (automated test) | F04.01 | | A character the font lacks prints as U+FFFD in the PDF only (A59, 14 October 2026; S04.01.02 Notes) |
 | 3 | A day with 20 notes downloads in under 10 seconds | F04.01 | | |
 | 4 | The PDF opens in Edge and Acrobat; the Word file opens in desktop and mobile Word, with participant headings in the desktop Navigation pane | F04.01 | | Manual checks |
 | 5 | Edited, flagged, reviewed, submitted-next-day and past-day notes each show the right marker | F04.01 | | |

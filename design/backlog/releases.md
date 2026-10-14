@@ -13,6 +13,8 @@ Release planning: 4 October 2026, revised the same day after review. Re-forecast
 
 ## Backlog order
 
+**Superseded on 14 October 2026:** the remaining work is built as the tasks in [tasks.md](tasks.md), in its order (D87).
+
 The Product Backlog order: every item not yet done, R1 then R2. The owner reorders it at refinement (README §4).
 
 The order respects every `depends_on`. Otherwise it follows the milestones (M0 to M6, then R2) and, within each epic,
@@ -523,8 +525,8 @@ that takes an affected story.
 | Sprint 19 (21 Jun 2027) | note-form.md Q3 (the version number in the edit caption) | S02.06.01 |
 | Sprint 20 (5 Jul 2027) | note-form.md Q4 (back-link labels for past-day notes) | S02.08.02 |
 | Sprint 21 (19 Jul 2027) | The sort key for "oldest first"; ux/README.md Q3 and Q9 | S03.03.01, S03.03.03 |
-| Sprint 23 (16 Aug 2027) | What the PDF shows for a character the embedded font lacks, such as an emoji | S04.01.02 |
-| Sprint 25 (13 Sep 2027) | record-export.md Q1 (the earliest note date for the From default), Q2 (the no-notes response), Q3 (a To date after today). **Q1 and Q2 answered 13 Oct 2026:** `GET /api/participants/{id}` gives `firstNoteDate`, and an empty range answers `404 report.no_notes` (D80); Q3 is still open | S05.01.01, S05.01.02 |
+| Sprint 23 (16 Aug 2027) | What the PDF shows for a character the embedded font lacks, such as an emoji. **Answered 14 Oct 2026** by an assumed default from the condensed plan: the replacement mark U+FFFD in the PDF only, while the Word file keeps the text as written (design.md A59) | S04.01.02 |
+| Sprint 25 (13 Sep 2027) | record-export.md Q1 (the earliest note date for the From default), Q2 (the no-notes response), Q3 (a To date after today). **Q1 and Q2 answered 13 Oct 2026:** `GET /api/participants/{id}` gives `firstNoteDate`, and an empty range answers `404 report.no_notes` (D80). **Q3 answered 14 Oct 2026** by an assumed default from the condensed plan: a To date after today is accepted as sent (design.md A60) | S05.01.01, S05.01.02 |
 | Sprint 27 (11 Oct 2027) | Where the HPP 4.3 destruction log and the yearly retention list are kept (not in the repository) | S05.04.01 |
 | Sprint 27 (11 Oct 2027) | The switch-over date (A40), so staff onboarding and the gathering of Word notes can be planned (the likely forecast leaves the provider about three weeks of production before go-live; a later date gives more); who runs staff onboarding; whether to have a pilot | F06.06, S06.05.02, S06.06.03 |
 | Sprint 27 (11 Oct 2027) | When the restore test runs, given production holds no note until the switch-over day: may production hold a known note before then? The answer shapes how S06.03.02's runbook is written and whether go-live line 8 can be complete before go-live | S06.03.02, S06.06.02 |
