@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, apiWithHeaders, classify } from '../../api/api.ts';
 import { refreshMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
@@ -13,10 +13,10 @@ import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { limits } from '../../limits.ts';
-import { unloadGuardArmed } from '../../routes/leaveGuard.ts';
 import { fieldIds } from './fieldIds.ts';
 import styles from './GuidePromptsForm.module.css';
 import { guidePromptsQuery, type GuidePrompts } from './guidePromptsQuery.ts';
+import { LeaveWarning } from './LeaveWarning.tsx';
 
 const promptsPath = '/api/admin/guide-prompts';
 // The count shows from 900 characters, 90% of the limit, GOV.UK's threshold (guide-prompts.md 6c).
@@ -33,7 +33,8 @@ const savingDelay = 400;
  * trimmed, or, over 1,000 characters, shows the error and sends nothing, with the alert above it for a request that
  * failed and the save status beside it. The field is never focused by itself, as on a phone the keyboard would open
  * over the help text, and has no placeholder, which could be taken for saved prompts. Nothing is sent while typing,
- * as every save reaches every worker's empty Guided notes box at once.
+ * as every save reaches every worker's empty Guided notes box at once, and leaving with text not saved asks first
+ * (component 7).
  */
 export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
   const queryClient = useQueryClient();
@@ -63,6 +64,9 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
   const over = length > limits.guidePrompts;
   // The field holds text that the server does not, so that leaving would lose it.
   const dirty = trimmed !== base.text;
+  // The same, read from the field itself at the moment a navigation or Sign out asks (settings-textarea.md
+  // *Implementation notes*). The field has gone once a navigation that it let through has unmounted the page.
+  const isDirty = useCallback(() => field.current !== null && field.current.value.trim() !== base.text, [base.text]);
   useErrorTitle(tooLong > 0 || failure !== undefined);
 
   useLayoutEffect(() => {
@@ -88,25 +92,6 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
     }, countPause);
     return () => window.clearTimeout(timer);
   }, [typed]);
-
-  // The browser's own warning before a reload, a closed tab or a typed address, added only while the text is not
-  // saved, as a page with the listener loses the browser's back-forward cache (settings-textarea.md *Implementation
-  // notes*).
-  useEffect(() => {
-    if (!dirty) {
-      return;
-    }
-
-    const warn = (event: BeforeUnloadEvent) => {
-      if (unloadGuardArmed()) {
-        event.preventDefault();
-        // For Chromium before 119, which asks only when this is set.
-        event.returnValue = true;
-      }
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
 
   function onInput(event: FormEvent<HTMLTextAreaElement>) {
     const { value } = event.currentTarget;
@@ -189,48 +174,51 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
   );
 
   return (
-    <form noValidate onSubmit={(event) => void save(event)}>
-      <div className={styles.group} data-invalid={tooLong > 0 || undefined}>
-        {tooLong > 0 && (
-          <FieldError fieldId={fieldIds.prefix}>{msg.tooLong(pageName.guidePrompts, limits.guidePrompts)}</FieldError>
-        )}
-        {/* The copy behind the box, from data-value, sizes it where there is no field-sizing (TextBox.module.css). */}
-        <div ref={grow} className={textBox.grow} data-value={text}>
-          <textarea
-            ref={field}
-            id={fieldIds.text}
-            name="text"
-            className={textBox.box}
-            defaultValue={text}
-            aria-describedby={description.join(' ')}
-            aria-invalid={tooLong > 0 || undefined}
-            data-over-limit={over || undefined}
-            spellCheck
-            autoCapitalize="sentences"
-            autoComplete="off"
-            onInput={onInput}
-          />
-        </div>
-        {/* Hidden from screen readers, which hear its twin instead, once typing has stopped. */}
-        {length >= countFrom && (
-          <p aria-hidden="true" className={styles.count} data-over-limit={over || undefined}>
-            {msg.characterCount(length, limits.guidePrompts)}
+    <>
+      <form noValidate onSubmit={(event) => void save(event)}>
+        <div className={styles.group} data-invalid={tooLong > 0 || undefined}>
+          {tooLong > 0 && (
+            <FieldError fieldId={fieldIds.prefix}>{msg.tooLong(pageName.guidePrompts, limits.guidePrompts)}</FieldError>
+          )}
+          {/* The copy behind the box, from data-value, sizes it without field-sizing (TextBox.module.css). */}
+          <div ref={grow} className={textBox.grow} data-value={text}>
+            <textarea
+              ref={field}
+              id={fieldIds.text}
+              name="text"
+              className={textBox.box}
+              defaultValue={text}
+              aria-describedby={description.join(' ')}
+              aria-invalid={tooLong > 0 || undefined}
+              data-over-limit={over || undefined}
+              spellCheck
+              autoCapitalize="sentences"
+              autoComplete="off"
+              onInput={onInput}
+            />
+          </div>
+          {/* Hidden from screen readers, which hear its twin instead, once typing has stopped. */}
+          {length >= countFrom && (
+            <p aria-hidden="true" className={styles.count} data-over-limit={over || undefined}>
+              {msg.characterCount(length, limits.guidePrompts)}
+            </p>
+          )}
+          <p aria-live="polite" className="visually-hidden">
+            {spoken}
           </p>
-        )}
-        <p aria-live="polite" className="visually-hidden">
-          {spoken}
-        </p>
-      </div>
-      <div className={styles.actions}>
-        <RequestAlert>{failure}</RequestAlert>
-        <div className={styles.saveRow}>
-          {/* Not announced by the page: the save status says "Saving…" itself (guide-prompts.md 6e). */}
-          <Button type="submit" variant="primary" busy={saving} busyLabel={strings.saving} announceBusy={false}>
-            {strings.save}
-          </Button>
-          <SaveStatus state={saving ? (slow ? 'saving' : 'none') : saved} />
         </div>
-      </div>
-    </form>
+        <div className={styles.actions}>
+          <RequestAlert>{failure}</RequestAlert>
+          <div className={styles.saveRow}>
+            {/* Not announced by the page: the save status says "Saving…" itself (guide-prompts.md 6e). */}
+            <Button type="submit" variant="primary" busy={saving} busyLabel={strings.saving} announceBusy={false}>
+              {strings.save}
+            </Button>
+            <SaveStatus state={saving ? (slow ? 'saving' : 'none') : saved} />
+          </div>
+        </div>
+      </form>
+      <LeaveWarning dirty={dirty} isDirty={isDirty} />
+    </>
   );
 }

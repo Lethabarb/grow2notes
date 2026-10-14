@@ -8,7 +8,9 @@ import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import { onSessionEnded } from '../../api/session.ts';
+import { buttonClass } from '../../components/buttonClass.ts';
 import textBox from '../../components/TextBox.module.css';
+import { confirmLeave, disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
 import { guidePromptsQuery } from './guidePromptsQuery.ts';
 
@@ -52,6 +54,11 @@ const conflict =
   'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to replace '
   + 'their version with yours.';
 const title = 'Grow2Notes – Guide prompts';
+// The leave dialog's words (guide-prompts.md component 7).
+const leaveTitle = 'Leave without saving?';
+const leaveBody = 'Your changes to the guide prompts are not saved.';
+const stay = 'Stay on this page';
+const leave = 'Leave without saving';
 
 /** How the server meets a request: an answer, or a failure as `fetch` has one. */
 type Answer = (init?: RequestInit) => Promise<Response>;
@@ -143,14 +150,14 @@ function putsSent(): { text: unknown; ifMatch: string | null }[] {
 
 /**
  * Renders the app at `path` for `me` on a memory router, under a query client of its own and StrictMode, as `main.tsx`
- * renders it. `['me']` holds `me` already, as after the start-up, so that the screen shows with the first render, from
- * which the fake clock then times its region.
+ * renders it, after the addresses in `before`, which Back goes to. `['me']` holds `me` already, as after the start-up,
+ * so that the screen shows with the first render, from which the fake clock then times its region.
  */
-function renderApp(path: string, me: Me = manager) {
+function renderApp(path: string, me: Me = manager, before: string[] = []) {
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(routes, { initialEntries: [...before, path] });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -294,6 +301,67 @@ function pressTryAgain(): HTMLElement {
   return button;
 }
 
+/** The leave dialog, or `null` while it is closed. */
+function leaveDialog(): HTMLDialogElement | null {
+  return screen.queryByRole<HTMLDialogElement>('alertdialog');
+}
+
+/** The leave dialog, which must be open. */
+function openDialog(): HTMLDialogElement {
+  const dialog = leaveDialog();
+  if (dialog === null) {
+    throw new Error('The leave dialog is not open.');
+  }
+
+  return dialog;
+}
+
+/** Presses the main navigation's link named `name`, and lets the router take or block it. */
+async function follow(name: string) {
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name }));
+  await settle();
+}
+
+/** Presses the leave dialog's button named `name`, and lets the `close` event that its stand-in queues run. */
+async function pressInDialog(name: string) {
+  fireEvent.click(within(openDialog()).getByRole('button', { name }));
+  await settle();
+}
+
+/**
+ * The ways to close the leave dialog but Leave without saving, each of which means Stay (guide-prompts.md component
+ * 7): its Stay on this page; Escape or Android's back gesture, for which the browser fires `cancel`, then closes it;
+ * and a plain `close()`, with which the shell closes an open dialog before its warning.
+ */
+const staying: [string, (dialog: HTMLDialogElement) => void][] = [
+  [stay, (dialog) => fireEvent.click(within(dialog).getByRole('button', { name: stay }))],
+  [
+    'Escape',
+    (dialog) => {
+      fireEvent(dialog, new Event('cancel', { cancelable: true }));
+      dialog.close();
+    },
+  ],
+  ['a plain close()', (dialog) => dialog.close()],
+];
+
+/** Asks the page whether the person may leave, as Sign out does first. */
+function askToLeave(): Promise<boolean> {
+  const asked: Promise<boolean>[] = [];
+  act(() => {
+    asked.push(confirmLeave());
+  });
+  return asked[0];
+}
+
+/** How many `beforeunload` listeners the app has on the window, as it adds and removes them from now on. */
+function watchBeforeUnload(): () => number {
+  const added = vi.spyOn(window, 'addEventListener');
+  const removed = vi.spyOn(window, 'removeEventListener');
+  const count = (calls: unknown[][]) => calls.filter(([type]) => type === 'beforeunload').length;
+  return () => count(added.mock.calls) - count(removed.mock.calls);
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string; a `PUT` is answered by its own key.
@@ -323,6 +391,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // As a Sign out that failed leaves it, so that a test that disarmed it leaves no other test disarmed.
+  rearmUnloadGuard();
   answers.clear();
   fetchMock.mockReset();
   vi.unstubAllGlobals();
@@ -1067,5 +1137,200 @@ describe('Guide prompts, saving', () => {
     expect(save).not.toHaveAttribute('aria-disabled');
     expect(document.title).toBe(title);
     expect(putsSent()).toHaveLength(1);
+  });
+});
+
+describe('Guide prompts, leaving', () => {
+  const typed = `${saved}\nAny visitors?`;
+
+  it('asks before a link to another page while the text is not saved, with focus on Stay on this page', async () => {
+    const { router } = await openWith();
+    enter(typed);
+
+    await follow('Today');
+
+    const dialog = openDialog();
+    expect(dialog).toHaveAccessibleName(leaveTitle);
+    expect(dialog).toHaveAccessibleDescription(leaveBody);
+    const [stayButton, leaveButton] = within(dialog).getAllByRole('button');
+    expect(stayButton).toHaveTextContent(stay);
+    expect(stayButton).toHaveFocus();
+    expect(stayButton.className).toContain(buttonClass('primary'));
+    // Not red: a few lines of prompts are easy to type again (guide-prompts.md component 7).
+    expect(leaveButton).toHaveTextContent(leave);
+    expect(leaveButton.className).toContain(buttonClass('secondary'));
+    expect(router.state.location.pathname).toBe(address);
+    expect(field()).toHaveValue(typed);
+  });
+
+  it.each(staying)('stays as it was after %s, and asks again at the next link', async (_, close) => {
+    const { router } = await openWith();
+    enter(typed);
+    await follow('Today');
+
+    close(openDialog());
+    await settle();
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(address);
+    expect(field()).toHaveValue(typed);
+    // The navigation's blocker was reset, not left blocked.
+    await follow('Manage');
+    expect(openDialog()).toHaveAccessibleName(leaveTitle);
+    expect(router.state.location.pathname).toBe(address);
+  });
+
+  it('goes to the page on Leave without saving, and then asks nothing before Sign out or a reload', async () => {
+    const listeners = watchBeforeUnload();
+    const { router } = await openWith();
+    enter(typed);
+    expect(listeners()).toBe(1);
+    await follow('Today');
+
+    await pressInDialog(leave);
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
+    expect(pageHeading()).toHaveTextContent(/^Today/);
+    expect(listeners()).toBe(0);
+    await expect(askToLeave()).resolves.toBe(true);
+    expect(leaveDialog()).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['as loaded', []],
+    ['typed, then deleted back', [typed, saved]],
+    ['changed at its ends alone, which Save trims', [`\n${saved}  \n`]],
+  ])('asks nothing for a link while the text is %s', async (_, inputs: string[]) => {
+    const { router } = await openWith();
+    for (const input of inputs) {
+      enter(input);
+    }
+
+    await follow('Today');
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('asks nothing for a change of address that keeps the page, such as its query', async () => {
+    const { router } = await openWith();
+    enter(typed);
+
+    await act(() => router.navigate(`${address}?from=manage`));
+    await settle();
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.search).toBe('?from=manage');
+    expect(field()).toHaveValue(typed);
+  });
+
+  it('asks before Back within the app, which Stay on this page undoes and Leave without saving takes', async () => {
+    serve(promptsPath, prompts(saved));
+    const { router } = renderApp(address, manager, ['/manage']);
+    await settle();
+    enter(typed);
+
+    await act(() => router.navigate(-1));
+    await settle();
+    expect(openDialog()).toHaveAccessibleName(leaveTitle);
+    expect(within(openDialog()).getByRole('button', { name: stay })).toHaveFocus();
+    expect(router.state.location.pathname).toBe(address);
+    await pressInDialog(stay);
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(address);
+    expect(field()).toHaveValue(typed);
+
+    await act(() => router.navigate(-1));
+    await settle();
+    await pressInDialog(leave);
+
+    expect(router.state.location.pathname).toBe('/manage');
+    expect(pageHeading()).toHaveAccessibleName('Manage');
+  });
+
+  it.each(staying)('asks Sign out the same dialog while the text is not saved, staying after %s', async (_, close) => {
+    await openWith();
+    enter(typed);
+
+    const asked = askToLeave();
+    expect(openDialog()).toHaveAccessibleName(leaveTitle);
+    expect(within(openDialog()).getByRole('button', { name: stay })).toHaveFocus();
+    close(openDialog());
+    await settle();
+
+    await expect(asked).resolves.toBe(false);
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(field()).toHaveValue(typed);
+  });
+
+  it('lets Sign out go on after Leave without saving', async () => {
+    await openWith();
+    enter(typed);
+
+    const asked = askToLeave();
+    await pressInDialog(leave);
+
+    await expect(asked).resolves.toBe(true);
+    expect(leaveDialog()).not.toBeInTheDocument();
+  });
+
+  it('lets Sign out go on at once, with no dialog, while the text is as saved, typed and deleted back', async () => {
+    await openWith();
+    enter(typed);
+    enter(saved);
+
+    const asked = askToLeave();
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    await expect(asked).resolves.toBe(true);
+  });
+
+  it('has a beforeunload listener only while the text is not saved, asking unless the shell disarms it', async () => {
+    const listeners = watchBeforeUnload();
+    await openWith();
+    expect(listeners()).toBe(0);
+    expect(warnsBeforeUnload()).toBe(false);
+
+    enter(typed);
+    expect(listeners()).toBe(1);
+    expect(warnsBeforeUnload()).toBe(true);
+    // As Sign out leaves it before its full page load, and then a logout that failed.
+    disarmUnloadGuard();
+    expect(warnsBeforeUnload()).toBe(false);
+    rearmUnloadGuard();
+    expect(warnsBeforeUnload()).toBe(true);
+
+    enter(saved);
+    expect(listeners()).toBe(0);
+
+    enter(typed);
+    serve(savePath, stored());
+    pressSave();
+    await settle();
+    expect(saveStatus().textContent).toBe('Saved 4:12 pm');
+    expect(listeners()).toBe(0);
+    expect(warnsBeforeUnload()).toBe(false);
+  });
+});
+
+describe('Today, Manage and Users', () => {
+  // S01.04.02's own criterion: design.md asks for a leave warning on Guide prompts alone.
+  it.each([
+    ['/', 'Manage', '/manage'],
+    ['/manage', 'Today', '/'],
+    ['/manage/users', 'Today', '/'],
+  ])('at %s, ask nothing before Sign out, a reload or a link', async (path, link, next) => {
+    serve('/api/admin/users', noAnswer);
+    const listeners = watchBeforeUnload();
+    const { router } = renderApp(path);
+    await settle();
+
+    await expect(askToLeave()).resolves.toBe(true);
+    expect(listeners()).toBe(0);
+    await follow(link);
+
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(next);
   });
 });

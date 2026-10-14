@@ -201,6 +201,10 @@ changes by a link, Back, reload or Sign out.
   - After a `412`, Save stays busy until the refetch of the base text and `ETag` has answered, so that the next press
     sends the new `ETag`; a refetch that fails leaves the base as it was, and that press meets the `412` again.
     (Step 5, 14 October 2026.)
+  - The leave dialog answers the navigation that it holds, or Sign out, in its `close` event, which the browser fires a
+    task after Escape or Stay on this page has hidden it. A Back pressed within that one task is held, its address
+    put back and nothing lost, with no dialog; that is accepted rather than tracked apart from the event, and the
+    tests wait for the dialog to leave the page before they go on. (Step 6, 15 October 2026.)
 - Hand-offs, so that every criterion has one owner. Each is also written, dated 14 October 2026, where the receiving
   task reads it. Until that task proves it, the matching S01.04.01 or S01.04.02 criterion stays unticked with a dated
   Note naming the task:
@@ -313,7 +317,7 @@ changes by a link, Back, reload or Sign out.
       A sees the conflict with the text unchanged and A's next Save succeeds; and one test signed in for real (a
       bootstrapped manager with a passkey on the virtual authenticator, as `users.spec.ts` does) saving prompts with
       line breaks and reading them back after a reload
-- [ ] Warn before leaving unsaved (S01.04.02: design.md §4.10's warning, guide-prompts.md *Leaving*, app-shell.md's
+- [x] Warn before leaving unsaved (S01.04.02: design.md §4.10's warning, guide-prompts.md *Leaving*, app-shell.md's
       Guide prompts bullet and its own criterion): dirty is the field's trimmed value, read from the DOM, against the
       base text; `useBlocker` blocks only when the pathname changes while dirty; the leave dialog on the `ConfirmDialog`
       shell says "Leave without saving?" and "Your changes to the guide prompts are not saved.", with "Stay on this

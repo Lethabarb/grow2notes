@@ -190,7 +190,7 @@ export const strings = {
   /**
    * Manage > Guide prompts (guide-prompts.md), whose `<h1>` is its page name, which labels the field: the help text
    * under it (design.md §4.10), the region's loading line and what did not load, as its failure sentence starts, then
-   * the alert above Save for a `412`, when another manager saved first.
+   * the alert above Save for a `412`, when another manager saved first; and the leave dialog (component 7).
    */
   guidePrompts: {
     help: 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.',
@@ -199,6 +199,13 @@ export const strings = {
     conflict:
       'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to '
       + 'replace their version with yours.',
+    /** The leave dialog's title and body, then its safe button, on top, and the button that leaves. */
+    leave: {
+      title: 'Leave without saving?',
+      body: 'Your changes to the guide prompts are not saved.',
+      stay: 'Stay on this page',
+      leave: 'Leave without saving',
+    },
   },
   /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user

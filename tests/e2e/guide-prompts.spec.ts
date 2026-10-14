@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import {
   failPrompts,
@@ -15,9 +15,10 @@ import {
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
+import { people, serveUsers } from './users.ts';
 
-// Manage > Guide prompts in the published app (S01.04.01), against guide-prompts.md's criteria for access and
-// structure, loading, the field, the limit and count, and Save. The tests answer /api/auth/me and
+// Manage > Guide prompts in the published app (S01.04.01, S01.04.02), against guide-prompts.md's criteria for access
+// and structure, loading, the field, the limit and count, Save and leaving. The tests answer /api/auth/me and
 // /api/admin/guide-prompts in the browser (me.ts, guidePrompts.ts), so that neither request reaches the app, but for
 // the one that signs in for real and saves to the app's own database.
 
@@ -685,3 +686,398 @@ test('signed in for real, a manager saves prompts with line breaks and reads the
   await page.reload();
   await expect(field(page)).toHaveValue(savedPrompts);
 });
+
+// The leave dialog (guide-prompts.md component 7), and the Account panel's Sign out (app-shell.md component 2d), by its
+// place rather than its name, which is "Signing out…" while it is busy.
+const leaveDialog = (page: Page) => page.getByRole('alertdialog', { name: 'Leave without saving?' });
+const stayOnPage = (page: Page) => leaveDialog(page).getByRole('button', { name: 'Stay on this page' });
+const leaveWithoutSaving = (page: Page) => leaveDialog(page).getByRole('button', { name: 'Leave without saving' });
+const navLink = (page: Page, name: string) => nav(page).getByRole('link', { name, exact: true });
+const account = (page: Page) => page.getByRole('button', { name: 'Account' });
+const signOut = (page: Page) => page.locator('#account-panel').getByRole('button');
+const signOutLine = (page: Page) => page.locator('#account-panel').getByRole('status');
+// What the tests type at the end of the saved prompts, which leaves the text not saved.
+const added = '\nAny visitors?';
+const typed = `${savedPrompts}${added}`;
+// The colour of a secondary button's fill (tokens.css).
+const surface = 'rgb(255, 255, 255)';
+
+/**
+ * Types `words` at the end of the field, key by key, as a person does, which also gives the page the activation that
+ * Chromium needs before its own dialog asks about leaving (MDN, `beforeunload`).
+ */
+async function typeAtEnd(page: Page, words: string) {
+  await field(page).click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(words);
+}
+
+/**
+ * The browser's own dialogs, such as Chromium's for a `beforeunload` that asks, which the page opens from now on, by
+ * their type. Each is accepted, so that the navigation it held goes on, and a test that expects none fails on the list
+ * rather than on a navigation that never ends.
+ */
+function browserDialogs(page: Page): string[] {
+  const seen: string[] = [];
+  page.on('dialog', (dialog) => {
+    seen.push(dialog.type());
+    void dialog.accept();
+  });
+  return seen;
+}
+
+/**
+ * Meets each `POST /api/auth/logout` that the page sends from now on with `answer`, in the browser, so that none
+ * reaches the app, and gives how many it has sent, which a test reads once it has the answer to a request of its own.
+ */
+async function serveLogouts(page: Page, answer: (route: Route) => Promise<void>): Promise<() => number> {
+  let count = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/auth/logout') {
+      count += 1;
+    }
+  });
+  await page.route('**/api/auth/logout', answer);
+  return () => count;
+}
+
+/**
+ * Keeps count, in each page that loads from now on, of the `beforeunload` listeners on its window, through spies on its
+ * `addEventListener` and `removeEventListener`, which `beforeUnloadListeners` reads.
+ */
+async function watchBeforeUnload(page: Page) {
+  await page.addInitScript(() => {
+    const listeners = new Set<unknown>();
+    const { addEventListener, removeEventListener } = window;
+    Object.assign(window, {
+      addEventListener: (type: string, listener: unknown, options?: unknown) => {
+        if (type === 'beforeunload') {
+          listeners.add(listener);
+        }
+
+        Reflect.apply(addEventListener, window, [type, listener, options]);
+      },
+      removeEventListener: (type: string, listener: unknown, options?: unknown) => {
+        if (type === 'beforeunload') {
+          listeners.delete(listener);
+        }
+
+        Reflect.apply(removeEventListener, window, [type, listener, options]);
+      },
+      beforeUnloadListeners: () => listeners.size,
+    });
+  });
+}
+
+const beforeUnloadListeners = (page: Page) =>
+  page.evaluate(() => (window as unknown as { beforeUnloadListeners: () => number }).beforeUnloadListeners());
+
+/**
+ * Expects the leave dialog to have gone from the page, which it does once the page has handled its `close` event and
+ * answered the navigation or Sign out that it held; a closed `<dialog>` is hidden a task before that event.
+ */
+const expectNoLeaveDialog = (page: Page) => expect(main(page).locator('dialog')).toHaveCount(0);
+
+/** Closes the open leave dialog with a plain `close()`, as the shell closes any open dialog before its warning. */
+const closeTheDialog = (page: Page) =>
+  page.evaluate(() => document.querySelector<HTMLDialogElement>('dialog[open]')?.close());
+
+test('with text not saved, Today opens the leave dialog on Stay, and Escape keeps the page and focus on Today', async ({
+  page,
+}) => {
+  await openWith(page);
+  await typeAtEnd(page, added);
+
+  await navLink(page, 'Today').click();
+
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(leaveDialog(page)).toHaveAccessibleDescription('Your changes to the guide prompts are not saved.');
+  await expect(leaveDialog(page).getByRole('heading', { level: 2 })).toHaveText('Leave without saving?');
+  await expect(leaveDialog(page).getByRole('button')).toHaveText(['Stay on this page', 'Leave without saving']);
+  await expect(stayOnPage(page)).toBeFocused();
+  // Not red: a few lines of prompts are easy to type again (guide-prompts.md component 7).
+  await expect(leaveWithoutSaving(page)).toHaveCSS('background-color', surface);
+  await expect(page).toHaveURL(address);
+
+  await page.keyboard.press('Escape');
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  await expect(field(page)).toHaveValue(typed);
+  await expect(navLink(page, 'Today')).toBeFocused();
+});
+
+test('with text not saved, Leave without saving goes on to Today, which then asks nothing', async ({ page }) => {
+  await openWith(page);
+  const dialogs = browserDialogs(page);
+  await typeAtEnd(page, added);
+  await navLink(page, 'Today').click();
+
+  await leaveWithoutSaving(page).click();
+
+  await expect(page).toHaveURL('/');
+  await expect(heading(page)).toContainText('Today');
+  await expectNoLeaveDialog(page);
+  // The page's warning went with it.
+  await page.reload();
+  await expect(heading(page)).toContainText('Today');
+  expect(dialogs).toEqual([]);
+});
+
+test('with the text typed and deleted back, nothing asks before a link, Back, a reload or Sign out', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await servePrompts(page, savedPrompts);
+  const logouts = await serveLogouts(page, (route) => route.fulfill({ status: 204 }));
+  const dialogs = browserDialogs(page);
+  const typeAndDeleteBack = async () => {
+    await expect(field(page)).toHaveValue(savedPrompts);
+    await typeAtEnd(page, '!');
+    await page.keyboard.press('Backspace');
+    await expect(field(page)).toHaveValue(savedPrompts);
+  };
+  await page.goto('/manage');
+  await main(page).getByRole('link', { name: 'Guide prompts', exact: true }).click();
+
+  await typeAndDeleteBack();
+  await page.goBack();
+  await expect(page).toHaveURL('/manage');
+  await expect(heading(page)).toHaveText('Manage');
+
+  await page.goForward();
+  await typeAndDeleteBack();
+  await navLink(page, 'Today').click();
+  await expect(page).toHaveURL('/');
+  await expect(heading(page)).toContainText('Today');
+
+  await page.goBack();
+  await typeAndDeleteBack();
+  await page.reload();
+  await expect(field(page)).toHaveValue(savedPrompts);
+
+  await typeAndDeleteBack();
+  const loaded = page.waitForEvent('load');
+  await account(page).click();
+  await signOut(page).click();
+  await loaded;
+  await expect(page).toHaveURL('/');
+  expect(logouts()).toBe(1);
+  expect(dialogs).toEqual([]);
+});
+
+test('from Manage, with text not saved, Back asks; Escape and Stay keep the page, Leave goes back to Manage', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await servePrompts(page, savedPrompts);
+  await page.goto('/manage');
+  await main(page).getByRole('link', { name: 'Guide prompts', exact: true }).click();
+  await typeAtEnd(page, added);
+
+  await page.goBack();
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(stayOnPage(page)).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  await expect(field(page)).toHaveValue(typed);
+
+  await page.goBack();
+  await expect(stayOnPage(page)).toBeFocused();
+  await stayOnPage(page).click();
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  await expect(field(page)).toHaveValue(typed);
+
+  await page.goBack();
+  await leaveWithoutSaving(page).click();
+  await expect(page).toHaveURL('/manage');
+  await expect(heading(page)).toHaveText('Manage');
+});
+
+test('a click on the backdrop leaves the leave dialog open and the address as it was', async ({ page }) => {
+  await openWith(page);
+  await typeAtEnd(page, added);
+  await navLink(page, 'Today').click();
+  await expect(leaveDialog(page)).toBeVisible();
+  const dialogBox = await boxOf(leaveDialog(page));
+
+  // Above the dialog, on its backdrop.
+  await page.mouse.click(dialogBox.x + dialogBox.width / 2, dialogBox.y / 2);
+
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(page).toHaveURL(address);
+  await stayOnPage(page).click();
+  await expectNoLeaveDialog(page);
+  await expect(field(page)).toHaveValue(typed);
+});
+
+test("with text not saved, a reload meets Chromium's own dialog, and after a Save it meets none", async ({ page }) => {
+  await openWith(page);
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  const dialogs = browserDialogs(page);
+  await typeAtEnd(page, added);
+
+  await page.reload();
+  expect(dialogs).toEqual(['beforeunload']);
+  // Accepted, so the page has loaded again, with the prompts as saved.
+  await expect(field(page)).toHaveValue(savedPrompts);
+
+  await typeAtEnd(page, added);
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await page.reload();
+  await expect(field(page)).toHaveValue(savedPrompts);
+  expect(dialogs).toEqual(['beforeunload']);
+});
+
+test('the page listens for beforeunload only while its text is not saved', async ({ page }) => {
+  await watchBeforeUnload(page);
+  await openWith(page);
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  expect(await beforeUnloadListeners(page)).toBe(0);
+
+  await typeAtEnd(page, '!');
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(1);
+  await page.keyboard.press('Backspace');
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(0);
+
+  await page.keyboard.type('!');
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(1);
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(0);
+
+  await typeAtEnd(page, '?');
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(1);
+  await navLink(page, 'Today').click();
+  await leaveWithoutSaving(page).click();
+  await expect(page).toHaveURL('/');
+  await expect.poll(() => beforeUnloadListeners(page)).toBe(0);
+});
+
+test('with text not saved, Sign out asks first: Stay sends no logout, Leave signs out with no browser dialog', async ({
+  page,
+}) => {
+  await openWith(page);
+  const logouts = await serveLogouts(page, (route) => route.fulfill({ status: 204 }));
+  const dialogs = browserDialogs(page);
+  await typeAtEnd(page, added);
+  await account(page).click();
+
+  await signOut(page).click();
+  await expect(leaveDialog(page)).toBeVisible();
+  await expect(stayOnPage(page)).toBeFocused();
+  await page.evaluate(() => fetch('/healthz'));
+  expect(logouts()).toBe(0);
+
+  await stayOnPage(page).click();
+  await expectNoLeaveDialog(page);
+  await expect(signOut(page)).toBeFocused();
+  await expect(signOut(page)).toHaveAccessibleName('Sign out');
+  await expect(signOut(page)).not.toHaveAttribute('aria-disabled');
+  await expect(field(page)).toHaveValue(typed);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(logouts()).toBe(0);
+
+  // Gone once / has loaded again, as the new page starts with nothing in memory.
+  await page.evaluate(() => Reflect.set(window, 'beforeSignOut', true));
+  const loaded = page.waitForEvent('load');
+  await signOut(page).click();
+  await leaveWithoutSaving(page).click();
+  await loaded;
+  await expect(page).toHaveURL('/');
+  expect(await page.evaluate(() => Reflect.has(window, 'beforeSignOut'))).toBe(false);
+  expect(logouts()).toBe(1);
+  expect(dialogs).toEqual([]);
+});
+
+test('a Sign out whose logout fails leaves the page guarded, by the leave dialog and by the browser', async ({
+  page,
+}) => {
+  await openWith(page);
+  await serveLogouts(page, (route) => route.abort('internetdisconnected'));
+  const dialogs = browserDialogs(page);
+  await typeAtEnd(page, added);
+  await account(page).click();
+  await signOut(page).click();
+
+  await leaveWithoutSaving(page).click();
+
+  await expect(signOutLine(page)).toHaveText('Not signed out: no connection. Try again.');
+  await expect(field(page)).toHaveValue(typed);
+  await navLink(page, 'Today').click();
+  await expect(leaveDialog(page)).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL(address);
+  await page.reload();
+  expect(dialogs).toEqual(['beforeunload']);
+});
+
+test("a plain close() of the leave dialog, as the shell's warning gives it, is Stay for a link and Sign out", async ({
+  page,
+}) => {
+  await openWith(page);
+  const logouts = await serveLogouts(page, (route) => route.fulfill({ status: 204 }));
+  await typeAtEnd(page, added);
+
+  await navLink(page, 'Today').click();
+  await expect(leaveDialog(page)).toBeVisible();
+  await closeTheDialog(page);
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  // Not left blocked: the next link asks again.
+  await navLink(page, 'Manage').click();
+  await expect(leaveDialog(page)).toBeVisible();
+  await closeTheDialog(page);
+  await expectNoLeaveDialog(page);
+
+  await account(page).click();
+  await signOut(page).click();
+  await expect(leaveDialog(page)).toBeVisible();
+  await closeTheDialog(page);
+  await expectNoLeaveDialog(page);
+  await expect(signOut(page)).toBeFocused();
+  await expect(signOut(page)).not.toHaveAttribute('aria-disabled');
+  await page.evaluate(() => fetch('/healthz'));
+  expect(logouts()).toBe(0);
+  await expect(page).toHaveURL(address);
+  await expect(field(page)).toHaveValue(typed);
+});
+
+// S01.04.02's own criterion: design.md asks for a leave warning on Guide prompts alone.
+for (const { path, name, link } of [
+  { path: '/', name: 'Today', link: 'Manage' },
+  { path: '/manage', name: 'Manage', link: 'Today' },
+  { path: '/manage/users', name: 'Users', link: 'Today' },
+]) {
+  test(`${name} asks nothing before a link, a reload or Sign out`, async ({ page }) => {
+    await watchBeforeUnload(page);
+    await serveMe(page, manager);
+    await serveUsers(page, people);
+    const logouts = await serveLogouts(page, (route) => route.fulfill({ status: 204 }));
+    const dialogs = browserDialogs(page);
+    await page.goto(path);
+    // A press on the page, which gives it the activation that Chromium needs before it asks about leaving.
+    await heading(page).click();
+    expect(await beforeUnloadListeners(page)).toBe(0);
+
+    await navLink(page, link).click();
+    await expect(page).not.toHaveURL(path);
+    await expectNoLeaveDialog(page);
+    await page.goBack();
+    await expect(heading(page)).toContainText(name);
+
+    await heading(page).click();
+    await page.reload();
+    await expect(heading(page)).toContainText(name);
+
+    await heading(page).click();
+    const loaded = page.waitForEvent('load');
+    await account(page).click();
+    await signOut(page).click();
+    await loaded;
+    expect(logouts()).toBe(1);
+    expect(dialogs).toEqual([]);
+  });
+}
