@@ -202,6 +202,19 @@ with their typing kept (checked with a half-filled Invite form), and a different
   email format message, word for word the same as view E's term and sign-in's message, are now `strings.name` and
   `strings.emailFormat`, shared. users.md AC17's autofill check is by hand, in Chrome, Edge and Safari
   (ops/first-use-in-test.md steps 12, 13 and 18), with the Invite page's screen-reader readings (steps 12 and 18).
+- Where design.md is silent (step 6), the simplest options: `apiWithDate()`, beside `api()` in `src/api/api.ts`, sends
+  a request as `api()` does and gives `{ body, date }`, the time of the answer's `Date` header in UTC with `Z`, as the
+  API gives its times, or `undefined` when there is none or it is not a time; T02 and T03 reuse it at rebase.
+  `allowedActions(user)` gives the actions as a list, in the order the page shows them. The actions are
+  `UserActions` (`src/features/users/`), which T04 adds to. Resend invite's line is emptied at the press, so that its
+  sentence, written once the list has been refetched, always goes into an empty line, and it goes when a refetch shows
+  the user no longer Invited, so that it cannot come back with the button. A `412` refetches the list before its
+  sentence shows, with the button busy until then, and when the list then shows the user no longer Invited, which
+  takes the button away, the `<h1>` takes focus, as users.md's checklist allows, the Status row being T04's to make a
+  focus target. Any other refusal (`409 user.not_active`, a `403`, a `404`) shows "Not sent: something went wrong.
+  Try again.", and a `401` nothing. The sentence's address and the alert's name are the user's as the page showed them
+  at the press. NVDA's reading after Resend invite, and a resent email arriving, are by hand (ops/first-use-in-test.md
+  step 17).
 
 ### Steps
 
@@ -286,7 +299,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       it; review finds the parent company's name in no page or email (AC4, D72); and in ops/first-use-in-test.md steps
       12 and 17 invite through Users, and AC17's autofill check in Chrome, Safari and Edge and the Invite page's
       screen-reader lines join the by-hand steps
-- [ ] Add Resend invite to an Invited user's page (users.md component C items 2, 5 and 6, *States* › User detail,
+- [x] Add Resend invite to an Invited user's page (users.md component C items 2, 5 and 6, *States* › User detail,
       *Live regions*, AC21, AC23 and AC33; S00.06.03's Notes from S00.06.01; see Notes): the action error region
       above group 1; group 1 as Edit, then Resend invite with its description and its always-present `role="status"`
       line; `allowedActions(user)` in `userRules.ts`; the `Date` header from `api()`, unless T02 or T03 has put a way on

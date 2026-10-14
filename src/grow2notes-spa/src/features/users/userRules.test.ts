@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/api.ts';
-import { userRefusal, validateUser, type UserValues } from './userRules.ts';
+import { allowedActions, userRefusal, validateUser, type UserValues } from './userRules.ts';
+import type { AdminUser, UserStatus } from './usersQuery.ts';
 
 const alex: UserValues = { displayName: 'Alex Park', email: 'alex.park@example.org', role: 'Worker' };
 
@@ -9,6 +10,28 @@ const nameTooLong = 'Name must be 100 characters or less';
 const enterEmail = 'Enter an email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
 const chooseRole = 'Choose Worker or Manager';
+
+describe('allowedActions', () => {
+  /** Alex Park, a worker, with `status`. */
+  const alexWhen = (status: UserStatus): AdminUser => ({
+    id: '3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95',
+    ...alex,
+    status,
+    invitedAtUtc: '2026-09-01T00:00:00Z',
+    activatedAtUtc: status === 'Invited' ? null : '2026-09-02T00:00:00Z',
+    deactivatedAtUtc: status === 'Deactivated' ? '2026-09-30T00:00:00Z' : null,
+    concurrencyStamp: 'stamp-alex',
+  });
+
+  // users.md's *Which actions show, by status*, for the actions built so far.
+  it.each<{ status: UserStatus; actions: string[] }>([
+    { status: 'Invited', actions: ['edit', 'resendInvite'] },
+    { status: 'Active', actions: ['edit'] },
+    { status: 'Deactivated', actions: ['edit'] },
+  ])('gives $actions for someone $status, in the order the page shows them', ({ status, actions }) => {
+    expect(allowedActions(alexWhen(status))).toEqual(actions);
+  });
+});
 
 describe('validateUser', () => {
   it('passes a name and an address, with the spaces round them that are trimmed as they are sent', () => {

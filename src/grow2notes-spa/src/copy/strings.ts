@@ -255,6 +255,12 @@ export const strings = {
     enterName: 'Enter the person’s name',
     enterEmail: 'Enter an email address',
     chooseRole: 'Choose Worker or Manager',
+    /**
+     * The user detail's Resend invite, for an Invited user (users.md component C item 6), with the description above
+     * it; its busy label is `sending`, and its result `msg.setupLinkSent`.
+     */
+    resendInvite: 'Resend invite',
+    resendInviteDescription: 'Sends a new setup link. The old link stops working.',
   },
   /**
    * A user's status, by its name in the API (status-tags.md): plain words, never a tag. "Deactivated" also heads the

@@ -17,6 +17,17 @@ export function byName(a: AdminUser, b: AdminUser): number {
   return collator.compare(a.displayName, b.displayName);
 }
 
+/** An action on a user's page (users.md component C). */
+export type UserAction = 'edit' | 'resendInvite';
+
+/**
+ * The actions that a user's page offers for `user` now, in the order that it shows them (users.md component C, *Which
+ * actions show, by status*): Edit for every status, and Resend invite while Invited. The server is still the gate.
+ */
+export function allowedActions(user: AdminUser): readonly UserAction[] {
+  return user.status === 'Invited' ? ['edit', 'resendInvite'] : ['edit'];
+}
+
 /** A user's fields as a manager types them, by the names that the API's JSON gives them (design.md §6.6). */
 export type UserValues = { displayName: string; email: string; role: Role };
 

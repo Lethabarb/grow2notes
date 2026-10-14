@@ -110,11 +110,12 @@ npm test
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
-Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`) and the Guide prompts test that saves to
-the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the
-`invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's
-folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests
-open. Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
+Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
+app's own resend (`e2e/resend-invite.spec.ts`) and the Guide prompts test that saves to the app
+(`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the `invite`
+fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder,
+in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
+Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
 organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
 holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
@@ -260,6 +261,15 @@ await answerInvites(page, { status: 500 });
 The tests that meet the app's own invite sign in for real, as above, and invite a made-up person with a new
 `example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no `Email__Endpoint`
 and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
+
+Resend invite on an Invited user's page sends `POST /api/admin/users/{id}/setup-link`, whose path `setupLinks` in
+`e2e/users.ts` matches for any user. `answerSetupLinks(page, answer)` answers each resend in the browser:
+`{ sentAt }`, the app's `204` with that `Date` header, such as `'Wed, 14 Oct 2026 05:12:00 GMT'`, from which the page
+takes the time it shows, or as `answerInvites` answers an invite. `holdNext(page, setupLinks)` holds the next one, for
+the busy button and its emptied line, until the test answers it with `route.fulfill`. A test of the device's clock and
+time zone sets the zone with `test.use({ timezoneId })` and the day with `page.clock.install({ time })`, both before
+the page loads. The test that meets the app's own resend invites a worker through Invite user first, and reads the
+time from the app's own `Date` header. `e2e/resend-invite.spec.ts` is the example of each.
 
 ### Answering `/api/admin/guide-prompts`
 

@@ -122,7 +122,11 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     and no other organisation, product or person, and holds one link, of the form
     `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and its headers (Show original in Gmail, View
     message source in Outlook.com) show `spf=pass`, `dkim=pass` and `dmarc=pass` in `Authentication-Results`.
-    (S00.02.07's third criterion, and its first seen in test.)
+    (S00.02.07's third criterion, and its first seen in test.) Then, with NVDA running, open the second worker's page
+    from Users and press Resend invite. Look for: NVDA saying "Setup link sent to", the worker's address, the time
+    and "The old link no longer works.", with focus left on Resend invite; and a second email to that worker within 5
+    minutes, whose link step 18 follows in place of the first one's. (S00.06.03, the first resend in test; users.md's
+    screen-reader pass over Resend invite.)
 18. On the iPhone, with VoiceOver on, open each of the three invites' emails in the testing mailbox and follow its
     setup link. Set up account C and one worker with Use a passkey (recommended), and the other worker with Use a
     password and authenticator app, typing the setup key into the phone's authenticator app. Look for: each setup

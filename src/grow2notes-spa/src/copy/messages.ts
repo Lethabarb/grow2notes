@@ -35,6 +35,15 @@ export const msg = {
    * (users.md *States*).
    */
   notSent: (cause: Cause): string => msg.notDone('sent', cause),
+  /**
+   * Resend invite's result under its button (users.md *States* › User detail), with the time the server sent the link,
+   * such as "4:12 pm", or, when the answer said none, without "at …", as the device's clock is never the time shown.
+   */
+  setupLinkSent: (email: string, time: string | undefined) =>
+    `Setup link sent to ${email}${time === undefined ? '' : ` at ${time}`}. The old link no longer works.`,
+  /** A page action refused `412`, as someone changed the user first, once the page shows them as they are now. */
+  userChanged: (displayName: string) =>
+    `Someone else has just changed ${displayName}’s account. The page now shows the latest details.`,
   /** A user's name longer than `limits.displayName`, so that the words say the rule that the field checks. */
   nameTooLong: (maxLength: number) => `Name must be ${maxLength} characters or less`,
   /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
