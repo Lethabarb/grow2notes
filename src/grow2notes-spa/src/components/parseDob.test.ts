@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDob, type DobParts } from './parseDob.ts';
+import { dobPartsOf, parseDob, type DobParts } from './parseDob.ts';
 
 // Melbourne's date from the server, as `me.today` gives it.
 const today = '2026-10-01';
@@ -97,4 +97,19 @@ describe('parseDob', () => {
       });
     },
   );
+});
+
+describe('dobPartsOf', () => {
+  it.each([
+    ['1987-03-07', '7/3/1987'],
+    ['1999-12-31', '31/12/1999'],
+    ['2024-02-29', '29/2/2024'],
+    ['0987-10-01', '1/10/0987'],
+  ])('shows %s as "%s", with no leading zero on the day or month', (iso, date) => {
+    expect(dobPartsOf(iso)).toEqual(typed(date));
+  });
+
+  it.each(['1987-03-07', '2024-02-29', '0987-10-01'])('gives back %s through parseDob', (iso) => {
+    expect(parseDob(dobPartsOf(iso), today)).toEqual({ ok: true, iso });
+  });
 });

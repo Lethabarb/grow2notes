@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import { routes } from '../../routes/routes.tsx';
@@ -42,8 +43,31 @@ const jane: AdminParticipant = {
   rowVersion: 'AAAAAAAAB9E=',
 };
 
+const priya: AdminParticipant = {
+  id: '0c6f2e8a-4b17-4d39-a5e2-7f1b3c9d0a64',
+  givenName: 'Priya',
+  familyName: 'Kumar',
+  dateOfBirth: '1990-11-23',
+  status: 'Active',
+  rowVersion: 'AAAAAAAAB9I=',
+};
+
+// Jane as the list gives her once a correction is saved, with the version that the row then has.
+const janeSaved: AdminParticipant = { ...jane, familyName: 'Citizen-Hall', rowVersion: 'AAAAAAAAB+A=' };
+
+// Jane as the list gives her once another manager has corrected her, with the version that the row then has.
+const janeChangedMeanwhile: AdminParticipant = {
+  ...jane,
+  givenName: 'Jayne',
+  dateOfBirth: '1987-03-08',
+  rowVersion: 'AAAAAAAAB+E=',
+};
+
 // The new participant's ID, as the 201 gives it.
 const newId = '7a1d4f9c-2e53-4b86-9c07-5f3e1a8d6b20';
+
+// A made-up ID that is on no list.
+const unknownId = '4f2a9c7e-1b38-4d65-a0e9-8c3b5d1f7a26';
 
 // 06:12 UTC on 1 October 2026, the answer's Date, is 4:12 pm in Melbourne.
 const answeredAt = 'Thu, 01 Oct 2026 06:12:00 GMT';
@@ -67,6 +91,19 @@ const added: Answer = () =>
       headers: { 'Content-Type': 'application/json', Date: answeredAt },
     }),
   );
+
+/** The bare `200` of a correction, with the answer's `Date`. */
+const corrected: Answer = () => Promise.resolve(new Response(null, { status: 200, headers: { Date: answeredAt } }));
+
+/** `answer`, given `ms` after the request was sent. */
+function later(ms: number, answer: Answer): Answer {
+  return (init) =>
+    new Promise((resolve, reject) => {
+      setTimeout(() => {
+        answer(init).then(resolve, reject);
+      }, ms);
+    });
+}
 
 /** An RFC 9457 problem, as the API answers a failure (design.md §6.1), with its extensions such as `errors`. */
 function problem(status: number, extensions: Record<string, unknown> = {}): Answer {
@@ -93,7 +130,7 @@ const fetchMock = vi.fn<typeof fetch>();
 const answers = new Map<string, Answer>();
 
 /** Stubs `fetch` as the server, which answers each `method` request for `path` with `answer` from now on. */
-function serve(method: 'GET' | 'POST', path: string, answer: Answer) {
+function serve(method: 'GET' | 'POST' | 'PUT', path: string, answer: Answer) {
   answers.set(`${method} ${path}`, answer);
 }
 
@@ -104,15 +141,34 @@ function adds(): unknown[] {
     .map(([, init]) => JSON.parse(init?.body as string) as unknown);
 }
 
+/** The corrections sent, each as its path, its `If-Match` and the JSON of its body. */
+function corrections(): { path: string; ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([, init]) => init?.method === 'PUT')
+    .map(([path, init]) => ({
+      path: path as string,
+      ifMatch: new Headers(init?.headers).get('If-Match'),
+      body: JSON.parse(init?.body as string) as unknown,
+    }));
+}
+
+/** The requests sent, each as its method and path, in the order sent, but for the antiforgery token's. */
+function requests(): string[] {
+  return fetchMock.mock.calls
+    .filter(([path]) => path !== antiforgeryPath)
+    .map(([path, init]) => `${init?.method ?? 'GET'} ${path as string}`);
+}
+
 /**
- * Renders the app at `path` for `me` on a memory router, under a query client of its own and StrictMode, as `main.tsx`
- * renders it, with `['me']` holding `me` already, as after the start-up.
+ * Renders the app at `path` for `me` on a memory router, or at the last of `path`'s addresses, after the others in its
+ * history, under a query client of its own and StrictMode, as `main.tsx` renders it, with `['me']` holding `me`
+ * already, as after the start-up.
  */
-function renderApp(path: string, me: Me = manager): Router {
+function renderApp(path: string | string[], me: Me = manager): Router {
   serve('GET', mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(routes, { initialEntries: typeof path === 'string' ? [path] : path });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -199,13 +255,9 @@ function alert(): HTMLElement {
   return within(main()).getByRole('alert');
 }
 
-/** The save status beside Save: the one region in `<main>` that shows, beside the page's hidden one. */
+/** The save status beside Save, in the Details. */
 function saveStatus(): HTMLElement {
-  const shown = within(main())
-    .getAllByRole('status')
-    .filter((region) => !region.classList.contains('visually-hidden'));
-  expect(shown).toHaveLength(1);
-  return shown[0];
+  return within(within(main()).getByRole('region', { name: 'Details' })).getByRole('status');
 }
 
 /** Types `text` in `input`, replacing what was there. */
@@ -642,6 +694,504 @@ describe('Add participant', () => {
 
     expect(pageHeading()).toHaveAccessibleName('Page not found');
     expect(document.title).toBe('Grow2Notes – Page not found');
+    expect(fetchMock.mock.calls.filter(([path]) => path !== mePath)).toEqual([]);
+  });
+});
+
+/** The page's `<h1>`, or `null` while it has none. */
+function headingOrNone(): HTMLElement | null {
+  return screen.queryByRole('heading', { level: 1 });
+}
+
+/** The back link to the list, wherever it is. */
+function backLink(): HTMLElement | null {
+  return screen.queryByRole('link', { name: 'Participants' });
+}
+
+/** The region's line: the status region in `<main>` that shows outside the Details, beside the page's hidden one. */
+function line(): HTMLElement {
+  const shown = within(main())
+    .getAllByRole('status')
+    .filter((region) => !region.classList.contains('visually-hidden') && region.closest('section') === null);
+  expect(shown).toHaveLength(1);
+  return shown[0];
+}
+
+/** Each field's value, in page order. */
+function values(): string[] {
+  return (['Given name', 'Family name', 'Day', 'Month', 'Year'] as const).map(
+    (name) => (field(name) as HTMLInputElement).value,
+  );
+}
+
+/** Opens Jane's page from her row of the list, as the manager does, the list holding `people`. */
+async function openJane(people: AdminParticipant[] = [jane, priya]): Promise<Router> {
+  serve('GET', listPath, json(people));
+  const router = renderApp('/manage/participants');
+  await settle();
+  await press(within(main()).getByRole('link', { name: 'Jane Citizen' }));
+  expect(router.state.location.pathname).toBe(`/manage/participants/${jane.id}`);
+  return router;
+}
+
+/**
+ * Opens a participant's page at `path` from Manage, as a link to it would, so that the shell's arrival focus is due
+ * whenever the page's `<h1>` comes.
+ */
+async function openFromManage(path: string): Promise<Router> {
+  const router = renderApp('/manage');
+  await settle();
+  await act(() => router.navigate(path));
+  return router;
+}
+
+describe("A participant's page", () => {
+  it('opens from its row with the name as the <h1>, focused, and the Details filled in from the list', async () => {
+    await openJane();
+
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    // The date of birth as a person types it, with no leading zeros.
+    expect(values()).toEqual(['Jane', 'Citizen', '7', '3', '1987']);
+    expect(document.title).toBe('Grow2Notes – Participant');
+    expect(currentItems()).toEqual(['Manage true']);
+    expect(alert()).toBeEmptyDOMElement();
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(summary()).toBeNull();
+  });
+
+  it('has its back link to the list, which goes back to the row opened, focusing it', async () => {
+    const router = await openJane();
+    expect(backLink()).toHaveAttribute('href', '/manage/participants');
+    expect(main()).not.toContainElement(backLink());
+
+    await press(backLink()!);
+
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/manage/participants');
+    expect(within(main()).getByRole('link', { name: 'Jane Citizen' })).toHaveFocus();
+  });
+
+  it('holds no name or date of birth in its address or title', async () => {
+    const router = await openJane();
+    type(field('Given name'), 'Janet');
+
+    const { pathname, search, hash } = router.state.location;
+    for (const text of [document.title, `${pathname}${search}${hash}`, JSON.stringify(router.state.location.state)]) {
+      for (const detail of ['Jane', 'Janet', 'Citizen', '1987']) {
+        expect(text).not.toContain(detail);
+      }
+    }
+  });
+
+  it('sends the correction with the version that it loaded, then shows when it was saved, focus on Save', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, json([janeSaved, priya]));
+    const button = saveButton();
+    type(field('Family name'), ' Citizen-Hall ');
+
+    await save();
+
+    expect(corrections()).toEqual([
+      {
+        path: `${participantsPath}/${jane.id}`,
+        ifMatch: '"AAAAAAAAB9E="',
+        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07' },
+      },
+    ]);
+    const [, init] = fetchMock.mock.calls.find(([, sent]) => sent?.method === 'PUT')!;
+    expect(new Headers(init?.headers).get('X-XSRF-TOKEN')).toBe('token-1');
+    expect(saveStatus().textContent).toBe(`Saved 4:12${nbsp}pm`);
+    expect(saveStatus().querySelector('time')).toHaveAttribute('dateTime', '2026-10-01T06:12:00.000Z');
+    expect(button).toHaveFocus();
+    expect(alert()).toBeEmptyDOMElement();
+    expect(document.title).toBe('Grow2Notes – Participant');
+  });
+
+  it('changes the <h1> only once the save is done, to the name as saved, never as it is typed', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, later(2000, corrected));
+    serve('GET', listPath, json([{ ...janeSaved, givenName: 'Janet' }, priya]));
+
+    type(field('Given name'), ' Janet ');
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    await save();
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    await wait(2000);
+
+    expect(pageHeading()).toHaveAccessibleName('Janet Citizen');
+    expect(field('Given name')).toHaveValue(' Janet ');
+  });
+
+  it('reads the list again after a save, and sends its version with the next', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, json([janeSaved, priya]));
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+    const listReads = requests().filter((request) => request === `GET ${listPath}`).length;
+
+    type(field('Day'), '17');
+    await save();
+
+    expect(corrections().map(({ ifMatch }) => ifMatch)).toEqual(['"AAAAAAAAB9E="', '"AAAAAAAAB+A="']);
+    // Each save's own read follows its answer.
+    expect(requests().slice(-2)).toEqual([`PUT ${participantsPath}/${jane.id}`, `GET ${listPath}`]);
+    expect(requests().filter((request) => request === `GET ${listPath}`)).toHaveLength(listReads + 1);
+  });
+
+  it('empties "Saved" at the next edit, so that it never stands for changes not saved', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, json([janeSaved, priya]));
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+    expect(saveStatus()).toHaveTextContent('Saved');
+
+    type(field('Month'), '4');
+
+    expect(saveStatus()).toBeEmptyDOMElement();
+  });
+
+  it('keeps what is typed when the list is fetched again, and sends the version that it loaded', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    const router = renderApp('/manage/participants');
+    await settle();
+    // The page reads the list again as it opens; another manager has corrected Jane meanwhile.
+    serve('GET', listPath, later(500, json([janeChangedMeanwhile, priya])));
+    await press(within(main()).getByRole('link', { name: 'Jane Citizen' }));
+    expect(router.state.location.pathname).toBe(`/manage/participants/${jane.id}`);
+    type(field('Family name'), 'Citizen-Hall');
+
+    await wait(500);
+
+    // Copied once, as the page opened: neither the typed name nor the other fields take the list's new values.
+    expect(values()).toEqual(['Jane', 'Citizen-Hall', '7', '3', '1987']);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+
+    serve('PUT', `${participantsPath}/${jane.id}`, problem(412, { code: 'precondition.failed' }));
+    await save();
+
+    expect(corrections().map(({ ifMatch }) => ifMatch)).toEqual(['"AAAAAAAAB9E="']);
+  });
+
+  it(
+    "says that someone else changed the details on a 412, keeping what is typed, and sends the list's version next",
+    async () => {
+      await openJane();
+      serve('PUT', `${participantsPath}/${jane.id}`, problem(412, { code: 'precondition.failed' }));
+      serve('GET', listPath, json([janeChangedMeanwhile, priya]));
+      type(field('Family name'), 'Citizen-Hall');
+      const button = saveButton();
+
+      await save();
+
+      expect(alert()).toHaveTextContent(
+        'Someone else changed these details while you were editing. Check the details, then save again.',
+      );
+      expect(button).toHaveFocus();
+      expect(values()).toEqual(['Jane', 'Citizen-Hall', '7', '3', '1987']);
+      expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+      expect(saveStatus()).toBeEmptyDOMElement();
+      expect(summary()).toBeNull();
+      expect(document.title).toBe('Grow2Notes – Participant');
+      // The list read again for the participant's version, after the refusal.
+      expect(requests().slice(-2)).toEqual([`PUT ${participantsPath}/${jane.id}`, `GET ${listPath}`]);
+
+      serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+      await save();
+
+      expect(corrections().map(({ ifMatch }) => ifMatch)).toEqual(['"AAAAAAAAB9E="', '"AAAAAAAAB+E="']);
+      expect(alert()).toBeEmptyDOMElement();
+      expect(saveStatus()).toHaveTextContent('Saved');
+    },
+  );
+
+  it('sends the correction once when its answer is lost, says so above Save, and keeps the fields', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, noConnection);
+    type(field('Family name'), 'Citizen-Hall');
+
+    await save();
+    await wait(60_000);
+
+    expect(corrections()).toHaveLength(1);
+    expect(alert()).toHaveTextContent('Not saved: no connection. Try again.');
+    expect(saveButton()).toHaveFocus();
+    expect(values()).toEqual(['Jane', 'Citizen-Hall', '7', '3', '1987']);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(summary()).toBeNull();
+  });
+
+  it('sends the correction once when no answer comes in 10 seconds, and says there was no connection', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, noAnswer);
+    type(field('Family name'), 'Citizen-Hall');
+
+    await save();
+    await wait(9_000);
+    expect(alert()).toBeEmptyDOMElement();
+    await wait(60_000);
+
+    expect(corrections()).toHaveLength(1);
+    expect(alert()).toHaveTextContent('Not saved: no connection. Try again.');
+    expect(saveButton()).toHaveFocus();
+  });
+
+  it('says that something went wrong for a server error, and the next press empties it', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, problem(500));
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+    expect(alert()).toHaveTextContent('Not saved: something went wrong. Try again.');
+    serve('PUT', `${participantsPath}/${jane.id}`, noAnswer);
+
+    await save();
+
+    expect(alert()).toBeEmptyDOMElement();
+    expect(corrections()).toHaveLength(2);
+  });
+
+  it('checks the fields on Save, as Add participant does, and sends nothing while one fails', async () => {
+    await openJane();
+    type(field('Given name'), ' ');
+    type(field('Year'), '2026');
+    type(field('Month'), '10');
+    type(field('Day'), '1');
+
+    await save();
+
+    expect(inlineMessages()).toEqual(['Enter the given name', 'Date of birth must be in the past']);
+    expect(summaryLinks()).toEqual(['Enter the given name', 'Date of birth must be in the past']);
+    expect(summary()).toHaveFocus();
+    expect(document.title).toBe('Error: Grow2Notes – Participant');
+    expect(corrections()).toEqual([]);
+  });
+
+  it("shows the server's refusal of a field on its field, as Save's own checks would", async () => {
+    await openJane();
+    serve(
+      'PUT',
+      `${participantsPath}/${jane.id}`,
+      problem(422, { code: 'validation.failed', errors: { dateOfBirth: ['Refused'] } }),
+    );
+    type(field('Year'), '2026');
+    type(field('Month'), '9');
+    type(field('Day'), '30');
+
+    await save();
+
+    expect(inlineMessages()).toEqual(['Date of birth must be in the past']);
+    expect(summary()).toHaveFocus();
+    expect(invalidFields()).toEqual(['Day', 'Month', 'Year']);
+    expect(alert()).toBeEmptyDOMElement();
+  });
+
+  it('reads the list before the next save when its read after a save did not load', async () => {
+    await openJane();
+    serve('PUT', `${participantsPath}/${jane.id}`, corrected);
+    serve('GET', listPath, noConnection);
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+    // The read's silent retry, 1 s on, which fails too.
+    await wait(1000);
+    expect(saveStatus()).toHaveTextContent('Saved');
+    serve('GET', listPath, json([janeSaved, priya]));
+
+    type(field('Day'), '17');
+    await save();
+
+    expect(requests().slice(-3)).toEqual([
+      `GET ${listPath}`,
+      `PUT ${participantsPath}/${jane.id}`,
+      `GET ${listPath}`,
+    ]);
+    expect(corrections().map(({ ifMatch }) => ifMatch)).toEqual(['"AAAAAAAAB9E="', '"AAAAAAAAB+A="']);
+  });
+});
+
+describe('A participant just added', () => {
+  it('saves the next change as a correction, with the version that the list gives them', async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+    await save();
+    serve('GET', listPath, json([{ ...jane, id: newId, rowVersion: 'AAAAAAAAB+A=' }, priya]));
+    serve('PUT', `${participantsPath}/${newId}`, corrected);
+
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+
+    expect(adds()).toHaveLength(1);
+    expect(corrections()).toEqual([
+      {
+        path: `${participantsPath}/${newId}`,
+        ifMatch: '"AAAAAAAAB+A="',
+        body: { givenName: 'Jane', familyName: 'Citizen-Hall', dateOfBirth: '1987-03-07' },
+      },
+    ]);
+    // Their version read first, as the add's answer gives none.
+    expect(requests().slice(-3)).toEqual([
+      `GET ${listPath}`,
+      `PUT ${participantsPath}/${newId}`,
+      `GET ${listPath}`,
+    ]);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen-Hall');
+    expect(saveStatus().textContent).toBe(`Saved 4:12${nbsp}pm`);
+    expect(saveButton()).toHaveFocus();
+  });
+
+  it('sends no correction, and says so, when their version cannot be read', async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+    await save();
+    serve('GET', listPath, noConnection);
+
+    type(field('Family name'), 'Citizen-Hall');
+    await save();
+    await wait(1000);
+
+    expect(corrections()).toEqual([]);
+    expect(alert()).toHaveTextContent('Not saved: no connection. Try again.');
+    expect(saveButton()).toHaveFocus();
+  });
+});
+
+describe("A participant's page while the list loads", () => {
+  it('shows its back link and no <h1>, then nothing more until "Loading participant…" at 1 s', async () => {
+    serve('GET', listPath, noAnswer);
+    renderApp(`/manage/participants/${jane.id}`);
+
+    expect(backLink()).toBeInTheDocument();
+    expect(headingOrNone()).not.toBeInTheDocument();
+
+    await wait(999);
+    expect(line()).toBeEmptyDOMElement();
+    expect(main().textContent).toBe('');
+
+    await wait(1);
+    expect(line()).toHaveTextContent('Loading participant…');
+    expect(main().textContent).toBe('Loading participant…');
+    expect(headingOrNone()).not.toBeInTheDocument();
+  });
+
+  it('focuses the name as it arrives, the focus having waited for it', async () => {
+    serve('GET', listPath, later(2000, json([jane, priya])));
+    await openFromManage(`/manage/participants/${jane.id}`);
+    expect(headingOrNone()).not.toBeInTheDocument();
+
+    await wait(2000);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(values()).toEqual(['Jane', 'Citizen', '7', '3', '1987']);
+  });
+
+  it.each([
+    ['no connection', noConnection],
+    ['something went wrong', problem(500)],
+  ])(
+    'says that the participant did not load: %s, under the <h1> "Participant", which takes the focus',
+    async (cause, answer) => {
+      serve('GET', listPath, answer);
+      await openFromManage(`/manage/participants/${jane.id}`);
+
+      // After the query client's silent retry.
+      await wait(1000);
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName('Participant');
+      expect(pageHeading()).toHaveFocus();
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(line().textContent).toBe(`This participant did not load: ${cause}. Try again.`);
+      expect(within(main()).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+      expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+      expect(backLink()).toBeInTheDocument();
+      expect(document.title).toBe('Grow2Notes – Participant');
+    },
+  );
+
+  it(
+    'says that the participant still did not load after a Try again that fails, focus still on Try again',
+    async () => {
+      serve('GET', listPath, noConnection);
+      renderApp(`/manage/participants/${jane.id}`);
+      await wait(1000);
+      await settle();
+      const button = within(main()).getByRole('button', { name: 'Try again' });
+
+      await press(button);
+      // Its one silent retry, as on the first load.
+      await wait(1000);
+      await settle();
+
+      expect(line().textContent).toBe('This participant still did not load: no connection. Try again.');
+      expect(pageHeading()).toHaveAccessibleName('Participant');
+      expect(button).toHaveFocus();
+    },
+  );
+
+  it('shows the participant after a Try again that loads, with focus on their name, the one <h1>', async () => {
+    serve('GET', listPath, noConnection);
+    renderApp(`/manage/participants/${jane.id}`);
+    await wait(1000);
+    await settle();
+    serve('GET', listPath, json([jane, priya]));
+
+    await press(within(main()).getByRole('button', { name: 'Try again' }));
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toEqual([pageHeading()]);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(values()).toEqual(['Jane', 'Citizen', '7', '3', '1987']);
+  });
+});
+
+describe('A participant who cannot be shown', () => {
+  it.each([unknownId, 'not-an-id'])(
+    'shows Page not found in place of the whole page for %s, an ID not on the list, at the same address',
+    async (id) => {
+      serve('GET', listPath, json([jane, priya]));
+      const router = renderApp(`/manage/participants/${id}`);
+
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName('Page not found');
+      expect(document.title).toBe('Grow2Notes – Page not found');
+      expect(backLink()).not.toBeInTheDocument();
+      expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+      expect(router.state.location.pathname).toBe(`/manage/participants/${id}`);
+    },
+  );
+
+  it('shows Page not found in place of the whole page for a 403 on the list', async () => {
+    // React and React Router report the refusal that the route's boundary catches, which is expected here.
+    const report = console.error;
+    const reported = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((arg) => arg instanceof ApiError && arg.status === 403)) {
+        report(...args);
+      }
+    });
+    onTestFinished(() => reported.mockRestore());
+    serve('GET', listPath, problem(403));
+    renderApp(`/manage/participants/${jane.id}`);
+
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
+    expect(backLink()).not.toBeInTheDocument();
+  });
+
+  it('shows a worker Page not found, and sends nothing', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    renderApp(`/manage/participants/${jane.id}`, worker);
+    await wait(60_000);
+
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
     expect(fetchMock.mock.calls.filter(([path]) => path !== mePath)).toEqual([]);
   });
 });

@@ -148,6 +148,11 @@ internal static class EndpointMatrix
         new(Post,      "/api/admin/participants", Unauthorized, Forbidden, Created, Created,
             WithJson("/api/admin/participants",
                 new { givenName = "Matrix", familyName = "Caller", dateOfBirth = "1990-01-01" })),
+
+        // Correcting a participant (§6.6), in the same group. Each call corrects a participant of its own, whom its
+        // request first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/participants/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+            CorrectingAParticipantOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -239,6 +244,20 @@ internal static class EndpointMatrix
 
         var request = new HttpRequestMessage(call.Method, $"/api/admin/users/{invite.User.Id}/setup-link");
         request.Headers.IfMatch.Add(new EntityTagHeaderValue(IfMatch.ETag(invite.User.ConcurrencyStamp!)));
+        return request;
+    }
+
+    // A correction of a participant whom the request first adds to A, sent with their ETag as If-Match, so that each
+    // call changes a participant of its own, as the seeded-rows rule asks (tests/README.md).
+    private static async Task<HttpRequestMessage> CorrectingAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}")
+        {
+            Content = JsonContent.Create(
+                new { givenName = "Matrix", familyName = "Corrected", dateOfBirth = "1990-01-01" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
         return request;
     }
 

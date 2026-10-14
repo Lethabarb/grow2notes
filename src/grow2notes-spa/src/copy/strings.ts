@@ -274,14 +274,16 @@ export const strings = {
     resendInviteDescription: 'Sends a new setup link. The old link stops working.',
   },
   /**
-   * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's
-   * loading line, and what did not load, as its failure sentence starts (empty-loading-error.md); the list's empty
-   * sentences, in place of its rows, for no participants at all and for a view with none; and the names of its two
-   * views, Active and Archived (tabs-segmented.md).
+   * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and
+   * the participant page's loading lines, and what did not load, as each failure sentence starts
+   * (empty-loading-error.md); the list's empty sentences, in place of its rows, for no participants at all and for a
+   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md).
    */
   participants: {
     listLoading: 'Loading participants…',
     theList: 'The participant list',
+    participantLoading: 'Loading participant…',
+    thisParticipant: 'This participant',
     noneYet: 'No participants yet.',
     noneActive: 'No active participants.',
     noneArchived: 'No archived participants.',
@@ -290,7 +292,8 @@ export const strings = {
   },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
-   * with which their too-long messages start, and each name's message when it is left empty.
+   * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above
+   * Save, a save refused as stale (`412`), the typed details kept.
    */
   participantDetails: {
     heading: 'Details',
@@ -298,6 +301,8 @@ export const strings = {
     familyName: 'Family name',
     enterGivenName: 'Enter the given name',
     enterFamilyName: 'Enter the family name',
+    changedMeanwhile:
+      'Someone else changed these details while you were editing. Check the details, then save again.',
   },
   /**
    * The date of birth's three fields (text-and-date-inputs.md): the group's legend, which also starts its messages,

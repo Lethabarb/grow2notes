@@ -535,6 +535,19 @@ found and `403`.
   a save's answer with its `Date`; `SaveStatus` is at the body's size, as status-messages.md has it, where T03's is at
   the small size that guide-prompts.md gives its own, so the second of T02 and T03 to merge keeps one component for
   both. `FieldGroup`'s fieldset says its `group` role again for every group, as govuk-frontend's date input does.
+- Also the simplest options where the design is silent (15 October 2026, step 5): the `PUT` finds the participant first,
+  so another organisation's is `404`, then checks `If-Match`, then the fields, so a stale correction with a refused
+  field gets `412`; it answers `200` with no body and no `ETag`, as the page reads the next version from the list, as
+  participants.md has it; and its route takes a GUID, another ID getting the unknown path's `404`. The page keeps the
+  version that it loaded the details at, copied once with them, and reads the list again after each `200` and each
+  `412`, within the save, so that Save stays busy until the next version is known, calling off a read already under way,
+  which began before the answer. So a refetch in between, as the list's as the page opens, brings the page no version,
+  and a save over another manager's change gets `412` rather than overwriting it unseen. A participant that the page has
+  just added has no version, as the `201` gives none, and nor has one whose read after a save did not load: the next
+  save reads the list first, and says "Not saved: …" when it cannot, sending nothing. The `<h1>` shows the name as the
+  `200` saved it, never the list's after a `412`. The `412`'s words are participants.md's, without
+  text-and-date-inputs.md's "below", as the alert is above Save. `EndpointCall` carries the app's services and the
+  seeded organisations, with which the `PUT`'s matrix row adds a participant to A for each call (tests/README.md).
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -639,7 +652,7 @@ found and `403`.
       on every failed Save, its links matching and focusing their fields with no URL change; the `parseDob` cases; and
       after `201` the URL replaced, Back reaching the list, focus on Save, "Saved 4:12 pm" in Melbourne time with its
       non-breaking space, the name as the `<h1>`, and one request after a lost response.
-- [ ] Correct a participant's details (S01.02.03; participants.md *Participant detail*):
+- [x] Correct a participant's details (S01.02.03; participants.md *Participant detail*):
       `PUT /api/admin/participants/{id}` with `If-Match` (`IfMatch.Check` against `RowVersionToken.Of`) and the `POST`'s
       rules, saving `participant.updated` with the old and new value of each changed field only; its matrix row (`404`
       for B's manager) and audit-events row. Integration tests: `428` with no `If-Match`; a stale one `412` with nothing

@@ -95,3 +95,12 @@ export function parseDob(parts: DobParts, today: string): DobResult {
 
   return { ok: true, iso };
 }
+
+/**
+ * A stored date of birth, written `1987-03-07`, in its three fields as a person types it (text-and-date-inputs.md):
+ * the day and month with no leading zero, `7` and `3`, and the year as written, which `parseDob` reads back as it was.
+ */
+export function dobPartsOf(iso: string): DobParts {
+  const [year, month, day] = iso.split('-');
+  return { day: String(Number(day)), month: String(Number(month)), year };
+}

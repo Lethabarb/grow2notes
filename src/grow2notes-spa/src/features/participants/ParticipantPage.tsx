@@ -1,5 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useId, useState, type FormEvent } from 'react';
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ApiError, apiWithHeaders, classify, type FieldErrors } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
@@ -8,10 +8,11 @@ import { Button } from '../../components/Button.tsx';
 import { DateOfBirthField } from '../../components/DateOfBirthField.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
+import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
-import { dobParts, parseDob, type DobPart, type DobParts } from '../../components/parseDob.ts';
+import { dobParts, dobPartsOf, parseDob, type DobPart, type DobParts } from '../../components/parseDob.ts';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { SaveStatus, type SaveState } from '../../components/SaveStatus.tsx';
 import textInput from '../../components/textInput.module.css';
@@ -21,7 +22,7 @@ import { strings } from '../../copy/strings.ts';
 import { limits } from '../../limits.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
 import styles from './ParticipantPage.module.css';
-import { fullName, participantsQuery } from './participantsQuery.ts';
+import { fullName, participantsQuery, type AdminParticipant } from './participantsQuery.ts';
 
 const participantsPath = '/api/admin/participants';
 
@@ -46,10 +47,12 @@ type Errors = {
   dateOfBirth?: { message: string; parts: readonly DobPart[] };
 };
 
-/** The participant that the page has added, whose page it then is. */
-type Added = { id: string; name: string };
-
 const nothingTyped: Typed = { givenName: '', familyName: '', dateOfBirth: { day: '', month: '', year: '' } };
+
+/** A participant's details as the fields show them, the date of birth as a person types it. */
+function typedOf({ givenName, familyName, dateOfBirth }: AdminParticipant): Typed {
+  return { givenName, familyName, dateOfBirth: dobPartsOf(dateOfBirth) };
+}
 
 /**
  * A name's message, or nothing: none typed once its ends are trimmed, or more than `limits.participantName`
@@ -143,44 +146,137 @@ function summaryItems({ givenName, familyName, dateOfBirth }: Errors): FormError
 }
 
 /**
+ * The participant as the server last confirmed them: their ID, their name as saved, which the `<h1>` shows, so that it
+ * changes only once a save is done, never as the name is typed (text-and-date-inputs.md), and their version, which the
+ * next save sends as `If-Match`.
+ */
+type Known = {
+  id: string;
+  name: string;
+  /**
+   * The version that the page loaded them at, then the one that the list gives after each save and each refusal as
+   * stale, never one that a refetch brings in between, which would let a save overwrite a change that the page has not
+   * shown; `undefined` while the page has read none, for a participant that it has just added, or when its read after
+   * a save did not load, so that the next save reads the list first.
+   */
+  version: string | undefined;
+};
+
+/** A correction of a participant's Details, and the version it is sent with. */
+type Correction = { id: string; details: Details; version: string | undefined };
+
+/**
+ * What a correction came to: saved, at its answer's `Date`, or refused as stale (`412`); and the participant's version,
+ * read afresh from the list, or `undefined` when that read did not load.
+ */
+type Corrected = { stale: boolean; savedAtUtc: string | undefined; version: string | undefined };
+
+/**
+ * The participant's version as the list gives it now (design.md §6.6: a save answers with none), from a read sent now:
+ * a read already under way began before the save's answer, so it is called off first, rather than joined. It fails as
+ * the list's request fails, and is `undefined` when the list does not hold them.
+ */
+async function listedVersion(queryClient: QueryClient, id: string): Promise<string | undefined> {
+  await queryClient.cancelQueries({ queryKey: participantsQuery.queryKey });
+  const participants = await queryClient.fetchQuery(participantsQuery);
+  return participants.find((participant) => participant.id === id)?.rowVersion;
+}
+
+/**
  * The one route component of `/manage/participants/new` and `/manage/participants/{participantId}` (participants.md
- * component B), so that the `201` of Add participant, which replaces the address with the new participant's, turns
- * this page into theirs without a remount, its fields as typed and focus on Save.
+ * component B): Add participant, which the `201`, as it replaces the address with the new participant's, turns into
+ * their page without a remount, its fields as typed and focus on Save; or the page of a participant opened from the
+ * list or an address, which loads them.
  */
 export function ParticipantPage() {
   const { participantId } = useParams();
-  const [added, setAdded] = useState<Added>();
+  // The participant that this page has added, at whose address it stays the same page.
+  const [addedId, setAddedId] = useState<string>();
 
-  // A participant's page opened from the list or an address is S01.02.03's; until then, only the participant that
-  // this page has just added has one.
-  if (participantId !== undefined && participantId !== added?.id) {
+  if (participantId === undefined || participantId === addedId) {
+    return (
+      <ParticipantFrame>
+        <Details onAdded={setAddedId} />
+      </ParticipantFrame>
+    );
+  }
+
+  return <ListedParticipant key={participantId} participantId={participantId} />;
+}
+
+/** The page around the Details: the back link to the list, in the shell's bar, and the page's status region. */
+function ParticipantFrame({ children }: { children: ReactNode }) {
+  return (
+    <PageStatus>
+      <PageBar>
+        <BackLink to="/manage/participants">{pageName.participants}</BackLink>
+      </PageBar>
+      {children}
+    </PageStatus>
+  );
+}
+
+/**
+ * A participant's page opened at their address (participants.md B9): the back link alone while the list loads, as the
+ * `<h1>` is their name, then "Loading participant…" after 1 s; then their Details, copied from the list, whose `<h1>`
+ * takes the focus left pending for it; or the fallback `<h1>` "Participant" with the failure sentence and Try again;
+ * or, for an ID not on the list, Page not found in place of the whole page.
+ */
+function ListedParticipant({ participantId }: { participantId: string }) {
+  const participants = useQuery(participantsQuery);
+  // Found in the list rather than picked out by a `select`, whose `undefined` for an ID not on it the region would
+  // take for a list not loaded yet.
+  const participant = participants.data?.find(({ id }) => id === participantId);
+
+  if (participants.data !== undefined && participant === undefined) {
     return <PageNotFound />;
   }
 
-  return <DetailsPage added={added} onAdded={setAdded} />;
+  return (
+    <ParticipantFrame>
+      <LoadRegion
+        queries={[participants]}
+        loading={strings.participants.participantLoading}
+        what={strings.participants.thisParticipant}
+        fallbackHeading={pageName.participant}
+      >
+        {/* Called only once the query has data, which then holds the participant. */}
+        {() => <Details participant={participant!} />}
+      </LoadRegion>
+    </ParticipantFrame>
+  );
 }
 
-type DetailsPageProps = {
-  /** The participant once Save has added them, whose name is then the page's `<h1>`. */
-  added: Added | undefined;
-  onAdded: (added: Added) => void;
-};
+/**
+ * A participant's page, with the participant as the list gave them as it opened, whose details the fields start
+ * with, copied once; or Add participant, told the new participant's ID once Save has added them.
+ */
+type DetailsProps =
+  | { participant: AdminParticipant; onAdded?: never }
+  | { participant?: never; onAdded: (id: string) => void };
 
 /**
- * Add participant (participants.md B1, B2, B4, B5, B8): the back link to the list, the error summary after a failed
- * Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any
- * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and
- * the save status beside it. Nothing is checked before Save, which checks every field in page order and sends nothing
- * while one fails; once a field shows a message, each edit checks it again. A `201` shows "Saved 4:12 pm" from its
- * `Date`, makes the name the `<h1>` and replaces the address with the participant's, in the screen.
+ * Add participant or a participant's Details (participants.md B2, B4, B5): the error summary after a failed Save, the
+ * `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any field, so
+ * that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and the save
+ * status beside it. Nothing is checked before Save, which checks every field in page order and sends nothing while one
+ * fails; once a field shows a message, each edit checks it again. A `201` shows "Saved 4:12 pm" from its `Date`, makes
+ * the name the `<h1>` and replaces the address with the participant's, in the screen. A save of a participant who
+ * exists is a `PUT` with their version as `If-Match`, whose `200` shows "Saved 4:12 pm" and the saved name as the
+ * `<h1>`, and whose `412` says that someone else changed the details, the fields kept as typed. Focus stays on Save.
  */
-function DetailsPage({ added, onAdded }: DetailsPageProps) {
+function Details({ participant, onAdded }: DetailsProps) {
   const me = useMe();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const headingId = useId();
-  // As typed, in this page's memory only (D22).
-  const [typed, setTyped] = useState<Typed>(nothingTyped);
+  // As typed, in this page's memory only (D22), copied once from the participant, so that no refetch overwrites them.
+  const [typed, setTyped] = useState<Typed>(() => (participant === undefined ? nothingTyped : typedOf(participant)));
+  const [known, setKnown] = useState<Known | undefined>(() =>
+    participant === undefined
+      ? undefined
+      : { id: participant.id, name: fullName(participant), version: participant.rowVersion },
+  );
   const [errors, setErrors] = useState<Errors>({});
   // The presses that found a field in error, so that each moves focus to the summary, even with the same messages.
   const [attempt, setAttempt] = useState(0);
@@ -196,6 +292,29 @@ function DetailsPage({ added, onAdded }: DetailsPageProps) {
     // Even once the page has gone, so that the list shows them.
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: participantsQuery.queryKey });
+    },
+  });
+  // Sent once, as the query client's mutations are: one sent again after a lost answer would meet its own change as a
+  // `412`. The list is read again after the answer, for the next version, as no save answers with one, and for the
+  // list screen; inside the save, so that Save stays busy until the next version is known.
+  const correct = useMutation({
+    mutationFn: async ({ id, details, version }: Correction): Promise<Corrected> => {
+      const ifMatch = version ?? (await listedVersion(queryClient, id));
+      const reread = () => listedVersion(queryClient, id).catch(() => undefined);
+      try {
+        const { dateUtc } = await apiWithHeaders<undefined>(`${participantsPath}/${id}`, {
+          method: 'PUT',
+          body: details,
+          ifMatch,
+        });
+        return { stale: false, savedAtUtc: dateUtc, version: await reread() };
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 412)) {
+          throw error;
+        }
+
+        return { stale: true, savedAtUtc: undefined, version: await reread() };
+      }
     },
   });
 
@@ -225,6 +344,25 @@ function DetailsPage({ added, onAdded }: DetailsPageProps) {
     );
   }
 
+  // A request's failure: a `422`'s fields on the fields, as Save's own checks show them; nothing for a `401`, which
+  // the session flow has, as `api()` started it; else "Not saved: …" in the alert, focus staying on Save.
+  function refused(error: Error) {
+    const fields =
+      error instanceof ApiError && error.status === 422 && error.errors !== undefined
+        ? serverErrors(error.errors)
+        : undefined;
+    if (fields !== undefined) {
+      setErrors(fields);
+      setAttempt((presses) => presses + 1);
+      return;
+    }
+
+    const cause = classify(error);
+    if (cause !== 'signedOut') {
+      setFailure(msg.notSaved(cause));
+    }
+  }
+
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     // Emptied at each press, so that what the press brings is written into empty regions and announced.
@@ -237,47 +375,44 @@ function DetailsPage({ added, onAdded }: DetailsPageProps) {
       return;
     }
 
-    // Saving the Details of a participant who exists is S01.02.03's, a PUT with If-Match.
-    if (added !== undefined) {
+    const details = checked.details;
+    if (known !== undefined) {
+      correct.mutate(
+        { id: known.id, details, version: known.version },
+        {
+          onSuccess: ({ stale, savedAtUtc, version }) => {
+            if (stale) {
+              setKnown({ ...known, version });
+              setFailure(strings.participantDetails.changedMeanwhile);
+              return;
+            }
+
+            setKnown({ id: known.id, name: fullName(details), version });
+            setSaved({ savedAtUtc });
+          },
+          onError: refused,
+        },
+      );
       return;
     }
 
-    const details = checked.details;
     add.mutate(details, {
       onSuccess: ({ body, dateUtc }) => {
-        onAdded({ id: body.id, name: fullName(details) });
+        setKnown({ id: body.id, name: fullName(details), version: undefined });
+        onAdded?.(body.id);
         setSaved({ savedAtUtc: dateUtc });
         // Replaced, so that Back goes to the list, not to an empty form, and in the screen, so that the shell moves
         // neither focus nor scroll (app-shell.md *The route-change rule (one owner)*).
         void navigate(`/manage/participants/${body.id}`, { replace: true, state: { inScreen: true } });
       },
-      onError: (error) => {
-        const fields =
-          error instanceof ApiError && error.status === 422 && error.errors !== undefined
-            ? serverErrors(error.errors)
-            : undefined;
-        if (fields !== undefined) {
-          setErrors(fields);
-          setAttempt((presses) => presses + 1);
-          return;
-        }
-
-        // A 401 has the session flow, which `api()` started, and shows nothing here.
-        const cause = classify(error);
-        if (cause !== 'signedOut') {
-          setFailure(msg.notSaved(cause));
-        }
-      },
+      onError: refused,
     });
   }
 
   return (
-    <PageStatus>
-      <PageBar>
-        <BackLink to="/manage/participants">{pageName.participants}</BackLink>
-      </PageBar>
+    <>
       <ErrorSummary errors={summaryItems(errors)} attempt={attempt} />
-      <PageHeading>{added === undefined ? pageName.addParticipant : added.name}</PageHeading>
+      <PageHeading>{known === undefined ? pageName.addParticipant : known.name}</PageHeading>
       <section aria-labelledby={headingId} className={styles.details}>
         <h2 id={headingId}>{strings.participantDetails.heading}</h2>
         <form noValidate onSubmit={save}>
@@ -306,14 +441,19 @@ function DetailsPage({ added, onAdded }: DetailsPageProps) {
           </div>
           <RequestAlert>{failure}</RequestAlert>
           <div className={styles.save}>
-            <Button type="submit" variant="primary" busy={add.isPending} busyLabel={strings.saving}>
+            <Button
+              type="submit"
+              variant="primary"
+              busy={add.isPending || correct.isPending}
+              busyLabel={strings.saving}
+            >
               {strings.save}
             </Button>
             <SaveStatus state={saved} />
           </div>
         </form>
       </section>
-    </PageStatus>
+    </>
   );
 }
 

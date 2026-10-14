@@ -4,13 +4,16 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 
 namespace Grow2Notes.Web.Features.Participants;
 
 /// <summary>
 /// The handler that changes an organisation's participants (design.md §6.6), as a handler class that takes the
-/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants</c> calls it with
-/// <see cref="Actor.InApp"/>, and Release 2's <c>add_participant</c> tool will call it with <see cref="Channel.Mcp"/>.
+/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants</c> and
+/// <c>PUT /api/admin/participants/{id}</c> call it with <see cref="Actor.InApp"/>, and Release 2's tools will call it
+/// with <see cref="Channel.Mcp"/>.
 /// Each change is saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class ParticipantChanges(
@@ -56,6 +59,61 @@ internal sealed class ParticipantChanges(
             Values(participant),
             cancellationToken: cancellationToken);
         return new(participant.Id, Errors: null);
+    }
+
+    /// <summary>
+    /// Corrects a participant's details in the tenant's organisation (S01.02.03): loads them through the tenant filter,
+    /// so another organisation's is not found; checks <paramref name="ifMatch"/> against their version; reads
+    /// <paramref name="request"/> by the add's rules (<see cref="ParticipantDetails.TryRead"/>); then saves the details
+    /// with <c>participant.updated</c>, whose <c>Details</c> hold the old and new value of each changed field alone;
+    /// or, when no value changed, saves nothing and writes no event, and answers as a save does (D84). An archived
+    /// participant is corrected too, as Release 1's server refuses nothing on one (D86).
+    /// </summary>
+    /// <param name="actor">Who corrects them.</param>
+    /// <param name="participantId">The participant.</param>
+    /// <param name="ifMatch">
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
+    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
+    /// </param>
+    /// <param name="request">The details as sent.</param>
+    /// <param name="cancellationToken">Cancels the correction.</param>
+    public async Task<ParticipantChangeResult> UpdateAsync(
+        Actor actor,
+        Guid participantId,
+        StringValues ifMatch,
+        ParticipantDetailsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var participant = await db.Participants.SingleOrDefaultAsync(p => p.Id == participantId, cancellationToken);
+        if (participant is null)
+        {
+            return ParticipantChangeResult.NotFound;
+        }
+
+        if (IfMatch.Check(ifMatch, RowVersionToken.Of(participant)) is { } refused)
+        {
+            return ParticipantChangeResult.Refused(refused);
+        }
+
+        if (!ParticipantDetails.TryRead(request, clock.Today(), out var details, out var errors))
+        {
+            return ParticipantChangeResult.Invalid(errors);
+        }
+
+        var before = Values(participant);
+        participant.GivenName = details.GivenName;
+        participant.FamilyName = details.FamilyName;
+        participant.DateOfBirth = details.DateOfBirth;
+        var saved = await changes.SaveAsync(
+            actor,
+            AuditEventTypes.Participant.Updated,
+            AuditEntityTypes.Participant,
+            participant.Id,
+            participant.Id,
+            before,
+            Values(participant),
+            cancellationToken: cancellationToken);
+        return ParticipantChangeResult.Of(saved);
     }
 
     /// <summary>

@@ -28,6 +28,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     private static readonly Dictionary<string, Func<AuditEventsTests, Task<WrittenEvent>>> Rows = new()
     {
         [AuditEventTypes.Participant.Created] = test => test.AddParticipantAsync(),
+        [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
     };
 
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
@@ -83,6 +84,37 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             id,
             id,
             new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>participant.updated</c>: A's manager corrects the family name and date of birth of a participant added for
+    /// the row with <c>PUT /api/admin/participants/{id}</c>, which records the participant as the entity and the
+    /// participant, and the old and new value of the two fields that changed alone, not the given name, sent as it was.
+    /// </summary>
+    private async Task<WrittenEvent> CorrectParticipantAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/participants/{participant.Id}",
+            await client.FetchTokenAsync(),
+            new { givenName = "Jane", familyName = " Smith", dateOfBirth = "1987-03-17" },
+            participant.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["familyName"] = "Citizen", ["dateOfBirth"] = "1987-03-07" },
+            ["new"] = new JsonObject { ["familyName"] = "Smith", ["dateOfBirth"] = "1987-03-17" },
+        };
+        return new(
+            AuditEventTypes.Participant.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Participant,
+            participant.Id,
+            participant.Id,
+            details.ToJsonString());
     }
 
     // The ID of the last event written, by any test. The tests of the collection run one at a time, so the events after
