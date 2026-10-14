@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using Grow2Notes.Tests.Fixtures;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -11,10 +12,10 @@ namespace Grow2Notes.Tests;
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
-/// behind the fallback policy, the app's own <c>/api/auth/me</c> and its <c>/api/admin/users</c> show; so the others
-/// show that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file,
-/// page or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database here, so they run
-/// without Docker: a request with no cookie never reaches one.
+/// behind the fallback policy, the app's own <c>/api/auth/me</c> and its <c>/api/admin/users</c>, listed and posted to,
+/// show; so the others show that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a
+/// request that no file, page or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database
+/// here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -61,6 +62,23 @@ public sealed class SignedOutTests : IAsyncDisposable
         using var client = app.CreateHttpsClient();
 
         using var response = await client.GetAsync("/api/admin/users", TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
+    // As the list's, over HTTPS with no antiforgery token, which the /api group's check would answer with a 400: the
+    // Manager policy refuses it first, so the endpoint, which would need the database that is not here, invites no one.
+    [Fact]
+    public async Task Invite_user_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PostAsJsonAsync(
+            "/api/admin/users",
+            new { displayName = "Avery Brooks", email = "avery.brooks@example.org", role = "Worker" },
+            TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());

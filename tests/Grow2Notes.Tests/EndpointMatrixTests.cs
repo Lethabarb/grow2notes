@@ -63,7 +63,8 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
     public async Task A_user_list_that_lacks_one_of_the_caller_s_users_or_holds_another_organisation_s_fails_the_run()
     {
         var (a, b) = sqlServer.Seeded;
-        var check = Assert.Single(EndpointMatrix.Rows, candidate => candidate.Route == "/api/admin/users").Answer;
+        var check = Assert.Single(
+            EndpointMatrix.Rows, candidate => candidate is { Route: "/api/admin/users", Methods: ["GET"] }).Answer;
         Assert.NotNull(check);
         using var answer = new HttpResponseMessage
         {

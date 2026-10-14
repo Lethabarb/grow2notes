@@ -667,6 +667,12 @@ used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase
 writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
 set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
+`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email as
+`SetupLinks.InviteAsync` reads the invite core's, for a test that opens it, such as with `StartSetupAsync`. A test of an
+email that cannot be sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender
+sends nothing and throws an exception that holds the address and the whole text, link and all, so the test shows that
+neither reaches the logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both.
+
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each

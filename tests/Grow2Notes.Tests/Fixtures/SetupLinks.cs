@@ -1,6 +1,7 @@
 using System.Net;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Users;
+using Grow2Notes.Web.Platform.Email;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.WebUtilities;
@@ -35,11 +36,18 @@ internal static class SetupLinks
         var result = await scope.ServiceProvider.GetRequiredService<Invitations>().InviteAsync(
             organisation.OrganisationId, DisplayName, email, UserRole.Worker, organisation.ManagerId);
         Assert.True(result.Succeeded, string.Join(" ", result.Errors.Select(error => error.Code)));
-
-        var fragment = QueryHelpers.ParseQuery(
-            result.SetupLink[(result.SetupLink.IndexOf('#', StringComparison.Ordinal) + 1)..]);
-        return new(fragment["u"].ToString(), fragment["t"].ToString(), email);
+        return Read(result.SetupLink, email);
     }
+
+    /// <summary>
+    /// The setup link in <paramref name="email"/>, a setup-link email that the app sent: the one line of its text that
+    /// is a link, read as <see cref="InviteAsync"/> reads one.
+    /// </summary>
+    public static SetupLink FromEmail(EmailMessage email) => Read(
+        Assert.Single(
+            email.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries),
+            line => line.StartsWith("https://", StringComparison.Ordinal)),
+        email.To);
 
     /// <summary>
     /// Starts setup with <paramref name="link"/> as the SPA does, with an antiforgery token fetched first, which it
@@ -65,6 +73,13 @@ internal static class SetupLinks
         var user = await users.FindByIdAsync(userId);
         Assert.NotNull(user);
         return user.SecurityStamp;
+    }
+
+    // With ParseQuery, which matches the SPA's URLSearchParams: + is a space, then %XX is decoded.
+    private static SetupLink Read(string setupLink, string email)
+    {
+        var fragment = QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..]);
+        return new(fragment["u"].ToString(), fragment["t"].ToString(), email);
     }
 }
 

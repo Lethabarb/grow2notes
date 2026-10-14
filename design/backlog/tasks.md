@@ -167,6 +167,14 @@ with their typing kept (checked with a half-filled Invite form), and a different
   form-validation.md words that case, so no raw server text shows.
 - If T02's shared audit-events test is on `main` at rebase, T01 adds its `user.invited` and `user.setup_link_sent`
   rows to it.
+- Where design.md is silent (step 3): Invite's handler checks its three fields itself, with no data annotations, so
+  that each field at fault is named at once, and a missing value, or a role that is not `Worker` or `Manager` exactly
+  (no number or other letter case), gets its field's `422`, as Release 2's `invite_user` will through the same handler.
+  Its words are users.md's, and an address over 256 characters gets the format message, as no address that long is
+  valid. The values are saved as sent, which the screen trims. `user.invited`'s `Details` are a new row's in
+  `user.updated`'s shape, `{"new": {"email", "displayName", "role"}}` with all three (`ChangeDetails.Of`). A sender's
+  exception, whose text can hold the address or the link, is replaced by `EmailNotSentException`, which names only its
+  type, and which the exception handler logs, as any unhandled exception, and answers with a `500` problem.
 
 ### Steps
 
@@ -194,7 +202,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       run is needed; design.md §10.1 takes the resources' names; CI's Bicep build compiles it with no warning; and
       ops/first-use-in-test.md gains the by-hand check that a setup-link email from test arrives, says Grow2Notes only,
       and shows SPF, DKIM and DMARC passing in its received headers
-- [ ] Add `POST /api/admin/users` (S00.06.02 criteria 1 to 4; design.md §4.11 *Invite user*, §6.6, §8.1 steps 1
+- [x] Add `POST /api/admin/users` (S00.06.02 criteria 1 to 4; design.md §4.11 *Invite user*, §6.6, §8.1 steps 1
       and 2, A27; S00.06.02's Notes): a handler in `Features/Users/` that takes an `Actor` and the tenant from
       `ITenantContext`, checks the name (required, at most 100 characters), the email (required, at most
       `Limits.Email` characters, so that an address Identity's check accepts never meets the 256-character columns as

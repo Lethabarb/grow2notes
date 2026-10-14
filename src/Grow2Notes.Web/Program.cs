@@ -226,6 +226,7 @@ builder.Services.AddScoped<SetupCompletion>();
 // The admin handler classes (mcp-server.md §3.5, convention 1), one per scope, as each reads and writes through the
 // scope's context.
 builder.Services.AddScoped<UserList>();
+builder.Services.AddScoped<UserInvite>();
 builder.Services.AddScoped<GuidePromptsHandler>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
@@ -333,6 +334,7 @@ var api = app.MapApiGroup()
 
 api.MapAdminGroup()
     .MapUserListEndpoint()
+    .MapInviteUserEndpoint()
     .MapGuidePromptsEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for

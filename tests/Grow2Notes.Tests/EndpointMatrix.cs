@@ -115,6 +115,11 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeededUsersOnly),
 
+        // Each manager invites into their own organisation, which a call commits, so each call invites an address of
+        // its own (tests/README.md).
+        new(Post,      "/api/admin/users",       Unauthorized, Forbidden, Created, Created,
+            AnInviteOfANewAddress),
+
         // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
         // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
         new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
@@ -184,6 +189,18 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // An invite of a worker with a made-up address (A35) that no other call or test uses.
+    private static Task<HttpRequestMessage> AnInviteOfANewAddress(EndpointCall call) =>
+        Task.FromResult(new HttpRequestMessage(call.Method, "/api/admin/users")
+        {
+            Content = JsonContent.Create(new
+            {
+                displayName = "Avery Brooks",
+                email = $"avery.brooks.{Guid.NewGuid():N}@example.org",
+                role = "Worker",
+            }),
+        });
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
     // the challenge, so a made-up one does, with no options asked for first, and the call changes nothing.

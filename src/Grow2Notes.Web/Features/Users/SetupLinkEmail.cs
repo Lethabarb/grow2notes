@@ -22,4 +22,28 @@ internal static class SetupLinkEmail
 
         You are getting this email because a manager added you to Grow2Notes or reset your sign-in.
         """);
+
+    /// <summary>
+    /// Sends the email to <paramref name="address"/> that carries <paramref name="setupLink"/> through
+    /// <paramref name="sender"/>, returning once it has been handed on. Its caller sends it inside the transaction that
+    /// made the link, after the audit event and before the commit, so that a send that fails leaves nothing changed
+    /// (T01's Notes).
+    /// </summary>
+    /// <exception cref="EmailNotSentException">
+    /// The sender could not hand the email on, and threw anything but the caller's own cancellation, which is thrown
+    /// as it came.
+    /// </exception>
+    public static async Task SendAsync(
+        IEmailSender sender, string address, string setupLink, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await sender.SendAsync(To(address, setupLink), cancellationToken);
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            throw new EmailNotSentException(exception.GetType().FullName!);
+        }
+    }
 }
