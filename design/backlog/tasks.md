@@ -102,6 +102,11 @@ with their typing kept (checked with a half-filled Invite form), and a different
   the link on its own line, "The link works once and lasts 7 days. If it has expired, ask a manager to send a new
   one.", and "You are getting this email because a manager added you to Grow2Notes or reset your sign-in." It comes
   from the Azure-managed domain's own `DoNotReply` address.
+- Layout, where design.md is silent (step 1): the email's opening line, the link, the two sentences on how long it
+  works and its last line are paragraphs with a blank line between each, and the console sender writes `To:` and
+  `Subject:` lines, a blank line and the text. The setup-link step gives no link for a user changed since they were
+  loaded (Identity's `ConcurrencyFailure`), saving nothing, so a resend or a reset can answer `412`; any other refusal
+  is a fault.
 - How the sender is chosen (design.md is silent): Azure Communication Services where `Email:Endpoint` is set, as
   `main.bicep` sets it with `Email:SenderAddress`, signing in as the app's identity, as Key Vault and telemetry do;
   otherwise a console sender that writes each message to standard output, never through `ILogger`, so a link never
@@ -151,7 +156,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
 
 ### Steps
 
-- [ ] Build the setup-link step and the email sender, which T04 reuses (S00.02.07 criteria 1, 2 and 4; design.md §8.1
+- [x] Build the setup-link step and the email sender, which T04 reuses (S00.02.07 criteria 1, 2 and 4; design.md §8.1
       step 2, §10.3's Local row; user-management.md; see Notes): split the key, token and link step out of
       `Invitations.InviteAsync` into one step that gives an existing user a new authenticator key (rotating the stamp),
       a 7-day setup token and the link, in the same form with the token escaped, which the invite core and so

@@ -5,6 +5,7 @@ using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
+using Grow2Notes.Web.Platform.Email;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
@@ -22,6 +23,10 @@ var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 // Server telemetry goes to Application Insights only where it is configured, as in Azure (design.md §9.5). Its
 // settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
 builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
+
+// The setup-link email goes through Communication Services where it is configured, as in Azure, and to the console
+// elsewhere (design.md §10.3). Its settings are read here, for the same reasons as the Key Vault settings below.
+builder.Services.AddEmailWhenConfigured(builder.Configuration);
 
 builder.Services.AddHealthEndpoints();
 
@@ -209,9 +214,10 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 // and its event are saved by one SaveChanges on the scope's context.
 builder.Services.AddScoped<ConfigurationChanges>();
 
-// One per scope, for the same reason: its UserManager saves through the scope's context, so an invite joins the
-// transaction its caller opens there, with the audit event that records it.
+// One per scope, for the same reason: their UserManager saves through the scope's context, so an invite, and the new
+// key of the setup-link step, join the transaction their caller opens there, with the audit event that records them.
 builder.Services.AddScoped<Invitations>();
+builder.Services.AddScoped<SetupLinkIssuer>();
 
 // One per scope, for the same reason: setup's completion opens its transaction on the scope's context, through which
 // the method that the endpoint adds, the user's changes and their audit event are all saved.

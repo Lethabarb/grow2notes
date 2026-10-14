@@ -1,25 +1,26 @@
 using Grow2Notes.Web.Data;
-using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Identity;
 
 namespace Grow2Notes.Web.Features.Users;
 
 /// <summary>
-/// The invite core (design.md §8.1 steps 1 and 2): creates a user as Invited, generates their authenticator key, and
-/// makes their setup link. <c>admin bootstrap</c> invites the first manager with it, and Invite user will invite the
-/// others. It only creates a new user: a resend and a sign-in reset, which need a new link for a user who exists, split
-/// out its key, token and link step when they are built (S00.06.03, S00.06.04). It opens no transaction and writes no
-/// audit event: its caller does both, so that the event commits or rolls back with the invite it records (S00.03.05's
-/// Notes).
+/// The invite core (design.md §8.1 steps 1 and 2): creates a user as Invited, then gives them their authenticator key
+/// and setup link through the setup-link step (<see cref="SetupLinkIssuer"/>), which a resend and a sign-in reset take
+/// for a user who exists. <c>admin bootstrap</c> invites the first manager with it, and Invite user will invite the
+/// others. It opens no transaction and writes no audit event: its caller does both, so that the event commits or rolls
+/// back with the invite it records (S00.03.05's Notes).
 /// </summary>
 internal sealed class Invitations(
-    UserManager<ApplicationUser> users, TimeProvider timeProvider, IConfiguration configuration)
+    UserManager<ApplicationUser> users,
+    SetupLinkIssuer setupLinks,
+    TimeProvider timeProvider,
+    IConfiguration configuration)
 {
     /// <summary>
     /// Creates the user through <see cref="UserManager{TUser}"/> as Invited, with no password, so they cannot sign in,
-    /// and an unconfirmed address, which is also their user name (§5.3); then generates their authenticator key; then
-    /// makes the 7-day setup token (<see cref="SetupTokenProvider"/>) and the link that carries it.
+    /// and an unconfirmed address, which is also their user name (§5.3); then gives them their authenticator key, the
+    /// 7-day setup token and the link that carries it (<see cref="SetupLinkIssuer.IssueAsync"/>).
     /// </summary>
     /// <param name="organisationId">The organisation the user joins.</param>
     /// <param name="displayName">The user's name, as shown on what they write and review.</param>
@@ -38,8 +39,8 @@ internal sealed class Invitations(
     public async Task<InviteResult> InviteAsync(
         Guid organisationId, string displayName, string email, UserRole role, Guid? invitedByUserId)
     {
-        var origin = AppOrigin.Find(configuration) ?? throw new InvalidOperationException(
-            $"{AppOrigin.Key} is not set, so no setup link can be made. Set it to the address the app is reached at.");
+        // Read here as well as by the setup-link step, so that a missing setting is found before the user is created.
+        AppOrigin.Require(configuration);
 
         var user = new ApplicationUser
         {
@@ -58,23 +59,9 @@ internal sealed class Invitations(
             return InviteResult.Refused(created.Errors);
         }
 
-        // Generating the key rotates the security stamp, which the setup token holds, so it comes first. Setup then
-        // only reads the key, so nothing changes the stamp before setup completes, and the link works until then, for
-        // up to 7 days (§8.1 step 1).
-        var keyed = await users.ResetAuthenticatorKeyAsync(user);
-        if (!keyed.Succeeded)
-        {
-            throw new InvalidOperationException(
-                "Identity refused the authenticator key of the user it had just created: " +
-                $"{string.Join(" ", keyed.Errors.Select(error => error.Code))}.");
-        }
-
-        var token = await users.GenerateUserTokenAsync(
-            user, SetupTokenProvider.ProviderName, SetupTokenProvider.Purpose);
-
-        // The token is in the fragment, so it never reaches a server (§8.1 step 2). It is base64, whose + the SPA's
-        // URLSearchParams would read as a space, so it is escaped, which URLSearchParams reads back exactly.
-        var setupLink = $"{new Uri(origin, "/setup").AbsoluteUri}#u={user.Id:D}&t={Uri.EscapeDataString(token)}";
+        // Nothing else has the new user, so nothing can have changed them since they were created.
+        var setupLink = await setupLinks.IssueAsync(user) ?? throw new InvalidOperationException(
+            "Identity found the user it had just created changed before their authenticator key was saved.");
         return InviteResult.Invited(user, setupLink);
     }
 }

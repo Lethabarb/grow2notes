@@ -382,7 +382,13 @@ await page.clock.runFor('28:00'); // the warning opens
   app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
   the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way. It hosts the app
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
-  show what a signed-out caller gets.
+  show what a signed-out caller gets. For the same reason it keeps the app's own email sender, the console one, as
+  local development has (below).
+- A test that reads what is written to standard output puts a writer of its own in its place with `Console.SetOut`,
+  and the old one back in a `finally`, in `[Collection<StandardOutputCollection>]`, which xUnit runs on its own, after
+  every collection that runs in parallel, so nothing else writes to it meanwhile. It hosts its app with
+  `logging.ClearProviders()` and a provider of its own, so the console logger writes nothing there either.
+  `Grow2Notes.Tests/Platform/Email/ConsoleEmailSenderTests.cs` is the example.
 - A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
   it `AllowAnonymous` unless the test is about who may call it. A signed-out request to one that is not gets the
   session cookie's `401`, as problem details, as in the deployed app: in `AppWithoutDatabase`, where the cookie is the
@@ -640,6 +646,26 @@ using var response = await client.GetAsync("/api/auth/me", TestContext.Current.C
 
 As with a passkey, a test reads only the audit events of a user it added, by the user's ID.
 `Grow2Notes.Tests/Features/Auth/TotpSignInEndpointTests.cs` is the example.
+
+### Reading the emails the app sent
+
+No test sends real email (design.md A58). `Grow2NotesFactory` puts a `RecordingEmailSender`
+(`Grow2Notes.Tests/Fixtures/RecordingEmailSender.cs`) in place of the app's email sender, and it records each message
+that the app sends, as an `EmailMessage` with its `To`, `Subject` and `Text`, in the order sent, and sends nothing. A
+test reads them from the app it called:
+
+```csharp
+var sent = app.Services.GetRequiredService<RecordingEmailSender>().Sent;
+var email = Assert.Single(sent, message => message.To == address);
+```
+
+Each app has a recorder of its own. One made with `WithWebHostBuilder` starts with none recorded, so a test that shows
+that nothing was sent, or exactly what was, uses such an app, as
+`Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends nothing. The
+class fixture's app is shared by the class's tests, so a test that calls it finds its own messages by the address it
+used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` keeps the app's console sender, which
+writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
+set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
 ### The endpoint matrix
 
