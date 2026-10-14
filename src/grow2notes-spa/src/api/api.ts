@@ -58,20 +58,50 @@ let antiforgeryToken: Promise<string> | undefined;
 
 type Answer = { response: Response; text: string };
 
+// A `2xx` answer: its JSON, or nothing when it has no body, and its headers.
+type Reply<T> = { body: T; headers: Headers };
+
 /**
  * Sends a request to the API and gives the JSON of its `2xx` answer, or nothing when that answer has no body. A
  * `POST`, `PUT` or `DELETE` carries the antiforgery token, fetched first when none is held. Throws `ApiError` for any
  * other answer, and with status `0` when no whole answer came within `timeoutMs`; a `401` that means the session has
- * ended raises the session-ended event first. The session clock holds while the call is out, as its answer may start
- * the clock afresh or end it (session-timeout.md *The session clock*).
+ * ended raises the session-ended event first.
  */
 export function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  return heldRequest<T>(path, options).then(({ body }) => body);
+}
+
+/** A `2xx` answer's body, as `api()` gives it, with the two headers that a screen that saves reads. */
+export type WithHeaders<T> = {
+  body: T;
+  /** The token of the answer's `ETag`, without its quotes, which goes back as `ifMatch`; `undefined` with none. */
+  etag: string | undefined;
+  /** The answer's `Date`, the server's clock, in UTC, as `time()` takes it; `undefined` with none. */
+  dateUtc: string | undefined;
+};
+
+/**
+ * Sends a request as `api()` does, and fails as it does, but gives its `2xx` answer's `ETag` and `Date` with the body:
+ * the row's version for the next change's `If-Match`, and the time a save was done (design.md §6.6, D84;
+ * status-messages.md `SaveStatus`).
+ */
+export function apiWithHeaders<T>(path: string, options: ApiOptions = {}): Promise<WithHeaders<T>> {
+  return heldRequest<T>(path, options).then(({ body, headers }) => ({
+    body,
+    etag: entityTagToken(headers.get('ETag')),
+    dateUtc: utcTime(headers.get('Date')),
+  }));
+}
+
+// The session clock holds while the call is out, as its answer may start the clock afresh or end it
+// (session-timeout.md *The session clock*).
+function heldRequest<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
   const call = request<T>(path, options);
   holdWhile(call);
   return call;
 }
 
-async function request<T>(path: string, options: ApiOptions): Promise<T> {
+async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
   const { method = 'GET', body, ifMatch, timeoutMs = defaultTimeoutMs, signal } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) {
@@ -97,7 +127,7 @@ async function request<T>(path: string, options: ApiOptions): Promise<T> {
     }
 
     // Several writes answer a bare 200 or 201 with no body (design.md §6.6), on which `response.json()` would throw.
-    return (text === '' ? undefined : JSON.parse(text)) as T;
+    return { body: (text === '' ? undefined : JSON.parse(text)) as T, headers: response.headers };
   }
 
   if (response.status === 401 && endsSession(path)) {
@@ -243,6 +273,23 @@ function entityTag(token: string): string {
   }
 
   return `"${token}"`;
+}
+
+// The token of one strong entity tag, the inverse of entityTag(). A weak tag, W/"…", names no version that If-Match
+// takes, so it gives none.
+function entityTagToken(header: string | null): string | undefined {
+  return header?.match(/^"([^"]+)"$/)?.[1];
+}
+
+// An HTTP date, such as "Thu, 01 Oct 2026 06:12:00 GMT", as an ISO 8601 time in UTC, or none for one that is not a
+// date, so that a save that was done is never shown as failed.
+function utcTime(header: string | null): string | undefined {
+  if (header === null) {
+    return undefined;
+  }
+
+  const ms = Date.parse(header);
+  return Number.isNaN(ms) ? undefined : new Date(ms).toISOString();
 }
 
 // A 401 from /api/auth/login*, /api/auth/passkey*, /api/auth/setup/* or /api/auth/logout is a failed sign-in, an

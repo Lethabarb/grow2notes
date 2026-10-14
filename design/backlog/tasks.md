@@ -236,7 +236,7 @@ changes by a link, Back, reload or Sign out.
       signed out, `403` for A's worker, and for both managers `200` from the `GET` and `428` from a `PUT` with a body
       and no `If-Match`, which changes nothing; `AdminGuardTests` pass; and, if T02's audit-events test is on `main`,
       its `guide_prompts.updated` row
-- [ ] Build the shared pieces that later tasks reuse (Notes above): `count()` in `src/copy/format.ts` (microcopy.md
+- [x] Build the shared pieces that later tasks reuse (Notes above): `count()` in `src/copy/format.ts` (microcopy.md
       §3: `Intl.NumberFormat` and `Intl.PluralRules` in `en-AU`), with the character-count words in `messages.ts`
       (microcopy.md §4: "You can enter up to 1,000 characters", "You have 100 characters remaining", "You have 1
       character too many"); `TextBox.module.css` in `src/components` (guide-prompts.md 6b: 18 px text, line height

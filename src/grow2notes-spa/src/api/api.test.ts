@@ -4,6 +4,7 @@ import type * as SessionModule from './session.ts';
 
 // A fresh copy of the wrapper for each test, as it keeps the antiforgery token from one request to the next.
 let api: typeof ApiModule.api;
+let apiWithHeaders: typeof ApiModule.apiWithHeaders;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
 let isNotFound: typeof ApiModule.isNotFound;
@@ -123,7 +124,7 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, ApiError, classify, isNotFound } = await import('./api.ts'));
+  ({ api, apiWithHeaders, ApiError, classify, isNotFound } = await import('./api.ts'));
   ({ onSessionEnded } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -605,6 +606,105 @@ describe('api', () => {
       expect(sessionStorage.length).toBe(0);
       expect(document.cookie).toBe('');
     });
+  });
+});
+
+describe('apiWithHeaders', () => {
+  const promptsPath = '/api/admin/guide-prompts';
+  // The ETag that the server writes, a RowVersion as base64 in quotes, and the Date that ASP.NET Core writes.
+  const etag = '"AAAAAAAAB9E="';
+  const date = 'Thu, 01 Oct 2026 06:12:00 GMT';
+
+  it('gives the body, the ETag\'s token without its quotes, and the Date in UTC', async () => {
+    const prompts = { text: 'What did you do together?\nAnything to follow up?' };
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify(prompts), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ETag: etag, Date: date },
+      }),
+    );
+
+    await expect(apiWithHeaders(promptsPath)).resolves.toEqual({
+      body: prompts,
+      etag: 'AAAAAAAAB9E=',
+      dateUtc: '2026-10-01T06:12:00.000Z',
+    });
+  });
+
+  it('sends a change as api() does, and gives its answer\'s headers with no body', async () => {
+    serve(new Response(null, { status: 200, headers: { ETag: '"AAAAAAAAB9I="', Date: date } }));
+
+    await expect(
+      apiWithHeaders(promptsPath, { method: 'PUT', body: { text: '' }, ifMatch: 'AAAAAAAAB9E=' }),
+    ).resolves.toEqual({ body: undefined, etag: 'AAAAAAAAB9I=', dateUtc: '2026-10-01T06:12:00.000Z' });
+
+    expect(trail()).toEqual([`GET ${antiforgeryPath}`, `PUT ${promptsPath} with token-1`]);
+    const request = sentRequest();
+    expect(request.headers.get('If-Match')).toBe(etag);
+    expect(request.body).toBe('{"text":""}');
+  });
+
+  it('gives undefined for each header that the answer does not have', async () => {
+    fetchMock.mockResolvedValue(json(200, { text: '' }));
+
+    await expect(apiWithHeaders(promptsPath)).resolves.toEqual({
+      body: { text: '' },
+      etag: undefined,
+      dateUtc: undefined,
+    });
+  });
+
+  it.each(['W/"AAAAAAAAB9E="', 'AAAAAAAAB9E=', '""'])(
+    'gives no token for an ETag of %s, which is not a strong tag with a token',
+    async (notStrong) => {
+      fetchMock.mockResolvedValue(new Response(null, { status: 200, headers: { ETag: notStrong, Date: date } }));
+
+      await expect(apiWithHeaders(promptsPath)).resolves.toMatchObject({ etag: undefined });
+    },
+  );
+
+  it('gives no time for a Date that is not a date, rather than failing an answer that came', async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 200, headers: { ETag: etag, Date: 'soon' } }));
+
+    await expect(apiWithHeaders(promptsPath)).resolves.toEqual({
+      body: undefined,
+      etag: 'AAAAAAAAB9E=',
+      dateUtc: undefined,
+    });
+  });
+
+  it('fails as api() does, with the status and code of a problem, or status 0 with no connection', async () => {
+    serve(problem(412, { code: 'precondition.failed' }), problem(422, { code: 'validation.failed', errors: {} }));
+
+    await expect(
+      apiWithHeaders(promptsPath, { method: 'PUT', body: { text: '' }, ifMatch: 'AAAAAAAAB9E=' }),
+    ).rejects.toStrictEqual(new ApiError(412, 'precondition.failed'));
+    await expect(
+      apiWithHeaders(promptsPath, { method: 'PUT', body: {}, ifMatch: 'AAAAAAAAB9E=' }),
+    ).rejects.toStrictEqual(new ApiError(422, 'validation.failed', {}));
+
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(apiWithHeaders(promptsPath)).rejects.toStrictEqual(new ApiError(0));
+  });
+
+  it('raises the session-ended event for a 401, as api() does', async () => {
+    const ended = listen();
+    fetchMock.mockResolvedValue(problem(401));
+
+    await expect(apiWithHeaders(promptsPath)).rejects.toStrictEqual(new ApiError(401));
+    expect(ended).toHaveBeenCalledOnce();
+  });
+
+  it('fails with status 0 when no answer has come after 10 seconds, and not before', async () => {
+    fetchMock.mockImplementation(noAnswer);
+    const { request, settled } = track(apiWithHeaders(promptsPath));
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(settled()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).rejects.toStrictEqual(new ApiError(0));
   });
 });
 

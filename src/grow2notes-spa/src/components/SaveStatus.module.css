@@ -1,0 +1,10 @@
+/*
+ * Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. Its figures
+ * are all one width, so that a later time does not shift the words (guide-prompts.md 6f).
+ */
+.status {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}

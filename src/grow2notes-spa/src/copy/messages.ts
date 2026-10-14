@@ -1,5 +1,8 @@
+import { count } from './format.ts';
 import type { PageName } from './pageNames.ts';
 import { strings, type Cause } from './strings.ts';
+
+const characters = (n: number) => count(n, 'character', 'characters');
 
 /** Words with slots (microcopy.md §8), each shape written here once. */
 export const msg = {
@@ -29,4 +32,14 @@ export const msg = {
   passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
   /** View F's message for a password shorter than `limits.passwordMinLength`. */
   passwordTooShort: (minLength: number) => `Password must be ${minLength} characters or more`,
+  /** microcopy.md §4's Character count hint, under a field's label: "You can enter up to 1,000 characters". */
+  characterLimitHint: (limit: number) => `You can enter up to ${characters(limit)}`,
+  /**
+   * microcopy.md §4's Character count, under a field near or over its limit: "You have 100 characters remaining", down
+   * to "You have 0 characters remaining" at the limit, then "You have 1 character too many".
+   */
+  characterCount: (length: number, limit: number) =>
+    length <= limit
+      ? `You have ${characters(limit - length)} remaining`
+      : `You have ${characters(length - limit)} too many`,
 } as const;

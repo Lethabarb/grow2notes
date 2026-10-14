@@ -1,0 +1,22 @@
+/* Inside the box of dialog.module.css (confirm-dialog.md *Anatomy*). The focus ring is base.css's. */
+
+/* An <h2>, so at --font-size-h2, by base.css. */
+.title {
+  margin: 0;
+}
+
+.body p {
+  margin: var(--space-3) 0 0;
+}
+
+/* Stacked, the top button first, at every size. */
+.buttons {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+}
+
+/* The full width at every size, where the shared Button is as wide as its label from 40rem. */
+.button {
+  inline-size: 100%;
+}

@@ -82,6 +82,10 @@ export const strings = {
   checking: 'Checking…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
+  /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
+  saving: 'Saving…',
+  /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
+  saved: 'Saved',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
   /** A person's email address, as a field's label or a summary's term (sign-in.md components 6 and 13). */

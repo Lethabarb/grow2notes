@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateLong, datePlain, dateTime, dateToday, parseDateOnly, stamp, time } from './format.ts';
+import { count, dateLong, datePlain, dateTime, dateToday, parseDateOnly, stamp, time } from './format.ts';
 
 const firstOctober = { y: 2026, m: 10, d: 1 };
 
@@ -80,5 +80,19 @@ describe('stamp', () => {
   it('gives the date and time a minute before the reference day begins, and once it has ended', () => {
     expect(stamp('2026-09-30T13:59:00Z', firstOctober)).toBe('Wed 30\u00A0Sep 2026, 11:59\u00A0pm');
     expect(stamp('2026-10-01T14:00:00Z', firstOctober)).toBe('Fri 2\u00A0Oct 2026, midnight');
+  });
+});
+
+describe('count', () => {
+  it('gives the singular for exactly 1, and the plural for every other number, 0 among them', () => {
+    expect(count(1, 'character', 'characters')).toBe('1 character');
+    expect(count(0, 'character', 'characters')).toBe('0 characters');
+    expect(count(2, 'version', 'versions')).toBe('2 versions');
+  });
+
+  it('groups the thousands with a comma', () => {
+    expect(count(999, 'character', 'characters')).toBe('999 characters');
+    expect(count(1_000, 'character', 'characters')).toBe('1,000 characters');
+    expect(count(20_000, 'character', 'characters')).toBe('20,000 characters');
   });
 });
