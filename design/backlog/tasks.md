@@ -523,6 +523,18 @@ found and `403`.
   walk marks Manage there and answers the list with `serveParticipants`, which step 3 adds to `e2e/participants.ts`
   for it; step 7 adds `failParticipants` beside it. S01.02.01's third criterion stays open until step 7 proves Page not
   found for a worker on all three Participants routes.
+- Also the simplest options where the design is silent (15 October 2026, step 4): the server words each refused field
+  as participants.md does, with its first failing check alone, as Release 2's tools will give them (mcp-server.md
+  §5.5); a body's other fields are passed over, and a `dateOfBirth` that is not a calendar date gets binding's `400`,
+  which the SPA never sends. The SPA sends the names trimmed and words a `422` itself: as it checks what the server
+  checks, a name refused there is one that the server's own trimming leaves empty, "Enter the given name" or "Enter the
+  family name", and a date of birth one that is no longer before today, Melbourne's day having changed since
+  `me.today`, "Date of birth must be in the past" on all three parts; a refusal of a field that the form does not have
+  gets "Not saved: something went wrong. Try again.". A year of 0000 is not a real date. `participant.created`'s
+  `Details` name `givenName`, `familyName`, `dateOfBirth` and `status`, as §6.6's list does. `apiWithHeaders()` gives
+  a save's answer with its `Date`; `SaveStatus` is at the body's size, as status-messages.md has it, where T03's is at
+  the small size that guide-prompts.md gives its own, so the second of T02 and T03 to merge keeps one component for
+  both. `FieldGroup`'s fieldset says its `group` role again for every group, as govuk-frontend's date input does.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -608,7 +620,7 @@ found and `403`.
       connection. Try again." or "…: something went wrong. Try again." with Try again, then "The participant list still
       did not load: …" with focus kept on Try again, the title, no name in the query key, and a worker's Page not found
       with no request sent.
-- [ ] Add a participant (S01.02.02; participants.md B1, B2, B4, B5, B8 and *Add participant*):
+- [x] Add a participant (S01.02.02; participants.md B1, B2, B4, B5, B8 and *Add participant*):
       `POST /api/admin/participants`, given and family names of 1 to 100 characters after trimming the ends and kept as
       typed, a date of birth before today in Melbourne, `201 {id}` or `422 validation.failed` with field errors, saved
       with `participant.created` through `ConfigurationChanges.SaveAsync`, its ID as `entityId` and `participantId`,

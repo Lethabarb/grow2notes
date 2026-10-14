@@ -86,7 +86,8 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
     public async Task A_participant_list_that_lacks_the_caller_s_participant_or_holds_another_s_fails_the_run()
     {
         var (a, b) = sqlServer.Seeded;
-        var check = Assert.Single(EndpointMatrix.Rows, row => row.Route == "/api/admin/participants").Answer;
+        var check = Assert.Single(
+            EndpointMatrix.Rows, row => EndpointMatrix.NameOf(row) == "GET /api/admin/participants").Answer;
         Assert.NotNull(check);
         using var answer = new HttpResponseMessage
         {

@@ -1,6 +1,7 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
+import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
 import { UserPage } from '../features/users/UserPage.tsx';
@@ -92,6 +93,18 @@ export const routes: AppRoute[] = [
                 path: 'manage/participants',
                 element: <ParticipantsPage />,
                 handle: { pageName: pageName.participants, returnFocus: {}, backKey: 'participants' },
+              },
+              // One element for both, so that the replace after Add participant's 201 keeps it mounted
+              // (participants.md component B), and each with its own title.
+              {
+                path: 'manage/participants/new',
+                element: <ParticipantPage />,
+                handle: { pageName: pageName.addParticipant },
+              },
+              {
+                path: 'manage/participants/:participantId',
+                element: <ParticipantPage />,
+                handle: { pageName: pageName.participant },
               },
               {
                 path: 'manage/guide-prompts',

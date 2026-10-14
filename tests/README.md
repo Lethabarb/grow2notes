@@ -830,3 +830,8 @@ story adds one as follows.
   handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
   stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
   `SaveChangesInterceptor` holds back while another request changes the user.
+- Give each event type that it writes a row in the shared audit-events test,
+  `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
+  through the real endpoint, in seeded organisation A, adding the rows it acts on, and returns the entry that it must
+  write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new entry, and
+  compares the `Details` as JSON. `participant.created`'s row, the first, is the example.

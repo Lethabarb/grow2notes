@@ -88,10 +88,12 @@ export function FieldGroup({
     (id) => id !== undefined,
   );
   // The bar is on a wrapper, as GOV.UK's is: on the fieldset, which draws its legend across its top edge, the bar would
-  // start half-way down the legend.
+  // start half-way down the legend. The fieldset's role is said again, as govuk-frontend's date input says it, for
+  // JAWS, which otherwise does not read the fieldset's description (text-and-date-inputs.md).
   return (
     <div className={styles.group} data-invalid={invalid || undefined}>
       <fieldset
+        role="group"
         className={styles.fieldset}
         aria-describedby={description.length > 0 ? description.join(' ') : undefined}
       >

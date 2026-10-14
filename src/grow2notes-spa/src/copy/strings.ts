@@ -94,7 +94,10 @@ export const strings = {
   sending: 'Sending…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
-  /** The button of a page that saves what it shows and stays, such as Guide prompts (primary-actions.md). */
+  /**
+   * The button of a page or form that saves what it shows and stays, such as Guide prompts or a participant's Details
+   * (primary-actions.md).
+   */
   save: 'Save',
   /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
   saving: 'Saving…',
@@ -284,6 +287,34 @@ export const strings = {
     noneArchived: 'No archived participants.',
     active: 'Active',
     archived: 'Archived',
+  },
+  /**
+   * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
+   * with which their too-long messages start, and each name's message when it is left empty.
+   */
+  participantDetails: {
+    heading: 'Details',
+    givenName: 'Given name',
+    familyName: 'Family name',
+    enterGivenName: 'Enter the given name',
+    enterFamilyName: 'Enter the family name',
+  },
+  /**
+   * The date of birth's three fields (text-and-date-inputs.md): the group's legend, which also starts its messages,
+   * its hint and each part's label; each part as a message names it, as in "a day and month"; then the messages, in
+   * the order the checks run.
+   */
+  dateOfBirth: {
+    legend: 'Date of birth',
+    hint: 'For example, 27 3 1987',
+    day: 'Day',
+    month: 'Month',
+    year: 'Year',
+    partNames: { day: 'day', month: 'month', year: 'year' },
+    enter: 'Enter the date of birth',
+    yearFourNumbers: 'Year must include 4 numbers',
+    notReal: 'Date of birth must be a real date',
+    inThePast: 'Date of birth must be in the past',
   },
   /**
    * The Find a participant box (search-filter.md), on Today and Manage > Participants: its label; the description that

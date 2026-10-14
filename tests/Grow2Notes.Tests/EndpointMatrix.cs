@@ -140,6 +140,14 @@ internal static class EndpointMatrix
         // participant and not the other's.
         new(Get,       "/api/admin/participants", Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeeded("participant", organisation => [organisation.ParticipantId])),
+
+        // Adding a participant (§6.6), in the same group. The policy refuses A's worker before the handler runs, so
+        // the worker's call adds no one. Each manager's call adds a made-up participant to their own organisation,
+        // which the seeded-rows rule allows (tests/README.md), and loads nothing of another's, so B's manager gets
+        // what A's does.
+        new(Post,      "/api/admin/participants", Unauthorized, Forbidden, Created, Created,
+            WithJson("/api/admin/participants",
+                new { givenName = "Matrix", familyName = "Caller", dateOfBirth = "1990-01-01" })),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
