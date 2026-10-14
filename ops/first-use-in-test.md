@@ -138,3 +138,30 @@ they need an Android phone with Chrome, Samsung Internet and TalkBack, and Drago
     Record, for each button, how many understood it; a button that fewer than 4 of the 5 understood goes to the owner
     as a wording question, and no wording changes without the owner's approval. This step is also on the go-live run
     sheet that T22 writes. (S06.02.05; microcopy.md §8 *Testing the words*.)
+
+### Guide prompts, on the laptop and both phones
+
+These steps need the Android phone, with Chrome and TalkBack, as well as the kit in *Before you start*. Type only
+made-up prompts: every worker in the organisation sees them in every empty note.
+
+24. On the laptop, sign in as account A as in step 9, with NVDA running, and choose Manage, then Guide prompts. Do the
+    same as account B on the iPhone, with VoiceOver in Safari, and on the Android phone, with TalkBack in Chrome,
+    signing in with email, password and a 6-digit code as in step 14. With each screen reader, once: arrive on the
+    page; move into the box; type or paste until it holds 900 characters or more, then stop; paste in more than 1,000
+    and press Save; cut it back to 1,000 or fewer and press Save, then Save again with nothing changed; then type a
+    word and choose Today, and in the dialog Stay on this page. Look for each announcement in guide-prompts.md's
+    *Interactions and focus*, heard once each: "Guide prompts, heading level 1" as the page arrives; the box's name,
+    its text, then the help text and "You can enter up to 1,000 characters"; the count about a second after typing
+    stops, never at each key; the error, with focus moved to the box; "Saved" and the time after each of the two
+    Saves; and, as the dialog opens, "Leave without saving?", that it is a dialog, "Your changes to the guide prompts
+    are not saved." and "Stay on this page", with focus back on Today after Stay. (S01.04.01; S01.04.02;
+    guide-prompts.md's *Accessibility checklist*, *Screen reader*, and *Accessibility runs*.)
+25. On each phone, signed in as in step 24 with the screen reader off, choose Manage, then Guide prompts, and type a
+    word, so that the text is not saved. Go back with the phone's own gesture: on the iPhone, swipe in from the left
+    edge of Safari; on the Android phone, the back gesture, or Back. Look for the leave dialog, with focus on Stay on
+    this page, and after Stay, the page, its address and your text as they were. Go back the same way again and
+    choose Leave without saving, and look for Manage. Then type a word again, reload the page from the browser's
+    menu, and then close the tab. Write down, for each phone, whether the gesture brought the dialog or left the page
+    without it, and whether the browser showed a warning of its own for the reload and for the close; a phone may
+    show none (MDN), which the developer records rather than fixes. (S01.04.02's Note; guide-prompts.md *Open
+    questions* and *Accessibility runs*.)

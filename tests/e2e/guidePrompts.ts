@@ -24,6 +24,13 @@ export const savedAnswer = (version = nextVersion, date = savedAt) => ({
   headers: { ETag: `"${version}"`, Date: date },
 });
 
+/** The `PUT`'s `412`, as the API gives it once another manager has saved since the page loaded (design.md §6.7). */
+export const conflictAnswer = {
+  status: 412,
+  contentType: 'application/problem+json',
+  json: { type: 'about:blank', title: 'Precondition Failed', status: 412, code: 'precondition.failed' },
+};
+
 /**
  * Answers each `GET /api/admin/guide-prompts` that the page sends from now on with `text`, in the browser, as `serveMe`
  * answers `/api/auth/me`, so that the request never reaches the app, where no made-up manager has a session. A later
@@ -98,11 +105,7 @@ export function promptsStore(text: string) {
 
         const { text: sent, ifMatch } = await sentSave(route);
         if (ifMatch !== entityTag()) {
-          await route.fulfill({
-            status: 412,
-            contentType: 'application/problem+json',
-            json: { type: 'about:blank', title: 'Precondition Failed', status: 412, code: 'precondition.failed' },
-          });
+          await route.fulfill(conflictAnswer);
           return;
         }
 

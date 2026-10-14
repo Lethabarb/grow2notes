@@ -205,6 +205,13 @@ changes by a link, Back, reload or Sign out.
     task after Escape or Stay on this page has hidden it. A Back pressed within that one task is held, its address
     put back and nothing lost, with no dialog; that is accepted rather than tracked apart from the event, and the
     tests wait for the dialog to leave the page before they go on. (Step 6, 15 October 2026.)
+  - The storage spies run in every test of `guide-prompts.spec.ts`, as a fixture of that file, so that every path
+    the tests take is covered. The checklist items that axe does not check are shown beside its runs: its AAA
+    contrast rule for the 7:1 text, WCAG's text spacing on top of the 200% text at 320 px for SC 1.4.12, and no
+    animation or transition for no motion. The by-hand checks are steps 24 and 25 of ops/first-use-in-test.md, in a
+    section of their own after step 23, so that no step that a Note cites is renumbered; T26 orders them with the
+    rest. The checklist's five screen-reader items stay unticked until step 24 has been done. (Step 7, 15 October
+    2026.)
 - Hand-offs, so that every criterion has one owner. Each is also written, dated 14 October 2026, where the receiving
   task reads it. Until that task proves it, the matching S01.04.01 or S01.04.02 criterion stays unticked with a dated
   Note naming the task:
@@ -336,7 +343,7 @@ changes by a link, Back, reload or Sign out.
       and no browser dialog; a failed logout leaving the page guarded; a plain `close()` of the dialog as Stay; no
       warning on Today, Manage or Users for a link, reload or Sign out; and, if T01 is on `main`, the two
       sign-in-again bullets (Notes above)
-- [ ] Meet the Definition of Done's rows for this screen (guide-prompts.md *Storage and naming* and *Accessibility
+- [x] Meet the Definition of Done's rows for this screen (guide-prompts.md *Storage and naming* and *Accessibility
       runs*; README §9): Playwright shows nothing written to `localStorage`, `sessionStorage` or IndexedDB on any of
       the paths above (spies on `Storage.prototype.setItem` and `indexedDB.open`); axe passing in Default, Loading,
       Load failed, Too long, Saved, Conflict and with the dialog open; at 320 px with text at 200%, which also stands

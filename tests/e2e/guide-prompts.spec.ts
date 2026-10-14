@@ -1,6 +1,10 @@
-import type { Page, Route } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { AxeBuilder } from '@axe-core/playwright';
+import type { Locator, Page, Route } from '@playwright/test';
+import { expectAxeToPass } from './axe.ts';
+import { expect, test as base } from './fixtures.ts';
+import { whereFocusIs } from './focus.ts';
 import {
+  conflictAnswer,
   failPrompts,
   nextVersion,
   promptsAnswer,
@@ -21,6 +25,43 @@ import { people, serveUsers } from './users.ts';
 // and structure, loading, the field, the limit and count, Save and leaving. The tests answer /api/auth/me and
 // /api/admin/guide-prompts in the browser (me.ts, guidePrompts.ts), so that neither request reaches the app, but for
 // the one that signs in for real and saves to the app's own database.
+
+/**
+ * The fixtures' `test`, which, in every test below, on every path that it takes, shows that nothing is kept on the
+ * device (D22; guide-prompts.md *Storage and naming*): spies on `Storage.prototype.setItem`, which `localStorage` and
+ * `sessionStorage` share, and on `indexedDB.open`, put in each page of the test's browser context as it loads, note
+ * each call in `deviceWrites`, and the test fails, once it has ended, on any.
+ */
+const test = base.extend<{ deviceWrites: string[] }>({
+  deviceWrites: [
+    async ({ context }, use) => {
+      const writes: string[] = [];
+      await context.exposeBinding('noteDeviceWrite', (_, write: string) => {
+        writes.push(write);
+      });
+      await context.addInitScript(() => {
+        // Looked up at each call, as the binding may reach the page after this script.
+        const note = (write: string) =>
+          void (window as unknown as { noteDeviceWrite: (write: string) => Promise<void> }).noteDeviceWrite(write);
+        const { setItem } = Storage.prototype;
+        Storage.prototype.setItem = function (this: Storage, key: string, value: string) {
+          note(`${this === window.localStorage ? 'localStorage' : 'sessionStorage'}.setItem('${key}')`);
+          Reflect.apply(setItem, this, [key, value]);
+        };
+        const { open } = IDBFactory.prototype;
+        IDBFactory.prototype.open = function (this: IDBFactory, ...args: Parameters<IDBFactory['open']>) {
+          note(`indexedDB.open('${args[0]}')`);
+          return Reflect.apply(open, this, args);
+        };
+      });
+
+      await use(writes);
+
+      expect(writes, 'Written to the device').toEqual([]);
+    },
+    { auto: true },
+  ],
+});
 
 const address = '/manage/guide-prompts';
 const help = 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.';
@@ -1081,3 +1122,470 @@ for (const { path, name, link } of [
     expect(dialogs).toEqual([]);
   });
 }
+
+// The Definition of Done's rows for the screen (guide-prompts.md *Storage and naming* and *Accessibility runs*; backlog
+// README §9): axe in each state, the page at 320 px with text at 200%, forced colours and a keyboard-only pass, which
+// also show the items of guide-prompts.md's *Accessibility checklist* that axe does not check. The spies of `test`,
+// above, show that nothing is kept on the device, in these tests as in all the others.
+
+// The colour of base.css's focus ring (tokens.css).
+const focusColour = 'rgb(11, 12, 12)';
+// What a colour with nothing drawn, such as a border left transparent, computes to.
+const transparent = 'rgba(0, 0, 0, 0)';
+const loadFailed = 'The guide prompts did not load: no connection. Try again.';
+
+/**
+ * Expects the page as it is to pass axe's WCAG 2.2 AA rules at a phone's width and a laptop's (axe.ts); its text to
+ * reach 7:1 against its background, which guide-prompts.md's checklist asks beyond AA's 4.5:1, by axe's AAA contrast
+ * rule; and nothing on it to move (SC 2.3.3), as no element has an animation or a transition.
+ */
+async function expectAccessible(page: Page) {
+  await expectAxeToPass(page);
+  const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast-enhanced']).analyze();
+  expect(violations.flatMap(({ nodes }) => nodes.map(({ target }) => target.join(' '))), 'Text below 7:1').toEqual([]);
+  const moving = await page.evaluate(() =>
+    [...document.querySelectorAll('*')]
+      .filter((element) => {
+        const { animationName, transitionDuration } = getComputedStyle(element);
+        return animationName !== 'none' || transitionDuration.split(', ').some((duration) => parseFloat(duration) > 0);
+      })
+      .map((element) => element.localName),
+  );
+  expect(moving, 'Elements with an animation or a transition').toEqual([]);
+}
+
+/**
+ * Text at 200%: Chromium's default text size at 32 px, where it is 16, which makes the body's 18 px 36 (S00.05.01's
+ * Notes). At 320 px wide, it also stands for 400% zoom at 1280 px (guide-prompts.md *Accessibility runs*).
+ */
+async function setTextTo200Percent(page: Page) {
+  const devTools = await page.context().newCDPSession(page);
+  await devTools.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+}
+
+/**
+ * WCAG's text spacing (SC 1.4.12), on every element, as its bookmarklet sets it: lines 1.5 times the text apart,
+ * paragraphs 2 times, letters 0.12 times and words 0.16 times. Through a constructed stylesheet, which the page's
+ * Content Security Policy allows, as it refuses a `<style>` element.
+ */
+async function spaceTextOut(page: Page) {
+  await page.evaluate(() => {
+    const spacing = new CSSStyleSheet();
+    spacing.replaceSync(
+      '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }'
+        + ' p { margin-block-end: 2em !important; }',
+    );
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, spacing];
+  });
+}
+
+/**
+ * Expects the page as it is to fit the window's width (SC 1.4.10): no sideways scroll; no element, and no line of an
+ * element's own text, reaching past the window's sides or past its element's; no element cutting off what it holds,
+ * but for a box that scrolls up and down, as the dialog may; and the field showing all its text, as it grows with it.
+ * Words hidden on purpose by a clip, as the visually hidden ones and the skip link are, are left out.
+ */
+async function expectToFit(page: Page, state: string) {
+  const problems = await page.evaluate(() => {
+    const windowWidth = document.documentElement.clientWidth;
+    const found: string[] = [];
+    if (document.documentElement.scrollWidth > windowWidth) {
+      found.push('the page scrolls sideways');
+    }
+
+    const named = (element: Element) => `<${element.localName}> "${(element.textContent ?? '').trim().slice(0, 40)}"`;
+    const clipped = (element: Element | null): boolean =>
+      element !== null && (getComputedStyle(element).clipPath !== 'none' || clipped(element.parentElement));
+    for (const element of document.body.querySelectorAll('*')) {
+      const style = getComputedStyle(element);
+      if (element.getClientRects().length === 0 || style.visibility !== 'visible' || clipped(element)) {
+        continue;
+      }
+
+      const box = element.getBoundingClientRect();
+      if (box.left < -1 || box.right > windowWidth + 1) {
+        found.push(`${named(element)} reaches past the window`);
+      }
+
+      if (
+        (style.overflowX !== 'visible' && element.scrollWidth > element.clientWidth + 1)
+        || (['hidden', 'clip'].includes(style.overflowY) && element.scrollHeight > element.clientHeight + 1)
+        || (element.localName === 'textarea' && element.scrollHeight > element.clientHeight + 1)
+      ) {
+        found.push(`${named(element)} cuts off what it holds`);
+      }
+
+      for (const node of element.childNodes) {
+        if (node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim() === '') {
+          continue;
+        }
+
+        const text = document.createRange();
+        text.selectNodeContents(node);
+        if ([...text.getClientRects()].some(({ left, right }) => left < box.left - 1 || right > box.right + 1)) {
+          found.push(`the text of ${named(element)} reaches past it`);
+        }
+      }
+    }
+
+    return found;
+  });
+  expect(problems, state).toEqual([]);
+}
+
+/** The colour that a system colour, such as `Highlight`, takes under the forced colours that the page emulates. */
+function systemColour(page: Page, keyword: string): Promise<string> {
+  return page.evaluate((colour) => {
+    const probe = document.createElement('span');
+    probe.style.color = colour;
+    document.body.append(probe);
+    const { color } = getComputedStyle(probe);
+    probe.remove();
+    return color;
+  }, keyword);
+}
+
+/** Expects the element's border on `side` to be drawn: solid, `width` wide, and in a colour that shows. */
+async function expectDrawnBorder(locator: Locator, side: 'top' | 'left', width: string) {
+  await expect(locator).toHaveCSS(`border-${side}-style`, 'solid');
+  await expect(locator).toHaveCSS(`border-${side}-width`, width);
+  await expect(locator).not.toHaveCSS(`border-${side}-color`, transparent);
+}
+
+/**
+ * Expects `locator` to have focus with base.css's ring round it, 3 px, solid and near-black, 2 px out from its edge
+ * (SC 2.4.7), and nothing over it (SC 2.4.11), as at each stop of a keyboard-only pass.
+ */
+async function expectFocusRing(locator: Locator) {
+  await expect(locator).toBeFocused();
+  await expect(locator).toHaveCSS('outline-style', 'solid');
+  await expect(locator).toHaveCSS('outline-width', '3px');
+  await expect(locator).toHaveCSS('outline-offset', '2px');
+  await expect(locator).toHaveCSS('outline-color', focusColour);
+  const uncovered = await locator.evaluate((element) => {
+    const { left, top, width, height } = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(left + width / 2, top + height / 2);
+    return hit !== null && element.contains(hit);
+  });
+  expect(uncovered, 'Nothing over it').toBe(true);
+}
+
+test("the spies of this file's test note each write to localStorage, sessionStorage and IndexedDB", async ({
+  page,
+  deviceWrites,
+}) => {
+  await openWith(page);
+
+  await page.evaluate(() => {
+    localStorage.setItem('probe', 'a');
+    sessionStorage.setItem('probe', 'b');
+    indexedDB.open('probe');
+  });
+
+  await expect
+    .poll(() => [...deviceWrites])
+    .toEqual(["localStorage.setItem('probe')", "sessionStorage.setItem('probe')", "indexedDB.open('probe')"]);
+  // Emptied, as this test's writes are its own, so that the fixture, which fails a test on any, passes it.
+  deviceWrites.length = 0;
+});
+
+test("the one <h1> labels the field, in en-AU, among the shell's landmarks alone, with one Save of 48 px", async ({
+  page,
+}) => {
+  await openWith(page);
+
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en-AU');
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(heading(page).locator('label')).toHaveAttribute('for', 'guidePrompts-text');
+  await expect(field(page)).toHaveAttribute('id', 'guidePrompts-text');
+  // Named by its label alone, and not required, as no prompts at all is a value it may save.
+  for (const attribute of ['aria-label', 'aria-labelledby', 'aria-required', 'required']) {
+    await expect(field(page), attribute).not.toHaveAttribute(attribute);
+  }
+
+  // The skip link first, then the shell's header, nav and <main>, and no other landmark.
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+  await expect(page.getByRole('banner')).toHaveCount(1);
+  await expect(page.getByRole('navigation')).toHaveCount(1);
+  await expect(nav(page)).toBeVisible();
+  await expect(page.getByRole('main')).toHaveCount(1);
+  await expect(main(page)).toHaveAttribute('id', 'main-content');
+  for (const role of ['complementary', 'contentinfo', 'form', 'region', 'search'] as const) {
+    await expect(page.getByRole(role), role).toHaveCount(0);
+  }
+
+  // Nothing fixed or sticky, which could cover the control that has focus (SC 2.4.11).
+  const pinned = await page.evaluate(() =>
+    [...document.querySelectorAll('*')]
+      .filter((element) => ['fixed', 'sticky'].includes(getComputedStyle(element).position))
+      .map((element) => element.localName),
+  );
+  expect(pinned).toEqual([]);
+
+  // One Save, named by its word alone, filled with tokens.css's --colour-action, which tokens.test.ts checks at 3:1 on
+  // the page, as it does the box's border and the focus ring; at least 48 px each way at both widths; and no keyboard
+  // shortcut (SC 2.1.4).
+  await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(1);
+  await expect(save(page)).toHaveAccessibleName('Save');
+  await expect(save(page)).toHaveCSS('background-color', 'rgb(0, 85, 139)');
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const { width: across, height: down } = await boxOf(save(page));
+    expect(Math.min(across, down), `Save at ${width} px`).toBeGreaterThanOrEqual(48);
+  }
+
+  await expect(page.locator('[accesskey], [aria-keyshortcuts]')).toHaveCount(0);
+});
+
+test('axe passes, text is 7:1 and nothing moves: the prompts, too long, saved, in conflict, the dialog', async ({
+  page,
+}) => {
+  await openWith(page);
+  await expectAccessible(page);
+
+  await field(page).fill(textOf(1_001));
+  await save(page).click();
+  await expect(fieldError(page)).toHaveText(`Error: ${tooLong}`);
+  await expectAccessible(page);
+
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  await field(page).fill('What went well today?');
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expectAccessible(page);
+
+  // Another manager has saved since: the page loads their prompts as its base, and the field keeps this manager's.
+  await serveSaves(page, (route) => route.fulfill(conflictAnswer));
+  await save(page).click();
+  await expect(requestAlert(page)).toHaveText(conflict);
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await expectAccessible(page);
+
+  await navLink(page, 'Today').click();
+  await expect(stayOnPage(page)).toBeFocused();
+  await expectAccessible(page);
+});
+
+test('axe passes, text is 7:1 and nothing moves, loading and once the load fails, with Try again 48 px', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await failPrompts(page);
+  // The first GET is held, and its silent retry fails, as failPrompts aborts it.
+  const heldPrompts = await holdNext(page, '**/api/admin/guide-prompts');
+  await page.goto(address);
+  const prompts = await heldPrompts();
+  await expect(statusLine(page)).toHaveText('Loading guide prompts…');
+  await expectAccessible(page);
+
+  await prompts.abort('internetdisconnected');
+  await expect(statusLine(page)).toHaveText(loadFailed);
+  await expectAccessible(page);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const { width: across, height: down } = await boxOf(tryAgain(page));
+    expect(Math.min(across, down), `Try again at ${width} px`).toBeGreaterThanOrEqual(48);
+  }
+});
+
+test('at 320 px, with text at 200% and spaced out, nothing scrolls sideways or is cut off in any state', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await setTextTo200Percent(page);
+  await openWith(page);
+  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await spaceTextOut(page);
+  await expectToFit(page, 'With the prompts');
+
+  await field(page).fill(textOf(1_001));
+  await save(page).click();
+  await expect(fieldError(page)).toHaveText(`Error: ${tooLong}`);
+  await expectToFit(page, 'Too long');
+
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  await field(page).fill('What went well today?');
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expectToFit(page, 'Saved');
+
+  await serveSaves(page, (route) => route.fulfill(conflictAnswer));
+  await save(page).click();
+  await expect(requestAlert(page)).toHaveText(conflict);
+  await expectToFit(page, 'In conflict');
+
+  await navLink(page, 'Today').click();
+  await expect(stayOnPage(page)).toBeFocused();
+  await expectToFit(page, 'With the leave dialog open');
+});
+
+test('at 320 px, with text at 200% and spaced out, a failed load fits, its sentence and Try again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await setTextTo200Percent(page);
+  await serveMe(page, manager);
+  await failPrompts(page);
+  await page.goto(address);
+  await expect(statusLine(page)).toHaveText(loadFailed);
+  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await spaceTextOut(page);
+  await expectToFit(page, 'Load failed');
+
+  await tryAgain(page).click();
+  await expect(statusLine(page)).toHaveText('The guide prompts still did not load: no connection. Try again.');
+  await expectToFit(page, 'Still failing');
+});
+
+test('under forced colours, the box, error bar and buttons keep real borders, and focus is Highlight', async ({
+  page,
+}) => {
+  // A Windows contrast theme, as Chromium emulates one.
+  await page.emulateMedia({ forcedColors: 'active' });
+  await serveMe(page, manager);
+  await failPrompts(page);
+  await page.goto(address);
+  await expect(statusLine(page)).toHaveText(loadFailed);
+  await expectDrawnBorder(tryAgain(page), 'top', '2px');
+  // Each system colour below differs from the text's, so that a check of one cannot pass on the text's colour.
+  const [highlight, grayText, canvasText] = await Promise.all(
+    ['Highlight', 'GrayText', 'CanvasText'].map((keyword) => systemColour(page, keyword)),
+  );
+  expect(new Set([highlight, grayText, canvasText]).size).toBe(3);
+
+  await servePrompts(page, savedPrompts);
+  await tryAgain(page).click();
+  await expect(field(page)).toHaveValue(savedPrompts);
+  await expectDrawnBorder(field(page), 'top', '2px');
+  await expectDrawnBorder(save(page), 'top', '2px');
+  await field(page).focus();
+  await page.keyboard.press('Tab');
+  await expect(save(page)).toBeFocused();
+  await expect(save(page)).toHaveCSS('outline-style', 'solid');
+  await expect(save(page)).toHaveCSS('outline-color', highlight);
+  await page.keyboard.press('Shift+Tab');
+  await expect(field(page)).toBeFocused();
+  await expect(field(page)).toHaveCSS('outline-style', 'solid');
+  await expect(field(page)).toHaveCSS('outline-color', highlight);
+
+  // Too long: the bar down the field's group, and the box's 3 px border, a shape where the error's red has gone.
+  await field(page).fill(textOf(1_001));
+  await save(page).click();
+  await expect(fieldError(page)).toHaveText(`Error: ${tooLong}`);
+  await expectDrawnBorder(main(page).locator('form [data-invalid]'), 'left', '4px');
+  await expectDrawnBorder(field(page), 'top', '3px');
+
+  // Busy, Save's words and border in GrayText.
+  await field(page).fill('What went well today?');
+  const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+  await save(page).click();
+  const put = await heldSave();
+  await expect(save(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(save(page)).toHaveCSS('color', grayText);
+  await expect(save(page)).toHaveCSS('border-top-color', grayText);
+  await put.fulfill(savedAnswer());
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect(save(page)).not.toHaveCSS('color', grayText);
+
+  await typeAtEnd(page, added);
+  await navLink(page, 'Today').click();
+  await expect(stayOnPage(page)).toBeFocused();
+  for (const button of [stayOnPage(page), leaveWithoutSaving(page)]) {
+    await expectDrawnBorder(button, 'top', '2px');
+  }
+});
+
+test('keyboard alone: from Manage, Tab reaches Try again only while the load fails, then field and Save', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await failPrompts(page);
+  await page.goto(address);
+  await expect(statusLine(page)).toHaveText(loadFailed);
+
+  await navLink(page, 'Manage').focus();
+  await page.keyboard.press('Tab');
+  await expectFocusRing(tryAgain(page));
+  await page.keyboard.press('Tab');
+  expect(await whereFocusIs(page)).toBe('outside the page');
+
+  // Try again, by Enter, mounts the field and focuses the <h1>, from which Tab reaches the field, then Save, in the
+  // order that they show, and then leaves the page.
+  await servePrompts(page, savedPrompts);
+  await navLink(page, 'Manage').focus();
+  await page.keyboard.press('Tab');
+  await expect(tryAgain(page)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(field(page)).toHaveValue(savedPrompts);
+  await expect(heading(page)).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expectFocusRing(field(page));
+  await page.keyboard.press('Tab');
+  await expectFocusRing(save(page));
+  await page.keyboard.press('Tab');
+  expect(await whereFocusIs(page)).toBe('outside the page');
+  expect((await boxOf(field(page))).y).toBeLessThan((await boxOf(save(page))).y);
+
+  // Loaded, nothing stands between Manage and the field.
+  await navLink(page, 'Manage').focus();
+  await page.keyboard.press('Tab');
+  await expectFocusRing(field(page));
+});
+
+test('keyboard alone: Enter in the field adds a line break, on Save saves, and Tab stays in the dialog', async ({
+  page,
+}) => {
+  await openWith(page);
+  const sent = await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  await navLink(page, 'Manage').focus();
+  await page.keyboard.press('Tab');
+  await expectFocusRing(field(page));
+
+  // A textarea never sends its form on Enter.
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Any visitors?');
+  await expect(field(page)).toHaveValue(typed);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(sent).toEqual([]);
+
+  await page.keyboard.press('Tab');
+  await expectFocusRing(save(page));
+  await page.keyboard.press('Enter');
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect(save(page)).toBeFocused();
+  expect(sent).toEqual([{ text: typed, ifMatch: `"${promptsVersion}"` }]);
+
+  // Not saved once more, then Manage, which asks first.
+  await page.keyboard.press('Shift+Tab');
+  await expectFocusRing(field(page));
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type('!');
+  await page.keyboard.press('Shift+Tab');
+  await expectFocusRing(navLink(page, 'Manage'));
+  await page.keyboard.press('Enter');
+  await expectFocusRing(stayOnPage(page));
+  await page.keyboard.press('Tab');
+  await expectFocusRing(leaveWithoutSaving(page));
+  // The modal dialog holds Tab: on from its last button, it leaves the page for the browser's own controls, and comes
+  // back to its first, never reaching the page behind it.
+  const round: string[] = [];
+  for (let stop = 0; stop < 2; stop += 1) {
+    await page.keyboard.press('Tab');
+    round.push(await whereFocusIs(page));
+  }
+  expect(round).toEqual(['outside the page', 'Stay on this page']);
+
+  // Escape is Stay, and gives focus back to Manage, whose Enter asks again; Leave without saving then goes.
+  await page.keyboard.press('Escape');
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  await expect(navLink(page, 'Manage')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(stayOnPage(page)).toBeFocused();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL('/manage');
+  await expect(heading(page)).toHaveText('Manage');
+});

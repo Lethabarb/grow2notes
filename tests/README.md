@@ -258,7 +258,8 @@ editor, answers it too.
 
 Save sends `PUT /api/admin/guide-prompts`, which a test meets in the browser too, so that no save reaches the app.
 `savedAnswer(version, date)` is its `200`: no body, a made-up row version in the `ETag` and the server's time in the
-`Date`, by default `savedAt`, 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm".
+`Date`, by default `savedAt`, 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm". `conflictAnswer` is
+its `412 precondition.failed`, as the API answers once another manager has saved.
 
 - `serveSaves(page, answer)` meets each `PUT` with what `answer` does to its route, such as
   `route.fulfill(savedAnswer())` or `route.abort('internetdisconnected')`, and gives the list of the `PUT`s sent, each
@@ -269,6 +270,12 @@ Save sends `PUT /api/admin/guide-prompts`, which a test meets in the browser too
 
 The one test that meets the app's own endpoint signs in for real, through the `invite` fixture and setup with a passkey
 on the `authenticator` fixture, as the Users test does, and saves to the organisation that `admin bootstrap` made.
+
+`e2e/guide-prompts.spec.ts` extends the fixtures' `test` with one more, `deviceWrites`, which runs in each of its tests
+without being named, as the screen's Definition of Done asks that nothing be kept on the device on any of its paths
+(guide-prompts.md *Storage and naming*). It spies on `Storage.prototype.setItem` and `indexedDB.open` in each page of
+the test's browser context as it loads, and fails the test, once it has ended, on any call; a test that names it reads
+the calls so far, as the file's own test of the spies does.
 
 ### Signing in with a passkey, end to end
 
