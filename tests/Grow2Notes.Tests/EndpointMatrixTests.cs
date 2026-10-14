@@ -89,7 +89,7 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
         var token = await client.FetchTokenAsync();
         List<string> differences = [];
 
-        foreach (var call in EndpointMatrix.CallsTo(EndpointsOf(factory)))
+        foreach (var call in EndpointMatrix.CallsTo(factory.Services, sqlServer.Seeded))
         {
             if (EndpointMatrix.RowOf(call.Endpoint) is { } row)
             {
@@ -134,7 +134,7 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
         var token = await client.FetchTokenAsync();
         List<string> differences = [];
 
-        foreach (var call in EndpointMatrix.CallsTo(EndpointsOf(app)))
+        foreach (var call in EndpointMatrix.CallsTo(app.Services, sqlServer.Seeded))
         {
             if (statuses.TryGetValue(call.Endpoint.RoutePattern.RawText ?? "", out var status))
             {

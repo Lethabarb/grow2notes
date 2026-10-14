@@ -223,10 +223,15 @@ builder.Services.AddScoped<SetupLinkIssuer>();
 // the method that the endpoint adds, the user's changes and their audit event are all saved.
 builder.Services.AddScoped<SetupCompletion>();
 
+// One per scope, for the same reason: a change to a user who exists opens its transaction on the scope's context, in
+// which the user is loaded and their If-Match checked, and the change and its audit event are saved.
+builder.Services.AddScoped<UserChanges>();
+
 // The admin handler classes (mcp-server.md §3.5, convention 1), one per scope, as each reads and writes through the
 // scope's context.
 builder.Services.AddScoped<UserList>();
 builder.Services.AddScoped<UserInvite>();
+builder.Services.AddScoped<UserSetupLink>();
 builder.Services.AddScoped<GuidePromptsHandler>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
@@ -335,6 +340,7 @@ var api = app.MapApiGroup()
 api.MapAdminGroup()
     .MapUserListEndpoint()
     .MapInviteUserEndpoint()
+    .MapUserSetupLinkEndpoint()
     .MapGuidePromptsEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for

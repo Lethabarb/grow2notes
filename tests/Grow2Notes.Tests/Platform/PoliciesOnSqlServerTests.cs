@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Platform;
@@ -121,7 +120,7 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
     // which gives any route parameter a value, and this test's own at their route patterns.
     private List<EndpointCall> CallsToEveryEndpointThatIsNotAnonymous() =>
     [
-        .. EndpointMatrix.CallsTo(app.Services.GetRequiredService<EndpointDataSource>())
+        .. EndpointMatrix.CallsTo(app.Services, seeded)
             .Where(call => call.Endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null),
     ];
 

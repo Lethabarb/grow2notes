@@ -175,6 +175,16 @@ with their typing kept (checked with a half-filled Invite form), and a different
   `user.updated`'s shape, `{"new": {"email", "displayName", "role"}}` with all three (`ChangeDetails.Of`). A sender's
   exception, whose text can hold the address or the link, is replaced by `EmailNotSentException`, which names only its
   type, and which the exception handler logs, as any unhandled exception, and answers with a `500` problem.
+- Where design.md is silent (step 4): the If-Match handling for user changes is `UserChanges.ChangeAsync`
+  (`Features/Users/`), which T04's handlers reuse: inside the one transaction, so each attempt that a transient failure
+  retries loads the user again (§5.9), it loads the user by ID and the tenant's organisation, then checks `If-Match`
+  against the row it read, then hands the user to the handler's change. A user not found is `UserChangeResult.NotFound`,
+  which has no §6.9 code: the endpoint answers a bare `404`, which the status code pages make problem details, as for
+  an unknown path, and Release 2's tools will give `not_found`. The route's `{id:guid}` constraint makes an ID that is
+  not a GUID the unknown-path `404`, not a `400`. `user.setup_link_sent` has no `Details`: its actor and its entity ID
+  name who sent the link to whom. In the endpoint matrix, each call first invites a user into A and sends their ETag,
+  so A's manager gets `204` and B's manager `404`; `EndpointCall` carries the app's services and the seeded
+  organisations for it (tests/README.md).
 
 ### Steps
 
@@ -220,7 +230,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       Identity's check accepts, and a missing role or one that is neither Worker nor Manager, give `422` under
       `displayName`, `email` or `role`, never `400` or `500`, and create, write and send nothing; and a sender that
       fails gives `500` and leaves no user and no event, with neither the address nor the link in the logs
-- [ ] Add `POST /api/admin/users/{id}/setup-link` for an Invited user, with the `If-Match` handling for user changes
+- [x] Add `POST /api/admin/users/{id}/setup-link` for an Invited user, with the `If-Match` handling for user changes
       that T04 reuses (S00.06.03 criteria 1 and 2; design.md §4.11 *Resend invite*, §6.6, §6.7, A53;
       S00.06.03's Notes; see Notes): in this order, load the user filtered by the tenant's organisation, `404` for an
       unknown ID or another organisation's; `IfMatch.Check` against their `ConcurrencyStamp`, `428` when missing and

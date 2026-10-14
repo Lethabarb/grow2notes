@@ -693,8 +693,9 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   request, such as `At("/api/no-such-path")`, and one whose endpoint reads a JSON body gives it one with `WithJson`,
   as `POST /api/auth/setup/start`'s gives a made-up link; a row's builder is asked again for each call. A call
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
-  on, in organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's
-  services and the seeded organisations to do it with.
+  on, in organisation A, as the seeded-rows rule above says, with the app's services and the seeded organisations
+  that `EndpointCall` carries: `POST /api/admin/users/{id}/setup-link`'s row, the first, invites a user into A
+  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`.
 - A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
   caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
   row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
@@ -750,3 +751,7 @@ story adds one as follows.
   `Grow2Notes.Tests/Platform/Configuration/ConfigurationChangesOnSqlServerTests.cs` is the example for a change sent
   with `If-Match`: in an organisation the test adds with two managers, the `200` with its new `ETag` and audit event,
   the second manager's `412`, the `428`, and a save of the stored values that writes nothing.
+  `Grow2Notes.Tests/Features/Users/UserSetupLinkEndpointTests.cs` is the example for a change to a user, which the
+  handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
+  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
+  `SaveChangesInterceptor` holds back while another request changes the user.

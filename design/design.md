@@ -1342,6 +1342,7 @@ The SPA never polls in the background. `GET /api/auth/me` is called on page load
 | 409 | `review.not_current` | The note is no longer To review, or the version is not current. |
 | 409 | `user.email_in_use` | The email already belongs to an account. |
 | 409 | `user.last_manager` | Would leave no active manager. |
+| 409 | `user.not_active` | A setup link for a user who is not Invited: a Deactivated user is reactivated first (D75). Until Reset sign-in serves an Active user (S00.06.04), they get it too. |
 | 409 | `config.group_archived` | Adding a common item to, rewording one in, or moving one into a common item group that is archived. Archiving a group does not change its items' `RowVersion`, so `If-Match` cannot catch this. |
 | 410 | `auth.setup_link_invalid` | The setup link is expired, used or replaced. |
 | 412 | `precondition.failed` | Stale `If-Match`. |
