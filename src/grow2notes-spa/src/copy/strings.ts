@@ -186,6 +186,15 @@ export const strings = {
     },
   },
   /**
+   * Manage > Guide prompts (guide-prompts.md), whose `<h1>` is its page name, which labels the field: the help text
+   * under it (design.md §4.10), then the region's loading line and what did not load, as its failure sentence starts.
+   */
+  guidePrompts: {
+    help: 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.',
+    loading: 'Loading guide prompts…',
+    thePrompts: 'The guide prompts',
+  },
+  /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
    * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md); then the
    * user detail's own words.

@@ -40,6 +40,12 @@ const users: AdminUser[] = [
   },
 ];
 
+// The made-up answers of the manager screens' requests, by path.
+const managerAnswers: Readonly<Record<string, unknown>> = {
+  '/api/admin/users': users,
+  '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
+};
+
 // Between a day and its month, so that the two never split across lines (microcopy.md §3).
 const nbsp = ' ';
 
@@ -56,15 +62,16 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers `GET /api/admin/users` with the made-up list and any other request,
- * `GET /api/auth/me`, with `me`, or, for none, never answers.
+ * Stubs `fetch` as the server, which answers `GET /api/admin/users` and `GET /api/admin/guide-prompts` with their
+ * made-up answers and any other request, `GET /api/auth/me`, with `me`, or, for none, never answers.
  */
 function serveMe(me: Me | undefined) {
   fetchMock.mockImplementation((path, init) =>
     me === undefined
       ? noAnswer(init)
       : Promise.resolve(
-          new Response(JSON.stringify(path === '/api/admin/users' ? users : me), {
+          // `api()` sends each request to a path, as a string.
+          new Response(JSON.stringify(managerAnswers[path as string] ?? me), {
             headers: { 'Content-Type': 'application/json' },
           }),
         ),
@@ -174,7 +181,7 @@ describe('Manage', () => {
     expect(within(main).getAllByRole('link')).toEqual(listed);
   });
 
-  it.each(links.filter(({ name }) => name !== 'Users'))(
+  it.each(links.filter(({ name }) => name !== 'Guide prompts' && name !== 'Users'))(
     'opens Page not found from $name, until its screen is built',
     async ({ name, address }) => {
       serveMe(manager);
@@ -201,6 +208,23 @@ describe('Manage', () => {
     expect(pageHeading()).toHaveAccessibleName('Users');
     expect(within(screen.getByRole('main')).getByRole('link', { name: 'Sam Lee' })).toBeInTheDocument();
     expect(document.title).toBe('Grow2Notes – Users');
+    expect(currentItems()).toEqual(['Manage true']);
+  });
+
+  it('opens the editor from Guide prompts, not Page not found, with Manage still marked', async () => {
+    serveMe(manager);
+    const router = renderApp('/manage');
+    await settle();
+
+    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Guide prompts' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/manage/guide-prompts');
+    expect(pageHeading()).toHaveAccessibleName('Guide prompts');
+    expect(within(screen.getByRole('main')).getByRole('textbox', { name: 'Guide prompts' })).toHaveValue(
+      'Mood and wellbeing today?',
+    );
+    expect(document.title).toBe('Grow2Notes – Guide prompts');
     expect(currentItems()).toEqual(['Manage true']);
   });
 });

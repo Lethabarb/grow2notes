@@ -5,7 +5,7 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out and the Users screens, with axe accessibility checks, run against the published app.
+  the idle sign-out, the Users screens and Guide prompts, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -238,6 +238,22 @@ before each comma that only screen readers get, "alex.park@example.org , Invited
 setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made lists its
 first manager alone. `e2e/users.spec.ts` is the example of each, and `e2e/shell.spec.ts`'s walk, whose Users link opens
 the list, answers it too.
+
+### Answering `/api/admin/guide-prompts`
+
+Guide prompts loads the organisation's prompts from `GET /api/admin/guide-prompts`, which needs a manager's session too,
+so a test of it answers that in the browser in the same way. `e2e/guidePrompts.ts` has the design's sketch of the
+prompts, with a blank line inside them, as `savedPrompts`, and `promptsAnswer(text, version)`, the `GET`'s answer: the
+JSON `{text}` with a made-up row version in the `ETag`, in quotes, as the API writes it. Its two helpers route the
+page's `GET`s through `page.route`, as the Users helpers route theirs, and pass any other request on to the routes
+before them.
+
+- `servePrompts(page, text)` answers each `GET` with `text`.
+- `failPrompts(page)` aborts each, as `failUsers(page)` does.
+
+A test of the loading line holds the next `GET` with `holdNext` and answers it with `promptsAnswer`, as the Users test
+does. `e2e/guide-prompts.spec.ts` is the example, and `e2e/shell.spec.ts`'s walk, whose Guide prompts link opens the
+editor, answers it too.
 
 ### Signing in with a passkey, end to end
 

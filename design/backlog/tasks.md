@@ -268,7 +268,7 @@ changes by a link, Back, reload or Sign out.
       `Header.test.tsx` shows, with a stand-in guard: none registered, one logout as before; Stay, no request, Sign out
       not busy and focused; Leave, the guard disarmed before the `POST`; a failed logout, the guard armed again and the
       failure line shown; and the different-person reload disarming first, if it is built
-- [ ] Show Manage > Guide prompts (guide-prompts.md *Access and structure*, *Loading* and *Field*; design.md §4.10's
+- [x] Show Manage > Guide prompts (guide-prompts.md *Access and structure*, *Loading* and *Field*; design.md §4.10's
       *On screen*, *Help text* and no-prompt-text lines): `/manage/guide-prompts` under `ManagerOnly`, named
       `pageName.guidePrompts`, in `src/features/guidePrompts`; the `<h1>` holding the field's `<label>`, the help text
       and the limit hint, rendered at once; `LoadRegion` with "Loading guide prompts…" and "The guide prompts"; the
