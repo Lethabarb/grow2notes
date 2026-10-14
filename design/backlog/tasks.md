@@ -215,7 +215,7 @@ changes by a link, Back, reload or Sign out.
 
 ### Steps
 
-- [ ] Serve the guide prompts (S01.04.01's first criterion; guide-prompts.md *Access and structure*'s `403`, *Save*'s
+- [x] Serve the guide prompts (S01.04.01's first criterion; guide-prompts.md *Access and structure*'s `403`, *Save*'s
       two-managers and audit bullets and the server half of *Limit and count*; design.md §5.4, §6.6, D84): a handler
       class in `Features/GuidePrompts` that takes the `Actor` (mcp-server.md §3.5), with `GET` and
       `PUT /api/admin/guide-prompts` mapped in the `/api/admin` group from `Program.cs`. The `GET` gives `{text}` with
