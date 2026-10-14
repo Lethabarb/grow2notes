@@ -85,6 +85,13 @@ module keyVault 'modules/keyvault.bicep' = {
   }
 }
 
+module email 'modules/email.bicep' = {
+  name: 'email'
+  params: {
+    environmentName: environmentName
+  }
+}
+
 // SqlClient signs in as the app identity, so the string holds no secret (design.md §9.4). Encrypt=Strict is TDS 8.0:
 // TLS starts before any TDS message and the server's certificate is always validated, which TrustServerCertificate
 // cannot turn off, so that keyword is left out (design.md §9.3).
@@ -107,9 +114,9 @@ module app 'modules/app.bicep' = {
     subnetId: network.outputs.subnetId
     healthCheckPath: healthCheckPath
     // The app reads these as ConnectionStrings:Grow2Notes, ManagedIdentity:ClientId and DataProtection:KeyVaultKeyUri.
-    // The client ID picks the user-assigned identity for ManagedIdentityCredential, which signs in to Key Vault and
-    // later to telemetry and email (design.md §9.4). The key URI has no version: Data Protection wraps each new key
-    // with the key's current version (design.md §9.3). APPLICATIONINSIGHTS_CONNECTION_STRING is the name the Azure
+    // The client ID picks the user-assigned identity for ManagedIdentityCredential, which signs in to Key Vault,
+    // telemetry and email (design.md §9.4). The key URI has no version: Data Protection wraps each new key with the
+    // key's current version (design.md §9.3). APPLICATIONINSIGHTS_CONNECTION_STRING is the name the Azure
     // Monitor OpenTelemetry distro reads; the string only says where to send, and the identity's token is what lets
     // the app send (design.md §9.5). Statsbeat, the exporter's own usage reports, would go to Microsoft outside
     // Australia, so it is off (design.md §10, D33).
@@ -122,6 +129,12 @@ module app 'modules/app.bicep' = {
       // Read as App:Origin. An invite's setup link starts with it, because the operator commands, which print one,
       // run where there is no request to take the address from (design.md §7.4, §8.1).
       App__Origin: appOrigin
+      // Read as Email:Endpoint and Email:SenderAddress. With both, the app sends its setup-link email through
+      // Communication Services as the app identity; without the endpoint it would write each email, link and all, to
+      // its console. Neither is a secret: access keys are off, so there is no connection string or key, and the
+      // address is on every email the app sends.
+      Email__Endpoint: email.outputs.endpoint
+      Email__SenderAddress: email.outputs.senderAddress
       // App Service mounts the deployed zip read-only as wwwroot, so a running build never loads a later build's files,
       // and sends traffic to a newly started build only once /healthz answers 200 (design.md §10.4 step 7, A49).
       // /healthz in both environments, not prod's /healthz/ready, because it never touches the database (design.md

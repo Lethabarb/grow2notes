@@ -9,9 +9,13 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 ## Before you start
 
 - Test holds made-up data only (A35): made-up names, such as `Sample Support Services` and `Alex Sample`, and a new
-  `example.org` address for each account, such as `alex.sample.20261013@example.org`.
+  `example.org` address for each account that `admin bootstrap` creates, such as `alex.sample.20261013@example.org`.
+  An account invited from the Users screen gets its setup link by email instead, which an `example.org` address never
+  receives, so it gets a new address at a mailbox kept only for testing; if the mailbox takes `+` tags, as Gmail and
+  Outlook.com do, `name+20261015c@…` gives each account its own.
 - Have ready: a laptop with Chrome and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
-  Authenticator or Microsoft Authenticator), and the Azure portal signed in with your own account.
+  Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
+  your own account.
 - In Chrome, open the developer tools on the Network panel, with **Preserve log** on, before each step that names a
   request.
 - Write down each step's time and result (passed, or what you saw) for the developer, who records them in the
@@ -100,12 +104,19 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 
 17. F00.04's feature check also asks for a worker on each setup path, and for a manager's passkey on a phone, since
     account A's is on the laptop, each setting up and signing in a second time on a phone and a laptop. As account A,
-    invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a new made-up
-    `example.org` address, with the setup link as S00.02.07 and S00.06.02 make it reach a made-up address in test.
-18. On the iPhone, with VoiceOver on, set up account C and one worker with Use a passkey (recommended), and the other
-    worker with Use a password and authenticator app, typing the setup key into the phone's authenticator app. Look
-    for: each setup ends on Today, and VoiceOver reads views D to G as sign-in.md's *Accessibility checklist* says.
-    Sign each out with Sign out. (F00.04's feature check: setup on the phone, and its VoiceOver pass over views D to G.)
+    invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a made-up name and
+    a new address at the testing mailbox (*Before you start*). Open the first invite's email on the laptop, leaving its
+    link for step 18. Look for: it arrives within 5 minutes (look in junk too, and say which folder it was in), from a
+    `DoNotReply@…azurecomm.net` address, with the subject "Set up your Grow2Notes sign-in"; its text names Grow2Notes
+    and no other organisation, product or person, and holds one link, of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and its headers (Show original in Gmail, View
+    message source in Outlook.com) show `spf=pass`, `dkim=pass` and `dmarc=pass` in `Authentication-Results`.
+    (S00.02.07's third criterion, and its first seen in test.)
+18. On the iPhone, with VoiceOver on, open each of the three invites' emails in the testing mailbox and follow its
+    setup link. Set up account C and one worker with Use a passkey (recommended), and the other worker with Use a
+    password and authenticator app, typing the setup key into the phone's authenticator app. Look for: each setup
+    ends on Today, and VoiceOver reads views D to G as sign-in.md's *Accessibility checklist* says. Sign each out with
+    Sign out. (F00.04's feature check: setup on the phone, and its VoiceOver pass over views D to G.)
 19. Sign each of the three in a second time on the laptop: the passkey ones with Sign in with a passkey, choosing the
     iPhone when Chrome offers it, and the password worker with email, password and a 6-digit code. Look for Today each
     time, then sign out as in step 7, and repeat step 15's query for their `auth.setup_completed` and

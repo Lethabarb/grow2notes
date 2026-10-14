@@ -131,6 +131,20 @@ with their typing kept (checked with a half-filled Invite form), and a different
   the next one comes from the refetched list (D78).
 - The Communication Services and Email resources are named `acs-grow2notes-<env>` and `ecs-grow2notes-<env>`, carrying
   the environment as every other resource does, and design.md §10.1's row changes to match.
+- Where design.md is silent (step 2): the Email service has no access keys of its own, so its API has no
+  `disableLocalAuth`; it holds the domain, the email goes through Communication Services, and keys are turned off
+  there. Mail to an `example.org` address goes nowhere, so in test an account invited from Users gets an address at a
+  mailbox kept only for testing, as ops/first-use-in-test.md's *Before you start* says.
+- 14 October 2026, a risk for the owner, not a design change: Microsoft Learn's retirement and breaking changes guide
+  for Communication Services (updated 8 October 2026),
+  <https://learn.microsoft.com/azure/communication-services/acs-retirement-and-breaking-changes-guide>, says its Email
+  service retires on 30 September 2028 and is in maintenance mode, with security and critical fixes only. Microsoft
+  advises using the time to migrate rather than onboarding new solutions, and says new Email resources can still be
+  created but that this may change at any time. It also says that from 23 October 2026 it starts limiting onboarding
+  to retiring services, and that a customer with a Communication Services resource created before then can keep using
+  it. The data-location page that `email.bicep` cites carries the same warning. A58 and `email.bicep` stand, as new
+  resources can still be created; whether A58 holds, and what sends production's email (S00.02.04, in T22), is a
+  question for the owner. No other provider is chosen or built here.
 - `allowedActions(user)` in `userRules.ts` gives Edit and, while Invited, Resend invite. T04 adds its `onlyManager`
   argument with `isOnlyActiveManager`, Reset sign-in, Deactivate and Reactivate, so no argument goes unused before then.
   Invite user and T04's Edit user share `validateUser()` and the Role radios (`RoleField`, in `src/features/users/`).
@@ -170,7 +184,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       key, and a missing client ID or sender address stops the app starting; the invite core's and `admin bootstrap`'s
       tests still pass, bootstrap printing its link and sending nothing; and tests/README.md says how a test reads the
       emails the fake sender recorded
-- [ ] Add `infra/modules/email.bicep` to `main.bicep` (S00.02.07 criteria 2 and 3; design.md §10, §10.1's
+- [x] Add `infra/modules/email.bicep` to `main.bicep` (S00.02.07 criteria 2 and 3; design.md §10, §10.1's
       Communication Services row, §10.3, A58; see Notes): first confirm, read-only from Microsoft Learn's data-location
       list, that the Email service offers Australia; then Communication Services and its Email service, both with data
       location Australia, access keys off (`disableLocalAuth`), and the Email service's Azure-managed `azurecomm.net`
