@@ -150,7 +150,9 @@ made-up prompts: every worker in the organisation sees them in every empty note.
     page; move into the box; type or paste until it holds 900 characters or more, then stop; paste in more than 1,000
     and press Save; cut it back to 1,000 or fewer and press Save, then Save again with nothing changed; then type a
     word and choose Today, and in the dialog Stay on this page. Look for each announcement in guide-prompts.md's
-    *Interactions and focus*, heard once each: "Guide prompts, heading level 1" as the page arrives; the box's name,
+    *Interactions and focus*, heard once each: "Guide prompts, heading level 1" as the page arrives, though skip this
+    one until [tasks.md](../design/backlog/tasks.md) T02, *Keep my place across screens*, is in test, as nothing moves
+    focus to the heading on arrival before then; the box's name,
     its text, then the help text and "You can enter up to 1,000 characters"; the count about a second after typing
     stops, never at each key; the error, with focus moved to the box; "Saved" and the time after each of the two
     Saves; and, as the dialog opens, "Leave without saving?", that it is a dialog, "Your changes to the guide prompts

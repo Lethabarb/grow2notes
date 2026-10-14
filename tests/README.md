@@ -275,7 +275,9 @@ on the `authenticator` fixture, as the Users test does, and saves to the organis
 without being named, as the screen's Definition of Done asks that nothing be kept on the device on any of its paths
 (guide-prompts.md *Storage and naming*). It spies on `Storage.prototype.setItem` and `indexedDB.open` in each page of
 the test's browser context as it loads, and fails the test, once it has ended, on any call; a test that names it reads
-the calls so far, as the file's own test of the spies does.
+the calls so far, as the file's own test of the spies does. A second test, marked `test.fail()` as the one in
+`e2e/fixtures.spec.ts` is, writes to `localStorage` without naming it, which shows that the fixture runs, and fails a
+test, by itself.
 
 ### Signing in with a passkey, end to end
 

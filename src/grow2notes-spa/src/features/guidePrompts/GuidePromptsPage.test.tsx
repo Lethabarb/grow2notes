@@ -1101,6 +1101,35 @@ describe('Guide prompts, saving', () => {
     expect(warnsBeforeUnload()).toBe(false);
   });
 
+  it('after a 412 whose refetch fails, says so, and keeps the base, so the next save sends its ETag', async () => {
+    await openWith();
+    const mine = `${saved}\nAny visitors?`;
+    serve(savePath, problem(412, { code: 'precondition.failed' }));
+    serve(promptsPath, noConnection);
+
+    enter(mine);
+    const save = pressSave();
+    // Past the refetch's silent retry.
+    await wait(60_000);
+
+    expect(alert().textContent).toBe(conflict);
+    expect(field()).toHaveValue(mine);
+    expect(save).toHaveFocus();
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(warnsBeforeUnload()).toBe(true);
+
+    serve(savePath, stored());
+    pressSave();
+    await settle();
+
+    // The base as it was, which the server would meet with the 412 again.
+    expect(putsSent()).toEqual([
+      { text: mine, ifMatch: `"${etag}"` },
+      { text: mine, ifMatch: `"${etag}"` },
+    ]);
+  });
+
   it('refreshes /me after a 403, so that the role guard shows Page not found once it says worker', async () => {
     const { router } = await openWith();
     serve(savePath, problem(403));

@@ -91,6 +91,11 @@ with their typing kept (checked with a half-filled Invite form), and a different
 - Tests use a fake sender; CI never sends real email. A real email arriving in test, with its SPF, DKIM and DMARC
   headers, is a by-hand check on ops/first-use-in-test.md.
 - Whichever of T01 and T03 merges second adds `disarmUnloadGuard()` before the different-person reload.
+- From T03 (15 October 2026, its review): if T03 merges first, T01 also proves on Manage > Guide prompts, in
+  Playwright, guide-prompts.md › Leaving's last two bullets, which need its sign-in in place: after a `401` mid-edit
+  the same person signs in, and the text is still there and still not saved, with no `PUT` until Save is pressed
+  again; and a different person signs in, and the page reloads in full to Today, with no browser dialog and the text
+  gone (S00.04.08's Note from T03). S01.04.02 keeps them open until then.
 
 ### Steps
 
@@ -137,6 +142,13 @@ found and `403`.
   and the date-of-birth fields that Today reuses (T08), and the shared audit-events test that later tasks add rows to
   (T24 completes it).
 - A worker's `403` on each new endpoint is an endpoint-matrix row, not a test of its own.
+- From T03 (15 October 2026, its review): if T03 merges first, T02 also checks its route focus on Manage > Guide
+  prompts, in Vitest and in `guide-prompts.spec.ts`: focus on the `<h1>` after a client-side arrival there
+  (guide-prompts.md › Access and structure, the third bullet), and on Today's `<h1>` after Leave without saving
+  (› Leaving, the first bullet), which S01.04.01 and S01.04.02 keep open until then (S00.05.02's Note from T03). And
+  the one `SaveStatus` that ships, which Details' Save uses too, is at `--font-size-small` with `tabular-nums`, as
+  foundations.md, which owns sizes, has status lines and the save indicator, where status-messages.md's *States*
+  table says body size (guide-prompts.md *Conflicts resolved* 17; S01.02.03's Note from T03).
 
 ### Steps
 
@@ -172,7 +184,7 @@ changes by a link, Back, reload or Sign out.
   `src/copy/format.ts` and the leave guard. T04 adds the red warning style to the dialog shell; T05 uses `count()`.
 - Also builds once the `SaveStatus` line and `apiWithHeaders()`, which gives an answer's `ETag` and `Date`, as T02's
   participant Details Save needs both too (status-messages.md, D79): whichever of T02 and T03 merges second reuses the
-  first one's, so that one copy ships (S01.02.03's Notes).
+  first one's, so that one copy ships (S01.02.03's Notes), at the small size (the review Note below).
 - Whichever of T01 and T03 merges second adds `disarmUnloadGuard()` before the different-person reload.
 - guide-prompts.md's other open questions (the (M) string, the conflict message) are built as the spec words them unless
   the owner says otherwise.
@@ -230,6 +242,27 @@ changes by a link, Back, reload or Sign out.
     open dialog with a plain `close()`, are T04's (T04's Notes). No S01.04.01 or S01.04.02 criterion waits on them,
     and the leave dialog already treats that `close()` as Stay.
   - By-hand checks (screen readers, real phones) go on ops/first-use-in-test.md in step 7.
+- 15 October 2026, review: 7 findings were confirmed and are fixed here:
+  - `guide-prompts.spec.ts`'s test of two saves in a row checked the save status empty with the page's clock running,
+    so a runner that stalled for 400 ms would meet its hidden "Saving…" and fail; it now pauses the clock for that
+    check, as the test of the held save does.
+  - No test showed that a refetch that fails after a `412` still shows the conflict and leaves the base as it was
+    (step 5's Note above). A Vitest case now does, and fails, with an unhandled rejection, once that refetch's
+    `.catch` is removed.
+  - No test showed that the storage spies run in, and fail, a test that does not name them. A test marked
+    `test.fail()` now writes to `localStorage` without naming them, as `fixtures.spec.ts` does for the Content
+    Security Policy, so that a fixture no longer automatic, or no longer failing on a write, fails the run.
+  - `SaveStatus` is at `--font-size-small` with `tabular-nums`, as guide-prompts.md 6f has it and foundations.md,
+    which owns sizes, gives status lines and the save indicator, where status-messages.md's *States* table has "Saved
+    4:12 pm" at body size. The choice is now recorded, as guide-prompts.md *Conflicts resolved* 17, in S01.02.03's
+    Note from T03 and in T02's Notes, so that the one copy that ships keeps that size, whichever of T02 and T03 merges
+    second.
+  - S01.04.01 and S01.04.02 had no dated Notes for the criteria handed to T01, T02 and T08 and to the by-hand steps,
+    though F00.04, F00.05 and F02.02 said they had; each now has one.
+  - The hand-offs to T01 and T02 were only in story Notes, which a rebase does not bring to those lanes; T01's and
+    T02's Notes here now hold them, as T04's and T08's do.
+  - ops/first-use-in-test.md step 24 listened for the heading as the page arrives, which needs T02's route focus, with
+    no gate; that check now waits until T02 is in test.
 
 ### Steps
 

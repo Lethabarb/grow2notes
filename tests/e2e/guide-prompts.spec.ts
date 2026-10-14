@@ -593,15 +593,20 @@ test('a Date of 06:12 UTC on 1 October 2026 shows "Saved 4:12 pm", focus on Save
 });
 
 test('two saves in a row are both announced, as the status empties at each press', async ({ page }) => {
+  await page.clock.install();
   await openWith(page);
   await serveSaves(page, (route) => route.fulfill(savedAnswer()));
   await save(page).click();
   await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
   const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+  // Paused, so that the status cannot reach its hidden "Saving…" at 400 ms, however slow the runner, before it is
+  // seen empty.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
 
   await save(page).click();
   const put = await heldSave();
   await expect(saveStatus(page)).toBeEmpty();
+  await page.clock.resume();
   await put.fulfill(savedAnswer('AAAAAAAAB9M='));
 
   await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
@@ -1287,6 +1292,18 @@ test("the spies of this file's test note each write to localStorage, sessionStor
     .toEqual(["localStorage.setItem('probe')", "sessionStorage.setItem('probe')", "indexedDB.open('probe')"]);
   // Emptied, as this test's writes are its own, so that the fixture, which fails a test on any, passes it.
   deviceWrites.length = 0;
+});
+
+// Shows that the spies run in a test that does not name them, and fail it on a write once it has ended, which the test
+// above, naming them and emptying them, cannot show. Marked to fail, it passes only if something fails it, and nothing
+// in it is asserted, so what fails it is the fixture's check after it ends (as in fixtures.spec.ts). Were the fixture
+// no longer automatic, or no longer to fail a test on a write, Playwright would fail the run.
+test.fail('a write to the device fails a test that does not name the spies', async ({ page }) => {
+  await page.goto('/');
+
+  await page.evaluate(() => {
+    localStorage.setItem('probe', 'a');
+  });
 });
 
 test("the one <h1> labels the field, in en-AU, among the shell's landmarks alone, with one Save of 48 px", async ({
