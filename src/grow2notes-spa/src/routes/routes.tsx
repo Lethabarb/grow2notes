@@ -18,10 +18,13 @@ import { TodayPage } from './TodayPage.tsx';
 
 /**
  * What a route declares for the shell: its page name, from which the shell sets the title (app-shell.md, 3) and, for
- * Page not found, marks no nav item (component 2b); and, for a page that a person with no session must reach, that it
- * shows in the signed-out frame whatever `/me` answers, rather than waiting for its `200` (sign-in.md component 1).
+ * Page not found, marks no nav item (component 2b); for a page that a person with no session must reach, that it
+ * shows in the signed-out frame whatever `/me` answers, rather than waiting for its `200` (sign-in.md component 1);
+ * and, for routes that are one screen, such as the Daily report's dates, the screen key that they share, so that the
+ * shell moves neither focus nor scroll between them and keeps one scroll position for them all (*The route-change rule
+ * (one owner)*).
  */
-export type RouteHandle = { pageName: PageName; signedOutFrame?: true };
+export type RouteHandle = { pageName: PageName; signedOutFrame?: true; screenKey?: string };
 
 /** A route of the table, whose `handle`, which React Router types as `any`, must name a page from the list. */
 export type AppRoute =

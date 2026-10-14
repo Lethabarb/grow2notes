@@ -491,6 +491,14 @@ found and `403`.
   record, an archived participant's page has no Actions section, as it would be empty, and an active one's holds
   Archive participant alone, with no divider; a `412` on Archive or Restore whose re-read finds the status already
   changed sends focus where that action's success would, the notice or the `<h1>`, since the pressed button has gone.
+- Also the simplest options where the design is silent (14 October 2026, step 1), the first two now in app-shell.md's
+  rule: a location with the same `pathname` is the same screen whatever else changed, the search, the fragment that
+  setup takes out of the address, or nothing but the key, so a nav link to the screen already open keeps focus, as
+  `session-warning.spec.ts` expects; `inScreen` counts on the push or replace that writes it, as a pop back to that
+  entry from another screen, such as Back from a page opened from the new participant, is a new screen; a pop to an
+  entry with no position kept, as one from before a reload, goes to the top; the shell keeps an entry's position from
+  the page's `scroll` events and, on a change that is not a new screen, from the change itself; and a whole-page
+  message takes focus when the element that had focus as it rendered has left the page.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -510,7 +518,7 @@ found and `403`.
 
 ### Steps
 
-- [ ] The shell's one route-change rule (S00.05.02; app-shell.md *The route-change rule (one owner)*;
+- [x] The shell's one route-change rule (S00.05.02; app-shell.md *The route-change rule (one owner)*;
       empty-loading-error.md's pending focus; status-messages.md's message store): a location change is a new screen
       unless only the search changed, `state.inScreen` is `true`, or both routes share a `handle.screenKey`, alike for
       push, replace and pop; a first load moves nothing; a push or replace scrolls to the top and a pop restores the

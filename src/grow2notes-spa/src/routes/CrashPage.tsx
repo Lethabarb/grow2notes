@@ -2,6 +2,7 @@ import { PageHeading } from '../components/PageHeading.tsx';
 import { PageStatus } from '../components/PageStatus.tsx';
 import { pageName } from '../copy/pageNames.ts';
 import { strings } from '../copy/strings.ts';
+import { useFocusOnReplace } from './routeChange.ts';
 import { ShellFrame } from './ShellFrame.tsx';
 import { usePageTitle } from './usePageTitle.ts';
 import { useWholePageMessage } from './wholePageMessage.ts';
@@ -34,11 +35,14 @@ export function ShellCrashPage() {
 }
 
 /**
- * Both crash pages' message, in its own `PageStatus`, as the screen's went with it. Go to Today is a plain link, not
- * the router's, so that the page loads afresh, with nothing of the broken state that memory held
+ * Both crash pages' message, in its own `PageStatus`, as the screen's went with it, whose `<h1>` takes focus when it
+ * takes the place of what had focus, as after a press or a refresh (the shell's route-change rule). Go to Today is a
+ * plain link, not the router's, so that the page loads afresh, with nothing of the broken state that memory held
  * (empty-loading-error.md *Whole-page messages*).
  */
 function CrashMessage() {
+  useFocusOnReplace();
+
   return (
     <PageStatus>
       <PageHeading>{strings.thereIsAProblem}</PageHeading>

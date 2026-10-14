@@ -28,3 +28,15 @@ if ('HTMLDialogElement' in globalThis) {
     });
   };
 }
+
+// jsdom's scrollTo() only reports that it is not implemented, as jsdom lays nothing out, so this stands in for it, as
+// far as the position that scrollY then reads, which it takes whatever the page's length, with no scroll event. Where
+// a page is on screen is checked end to end.
+if ('window' in globalThis) {
+  window.scrollTo = function scrollTo(xOrOptions?: number | ScrollToOptions, y?: number) {
+    const top = typeof xOrOptions === 'object' ? xOrOptions.top : y;
+    if (top !== undefined) {
+      Object.defineProperty(window, 'scrollY', { value: top, configurable: true, writable: true });
+    }
+  };
+}
