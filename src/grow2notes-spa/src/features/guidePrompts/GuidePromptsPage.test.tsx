@@ -7,12 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import { onSessionEnded } from '../../api/session.ts';
 import textBox from '../../components/TextBox.module.css';
 import { routes } from '../../routes/routes.tsx';
 import { guidePromptsQuery } from './guidePromptsQuery.ts';
 
 const mePath = '/api/auth/me';
 const promptsPath = '/api/admin/guide-prompts';
+/** The key under which `serve` takes the answer to `PUT /api/admin/guide-prompts`, as the `GET` has the path alone. */
+const savePath = `PUT ${promptsPath}`;
+const antiforgeryPath = '/api/auth/antiforgery';
 const address = '/manage/guide-prompts';
 
 // A made-up manager, signed in, and worker (A35), in the JSON that MeEndpointTests asserts.
@@ -36,8 +40,18 @@ const saved = 'Mood and wellbeing today?\nWhat did you do together?\n\nAnything 
 // The organisation's row version, as the API writes it in the ETag, in quotes.
 const etag = 'AAAAAAAAB9E=';
 
+// The row's version once a save has moved it on, as another manager's save does too.
+const nextVersion = 'AAAAAAAAB9I=';
+// 06:12 UTC on 1 October 2026, as an answer's Date says it: 4:12 pm in Melbourne, before daylight saving starts.
+const savedAt = 'Thu, 01 Oct 2026 06:12:00 GMT';
+
 const help = 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.';
 const limitHint = 'You can enter up to 1,000 characters';
+const tooLong = 'Guide prompts must be 1,000 characters or less';
+const conflict =
+  'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to replace '
+  + 'their version with yours.';
+const title = 'Grow2Notes – Guide prompts';
 
 /** How the server meets a request: an answer, or a failure as `fetch` has one. */
 type Answer = (init?: RequestInit) => Promise<Response>;
@@ -70,9 +84,22 @@ function after(ms: number, answer: Answer): Answer {
     }).then(() => answer(init));
 }
 
-/** An RFC 9457 problem, as the API answers a failure (design.md §6.1). */
-function problem(status: number): Answer {
-  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status });
+/**
+ * The `PUT`'s `200`, with no body: the row's new version in the `ETag`, and the server's time in the `Date`, unless
+ * `date` is `null`.
+ */
+function stored(version = nextVersion, date: string | null = savedAt): Answer {
+  const headers = new Headers({ ETag: `"${version}"` });
+  if (date !== null) {
+    headers.set('Date', date);
+  }
+
+  return () => Promise.resolve(new Response(null, { status: 200, headers }));
+}
+
+/** An RFC 9457 problem, as the API answers a failure (design.md §6.1), with its `code` and `errors` if it has them. */
+function problem(status: number, details: { code?: string; errors?: Record<string, string[]> } = {}): Answer {
+  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status, ...details });
   return () =>
     Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/problem+json' } }));
 }
@@ -102,6 +129,16 @@ function serve(path: string, answer: Answer) {
 /** How many requests have been sent, for `path` or, with none, in all. */
 function sent(path?: string): number {
   return fetchMock.mock.calls.filter(([sentPath]) => path === undefined || sentPath === path).length;
+}
+
+/** Each `PUT` of the prompts sent, as the `text` of its JSON body and its `If-Match`. */
+function putsSent(): { text: unknown; ifMatch: string | null }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => path === promptsPath && init?.method === 'PUT')
+    .map(([, init]) => ({
+      text: (JSON.parse(init?.body as string) as { text: unknown }).text,
+      ifMatch: new Headers(init?.headers).get('If-Match'),
+    }));
 }
 
 /**
@@ -149,13 +186,92 @@ function field(): HTMLTextAreaElement {
   return within(main()).getByRole<HTMLTextAreaElement>('textbox', { name: 'Guide prompts' });
 }
 
-/** The region's line: the status region in `<main>` that shows, beside the page's visually hidden one. */
+/**
+ * The region's line: the status region in `<main>` that shows, beside the page's visually hidden one, outside the form,
+ * which has the save status.
+ */
 function line(): HTMLElement {
   const shown = within(main())
     .getAllByRole('status')
-    .filter((region) => !region.classList.contains('visually-hidden'));
+    .filter((region) => !region.classList.contains('visually-hidden') && region.closest('form') === null);
   expect(shown).toHaveLength(1);
   return shown[0];
+}
+
+/** The form round the field. */
+function form(): HTMLFormElement {
+  const found = field().closest('form');
+  if (found === null) {
+    throw new Error('The field is not in a form.');
+  }
+
+  return found;
+}
+
+/** Save, by its name, or by its busy label once it has been busy for 400 ms. */
+function saveButton(): HTMLElement {
+  return within(form()).getByRole('button', { name: /^(?:Save|Saving…)$/ });
+}
+
+/** Focuses Save and presses it, as a keyboard user would, and returns it. */
+function pressSave(): HTMLElement {
+  const button = saveButton();
+  button.focus();
+  fireEvent.click(button);
+  return button;
+}
+
+/** Puts `value` in the field as one input, as typing, pasting or deleting gives it. */
+function enter(value: string) {
+  fireEvent.input(field(), { target: { value } });
+}
+
+/** The save status beside Save. */
+function saveStatus(): HTMLElement {
+  return within(form()).getByRole('status');
+}
+
+/** The alert above Save, for a request that failed. */
+function alert(): HTMLElement {
+  return within(form()).getByRole('alert');
+}
+
+/** The count under the box, which shows from 900 characters, or `null`. */
+function shownCount(): HTMLElement | null {
+  return form().querySelector('p[aria-hidden="true"]');
+}
+
+/** The count's visually hidden twin, which screen readers hear. */
+function countTwin(): HTMLElement {
+  const twin = form().querySelector<HTMLElement>('[aria-live="polite"]');
+  if (twin === null) {
+    throw new Error('The form has no polite twin of the count.');
+  }
+
+  return twin;
+}
+
+/** Whether the page asks before it goes: whether it cancels a `beforeunload`, as a page with text not saved does. */
+function warnsBeforeUnload(): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
+/**
+ * `count` characters of text, in lines of 90 with a line break after each, which count as one character each, and
+ * never one at the end, which Save would trim: 1,000 characters hold 10 line breaks.
+ */
+function textOf(count: number): string {
+  return Array.from({ length: count }, (_, index) => (index % 91 === 90 && index < count - 1 ? '\n' : 'x')).join('');
+}
+
+/** Renders the page with `text` saved, and waits for the field. */
+async function openWith(text = saved) {
+  serve(promptsPath, prompts(text));
+  const rendered = renderApp(address);
+  await settle();
+  return rendered;
 }
 
 /** Each element of the header that has `aria-current`, as its text and the attribute's value. */
@@ -180,9 +296,10 @@ function pressTryAgain(): HTMLElement {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  // `api()` sends each request to a path, as a string.
+  // `api()` sends each request to a path, as a string; a `PUT` is answered by its own key.
   fetchMock.mockImplementation((path, init) => {
-    const answer = typeof path === 'string' ? answers.get(path) : undefined;
+    const key = typeof path === 'string' && init?.method === 'PUT' ? `PUT ${path}` : path;
+    const answer = typeof key === 'string' ? answers.get(key) : undefined;
     if (answer === undefined) {
       throw new Error('The test gave no answer for this request.');
     }
@@ -190,6 +307,10 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // The token that each change carries, which `api()` asks for before its first one.
+  serve(antiforgeryPath, () =>
+    Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'made-up-token' } })),
+  );
   // React and React Router report each throw that a boundary catches: a refusal is expected, and anything else shows.
   const report = console.error;
   vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
@@ -502,5 +623,449 @@ describe('Guide prompts for a worker', () => {
     expect(currentItems()).toEqual([]);
     expectNoForm();
     expect(sent(promptsPath)).toBe(0);
+  });
+});
+
+describe('Guide prompts, counting', () => {
+  it('shows no count below 900 characters of trimmed text, with spaces and lines at the ends not counted', async () => {
+    await openWith();
+
+    enter(textOf(899));
+    expect(shownCount()).toBeNull();
+    enter(`  \n${textOf(899)}\n\n  `);
+    expect(shownCount()).toBeNull();
+    enter(`  \n${textOf(900)}\n\n  `);
+    expect(shownCount()?.textContent).toBe('You have 100 characters remaining');
+  });
+
+  it.each([
+    [900, 'You have 100 characters remaining'],
+    [999, 'You have 1 character remaining'],
+    [1_000, 'You have 0 characters remaining'],
+  ])('at %i characters, says "%s" under the box, hidden from screen readers', async (length, words) => {
+    await openWith();
+
+    enter(textOf(length));
+
+    const count = shownCount();
+    expect(count?.textContent).toBe(words);
+    expect(count).toHaveAttribute('aria-hidden', 'true');
+    expect(count).not.toHaveAttribute('data-over-limit');
+    expect(field()).not.toHaveAttribute('data-over-limit');
+    expect(field().compareDocumentPosition(count!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('at 1,001 characters, says "You have 1 character too many", the box marked over but not invalid', async () => {
+    await openWith();
+
+    enter(textOf(1_001));
+    await wait(60_000);
+
+    expect(shownCount()?.textContent).toBe('You have 1 character too many');
+    expect(shownCount()).toHaveAttribute('data-over-limit');
+    expect(field()).toHaveAttribute('data-over-limit');
+    expect(field()).not.toHaveAttribute('aria-invalid');
+    expect(field()).toHaveAccessibleDescription(`${help} ${limitHint}`);
+    expect(within(form()).queryByText(tooLong)).not.toBeInTheDocument();
+  });
+
+  it('says the count to screen readers once typing has stopped for 1 s, never at each keystroke', async () => {
+    await openWith();
+    // In the form from its first render, empty, so that a screen reader hears what is written into it.
+    expect(countTwin()).toBeEmptyDOMElement();
+    expect(countTwin()).toHaveClass('visually-hidden');
+    expect(countTwin()).not.toHaveAttribute('aria-hidden');
+
+    enter(textOf(900));
+    await wait(999);
+    expect(countTwin()).toBeEmptyDOMElement();
+    // A keystroke within the second starts it again.
+    enter(textOf(901));
+    await wait(999);
+    expect(countTwin()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(countTwin().textContent).toBe('You have 99 characters remaining');
+
+    enter(textOf(1_001));
+    await wait(1_000);
+    expect(countTwin().textContent).toBe('You have 1 character too many');
+
+    // Below 900, it says nothing.
+    enter(saved);
+    await wait(1_000);
+    expect(countTwin()).toBeEmptyDOMElement();
+  });
+
+  it('shows the count of loaded text from 900 characters at once, and says nothing until typing', async () => {
+    await openWith(textOf(950));
+
+    expect(shownCount()?.textContent).toBe('You have 50 characters remaining');
+    await wait(60_000);
+    expect(countTwin()).toBeEmptyDOMElement();
+  });
+});
+
+describe('Guide prompts, too long', () => {
+  it('keeps a 1,200-character paste whole, and Save shows the error, focuses the field and sends nothing', async () => {
+    await openWith();
+    const pasted = textOf(1_200);
+
+    fireEvent.paste(field());
+    enter(pasted);
+    expect(field()).toHaveValue(pasted);
+    expect(shownCount()?.textContent).toBe('You have 200 characters too many');
+    const save = pressSave();
+    await wait(60_000);
+
+    expect(putsSent()).toEqual([]);
+    expect(field()).toHaveValue(pasted);
+    expect(field()).toHaveFocus();
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    expect(field()).toHaveAccessibleDescription(`${help} ${limitHint} Error: ${tooLong}`);
+    // Above the box, "Error:" hidden but read, in the group that has the bar (guide-prompts.md 6a).
+    const message = within(form()).getByText(tooLong);
+    expect(message.id).toBe('guidePrompts-error');
+    expect(message.textContent).toBe(`Error: ${tooLong}`);
+    expect(within(message).getByText('Error:')).toHaveClass('visually-hidden');
+    expect(message.compareDocumentPosition(field())).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const group = form().querySelector('[data-invalid]');
+    expect(group).toContainElement(message);
+    expect(group).toContainElement(field());
+    expect(group).toContainElement(shownCount());
+    expect(document.title).toBe(`Error: ${title}`);
+    expect(alert()).toBeEmptyDOMElement();
+    expect(saveStatus()).toBeEmptyDOMElement();
+
+    // Still over by one, then down to 1,000, which clears it silently.
+    enter(textOf(1_001));
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    enter(textOf(1_000));
+    expect(within(form()).queryByText(tooLong)).not.toBeInTheDocument();
+    expect(field()).not.toHaveAttribute('aria-invalid');
+    expect(field()).toHaveAccessibleDescription(`${help} ${limitHint}`);
+    expect(form().querySelector('[data-invalid]')).toBeNull();
+    expect(document.title).toBe(title);
+    expect(field()).toHaveFocus();
+  });
+
+  it('moves focus to the field at each press while the text is too long', async () => {
+    await openWith();
+    enter(textOf(1_001));
+
+    pressSave();
+    expect(field()).toHaveFocus();
+    // Back on Save, as Tab takes it, for a second press.
+    pressSave();
+    await settle();
+
+    expect(field()).toHaveFocus();
+    expect(within(form()).getAllByText(tooLong)).toHaveLength(1);
+    expect(putsSent()).toEqual([]);
+  });
+
+  it('shows a 422 for the text as too long, with focus on the field', async () => {
+    await openWith();
+    serve(savePath, problem(422, { code: 'validation.failed', errors: { text: ['The text is too long.'] } }));
+
+    enter(textOf(1_000));
+    pressSave();
+    await settle();
+
+    expect(putsSent()).toHaveLength(1);
+    expect(field()).toHaveAttribute('aria-invalid', 'true');
+    expect(field()).toHaveAccessibleDescription(`${help} ${limitHint} Error: ${tooLong}`);
+    expect(field()).toHaveFocus();
+    expect(alert()).toBeEmptyDOMElement();
+  });
+});
+
+describe('Guide prompts, saving', () => {
+  it("sends the text trimmed at its ends alone, with If-Match from the GET's ETag, the field as typed", async () => {
+    await openWith();
+    serve(savePath, stored());
+    const typed = '\n  Mood today?\n\n  What did you do together?  \n\n';
+
+    enter(typed);
+    const save = pressSave();
+    await settle();
+
+    expect(putsSent()).toEqual([{ text: 'Mood today?\n\n  What did you do together?', ifMatch: `"${etag}"` }]);
+    expect(field()).toHaveValue(typed);
+    expect(save).toHaveFocus();
+  });
+
+  it('sends "" for spaces and line breaks alone, which leaves the boxes with no prompts', async () => {
+    await openWith();
+    serve(savePath, stored());
+
+    enter('  \n\n \t ');
+    pressSave();
+    await settle();
+
+    expect(putsSent()).toEqual([{ text: '', ifMatch: `"${etag}"` }]);
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+  });
+
+  it('saves 1,000 characters holding 10 line breaks, as the server counts them too', async () => {
+    await openWith();
+    serve(savePath, stored());
+    const text = textOf(1_000);
+    expect(text.match(/\n/g)).toHaveLength(10);
+
+    enter(text);
+    pressSave();
+    await settle();
+
+    expect(putsSent()).toEqual([{ text, ifMatch: `"${etag}"` }]);
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(field()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it("says Saved and the time of the answer's Date in Melbourne, focus on Save, until the next keystroke", async () => {
+    await openWith();
+    serve(savePath, stored());
+
+    enter('What went well today?');
+    const save = pressSave();
+    await settle();
+
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-10-01T06:12:00.000Z');
+    expect(save).toHaveFocus();
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(alert()).toBeEmptyDOMElement();
+    expect(document.title).toBe(title);
+
+    enter('What went well today?!');
+    expect(saveStatus()).toBeEmptyDOMElement();
+  });
+
+  it('says "Saved" alone when the answer has no Date, never the time on the device', async () => {
+    await openWith();
+    serve(savePath, stored(nextVersion, null));
+
+    pressSave();
+    await settle();
+
+    expect(saveStatus().textContent).toBe('Saved');
+    expect(saveStatus().querySelector('time')).toBeNull();
+  });
+
+  it('sends the next save with the ETag that the last 200 gave', async () => {
+    await openWith();
+    serve(savePath, stored());
+    enter('What went well today?');
+    pressSave();
+    await settle();
+
+    serve(savePath, stored('AAAAAAAAB9M='));
+    enter('What went well today?\nAny visitors?');
+    pressSave();
+    await settle();
+
+    expect(putsSent()).toEqual([
+      { text: 'What went well today?', ifMatch: `"${etag}"` },
+      { text: 'What went well today?\nAny visitors?', ifMatch: `"${nextVersion}"` },
+    ]);
+  });
+
+  it('is never given disabled, with no change or over the limit, and two quick presses send one PUT', async () => {
+    await openWith();
+    expect(saveButton()).not.toHaveAttribute('disabled');
+    expect(saveButton()).not.toHaveAttribute('aria-disabled');
+    enter(textOf(1_001));
+    expect(saveButton()).not.toHaveAttribute('disabled');
+    expect(saveButton()).not.toHaveAttribute('aria-disabled');
+    serve(savePath, after(2_000, stored()));
+    enter('What went well today?');
+
+    const save = pressSave();
+    fireEvent.click(save);
+    await settle();
+
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(save).not.toHaveAttribute('disabled');
+    await wait(2_000);
+    expect(putsSent()).toHaveLength(1);
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+  });
+
+  it('with the PUT held 2 s, Save and its status say "Saving…" from 400 ms, the field stays editable', async () => {
+    await openWith();
+    serve(savePath, after(2_000, stored()));
+    const pageRegion = within(main())
+      .getAllByRole('status')
+      .find((region) => region.classList.contains('visually-hidden'));
+
+    const save = pressSave();
+    await wait(399);
+    expect(save).toHaveAccessibleName('Save');
+    expect(save).not.toHaveAttribute('data-busy');
+    expect(saveStatus()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(save).toHaveAccessibleName('Saving…');
+    expect(save).toHaveAttribute('data-busy');
+    expect(saveStatus().textContent).toBe('Saving…');
+    expect(within(saveStatus()).getByText('Saving…')).toHaveClass('visually-hidden');
+    // Said once, by the save status: Save does not write it to the page's region too (guide-prompts.md 6e).
+    expect(pageRegion).toBeEmptyDOMElement();
+
+    for (const attribute of ['disabled', 'readonly', 'aria-disabled', 'aria-readonly']) {
+      expect(field()).not.toHaveAttribute(attribute);
+    }
+    enter(`${saved}\nAny visitors?`);
+    expect(field()).toHaveValue(`${saved}\nAny visitors?`);
+    await wait(1_600);
+
+    expect(save).toHaveAccessibleName('Save');
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(putsSent()).toEqual([{ text: saved, ifMatch: `"${etag}"` }]);
+  });
+
+  it('empties the status at each press, so that two saves in a row are both announced', async () => {
+    await openWith();
+    serve(savePath, stored());
+    pressSave();
+    await settle();
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+
+    serve(savePath, after(1_000, stored('AAAAAAAAB9M=')));
+    pressSave();
+    expect(saveStatus()).toBeEmptyDOMElement();
+    await wait(1_000);
+
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(putsSent()).toHaveLength(2);
+  });
+
+  it('leaves the page not saved when the manager types while a save is out, and saved when they do not', async () => {
+    await openWith();
+    expect(warnsBeforeUnload()).toBe(false);
+    enter('What went well today?');
+    expect(warnsBeforeUnload()).toBe(true);
+    serve(savePath, after(2_000, stored()));
+
+    pressSave();
+    await wait(1_000);
+    enter('What went well today?\nAny visitors?');
+    await wait(1_000);
+
+    // The press's save is done, and says so (settings-textarea.md *Behaviour* 6), but what was typed since is not.
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(warnsBeforeUnload()).toBe(true);
+
+    serve(savePath, stored('AAAAAAAAB9M='));
+    pressSave();
+    await settle();
+    expect(putsSent().at(-1)).toEqual({ text: 'What went well today?\nAny visitors?', ifMatch: `"${nextVersion}"` });
+    expect(warnsBeforeUnload()).toBe(false);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not saved: no connection. Try again.'],
+    ['a 500', problem(500), 'Not saved: something went wrong. Try again.'],
+    ['a 428', problem(428, { code: 'precondition.required' }), 'Not saved: something went wrong. Try again.'],
+  ])('after %s, says so above Save, keeps the text and focus, and sends one PUT a press', async (_, answer, words) => {
+    await openWith();
+    serve(savePath, answer);
+    const typed = 'What went well today?';
+
+    enter(typed);
+    const save = pressSave();
+    await settle();
+
+    expect(alert().textContent).toBe(words);
+    expect(alert().compareDocumentPosition(save)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(field()).toHaveValue(typed);
+    expect(save).toHaveFocus();
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(document.title).toBe(`Error: ${title}`);
+    expect(warnsBeforeUnload()).toBe(true);
+    await wait(60_000);
+    expect(putsSent()).toHaveLength(1);
+
+    pressSave();
+    // Emptied at the press, so that the same words, written again, are announced again.
+    expect(alert()).toBeEmptyDOMElement();
+    await settle();
+    expect(alert().textContent).toBe(words);
+    expect(putsSent()).toHaveLength(2);
+    expect(field()).toHaveValue(typed);
+  });
+
+  it("after a 412, keeps the text, makes the other manager's text the base, and saves next with its ETag", async () => {
+    await openWith();
+    const theirs = 'What went well today?';
+    const mine = `${saved}\nAny visitors?`;
+    serve(savePath, problem(412, { code: 'precondition.failed' }));
+    serve(promptsPath, after(1_000, prompts(theirs, nextVersion)));
+
+    enter(mine);
+    const save = pressSave();
+    await settle();
+    // Busy until the refetch has answered, so that the next press sends the new ETag.
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(alert()).toBeEmptyDOMElement();
+    await wait(1_000);
+
+    expect(alert().textContent).toBe(conflict);
+    expect(field()).toHaveValue(mine);
+    expect(save).toHaveFocus();
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(warnsBeforeUnload()).toBe(true);
+
+    serve(savePath, stored('AAAAAAAAB9M='));
+    pressSave();
+    await settle();
+
+    expect(putsSent()).toEqual([
+      { text: mine, ifMatch: `"${etag}"` },
+      { text: mine, ifMatch: `"${nextVersion}"` },
+    ]);
+    expect(alert()).toBeEmptyDOMElement();
+    expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+    expect(warnsBeforeUnload()).toBe(false);
+  });
+
+  it('refreshes /me after a 403, so that the role guard shows Page not found once it says worker', async () => {
+    const { router } = await openWith();
+    serve(savePath, problem(403));
+    serve(mePath, json(worker));
+    const before = sent(mePath);
+
+    pressSave();
+    await settle();
+    await settle();
+
+    expect(sent(mePath)).toBe(before + 1);
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
+    expect(router.state.location.pathname).toBe(address);
+    expect(putsSent()).toHaveLength(1);
+  });
+
+  it('shows nothing for a 401, which ends the session, for the shell to sign the person in again', async () => {
+    await openWith();
+    const ended = vi.fn();
+    const stopListening = onSessionEnded(ended);
+    serve(savePath, problem(401));
+    const typed = 'What went well today?';
+
+    enter(typed);
+    const save = pressSave();
+    await settle();
+    stopListening();
+
+    expect(ended).toHaveBeenCalledOnce();
+    expect(alert()).toBeEmptyDOMElement();
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(field()).not.toHaveAttribute('aria-invalid');
+    expect(field()).toHaveValue(typed);
+    expect(save).not.toHaveAttribute('aria-disabled');
+    expect(document.title).toBe(title);
+    expect(putsSent()).toHaveLength(1);
   });
 });

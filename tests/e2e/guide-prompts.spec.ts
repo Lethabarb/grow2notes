@@ -1,31 +1,101 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { failPrompts, promptsAnswer, savedPrompts, servePrompts } from './guidePrompts.ts';
+import {
+  failPrompts,
+  nextVersion,
+  promptsAnswer,
+  promptsStore,
+  promptsVersion,
+  savedAnswer,
+  savedPrompts,
+  sentSave,
+  servePrompts,
+  serveSaves,
+} from './guidePrompts.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
 
 // Manage > Guide prompts in the published app (S01.04.01), against guide-prompts.md's criteria for access and
-// structure, loading and the field. The tests answer /api/auth/me and /api/admin/guide-prompts in the browser
-// (me.ts, guidePrompts.ts), so that neither request reaches the app.
+// structure, loading, the field, the limit and count, and Save. The tests answer /api/auth/me and
+// /api/admin/guide-prompts in the browser (me.ts, guidePrompts.ts), so that neither request reaches the app, but for
+// the one that signs in for real and saves to the app's own database.
 
 const address = '/manage/guide-prompts';
 const help = 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.';
 const limitHint = 'You can enter up to 1,000 characters';
+const tooLong = 'Guide prompts must be 1,000 characters or less';
+const conflict =
+  'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to replace '
+  + 'their version with yours.';
+// "Saved 4:12 pm", with the non-breaking space that keeps the time and "pm" together (microcopy.md §3).
+const savedAtFourTwelve = 'Saved 4:12\u00A0pm';
+// Any time on the server's clock, for a save that the app itself answered.
+const savedAnyTime = /^Saved (?:\d{1,2}:\d{2}\u00A0[ap]m|midday|midnight)$/;
+// The colours of the hint's words and the box's border, and of an error (tokens.css).
+const secondaryText = 'rgb(72, 73, 73)';
+const controlBorder = 'rgb(11, 12, 12)';
+const error = 'rgb(164, 0, 15)';
 
 const main = (page: Page) => page.getByRole('main');
 const heading = (page: Page) => main(page).getByRole('heading', { level: 1 });
 const field = (page: Page) => main(page).getByRole('textbox', { name: 'Guide prompts', exact: true });
-const save = (page: Page) => main(page).getByRole('button', { name: 'Save', exact: true });
+// The form's one button, named Save, or "Saving…" once it has been busy for 400 ms.
+const save = (page: Page) => main(page).locator('form').getByRole('button');
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
-// The region's line, beside the page's visually hidden status region (guide-prompts.md *Live regions*).
-const statusLine = (page: Page) => main(page).getByRole('status').and(page.locator(':not(.visually-hidden)'));
+// The region's line, beside the page's visually hidden status region and outside the form, which has the save status
+// (guide-prompts.md *Live regions*).
+const statusLine = (page: Page) =>
+  main(page).getByRole('status').and(page.locator(':not(.visually-hidden):not(form *)'));
+const saveStatus = (page: Page) => main(page).locator('form').getByRole('status');
+const requestAlert = (page: Page) => main(page).locator('form').getByRole('alert');
+const fieldError = (page: Page) => main(page).locator('#guidePrompts-error');
+// The count under the box, hidden from screen readers, and its visually hidden twin, which they hear.
+const shownCount = (page: Page) => main(page).locator('form p[aria-hidden="true"]');
+const countTwin = (page: Page) => main(page).locator('form [aria-live="polite"]');
 const tryAgain = (page: Page) => main(page).getByRole('button', { name: 'Try again' });
 // The nav items marked current, Manage alone (guide-prompts.md component 1).
 const marked = (page: Page) => page.getByRole('banner').locator('[aria-current]');
 
 /** Whether the page's focus is on `<body>`, where it stays when nothing has moved it. */
 const focusOnBody = (page: Page) => page.evaluate(() => document.activeElement === document.body);
+
+/**
+ * `count` characters of text, in lines of 90 with a line break after each, which counts as one character, and never
+ * one at the end, which Save would trim: 1,000 characters hold 10 line breaks.
+ */
+const textOf = (count: number) =>
+  Array.from({ length: count }, (_, index) => (index % 91 === 90 && index < count - 1 ? '\n' : 'x')).join('');
+
+/** Whether the page asks before it goes: whether it cancels a `beforeunload`, as a page with text not saved does. */
+const warnsBeforeUnload = (page: Page) =>
+  page.evaluate(() => {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  });
+
+/** Opens the page as `manager`, with `text` as the organisation's prompts, and waits for the field. */
+async function openWith(page: Page, text = savedPrompts) {
+  await serveMe(page, manager);
+  await servePrompts(page, text);
+  await page.goto(address);
+  await expect(field(page)).toHaveValue(text);
+}
+
+/**
+ * The `PUT`s of the prompts that the page sends from now on, however they are met. A count that should not have grown
+ * is read once the test has the answer to a request of its own (tests/README.md).
+ */
+function countSaves(page: Page): () => number {
+  let count = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === '/api/admin/guide-prompts') {
+      count += 1;
+    }
+  });
+  return () => count;
+}
 
 /**
  * Notes in the page each field and each button, such as Save, that `<main>` gains from now on, however briefly it
@@ -273,3 +343,345 @@ for (const { width, boxWidth } of [
     expect((await boxOf(field(page))).width).toBe(boxWidth);
   });
 }
+
+test('the count shows from 900 characters, red over 1,000 with the box, and its twin speaks 1 s after typing', async ({
+  page,
+}) => {
+  // Before the page loads, so that its timers run on Playwright's clock, which runs as the real one until told.
+  await page.clock.install();
+  await openWith(page);
+  // Paused, so that the twin's second runs only as the test runs it on.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+
+  await field(page).fill(textOf(899));
+  await expect(shownCount(page)).toHaveCount(0);
+  for (const [length, words] of [
+    [900, 'You have 100 characters remaining'],
+    [999, 'You have 1 character remaining'],
+    [1_000, 'You have 0 characters remaining'],
+  ] as const) {
+    await field(page).fill(textOf(length));
+    await expect(shownCount(page)).toHaveText(words);
+    await expect(shownCount(page)).toHaveAttribute('aria-hidden', 'true');
+    await expect(shownCount(page)).toHaveCSS('color', secondaryText);
+    await expect(shownCount(page)).toHaveCSS('font-weight', '400');
+    await expect(field(page)).toHaveCSS('border-top-color', controlBorder);
+  }
+
+  await field(page).fill(textOf(1_001));
+  await expect(shownCount(page)).toHaveText('You have 1 character too many');
+  await expect(shownCount(page)).toHaveCSS('color', error);
+  await expect(shownCount(page)).toHaveCSS('font-weight', '700');
+  // The box's border in the error colour, but not yet the error's 3 px, as no press has checked the text.
+  await expect(field(page)).toHaveCSS('border-top-color', error);
+  await expect(field(page)).toHaveCSS('border-top-width', '2px');
+  await expect(field(page)).not.toHaveAttribute('aria-invalid');
+  await expect(fieldError(page)).toHaveCount(0);
+
+  // Five inputs with no time between them, and the twin has said nothing; 1 s after the last, it says the count.
+  await expect(countTwin(page)).toBeEmpty();
+  await page.clock.runFor(999);
+  await expect(countTwin(page)).toBeEmpty();
+  await page.clock.runFor(1);
+  await expect(countTwin(page)).toHaveText('You have 1 character too many');
+});
+
+test('a 1,200-character paste is kept whole, and Save shows the error, focuses the field and sends nothing', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await openWith(page);
+  const saves = countSaves(page);
+  const pasted = textOf(1_200);
+
+  await field(page).click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.evaluate((text) => navigator.clipboard.writeText(text), pasted);
+  await page.keyboard.press('ControlOrMeta+V');
+  await expect(field(page)).toHaveValue(pasted);
+  await expect(shownCount(page)).toHaveText('You have 200 characters too many');
+
+  await save(page).click();
+  await expect(fieldError(page)).toHaveText(`Error: ${tooLong}`);
+  await expect(field(page)).toBeFocused();
+  await expect(field(page)).toHaveValue(pasted);
+  await expect(field(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(field(page)).toHaveAccessibleDescription(`${help} ${limitHint} Error: ${tooLong}`);
+  await expect(field(page)).toHaveCSS('border-top-width', '3px');
+  await expect(field(page)).toHaveCSS('border-top-color', error);
+  await expect(fieldError(page)).toHaveCSS('color', error);
+  await expect(fieldError(page)).toHaveCSS('font-weight', '700');
+  // The bar down the start edge of the message, the box and the count (guide-prompts.md 6a).
+  const group = main(page).locator('form [data-invalid]');
+  await expect(group).toHaveCSS('border-left-width', '4px');
+  await expect(group).toHaveCSS('border-left-color', error);
+  await expect(page).toHaveTitle('Error: Grow2Notes – Guide prompts');
+  await page.evaluate(() => fetch('/healthz'));
+  expect(saves()).toBe(0);
+
+  // Deleting down to 1,000 clears it.
+  await page.keyboard.press('ControlOrMeta+End');
+  for (let deleted = 0; deleted < 200; deleted += 1) {
+    await page.keyboard.press('Backspace');
+  }
+  await expect(field(page)).toHaveValue(textOf(1_000));
+  await expect(fieldError(page)).toHaveCount(0);
+  await expect(field(page)).not.toHaveAttribute('aria-invalid');
+  await expect(field(page)).toHaveAccessibleDescription(`${help} ${limitHint}`);
+  await expect(field(page)).toHaveCSS('border-top-width', '2px');
+  await expect(page).toHaveTitle('Grow2Notes – Guide prompts');
+  await expect(shownCount(page)).toHaveText('You have 0 characters remaining');
+});
+
+test("1,000 characters holding 10 line breaks save, with If-Match from the GET's ETag", async ({ page }) => {
+  await openWith(page);
+  const sent = await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  const text = textOf(1_000);
+  expect(text.split('\n')).toHaveLength(11);
+
+  await field(page).fill(text);
+  await save(page).click();
+
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  expect(sent).toEqual([{ text, ifMatch: `"${promptsVersion}"` }]);
+  await expect(fieldError(page)).toHaveCount(0);
+});
+
+test('Save sends the text trimmed at its ends alone, and "" for spaces and line breaks alone', async ({ page }) => {
+  await openWith(page);
+  const sent = await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  const typed = '\n  Mood today?\n\n  What did you do together?  \n\n';
+
+  await field(page).fill(typed);
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  // The field is not rewritten.
+  await expect(field(page)).toHaveValue(typed);
+  await field(page).fill('  \n\n \t ');
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+
+  expect(sent).toEqual([
+    { text: 'Mood today?\n\n  What did you do together?', ifMatch: `"${promptsVersion}"` },
+    { text: '', ifMatch: `"${nextVersion}"` },
+  ]);
+});
+
+test('Save is never disabled, with no change or over the limit, and two quick presses send one PUT', async ({
+  page,
+}) => {
+  await openWith(page);
+  const saves = countSaves(page);
+  await expect(save(page)).not.toHaveAttribute('disabled');
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await field(page).fill(textOf(1_001));
+  await expect(save(page)).not.toHaveAttribute('disabled');
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await field(page).fill('What went well today?');
+  const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+
+  await save(page).dblclick();
+  const put = await heldSave();
+  await expect(save(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(save(page)).not.toHaveAttribute('disabled');
+  await put.fulfill(savedAnswer());
+
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await page.evaluate(() => fetch('/healthz'));
+  expect(saves()).toBe(1);
+});
+
+test('with the PUT held 2 s, Save says "Saving…" from 400 ms at the same size, and the field stays editable', async ({
+  page,
+}) => {
+  await page.clock.install();
+  await openWith(page);
+  const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+  const size = await boxOf(save(page));
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+
+  await save(page).click();
+  const put = await heldSave();
+  await page.clock.runFor(399);
+  await expect(save(page)).toHaveAccessibleName('Save');
+  await expect(save(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(saveStatus(page)).toBeEmpty();
+  await page.clock.runFor(1);
+  await expect(save(page)).toHaveAccessibleName('Saving…');
+  await expect(save(page).getByText('Saving…')).toBeVisible();
+  // Said, hidden, by the save status (guide-prompts.md 6f).
+  await expect(saveStatus(page)).toHaveText('Saving…');
+  expect(await boxOf(save(page))).toEqual(size);
+
+  await expect(field(page)).toBeEditable();
+  await field(page).press('ControlOrMeta+End');
+  await page.keyboard.type('\nAny visitors?');
+  await expect(field(page)).toHaveValue(`${savedPrompts}\nAny visitors?`);
+  await page.clock.runFor(1_600);
+  await expect(save(page)).toHaveAccessibleName('Saving…');
+
+  await page.clock.resume();
+  await put.fulfill(savedAnswer());
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect(save(page)).toHaveAccessibleName('Save');
+  expect(await sentSave(put)).toEqual({ text: savedPrompts, ifMatch: `"${promptsVersion}"` });
+});
+
+test('a Date of 06:12 UTC on 1 October 2026 shows "Saved 4:12 pm", focus on Save, until a keystroke', async ({
+  page,
+}) => {
+  await openWith(page);
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  await field(page).fill('What went well today?');
+
+  await save(page).click();
+
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await expect(saveStatus(page).locator('time')).toHaveAttribute('datetime', '2026-10-01T06:12:00.000Z');
+  await expect(saveStatus(page)).toHaveCSS('color', secondaryText);
+  await expect(save(page)).toBeFocused();
+  await expect(requestAlert(page)).toBeEmpty();
+  // Moving in the field changes nothing; a keystroke that changes the text empties it.
+  await field(page).press('ControlOrMeta+End');
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  await page.keyboard.type('!');
+  await expect(saveStatus(page)).toBeEmpty();
+});
+
+test('two saves in a row are both announced, as the status empties at each press', async ({ page }) => {
+  await openWith(page);
+  await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+
+  await save(page).click();
+  const put = await heldSave();
+  await expect(saveStatus(page)).toBeEmpty();
+  await put.fulfill(savedAnswer('AAAAAAAAB9M='));
+
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  expect(await sentSave(put)).toEqual({ text: savedPrompts, ifMatch: `"${nextVersion}"` });
+});
+
+test('typing while a save is out leaves the page not saved after its 200, and a save then leaves it saved', async ({
+  page,
+}) => {
+  await openWith(page);
+  expect(await warnsBeforeUnload(page)).toBe(false);
+  await field(page).fill('What went well today?');
+  expect(await warnsBeforeUnload(page)).toBe(true);
+  const heldSave = await holdNext(page, '**/api/admin/guide-prompts');
+
+  await save(page).click();
+  const put = await heldSave();
+  await field(page).press('ControlOrMeta+End');
+  await page.keyboard.type('\nAny visitors?');
+  await put.fulfill(savedAnswer());
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  expect(await warnsBeforeUnload(page)).toBe(true);
+
+  const sent = await serveSaves(page, (route) => route.fulfill(savedAnswer('AAAAAAAAB9M=')));
+  await save(page).click();
+  await expect.poll(() => sent.length).toBe(1);
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  expect(sent).toEqual([{ text: 'What went well today?\nAny visitors?', ifMatch: `"${nextVersion}"` }]);
+  expect(await warnsBeforeUnload(page)).toBe(false);
+});
+
+test('a save that fails says why above Save, keeps the text and focus, and sends one PUT per press', async ({
+  page,
+}) => {
+  await openWith(page);
+  const saves = countSaves(page);
+  let failure: 'no connection' | 'server' = 'no connection';
+  await serveSaves(page, (route) =>
+    failure === 'no connection' ? route.abort('internetdisconnected') : route.fulfill({ status: 500 }),
+  );
+  const typed = 'What went well today?';
+  await field(page).fill(typed);
+
+  await save(page).click();
+  await expect(requestAlert(page)).toHaveText('Not saved: no connection. Try again.');
+  await expect(requestAlert(page)).toHaveCSS('color', error);
+  await expect(save(page)).toBeFocused();
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await expect(saveStatus(page)).toBeEmpty();
+  await expect(field(page)).toHaveValue(typed);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(saves()).toBe(1);
+
+  failure = 'server';
+  await save(page).click();
+  await expect(requestAlert(page)).toHaveText('Not saved: something went wrong. Try again.');
+  await expect(save(page)).toBeFocused();
+  await expect(field(page)).toHaveValue(typed);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(saves()).toBe(2);
+});
+
+test("A loads, B saves, then A's Save meets the conflict with A's text kept, and A's next Save replaces B's", async ({
+  page,
+  context,
+}) => {
+  const store = promptsStore(savedPrompts);
+  const pageB = await context.newPage();
+  for (const each of [page, pageB]) {
+    await serveMe(each, manager);
+    await store.serve(each);
+  }
+
+  await page.goto(address);
+  await expect(field(page)).toHaveValue(savedPrompts);
+  await pageB.goto(address);
+  const theirs = 'What went well today?';
+  await field(pageB).fill(theirs);
+  await save(pageB).click();
+  await expect(saveStatus(pageB)).toHaveText(savedAnyTime);
+  expect(store.text()).toBe(theirs);
+  await pageB.close();
+
+  const mine = `${savedPrompts}\nAny visitors?`;
+  await field(page).fill(mine);
+  await save(page).click();
+  await expect(requestAlert(page)).toHaveText(conflict);
+  await expect(field(page)).toHaveValue(mine);
+  await expect(save(page)).toBeFocused();
+  await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  await expect(saveStatus(page)).toBeEmpty();
+  expect(store.text()).toBe(theirs);
+
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await expect(requestAlert(page)).toBeEmpty();
+  expect(store.text()).toBe(mine);
+});
+
+test('signed in for real, a manager saves prompts with line breaks and reads them back after a reload', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.goto(invite.setupLink);
+  await main(page).getByRole('button', { name: 'Use a passkey (recommended)' }).click();
+  await expect(heading(page)).toContainText('Today');
+  expect(await authenticator.credentials()).toHaveLength(1);
+  await nav(page).getByRole('link', { name: 'Manage', exact: true }).click();
+  await main(page).getByRole('link', { name: 'Guide prompts', exact: true }).click();
+  await expect(save(page)).toBeVisible();
+
+  await field(page).fill(savedPrompts);
+  const saved = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' && new URL(response.url()).pathname === '/api/admin/guide-prompts',
+  );
+  await save(page).click();
+
+  // The app's own answer, from the organisation that admin bootstrap made.
+  expect((await saved).status()).toBe(200);
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await page.reload();
+  await expect(field(page)).toHaveValue(savedPrompts);
+});

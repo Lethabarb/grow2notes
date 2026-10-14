@@ -109,13 +109,14 @@ npm test
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
-tests (`e2e/session-warning.spec.ts`) and the Users test that meets the app's own list (`e2e/users.spec.ts`) get their
-setup links from the published app's own `admin bootstrap` (the `invite` fixture, below), so the second terminal gives
-them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection string
-and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs a link
-fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a failure,
-`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
-`docker rm -f grow2notes-e2e-sql` when done.
+tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`) and the Guide
+prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own
+`admin bootstrap` (the `invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them:
+the published app's folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the
+address that the tests open. Without one of the three, each test that needs a link fails and names it, and each that
+gets one adds a made-up organisation and manager to the database. After a failure, `npx playwright show-report` opens
+the HTML report, which holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql`
+when done.
 
 ## Writing end-to-end tests
 
@@ -254,6 +255,20 @@ before them.
 A test of the loading line holds the next `GET` with `holdNext` and answers it with `promptsAnswer`, as the Users test
 does. `e2e/guide-prompts.spec.ts` is the example, and `e2e/shell.spec.ts`'s walk, whose Guide prompts link opens the
 editor, answers it too.
+
+Save sends `PUT /api/admin/guide-prompts`, which a test meets in the browser too, so that no save reaches the app.
+`savedAnswer(version, date)` is its `200`: no body, a made-up row version in the `ETag` and the server's time in the
+`Date`, by default `savedAt`, 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm".
+
+- `serveSaves(page, answer)` meets each `PUT` with what `answer` does to its route, such as
+  `route.fulfill(savedAnswer())` or `route.abort('internetdisconnected')`, and gives the list of the `PUT`s sent, each
+  as its `text` and `If-Match`, which grows as the page sends them. `sentSave(route)` reads one, as from a `PUT` that
+  `holdNext` held, which a test of the busy label or of typing during a save answers when it chooses.
+- `promptsStore(text)` keeps the prompts as the API does, for the pages of two managers to load and save through: each
+  `PUT` whose `If-Match` names the version it holds stores its text and moves the version on, and any other gets `412`.
+
+The one test that meets the app's own endpoint signs in for real, through the `invite` fixture and setup with a passkey
+on the `authenticator` fixture, as the Users test does, and saves to the organisation that `admin bootstrap` made.
 
 ### Signing in with a passkey, end to end
 

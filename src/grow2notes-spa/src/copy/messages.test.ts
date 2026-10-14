@@ -17,4 +17,16 @@ describe('the character count words (microcopy.md §4)', () => {
   ])('give, at %i of 1,000, "%s"', (length, words) => {
     expect(msg.characterCount(length, 1_000)).toBe(words);
   });
+
+  it("give a field's too-long message, naming it and its limit, grouped", () => {
+    expect(msg.tooLong('Guide prompts', 1_000)).toBe('Guide prompts must be 1,000 characters or less');
+    expect(msg.tooLong('Reason', 200)).toBe('Reason must be 200 characters or less');
+  });
+});
+
+describe("a Save's failure (microcopy.md §4's Action failed)", () => {
+  it('says it was not saved, and why', () => {
+    expect(msg.notSaved('offline')).toBe('Not saved: no connection. Try again.');
+    expect(msg.notSaved('server')).toBe('Not saved: something went wrong. Try again.');
+  });
 });

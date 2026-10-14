@@ -194,6 +194,13 @@ changes by a link, Back, reload or Sign out.
   - `ConfigurationChangesOnSqlServerTests` keeps its name when its tests move onto `/api/admin/guide-prompts`, as
     F01.02's and F01.03's Notes and tests/README.md cite its race test.
   - No migration: `Organisation.GuidePrompts` and the row's `RowVersion` are already in the schema.
+  - Save's `PUT` is a direct `apiWithHeaders()` call with the form's own busy state, as Sign out's and Finish setup's
+    are, not the TanStack mutation that primary-actions.md §8 suggests, whose `isPending` reaches the page a task
+    after the press, so that a second quick press could send a second `PUT`. Nothing sends it again by itself, which
+    is step 5's `retry: 0` (settings-textarea.md *Behaviour* 5). (Step 5, 14 October 2026.)
+  - After a `412`, Save stays busy until the refetch of the base text and `ETag` has answered, so that the next press
+    sends the new `ETag`; a refetch that fails leaves the base as it was, and that press meets the `412` again.
+    (Step 5, 14 October 2026.)
 - Hand-offs, so that every criterion has one owner. Each is also written, dated 14 October 2026, where the receiving
   task reads it. Until that task proves it, the matching S01.04.01 or S01.04.02 criterion stays unticked with a dated
   Note naming the task:
@@ -286,7 +293,7 @@ changes by a link, Back, reload or Sign out.
       breaks kept, in `#0b0c0c`; an empty value as an empty box; no request while typing, pasting and deleting; and, at
       375 and 1280 px, the box's computed 18 px font, 27 px line height, 12 px padding and 2 px border, 40rem wide on
       the laptop
-- [ ] Count and save (guide-prompts.md *Limit and count* and *Save*; design.md §4.10's Save): the count of the trimmed
+- [x] Count and save (guide-prompts.md *Limit and count* and *Save*; design.md §4.10's Save): the count of the trimmed
       text, hidden below 900, `aria-hidden` beside a polite twin that speaks 1 s after typing stops, and red over 1,000
       with the box's border but no `aria-invalid`; Save through `onSubmit` with no form action, sending the trimmed
       text, or, over 1,000, showing "Guide prompts must be 1,000 characters or less" with the error bar,

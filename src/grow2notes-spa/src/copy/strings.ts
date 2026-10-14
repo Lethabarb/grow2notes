@@ -82,6 +82,8 @@ export const strings = {
   checking: 'Checking…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
+  /** The button of a page that saves what it shows and stays, such as Guide prompts (primary-actions.md). */
+  save: 'Save',
   /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
   saving: 'Saving…',
   /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
@@ -187,12 +189,16 @@ export const strings = {
   },
   /**
    * Manage > Guide prompts (guide-prompts.md), whose `<h1>` is its page name, which labels the field: the help text
-   * under it (design.md §4.10), then the region's loading line and what did not load, as its failure sentence starts.
+   * under it (design.md §4.10), the region's loading line and what did not load, as its failure sentence starts, then
+   * the alert above Save for a `412`, when another manager saved first.
    */
   guidePrompts: {
     help: 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.',
     loading: 'Loading guide prompts…',
     thePrompts: 'The guide prompts',
+    conflict:
+      'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to '
+      + 'replace their version with yours.',
   },
   /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
