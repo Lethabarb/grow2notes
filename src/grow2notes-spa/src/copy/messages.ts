@@ -30,6 +30,13 @@ export const msg = {
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
   /** A Save that failed, in the alert above it, such as "Not saved: no connection. Try again." */
   notSaved: (cause: Cause): string => msg.notDone('saved', cause),
+  /**
+   * A Send invite or a Resend invite that failed, above its button, and a refusal that names no field of Invite user's
+   * (users.md *States*).
+   */
+  notSent: (cause: Cause): string => msg.notDone('sent', cause),
+  /** A user's name longer than `limits.displayName`, so that the words say the rule that the field checks. */
+  nameTooLong: (maxLength: number) => `Name must be ${maxLength} characters or less`,
   /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
   passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
   /** View F's message for a password shorter than `limits.passwordMinLength`. */

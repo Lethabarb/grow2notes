@@ -1,0 +1,12 @@
+/* One reading column, left-aligned in the page's container, at most 40rem wide (users.md *Layout - laptop*). */
+.view {
+  max-inline-size: var(--measure);
+}
+
+/* The three field groups a group's gap apart, and that gap above Send invite and its alert line (foundations.md). */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-block-end: var(--space-5);
+}

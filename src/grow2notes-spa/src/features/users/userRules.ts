@@ -1,3 +1,9 @@
+import { ApiError } from '../../api/api.ts';
+import type { Role } from '../../api/me.ts';
+import { apiErrorCopy } from '../../copy/apiErrors.ts';
+import { msg } from '../../copy/messages.ts';
+import { strings } from '../../copy/strings.ts';
+import { limits } from '../../limits.ts';
 import type { AdminUser } from './usersQuery.ts';
 
 // Letters alone, so that neither letter case nor an accent sets two names apart (users.md component A item 6).
@@ -9,4 +15,84 @@ const collator = new Intl.Collator('en-AU', { sensitivity: 'base' });
  */
 export function byName(a: AdminUser, b: AdminUser): number {
   return collator.compare(a.displayName, b.displayName);
+}
+
+/** A user's fields as a manager types them, by the names that the API's JSON gives them (design.md §6.6). */
+export type UserValues = { displayName: string; email: string; role: Role };
+
+/** The message of each of a user's fields that is at fault, in the words of users.md's *States*. */
+export type UserErrors = Partial<Record<keyof UserValues, string>>;
+
+/**
+ * What is wrong with a user's fields before anything is sent (users.md *States* › Invite user), each checked as it is
+ * sent, trimmed: a name that is empty or longer than `limits.displayName`, counted in UTF-16 units, as the server
+ * counts it; and an address that is empty or not text, one "@" and text, form-validation.md's loose check, which
+ * leaves the rest to the server. The role needs no check, as one of its radios is always chosen.
+ */
+export function validateUser({ displayName, email }: UserValues): UserErrors {
+  const errors: UserErrors = {};
+  const name = displayName.trim();
+  if (name === '') {
+    errors.displayName = strings.users.enterName;
+  } else if (name.length > limits.displayName) {
+    errors.displayName = msg.nameTooLong(limits.displayName);
+  }
+
+  const address = email.trim();
+  if (address === '') {
+    errors.email = strings.users.enterEmail;
+  } else if (!/^[^@]+@[^@]+$/.test(address)) {
+    errors.email = strings.emailFormat;
+  }
+
+  return errors;
+}
+
+/** The server's refusal of a user's fields, which the form shows as it shows its own checks. */
+export type UserRefusal = {
+  errors: UserErrors;
+  /** The server named a field that the form does not have, which the error summary lists with no link. */
+  unknownField: boolean;
+};
+
+/**
+ * The fields at fault in the server's answer to `sent` (users.md *States* › Invite user), always in the form's own
+ * words, never the server's: `409 user.email_in_use` on the address; and each key of a `422`'s `errors{}`, the name's
+ * message for what was sent, the address's format message, as the server refuses only an address that the loose
+ * check passes but no account can hold, and Role's, while any other key is an unknown field. Anything else, which
+ * says nothing of a field, gives `undefined`.
+ */
+export function userRefusal(error: unknown, sent: UserValues): UserRefusal | undefined {
+  if (!(error instanceof ApiError)) {
+    return undefined;
+  }
+
+  if (error.status === 409 && error.code === 'user.email_in_use') {
+    return { errors: { email: apiErrorCopy['user.email_in_use'] }, unknownField: false };
+  }
+
+  const keys = Object.keys(error.errors ?? {});
+  if (keys.length === 0) {
+    return undefined;
+  }
+
+  const refusal: UserRefusal = { errors: {}, unknownField: false };
+  for (const key of keys) {
+    switch (key) {
+      case 'displayName':
+        refusal.errors.displayName =
+          sent.displayName === '' ? strings.users.enterName : msg.nameTooLong(limits.displayName);
+        break;
+      case 'email':
+        refusal.errors.email = strings.emailFormat;
+        break;
+      case 'role':
+        refusal.errors.role = strings.users.chooseRole;
+        break;
+      default:
+        refusal.unknownField = true;
+    }
+  }
+
+  return refusal;
 }

@@ -442,21 +442,18 @@ test("with no connection, a user's page shows its fallback <h1>, its failure and
   await expectAxeToPass(page);
 });
 
-test('an ID not on the list, "new" among them, shows Page not found with the nav and no back link', async ({
-  page,
-}) => {
+test('an ID not on the list shows Page not found with the nav and no back link', async ({ page }) => {
   await serveMe(page, manager);
   await serveUsers(page, people);
+  const path = '/manage/users/4f2c8e1a-6b3d-4a97-8e05-1d7b9c3f2a68';
 
-  for (const id of ['4f2c8e1a-6b3d-4a97-8e05-1d7b9c3f2a68', 'new']) {
-    await page.goto(`/manage/users/${id}`);
-    await expect(heading(page)).toHaveText('Page not found');
-    await expect(page).toHaveTitle(title('Page not found'));
-    await expect(page).toHaveURL(`/manage/users/${id}`);
-    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-    await expect(marked(page)).toHaveCount(0);
-    await expect(pageBar(page).getByRole('link')).toHaveCount(0);
-  }
+  await page.goto(path);
+  await expect(heading(page)).toHaveText('Page not found');
+  await expect(page).toHaveTitle(title('Page not found'));
+  await expect(page).toHaveURL(path);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  await expect(marked(page)).toHaveCount(0);
+  await expect(pageBar(page).getByRole('link')).toHaveCount(0);
 });
 
 test("a worker at the Users list, Invite user and a user's page meets Page not found", async ({ page }) => {

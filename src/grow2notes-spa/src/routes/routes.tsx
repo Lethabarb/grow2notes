@@ -1,6 +1,7 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
+import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
 import { UserPage } from '../features/users/UserPage.tsx';
 import { UsersPage } from '../features/users/UsersPage.tsx';
 import { AppShell } from './AppShell.tsx';
@@ -67,6 +68,8 @@ export const routes: AppRoute[] = [
                 handle: { pageName: pageName.guidePrompts },
               },
               { path: 'manage/users', element: <UsersPage />, handle: { pageName: pageName.users } },
+              // React Router ranks this static segment above :userId, so "new" is never taken for a user's ID.
+              { path: 'manage/users/new', element: <InviteUserPage />, handle: { pageName: pageName.inviteUser } },
               { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },
             ],
           },

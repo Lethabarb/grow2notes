@@ -185,6 +185,23 @@ with their typing kept (checked with a half-filled Invite form), and a different
   name who sent the link to whom. In the endpoint matrix, each call first invites a user into A and sends their ETag,
   so A's manager gets `204` and B's manager `404`; `EndpointCall` carries the app's services and the seeded
   organisations for it (tests/README.md).
+- Where design.md is silent (step 5), the simplest options: the drawn radio that form-validation.md calls the shared
+  ChoiceRow is built once here, as `ChoiceRow` in `src/components/`, a native radio drawn as a 40 px circle in a
+  56 px row that is all its `<label>`, with its hint outside the label, which T07's Group radios and T21's Format
+  radios reuse; `RoleField` puts Worker and Manager in `FieldGroup`'s fieldset, its message under the legend and its
+  summary link to the first radio, as GOV.UK's is. Until T02's route-change rule is on `main`, Invite user focuses the
+  list's `<h1>` itself after its replace, drawn at once with `flushSync`, and its back link pushes the list, as the
+  user's page's does; whichever of T01 and T02 merges second leaves both to T02's rule and opened-from memory. A
+  double tap is stopped by state set in the press itself, as TanStack hands a mutation's state on only after a task;
+  the invite's callbacks run only while the page is shown, so one that ends after the manager has left goes nowhere.
+  A server message on a field goes once that field passes the client check as it changes, never as another field
+  changes; the unknown key's item comes first in the summary, as sign-in's unlinked item does, and stays until the
+  next press; a `422` under `displayName` gives "Enter the person’s name" for an empty name sent and the length
+  message otherwise. Any other refusal (another `409`, a `403`, a `422` naming no field) shows "Not sent: something
+  went wrong. Try again." above the button, and a `401` nothing, as the session flow has it (step 7). "Name" and the
+  email format message, word for word the same as view E's term and sign-in's message, are now `strings.name` and
+  `strings.emailFormat`, shared. users.md AC17's autofill check is by hand, in Chrome, Edge and Safari
+  (ops/first-use-in-test.md steps 12, 13 and 18), with the Invite page's screen-reader readings (steps 12 and 18).
 
 ### Steps
 
@@ -244,7 +261,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
       `user.setup_link_sent` is written, with no address in its details; a stale `If-Match` gives `412` and a missing
       one `428`, each changing, writing and sending nothing; another organisation's user is `404`; an Active and a
       Deactivated user get `409 user.not_active` with nothing changed or sent; and a worker gets `403`
-- [ ] Add Invite user at `/manage/users/new` (users.md component B, *States* › Invite user, *Interactions*, AC1, AC3,
+- [x] Add Invite user at `/manage/users/new` (users.md component B, *States* › Invite user, *Interactions*, AC1, AC3,
       AC4, AC13 to AC20, AC39 and AC40; S00.06.02's Notes; see Notes): the route beside `manage/users/:userId` under
       `ManagerOnly`, with the back link "Users", the error summary, the `<h1>`, Name and Email address with their hints,
       the Role fieldset (`RoleField`) with Worker selected (D77), the action error region and Send invite;

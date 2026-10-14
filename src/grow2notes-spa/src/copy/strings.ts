@@ -59,9 +59,11 @@ export const strings = {
     signIn: 'Sign in',
     /** The password field's label (the email field's is `emailAddress`). */
     password: 'Password',
-    /** The email and password form's messages, inline and linked in the error summary (form-validation.md). */
+    /**
+     * The email and password form's messages, inline and linked in the error summary (form-validation.md), with the
+     * shared `emailFormat`.
+     */
     enterEmail: 'Enter your email address',
-    emailFormat: 'Enter an email address in the correct format, like name@example.com',
     enterPassword: 'Enter your password',
     /** Every sign-in that the server refuses, in the error summary, which says nothing of why (A25). */
     failed:
@@ -80,6 +82,8 @@ export const strings = {
   loading: 'Loading…',
   /** The busy label of sign-in's Continue and of the setup link check's Try again (sign-in.md components 8 and 12). */
   checking: 'Checking…',
+  /** The busy label of Send invite and Resend invite (users.md component B item 8). */
+  sending: 'Sending…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
   /** The button of a page that saves what it shows and stays, such as Guide prompts (primary-actions.md). */
@@ -90,8 +94,17 @@ export const strings = {
   saved: 'Saved',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
-  /** A person's email address, as a field's label or a summary's term (sign-in.md components 6 and 13). */
+  /**
+   * A person's name and email address, each as a field's label or a summary's term (sign-in.md components 6 and 13,
+   * users.md component B).
+   */
+  name: 'Name',
   emailAddress: 'Email address',
+  /**
+   * An email address's message when it is not text, one "@" and text, form-validation.md's loose check, or the server
+   * refuses it (GOV.UK's words).
+   */
+  emailFormat: 'Enter an email address in the correct format, like name@example.com',
   /**
    * The Show/Hide button of a password field that has one (sign-in.md component 7, GOV.UK's words): its visible word,
    * its name, which starts with that word, and what its polite line then says.
@@ -130,8 +143,7 @@ export const strings = {
     timedOut: { heading: 'Your setup session timed out', body: 'Open the link from your email again.' },
     /** Under the `<h1>` "Set up your account", on a setup page opened with no link and nothing in memory. */
     noLink: 'To set up your account, open the link from your email again.',
-    /** View E's account summary (sign-in.md component 13): the term for the person's name, and the hint under it. */
-    name: 'Name',
+    /** The hint under view E's account summary (sign-in.md component 13), whose terms are `name` and `emailAddress`. */
     accountHint: 'If these are wrong, ask a manager.',
     /** View E's method choice (sign-in.md component 14): its `<h2>`, then each method with the hint under it. */
     chooseMethod: 'Choose how you’ll sign in',
@@ -210,18 +222,39 @@ export const strings = {
   /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
    * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md); then the
-   * user detail's own words.
+   * user detail's and Invite user's own words.
    */
   users: {
     listLoading: 'Loading users…',
     theList: 'The user list',
     userLoading: 'Loading user…',
     thisUser: 'This user',
-    /** The terms of the user detail's summary list, after `emailAddress` (users.md component C item 4). */
+    /**
+     * The terms of the user detail's summary list, after `emailAddress` (users.md component C item 4); `role` is also
+     * the Role radios' legend (component B item 6).
+     */
     role: 'Role',
     status: 'Status',
     /** The user detail's link to the Edit user page. */
     edit: 'Edit',
+    /** Invite user's hints (users.md component B items 4 and 5), under the labels `name` and `emailAddress`. */
+    nameHint: 'Shown on the notes they write',
+    inviteEmailHint: 'Grow2Notes will email them a setup link. It works once and lasts 7 days.',
+    /** The hint under each of the Role radios, by the role's name in the API (users.md component B item 6). */
+    roleHint: {
+      Worker: 'Writes notes and reads past notes',
+      Manager: 'Can also review flagged notes, download reports, and set up participants and users',
+    },
+    /** Invite user's button (users.md component B item 8), whose busy label is `sending`. */
+    sendInvite: 'Send invite',
+    /**
+     * The messages of a user's fields, inline and linked in the error summary (users.md *States* › Invite user), with
+     * the shared `emailFormat` and `msg.nameTooLong`. Role's is met only through a server `422`, as Worker starts
+     * selected.
+     */
+    enterName: 'Enter the person’s name',
+    enterEmail: 'Enter an email address',
+    chooseRole: 'Choose Worker or Manager',
   },
   /**
    * A user's status, by its name in the API (status-tags.md): plain words, never a tag. "Deactivated" also heads the

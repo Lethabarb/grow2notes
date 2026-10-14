@@ -109,14 +109,14 @@ npm test
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
-tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`) and the Guide
-prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own
-`admin bootstrap` (the `invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them:
-the published app's folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the
-address that the tests open. Without one of the three, each test that needs a link fails and names it, and each that
-gets one adds a made-up organisation and manager to the database. After a failure, `npx playwright show-report` opens
-the HTML report, which holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql`
-when done.
+tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
+Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`) and the Guide prompts test that saves to
+the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own `admin bootstrap` (the
+`invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's
+folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests
+open. Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
+organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
+holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -239,6 +239,27 @@ before each comma that only screen readers get, "alex.park@example.org , Invited
 setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made lists its
 first manager alone. `e2e/users.spec.ts` is the example of each, and `e2e/shell.spec.ts`'s walk, whose Users link opens
 the list, answers it too.
+
+Invite user sends `POST /api/admin/users` to the same address, so `e2e/users.ts` has two more helpers for it, each
+routing the invite alone and passing every other request on, through `route.fallback()`, to the routes before it,
+such as `serveUsers`'s. Call them after `serveUsers`, as Playwright tries the latest route first and `serveUsers`
+answers every method.
+
+- `answerInvites(page, answer)` answers each invite in the browser: `{ status, problem }` with that status and an RFC
+  9457 problem holding `problem`'s members, such as `{ code: 'validation.failed', errors: { role: ['…'] } }`, or
+  `'no connection'`, which aborts it.
+- `holdNextInvite(page)` holds the next invite until the test answers it or lets it go on to the app, as `holdNext`
+  holds a request, for the busy button's "Sending…" and a double tap.
+
+```ts
+await serveMe(page, manager);
+await serveUsers(page, people);
+await answerInvites(page, { status: 500 });
+```
+
+The tests that meet the app's own invite sign in for real, as above, and invite a made-up person with a new
+`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no `Email__Endpoint`
+and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
 
 ### Answering `/api/admin/guide-prompts`
 

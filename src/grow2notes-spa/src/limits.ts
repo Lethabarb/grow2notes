@@ -6,4 +6,5 @@
 export const limits = {
   passwordMinLength: 12,
   guidePrompts: 1_000,
+  displayName: 100,
 } as const;

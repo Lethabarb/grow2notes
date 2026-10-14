@@ -394,18 +394,15 @@ describe('User while the list loads', () => {
 });
 
 describe('User for an ID not on the list', () => {
-  it.each([unknownId, 'new'])(
-    'shows Page not found in place of the whole page at /manage/users/%s, at the same address',
-    async (id) => {
-      serve(usersPath, json(people));
-      const router = renderApp(`/manage/users/${id}`);
+  it('shows Page not found in place of the whole page, at the same address', async () => {
+    serve(usersPath, json(people));
+    const router = renderApp(`/manage/users/${unknownId}`);
 
-      await settle();
+    await settle();
 
-      expectPageNotFound();
-      expect(router.state.location.pathname).toBe(`/manage/users/${id}`);
-    },
-  );
+    expectPageNotFound();
+    expect(router.state.location.pathname).toBe(`/manage/users/${unknownId}`);
+  });
 });
 
 describe('User for a worker', () => {

@@ -43,7 +43,7 @@ function emailError(email: string): string | undefined {
     return strings.signIn.enterEmail;
   }
 
-  return /^[^@]+@[^@]+$/.test(email) ? undefined : strings.signIn.emailFormat;
+  return /^[^@]+@[^@]+$/.test(email) ? undefined : strings.emailFormat;
 }
 
 /**
