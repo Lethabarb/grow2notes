@@ -12,8 +12,8 @@ namespace Grow2Notes.Tests;
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
-/// behind the fallback policy, the app's own <c>/api/auth/me</c>, its <c>/api/admin/users</c>, listed and posted to,
-/// and a user's setup link show; so the others show that the page, its files and the health endpoints are
+/// behind the fallback policy, the app's own <c>/api/auth/me</c>, its admin lists, its <c>/api/admin/users</c> posted
+/// to, and a user's setup link show; so the others show that the page, its files and the health endpoints are
 /// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
 /// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
@@ -56,12 +56,15 @@ public sealed class SignedOutTests : IAsyncDisposable
 
     // The /api/admin group's Manager policy, like the fallback policy, needs a signed-in user, so the cookie challenges
     // a request with no session there too, before the endpoint, which would need the database that is not here.
-    [Fact]
-    public async Task The_user_list_with_no_session_gets_a_401_problem_that_is_never_stored()
+    [Theory]
+    [InlineData("/api/admin/users")]
+    [InlineData("/api/admin/participants")]
+    [InlineData("/api/admin/participants?includeArchived=true")]
+    public async Task An_admin_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
     {
         using var client = app.CreateHttpsClient();
 
-        using var response = await client.GetAsync("/api/admin/users", TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());

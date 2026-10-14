@@ -315,6 +315,15 @@ the calls so far, as the file's own test of the spies does. A second test, marke
 `e2e/fixtures.spec.ts` is, writes to `localStorage` without naming it, which shows that the fixture runs, and fails a
 test, by itself.
 
+### Answering `/api/admin/participants`
+
+The Participants screens list the organisation's participants from `GET /api/admin/participants?includeArchived=true`,
+the one request they send, which needs a manager's session too. `e2e/participants.ts`, beside `e2e/users.ts`, has
+made-up participants (A35), in the JSON that `ParticipantListEndpointTests` asserts, together in `participants`, in the
+API's order, by family name, then given name. `serveParticipants(page, list)` answers each request with `list`, in the
+browser, as `serveUsers` does. Call it before `page.goto`. `e2e/shell.spec.ts`'s walk, whose Participants link opens the
+list, is the example.
+
 ### Signing in with a passkey, end to end
 
 A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
@@ -480,11 +489,11 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
 ### The seeded organisations and the tenant
 
 After migrating the shared database, `SqlServerFixture` adds two made-up organisations (A35) for the two-organisation
-tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address. A test
-takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs in `sqlServer.Seeded`:
-`Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId` and `WorkerId`. A two-organisation test acts in A
-and checks that nothing of B's reaches it. `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is
-seeded.
+tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address, and an
+active participant. A test takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs
+in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId`, `WorkerId` and
+`ParticipantId`. A two-organisation test acts in A and checks that nothing of B's reaches it.
+`Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is seeded.
 
 - Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
   and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. An endpoint call
@@ -492,9 +501,14 @@ seeded.
   to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
   deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
-  database of its own from `SqlServerFixture.CreateDatabaseAsync`.
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`. Likewise no test archives, restores or changes a
+  seeded participant: it adds one of its own.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
+- A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation
+  (below), as `Grow2Notes.Tests/Features/Participants/ParticipantListEndpointTests.cs` does: EF Core gives a
+  participant added with no `OrganisationId` a new GUID, as the column is in its alternate key and its foreign key to
+  `Organisation`, and the save then refuses it as another organisation's (`Participant.OrganisationId`).
 
 Tenant-owned rows are read and written under a tenant (design.md §5.9). In a request, the app takes it from the
 signed-in user's session. A test that uses the app's context outside a request sets it as sign-in and the operator
@@ -761,7 +775,8 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
   from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
   whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
-  organisation's seeded users and neither of the other's.
+  organisation's seeded users and neither of the other's, and `GET /api/admin/participants`' row their own
+  organisation's seeded participant and not the other's.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,

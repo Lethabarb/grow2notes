@@ -19,6 +19,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
 
+    public DbSet<Participant> Participants => Set<Participant>();
+
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
     private Guid TenantId => tenant.OrganisationId;
@@ -87,6 +89,23 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             user.HasIndex(u => u.NormalizedEmail).IsUnique();
 
             user.HasIndex(u => new { u.OrganisationId, u.Status });
+        });
+
+        builder.Entity<Participant>(participant =>
+        {
+            participant.HasOne<Organisation>().WithMany().HasForeignKey(p => p.OrganisationId);
+
+            // The principal of the composite foreign keys from a participant's goals and notes, so the database keeps
+            // them within the participant's organisation (design.md §5.1, Tenancy).
+            participant.HasAlternateKey(p => new { p.OrganisationId, p.Id });
+
+            participant.Property(p => p.GivenName).HasMaxLength(Limits.ParticipantName);
+            participant.Property(p => p.FamilyName).HasMaxLength(Limits.ParticipantName);
+            participant.Property(p => p.RowVersion).IsRowVersion();
+
+            // Every list of participants is one organisation's, of one status or both, by family name, then given
+            // name (A5).
+            participant.HasIndex(p => new { p.OrganisationId, p.Status, p.FamilyName, p.GivenName });
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).

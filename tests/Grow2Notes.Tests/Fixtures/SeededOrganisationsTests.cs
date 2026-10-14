@@ -1,4 +1,5 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,12 +15,13 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
     : IClassFixture<Grow2NotesFactory>
 {
     [Fact]
-    public void The_two_organisations_and_their_four_users_are_distinct()
+    public void The_two_organisations_their_four_users_and_two_participants_are_distinct()
     {
         var (a, b) = sqlServer.Seeded;
 
         Assert.NotEqual(a.OrganisationId, b.OrganisationId);
         Assert.Distinct([a.ManagerId, a.WorkerId, b.ManagerId, b.WorkerId]);
+        Assert.NotEqual(a.ParticipantId, b.ParticipantId);
     }
 
     [Fact]
@@ -47,6 +49,34 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
                 ],
                 // Manager (2) sorts before Worker (1).
                 users.OrderByDescending(u => u.Role).Select(u => (u.Id, u.Role, u.Status)));
+        }
+    }
+
+    [Fact]
+    public async Task Each_organisation_has_its_active_participant_and_sees_none_of_the_other_s()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        var (a, b) = sqlServer.Seeded;
+
+        foreach (var (seeded, other) in new[] { (a, b), (b, a) })
+        {
+            // Other tests may add participants to a seeded organisation, so it reads the seeded two by their IDs.
+            using (tenant.Use(seeded.OrganisationId))
+            {
+                var participants = await db.Participants
+                    .Where(p => p.Id == seeded.ParticipantId || p.Id == other.ParticipantId)
+                    .Select(p => new { p.Id, p.OrganisationId, p.Status, p.ArchivedAtUtc })
+                    .ToListAsync(cancellationToken);
+
+                var participant = Assert.Single(participants);
+                Assert.Equal(seeded.ParticipantId, participant.Id);
+                Assert.Equal(seeded.OrganisationId, participant.OrganisationId);
+                Assert.Equal(ParticipantStatus.Active, participant.Status);
+                Assert.Null(participant.ArchivedAtUtc);
+            }
         }
     }
 

@@ -24,6 +24,11 @@ export const msg = {
     `Not ${done}: ${strings.cause[cause]}.${safe === undefined ? '' : ` ${safe}`} Try again.`,
   /** The setup link check's failure (sign-in.md *Setup*), with Try again, which sends the link held in memory. */
   setupLinkNotChecked: (cause: Cause) => `Your setup link was not checked: ${strings.cause[cause]}. Try again.`,
+  /**
+   * In place of a list that Find a participant has emptied, and read out after a pause in typing (search-filter.md),
+   * with the text as typed, its ends trimmed, in typographic quotes.
+   */
+  noParticipantMatches: (typed: string) => `No participant matches ‘${typed}’.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */

@@ -118,7 +118,7 @@ internal static class EndpointMatrix
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
-            Answer: HoldsTheCallersOwnSeededUsersOnly),
+            Answer: HoldsTheCallersOwnSeeded("user", organisation => [organisation.ManagerId, organisation.WorkerId])),
 
         // Each manager invites into their own organisation, which a call commits, so each call invites an address of
         // its own (tests/README.md).
@@ -135,6 +135,11 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
         new(Put,       "/api/admin/guide-prompts", Unauthorized, Forbidden, PreconditionRequired, PreconditionRequired,
             WithJson("/api/admin/guide-prompts", new { text = "What did they enjoy today?" })),
+
+        // The participant list (§6.6), in the same group. Each manager's list holds their own organisation's seeded
+        // participant and not the other's.
+        new(Get,       "/api/admin/participants", Unauthorized, Forbidden, OK, OK,
+            Answer: HoldsTheCallersOwnSeeded("participant", organisation => [organisation.ParticipantId])),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -238,28 +243,30 @@ internal static class EndpointMatrix
             authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
     }
 
-    // For an endpoint that lists an organisation's users: a JSON array of users, each with its id, that holds both of
-    // the caller's own organisation's seeded users and neither of the other's. Tests add users to the seeded
-    // organisations, so it may hold others of the caller's own.
-    private static async Task<IReadOnlyList<string>> HoldsTheCallersOwnSeededUsersOnly(
-        HttpResponseMessage response, Caller caller, SeededOrganisations seeded)
-    {
-        var (own, other) = caller switch
+    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id,
+    // that holds every one of the caller's own organisation's seeded rows that `seededIds` gives and none of the
+    // other's, each named in a difference as `what`. Tests add rows to the seeded organisations, so it may hold others
+    // of the caller's own.
+    private static Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>
+        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds) =>
+        async (response, caller, seeded) =>
         {
-            Caller.WorkerOfA or Caller.ManagerOfA => (seeded.A, seeded.B),
-            Caller.ManagerOfB => (seeded.B, seeded.A),
-            _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "A signed-out caller has no users."),
+            var (own, other) = caller switch
+            {
+                Caller.WorkerOfA or Caller.ManagerOfA => (seeded.A, seeded.B),
+                Caller.ManagerOfB => (seeded.B, seeded.A),
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(caller), caller, $"A signed-out caller has no {what}s."),
+            };
+            var rows = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var ids = rows.EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ToHashSet();
+            return
+            [
+                .. seededIds(own).Where(id => !ids.Contains(id))
+                    .Select(id => $"lacks the caller's own organisation's {what} {id}"),
+                .. seededIds(other).Where(ids.Contains).Select(id => $"holds the other organisation's {what} {id}"),
+            ];
         };
-        var users = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        var ids = users.EnumerateArray().Select(user => user.GetProperty("id").GetGuid()).ToHashSet();
-        return
-        [
-            .. new[] { own.ManagerId, own.WorkerId }.Where(id => !ids.Contains(id))
-                .Select(id => $"lacks the caller's own organisation's user {id}"),
-            .. new[] { other.ManagerId, other.WorkerId }.Where(ids.Contains)
-                .Select(id => $"holds the other organisation's user {id}"),
-        ];
-    }
 }
 
 /// <summary>

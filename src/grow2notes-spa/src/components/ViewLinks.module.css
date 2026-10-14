@@ -1,0 +1,72 @@
+/*
+ * Two views as links styled as tabs (tabs-segmented.md *Visual specification* and *States*): the current one in the
+ * text colour, bold, with a 4 px bar under it, so that neither colour nor the bar alone says which it is; the other a
+ * plain underlined link. Nothing moves or slides.
+ */
+
+/* In the reading column, as the list under it is (participant-list-rows.md *Phone vs laptop*). */
+.nav {
+  max-inline-size: var(--measure);
+  margin-block: var(--space-5) var(--space-4);
+}
+
+/* At 320 px with text at 200%, the two wrap onto two rows rather than scroll sideways. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* Two equal halves on a phone. */
+.item {
+  flex: 1 1 0;
+  min-inline-size: 8em;
+}
+
+/* Each a fixed, equal width from the left on a wide screen. */
+@media (min-width: 40rem) {
+  .item {
+    flex: 0 0 12em;
+  }
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: var(--target-min);
+  padding: 0.625em 1em;
+  /* The bar sits on the strip's line. */
+  margin-block-end: calc(-1 * var(--border-divider));
+  border-block-end: 4px solid transparent;
+  text-align: center;
+}
+
+/* Styled from the state that screen readers get, so the look and what is said never disagree. */
+.link[aria-current="page"] {
+  color: var(--colour-text);
+  font-weight: 700;
+  text-decoration: none;
+  border-block-end-color: currentColor;
+}
+
+@media (hover: hover) {
+  .link[aria-current="page"]:hover {
+    color: var(--colour-text);
+    text-decoration: none;
+  }
+}
+
+.link:active {
+  background: var(--colour-pressed);
+}
+
+/* The bar is a border, which forced colours keep, in the text colour. */
+@media (forced-colors: active) {
+  .link[aria-current="page"] {
+    border-block-end-color: CanvasText;
+  }
+}

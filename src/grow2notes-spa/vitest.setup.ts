@@ -40,3 +40,14 @@ if ('window' in globalThis) {
     }
   };
 }
+
+// jsdom has no <search> element, which every browser the app supports has had since 2023, so React warns in tests
+// alone that Find a participant's landmark is unrecognised. Only that warning is let go: every other one still shows.
+const consoleError = console.error;
+console.error = (...args: unknown[]) => {
+  const unrecognisedSearch =
+    typeof args[0] === 'string' && args[0].startsWith('The tag <%s> is unrecognized') && args[1] === 'search';
+  if (!unrecognisedSearch) {
+    consoleError(...args);
+  }
+};

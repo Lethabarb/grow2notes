@@ -271,6 +271,32 @@ export const strings = {
     resendInviteDescription: 'Sends a new setup link. The old link stops working.',
   },
   /**
+   * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's
+   * loading line, and what did not load, as its failure sentence starts (empty-loading-error.md); the list's empty
+   * sentences, in place of its rows, for no participants at all and for a view with none; and the names of its two
+   * views, Active and Archived (tabs-segmented.md).
+   */
+  participants: {
+    listLoading: 'Loading participants…',
+    theList: 'The participant list',
+    noneYet: 'No participants yet.',
+    noneActive: 'No active participants.',
+    noneArchived: 'No archived participants.',
+    active: 'Active',
+    archived: 'Archived',
+  },
+  /**
+   * The Find a participant box (search-filter.md), on Today and Manage > Participants: its label; the description that
+   * screen readers read once as the field takes focus, as the list changing shows itself on screen; and Clear, with
+   * the word only screen readers get after it, so that the button is named "Clear search".
+   */
+  findParticipant: {
+    label: 'Find a participant',
+    description: 'The list of participants below changes as you type.',
+    clear: 'Clear',
+    clearHidden: 'search',
+  },
+  /**
    * A user's status, by its name in the API (status-tags.md): plain words, never a tag. "Deactivated" also heads the
    * Users list's second section (users.md component A).
    */

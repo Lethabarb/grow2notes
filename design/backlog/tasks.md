@@ -509,6 +509,20 @@ found and `403`.
   then puts the page back at the position kept, which the page was too short for as it arrived, and focuses the row,
   while Page not found or a crash page that takes the list's place first takes the focus instead; and setup's view F
   keeps `[data-route-focus]` on its field for as long as setup holds the server's refusal of the password.
+- Also the simplest options where the design is silent (14 October 2026, step 3): the list is sorted in SQL Server's
+  collation, which ignores case, so "de Silva" sorts under D, with the ID last so that two people of one name keep one
+  order; with no participants at all, the Active / Archived links stay, as participants.md's *States* table has it,
+  and "No participants yet." shows in either view; `ViewLinks` passes no `preventScrollReset`, as the app has no
+  `<ScrollRestoration>` and the shell's rule keeps focus and scroll for a change of the search alone, and it sits in
+  the reading column with the list; `useView` takes out only `view` when it puts a wrong one right; Clear is the shared
+  secondary `Button`; the `['admin', 'participants']` query is not fetched again on window focus, as app-shell.md does
+  not list it; and Vitest's setup lets go React's warning that jsdom, alone, does not know `<search>`. A participant's
+  `OrganisationId` is `required` and set by the code that adds one: EF Core gives an empty one a new GUID as the row is
+  tracked, the column being in its alternate key and its foreign key to `Organisation`, which the save then refuses, so
+  step 4's `POST` and the tests set it to the tenant's. As Manage > Participants now opens the list, `shell.spec.ts`'s
+  walk marks Manage there and answers the list with `serveParticipants`, which step 3 adds to `e2e/participants.ts`
+  for it; step 7 adds `failParticipants` beside it. S01.02.01's third criterion stays open until step 7 proves Page not
+  found for a worker on all three Participants routes.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -570,7 +584,7 @@ found and `403`.
       users than fit at 320 px, the back link and browser Back land on the row with its scroll kept, and
       `history.state` holds only React Router's key and `inScreen`, with the origin's storage empty. Proves
       app-shell.md's bullets 3 and 6 and users.md AC8.
-- [ ] See and find participants (S01.02.01; design.md §4.8 *List screen*, §5.3, §6.6; participants.md A1 to A6): the
+- [x] See and find participants (S01.02.01; design.md §4.8 *List screen*, §5.3, §6.6; participants.md A1 to A6): the
       `Participant` entity (`ITenantOwned`, `IVersionedRow`, `IArchivableRow`; `ParticipantStatus` with `Active = 1`,
       `Archived = 2`) and its migration, with the alternate key `(OrganisationId, Id)` that T05's composite `Goal`
       foreign key points at (§5.1 *Tenancy*), the index `(OrganisationId, Status, FamilyName, GivenName)` and
