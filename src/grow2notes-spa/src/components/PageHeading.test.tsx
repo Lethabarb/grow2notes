@@ -113,8 +113,22 @@ describe('focusInsteadOfHeading', () => {
 
     expect(banner).toHaveFocus();
     expect(focus.mock.contexts.at(-1)).toBe(banner);
-    expect(focus.mock.calls.at(-1)).toEqual([]);
+    expect(focus.mock.calls.at(-1)?.[0]).toBeUndefined();
     render(<PageHeading>Today</PageHeading>);
     expect(banner).toHaveFocus();
+  });
+
+  it('focuses the element with the options given, such as a row without scrolling, taking away a pending focus', () => {
+    render(<a href="/made-up/1">Jane Citizen</a>);
+    const row = screen.getByRole('link');
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+    focusPageHeading();
+
+    focusInsteadOfHeading(row, { preventScroll: true });
+
+    expect(row).toHaveFocus();
+    expect(focus.mock.calls.at(-1)).toEqual([{ preventScroll: true }]);
+    render(<PageHeading>Participants</PageHeading>);
+    expect(row).toHaveFocus();
   });
 });

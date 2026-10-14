@@ -2,7 +2,6 @@ import { queryOptions, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, classify } from '../../api/api.ts';
 import { BackLink } from '../../components/BackLink.tsx';
-import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
@@ -74,8 +73,7 @@ type AuthenticatorAppProps = {
  * View G (sign-in.md view G and components 16 and 17; totp-setup.md): what an authenticator app is, and the steps that
  * add Grow2Notes to one, with the QR code to scan and the setup key to type, both shown on every screen, as a person
  * setting up on their phone cannot scan its own screen, then the code step that finishes setup. Its back link to view
- * F pops, as G's entry always follows F's while setup's memory lives, and the `h1` takes focus as G shows, as the
- * shell's focus on a new screen is S00.05.02's.
+ * F pops, as view F opened G, and the shell focuses the `h1` as G shows.
  */
 function AuthenticatorApp({ password, onTimedOut }: AuthenticatorAppProps) {
   const key = useQuery(setupKeyQuery);
@@ -83,10 +81,6 @@ function AuthenticatorApp({ password, onTimedOut }: AuthenticatorAppProps) {
   // The key region says nothing for a 401, which is the page's to say.
   const signedOut = key.error !== null && classify(key.error) === 'signedOut';
   const words = strings.setup.authenticatorApp;
-
-  useEffect(() => {
-    focusPageHeading();
-  }, []);
 
   useEffect(() => {
     if (signedOut) {
@@ -97,9 +91,7 @@ function AuthenticatorApp({ password, onTimedOut }: AuthenticatorAppProps) {
   return (
     <div className={styles.view}>
       <PageBar>
-        <BackLink to="/setup/password" previousIsDestination>
-          {strings.setup.createPassword}
-        </BackLink>
+        <BackLink to="/setup/password">{strings.setup.createPassword}</BackLink>
       </PageBar>
       <PageHeading>{words.heading}</PageHeading>
       <p>{words.intro}</p>

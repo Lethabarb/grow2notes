@@ -50,7 +50,7 @@ export function AppShell() {
   // The table's type gives every route's handle as a RouteHandle, or none.
   const matches = useMatches() as UIMatch<unknown, RouteHandle | undefined>[];
   const handle = matches.findLast((match) => match.handle !== undefined)?.handle;
-  useRouteChange(handle?.screenKey);
+  useRouteChange(handle);
   const signedOutFrame = handle?.signedOutFrame === true;
   const shown = signedIn || signedOutFrame;
   // The page name of a whole-page message in place of the route's screen, such as the crash page, which the title and

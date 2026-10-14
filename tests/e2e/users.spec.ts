@@ -530,3 +530,58 @@ test('from Manage, through Users and each user, Manage is marked and no name or 
   }));
   expect(stored).toEqual({ localStorage: 0, sessionStorage: 0, indexedDB: 0, cacheStorage: 0 });
 });
+
+test('back from a user far down the list, by the back link or browser Back, focuses their row where it was', async ({
+  page,
+}) => {
+  // More users than fit at 320 px, so that the one opened is far down the list, each with a made-up ID and name (A35).
+  const many = Array.from({ length: 30 }, (_, index) => {
+    const number = String(index + 1).padStart(2, '0');
+    return madeUpUser(
+      `6b1f0c4e-2d7a-4e93-8a5c-1f0e9d7c30${number}`,
+      `Sample Person ${number}`,
+      `sample.person.${number}@example.org`,
+      'Active',
+    );
+  });
+  await serveMe(page, manager);
+  await serveUsers(page, [sam, ...many]);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/manage');
+  await main(page).getByRole('link', { name: 'Users', exact: true }).click();
+  const row = main(page).getByRole('link', { name: 'Sample Person 25', exact: true });
+  await row.scrollIntoViewIfNeeded();
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const kept = await scrollY();
+  expect(kept).toBeGreaterThan(0);
+  // React Router's own key and index, and nothing of the app's in its usr (app-shell.md › Structure).
+  const listEntry = await page.evaluate(() => history.state as unknown);
+  expect(listEntry).toEqual({ usr: null, key: expect.any(String), idx: expect.any(Number) });
+
+  for (const [way, goBack] of [
+    ['the back link', () => pageBar(page).getByRole('link', { name: 'Users' }).click()],
+    ['browser Back', () => page.goBack()],
+  ] as const) {
+    await row.click();
+    await expect(heading(page)).toHaveText('Sample Person 25');
+    await expect(heading(page)).toBeFocused();
+    expect(await scrollY(), way).toBe(0);
+
+    await goBack();
+
+    await expect(row, way).toBeFocused();
+    await expect(row, way).toBeInViewport();
+    expect(await scrollY(), way).toBe(kept);
+    // The list's own entry again, so the back link went back one entry, as browser Back does, adding none.
+    expect(await page.evaluate(() => history.state as unknown), way).toEqual(listEntry);
+  }
+
+  // Nothing of anyone's is kept on the device (D22, design.md §9.6).
+  const stored = await page.evaluate(async () => ({
+    localStorage: localStorage.length,
+    sessionStorage: sessionStorage.length,
+    indexedDB: (await indexedDB.databases()).length,
+    cacheStorage: (await caches.keys()).length,
+  }));
+  expect(stored).toEqual({ localStorage: 0, sessionStorage: 0, indexedDB: 0, cacheStorage: 0 });
+});

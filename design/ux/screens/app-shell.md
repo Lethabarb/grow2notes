@@ -557,7 +557,9 @@ way for push, replace and pop:
 3. **Arrival focus, first match wins:**
    a. **`[data-route-focus]` wins on every arrival** (push, replace or pop): the success banner after Submit or an
       error summary. It is focused without `preventScroll`, so it scrolls into view at the top of `<main>`. So
-      Submit's pop back to Today focuses the banner, not the row and not the old scroll position.
+      Submit's pop back to Today focuses the banner, not the row and not the old scroll position. A one-field form
+      whose field is its own error summary puts it on the field: Create a password (sign-in.md view F) while it shows
+      the server's refusal of the password, so the pop back from view G focuses the field.
    b. **On pop only, the route's `handle.returnFocus`.** List screens declare it, with an optional fallback. Their
       row links carry `data-return-key={stable key}`; when one is activated, the shell records that key and the
       row's index on the list's history entry. On pop back to that entry, once the list says it is ready
@@ -589,11 +591,16 @@ position. `history.scrollRestoration = 'manual'`. React Router's `<ScrollRestora
 **Where a screen was opened from.** When an in-app link pushes a new entry, the shell records the opener on the new
 entry: `{ entryKey, backKey, path }`, where `backKey` comes from the opener route's `handle.backKey` (`'today'`,
 `'pastNotes'`, `'flagged'`, `'participant'`, `'note'`, `'versionHistory'`, `'participants'`, `'users'`, `'user'`)
-and `path` holds IDs and dates only. A replace (Edit → form, Save changes or Cancel → read view) copies the record to
-the new entry. BackLink reads it for its label and `href`, and pops when the record's `entryKey` is the previous
-entry. With no record (reload, pasted URL, new tab) BackLink uses the route's default. This replaces every
-router-state `back` object the component specs proposed (note-identity-header.md, today.md, participant-notes.md):
-`history.state` holds only React Router's key and the boolean `inScreen`.
+and `path` holds IDs and dates only (the opener's pathname). A replace (Edit → form, Save changes or Cancel → read
+view) copies the record to the new entry. The record decides pop or push: a plain click on BackLink pops when the
+record's `entryKey` is the previous entry (the shell follows the order of the entries in memory) and its `path` has
+the pathname of BackLink's `to`, whatever the search; otherwise it pushes the `to`. Where a screen has one opener, as a
+user's page, Invite user, setup's views F and G and the participant pages have, BackLink keeps the page's own label
+and `to` (a participant's following their status, participants.md), and the record decides only pop or push. A label
+and `href` from the record are only for screens with several openers (component 3a), which, with no record (reload,
+pasted URL, new tab), use the route's default. This replaces every router-state `back` object the component specs
+proposed (note-identity-header.md, today.md, participant-notes.md): `history.state` holds only React Router's key and
+the boolean `inScreen`.
 
 ### Refresh of `/api/auth/me` (badge, `today`, role, name)
 

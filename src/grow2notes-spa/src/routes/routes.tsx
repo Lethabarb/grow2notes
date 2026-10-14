@@ -17,14 +17,36 @@ import { SetupPage } from './setup/SetupPage.tsx';
 import { TodayPage } from './TodayPage.tsx';
 
 /**
+ * The name that a screen gives itself as the opener of the screens that it opens, which the shell records on each of
+ * them (app-shell.md *Where a screen was opened from*): the complete list.
+ */
+export type BackKey =
+  | 'today'
+  | 'pastNotes'
+  | 'flagged'
+  | 'participant'
+  | 'note'
+  | 'versionHistory'
+  | 'participants'
+  | 'users'
+  | 'user';
+
+/**
  * What a route declares for the shell: its page name, from which the shell sets the title (app-shell.md, 3) and, for
  * Page not found, marks no nav item (component 2b); for a page that a person with no session must reach, that it
  * shows in the signed-out frame whatever `/me` answers, rather than waiting for its `200` (sign-in.md component 1);
- * and, for routes that are one screen, such as the Daily report's dates, the screen key that they share, so that the
- * shell moves neither focus nor scroll between them and keeps one scroll position for them all (*The route-change rule
- * (one owner)*).
+ * for routes that are one screen, such as the Daily report's dates, the screen key that they share, so that the shell
+ * moves neither focus nor scroll between them and keeps one scroll position for them all; for a list, that a pop back
+ * to it focuses the row opened from it, or else its fallback, the `<h1>` unless it says `'sameIndex'`; and, for a
+ * screen that opens others, its back key (*The route-change rule (one owner)*).
  */
-export type RouteHandle = { pageName: PageName; signedOutFrame?: true; screenKey?: string };
+export type RouteHandle = {
+  pageName: PageName;
+  signedOutFrame?: true;
+  screenKey?: string;
+  returnFocus?: { fallback?: 'h1' | 'sameIndex' };
+  backKey?: BackKey;
+};
 
 /** A route of the table, whose `handle`, which React Router types as `any`, must name a page from the list. */
 export type AppRoute =
@@ -70,7 +92,11 @@ export const routes: AppRoute[] = [
                 element: <GuidePromptsPage />,
                 handle: { pageName: pageName.guidePrompts },
               },
-              { path: 'manage/users', element: <UsersPage />, handle: { pageName: pageName.users } },
+              {
+                path: 'manage/users',
+                element: <UsersPage />,
+                handle: { pageName: pageName.users, returnFocus: {}, backKey: 'users' },
+              },
               // React Router ranks this static segment above :userId, so "new" is never taken for a user's ID.
               { path: 'manage/users/new', element: <InviteUserPage />, handle: { pageName: pageName.inviteUser } },
               { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },

@@ -25,13 +25,13 @@ export function focusPageHeading(options?: FocusOptions): void {
 }
 
 /**
- * Focuses `element`, such as Today's success banner, in place of the page's `<h1>`, which then takes no focus that it
- * had pending (app-shell.md *The route-change rule (one owner)*, item 3a). Without `preventScroll`, so that the element
- * scrolls into view.
+ * Focuses `element`, such as Today's success banner or a list's row, in place of the page's `<h1>`, which then takes
+ * no focus that it had pending (app-shell.md *The route-change rule (one owner)*, items 3a and 3b). Without
+ * `preventScroll` unless `options` say so, so that a banner scrolls into view.
  */
-export function focusInsteadOfHeading(element: HTMLElement): void {
+export function focusInsteadOfHeading(element: HTMLElement, options?: FocusOptions): void {
   pending = false;
-  element.focus();
+  element.focus(options);
 }
 
 /** `PageHeading`'s ref: gives the heading, as it mounts, the focus pending for it, without scrolling. */

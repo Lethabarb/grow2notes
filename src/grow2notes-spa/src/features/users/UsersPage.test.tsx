@@ -208,6 +208,24 @@ function pressTryAgain(): HTMLElement {
   return button;
 }
 
+/** The link of the row named `name`. */
+function rowLink(name: string): HTMLElement {
+  return within(main()).getByRole('link', { name });
+}
+
+/** Clicks `element` with focus on it first, as a keyboard or a pointer does, and lets the next screen render. */
+async function press(element: HTMLElement) {
+  element.focus();
+  fireEvent.click(element);
+  await settle();
+}
+
+/** Scrolls the page to `y`, as the person does, with the scroll event that the browser fires. */
+function scrollPage(y: number) {
+  Object.defineProperty(window, 'scrollY', { value: y, configurable: true, writable: true });
+  window.dispatchEvent(new Event('scroll'));
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string.
@@ -509,5 +527,100 @@ describe('Users for a worker', () => {
 
     expectPageNotFound();
     expect(sent(usersPath)).toBe(0);
+  });
+});
+
+describe('Users, back from a user', () => {
+  /** Opens the list, scrolled to 600, and the row of `user` from it, and gives the router. */
+  async function openUser(user: AdminUser) {
+    serve(usersPath, json(people));
+    const router = renderApp('/manage/users');
+    await settle();
+    scrollPage(600);
+
+    await press(rowLink(user.displayName));
+
+    expect(router.state.location.pathname).toBe(`/manage/users/${user.id}`);
+    expect(pageHeading()).toHaveAccessibleName(user.displayName);
+    expect(window.scrollY).toBe(0);
+    return router;
+  }
+
+  beforeEach(() => {
+    scrollPage(0);
+  });
+
+  it.each([
+    { way: 'its back link', goBack: () => press(screen.getByRole('link', { name: 'Users' })) },
+    {
+      way: 'browser Back',
+      goBack: async (router: ReturnType<typeof renderApp>) => {
+        await act(() => router.navigate(-1));
+        await settle();
+      },
+    },
+  ])('by $way, goes back one entry to the list, focusing the row opened where the list was', async ({ goBack }) => {
+    const router = await openUser(jo);
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await goBack(router);
+
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/manage/users');
+    const row = rowLink(jo.displayName);
+    expect(row).toHaveFocus();
+    // Without scrolling, as the list is back where it was.
+    expect(focus.mock.contexts.at(-1)).toBe(row);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    expect(window.scrollY).toBe(600);
+  });
+
+  it.each([alex, sam, chris])("focuses $displayName's row on the way back, in either list", async (user) => {
+    const router = await openUser(user);
+
+    await press(screen.getByRole('link', { name: 'Users' }));
+
+    expect(router.state.historyAction).toBe('POP');
+    expect(rowLink(user.displayName)).toHaveFocus();
+  });
+
+  it('focuses the <h1> on the way back when the row opened has gone from the list', async () => {
+    const router = await openUser(alex);
+    // Gone as the list is fetched again on window focus, which puts Page not found in place of the user's page.
+    serve(usersPath, json([sam, jo, chris]));
+    returnToWindow();
+    await settle();
+    expectPageNotFound();
+
+    await act(() => router.navigate(-1));
+    await settle();
+
+    expect(listedNames()).toEqual([['Jo Smith', 'Sam Lee'], ['Chris Ng']]);
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('focuses the <h1> at the top, not the row opened, when a replace brings the list back', async () => {
+    const router = await openUser(jo);
+
+    await act(() => router.navigate('/manage/users', { replace: true }));
+    await settle();
+
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(0);
+  });
+
+  it('keeps nothing of the row in the router state, the address or storage', async () => {
+    const router = await openUser(jo);
+
+    await press(screen.getByRole('link', { name: 'Users' }));
+
+    expect(rowLink(jo.displayName)).toHaveFocus();
+    expect(router.state.location.state).toBeNull();
+    expect(`${router.state.location.search}${router.state.location.hash}`).toBe('');
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
   });
 });

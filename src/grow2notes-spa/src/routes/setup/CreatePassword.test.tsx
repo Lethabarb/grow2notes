@@ -202,6 +202,8 @@ describe('CreatePassword (view F)', () => {
     expect(heading()).toHaveFocus();
     expect(heading()).toContainElement(screen.getByText('Create a password', { selector: 'label' }));
 
+    // Not the arrival focus, which only the server's refusal makes it (AuthenticatorSetup.test.tsx).
+    expect(field()).not.toHaveAttribute('data-route-focus');
     expect(field()).toHaveAttribute('type', 'password');
     expect(field()).toHaveAttribute('autocomplete', 'new-password');
     expect(field()).toHaveAttribute('minlength', '12');

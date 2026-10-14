@@ -735,6 +735,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(router.state.location.pathname).toBe('/setup/password');
     const field = screen.getByLabelText('Create a password');
     expect(field).toHaveValue(password);
+    // The shell's arrival focus, as the field is F's error summary while it shows the server's refusal.
+    expect(field).toHaveAttribute('data-route-focus');
     expect(field).toHaveFocus();
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field).toHaveAccessibleDescription(
@@ -751,7 +753,9 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(document.title).toBe(title);
     fireEvent.click(backLink());
     await wait(0);
+    expect(router.state.historyAction).toBe('POP');
     expect(screen.getByLabelText('Create a password')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText('Create a password')).not.toHaveAttribute('data-route-focus');
     expect(heading()).toHaveFocus();
   });
 

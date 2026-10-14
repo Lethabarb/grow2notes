@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me, type Role } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
@@ -138,15 +138,15 @@ function sent(path: string): number {
 }
 
 /**
- * Renders the app at `path` for `me` on a memory router, under a query client of its own and StrictMode, as `main.tsx`
- * renders it. `['me']` holds `me` already, as after the start-up, so that the screen shows with the first render, from
- * which the fake clock then times its region.
+ * Renders the app at `path` for `me` on a memory router, or at the last of `path`'s addresses, after the others in its
+ * history, under a query client of its own and StrictMode, as `main.tsx` renders it. `['me']` holds `me` already, as
+ * after the start-up, so that the screen shows with the first render, from which the fake clock then times its region.
  */
-function renderApp(path: string, me: Me = manager) {
+function renderApp(path: string | string[], me: Me = manager) {
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  const router = createMemoryRouter(routes, { initialEntries: typeof path === 'string' ? [path] : path });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -430,9 +430,9 @@ describe('User', () => {
     }
   });
 
-  it('has its back link, named "Users", to the list, in the page bar outside <main>, which it opens', async () => {
+  it('has its back link, named "Users", to the list, in the page bar outside <main>', async () => {
     serve(usersPath, json(people));
-    const router = renderApp(`/manage/users/${alex.id}`);
+    renderApp(`/manage/users/${alex.id}`);
     await settle();
 
     const link = backLink();
@@ -440,15 +440,26 @@ describe('User', () => {
     expect(link).toHaveAttribute('href', '/manage/users');
     expect(pageBar()).toContainElement(link);
     expect(main()).not.toContainElement(link);
-
-    fireEvent.click(link!);
-    await settle();
-
-    expect(router.state.location.pathname).toBe('/manage/users');
-    expect(pageHeading()).toHaveAccessibleName('Users');
   });
 
-  it('opens from its row of the list, with nothing in the router state', async () => {
+  it('from a pasted address, pushes the list by its back link, which focuses the <h1> at the top', async () => {
+    serve(usersPath, json(people));
+    // After the list, as the tab may hold it, but opened afresh, so that nothing says that the list opened the page.
+    const router = renderApp(['/manage/users', `/manage/users/${alex.id}`]);
+    await settle();
+    Object.defineProperty(window, 'scrollY', { value: 300, configurable: true, writable: true });
+
+    fireEvent.click(backLink()!);
+    await settle();
+
+    expect(router.state.historyAction).toBe('PUSH');
+    expect(router.state.location.pathname).toBe('/manage/users');
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(0);
+  });
+
+  it('opens from its row of the list, with no router state, and goes back there by its back link', async () => {
     serve(usersPath, json(people));
     const router = renderApp('/manage/users');
     await settle();
@@ -461,7 +472,44 @@ describe('User', () => {
     expect(pageHeading()).toHaveAccessibleName('Alex Park');
     expect(facts()[0]).toEqual(['Email address', 'alex.park@example.org']);
     expect(document.title).toBe('Grow2Notes – User');
+
+    fireEvent.click(backLink()!);
+    await settle();
+
+    // Back one entry, adding none, so that Forward reaches the user again.
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/manage/users');
+    expect(within(main()).getByRole('link', { name: 'Alex Park' })).toHaveFocus();
+    await act(() => router.navigate(1));
+    expect(router.state.location.pathname).toBe(`/manage/users/${alex.id}`);
   });
+
+  it.each(['ctrlKey', 'metaKey', 'shiftKey'])(
+    'leaves a click on its back link with %s to the browser, which follows the href, though the list opened it',
+    async (modifier) => {
+      serve(usersPath, json(people));
+      const router = renderApp('/manage/users');
+      await settle();
+      fireEvent.click(within(main()).getByRole('link', { name: 'Alex Park' }));
+      await settle();
+      const { location } = router.state;
+      // Whether the click was prevented by the time it reached the window, which then prevents it, as jsdom cannot
+      // follow a link to another page.
+      const prevented: boolean[] = [];
+      const followHref = (event: MouseEvent) => {
+        prevented.push(event.defaultPrevented);
+        event.preventDefault();
+      };
+      window.addEventListener('click', followHref);
+      onTestFinished(() => window.removeEventListener('click', followHref));
+
+      fireEvent.click(backLink()!, { [modifier]: true });
+      await settle();
+
+      expect(prevented).toEqual([false]);
+      expect(router.state.location).toBe(location);
+    },
+  );
 });
 
 describe('User while the list loads', () => {

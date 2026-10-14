@@ -499,6 +499,16 @@ found and `403`.
   entry with no position kept, as one from before a reload, goes to the top; the shell keeps an entry's position from
   the page's `scroll` events and, on a change that is not a new screen, from the change itself; and a whole-page
   message takes focus when the element that had focus as it rendered has left the page.
+- Also the simplest options where the design is silent (14 October 2026, step 2), the first two now in app-shell.md's
+  *Where a screen was opened from*: the shell follows the order of the history's entries in memory, so that it knows
+  the previous entry, and a pop to an entry that it has not followed, as one from before a reload, starts that order
+  afresh from it; the record's `path` is the opener's pathname, so a back link whose `to` differs from it only in the
+  search still pops; the shell records a row as any click of its link reaches `<main>`, before the router takes it;
+  a list is ready for its return point once its rows, or the failure to load them, are in the page, as the Users list
+  says with `useReturnFocusReady(!users.isPending)`; a pop back to a list not ready yet moves no focus until it is,
+  then puts the page back at the position kept, which the page was too short for as it arrived, and focuses the row,
+  while Page not found or a crash page that takes the list's place first takes the focus instead; and setup's view F
+  keeps `[data-route-focus]` on its field for as long as setup holds the server's refusal of the password.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -536,7 +546,7 @@ found and `403`.
       `<h1>`; and the store and the pending flag are empty after a reload. Proves app-shell.md's *Screen changes,
       focus and scroll* bullets 1, 2, 4, 5, 7 and 8 (the skip link's stays proven by `shell.spec.ts`) and S00.05.02's
       two criteria; T08, T09 and T12 check the Today, Submit and Discard bullets again.
-- [ ] Return points and the opened-from memory, checked on Users (S00.05.02's Notes items (1) to (4); app-shell.md
+- [x] Return points and the opened-from memory, checked on Users (S00.05.02's Notes items (1) to (4); app-shell.md
       component 3a; users.md AC8): `LinkRow` takes a `returnKey`, rendered as `data-return-key`; `RouteHandle` gains
       `returnFocus` (fallback `'h1'` or `'sameIndex'`) and `backKey`; activating a row records its key and index on
       the list's entry, and a pop back focuses that row with `preventScroll` once the list calls

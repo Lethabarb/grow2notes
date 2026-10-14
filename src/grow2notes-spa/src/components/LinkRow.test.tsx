@@ -16,7 +16,12 @@ function renderList(rows: ReactNode): HTMLElement {
 describe('LinkRow', () => {
   it('is an item of a role="list" list, holding one link, named by its name alone, to its address', () => {
     const list = renderList(
-      <LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" detail={['Wednesday 30 September 2026']} />,
+      <LinkRow
+        to="/made-up/4e7a2c1b"
+        name="Jane Citizen"
+        returnKey="4e7a2c1b"
+        detail={['Wednesday 30 September 2026']}
+      />,
     );
 
     expect(list).toHaveAttribute('role', 'list');
@@ -27,9 +32,20 @@ describe('LinkRow', () => {
     expect(links[0]).toHaveAttribute('href', '/made-up/4e7a2c1b');
   });
 
+  it('gives its link its return key, by which the shell finds the row again', () => {
+    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" returnKey="4e7a2c1b" />);
+
+    expect(within(list).getByRole('link')).toHaveAttribute('data-return-key', '4e7a2c1b');
+  });
+
   it('describes its link by its detail, each line on its own, with a pause between them for screen readers', () => {
     const list = renderList(
-      <LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" detail={['jane@example.org', 'Second line']} />,
+      <LinkRow
+        to="/made-up/4e7a2c1b"
+        name="Jane Citizen"
+        returnKey="4e7a2c1b"
+        detail={['jane@example.org', 'Second line']}
+      />,
     );
 
     const link = within(list).getByRole('link');
@@ -44,7 +60,7 @@ describe('LinkRow', () => {
   });
 
   it('has no description and no detail without one', () => {
-    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" />);
+    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" returnKey="4e7a2c1b" />);
 
     const link = within(list).getByRole('link');
     expect(link).not.toHaveAttribute('aria-describedby');
@@ -52,7 +68,7 @@ describe('LinkRow', () => {
   });
 
   it('has a chevron that screen readers and the tab order skip', () => {
-    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" />);
+    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" returnKey="4e7a2c1b" />);
 
     const chevron = list.querySelector('svg');
     expect(chevron).toHaveAttribute('aria-hidden', 'true');

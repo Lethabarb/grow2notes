@@ -1,18 +1,22 @@
 import type * as SimpleWebAuthn from '@simplewebauthn/browser';
 import { startAuthentication, type AuthenticationResponseJSON } from '@simplewebauthn/browser';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode, useEffect, useState } from 'react';
 import { createMemoryRouter, Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
-import { ApiError } from '../api/api.ts';
+import { api, ApiError } from '../api/api.ts';
 import { meQuery, useMe, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
+import { LinkRow } from '../components/LinkRow.tsx';
+import { LinkRowList } from '../components/LinkRowList.tsx';
+import { LoadRegion } from '../components/LoadRegion.tsx';
 import { PageHeading } from '../components/PageHeading.tsx';
 import { pageName } from '../copy/pageNames.ts';
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { messageStore } from './messageStore.ts';
+import { useReturnFocusReady } from './routeChange.ts';
 import { routes, type AppRoute, type RouteHandle } from './routes.tsx';
 
 // The browser's passkey prompt, which jsdom has not got; the rest of SimpleWebAuthn is its own.
@@ -23,6 +27,7 @@ vi.mock('@simplewebauthn/browser', async (importOriginal) => ({
 
 const mePath = '/api/auth/me';
 const usersPath = '/api/admin/users';
+const listPath = '/api/made-up/list';
 const antiforgeryPath = '/api/auth/antiforgery';
 const optionsPath = '/api/auth/passkey/options';
 const passkeyPath = '/api/auth/passkey';
@@ -81,21 +86,30 @@ const submitted = 'Note for Jane Citizen submitted';
 // The crash that the made-up crashing screen throws.
 const crash = new Error('A made-up crash');
 
-/** Today, as T08 and T09 build it, as far as the rule goes: the success banner, read once, the `<h1>` and rows. */
-function MadeUpToday() {
-  // As Today reads the store (status-messages.md *Implementation notes*): once, and cleared, so that it shows once.
+/**
+ * The success banner, read from the store as Today reads it (status-messages.md *Implementation notes*): once, and
+ * cleared, so that it shows once.
+ */
+function MadeUpBanner() {
   const [message] = useState(() => messageStore.peek());
   useEffect(() => {
     messageStore.clear();
   }, []);
 
   return (
+    message !== undefined && (
+      <div tabIndex={-1} data-route-focus>
+        <p>{message}</p>
+      </div>
+    )
+  );
+}
+
+/** Today, as T08 and T09 build it, as far as the rule goes: the success banner, the `<h1>` and rows. */
+function MadeUpToday() {
+  return (
     <>
-      {message !== undefined && (
-        <div tabIndex={-1} data-route-focus>
-          <p>{message}</p>
-        </div>
-      )}
+      <MadeUpBanner />
       <PageHeading>Today</PageHeading>
       <ul>
         {['1', '2', '3'].map((id) => (
@@ -104,6 +118,35 @@ function MadeUpToday() {
           </li>
         ))}
       </ul>
+    </>
+  );
+}
+
+/**
+ * A list whose rows are return points, as the participants list and Flagged are, under the success banner: its rows,
+ * from `listPath`, in a region, each open a note, and it tells the shell that it is ready once they, or the failure to
+ * load them, are in the page.
+ */
+function MadeUpList() {
+  const rows = useQuery({
+    queryKey: ['made-up', 'list'],
+    queryFn: ({ signal }) => api<string[]>(listPath, { signal }),
+  });
+  useReturnFocusReady(!rows.isPending);
+
+  return (
+    <>
+      <MadeUpBanner />
+      <PageHeading>Participants</PageHeading>
+      <LoadRegion queries={[rows]} loading="Loading participants…" what="The participant list">
+        {() => (
+          <LinkRowList>
+            {rows.data!.map((id) => (
+              <LinkRow key={id} to={`/made-up/notes/${id}`} name={`Participant ${id}`} returnKey={id} />
+            ))}
+          </LinkRowList>
+        )}
+      </LoadRegion>
     </>
   );
 }
@@ -212,6 +255,17 @@ const reportHandle: RouteHandle = { pageName: pageName.dailyReport, screenKey: '
 // The made-up screens beside the app's.
 const madeUp: AppRoute[] = [
   { path: 'made-up/today', element: <MadeUpToday />, handle: { pageName: pageName.today } },
+  {
+    path: 'made-up/list',
+    element: <MadeUpList />,
+    handle: { pageName: pageName.participants, returnFocus: {}, backKey: 'participants' },
+  },
+  // A list whose fallback is the row now at the place of the one opened, as Flagged's is.
+  {
+    path: 'made-up/flagged-list',
+    element: <MadeUpList />,
+    handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
+  },
   { path: 'made-up/notes/:id', element: <MadeUpNote />, handle: { pageName: pageName.note } },
   { path: 'made-up/flagged', element: <MadeUpFlagged />, handle: { pageName: pageName.flaggedNotes } },
   { path: 'made-up/participants/:id', element: <MadeUpParticipant />, handle: { pageName: pageName.participant } },
@@ -792,6 +846,173 @@ describe('a data <h1>', () => {
 
     expect(pageHeading()).toHaveAccessibleName('Alex Park');
     expect(pageHeading()).toHaveFocus();
+  });
+});
+
+describe('a return point', () => {
+  /** A row link of the list, by the row's name. */
+  function rowLink(name: string): HTMLElement {
+    return within(main()).getByRole('link', { name });
+  }
+
+  /** Opens the made-up list at `path`, holding `rows`, scrolls it to 800 and opens the row of `id`, a note. */
+  async function openRow(path: string, rows: string[], id: string) {
+    serve(listPath, json(rows));
+    const router = renderApp(path);
+    await settle();
+    scrollPage(800);
+
+    await press(rowLink(`Participant ${id}`));
+
+    expect(pageHeading()).toHaveAccessibleName(`Note ${id}`);
+    return router;
+  }
+
+  /** Stays on the note until TanStack has dropped the list's data, unused for 5 minutes, so that a pop loads it. */
+  async function dropList() {
+    await wait(5 * 60_000);
+  }
+
+  it('on a pop to a list ready at once, focuses the row opened, without scrolling from the kept position', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+
+    await go(router, -1);
+
+    expectFocused(rowLink('Participant 2'), { preventScroll: true });
+    expectScrolledTo(800);
+  });
+
+  it('on a pop to a list not loaded yet, focuses nothing until its rows come, then the row opened', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+    await dropList();
+    serve(listPath, after(500, json(['1', '2', '3'])));
+
+    await go(router, -1);
+
+    expect(within(main()).queryByRole('list')).not.toBeInTheDocument();
+    expect(document.body).toHaveFocus();
+
+    await wait(500);
+    await settle();
+
+    expectFocused(rowLink('Participant 2'), { preventScroll: true });
+    // Again, as a page shorter than the position kept could not show it as the list arrived.
+    expectScrolledTo(800);
+  });
+
+  it('on a pop to a list, with the row opened gone, focuses its default fallback, the <h1>', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+    await dropList();
+    serve(listPath, json(['1', '3']));
+
+    await go(router, -1);
+    await settle();
+
+    expect(rowLink('Participant 3')).toBeInTheDocument();
+    expectFocused(pageHeading(), { preventScroll: true });
+  });
+
+  it.each([
+    { opened: '2', rows: ['1', '3'], focused: 'Participant 3', kind: 'the row now at its place' },
+    { opened: '3', rows: ['1', '2'], focused: 'Participant 2', kind: 'the last row, with none at its place' },
+  ])("on a pop to a list whose fallback is 'sameIndex', with the row opened gone, focuses $kind", async (row) => {
+    const router = await openRow('/made-up/flagged-list', ['1', '2', '3'], row.opened);
+    await dropList();
+    serve(listPath, json(row.rows));
+
+    await go(router, -1);
+    await settle();
+
+    expectFocused(rowLink(row.focused), { preventScroll: true });
+    expectScrolledTo(800);
+  });
+
+  it("on a pop to a list whose fallback is 'sameIndex', with no row left, focuses the <h1>", async () => {
+    const router = await openRow('/made-up/flagged-list', ['1', '2', '3'], '2');
+    await dropList();
+    serve(listPath, json([]));
+
+    await go(router, -1);
+    await settle();
+
+    expect(within(main()).queryByRole('link')).not.toBeInTheDocument();
+    expectFocused(pageHeading(), { preventScroll: true });
+  });
+
+  it('on a pop to a list that does not load, focuses the <h1> over the failure', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+    await dropList();
+    serve(listPath, noConnection);
+
+    await go(router, -1);
+    // Past its one silent retry.
+    await wait(1000);
+    await settle();
+
+    expect(main()).toHaveTextContent('The participant list did not load: no connection. Try again.');
+    expectFocused(pageHeading(), { preventScroll: true });
+  });
+
+  it('Page not found, in place of a list refused on a pop, takes the focus that the row was due', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+    await dropList();
+    serve(listPath, after(100, problem(403)));
+
+    await go(router, -1);
+    await wait(100);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('gives way to the success banner, which wins on a pop back to the list too, with the top', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+
+    await press(within(main()).getByRole('button', { name: 'Submit and go back' }));
+
+    expect(router.state.historyAction).toBe('POP');
+    expectFocused(within(main()).getByText(submitted).parentElement!);
+    expectScrolledTo(0);
+  });
+
+  it.each([
+    { action: 'a push', replace: false },
+    { action: 'a replace', replace: true },
+  ])('is not used on $action to the list, which focuses the <h1> at the top', async ({ replace }) => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+
+    await act(() => router.navigate('/made-up/list', { replace }));
+    await settle();
+
+    expectFocused(pageHeading());
+    expect(pageHeading()).toHaveAccessibleName('Participants');
+    expectScrolledTo(0);
+  });
+
+  it('on a pop to a list that opened no row, focuses the <h1>', async () => {
+    serve(listPath, json(['1', '2', '3']));
+    // Not from the first entry, whose key is the same in every test, and so a row that an earlier test opened.
+    const router = renderApp(['/manage', '/made-up/list']);
+    await settle();
+    scrollPage(800);
+    await press(navLink('Manage'));
+
+    await go(router, -1);
+
+    expectFocused(pageHeading(), { preventScroll: true });
+    expectScrolledTo(800);
+  });
+
+  it('keeps nothing of the row in the router state, the address or storage', async () => {
+    const router = await openRow('/made-up/list', ['1', '2', '3'], '2');
+
+    await go(router, -1);
+
+    expect(router.state.location.state).toBeNull();
+    expect(router.state.location.search).toBe('');
+    expect(sessionStorage).toHaveLength(0);
+    expect(localStorage).toHaveLength(0);
   });
 });
 
