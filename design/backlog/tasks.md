@@ -54,7 +54,7 @@ top; it never merges the snapshot by hand. It also adds its own audit-test and e
 
 ```yaml
 id: T01
-status: new
+status: doing
 release: R1
 lane: A
 size: M
@@ -96,10 +96,189 @@ with their typing kept (checked with a half-filled Invite form), and a different
   the same person signs in, and the text is still there and still not saved, with no `PUT` until Save is pressed
   again; and a different person signs in, and the page reloads in full to Today, with no browser dialog and the text
   gone (S00.04.08's Note from T03). S01.04.02 keeps them open until then.
+- The setup-link email's wording, proposed here and marked (P), was approved in advance (D85). It is plain text only,
+  with no HTML, image or tracking, and names no one, so it reads right for an invite and a sign-in reset alike (A23).
+  Subject: "Set up your Grow2Notes sign-in" (P). Text (P): "Open this link to set up how you sign in to Grow2Notes:",
+  the link on its own line, "The link works once and lasts 7 days. If it has expired, ask a manager to send a new
+  one.", and "You are getting this email because a manager added you to Grow2Notes or reset your sign-in." It comes
+  from the Azure-managed domain's own `DoNotReply` address.
+- How the sender is chosen (design.md is silent): Azure Communication Services where `Email:Endpoint` is set, as
+  `main.bicep` sets it with `Email:SenderAddress`, signing in as the app's identity, as Key Vault and telemetry do;
+  otherwise a console sender that writes each message to standard output, never through `ILogger`, so a link never
+  reaches logs or telemetry (§9.5). Local development and CI's end-to-end run, which set no endpoint, use the console
+  one, so CI never sends real email. Refusing the console sender outside Development would stop CI's run, which is in
+  Production; as for Key Vault and telemetry, the after-deploy check that the web app's settings name `Email__Endpoint`
+  and `Email__SenderAddress` is the guard against an Azure app writing links to its console.
+- When the email goes (design.md is silent): inside the transaction, after the audit event and before the commit. A
+  failed send then leaves nothing changed, so "Not sent: … Try again." is true and a second press works; a commit that
+  fails after the send leaves only a link that answers `410`. A transient failure that the execution strategy retries
+  runs the whole work again, the send included (§5.9), so a second email goes and the first one's link answers `410`.
+  The sender returns once Communication Services has accepted the message (`WaitUntil.Started`) and never waits for
+  delivery, which would hold the transaction and could outlast `api()`'s 10-second timeout, so the screen would say
+  "Not sent: no connection" for an invite that commits. A failed send answers `500` problem+json and is logged with
+  no address or link.
+- `POST /api/admin/users` answers `201` with no body (§6.6), as the screen goes back to the list, not to the new user.
+- In T01, `POST /api/admin/users/{id}/setup-link` serves an Invited user only. Any other status gets
+  `409 user.not_active`, mcp-server.md's code for a Deactivated user, which the shared handler gives both channels; T01
+  adds it to design.md §6.9 and `ErrorCode`, and T04 turns an Active user's call into the reset, leaving the code to
+  Deactivated users. The screen never meets it: it offers Resend invite only while Invited, and the handler checks
+  `If-Match` before the status, so a status changed since the page loaded gives `412`. The `204` carries no `ETag`, as
+  the next one comes from the refetched list (D78).
+- The Communication Services and Email resources are named `acs-grow2notes-<env>` and `ecs-grow2notes-<env>`, carrying
+  the environment as every other resource does, and design.md §10.1's row changes to match.
+- `allowedActions(user)` in `userRules.ts` gives Edit and, while Invited, Resend invite. T04 adds its `onlyManager`
+  argument with `isOnlyActiveManager`, Reset sign-in, Deactivate and Reactivate, so no argument goes unused before then.
+  Invite user and T04's Edit user share `validateUser()` and the Role radios (`RoleField`, in `src/features/users/`).
+- A way for `api()` to give a response's `Date` header is built once, by whichever of T01, T02 and T03 merges first;
+  the others reuse it at rebase.
+- Two edge cases that S00.04.08's Notes leave to be weighed, taken the simple way: a `/me` refresh that answers another
+  `userId` than `['me']` holds reloads the page with `fullPageLoad()`, as a different person's sign-in in place does;
+  and a `401` to a request sent before the newest sign-in raises no session-ended event, so it neither ends the clock
+  nor shows the signed-out view.
+- The parts of the Session criteria that need the note form (the pending autosave retried and accepted, the ticks and
+  flag reason kept) are proved by T10, which reuses this view. The "never replayed" rule is shown here with Send invite
+  and Resend invite. For the note form, note-form.md *Interactions* › *Session* states it: T10 shows it for Submit, as
+  its S02.02.05 links that section, and T12 and T14, which build Discard and Save changes after T10, say so in their
+  Notes. For Mark reviewed, review-panel.md *Behaviour* 6 states it, which T16's S03.02.01 links.
+- A server `422` on Invite user (users.md *States* › Invite user maps it by key but gives no words for two cases):
+  `email` shows the format message, which is true of the two addresses that the client's loose check passes and the
+  server refuses, one with a letter outside ASCII (Identity's `InvalidUserName`) and one over 256 characters; and an
+  unknown key becomes an unlinked summary item, as users.md says over form-validation.md's general rule, since the
+  screen file is what is built (ux/README.md), worded "Not sent: something went wrong. Try again.", as
+  form-validation.md words that case, so no raw server text shows.
+- If T02's shared audit-events test is on `main` at rebase, T01 adds its `user.invited` and `user.setup_link_sent`
+  rows to it.
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] Build the setup-link step and the email sender, which T04 reuses (S00.02.07 criteria 1, 2 and 4; design.md §8.1
+      step 2, §10.3's Local row; user-management.md; see Notes): split the key, token and link step out of
+      `Invitations.InviteAsync` into one step that gives an existing user a new authenticator key (rotating the stamp),
+      a 7-day setup token and the link, in the same form with the token escaped, which the invite core and so
+      `admin bootstrap` call; add the sender in `Platform/` with `AddEmailWhenConfigured`: Communication Services'
+      `EmailClient` with `ManagedIdentityCredential` for the user-assigned identity where `Email:Endpoint` is set,
+      refusing to start without `ManagedIdentity:ClientId` or `Email:SenderAddress`, and otherwise the console sender;
+      and the one setup-link email, built from the link alone; tests replace the sender with a fake that records each
+      message, so no test sends real email: the email's subject and text are exactly the (P) wording, with the link and
+      no other value; with no endpoint the console sender is registered and writes the message to standard output and
+      nothing to any logger; with one, the client is built with the identity's credential and no connection string or
+      key, and a missing client ID or sender address stops the app starting; the invite core's and `admin bootstrap`'s
+      tests still pass, bootstrap printing its link and sending nothing; and tests/README.md says how a test reads the
+      emails the fake sender recorded
+- [ ] Add `infra/modules/email.bicep` to `main.bicep` (S00.02.07 criteria 2 and 3; design.md §10, §10.1's
+      Communication Services row, §10.3, A58; see Notes): first confirm, read-only from Microsoft Learn's data-location
+      list, that the Email service offers Australia; then Communication Services and its Email service, both with data
+      location Australia, access keys off (`disableLocalAuth`), and the Email service's Azure-managed `azurecomm.net`
+      domain linked to Communication Services; outputs of the endpoint and the domain's `DoNotReply` sender address,
+      which `main.bicep` gives the app as `Email__Endpoint` and `Email__SenderAddress`, with no connection string or
+      key; the app identity's Communication and Email Service Owner role is already in `bootstrap.bicep`, so no Owner
+      run is needed; design.md §10.1 takes the resources' names; CI's Bicep build compiles it with no warning; and
+      ops/first-use-in-test.md gains the by-hand check that a setup-link email from test arrives, says Grow2Notes only,
+      and shows SPF, DKIM and DMARC passing in its received headers
+- [ ] Add `POST /api/admin/users` (S00.06.02 criteria 1 to 4; design.md §4.11 *Invite user*, §6.6, §8.1 steps 1
+      and 2, A27; S00.06.02's Notes): a handler in `Features/Users/` that takes an `Actor` and the tenant from
+      `ITenantContext`, checks the name (required, at most 100 characters), the email (required, at most
+      `Limits.Email` characters, so that an address Identity's check accepts never meets the 256-character columns as
+      a `500`) and the role, then in one transaction invites through the invite core with the actor as inviter,
+      writes `user.invited` and sends the setup-link email before committing, and answers `201` with no body;
+      Identity's `DuplicateEmail` gives `409 user.email_in_use`, and its `InvalidEmail` and `InvalidUserName` the
+      email field's `422`, never `500`; a sender that fails gives `500` problem+json, logged with neither the address
+      nor the link; its matrix row and its signed-out `401`; tests on the SQL Server container with the fake sender:
+      a manager's invite creates an Invited user in their organisation with the role given, writes one `user.invited`
+      with the manager as actor, committed with the user, and sends one email to the address, whose link
+      `POST /api/auth/setup/start` accepts; the address of a user in the other seeded organisation, in other letter
+      case, gives `409 user.email_in_use` and creates, writes and sends nothing; the invited person cannot sign in
+      (`CanSignInAsync` is false while Invited); a worker gets `403` and nothing is created; an empty, a 101-character
+      or a malformed value, an address with a letter outside ASCII (`zoë@example.org`) and one of 257 characters that
+      Identity's check accepts, and a missing role or one that is neither Worker nor Manager, give `422` under
+      `displayName`, `email` or `role`, never `400` or `500`, and create, write and send nothing; and a sender that
+      fails gives `500` and leaves no user and no event, with neither the address nor the link in the logs
+- [ ] Add `POST /api/admin/users/{id}/setup-link` for an Invited user, with the `If-Match` handling for user changes
+      that T04 reuses (S00.06.03 criteria 1 and 2; design.md §4.11 *Resend invite*, §6.6, §6.7, A53;
+      S00.06.03's Notes; see Notes): in this order, load the user filtered by the tenant's organisation, `404` for an
+      unknown ID or another organisation's; `IfMatch.Check` against their `ConcurrencyStamp`, `428` when missing and
+      `412` when stale; any status but Invited gets `409 user.not_active`, added to design.md §6.9 and `ErrorCode`;
+      then in one transaction the setup-link step, `user.setup_link_sent` recording the actor and the user's ID, with
+      no address in its details (A28), and the setup-link email sent before the commit, answering `204`; `412`, never
+      `500`, for a concurrency failure on saving, and `500` problem+json for a sender that fails, as Invite's; its
+      matrix row and its signed-out `401`; tests with the fake sender: after a resend the old link's
+      `POST /api/auth/setup/start` gets `410 auth.setup_link_invalid` and the newly emailed link `200`, and a browser
+      that started setup with the old link gets `401` from `POST /api/auth/setup/passkey/options`; one
+      `user.setup_link_sent` is written, with no address in its details; a stale `If-Match` gives `412` and a missing
+      one `428`, each changing, writing and sending nothing; another organisation's user is `404`; an Active and a
+      Deactivated user get `409 user.not_active` with nothing changed or sent; and a worker gets `403`
+- [ ] Add Invite user at `/manage/users/new` (users.md component B, *States* › Invite user, *Interactions*, AC1, AC3,
+      AC4, AC13 to AC20, AC39 and AC40; S00.06.02's Notes; see Notes): the route beside `manage/users/:userId` under
+      `ManagerOnly`, with the back link "Users", the error summary, the `<h1>`, Name and Email address with their hints,
+      the Role fieldset (`RoleField`) with Worker selected (D77), the action error region and Send invite;
+      `validateUser()` in `userRules.ts`, `displayName` in `limits.ts` with its `SpaLimitsTests` row, the words in
+      `src/copy` and `user.email_in_use` in `apiErrors.ts`; on `201`, refetch `['admin', 'users']` and replace to the
+      list; a `422`'s `errors{}` mapped by key to the inline errors and the focused summary in users.md's words
+      (`displayName` the name's message for what is typed, `email` the format message, `role` "Choose Worker or
+      Manager"), an unknown key becoming an unlinked summary item, and every typed value kept (see Notes); a network
+      failure and a `5xx` in the action error region; Vitest and Playwright tests: the page opens with Worker selected,
+      both fields empty and no error (AC13); Send invite with both empty shows both messages inline and in the focused
+      summary, sends nothing and sets the title "Error: Grow2Notes – Invite user" (AC14); fixing a field removes its
+      error and summary item as you type (AC15); "alex" and a 101-character name give their messages, and a longer
+      pasted name is not cut (AC16); signed in for real, a double tap sends one `POST`, "Sending…" shows only after 400
+      ms, and the list shows the new row "Invited · Worker" with focus on its `<h1>`, no banner, and Back not returning
+      to the form (AC18); the manager's own address in other letter case gives the email-in-use message on Email, linked
+      from the summary, with every value kept (AC19); a server `422` under `email` for `zoë@example.org`, which the
+      client's check passes, one under `role` and one under an unknown key each show as users.md says, with focus on the
+      summary, the title's "Error: " prefix and every value kept; a cut network gives "Not sent: no connection. Try
+      again." and a `500` "Not sent: something went wrong. Try again.", each with focus on Send invite and nothing
+      cleared (AC20); a worker meets Page not found (AC1); no name or email is left in a title, an address,
+      `history.state` or storage (AC3); axe passes in each state (AC39); the tests that met "new" as an unknown ID drop
+      it; review finds the parent company's name in no page or email (AC4, D72); and in ops/first-use-in-test.md steps
+      12 and 17 invite through Users, and AC17's autofill check in Chrome, Safari and Edge and the Invite page's
+      screen-reader lines join the by-hand steps
+- [ ] Add Resend invite to an Invited user's page (users.md component C items 2, 5 and 6, *States* › User detail,
+      *Live regions*, AC21, AC23 and AC33; S00.06.03's Notes from S00.06.01; see Notes): the action error region
+      above group 1; group 1 as Edit, then Resend invite with its description and its always-present `role="status"`
+      line; `allowedActions(user)` in `userRules.ts`; the `Date` header from `api()`, unless T02 or T03 has put a way on
+      `main` first; a mutation that sends `If-Match` from `concurrencyStamp`, is never retried, and awaits the users
+      refetch; Vitest and Playwright tests: one `POST …/setup-link` with `If-Match`, focus staying on the button, and
+      "Setup link sent to {email} at {time}. The old link no longer works." with the time from the `Date` header in
+      Melbourne time, also with the device's clock and time zone set elsewhere, and with "at …" left out when the
+      header is missing (AC23); a second press a minute later gives the new time and is announced again; a `412`
+      refetches and says "Someone else has just changed {name}'s account. The page now shows the latest details."; no
+      connection and a `500` give "Not sent: …", and nothing is resent by itself (AC33); an Active or a Deactivated
+      user's page has no Resend invite, no element is `disabled` (AC21), and the tests that held Edit as the one action
+      follow users.md's table for the actions T01 builds; signed in for real in the published app, a worker invited
+      through the page gets the sentence; and axe passes with the sentence and with each failure
+- [ ] Show sign-in again in place, checked with a half-filled Invite user form (S00.04.08, every criterion; design.md
+      §8.5 *No work is lost*; sign-in.md *Sign in again, in place*; app-shell.md component 7 and its Session and
+      Structure bullets; session-timeout.md *The signed-out state*; S00.04.08's Notes; see Notes): while the shell shows
+      a signed-in screen and the session clock is `expired` (30:00 idle, or a `401` that ends the session, a refresh's
+      among them), `<main>` holds view C, "You've been signed out" and its sentence over sign-in's controls, whose
+      headings become `<h2>`, with the route still mounted in a `<div hidden>`, `#page-bar` hidden, the header without
+      nav or Account, the title "Grow2Notes – Sign in" and focus on the `<h1>`; the same person's sign-in unhides the
+      route, refetches its queries, restores the header and title, focuses the page's `<h1>` and replays no change; a
+      different person's runs `disarmUnloadGuard()` if T03 is on `main`, then `fullPageLoad()`; an accepted `/me` for
+      the same `userId` while view C shows (another tab kept the session alive, session-timeout.md *Behaviour* 5,
+      app-shell.md *Page visible again*) closes it as the same person's sign-in does, unhiding the route, restoring the
+      header and title and focusing the page's `<h1>`, with no refetch beyond the refresh's; Vitest and Playwright
+      tests: signed in for real with Invite user half filled, a real `401` (the session cookie removed, then window
+      focus) shows view C at the same address, and signing in again with the passkey shows the form with the typed
+      values, focus on its `<h1>` and the address unchanged (the story's criterion); a second account signing in there
+      reloads to Today, and no `POST /api/admin/users` is ever sent; a Send invite, and on an Invited user's page a
+      Resend invite, that met the `401` is not sent again after signing in; with fake timers, view C shows at 30:00 with
+      focus on its `<h1>`, and window focus then bringing a `/me` `200` for the same `userId` shows the screen again
+      with focus on its `<h1>`; after 31 minutes hidden, the refresh's `401` shows view C and its `200` leaves the
+      screen as it was (`useRefreshMe.test.tsx`'s `401` row now expects view C); a wrong password in view C leaves view
+      C up with the "Sign-in failed" summary; nothing shows for a `401` over view A or a setup page, nor for Sign out's
+      logout `401`, nor for one to a request sent before the newest sign-in; a refresh that answers another `userId`
+      reloads; on a user's page, view C hides the back link in `#page-bar` from sight and from Tab; and axe passes on
+      view C
+- [ ] After the deploy to test, check read-only, with no sign-in: read-only `az` shows the test resource group's
+      Communication Services and Email service with data location Australia and access keys off, the Azure-managed
+      domain linked with SPF, DKIM and DMARC verified, and the web app's settings naming `Email__Endpoint` and
+      `Email__SenderAddress` (names only, no values printed) and no Communication Services connection string or key;
+      signed out, `POST /api/admin/users` and `POST /api/admin/users/{a new GUID}/setup-link` answer `401`
+      problem+json with `no-store`; a headless browser at `/manage/users/new` meets sign-in's view A, titled
+      "Grow2Notes – Sign in", with no Content Security Policy violation, and the deployed bundle holds "Send invite",
+      "Setup link sent to" and "You’ve been signed out"; and Log Analytics holds no `5xx` or exception from the app
+      since the deploy
 
 ---
 
@@ -760,6 +939,8 @@ manager can read it.
 
 - One discard endpoint and one dialog, on T03's dialog shell, serve both the writer and the manager.
 - T12, T13 and T14 run one after another: all three change the note form, the draft save and Today.
+- A Discard that met a `401` is not sent again after signing in again in T01's view C (note-form.md *Interactions* ›
+  *Session*; app-shell.md's Session criteria, the never-replayed bullet).
 
 ### Steps
 
@@ -837,6 +1018,8 @@ and shown the newer version, so nothing is silently overwritten.
 ### Notes
 
 - Runs after T13: it changes the same note form and draft save.
+- A Save changes or a Cancel that met a `401` is not sent again after signing in again in T01's view C (note-form.md
+  *Interactions* › *Session*; app-shell.md's Session criteria, the never-replayed bullet).
 
 ### Steps
 
