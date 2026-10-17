@@ -573,10 +573,10 @@ found and `403`.
   the shared `Button`, and the search field's height, and 56 px for a row. `history.state` holds nothing but React
   Router's `usr`, `key` and `idx` with a value, the first entry its `idx` alone. The by-hand checks are steps 26 to 28
   of ops/first-use-in-test.md, after T03's 24 and 25, at its end, as other files cite the numbers of the steps before
-  them. The step stays unticked until CI's run on the pull request passes and its `migrate.sql` artifact has been read
-  there, and that run's ID then goes here. Locally, CI's `dotnet ef migrations script --idempotent` command, from
-  `AddAuditEvent` to `AddParticipant`, gives only additions: `CREATE TABLE [Participant]`, its `CREATE INDEX` and
-  `DENY DELETE ON [dbo].[Participant] TO [grow2notes_runtime]`.
+  them. CI's run 39042194147 on the pull request (#57) passed, with 883 xUnit and 154 Playwright tests. Its
+  `migrate.sql` artifact, read there, gives `AddParticipant` only additions, as the same command did locally:
+  `CREATE TABLE [Participant]` with its primary key, the `(OrganisationId, Id)` alternate key and the foreign key to
+  `Organisation`, its `CREATE INDEX` and `DENY DELETE ON [dbo].[Participant] TO [grow2notes_runtime]`.
 - Parts of the absorbed criteria arrive with later tasks: the Goals section with T05, which checks that the next Tab
   after the `201` reaches it and that an archived participant's goals are read-only; Today with T08, which checks
   "gone from Today" and "back on Today" and adds Today's query to what these saves invalidate; the Past notes, Write
@@ -597,8 +597,7 @@ found and `403`.
     status-messages.md now gives too (design.md A63); T03's `apiWithHeaders()`, whose `dateUtc` Details' Save reads; and
     T01's `ValidationProblems.Fields`. T02's copies and their tests are gone. The routes, `Program.cs`, the endpoint
     matrix, `SignedOutTests`, `shell.spec.ts`'s walk and the copy hold both sides. Neither added a migration, so
-    `AddParticipant` and the model snapshot stand. CI's run on the pull request and its `migrate.sql` stay step 7's to
-    record.
+    `AddParticipant` and the model snapshot stand. Step 7 records CI's run on the pull request and its `migrate.sql`.
   - The by-hand checks reused T03's step numbers 24 and 25: they are steps 26 to 28 of ops/first-use-in-test.md, with
     "Do step 27 again", as the step 7 Note above says.
   - The hand-offs to T02 that T03 and T01 left on `main` (the Notes above) were not done. Guide prompts now proves T02's
@@ -745,7 +744,7 @@ found and `403`.
       this participant just now. Check the page, then try again." in the slot. Vitest: those; the list showing the
       person in the right view after each; and a participant opened from the Active view and archived on its page,
       whose back link, like browser Back, pops to the Active view, where the row has gone, so the `<h1>` takes focus.
-- [ ] Prove the participant flows end to end and bring the documents into line: `tests/e2e/participants.ts` with
+- [x] Prove the participant flows end to end and bring the documents into line: `tests/e2e/participants.ts` with
       `serveParticipants` and `failParticipants` beside `e2e/users.ts`, described in tests/README.md, and
       `tests/e2e/participants.spec.ts`: signed in for real through the `invite` fixture and a passkey on the
       `authenticator` fixture, a manager at 375 px adds "O'Brien", corrects the date of birth, comes back to the row
