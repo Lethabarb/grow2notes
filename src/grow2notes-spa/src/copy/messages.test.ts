@@ -77,3 +77,10 @@ describe("a user's actions and their dialogs", () => {
     );
   });
 });
+
+describe("an Add's failure (list-editor.md *Request errors*)", () => {
+  it('says it was not added, and why', () => {
+    expect(msg.notAdded('offline')).toBe('Not added: no connection. Try again.');
+    expect(msg.notAdded('server')).toBe('Not added: something went wrong. Try again.');
+  });
+});

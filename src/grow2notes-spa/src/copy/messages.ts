@@ -39,6 +39,8 @@ export const msg = {
   notArchived: (cause: Cause): string => msg.notDone('archived', cause),
   /** A Restore that failed, in the alert above it, in the archived notice (participants.md *States*). */
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
+  /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
+  notAdded: (cause: Cause): string => msg.notDone('added', cause),
   /**
    * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
    * design.md §3.7.

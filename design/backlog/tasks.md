@@ -1566,7 +1566,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       load showing "This participant did not load: …" with Try again (list-editor.md's *Load failure* row, superseded
       by microcopy.md §9), a goals `404` showing Page not found, and Add participant showing no Goals section before
       its `201` (B6: "Rendered only once the participant exists").
-- [ ] Add goals one after another (S01.02.05's last two criteria; design.md §14 M1's five goals; participants.md
+- [x] Add goals one after another (S01.02.05's last two criteria; design.md §14 M1's five goals; participants.md
       *Goals*' "A manager can add five goals…" and "Typing past 200 characters…", and *Add participant and Details*'
       "A Details Save or any goal write whose response is lost…"): `POST /api/admin/participants/{participantId}/goals`
       with `{text}`, its handler class `GoalChanges` in `Features/Participants` taking an `Actor`, as steps 3 to 5's

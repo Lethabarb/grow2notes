@@ -23,7 +23,7 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
     : IClassFixture<Grow2NotesFactory>
 {
     // Made up (A35), with milliseconds, which datetime2(3) keeps.
-    private static readonly DateTime AddedAtUtc = new(2026, 10, 2, 3, 4, 5, 678, DateTimeKind.Utc);
+    private static readonly DateTime AddedAtUtc = TestGoals.AddedAtUtc;
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
@@ -248,32 +248,9 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
         return [.. goals.EnumerateArray()];
     }
 
-    /// <summary>
-    /// Adds the goals to the participant, who is in organisation A, through the app's context under A's tenant, as the
-    /// app adds them, and gives their IDs in the order given.
-    /// </summary>
-    private async Task<List<Guid>> AddGoalsAsync(Guid participantId, params TestGoal[] goals)
-    {
-        await using var scope = factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        var rows = goals.Select(goal => new Goal
-        {
-            Id = goal.Id ?? Guid.NewGuid(),
-            OrganisationId = seeded.A.OrganisationId,
-            ParticipantId = participantId,
-            Text = goal.Text,
-            SortOrder = goal.SortOrder,
-            ArchivedAtUtc = goal.ArchivedAtUtc,
-            CreatedAtUtc = goal.CreatedAtUtc ?? AddedAtUtc,
-        }).ToList();
-        db.Goals.AddRange(rows);
-        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
-        {
-            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-        }
-
-        return [.. rows.Select(goal => goal.Id)];
-    }
+    // Adds the goals to the participant, who is in organisation A, and gives their IDs in the order given.
+    private Task<List<Guid>> AddGoalsAsync(Guid participantId, params TestGoal[] goals) =>
+        factory.Services.AddGoalsAsync(seeded.A, participantId, goals);
 
     private async Task RewordAsync(Guid goalId, string text)
     {
@@ -311,11 +288,4 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
             .SqlQuery<long?>($"SELECT MAX([Id]) AS [Value] FROM [AuditEvent]")
             .SingleAsync(TestContext.Current.CancellationToken);
     }
-
-    /// <summary>
-    /// A goal that a test adds: its text and <c>SortOrder</c>; when it was added, by default <see cref="AddedAtUtc"/>;
-    /// its ID, by default a new one; and when it was archived, or <see langword="null"/> for an active goal.
-    /// </summary>
-    private sealed record TestGoal(
-        string Text, int SortOrder, DateTime? CreatedAtUtc = null, Guid? Id = null, DateTime? ArchivedAtUtc = null);
 }

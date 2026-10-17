@@ -8,4 +8,5 @@ export const limits = {
   guidePrompts: 1_000,
   displayName: 100,
   participantName: 100,
+  itemText: 200,
 } as const;

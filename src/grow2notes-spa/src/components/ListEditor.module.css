@@ -45,6 +45,28 @@
   min-inline-size: 0;
 }
 
+/*
+ * The add form under the list, in the reading column (TextBox.module.css), as are the help text and the box, while
+ * the list uses the wider page (participants.md *Layout - laptop*).
+ */
+.textForm {
+  margin-block-start: var(--space-5);
+}
+
+/* The field, then the alert, which takes space only while it holds words, then the button. */
+.field {
+  margin-block-end: var(--space-5);
+}
+
+/*
+ * Three lines' minimum height (list-editor.md *Implementation notes*: rows={3}), in place of the shared box's six,
+ * as field-sizing sizes the box by its CSS rather than by rows. Two classes, so that it outranks the shared rule
+ * whichever stylesheet comes first.
+ */
+.textForm .box {
+  min-block-size: calc(3em * var(--line-height-body) + 2 * var(--space-3) + 2 * var(--border-control));
+}
+
 .archived {
   margin-block-start: var(--space-6);
 }

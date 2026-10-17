@@ -1329,7 +1329,7 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  it('is in Actions under Details, alone, its empty alert above it, and the next Tab stop after Save', async () => {
+  it('is in Actions under Details, alone, its empty alert above it, and the next Tab stop after Add goal', async () => {
     await openJane();
 
     const actions = actionsSection()!;
@@ -1341,12 +1341,12 @@ describe('Archive participant', () => {
     expect(button).toHaveAttribute('type', 'button');
     expect(archiveAlert()).toBeEmptyDOMElement();
     expect(follows(archiveAlert(), button)).toBe(true);
-    expect(nextTabStop(saveButton())).toBe(button);
+    expect(nextTabStop(addGoalButton())).toBe(button);
     expect(notice()).toBeNull();
     expect(backLink()).toHaveAttribute('href', '/manage/participants');
   });
 
-  it('comes with the participant on Add participant, the next Tab stop after Save once the 201 is in', async () => {
+  it('comes with the participant on Add participant, the next Tab stop after Add goal once the 201 is in', async () => {
     await openAdd();
     expect(actionsSection()).toBeNull();
     serve('POST', participantsPath, added);
@@ -1354,7 +1354,7 @@ describe('Archive participant', () => {
 
     await save();
 
-    expect(nextTabStop(saveButton())).toBe(archiveButton());
+    expect(nextTabStop(addGoalButton())).toBe(archiveButton());
   });
 
   it(
@@ -1811,6 +1811,49 @@ function archivedGoals(): string[] {
   return Array.from(goalsSection()!.querySelectorAll('details ul > li'), (item) => item.textContent);
 }
 
+/** The Goals section's New goal field. */
+function newGoal(): HTMLElement {
+  return within(goalsSection()!).getByRole('textbox', { name: 'New goal' });
+}
+
+/** The Goals section's Add goal, by its name while it is not busy. */
+function addGoalButton(): HTMLElement {
+  return within(goalsSection()!).getByRole('button', { name: 'Add goal' });
+}
+
+/** The page's status region, which a goal's add writes to. */
+function pageStatus(): HTMLElement {
+  return main().querySelector<HTMLElement>('p.visually-hidden[role="status"]')!;
+}
+
+/** The path that a goal of the participant whose ID is `participantId` is added at. */
+function goalAddPath(participantId: string): string {
+  return `${participantsPath}/${participantId}/goals`;
+}
+
+/** The bare `201` of a goal's add. */
+const goalAdded: Answer = () => Promise.resolve(new Response(null, { status: 201 }));
+
+/** The goals' adds sent, each as its path, its token and the JSON of its body. */
+function goalAdds(): { path: string; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'POST' && (path as string).endsWith('/goals'))
+    .map(([path, init]) => ({
+      path: path as string,
+      token: new Headers(init?.headers).get('X-XSRF-TOKEN'),
+      body: JSON.parse(init?.body as string) as unknown,
+    }));
+}
+
+/** A goal as the list gives it once it is added, first in the list. */
+const breakfastAdded: ListRow = {
+  id: '8d3a1f6c-5e49-4b7a-ac12-3f4a5b6c7d8e',
+  text: 'Makes own breakfast',
+  sortOrder: 0,
+  archivedAtUtc: null,
+  rowVersion: 'AAAAAAAAD9E=',
+};
+
 /** Opens Jane's page from her row of the list, as the manager does, her goals being `goals`. */
 async function openJaneWithGoals(goals: ListRow[]): Promise<Router> {
   serve('GET', goalsPath(jane.id), json(goals));
@@ -1878,6 +1921,73 @@ describe("A participant's goals", () => {
     await openArchivedJane();
 
     expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+  });
+
+  it("after Add participant's 201, are the next Tab stop from Save, at New goal, past the help", async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+
+    await save();
+
+    expect(saveButton()).toHaveFocus();
+    expect(nextTabStop(saveButton())).toBe(newGoal());
+    expect(follows(within(goalsSection()!).getByText(noGoals), newGoal())).toBe(true);
+  });
+
+  it('take one added on the page: sent with the token, the list read again, then focus kept in New goal', async () => {
+    await openJaneWithGoals([]);
+    serve('POST', goalAddPath(jane.id), goalAdded);
+    serve('GET', goalsPath(jane.id), json([breakfastAdded]));
+    type(newGoal(), ' Makes own\nbreakfast ');
+
+    await press(addGoalButton());
+
+    expect(goalAdds()).toEqual([
+      { path: goalAddPath(jane.id), token: 'token-1', body: { text: 'Makes own breakfast' } },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${goalAddPath(jane.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual(['Makes own breakfast']);
+    expect(newGoal()).toHaveValue('');
+    expect(newGoal()).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal added to the end of the list');
+  });
+
+  it('of a participant just added take one added on the page, reading their list only after it', async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+    await save();
+    serve('POST', goalAddPath(newId), goalAdded);
+    serve('GET', goalsPath(newId), json([breakfastAdded]));
+    type(newGoal(), 'Makes own breakfast');
+
+    await press(addGoalButton());
+
+    expect(requests().slice(-2)).toEqual([`POST ${goalAddPath(newId)}`, `GET ${goalsPath(newId)}`]);
+    expect(activeGoals()).toEqual(['Makes own breakfast']);
+    expect(newGoal()).toHaveFocus();
+  });
+
+  it.each([
+    ['lost', noConnection, 0],
+    ['not given in 10 seconds', noAnswer, 10_000],
+  ])('are added once when the answer is %s, which says so above Add goal, the text kept', async (_, answer, ms) => {
+    await openJaneWithGoals([]);
+    serve('POST', goalAddPath(jane.id), answer);
+    type(newGoal(), 'Makes own breakfast');
+    const button = addGoalButton();
+
+    await press(button);
+    await wait(ms);
+    await wait(60_000);
+
+    expect(goalAdds()).toHaveLength(1);
+    expect(within(goalsSection()!).getByRole('alert')).toHaveTextContent('Not added: no connection. Try again.');
+    expect(newGoal()).toHaveValue('Makes own breakfast');
+    expect(button).toHaveFocus();
+    expect(activeGoals()).toEqual([]);
   });
 
   it('are not on Add participant before its 201, then come empty, with no request for them', async () => {

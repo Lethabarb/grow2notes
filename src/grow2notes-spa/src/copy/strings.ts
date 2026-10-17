@@ -92,6 +92,8 @@ export const strings = {
   checking: 'Checking…',
   /** The busy label of Send invite and Resend invite (users.md component B item 8). */
   sending: 'Sending…',
+  /** The busy label of a list's Add goal (list-editor.md *Exact copy*). */
+  adding: 'Adding…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
   /**
@@ -367,7 +369,9 @@ export const strings = {
   /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
    * (design.md §4.8): the help text above the list, unless it is read-only; the sentence in place of the list when no
-   * row is active; and the summary of the archived rows' section.
+   * row is active; and the summary of the archived rows' section. Then the add form: its field's label, its button,
+   * and, in the page's status region, what an add did; and a row's text as its messages name it, the one for no text
+   * and, with `msg.tooLong`, the one for too much (form-validation.md).
    */
   listEditor: {
     goal: {
@@ -376,6 +380,11 @@ export const strings = {
         + 'written with.',
       empty: 'No goals yet. Notes will show an empty Goals section.',
       archivedSummary: 'Archived goals',
+      newLabel: 'New goal',
+      add: 'Add goal',
+      added: 'Goal added to the end of the list',
+      enter: 'Enter the goal',
+      text: 'Goal',
     },
   },
   /**

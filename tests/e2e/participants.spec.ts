@@ -53,8 +53,9 @@ const tryAgain = (page: Page) => main(page).getByRole('button', { name: 'Try aga
 type FieldName = 'Given name' | 'Family name' | 'Day' | 'Month' | 'Year';
 const field = (page: Page, name: FieldName) => main(page).getByRole('textbox', { name, exact: true });
 const save = (page: Page) => main(page).getByRole('button', { name: 'Save', exact: true });
-const saveStatus = (page: Page) => main(page).locator('form').getByRole('status');
-const saveAlert = (page: Page) => main(page).locator('form').getByRole('alert');
+const details = (page: Page) => main(page).getByRole('region', { name: 'Details' });
+const saveStatus = (page: Page) => details(page).getByRole('status');
+const saveAlert = (page: Page) => details(page).getByRole('alert');
 const archive = (page: Page) => main(page).getByRole('button', { name: 'Archive participant' });
 const archiveAlert = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('alert');
 const restore = (page: Page) => main(page).getByRole('button', { name: 'Restore', exact: true });
@@ -196,8 +197,8 @@ const ring: Ring = { focusVisible: true, style: 'solid', width: '3px', colour: '
 
 /**
  * Where focus is, as `whereFocusIs` says, but by the text that shows, so that a button's busy label, hidden until it is
- * busy, is left out, and naming a field by its label; with the ring that shows on the element or, for a row's link, on
- * the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
+ * busy, is left out, and naming a field, a text box included, by its label; with the ring that shows on the element or,
+ * for a row's link, on the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
  */
 function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
   return page.evaluate(() => {
@@ -210,7 +211,10 @@ function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
       return { name: 'the page itself' };
     }
 
-    const text = element instanceof HTMLInputElement ? element.labels?.[0]?.innerText : element.innerText;
+    const text =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.labels?.[0]?.innerText
+        : element.innerText;
     const own = getComputedStyle(element);
     const drawn = own.outlineStyle === 'none' ? getComputedStyle(element, '::after') : own;
     const box = element.getBoundingClientRect();
@@ -465,6 +469,8 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText('Add participant');
     await expect(heading(page)).toBeFocused();
     const form = ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'];
+    // Goals' add form alone, as the participant has no goal yet.
+    const goals = ['New goal', 'Add goal'];
     await expectStops(page, 'Shift+Tab', ['Participants', 'Manage']);
     await expectStops(page, 'Tab', ['Participants', ...form, 'outside the page']);
     await expectStops(page, 'Shift+Tab', [...form].reverse());
@@ -480,11 +486,18 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText(siobhan.name);
     await expect(saveStatus(page)).toHaveText(savedAtAnyTime);
     await expect(save(page)).toBeFocused();
-    // Until T05 builds Goals, Archive participant follows Save.
-    await expectStops(page, 'Tab', ['Archive participant', 'outside the page']);
+    // The next Tab reaches Goals (participants.md *Interactions*), then Archive participant.
+    await expectStops(page, 'Tab', [...goals, 'Archive participant', 'outside the page']);
 
     // The date of birth corrected.
-    await expectStops(page, 'Shift+Tab', ['Archive participant', 'Save', 'Year', 'Month', 'Day']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      ...[...goals].reverse(),
+      'Save',
+      'Year',
+      'Month',
+      'Day',
+    ]);
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('8');
     await expectStops(page, 'Tab', ['Month', 'Year', 'Save']);
@@ -495,7 +508,7 @@ for (const width of [375, 1280]) {
     await expect(save(page)).toBeFocused();
 
     // Archived: the notice takes focus, then an archived participant's page has the back link and Restore.
-    await expectStops(page, 'Tab', ['Archive participant']);
+    await expectStops(page, 'Tab', [...goals, 'Archive participant']);
     const archived = page.waitForResponse(isChange('POST', `/${id}/archive`));
     await page.keyboard.press('Enter');
     expect((await archived).status()).toBe(204);
@@ -509,10 +522,14 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     expect((await restored).status()).toBe(204);
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', [...form, 'Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', [...form, ...goals, 'Archive participant', 'outside the page']);
 
     // Back to the list, where they are now to be found: Find a participant, then Clear while it holds text.
-    await expectStops(page, 'Shift+Tab', ['Archive participant', ...[...form].reverse(), 'Participants']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      ...[...form, ...goals].reverse(),
+      'Participants',
+    ]);
     await page.keyboard.press('Enter');
     await expect(heading(page)).toHaveText('Participants');
     await expect(heading(page)).toBeFocused();
@@ -946,7 +963,7 @@ test('in forced colours, the focus ring shows in the system Highlight colour at 
   await expectStops(
     page,
     'Tab',
-    ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save', 'Archive participant'],
+    ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save', 'New goal', 'Add goal', 'Archive participant'],
     forcedRing,
   );
 

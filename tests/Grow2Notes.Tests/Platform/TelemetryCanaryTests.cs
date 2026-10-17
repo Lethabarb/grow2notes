@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
@@ -24,9 +25,9 @@ namespace Grow2Notes.Tests.Platform;
 /// <summary>
 /// The canary test of design.md §9.5, its M0 part: a unique string sent in request bodies, and placed in the values
 /// that SQL Server puts in its error text, appears in no log, no telemetry and no response. Since S01.02.02 it is also
-/// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event. The
-/// app runs with telemetry on, as in Azure, and everything it writes or sends goes to a sink here. Note text joins the
-/// canary in E02.
+/// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event, and
+/// since T05 the text of a goal that the app's own endpoint adds to them, saved with its own. The app runs with
+/// telemetry on, as in Azure, and everything it writes or sends goes to a sink here. Note text joins the canary in E02.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -36,8 +37,9 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     private const string TruncationPath = "/api/test-only/truncation";
     private const string DuplicateEmailPath = "/api/test-only/duplicate-email";
 
-    // The app's own endpoint that adds a participant.
+    // The app's own endpoints that add a participant, and a goal to one, as each is routed.
     private const string ParticipantsPath = "/api/admin/participants";
+    private const string GoalsRoute = "/api/admin/participants/{participantId:guid}/goals";
 
     private static readonly DateTime TimeUtc = new(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
 
@@ -57,25 +59,34 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
             DuplicateEmailPath, new CanaryRequest($"{Canary}@example.org"), cancellationToken);
         HttpResponseMessage[] failures = [truncation, duplicate];
 
-        // As a manager adds one, over HTTPS with a token, as the /api group needs.
+        // As a manager adds one, over HTTPS with a token, as the /api group needs, then a goal of theirs.
         using var manager = app.CreateHttpsClient().SignInAs(sqlServer.Seeded.A.ManagerId);
         using var added = await manager.PostWithTokenAsync(
             ParticipantsPath,
             await manager.FetchTokenAsync(),
             new { givenName = Canary, familyName = Canary, dateOfBirth = "1987-03-07" });
         Assert.Equal(HttpStatusCode.Created, added.StatusCode);
+        var addedBody = await added.Content.ReadAsStringAsync(cancellationToken);
+        using var addedJson = JsonDocument.Parse(addedBody);
+        var goalsPath = $"{ParticipantsPath}/{addedJson.RootElement.GetProperty("id").GetGuid()}/goals";
+        using var goalAdded = await manager.PostWithTokenAsync(
+            goalsPath, await manager.FetchTokenAsync(), new { text = Canary });
+        Assert.Equal(HttpStatusCode.Created, goalAdded.StatusCode);
 
         // The app answered each failing request with a 500 problem, whose body the check below looks in too, as it does
-        // in the added participant's.
+        // in the added participant's and goal's.
         var bodies = (await Task.WhenAll(
                 failures.Select(r => r.ReadProblemAsync(HttpStatusCode.InternalServerError))))
-            .Append(await added.Content.ReadAsStringAsync(cancellationToken));
-        HttpResponseMessage[] responses = [.. failures, added];
+            .Append(addedBody)
+            .Append(await goalAdded.Content.ReadAsStringAsync(cancellationToken));
+        HttpResponseMessage[] responses = [.. failures, added, goalAdded];
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
         Assert.True(
             SpinWait.SpinUntil(
-                () => sinks.Spans.Spans.Count(IsFailingRequest) == 2 && sinks.Spans.Spans.Any(IsAddRequest),
+                () => sinks.Spans.Spans.Count(IsFailingRequest) == 2
+                    && sinks.Spans.Spans.Any(span => IsRequestTo(span, ParticipantsPath))
+                    && sinks.Spans.Spans.Any(span => IsRequestTo(span, goalsPath)),
                 TimeSpan.FromSeconds(10)),
             "The requests' spans did not end.");
         Assert.True(app.Services.GetRequiredService<TracerProvider>().ForceFlush());
@@ -116,13 +127,17 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
                 && (bool?)i["data"]?["baseData"]?["success"] == false);
         });
 
-        // And the request that added the participant, whose body held the names.
-        var add = sinks.Spans.Spans.Single(IsAddRequest);
-        Assert.Contains(sinks.Metrics.Points, p => p.Name == "http.server.request.duration"
-            && p.Tags.Contains(new("http.route", ParticipantsPath))
-            && p.Tags.Contains(new("http.response.status_code", 201)));
-        Assert.Contains(sinks.Ingestion.Items, i => (string?)i["name"] == "Request"
-            && (string?)i["tags"]?["ai.operation.id"] == add.TraceId.ToHexString());
+        // And the requests that added the participant, whose body held the names, and the goal, whose body held its
+        // text.
+        foreach (var (path, route) in new[] { (ParticipantsPath, ParticipantsPath), (goalsPath, GoalsRoute) })
+        {
+            var add = sinks.Spans.Spans.Single(span => IsRequestTo(span, path));
+            Assert.Contains(sinks.Metrics.Points, p => p.Name == "http.server.request.duration"
+                && p.Tags.Contains(new("http.route", route))
+                && p.Tags.Contains(new("http.response.status_code", 201)));
+            Assert.Contains(sinks.Ingestion.Items, i => (string?)i["name"] == "Request"
+                && (string?)i["tags"]?["ai.operation.id"] == add.TraceId.ToHexString());
+        }
     }
 
     private static void RouteEverythingToSinks(IWebHostBuilder builder, Sinks sinks)
@@ -157,8 +172,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     private static bool IsFailingRequest(Activity span) =>
         span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is TruncationPath or DuplicateEmailPath;
 
-    private static bool IsAddRequest(Activity span) =>
-        span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is ParticipantsPath;
+    private static bool IsRequestTo(Activity span, string path) =>
+        span.Kind == ActivityKind.Server && span.GetTagItem("url.path") as string == path;
 
     private static IEnumerable<(string Sink, string? Text)> ResponseHeaders(HttpResponseMessage response)
     {

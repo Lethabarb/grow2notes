@@ -46,6 +46,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
         [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
+        [AuditEventTypes.Goal.Created] = test => test.AddGoalAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -360,6 +361,33 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
+    /// <c>goal.created</c>: A's manager adds a goal, typed over two lines, to a participant added for the row with
+    /// <c>POST /api/admin/participants/{participantId}/goals</c>, which records the new goal as the entity and its
+    /// participant as the participant, and the goal's values as <c>new</c> alone, named as design.md §6.6's list names
+    /// them: its text as stored, on one line, its place at the end of a list that had no goal, and no time archived.
+    /// </summary>
+    private async Task<WrittenEvent> AddGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(
+            $"/api/admin/participants/{participant.Id}/goals",
+            await client.FetchTokenAsync(),
+            new { text = " Makes own\nbreakfast " });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var values = new JsonObject { ["text"] = "Makes own breakfast", ["sortOrder"] = 0, ["archivedAtUtc"] = null };
+        return new(
+            AuditEventTypes.Goal.Created,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            await StoredGoalIdAsync(participant.Id),
+            participant.Id,
+            new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
     /// <c>guide_prompts.updated</c>: the manager of an organisation that the row adds, so that no seeded row changes,
     /// loads its guide prompts with <c>GET /api/admin/guide-prompts</c> and saves new ones with <c>PUT</c> and the
     /// <c>ETag</c> loaded, which records the organisation as the entity, with no participant, and the text before and
@@ -522,6 +550,19 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             return await db.Participants.Where(p => p.Id == participantId)
                 .Select(p => p.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The ID of the one goal of a participant added for a row, through the app's context under A's tenant.
+    private async Task<Guid> StoredGoalIdAsync(Guid participantId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.Goals.Where(g => g.ParticipantId == participantId)
+                .Select(g => g.Id)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
     }

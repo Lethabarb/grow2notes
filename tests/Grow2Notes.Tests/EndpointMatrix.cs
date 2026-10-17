@@ -173,6 +173,11 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, OK, NotFound,
             call => Task.FromResult(
                 new HttpRequestMessage(call.Method, $"/api/admin/participants/{call.Seeded.A.ParticipantId}/goals"))),
+
+        // Adding a goal (§6.6), in the same group. Each call adds a goal to a participant of its own, whom its request
+        // first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, Created, NotFound,
+            AddingAGoalToAParticipantOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -305,6 +310,17 @@ internal static class EndpointMatrix
         var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/{action}");
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
         return request;
+    }
+
+    // A goal added to a participant whom the request first adds to A, so that each call adds to a participant of its
+    // own, never the seeded one (tests/README.md).
+    private static async Task<HttpRequestMessage> AddingAGoalToAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        return new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/goals")
+        {
+            Content = JsonContent.Create(new { text = "Makes own breakfast" }),
+        };
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
