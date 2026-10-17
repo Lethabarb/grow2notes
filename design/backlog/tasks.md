@@ -2224,7 +2224,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T08
-status: new
+status: doing
 release: R1
 lane: C
 size: L
@@ -2259,7 +2259,7 @@ lets workers write only today's note, using the Melbourne date.
 ### Notes
 
 - Builds once: the whole `Note` and `NoteDraft` schema (with no `PicksCopiedFrom`, D83) and the lists-changed reload.
-  Reuses T02's Find-a-participant box and T03's leave guard and `count()`.
+  Reuses T02's Find-a-participant box and T03's `count()`; T03's leave guard is T10's to reuse (Notes below).
 - Starts lane C's note-form run: T08, T09, T10, T12, T13 and T14 run back to back, because the note form is one hot
   spot.
 - From T03 (14 October 2026, its plan): also proves the parts of S01.04.01 that need the note form's Guided notes box,
@@ -2270,10 +2270,311 @@ lets workers write only today's note, using the Melbourne date.
   `POST`s refresh the participants list alone, as there is no Today query yet; this task adds Today's query to what
   each invalidates (participants.md *Interactions*) and checks S01.02.04's "gone from Today" after Archive and "back
   on Today" after Restore.
+- Planned on 18 October 2026 from `origin/main` at `c55cec5`, with T02 (#57), T03 (#55) and T05 (#59) merged. No
+  owner question holds it: note-form.md open question 1, the compact name, is cut above, and the other open questions
+  of today.md and note-form.md that it meets, such as note-form.md open question 2's "started the note for" on a day
+  other than today, are built as the specs word them ([Open owner questions](#open-owner-questions)). Where the
+  design is silent, the simplest option is taken:
+  - Each answer and request carries only what this task reads or writes, so that no field ships unread or always
+    empty, and the later tasks add the rest of design.md §6.3 with what uses it: `GET /api/today`'s rows are
+    `{id, givenName, familyName}` until T09 adds `note` with the status line (the Cut above);
+    `GET /api/participants/{participantId}` is `{id, givenName, familyName, status}` until T21 adds `firstNoteDate`
+    (D80); `GET {base}/draft` is `{baseVersion, isSaved, listsVersion?, guidePrompts, goals, narrative, savedAtUtc?}`,
+    T09 adding `isFlagged` and `flagReason` and T13 `commonItemGroups`; and the `PUT`'s body is
+    `{clientId, seq, listsVersion?, narrative, tickedGoalIds}`, T09 adding the flag, T13 the picks and common-item
+    ticks, and T14 `baseVersion`. The schema is whole, so `NoteDraft.IsFlagged` is `false`, `FlagReason` `null` and
+    `Groups` empty until then. Until T13 adds "2. Common items", the form has no section 2: its headings go from
+    "1. Goals" to "3. Guided notes", keeping note-form.md's numbers so that no heading changes later.
+  - The `PUT` applies every save of the draft's author and stores its `clientId` and `seq` as `LastClientId` and
+    `LastSeq`; §5.6's rules for a stale `seq` and a takeover are T10's (S02.02.04, S02.02.06). A creating `PUT` sent
+    again after a lost answer finds the caller's own draft and updates it. A save that fails leaves its change unsaved,
+    with "Saving…" shown, until the next change or blur sends it: the retries, the failed save's "Not saved: …", the
+    page-hidden save, the pause while signing in again and the rules for leaving the form are T10's, so this form
+    registers no leave guard, and T10 uses T03's. T03's `count()` reaches the Guided notes count through T05's
+    `CharacterCount`.
+  - The body's own checks come first, from the validation filter, as T03's and T05's requests' do: `narrative`
+    required but possibly empty and at most `Limits.GuidedNotes`, as its column has no size (§5.1), and
+    `tickedGoalIds` required, each refusal `422 validation.failed` under its name; the screen caps what it sends, so
+    it never meets the first. The `PUT` then finds the participant, the organisation's, else `404`, and reads the
+    live note. Another user's draft answers `409 note.in_progress_by_other` with `authorDisplayName` and
+    `startedAtUtc`, the note's `CreatedAtUtc`, as problem extensions, before any create check and writing nothing,
+    whoever sends it (design.md §6.3: "Draft: only the author"). This is the usual way to meet it, more often than a
+    race: a form opened before the other's first save, a stale tab, or a manager saving on a worker's draft. With no
+    live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order, `422 note.future_date`,
+    `422 note.past_date_manager_only` and `422 note.participant_archived`; the `listsVersion`, which a missing one
+    never matches, else `409 note.lists_changed`; and each ticked ID in the template, else `422 validation.failed`
+    under `tickedGoalIds`. A manager's first save for an earlier day creates the note, as §5.5 item 4 says, and T18
+    builds its screens. A save on the caller's own draft reads no `listsVersion` and checks the ticked IDs against
+    the stored snapshot. Ticks are a set, so an ID sent twice is one tick.
+  - The unique index's error 2601 or 2627 on a creating `PUT` reads the live note again: the caller's own takes this
+    save as an update (S02.02.07's same user on two devices), and anyone else's is the same `409`, which
+    `GET {base}/draft` gives for another person's draft too.
+  - `GET {base}/draft` for a date after today answers `404`, as no note can exist then, so that a hand-edited address
+    shows Page not found, words the app has: a refusal on the form would need a new string, and so the owner's
+    approval (D67). A creating `PUT` still refuses the date (S02.02.07). Every `note.past_date_manager_only` shows the
+    after-midnight sentence, the design's only words for it, a worker's pasted address for an earlier day included.
+  - The routes take a GUID and a `yyyy-MM-dd` date, another value getting the unknown path's `404`, so that the screen
+    shows Page not found for it.
+  - `listsVersion` is a SHA-256, as base64, of the active goals' IDs and wording in `GoalList.InListOrder`, the order
+    of the manager's list, which the template takes too; T13 adds the common items and their groups to it (S02.02.03's
+    Note). The snapshot is `NoteDraft.Items`' goal rows.
+  - `note.draft_started` has `EntityType` `Note`, the note's ID as `EntityId`, the `ParticipantId` and no `Details`:
+    the note row holds its date and author, and §5.3 gives note events version numbers, which a draft has none of.
+  - `AppendOnlySaveChangesInterceptor` also refuses a change to `Note.ParticipantId`, `NoteDate` or `AuthorUserId`,
+    as §5.8 gives both rules to one interceptor.
+  - A manager who opens someone else's draft sees the worker's sentence, as note-form.md's *Someone else's draft*
+    state has it, until T12 gives managers the read-only draft with Discard draft (S02.04.03). No note can be
+    submitted before T09, which adds the read view at the shared address.
+  - The in-progress sentence has two forms, on load and as the first save's dead end alike: "Alex P. started today’s
+    note for Jane Citizen at 9:14 am. Only Alex P. can finish it." when the note date is `me.today`, and "Alex P.
+    started the note for Jane Citizen at 9:14 am. Only Alex P. can finish it." for an earlier day (note-form.md's D
+    form, worded as participant-notes.md's earlier-day draft has it). T08 meets the second when a manager or a pasted
+    address opens another person's earlier-day draft, and when a manager's past-day first save races another's.
+  - The flows on the app's own answers sign in as the bootstrapped manager, as managers write notes too (A7), and as a
+    worker whom that manager invites, with the link that `resetSignIn` gives, on `secondDevice`; the other tests
+    answer the API in the browser.
+- Parts of the absorbed criteria arrive with later tasks, and each stays unticked, with a dated Note naming the task,
+  until that task proves it: today.md's DOM order with the success banner (T09) and the drafts section (T12); "after
+  Discard (a replace)" focusing the `<h1>` (T12); the Flagged tag dropping to its own line at 320 px (T09); today.md
+  Search's "'Alex' does not match a row only because Alex P. wrote its note", which passes trivially until rows carry
+  the author's name (T09); identity item 3's dialog title and confirm button, §14 M2's reworded goal in the submitted
+  version, note-form.md item 18's "keep Submit unavailable" with §4.3's Submit disabled while a change is unsaved,
+  item 38's "fill in and submit" at 375 px, and §5.6's working copy deleted when its version is saved (T09); design.md
+  §4.3 item 2's banner on a manager's past-day note, which T08's `PUT` can already create with no notice shown (T18);
+  §5.6's stale `seq`, takeover, page-hidden save and `401` retry, and §4.3's "Not saved: no connection. Keep this page
+  open; retrying." (T10); and note-form.md item 17's groups and common items, with section 2 (T13). Step 7 writes
+  each into the receiving task's Notes and, dated, into the story's Notes, as it does the other hand-offs, with the
+  fields and rules that the choices above leave to T09, T10, T12, T13, T14, T18 and T21.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after the steps already there: the operator
+  running `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming the `Note` deny and B7 and B8
+  listing `Note`, `NoteDraft` and `AddNote`; with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome,
+  today.md's *Screen reader* readings for what is built (a row as its name and "link" alone, the list's item count,
+  the no-match sentence once after its pause) and note-form.md's *Announcements* for what is built (the `<h1>` as
+  "Jane Citizen Thursday 1 October 2026, heading level 1", Goals' legend and hint on tabbing in, "Saving…" once per
+  burst then "Saved 9:42 am", the lists-changed sentence, caused by a manager adding a goal while the form is open,
+  and the archived refusal's sentence once, caused by archiving the participant before the first change); and, on
+  both phones, Clear keeping the keyboard open, the top bar staying in view with the keyboard open, the prompts while
+  the empty box has focus, and the keyboard's dictation into Guided notes ending in "Saved" (A31; note-form.md open
+  question 11).
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] The `Note` and `NoteDraft` tables, whole, which every later note task uses (S02.02.02's first criterion;
+      S02.02.07's database test; design.md §5.3, §5.5, §5.8, §5.10; D83): the `Note` entity (`ITenantOwned`, with
+      `NoteStatus` `Draft = 0`, `Submitted = 1`, `Discarded = 2` and `FlagStatus` `None = 0`, `ToReview = 1`,
+      `Reviewed = 2`) with §5.3's columns, the alternate key `(OrganisationId, Id)`, composite foreign keys to the
+      participant's alternate key and, for `AuthorUserId` and `DiscardedByUserId`, to the user's, the check
+      constraint, the unique index `(OrganisationId, ParticipantId, NoteDate)` filtered `[Status] IN (0, 1)`, the
+      index `(OrganisationId, NoteDate) INCLUDE (Status, ParticipantId, AuthorUserId)` and the index
+      `(OrganisationId, FlagStatus)` filtered `[FlagStatus] = 1`; the `NoteDraft` entity (`ITenantOwned`) keyed
+      `(NoteId, EditorUserId)`, with composite foreign keys to the note and the editor, `Groups` and `Items` as complex
+      collections mapped `ToJson`, `Narrative` as `nvarchar(max)`, `FlagReason` at `Limits.FlagReason`, the index
+      `(OrganisationId, EditorUserId)` and no `PicksCopiedFrom` (D83); their `AddNote` migration, with `DENY DELETE`
+      on `Note` for `grow2notes_runtime` and none on `NoteDraft`, whose rows the app deletes (§5.1 *Deletes*), in
+      `RuntimeRoleTests` and `infra/sql/check-database.sql` (B7, B8, D3, D5); and `AppendOnlySaveChangesInterceptor`
+      refusing a change to `Note.ParticipantId`, `NoteDate` or `AuthorUserId` (Notes). Tests: a model test of the
+      keys, foreign keys, indexes, filters, check constraint and JSON columns, as `GoalModelTests` has; on SQL Server,
+      a second live note for one participant and day refused by the unique index with error 2601, a discarded note
+      beside a live one saved, a row breaking each arm of the check constraint refused, and a working copy's `Items`
+      and `Groups` read back as written; the interceptor refusing each of the three changes and saving a change of
+      `Status`; and the tenancy and model-convention tests passing for both entities.
+- [ ] Today lists every active participant (S02.01.01; design.md §4.2 items 1 and 4 and *No participants*, §6.3;
+      today.md components 3, 4, 6, 8 and 9, and the criteria of its *Content and copy*, *Order and layout*, *Loading,
+      empty and error*, *Focus and navigation* and *Refresh* that S02.01.01 links): `GET /api/today` in the `/api`
+      group for any signed-in user, its handler in `Features/Today`, giving `{date, participants: [{id, givenName,
+      familyName}]}` (Notes), with `date` from `MelbourneClock` and the organisation's active participants by family
+      name, then given name, then ID, as the admin list orders them (T02's Notes); its matrix row (`401` signed out,
+      `200` for A's worker and manager, and for B's manager B's own list), whose `Answer` checks that each caller's
+      list holds their own organisation's seeded participant and not the other's, and a `SignedOutTests` row.
+      Integration tests: A's worker and manager get the same list, and B's manager none of A's; an archived
+      participant is left out; the order; `no-store` and no audit event; and, on a `TestClock` at 2026-10-03T14:30Z,
+      `date` 2026-10-04. On the SPA, `src/features/today` in place of the heading-only page: the route declaring
+      `returnFocus` and `backKey: 'today'`; the `['today', me.today]` query, fetched again on window focus and on
+      becoming visible, with `refreshMe()` once when its `date` is not `me.today`; one `LoadRegion` with "Loading
+      participants…" and "The participant list"; the hidden `<h2>` "Participants"; the rows as `LinkRow`s, each the
+      participant's name with `returnKey` their ID and no detail line (Cuts), linking to
+      `/participants/{id}/notes/{date}` from the list's `date` with no router state; "No participants yet." after a
+      successful empty answer, with Add participant for a manager alone; and Today's query added to what Add
+      participant's `POST`, the details `PUT`, Archive participant and Restore invalidate (T02's Notes). Vitest: the
+      title "Grow2Notes – Today" in every state; with the device's clock and time zone elsewhere and `me.today`
+      2026-10-04, "Today · Sunday 4 October" and every row's `href` ending `/notes/2026-10-04`; a row's push leaving
+      React Router's key alone in `history.state`; no second line on a row; names of 100 characters, unbroken,
+      "O’Brien-Smith" and "Zoë" wrapped, never truncated; no count, "Not started", "Missing", "No note" or "Overdue";
+      the DOM order; the server's order through a refetch; nothing at 999 ms and "Loading participants…" at 1,000 ms
+      in the status there from the first render; the no-connection and `503` sentences, Try again `aria-disabled`
+      while it runs, "…still did not load: …" with focus kept on it, and a success focusing the `<h1>`; a failed
+      background refetch leaving the rows; no Add participant for a worker; a `401` showing no load error and the list
+      loading after signing in again in place; the nav's Today and the wordmark focusing the `<h1>`; a refetch on
+      focus or visibility keeping focus and scroll, and nothing polling; a new `me.today` loading that day's list, its
+      links on the list's `date`; and, on a participant's page, Archive participant taking them off Today and Restore
+      putting them back (S01.02.04's hand-off from T02).
+- [ ] Find a participant on Today (S02.01.02; design.md §4.2 item 3 and *No search match*; today.md component 7, its
+      *Search* criteria and *Loading, empty and error*'s search box bullet; search-filter.md): T02's `FindParticipant`
+      and `matchesName` after the hidden heading, rendered once the list has loaded with at least one participant,
+      never while waiting or loading, after a failed load or with no participants, and never unmounted by a
+      background refetch; the text in Today's own state, filtering the rows on every key with no request and keeping
+      their order; and "No participant matches ‘xyz’." at once in place of the list, from the trimmed text, its status
+      sentence 500 ms after typing stops and emptied when matches return. Vitest: "jan", "JANE", "cit jane",
+      "citizen, jane" and "Jane." finding Jane Citizen, "zoe" Zoë and "obr" O’Brien, and "Alex" matching only a name
+      that holds it; no request while typing; Clear emptying the field with focus kept in it; Enter and Escape
+      changing nothing; no search box in each of the four states; and the text in no URL, `history.state`, title,
+      query key or storage, and gone after leaving Today and coming back.
+- [ ] Open today's note (S02.02.02's criteria on `GET /api/participants/{participantId}` and `GET {base}/draft` and
+      their matrix rows, its *Routes* and *Loading and load errors* criteria and identity items 1, 2, 3 and 6;
+      S02.02.03's first and last criteria; S02.02.07's `GET {base}/draft` by anyone but the author; guide-prompts.md
+      › *Effect on the note form*; T03's hand-offs (1) and (3) in S02.02.02's Notes; today.md's and app-shell.md's
+      Back to Today): both endpoints in the `/api` group for any signed-in user, their handlers in `Features/Notes`,
+      each writing nothing. The participant header gives `{id, givenName, familyName, status}`, never the date of
+      birth, and an unknown participant or another organisation's is `404`. `GET {base}/draft` finds the participant,
+      then the live note: with none, the template, `baseVersion: 0`, `isSaved: false`, the organisation's
+      `guidePrompts`, the active goals in `GoalList.InListOrder`, unticked, `narrative: ""` and `listsVersion`
+      (Notes), or `404` for a date after today (Notes); with the caller's own draft, its snapshot, ticks, narrative
+      and `savedAtUtc`, `isSaved: true` and the prompts as they are now; with anyone else's,
+      `409 note.in_progress_by_other` with the author's name and start time (Notes), the code added to `ErrorCode`
+      (`ErrorCodeTests`). Matrix rows (`401`, `200` for A's worker and manager, `404` for B's manager at A's
+      participant) and `SignedOutTests` rows. Integration tests: the header's fields; the template's goals in order,
+      archived ones left out; one list giving one `listsVersion`, and a reword, an add, an archive and a reorder each
+      changing it; the future date's `404`; the `409` to another worker and to a manager; and no row written. On the
+      SPA, in `src/features/notes`: the route `participants/:participantId/notes/:noteDate`, named `pageName.note`,
+      the page keyed by participant and date; the top bar in `PageBar` (note-form.md component 1), sticky, opaque and
+      at least 3.5rem, static under `max-height: 30rem`, its height in `--topbar-h` for
+      `scroll-padding-block-start`, holding `BackLink` "Today" to `/` and the save indicator
+      `<p id="save-status" role="status" aria-live="polite" aria-atomic="true">`, empty, from the first render; the
+      two queries, with no `placeholderData`, the draft's with `staleTime: Infinity` and no refetch on focus or
+      reconnect, in one `LoadRegion` with "Loading note…", "The note" and the fallback `<h1>` "Note"; and, only once
+      both have loaded, the identity `<h1 tabIndex={-1}>`, the name as stored in a `translate="no"` span and the date
+      in `dateLong` in a `<time>`; the lists-changed notice's empty `role="status"` (step 6); `TickListField` and
+      `TickList.module.css` in `src/components` (checkbox-list.md), built once: T09's flag row and T13's group tick
+      rows reuse its shared `.box` and 56 px row styles, and T13 gives `TickListField` its `headingLevel` and `hintId`;
+      here a `<fieldset>` with the `<legend>` `<h2>` "1. Goals" and the hint "Ticked means reached.", then a 56 px row
+      per goal, all its `<label>`, with the native box drawn at 40 px with borders, controlled from a set of ticked
+      IDs, or "No goals set up for Jane yet. A manager can add them." with no fieldset; and the Guided notes box
+      (guided-notes-textarea.md): the `<h2>` holding the `<label>` "3. Guided notes", an uncontrolled `<textarea>` on
+      `TextBox.module.css` in its 40rem column, the prompts its placeholder with their line breaks, `::placeholder`
+      `#626262` at `opacity: 1`, no placeholder for `""`, growing with its text through `field-sizing: content` or
+      the spec's fallback, with no inner scroll, never shorter than the prompts or about 6 lines, `aria-required` and
+      the attributes of guided-notes-textarea.md's table, no `maxlength`, and `CharacterCount` from 18,000, with
+      `guidedNotes: 20_000` in `limits.ts` (`SpaLimitsTests`). For the `409`, the identity `<h1>` and the in-progress
+      sentence in a `Notice`, in its today form or, for a note date before `me.today`, its "started the note for" form
+      (Notes), and no form. Vitest: no identity, tick box or text box before both answers; "Loading note…" at
+      1,000 ms; the fallback `<h1>`, the sentences and Try again on a failed load; Page not found for a `404`; for the
+      `409`, the identity `<h1>` focused, "Alex P. started today’s note for Jane Citizen at 9:14 am. Only Alex P. can
+      finish it." on today's date, "Alex P. started the note for Jane Citizen at 9:14 am. Only Alex P. can finish
+      it." on an earlier one, and no tick box or text box; the name as stored, wrapping at 320 px; the title
+      "Grow2Notes – Note"; the `<h1>` focused on arrival; a goal ticked and unticked by a click on its text
+      (note-form.md item 39); no request on opening, scrolling, focusing or tapping into the box; the count hidden at
+      17,999 characters and "You have 2,000 characters remaining" at 18,000; and a row opened from Today, then the
+      back link or browser Back, focusing that row with the list's position kept, also when the list is fetched again,
+      and the `<h1>` when the row has gone.
+- [ ] Start the note at the first change and autosave it (S02.02.02's second, third and seventh criteria, the `PUT`'s
+      matrix row of its sixth, and its autosave items 7, 8 and 10; S02.02.03's third and fourth criteria, and its last
+      one's save; design.md §3.3, §3.4 *Autosave*, §4.3's save indicator and *New*, §5.5 items 1 and 2, §5.6; T03's
+      hand-off (2)):
+      `PUT {base}/draft`, its handler in `Features/Notes`, with the body and checks of Notes. With no live note, it
+      creates the `Note` (Draft, the caller its author, the route's date, `CreatedAtUtc` now) and the caller's
+      `NoteDraft`, the template's goals as its snapshot with the ticks and narrative sent, and `note.draft_started`,
+      in one `InTransactionAsync`, and answers `201 {savedAtUtc}`; with the caller's own draft, it replaces the
+      ticks, narrative, `LastClientId`, `LastSeq` and `UpdatedAtUtc` and answers `200 {savedAtUtc}`; and with another
+      user's draft, it answers `409 note.in_progress_by_other` with the author's name and start time before any create
+      check, writing nothing (Notes). Its matrix row (a participant added to A for each call, `201` for A's worker and
+      manager, `404` for B's manager), the audit-events row for `note.draft_started`, a `SignedOutTests` row and the
+      canary test sending a narrative (design.md §9.5). Integration tests: the first `PUT` making exactly the note, the
+      working copy and one event with IDs only, and a failing event save leaving neither row; on a `TestClock`, a
+      worker's first save for today taking that date, with `CreatedAtUtc` the clock's time (A8); a later save's `200`
+      with the new `savedAtUtc`; a worker's `PUT` after another worker's draft exists, and a manager's on a worker's
+      draft, each `409` with `authorDisplayName` and `startedAtUtc` and nothing written, the manager's also after the
+      participant was archived and with no `listsVersion`, so that no create check answers first; a goal reworded
+      after the draft started still "Makes own breakfast" in the draft's `GET`; an ID outside the snapshot `422`,
+      changing nothing; a note for a participant with no goals saved; 20,000 characters saved and 20,001 refused; and
+      new guide prompts saved by a manager in the draft's next `GET`. On the SPA, `useAutosave` in
+      `src/features/notes` (note-form.md *Autosave*, autosave-status.md *Behaviour* 1 to 3): each tick and input a
+      change with its own number; a save 2 s after the last change, 5 s at most after the first unsaved one, and at
+      once when a field loses focus; one save in flight, the next one carrying the newest state, read as it is sent;
+      `clientId` and `seq` per note per page load in a module-level `Map`; `narrative` capped at 20,000 characters
+      without splitting a surrogate pair, the box keeping all of it; `retry: 0`, as T10 adds the retries; and the
+      indicator: "Saving…" from the first unsaved change, "Saved 9:42 am" through `stamp()` from the answer's
+      `savedAtUtc` once a save carrying the newest change is answered, and "Draft · saved 9:42 am" as a reopened draft
+      mounts. Vitest, on fake timers: nothing sent on opening; the first tick or keystroke sending a `PUT` within 2 s;
+      12 s of typing sending at least two; the box losing focus with an unsaved change sending it at once, with no
+      wait; a change made while a save is out keeping "Saving…" until the next answer; 20,050 characters all kept on
+      screen, with "You have 50 characters too many", and 20,000 sent; and a reopened draft showing its text and
+      ticks.
+- [ ] One note per participant per day, the date rules and the lists check (S02.02.07's other criteria;
+      S02.02.03's second criterion; note-form.md items 17, for goals, and 18; design.md §3.2, §3.3, §5.5 items
+      3 and 4, §5.7 *New draft*): the creating `PUT`'s checks in the order of Notes, each creating nothing,
+      `422 note.future_date`, `422 note.past_date_manager_only`, `422 note.participant_archived` and
+      `409 note.lists_changed`, added to `ErrorCode`; and the unique index's error taken as Notes say. Integration
+      tests on SQL Server: a worker's first save for yesterday and for tomorrow, and a manager's for tomorrow, refused,
+      and a manager's for yesterday creating the note with them as author; on a `TestClock`, a worker's template read
+      at 11:58 pm and first save at 12:01 am refused, and a draft started at 11:58 pm and saved at 12:01 am keeping
+      its date; an archived participant's first save refused; a stale `listsVersion`, and none, refused; two users'
+      first saves for one participant and day held together by an interceptor, as `HoldsTheFirstSaveOfTheUser` holds
+      a user's, making one note and giving the other `409` with the first's name and start time; and one user's two
+      first saves making one note, which holds the later save. On the SPA: a `409 note.lists_changed` fetching the
+      template again, applying the ticks of goals still listed by ID and keeping the text, filling the notice above
+      Goals with "The goal or common-item list was just changed. Please check your ticks." until the person leaves,
+      focusing the notice only when the focused box has gone, and saving again with the new `listsVersion`, the
+      indicator "Saving…" throughout; and the three dead ends of note-form.md *Conflicts and refusals*, "It’s now
+      after midnight, so this note can’t be started for yesterday. Ask a manager to record it.", the in-progress
+      sentence in its today form or, for a note date before `me.today`, its "started the note for" form (Notes), and
+      "Jane Citizen is archived, so this note cannot be started. Ask a manager.", each in the top bar's second row as
+      a `<section aria-labelledby>`, said once through the form's assertive region (note-form.md component 16: both
+      regions mounted with the form, the polite one its `PageStatus`), with the indicator "Not saved", autosave
+      stopped, every tick and the text kept, editable and copyable, and leaving never blocked. Vitest: each, the
+      after-midnight one on a fake clock from 11:58 pm to 12:01 am, and the in-progress one with "Alex P. started
+      today’s note for Jane Citizen at 9:14 am. Only Alex P. can finish it." on today's date and "Alex P. started the
+      note for Jane Citizen at 9:14 am. Only Alex P. can finish it." on an earlier one; the lists change keeping the
+      text and a listed goal's tick, dropping an archived goal's, and the next `PUT` sending the new `listsVersion`;
+      and focus kept unless the focused box went.
+- [ ] Prove Today and the note form end to end and bring the documents into line: `tests/e2e/today.ts` and
+      `tests/e2e/notes.ts`, which answer `/api/today`, the participant header and the draft's `GET` and `PUT` in the
+      browser from data in memory, described in tests/README.md beside `serveParticipants`; and `today.spec.ts` and
+      `note-form.spec.ts`. Signed in for real (Notes) at 375 px, on the app's own answers: the manager adds a
+      participant with two goals, Today lists them, Find a participant finds them, the row opens the note with its
+      `<h1>` focused, a tick and a sentence show "Saving…" then "Saved …", the back link focuses the row, and
+      reopening shows "Draft · saved …" with both; the worker sees the same Today and, at that note, the in-progress
+      sentence; after the manager saves new guide prompts, a draft with an empty box shows them when opened again,
+      and with the prompts saved as `""` the box has no placeholder (T03's hand-offs (2) and (3)); and the other
+      organisation's manager (`secondInvite`) gets Page not found at that note's address. With the API answered in the
+      browser: on a throttled network, A's name never in the DOM of B's form (identity item 1); the device in another
+      time zone and on another date (S02.01.01's third criterion); offline, the load-failed sentence within about
+      2 s; Clear keeping focus in the field; the after-midnight refusal on `page.clock`; the Guided notes box and
+      Guide prompts' editor with equal computed `font-size`, `line-height`, `padding` and `border-width` at 375 and
+      1280 px, both 40rem wide on the laptop, and the placeholder's computed colour `#626262` at opacity 1 (T03's
+      hand-off (1); note-form.md item 42); the Guided notes box growing as lines are typed past its starting height,
+      its `scrollHeight` never above its `clientHeight` (design.md §4.3 item 5); axe in Today's Waiting, Loading,
+      Ready, No participants (worker and manager), No match and Load failed, and in the form's Default, Loading, Did
+      not load, someone else's draft, lists changed and each dead end, at both widths; no sideways scroll at 320 px
+      with 200% text, Clear wrapping below the field; targets of 44 px, rows of 56 px, a goal row toggling when its
+      text is tapped (note-form.md item 39), and 48 px for the search field and Try again; nothing fixed or sticky on
+      Today, and the top bar sticky above 30rem of height and static below, with a focused tick row never under it;
+      live regions in the DOM before their text; the focus ring under forced colours; the keyboard-only check
+      (README §9) at both widths, in today.md's and note-form.md's Tab orders for what is built, with a visible ring
+      at each stop; and no name, note text, search text or message in `location`, `document.title`, `history.state`,
+      `localStorage`, `sessionStorage`, IndexedDB or Cache Storage after each flow. Every new string is in `src/copy`
+      and the copy test passes (note-form.md item 43), and the diff holds no trace of the parent company's name (D72).
+      Docs: design.md §6.3 keeps its full shapes, which the later tasks fill, and gains only the new facts, the draft
+      `GET`'s `404` for a date after today, the `409`'s problem extensions and the `404` for a route's GUID or date
+      that does not parse, while the interim subsets stay in this section's Notes and the hand-offs; today.md,
+      note-form.md, checkbox-list.md, guided-notes-textarea.md, autosave-status.md and search-filter.md likewise keep
+      their full design and gain only what the build settles; the deferred parts and hand-offs (Notes) in the
+      receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
+      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the
+      `Note` `DENY DELETE`; and CI's run on the pull request passing.
+- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
+      the CI and Deploy runs passed every step, the deploy's migration added `Note` and `NoteDraft` and its smoke test
+      passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed assets
+      answering `200`; signed out, `GET /api/today`, `GET /api/participants/{a made-up GUID}` and
+      `GET /api/participants/{that GUID}/notes/{today}/draft` each answer a `401` problem with `no-store`; then
+      headless Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker, and
+      `/api/today`, the participant header and the draft's `GET` and `PUT` with made-up data (A35), so that test
+      receives only `GET`s: at 375 and 1280 px, Today lists the participants under "Today · …", Find a participant
+      filters them, a row opens the note with its `<h1>` focused, a tick and typing show "Saving…" then "Saved …"
+      from the answered `PUT`, and the back link focuses the row again; the console reports no CSP violation or
+      script error, and the origin's storage is empty; Application Insights shows no exception and no `5xx` from the
+      deploy to the checks. Record the run IDs in Notes, then set T08's `status` here and its stories' to `done`
+      together, ticking their criteria and those that T08 proves for S01.04.01 and S01.02.04, and leaving unticked,
+      each with its dated Note, any part handed to a task not yet merged (Notes).
 
 ---
 
