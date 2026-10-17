@@ -78,16 +78,20 @@ The two lists are already in memory when the box is used. `GET /api/today` and `
 </search>
 <ul> participant rows </ul>                   the screen's list, outside <search>
   or, if nothing matches:
-No participant matches ‘xyz’                 visible message where the list would be
+No participant matches ‘xyz’.                visible message where the list would be
 ```
 
 1. **Landmark:** `<search>` with no `<form>` inside, so there is nothing to submit and Enter cannot reload the page.
 2. **Label:** a visible `<label>` reading **Find a participant** (4.2), on its own line above the field. The same label is used on both screens: one term per concept.
 3. **Field:** `<input type="text">`, full width on phones and at most about 32rem wide on laptops. It has a decorative magnifying-glass icon at the left inside the field (`aria-hidden="true"`), and **no placeholder**.
-4. **Clear button:** a real `<button type="button">` to the right of the field, with visible text **Clear** and a visually hidden " search", so its accessible name is "Clear search". It shows only while the field holds any text.
+4. **Clear button:** a real `<button type="button">` to the right of the field, the shared secondary `Button`, with
+   visible text **Clear** and a visually hidden " search", so its accessible name is "Clear search". It shows only while
+   the field holds any text.
 5. **Description:** visually hidden text, "The list of participants below changes as you type.", tied to the field with `aria-describedby`. Screen-reader users hear it once when they enter the field, so they know to check the list (Soueidan). Sighted users do not need it, because they see the list change.
-6. **Announcement region:** a visually hidden `<p role="status" aria-live="polite">` that is always rendered and starts empty.
-7. **No-match message:** the visible text **No participant matches ‘xyz’**, in place of the list. It is not part of `<search>`, because results are not search controls (MDN).
+6. **Announcement region:** a visually hidden `<p role="status">`, polite by its role, that is always rendered and
+   starts empty. No `aria-live` is added by hand, as everywhere in the app (status-messages.md).
+7. **No-match message:** the visible text **No participant matches ‘xyz’.**, in place of the list. It is not part of
+   `<search>`, because results are not search controls (MDN).
 
 ### Behaviour
 
@@ -109,7 +113,9 @@ No participant matches ‘xyz’                 visible message where the list 
 
 ### Screen-reader announcements
 
-- **Only one thing is announced: the no-match message.** About **500 ms** after the user stops typing, if nothing matches, the hidden status region receives "No participant matches ‘xyz’", the same words as the visible message. When there are matches, or the field is empty, the region is set to empty.
+- **Only one thing is announced: the no-match message.** About **500 ms** after the user stops typing, if nothing
+  matches, the hidden status region receives "No participant matches ‘xyz’.", the same words as the visible message.
+  When there are matches, or the field is empty, the region is set to empty.
   - This follows Soueidan and O'Hara: describe the behaviour up front, stay quiet while results exist, and speak up when the query has gone wrong. The visible no-match message is a status message, so SC 4.1.3 requires it to be exposed. The design shows no match count, and Today has "no counts" (4.2), so none is invented. **[Standard]** + **[Opinion]**
   - Why 500 ms: without a delay, every extra keystroke after the first miss changes the text ("…‘xy’", "…‘xyz’") and queues another announcement on top of the screen reader's typing echo. GOV.UK's accessible-autocomplete waits 1,400 ms for its count **[Convention]**, but a no-match message should not wait that long (O'Hara). 500 ms is **[Opinion]**; test it with NVDA and with VoiceOver on iOS, and adjust if needed.
   - Use polite, not assertive. Because the announcement waits for a pause in typing, there is no speech to interrupt, so polite is heard straight away without breaking the rule that assertive is for blocked actions and data at risk.
@@ -122,7 +128,7 @@ No participant matches ‘xyz’                 visible message where the list 
 |---|---|---|
 | **Default (empty)** | Label, empty field with icon, no Clear button, full list. | No placeholder. |
 | **Typing, matches** | The text as typed, Clear button, filtered list in A5 order. | Hidden region stays empty. |
-| **Empty (no match)** | The text stays in the field, Clear stays visible, and **No participant matches ‘xyz’** shows where the list was. | The typed text is trimmed and shown as typed, not normalised, so a dictation mistake is visible ("‘Jean’"). Long text wraps (`overflow-wrap: anywhere`). Plain body text: not red and no icon, because it is not an error. Announced after a 500 ms pause. |
+| **Empty (no match)** | The text stays in the field, Clear stays visible, and **No participant matches ‘xyz’.** shows where the list was. | The typed text is trimmed and shown as typed, not normalised, so a dictation mistake is visible ("‘Jean’"). Long text wraps (`overflow-wrap: anywhere`). Plain body text: not red and no icon, because it is not an error. Announced after a 500 ms pause. |
 | **No participants at all** | The **box is not rendered.** The screen shows "No participants yet." (managers also see "Add participant"). | **[Opinion]**: an empty box over an empty list invites a pointless action. On Manage > Participants this applies to the Active and Archived lists together. A view that is empty only because of the toggle keeps the box. |
 | **Loading (first load)** | The box is not rendered until the list has loaded. The screen's own loading state shows instead. | The request is small (6.1), and this rules out typing before the data exists or a false "No participant matches" message. |
 | **Refetching** | No change. The field stays mounted and focused, and keeps its text. | Never unmount or disable the field on `isFetching`, only on the first `isPending`. |
@@ -136,7 +142,14 @@ No participant matches ‘xyz’                 visible message where the list 
 
 ### Phone and laptop
 
-- **Phone (most Today use):** the field is full width with a minimum height of 48px (the design's minimum is 44 × 44). The Clear button is at least 44 × 44. Text is at least 16px, so iOS does not zoom. The box is **not sticky**: on a phone with the keyboard up and text at 200%, a sticky bar takes up much of the screen and can cover focused rows (SC 2.4.11). No `autofocus`, so the keyboard does not open on arrival. Keep the phone's default Enter key and do not set `enterkeyhint`, because Enter has no action. `autocorrect="off"` and `spellcheck="false"` stop iOS and Android "correcting" names such as "Nguyen" or "Thi". Keep `autocapitalize` at its default, because matching ignores case. Keyboard dictation works because the field is a plain text input, and normalising removes the capital letters and full stops that dictation adds.
+- **Phone (most Today use):** the field is full width with a minimum height of 48px (the design's minimum is 44 × 44).
+  The Clear button, the shared secondary `Button`, is at least 48 × 48, as every button is (primary-actions.md). Text is
+  at least 16px, so iOS does not zoom. The box is **not sticky**: on a phone with the keyboard up and text at 200%, a
+  sticky bar takes up much of the screen and can cover focused rows (SC 2.4.11). No `autofocus`, so the keyboard does
+  not open on arrival. Keep the phone's default Enter key and do not set `enterkeyhint`, because Enter has no action.
+  `autocorrect="off"` and `spellcheck="false"` stop iOS and Android "correcting" names such as "Nguyen" or "Thi". Keep
+  `autocapitalize` at its default, because matching ignores case. Keyboard dictation works because the field is a plain
+  text input, and normalising removes the capital letters and full stops that dictation adds.
 - **Laptop (most Manage use):** the field is at most about 32rem wide, with the Clear button beside it. GOV.UK: inputs should be "the right size for the content". Tab order is label, field, Clear (when shown), then the next control (the Active / Archived toggle on 4.8, the first participant on 4.2). There are no shortcuts such as "/" to focus: SC 2.1.4 and the simplicity rule.
 - **Reflow:** the field and Clear sit in a flex row with `flex-wrap: wrap`. At 320 CSS px or 200% text, Clear drops below the field instead of squeezing it. Nothing scrolls sideways (SC 1.4.10).
 
@@ -145,25 +158,36 @@ No participant matches ‘xyz’                 visible message where the list 
 | Where | Text | Source |
 |---|---|---|
 | Label | Find a participant | design.md 4.2 |
-| No-match message (visible and announced) | No participant matches ‘xyz’ | design.md 4.2, with typographic single quotes (Style Manual). No full stop, as written in the design. `xyz` is the trimmed text as typed. |
+| No-match message (visible and announced) | No participant matches ‘xyz’. | design.md 4.2, with typographic single quotes (Style Manual) and a full stop, as microcopy.md writes a sentence (N; participants.md *Conflicts resolved* 3). `xyz` is the trimmed text as typed. |
 | No participants | No participants yet. | design.md 4.2 (the box is hidden in this state) |
 | Clear button | Clear (accessible name "Clear search") | New; visible word plus visually hidden " search" |
 | Field description (screen readers only) | The list of participants below changes as you type. | New; hidden |
 
 ### Accessibility summary
 
-- **Semantics:** `<search>` (landmark), `<label for>`, `<input type="text">` (role textbox), `<button type="button">`, `<p role="status" aria-live="polite">`. The list stays a plain `<ul>` of links. **Do not use** `role="combobox"`, `listbox` or `aria-activedescendant`: the results are page content, not a popup, and those roles would take over the arrow keys in the list. `aria-controls` is not needed.
-- **ARIA used, and why:** `aria-describedby` (the description), `role="status"` with `aria-live="polite"` (SC 4.1.3; MDN recommends the redundant `aria-live`), `aria-hidden="true"` on the decorative icon only. Nothing else.
+- **Semantics:** `<search>` (landmark), `<label for>`, `<input type="text">` (role textbox), `<button type="button">`,
+  `<p role="status">`. The list stays a plain `<ul>` of links. **Do not use** `role="combobox"`, `listbox` or
+  `aria-activedescendant`: the results are page content, not a popup, and those roles would take over the arrow keys in
+  the list. `aria-controls` is not needed.
+- **ARIA used, and why:** `aria-describedby` (the description), `role="status"`, polite by its role (SC 4.1.3), with no
+  `aria-live` added by hand, as status-messages.md has it everywhere, `aria-hidden="true"` on the decorative icon only.
+  Nothing else.
 - **Keyboard:** Tab and Shift+Tab only. Enter and Escape are not intercepted. `preventDefault()` is never called on printable keys, so IME composition and dictation keep working.
 - **WCAG 2.2 criteria this meets:** 1.3.1 Info and Relationships (label, landmark), 1.4.3 Contrast (text 4.5:1), 1.4.4 Resize Text and 1.4.10 Reflow (wrapping row), 1.4.11 Non-text Contrast (field border and focus ring at 3:1), 1.4.12 Text Spacing, 2.1.1 Keyboard (a focusable Clear instead of the native ×), 2.1.4 Character Key Shortcuts (none added), 2.4.3 Focus Order, 2.4.6 Headings and Labels, 2.4.7 Focus Visible, 2.4.11 Focus Not Obscured (not sticky), 2.5.3 Label in Name ("Clear search" starts with "Clear"), 2.5.8 Target Size (44px and up), 3.2.1 On Focus (no autofocus or jump), 3.2.2 On Input (content change only), 3.3.2 Labels or Instructions, 4.1.2 Name, Role, Value, 4.1.3 Status Messages.
 
 ### Implementation notes (React 19, native HTML, CSS Modules)
 
 - **No React Aria.** Native elements cover everything here. React Aria's `SearchField` would also bring `type="search"`, Escape-to-clear and a clear button that is out of the tab order, all of which this design avoids.
+- **Built** (T02, for Manage > Participants; Today reuses both, T08): `FindParticipant` in
+  `src/components/FindParticipant.tsx` and `matchesName` in `src/components/matchesName.ts`, as sketched below but for
+  these: the words come from `src/copy` (`msg.noParticipantMatches`, with its full stop); Clear is the shared secondary
+  `Button`; the status region is `<p role="status">`, with no `aria-live`; and the field takes the shared text field's
+  look (`textInput.module.css`). The screen shows the box only once its list has loaded, and never when there are no
+  participants at all.
 - **Matching** lives in one pure function, unit-tested with Vitest:
 
 ```ts
-// src/features/participants/matchesName.ts
+// src/components/matchesName.ts
 const normalise = (s: string): string =>
   s.normalize('NFKD')
     .replace(/\p{M}/gu, '')                 // accents: "Zoë" -> "zoe"
@@ -188,7 +212,7 @@ Test cases: "jan", "JANE", "cit jane", "citizen, jane", "Jane.", "zoe" against "
 - **The component:**
 
 ```tsx
-// src/features/participants/FindParticipant.tsx
+// src/components/FindParticipant.tsx
 import { useEffect, useId, useRef, useState } from 'react';
 import styles from './FindParticipant.module.css';
 
@@ -204,7 +228,7 @@ export function FindParticipant({ value, onChange, noMatch }: Props) {
   const shown = value.trim();
 
   useEffect(() => {
-    const message = noMatch ? `No participant matches ‘${shown}’` : '';
+    const message = noMatch ? `No participant matches ‘${shown}’.` : '';
     const t = setTimeout(() => setAnnouncement(message), ANNOUNCE_DELAY_MS);
     return () => clearTimeout(t);
   }, [noMatch, shown]);
@@ -243,7 +267,7 @@ export function FindParticipant({ value, onChange, noMatch }: Props) {
         )}
       </div>
       {/* Always rendered so screen readers register it before text arrives */}
-      <p role="status" aria-live="polite" className="visually-hidden">{announcement}</p>
+      <p role="status" className="visually-hidden">{announcement}</p>
     </search>
   );
 }
@@ -260,39 +284,40 @@ const noMatch = participants.length > 0 && shown.length === 0;
   <FindParticipant value={query} onChange={setQuery} noMatch={noMatch} />
 )}
 {noMatch
-  ? <p className={styles.noMatch}>No participant matches ‘{query.trim()}’</p>
+  ? <p className={styles.noMatch}>No participant matches ‘{query.trim()}’.</p>
   : <ul className={styles.list}>{shown.map(/* rows */)}</ul>}
 ```
 
-- **CSS Module outline:**
+- **CSS Module outline**, as built, in foundations.md's tokens and two weights. The field's border, height and 18 px
+  text are the shared text field's (`textInput.module.css`), Clear's look the secondary `Button`'s, and the focus ring
+  base.css's, so none is repeated here:
 
 ```css
-/* FindParticipant.module.css */
+/* src/components/FindParticipant.module.css */
 .search { display: block; }                 /* older browsers treat <search> as an unknown inline element */
-.label  { display: block; font-weight: 600; margin-block-end: 0.25rem; }
-.row    { display: flex; flex-wrap: wrap; gap: 0.5rem; max-inline-size: 32rem; }
-.field  { position: relative; flex: 1 1 14rem; }
-.icon   { position: absolute; inset-inline-start: 0.75rem; inset-block-start: 50%;
-          translate: 0 -50%; inline-size: 1.25rem; block-size: 1.25rem; pointer-events: none; }
-.input  { appearance: none; box-sizing: border-box; inline-size: 100%; min-block-size: 3rem;
-          padding-block: 0.5rem; padding-inline: 2.75rem 0.75rem;
-          font: inherit; font-size: max(1rem, 16px);           /* iOS zooms below 16px */
-          color: var(--text); background: var(--surface);
-          border: 2px solid var(--border-strong); border-radius: 0.25rem; }
-.input:hover { border-color: var(--border-hover); }
-.clear  { min-inline-size: 44px; min-block-size: 3rem; padding-inline: 1rem; font: inherit;
-          color: var(--link); background: transparent; border: 2px solid transparent; }
-.clear:hover  { text-decoration: underline; }
-.clear:active { background: var(--pressed); }
-.input:focus-visible, .clear:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-@media (forced-colors: active) { .input { border-color: CanvasText; } .clear { border-color: ButtonText; } }
+.label  { display: block; margin-block-end: var(--space-2); font-weight: 700; }
+.row    { display: flex; flex-wrap: wrap; gap: var(--space-2); max-inline-size: 32rem; }
+.field  { position: relative; flex: 1 1 14rem; min-inline-size: 0; }
+.icon   { position: absolute; inset-block-start: 50%; inset-inline-start: var(--space-3); translate: 0 -50%;
+          inline-size: 1.25rem; block-size: 1.25rem; color: var(--colour-text-secondary); pointer-events: none; }
+.field > .input { padding-inline-start: 2.75rem; }   /* room for the icon */
+.row > .clear   { flex: none; inline-size: auto; }   /* the secondary Button at its own width, also on a phone */
+@media (forced-colors: active) { .icon { color: CanvasText; } }   /* an <svg> keeps a colour it is given */
 ```
 
 The visible no-match paragraph, on the screen's own module: `overflow-wrap: anywhere;`, body size, normal text colour.
 
-- **TypeScript:** recent `@types/react` versions include `<search>` among the intrinsic elements. This is **unverified** for the version CI pins at M0. If the build rejects it, add a one-line JSX intrinsic-element augmentation. Do not fall back to `<div role="search">` unless that fails.
+- **TypeScript:** the `@types/react` that the SPA pins has `<search>` among its intrinsic elements, so no augmentation
+  is needed. jsdom, alone, does not know the element, so Vitest's setup (`vitest.setup.ts`) lets go React's warning
+  about it as an unknown tag, and that warning only.
 - **Never** use `dangerouslySetInnerHTML` for the message. React escapes the typed text.
-- **Checks:** Playwright and axe on both screens (label present, status region in the initial DOM, no horizontal scroll at 320px). A Playwright test that Clear returns focus to the field. A manual pass with NVDA and Chrome on a laptop and with VoiceOver on an iPhone to confirm the no-match announcement and the 500 ms timing (axe cannot test announcements).
+- **Checks:** Playwright and axe on both screens (label present, status region in the initial DOM, no horizontal scroll
+  at 320px). A Playwright test that Clear returns focus to the field. A manual pass with NVDA and Chrome on a laptop and
+  with VoiceOver on an iPhone to confirm the no-match announcement and the 500 ms timing (axe cannot test
+  announcements). For Manage > Participants these are `tests/e2e/participants.spec.ts` (axe on each state at both
+  widths, every live region in the page before its words, no sideways scroll at 320 px with 200% text, Clear focusing
+  the field from the keyboard) and the *Participants* steps on `ops/first-use-in-test.md` for the manual pass; Today's
+  come with it (T08).
 
 ---
 
@@ -301,12 +326,16 @@ The visible no-match paragraph, on the screen's own module: `overflow-wrap: anyw
 **Today (4.2)**
 - Order follows the design: header, "Your unfinished drafts" (when shown), **Find a participant**, then the list. The filter never hides or changes the drafts section.
 - Rows show status text such as "Submitted · Alex P. · 4:12 pm". Typing "Alex" must not match Jane's row because of her author's name. Match on participant names only.
-- No-match state: only "No participant matches ‘xyz’". Do not show "Add participant" here (the design shows it only for "No participants yet."), do not show a count, and do not show suggestions.
+- No-match state: only "No participant matches ‘xyz’." Do not show "Add participant" here (the design shows it only
+  for "No participants yet."), do not show a count, and do not show suggestions.
 - The text resets when the user leaves Today, so after Submit the user returns to the full list and can see the new "Submitted" status (4.13).
-- This is the screen tired workers use on phones. The 16px text, the 44px Clear target, autocorrect off and the punctuation-tolerant matching matter most here.
+- This is the screen tired workers use on phones. The 16px text, the 48px Clear target, autocorrect off and the
+  punctuation-tolerant matching matter most here.
 
 **Manage > Participants list (4.8)**
-- Same component, label and messages. In DOM order the box comes before the Active / Archived toggle, as the design lists "search, an Active / Archived toggle, names". On a wide laptop screen they may share one row (flex-wrap). **[Opinion]**
+- Same component, label and messages. In DOM order the box comes before the Active / Archived toggle, as the design
+  lists "search, an Active / Archived toggle, names". The toggle sits on its own line under the box, in the reading
+  column with the list, at every width.
 - The typed text persists when the toggle changes, and the filter applies to the selected view. If the new view has no match, the no-match message shows and is announced after the pause. If the same no-match text was already in the region, it is not repeated. This is an accepted edge case.
 - "Add participant" stays visible and in the same place whatever is typed.
 - Managers mostly use laptops here: keep the field narrow (about 32rem), not full width.

@@ -562,6 +562,21 @@ found and `403`.
   line. The page renders its own back link once it shows the participant, so that the link follows their status, and
   the Active view's while the list loads. Archive participant and Restore share one mutation, as they never show
   together, and a press of Archive participant while a Details save is under way is not held back.
+- Also the simplest options where the design is silent (17 October 2026, step 7): the flow on the app's own answers
+  and the keyboard-only check, at 375 px and at 1280 px, sign in for real, each test in an organisation of its own, as
+  `admin bootstrap` makes one, setup's button pressed with the mouse, as `setup.spec.ts` proves setup, and every move
+  from Today on a key; the other tests answer the changes in the browser too, as well as the list. A visible focus ring
+  at a stop is the element matching `:focus-visible` with base.css's 3 px solid ring in `--colour-focus`, or in
+  `Highlight` under forced colours, drawn on the element on screen, or for a row on the `::after` that covers it. Every
+  test of the file checks the live regions, by wrapping `appendChild` and `insertBefore` on the Participants routes,
+  rather than region by region. The targets are 44 px for links and fields, 48 px for the buttons, Clear among them as
+  the shared `Button`, and the search field's height, and 56 px for a row. `history.state` holds nothing but React
+  Router's `usr`, `key` and `idx` with a value, the first entry its `idx` alone. The by-hand checks are steps 26 to 28
+  of ops/first-use-in-test.md, after T03's 24 and 25, at its end, as other files cite the numbers of the steps before
+  them. The step stays unticked until CI's run on the pull request passes and its `migrate.sql` artifact has been read
+  there, and that run's ID then goes here. Locally, CI's `dotnet ef migrations script --idempotent` command, from
+  `AddAuditEvent` to `AddParticipant`, gives only additions: `CREATE TABLE [Participant]`, its `CREATE INDEX` and
+  `DENY DELETE ON [dbo].[Participant] TO [grow2notes_runtime]`.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell

@@ -618,7 +618,7 @@ test.each([
 | `--page-max`, `--page-gutter`, `--radius-m`, `--space-2/3/4/6` | Same names (values as above) |
 | `--banner-edge`, `--banner-tint`, `--top-bar-height`, `--bar-height` | Component-local; they stay in their own files |
 
-The status-messages file asks for "light and dark values" for its tokens. Only light values are needed.
+The status-messages tokens, like every other here, need light values only.
 
 **Manual test list (add to M6's accessibility pass)**
 

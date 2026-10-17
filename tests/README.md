@@ -5,8 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, signing in again in place, the Users screens and Guide prompts, with axe accessibility checks,
-  run against the published app.
+  the idle sign-out, signing in again in place, the Users and Participants screens and Guide prompts, with axe
+  accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -113,13 +113,14 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
-(`e2e/sign-in-again.spec.ts`) and the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their
-setup links from the published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the
-second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
-app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
-each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
-database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
-Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) and the
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) get their setup links from the
+published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the second terminal gives
+them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
+string and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs
+a link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
+failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
+database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -317,12 +318,44 @@ test, by itself.
 
 ### Answering `/api/admin/participants`
 
-The Participants screens list the organisation's participants from `GET /api/admin/participants?includeArchived=true`,
-the one request they send, which needs a manager's session too. `e2e/participants.ts`, beside `e2e/users.ts`, has
-made-up participants (A35), in the JSON that `ParticipantListEndpointTests` asserts, together in `participants`, in the
-API's order, by family name, then given name. `serveParticipants(page, list)` answers each request with `list`, in the
-browser, as `serveUsers` does. Call it before `page.goto`. `e2e/shell.spec.ts`'s walk, whose Participants link opens the
-list, is the example.
+The Participants screens read the organisation's participants with `GET /api/admin/participants?includeArchived=true`,
+their one read, which needs a manager's session too. `e2e/participants.ts`, beside `e2e/users.ts`, has made-up
+participants (A35), in the JSON that `ParticipantListEndpointTests` asserts: Jane Citizen and Ravi de Silva, active, and
+Ben Archer, archived, together in `participants`, in the API's order, by family name, then given name.
+`madeUpParticipant` makes others, such as one with a long name, and a test changes one by spreading it with another
+`status`, date of birth or `rowVersion`. Each of the two helpers routes the page's requests through `page.route`,
+overriding the answer before it, as `serveUsers` does. Call them before `page.goto`.
+
+- `serveParticipants(page, list)` answers each request with `list`.
+- `failParticipants(page)` aborts each, as `failUsers` does. The failure then shows about 1 s after the page loads,
+  after the query client's silent retry, and the "still" sentence about 1 s after Try again. For the next Try again to
+  bring the list, the test then calls `serveParticipants`.
+
+```ts
+await serveMe(page, manager);
+await serveParticipants(page, participants);
+await page.goto('/manage/participants');
+```
+
+`e2e/shell.spec.ts`'s walk, whose Participants link opens the list, answers it too. A change to a participant, sent
+after an antiforgery token that the app gives anyone, is answered in the browser as well, by `answerChanges` in
+`e2e/participants.spec.ts`: Add participant's `POST`, a correction's `PUT`, and Archive participant's and Restore's
+`POST`s, each with a status, a body if any, and a `Date` of 4:12 pm in Melbourne, from which "Saved 4:12 pm" reads, or
+aborted, for no connection. The page reads the list again after each change, so the test first serves the list as the
+change leaves it, calling `serveParticipants` again with the participant changed.
+
+The tests that meet the app's own answers sign in for real, through the `invite` fixture and setup with a passkey on
+the `authenticator` fixture, so that the organisation that `admin bootstrap` made starts with no participants: one adds,
+corrects, archives and restores a participant at 375 px, and two more do it with the keyboard alone, at 375 px and at
+a laptop's width. `expectStops` there presses Tab or Shift+Tab and reads each stop: the focused element by the text
+that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and "outside the
+page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is drawn, on a row's
+link on the `::after` that covers the row.
+
+Every test in `e2e/participants.spec.ts` also watches the live regions, the elements whose role is `status` or `alert`:
+an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and reports, through
+`page.exposeFunction`, each region that the Participants screens put into the document with words already in it, which a
+screen reader may not announce. After the test, any region so reported fails it, as does any whose `display` is `none`.
 
 ### Signing in with a passkey, end to end
 

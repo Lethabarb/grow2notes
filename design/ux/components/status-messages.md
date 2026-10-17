@@ -23,7 +23,7 @@ The component comes in three kinds. They behave differently, so they are named s
 | **Today, 4.2** | "Note for Jane Citizen submitted" after Submit (4.3: "After submitting, the user returns to Today with…") | Success banner | The only success banner design.md specifies. It arrives with a navigation, so it takes focus and needs no live region. |
 | **Note form and submit confirmation, 4.3** | "Past-day note for Mon 28 Sep 2026, written on 1 Oct." (manager's past-day note). "This draft is for Wed 30 Sep. Submitting it now keeps that date." (draft from an earlier day). | Notice | Present when the form opens, sitting under the name and date. Never announced as a live update and never takes focus. If both apply, only one shows (see Per-screen notes). The confirmation dialog shows no success message. Success appears only on Today, after the server confirms. |
 | **Participant notes (history) and read view, 4.4** | The "Edited" label with the last editor and time. "Past-day note, written on … by …". The "Edited" tag on history rows. | Static label (metadata line) | Plain text in the note's header block. Not a banner, not a live region, not interactive. |
-| **Participants list and participant detail, 4.8** | Archived participant: "a read-only banner with Restore". Write past-day note opens the form with the past-day notice. Details **Save** result. | Notice with one action, plus inline status | The archived notice is the only banner holding a control. It is focused when it appears because of Archive. After Restore it is replaced by a success banner. Save on Details shows an inline status. |
+| **Participants list and participant detail, 4.8** | Archived participant: "a read-only banner with Restore". Write past-day note opens the form with the past-day notice. Details **Save** result. | Notice with one action, plus inline status | The archived notice is the only banner holding a control. It is focused when it appears because of Archive. After Restore it is removed and focus moves to the `<h1>`; the success banner proposed for Restore is not built unless the owner approves it ([ux/README.md](../README.md) open question 2). Save on Details shows an inline status. |
 | **Guide prompts, 4.10** | The result of **Save**. | Inline status | The manager stays on the page, so focus stays on Save and a polite `role="status"` announces the result. The help text is ordinary page text, not a banner. |
 
 ---
@@ -155,7 +155,9 @@ Inline status (Guide prompts, participant Details)
 
 - **Same component and same proportions.** Sizes are in `rem`/`em`, there are no fixed heights, and text wraps at 200% and at 320 px (SC 1.4.4, 1.4.10, 1.4.12).
 - **Phone:** full width of the content column, 16 px horizontal padding, icon top-aligned with the first line. Restore sits on its own line under the text, full width, at least 44 × 44 px (A32).
-- **Laptop:** the banner is the width of the content column, not the window. Restore sits after the text, at the inline end, when there is room (a container query at about 32 rem).
+- **Laptop:** the banner is the width of the content column, not the window. From 40rem, Restore follows the words on a
+  wrapping line, so it sits after them when there is room and drops under them otherwise, at 200% text too, with no
+  container query (participants.md *Layout - laptop* and *Conflicts resolved* 15).
 
 ### Exact copy
 
@@ -168,7 +170,7 @@ Inline status (Guide prompts, participant Details)
 | Read view, edited note | `Edited · last change by Jo Smith, Fri 2 Oct 9:01 am` | design.md 3.5 ("with the last editor and time"); wording mirrors the report marker in 11.3 without the version count, which is manager-only (A13) |
 | History row tag | `Edited` | design.md 4.4 |
 | Participant detail, archived | `Jane Citizen is archived, so this page is read-only. They are not on Today and no new notes can be written for them. Their past notes are kept.` + button `Restore` | **Proposed.** design.md 4.8 gives no string; content taken from 3.7. Needs owner sign-off. |
-| Participant detail, after Restore | `Jane Citizen restored. They are back on Today.` | **Proposed.** design.md 3.7 says "Back on Today". Needs owner sign-off. |
+| Participant detail, after Restore | `Jane Citizen restored. They are back on Today.` | **Proposed, not built** unless the owner approves it ([ux/README.md](../README.md) open question 2). design.md 3.7 says "Back on Today". Until then no banner shows: the notice goes and focus moves to the `<h1>`. |
 | Guide prompts and participant Details, after Save | `Saved 4:12 pm` | Reuses the note form's save-indicator wording (4.3, "Saved 9:42 am"), so one term covers one concept |
 
 Times use the shared Melbourne formatter (`Intl.DateTimeFormat('en-AU', { timeZone: 'Australia/Melbourne', hour: 'numeric', minute: '2-digit' })`, giving "4:12 pm"). Dates use one shared date formatter, so a later copy change happens in one place. Names are the participant's full name, as in the form header (3.9).
@@ -178,13 +180,26 @@ Times use the shared Melbourne formatter (`Intl.DateTimeFormat('en-AU', { timeZo
 - **Semantics.** Success banner: `<div tabindex="-1" data-route-focus>` containing an `aria-hidden` icon and a `<p>`. No role. Notice: `<div>` containing an `aria-hidden` icon, a `<p>` and an optional `<button type="button">`. No role and no landmark. Inline status: `<p role="status">`. No `aria-live` attribute is added anywhere by hand, there is no `role="alert"`, and there is no `aria-label` on the boxes.
 - **Why the success banner has no `role="alert"`, unlike GOV.UK.** GOV.UK and NHS serve full pages, and the APG says alerts present before page load completes are not announced. They focus the banner to make sure it is read. In this single-page app the banner is inserted after load. An `alert` role *plus* a focus move risks the message being read twice, and MDN says a live region is "likely not appropriate" when focus moves. Focus on its own is enough. **[Opinion]**, to be confirmed by the test below. **Fallback:** if a tested screen reader does not read the focused banner, add `role="alert"`, which is GOV.UK's exact markup.
 - **Keyboard.** Banners add no Tab stops, except Restore. Programmatic focus uses `tabIndex={-1}`, never a positive tabindex.
-- **Announcements.** On Today after Submit: "Note for Jane Citizen submitted", read once, through focus. Notices are read in normal reading order with no interruption. After Save on Guide prompts or Details: "Saved 4:12 pm", read politely. After Archive: the notice text, through focus. After Restore: "Jane Citizen restored. They are back on Today.", through focus.
+- **Announcements.** On Today after Submit: "Note for Jane Citizen submitted", read once, through focus. Notices are
+  read in normal reading order with no interruption. After Save on Guide prompts or Details: "Saved 4:12 pm", read
+  politely. After Archive: the notice text, through focus. After Restore: the participant's name, as focus moves to the
+  `<h1>` (no banner; see Exact copy).
 - **Test.** Use NVDA + Chrome, VoiceOver + iOS Safari and TalkBack + Chrome. Check: the submitted message is read exactly once on arrival at Today, then the `h1` is next. "Saved 4:12 pm" is read once per save. Nothing is read on page load for notices. In Windows forced colours the bar and border stay visible. At 320 px and 200% text there is no overlap or horizontal scroll.
 - **WCAG 2.2 criteria met:** 1.3.1 Info and Relationships; 1.3.2 Meaningful Sequence (notices sit next to what they describe); 1.4.1 Use of Color (words carry the meaning); 1.4.3 Contrast (Minimum) (body-colour text on a pale tint, ≥4.5:1); 1.4.4 Resize Text; 1.4.10 Reflow; 1.4.11 Non-text Contrast (focus outline ≥3:1); 1.4.12 Text Spacing; 2.1.1 Keyboard; 2.2.1 Timing Adjustable (nothing is timed); 2.2.2 Pause, Stop, Hide (no motion); 2.4.3 Focus Order; 2.4.7 Focus Visible; 2.4.11 Focus Not Obscured (Minimum); 2.5.8 Target Size (Minimum) (Restore, 44 px); 3.2.4 Consistent Identification (one banner look product-wide); 4.1.2 Name, Role, Value (Restore); 4.1.3 Status Messages (inline Save status through `role="status"`; the success banner and the post-Archive notice take focus, so they are outside 4.1.3 by its own definition).
 
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
 No React Aria is needed: a `div`, a `p`, a native `button` and one `role="status"` are enough. Do not use React Aria's `UNSTABLE_Toast`.
+
+**The notice is built** (T02, for the archived participant): `Notice` in `src/components/Notice.tsx`, the sketch's
+`Banner` with the notice tone alone. It takes the words, an optional `action` (the archived notice's Restore, with its
+always-rendered `role="alert"` above it, together one item of the line, so that the alert stays above the button) and
+`takesFocus`, with which it focuses itself as it appears, in place of the `<h1>`'s pending focus
+(`focusInsteadOfHeading`). Its "i" is an inline SVG, as the app has no icon set, and its bar, border and "i" are in
+`--colour-action` on `--colour-action-tint`, as setup's notice is, so there are no `--colour-notice-*` tokens. Its
+layout is `src/components/Notice.module.css`, which the CSS below sketches with the same tokens: under 40rem Restore,
+the shared `Button`, sits under the words, full width and 48 px high as every button is (primary-actions.md); from
+40rem it follows them on a wrapping line. The success banner is still a sketch, for Submit (T09).
 
 ```ts
 // src/shell/messageStore.ts: memory only (D22). Never history.state, the URL or browser storage.
@@ -278,18 +293,19 @@ export function SaveStatus({ savedAtUtc }: { savedAtUtc: string | null }) {
   color: var(--colour-text);
   margin-block-end: 1rem;
   scroll-margin-block-start: var(--top-bar-height, 4rem);  /* SC 2.4.11 */
-  container-type: inline-size;
 }
-.success { --banner-edge: var(--colour-success-edge); --banner-tint: var(--colour-success-tint); }
-.notice  { --banner-edge: var(--colour-notice-edge);  --banner-tint: var(--colour-notice-tint); }
+.success { --banner-edge: var(--colour-success); --banner-tint: var(--colour-success-tint); }
+.notice  { --banner-edge: var(--colour-action);  --banner-tint: var(--colour-action-tint); }
 .success .text { font-weight: 700; }
 .text { margin: 0; }
 .icon { flex: none; inline-size: 1.5em; text-align: center; font-weight: 700; color: var(--banner-edge); }
+/* The action is the shared Button, full width under 40rem and auto from it, 48 px high (primary-actions.md). */
 .body { display: flex; flex-direction: column; gap: 0.75rem; flex: 1; }
-.body button { min-block-size: 44px; inline-size: 100%; }
-@container (min-width: 32rem) {
-  .body { flex-direction: row; align-items: center; justify-content: space-between; }
-  .body button { inline-size: auto; }
+/* From the one breakpoint, the action follows the words on a wrapping line: after them when there is room, under them
+   otherwise, at 200% text too. No container query (foundations.md's breakpoint check refuses one). */
+@media (min-width: 40rem) {
+  .body { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .text { flex: 1 1 16rem; }
 }
 .banner:focus-visible { outline: 3px solid var(--colour-focus); outline-offset: 2px; }
 /* No transition or animation: messages appear at once (zero duration for status). */
@@ -301,7 +317,11 @@ export function SaveStatus({ savedAtUtc }: { savedAtUtc: string | null }) {
 .saveStatus { margin: 0; min-block-size: 0; color: var(--colour-text-secondary); }  /* never display:none */
 ```
 
-- Tokens `--colour-success-edge`, `--colour-success-tint`, `--colour-notice-edge` and `--colour-notice-tint` each need light and dark values. Body text on each tint must reach at least 4.5:1. Aim for 3:1 between the edge and the page background. SC 1.4.11 does not require it, because the words carry the meaning.
+- Tokens: the notice reuses `--colour-action` and `--colour-action-tint`, and the success banner takes
+  `--colour-success` and `--colour-success-tint`, which tokens.css already holds (foundations.md's mapping), so no
+  token is left to add for Submit (T09). Light values only, as foundations.md says. Body text on each tint must reach
+  at least 4.5:1. Aim for 3:1 between the edge and the page background. SC 1.4.11 does not require it, because the
+  words carry the meaning.
 - Replace the `✓` and `i` characters with the icon set's SVGs when one exists. Keep `aria-hidden="true"`.
 - Close the native `<dialog>` *before* calling `navigate`, so the dialog's own focus return does not compete with the route focus rule.
 
@@ -333,7 +353,10 @@ export function SaveStatus({ savedAtUtc }: { savedAtUtc: string | null }) {
 
 **Participants list and participant detail (4.8)**
 - **Archived notice** at the top of participant detail, under the name, with Restore. It is static when the page opens, and focused when it appears because of Archive.
-- **Restore succeeds:** replace the notice with a success banner in the same place ("Jane Citizen restored. They are back on Today.") and focus it. The Restore button has gone, so focus needs somewhere meaningful to land. It stays until the manager leaves the screen.
+- **Restore succeeds:** the notice is removed, the page is editable again, and focus moves to the `<h1>`, the
+  participant's name, as the Restore button has gone and focus needs somewhere meaningful to land. No success banner:
+  the proposed "Jane Citizen restored. They are back on Today." is not built unless the owner approves it
+  ([ux/README.md](../README.md) open question 2; participants.md *Conflicts resolved* 17).
 - **Details Save:** `SaveStatus` next to Save. Focus stays on Save.
 - **Write past-day note:** opens the form, which shows the past-day notice (4.3). The list screen has no banners.
 - Goal add, edit, move and archive announcements belong to the goals-list component. If it needs them, it should use the same always-rendered `role="status"` pattern, not a banner.

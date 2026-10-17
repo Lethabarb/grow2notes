@@ -230,3 +230,29 @@ made-up prompts: every worker in the organisation sees them in every empty note.
     without it, and whether the browser showed a warning of its own for the reload and for the close; a phone may
     show none (MDN), which the developer records rather than fixes. (S01.04.02's Note; guide-prompts.md *Open
     questions* and *Accessibility runs*.)
+
+### Participants, once T02 is in test
+
+These steps hold T02's by-hand checks ([tasks.md](../design/backlog/tasks.md), T02's Notes). They need account A,
+a manager, and, besides the kit in *Before you start*, an Android phone with Chrome and TalkBack. Each participant
+added is made up (A35), such as `Siobhan O'Brien`, with an apostrophe in the family name, born on a made-up date.
+
+26. The database, as the Entra admin, through a temporary firewall rule for your own address on `sql-grow2notes-test`,
+    deleted straight after, as `infra/sql/check-database.sql` describes: run the script for test as its header says.
+    Look for PASS on every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Participant` for
+    `grow2notes_runtime`, and B7 and B8, which list the `Participant` table and the `AddParticipant` migration.
+    (S01.02.01's first criterion, in test.)
+27. As account A on the laptop, with NVDA and Chrome, choose Manage, then Participants. Add a participant, correct the
+    date of birth, go back to the list with the back link, open their row, then press Archive participant and then
+    Restore. Look for NVDA reading each item of participants.md's *Accessibility checklist*, *Screen reader*: the
+    `<h1>` on each screen change, the name as "heading level 1" on the participant's page; their row again after the
+    back link and after Back; "Saved" and the time once for each Save; the date of birth's group and hint on the Day
+    field; the archived notice read exactly once, as it takes focus after Archive, then "Restore, button" at the next
+    Tab; and the views as "Participants, navigation, list, 2 items, Active, current page, link". Then type a name that
+    matches nobody in Find a participant and stop typing: look for "No participant matches" and the name read once,
+    after a short pause, and not again while you type. (participants.md's screen-reader pass; search-filter.md's
+    500 ms pause.)
+28. Do step 27 again on the iPhone with VoiceOver and Safari, and on the Android phone with TalkBack and Chrome, with a
+    second made-up participant on each. On each phone, also look for: Clear in Find a participant leaving the keyboard
+    open, with the cursor still in the field; and no autofill, saved name or saved date offered on Given name, Family
+    name, Day, Month and Year, nor on Find a participant. (participants.md open question 6.)

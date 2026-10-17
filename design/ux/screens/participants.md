@@ -283,8 +283,10 @@ https://www.gatsbyjs.com/blog/2019-07-11-user-testing-accessible-client-routing/
   current one. No ARIA tabs, no switch, no "Show archived" checkbox, no count. [Convention: GOV.UK, NHS, AgDS and
   MoJ say views that change the URL are links, https://design-patterns.service.justice.gov.uk/components/sub-navigation/;
   Research: Baymard back-button expectations, https://baymard.com/blog/back-button-expectations]
-- An ordinary pushed navigation with `preventScrollReset`; focus stays on the link; nothing is announced. Any other
-  `view` value falls back to Active with `replace`.
+- An ordinary pushed navigation; focus stays on the link and the page stays where it is, as the shell's route-change
+  rule takes a change of the search alone as the same screen (app-shell.md), so no `preventScrollReset` is passed: the
+  app has no `<ScrollRestoration>` for it to stop. Nothing is announced. Any other `view` value falls back to Active
+  with `replace`.
 - Both views come from **one** query (`GET /api/admin/participants?includeArchived=true`), filtered on `status` in
   memory, so switching never loads.
 - Placed after the search box (design order "search, an Active / Archived toggle, names").
@@ -774,7 +776,8 @@ content, not context) · 3.2.3 Consistent Navigation · 3.2.4 Consistent Identif
 - [ ] Switching Active / Archived keeps the search text, changes the URL to `?view=archived` and back, works with
       Back and reload, and leaves focus on the activated link; `?view=other` shows Active and the URL is corrected.
 - [ ] Exactly one `aria-current="page"` inside the Active / Archived nav.
-- [ ] With no participants at all, only "No participants yet." and Add participant show (no search box).
+- [ ] With no participants at all, "No participants yet.", Add participant and the Active / Archived links show, and
+      no search box (*States*).
 - [ ] The no-match sentence reads `No participant matches ‘xyz’.` and is announced once after a pause.
 - [ ] Clear returns focus to the field and the phone keyboard stays open.
 - [ ] Back from a participant focuses that participant's row.
