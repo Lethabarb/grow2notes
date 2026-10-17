@@ -994,7 +994,7 @@ describe('Guide prompts, saving', () => {
     expect(putsSent()).toEqual([{ text: saved, ifMatch: `"${etag}"` }]);
   });
 
-  it('empties the status at each press, so that two saves in a row are both announced', async () => {
+  it('announces two saves in a row, as the status is empty while the second is out', async () => {
     await openWith();
     serve(savePath, stored());
     pressSave();
@@ -1009,6 +1009,29 @@ describe('Guide prompts, saving', () => {
     expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
     expect(putsSent()).toHaveLength(2);
   });
+
+  it.each([
+    ['no connection', noConnection, 'Not saved: no connection. Try again.'],
+    ['a 412', problem(412, { code: 'precondition.failed' }), conflict],
+  ])(
+    'empties the status at the press after a save, so that "Saved" never shows beside the alert for %s',
+    async (_, answer, words) => {
+      await openWith();
+      serve(savePath, stored());
+      pressSave();
+      await settle();
+      expect(saveStatus().textContent).toBe('Saved 4:12\u00A0pm');
+
+      serve(savePath, answer);
+      // The other manager's prompts, which a 412 fetches as the new base.
+      serve(promptsPath, prompts('What went well today?', 'AAAAAAAAB9M='));
+      pressSave();
+      await settle();
+
+      expect(alert().textContent).toBe(words);
+      expect(saveStatus()).toBeEmptyDOMElement();
+    },
+  );
 
   it('leaves the page not saved when the manager types while a save is out, and saved when they do not', async () => {
     await openWith();

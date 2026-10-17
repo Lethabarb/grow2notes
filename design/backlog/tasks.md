@@ -263,6 +263,22 @@ changes by a link, Back, reload or Sign out.
     T02's Notes here now hold them, as T04's and T08's do.
   - ops/first-use-in-test.md step 24 listened for the heading as the page arrives, which needs T02's route focus, with
     no gate; that check now waits until T02 is in test.
+- 17 October 2026, review: 2 findings were confirmed and are fixed here:
+  - No test showed that Save empties the save status at the press (guide-prompts.md *Interactions and focus*, "Status
+    and alert cleared"), so a save that failed after one that worked could show "Saved" and its time beside the alert;
+    the tests of two saves in a row pass without it, as the status is empty while any save is out. A Vitest case now
+    saves, then meets no connection, and a `412`, and fails once that reset is removed; `guide-prompts.spec.ts`'s axe
+    run checks the status empty at the conflict that follows a save; and the two-saves tests' titles no longer claim
+    the reset.
+  - ops/first-use-in-test.md step 24 left out the load status, Try again's "Loading…" and failure, the hidden
+    "Saving…", the alerts for no connection and the conflict, Sign out's dialog and the heading after Leave without
+    saving, so it could not close the checklist's item on waiting and errors or *Accessibility runs*' screen-reader
+    bullet. It now causes each row of *Interactions and focus* that a person can: the conflict from a second tab, as
+    accounts A and B are in different organisations; no connection with the device offline; and, on the laptop alone,
+    whose developer tools can slow the connection, "Loading guide prompts…" and "Saving…", for which VoiceOver and
+    TalkBack hear the load-failed sentence and "Saved" in the same two regions. A server error shows in the same alert
+    as no connection, a `422` as the too-long error and a `401` is the shell's, so none needs a person. Step 24 is what
+    closes the checklist's five screen-reader items and that bullet.
 
 ### Steps
 

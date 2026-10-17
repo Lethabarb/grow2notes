@@ -592,7 +592,7 @@ test('a Date of 06:12 UTC on 1 October 2026 shows "Saved 4:12 pm", focus on Save
   await expect(saveStatus(page)).toBeEmpty();
 });
 
-test('two saves in a row are both announced, as the status empties at each press', async ({ page }) => {
+test('two saves in a row are both announced, as the status is empty while the second is out', async ({ page }) => {
   await page.clock.install();
   await openWith(page);
   await serveSaves(page, (route) => route.fulfill(savedAnswer()));
@@ -1377,6 +1377,8 @@ test('axe passes, text is 7:1 and nothing moves: the prompts, too long, saved, i
   await save(page).click();
   await expect(requestAlert(page)).toHaveText(conflict);
   await expect(save(page)).not.toHaveAttribute('aria-disabled');
+  // Emptied at the press, so that the last save's "Saved" does not stand beside the alert.
+  await expect(saveStatus(page)).toBeEmpty();
   await expectAccessible(page);
 
   await navLink(page, 'Today').click();

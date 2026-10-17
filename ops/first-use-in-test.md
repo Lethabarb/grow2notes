@@ -146,18 +146,43 @@ made-up prompts: every worker in the organisation sees them in every empty note.
 
 24. On the laptop, sign in as account A as in step 9, with NVDA running, and choose Manage, then Guide prompts. Do the
     same as account B on the iPhone, with VoiceOver in Safari, and on the Android phone, with TalkBack in Chrome,
-    signing in with email, password and a 6-digit code as in step 14. With each screen reader, once: arrive on the
-    page; move into the box; type or paste until it holds 900 characters or more, then stop; paste in more than 1,000
-    and press Save; cut it back to 1,000 or fewer and press Save, then Save again with nothing changed; then type a
-    word and choose Today, and in the dialog Stay on this page. Look for each announcement in guide-prompts.md's
-    *Interactions and focus*, heard once each: "Guide prompts, heading level 1" as the page arrives, though skip this
-    one until [tasks.md](../design/backlog/tasks.md) T02, *Keep my place across screens*, is in test, as nothing moves
-    focus to the heading on arrival before then; the box's name,
-    its text, then the help text and "You can enter up to 1,000 characters"; the count about a second after typing
-    stops, never at each key; the error, with focus moved to the box; "Saved" and the time after each of the two
-    Saves; and, as the dialog opens, "Leave without saving?", that it is a dialog, "Your changes to the guide prompts
-    are not saved." and "Stay on this page", with focus back on Today after Stay. (S01.04.01; S01.04.02;
-    guide-prompts.md's *Accessibility checklist*, *Screen reader*, and *Accessibility runs*.)
+    signing in with email, password and a 6-digit code as in step 14. With each screen reader, once, do the following
+    in order, and look for each announcement of guide-prompts.md's *Interactions and focus*, heard once each:
+    - Arrive on the page. Look for "Guide prompts, heading level 1", though skip this one until
+      [tasks.md](../design/backlog/tasks.md) T02, *Keep my place across screens*, is in test, as nothing moves focus to
+      the heading on arrival before then.
+    - Move into the box. Look for its name, its text, then the help text and "You can enter up to 1,000 characters".
+    - Type or paste until the box holds 900 characters or more, then stop. Look for the count about a second after
+      typing stops, never at each key.
+    - Paste in more than 1,000 and press Save. Look for the error, with focus moved to the box.
+    - Cut it back to 1,000 or fewer and press Save, then Save again with nothing changed. Look for "Saved" and the time
+      after each of the two Saves.
+    - Open Guide prompts in a second tab, type a word there, press Save and close that tab. Back in the first tab, type
+      a word and press Save. Look for "Another manager saved the guide prompts while you were editing…", with focus
+      still on Save. The second tab is the other manager: accounts A and B are in different organisations, so neither
+      can cause the other's conflict.
+    - Turn the connection off: on the laptop, choose Offline in the Network panel's throttling menu; on a phone, turn
+      on Airplane Mode with Wi-Fi off. Press Save. Look for "Not saved: no connection. Try again.", with focus still on
+      Save. Then turn the connection back on.
+    - Choose Today, and in the dialog Stay on this page. Then choose Account, then Sign out, and in the dialog Stay on
+      this page. Look for, as the dialog opens each time, "Leave without saving?", that it is a dialog, "Your changes
+      to the guide prompts are not saved." and "Stay on this page"; and, after Stay, focus back on Today, then on Sign
+      out.
+    - Choose Today again, and in the dialog Leave without saving. Look for Today's heading, though skip this one until
+      T02 is in test, as for the heading on arrival.
+    - Turn the connection off as before, then choose Manage, then Guide prompts. Look for "The guide prompts did not
+      load: no connection. Try again.", which "Loading guide prompts…" may come just before. Press Try again. Look for
+      "Loading…" while it waits, then "The guide prompts still did not load: no connection. Try again.", with focus
+      still on Try again. Turn the connection back on and press Try again. Look for focus on the heading, with the box
+      below it.
+    - On the laptop alone, add a profile with a latency of 3,000 ms to the Network panel's throttling menu, and choose
+      it. Choose Manage, then Guide prompts. Look for "Loading guide prompts…" about a second after you arrive. Type a
+      word and press Save. Look for "Saving…", then "Saved" and the time. Then choose No throttling. Only the laptop
+      can slow the connection, so these two are heard with NVDA alone: with VoiceOver and TalkBack, the load-failed
+      sentence and "Saved", which the same two regions carry, stand for them.
+
+    (S01.04.01; S01.04.02; guide-prompts.md's *Accessibility checklist*, its five *Screen reader* items, and
+    *Accessibility runs*, its screen-reader bullet.)
 25. On each phone, signed in as in step 24 with the screen reader off, choose Manage, then Guide prompts, and type a
     word, so that the text is not saved. Go back with the phone's own gesture: on the iPhone, swipe in from the left
     edge of Safari; on the Android phone, the back gesture, or Back. Look for the leave dialog, with focus on Stay on
