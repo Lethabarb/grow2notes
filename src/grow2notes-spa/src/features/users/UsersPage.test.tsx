@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
@@ -106,7 +106,9 @@ function renderApp(path: string, me: Me = manager) {
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  // With a key of its own, as a browser gives it, where a memory router gives every test's first entry the key
+  // "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const router = createMemoryRouter(routes, { initialEntries: [{ ...parsePath(path), key: crypto.randomUUID() }] });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>

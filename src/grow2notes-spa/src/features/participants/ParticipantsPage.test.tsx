@@ -1,7 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
@@ -104,7 +104,9 @@ function renderApp(path: string, me: Me = manager): { router: Router; client: Qu
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [path] });
+  // With a key of its own, as a browser gives it, where a memory router gives every test's first entry the key
+  // "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const router = createMemoryRouter(routes, { initialEntries: [{ ...parsePath(path), key: crypto.randomUUID() }] });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -763,5 +765,18 @@ describe('Participants, back from a participant', () => {
 
     expect(listedNames()).toEqual(activeNames.filter((name) => name !== 'Jane Citizen'));
     expect(pageHeading()).toHaveFocus();
+  });
+
+  // After the tests above, each of which opened a row from the first entry of its own history.
+  it('focuses the <h1> at the top on Back from Add participant, as no row was opened', async () => {
+    const { router } = await openList();
+
+    await press(addParticipant());
+    await goBack(router);
+
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/manage/participants');
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(0);
   });
 });

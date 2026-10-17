@@ -134,12 +134,13 @@ export function AppShell() {
   const shownOver = useRef<{ title: string; signIns: number }>(undefined);
   // As view C shows, it takes the title and focus, as the element focused is now hidden: in the shell's effect, after
   // the warning's, which closes as the clock ends, as a page behind an open modal cannot take focus, and in place of
-  // the page's <h1>, so that a heading of the hidden screen that mounts meanwhile takes none that it had pending. As it closes over
-  // the same person's screen, after every effect of the sign-in view's own has ended, it gives the screen back its
-  // title, "Error: " and all, unless Back has moved the screen on meanwhile; after a sign-in, though not after a
-  // refresh, which shows that the session was never lost, it fetches the screen's queries again, as invalidating every
-  // query does, `['me']` having no observer that fetches; and it focuses the screen's <h1>. No change that met the 401
-  // is sent again (app-shell.md *Sign in again, same person*).
+  // the page's <h1>, so that a heading of the hidden screen that mounts meanwhile takes none that it had pending. As it
+  // closes over the same person's screen, after every effect of the sign-in view's own has ended, it gives the screen
+  // back its title, "Error: " and all, unless Back has moved the screen on meanwhile; after a sign-in, though not after
+  // a refresh, which shows that the session was never lost, it fetches the screen's queries again, as invalidating
+  // every query does, `['me']` having no observer that fetches; and it focuses the screen's <h1>, or leaves the focus
+  // pending for one that is data still loading. No change that met the 401 is sent again (app-shell.md *Sign in again,
+  // same person*).
   useEffect(() => {
     const signInTitle = msg.pageTitle(pageName.signIn);
     if (inPlace) {

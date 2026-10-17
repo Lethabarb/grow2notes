@@ -6,7 +6,6 @@ import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
-import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
@@ -88,14 +87,6 @@ export function InviteUserPage() {
     }
   }
 
-  // The list in the form's place, so that Back does not return to the form (users.md *Interactions*), drawn at once so
-  // that its <h1>, which renders with it, can take focus here, until the shell's route-change rule (T02) focuses the
-  // <h1> of every new screen.
-  async function showList() {
-    await navigate('/manage/users', { replace: true, flushSync: true });
-    focusPageHeading();
-  }
-
   // Send invite, pressed or reached by Enter in a field. While busy, the button ignores both.
   function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,7 +105,9 @@ export function InviteUserPage() {
     // TanStack calls these only while the page is still shown, so that an invite that ends after the manager has
     // gone elsewhere takes them nowhere.
     invite.mutate(body, {
-      onSuccess: () => void showList(),
+      // The list in the form's place, so that Back does not return to the form (users.md *Interactions*), whose <h1>
+      // the shell's route-change rule focuses, as on every new screen.
+      onSuccess: () => void navigate('/manage/users', { replace: true }),
       onError: (error) => {
         setSending(false);
         const refusal = userRefusal(error, body);

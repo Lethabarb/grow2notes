@@ -167,6 +167,25 @@ test.afterEach(async ({ page }) => {
   expect(await hiddenLiveRegions(page), 'live regions with display: none').toEqual([]);
 });
 
+// Shows that the watcher fails a test whose page puts a live region in with its words, which no other test can show,
+// as the app puts none in. Marked to fail, it passes only if something fails it, and nothing in it is asserted, so what
+// fails it is the check after it ends (as in fixtures.spec.ts). Were the watcher to miss the region, as it would if the
+// Participants routes moved from under its address check or the region went in another way, Playwright would fail the
+// run.
+test.fail('a live region put into a Participants screen with its words fails the test', async ({ page }) => {
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await page.goto('/manage/participants');
+  await heading(page).waitFor();
+
+  await main(page).evaluate((element) => {
+    const region = document.createElement('p');
+    region.setAttribute('role', 'status');
+    region.textContent = 'Made-up words';
+    element.appendChild(region);
+  });
+});
+
 /** The focus ring as it shows (foundations.md): whether the element matches `:focus-visible`, and its outline. */
 type Ring = { focusVisible: boolean; style: string; width: string; colour: string; inViewport: boolean };
 

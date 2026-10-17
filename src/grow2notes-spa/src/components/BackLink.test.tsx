@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { createMemoryRouter, Outlet } from 'react-router';
+import { createMemoryRouter, Outlet, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { describe, expect, it, onTestFinished } from 'vitest';
 import { useRouteChange } from '../routes/routeChange.ts';
@@ -16,6 +16,9 @@ function Shell() {
  * in its history, as after a reload or from a pasted address, with the shell's rule around them.
  */
 function renderAt(...entries: string[]) {
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = entries.map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() }));
   const router = createMemoryRouter(
     [
       {
@@ -28,7 +31,7 @@ function renderAt(...entries: string[]) {
         ],
       },
     ],
-    { initialEntries: entries, initialIndex: entries.length - 1 },
+    { initialEntries, initialIndex: entries.length - 1 },
   );
   render(<RouterProvider router={router} />);
   return router;

@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
@@ -191,7 +191,13 @@ function renderApp(path: string | string[], me: Me = manager): Router {
   serve('GET', mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: typeof path === 'string' ? [path] : path });
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = (typeof path === 'string' ? [path] : path).map((entry) => ({
+    ...parsePath(entry),
+    key: crypto.randomUUID(),
+  }));
+  const router = createMemoryRouter(routes, { initialEntries });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -211,11 +217,12 @@ async function settle() {
   await wait(1);
 }
 
-/** Opens Add participant from the list, as the manager does, with its link. */
-async function openFromTheList(): Promise<Router> {
+/** Opens Add participant from the list, as the manager does, with its link, the list scrolled to `listScrolledTo`. */
+async function openFromTheList(listScrolledTo = 0): Promise<Router> {
   serve('GET', listPath, json([jane]));
   const router = renderApp('/manage/participants');
   await settle();
+  scrollPage(listScrolledTo);
   await press(within(main()).getByRole('link', { name: 'Add participant' }));
   expect(router.state.location.pathname).toBe('/manage/participants/new');
   return router;
@@ -300,6 +307,12 @@ function fill(givenName: string, familyName: string, day: string, month: string,
   type(field('Day'), day);
   type(field('Month'), month);
   type(field('Year'), year);
+}
+
+/** Scrolls the page to `y`, as the person does, with the scroll event that the browser fires. */
+function scrollPage(y: number) {
+  Object.defineProperty(window, 'scrollY', { value: y, configurable: true, writable: true });
+  window.dispatchEvent(new Event('scroll'));
 }
 
 /** Clicks `element` with focus on it first, as a keyboard or a pointer does, and lets what it starts run. */
@@ -585,8 +598,8 @@ describe('Add participant', () => {
     expect(adds()).toHaveLength(1);
   });
 
-  it('after a 201, Back goes to the list, not to an empty form', async () => {
-    const router = await openFromTheList();
+  it('after a 201, Back goes to the list, not to an empty form, with its <h1> focused where it was', async () => {
+    const router = await openFromTheList(300);
     serve('POST', participantsPath, added);
     fill('Jane', 'Citizen', '7', '3', '1987');
     await save();
@@ -596,10 +609,13 @@ describe('Add participant', () => {
 
     expect(router.state.location.pathname).toBe('/manage/participants');
     expect(pageHeading()).toHaveAccessibleName('Participants');
+    // No row was opened from the list, so its <h1> takes focus, and the list is where it was left.
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(300);
   });
 
   it('after a 201, its back link goes back to the list, as Back does', async () => {
-    const router = await openFromTheList();
+    const router = await openFromTheList(300);
     serve('POST', participantsPath, added);
     fill('Jane', 'Citizen', '7', '3', '1987');
     await save();
@@ -608,6 +624,9 @@ describe('Add participant', () => {
 
     expect(router.state.historyAction).toBe('POP');
     expect(router.state.location.pathname).toBe('/manage/participants');
+    expect(pageHeading()).toHaveAccessibleName('Participants');
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(300);
   });
 
   it('empties "Saved" at the next edit, so that it never stands for changes not saved', async () => {

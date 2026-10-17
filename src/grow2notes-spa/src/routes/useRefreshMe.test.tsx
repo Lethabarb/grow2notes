@@ -1,7 +1,7 @@
 import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
@@ -76,7 +76,10 @@ type Router = ReturnType<typeof createMemoryRouter>;
  */
 function renderApp(...entries: string[]) {
   const client = createQueryClient();
-  const router = createMemoryRouter(routes, { initialEntries: entries, initialIndex: entries.length - 1 });
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = entries.map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() }));
+  const router = createMemoryRouter(routes, { initialEntries, initialIndex: entries.length - 1 });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>

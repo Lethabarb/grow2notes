@@ -435,6 +435,21 @@ describe('the signed-out-in-place view', () => {
     expect(screen.getByRole('button', { name: 'Resend invite' }).nextElementSibling).toBeEmptyDOMElement();
   });
 
+  it("focuses a user's name as it loads, after signing in again over their page, whose list met the 401", async () => {
+    serve('GET', usersPath, problem(401));
+    await renderApp(`/manage/users/${alex.id}`);
+    expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
+    // The name is data, so the hidden page has no <h1> yet for the focus that signing in again gives it.
+    expect(hiddenScreen()?.querySelector('h1')).toBeNull();
+
+    serve('GET', usersPath, json([alex]));
+    await signInWithPassword();
+    await settle();
+
+    expect(shownHeading()).toHaveAccessibleName('Alex Park');
+    expect(shownHeading()).toHaveFocus();
+  });
+
   it('closes for a refresh that finds the session alive, kept by another tab, with nothing else fetched', async () => {
     await renderApp(`/manage/users/${alex.id}`);
     const userHeading = shownHeading();

@@ -1,7 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery } from '../../api/me.ts';
@@ -195,8 +195,10 @@ function recordAdded(): () => Element[] {
  * StrictMode.
  */
 async function open(path: string, before: string[] = []) {
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
   const router = createMemoryRouter(withSetupMemory(routes), {
-    initialEntries: [...before, path],
+    initialEntries: [...before, path].map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() })),
     initialIndex: before.length,
   });
   const client = createQueryClient();

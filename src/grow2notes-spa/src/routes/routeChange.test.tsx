@@ -3,7 +3,7 @@ import { startAuthentication, type AuthenticationResponseJSON } from '@simpleweb
 import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode, useEffect, useState } from 'react';
-import { createMemoryRouter, Link, useNavigate, useParams, useSearchParams } from 'react-router';
+import { createMemoryRouter, Link, parsePath, useNavigate, useParams, useSearchParams } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import { api, ApiError } from '../api/api.ts';
@@ -346,7 +346,13 @@ function renderApp(path: string | string[], me: Me | null = manager) {
     client.setQueryData(meQuery.queryKey, me);
   }
 
-  const router = createMemoryRouter(withMadeUp(routes), { initialEntries: typeof path === 'string' ? [path] : path });
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = (typeof path === 'string' ? [path] : path).map((entry) => ({
+    ...parsePath(entry),
+    key: crypto.randomUUID(),
+  }));
+  const router = createMemoryRouter(withMadeUp(routes), { initialEntries });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -540,8 +546,7 @@ describe('a new screen', () => {
   });
 
   it('on a pop to an entry with no position kept, as one from before a reload, scrolls to the top', async () => {
-    // The history before the reload: Manage, then Today, then a note, which the reload opened. Not from the first
-    // entry, whose key is the same in every test.
+    // The history before the reload: Manage, then Today, then a note, which the reload opened.
     const router = renderApp(['/manage', '/made-up/today', '/made-up/notes/1']);
     await settle();
     scrollPage(300);
@@ -992,8 +997,7 @@ describe('a return point', () => {
 
   it('on a pop to a list that opened no row, focuses the <h1>', async () => {
     serve(listPath, json(['1', '2', '3']));
-    // Not from the first entry, whose key is the same in every test, and so a row that an earlier test opened.
-    const router = renderApp(['/manage', '/made-up/list']);
+    const router = renderApp('/made-up/list');
     await settle();
     scrollPage(800);
     await press(navLink('Manage'));

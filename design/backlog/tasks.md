@@ -531,10 +531,10 @@ found and `403`.
   family name", and a date of birth one that is no longer before today, Melbourne's day having changed since
   `me.today`, "Date of birth must be in the past" on all three parts; a refusal of a field that the form does not have
   gets "Not saved: something went wrong. Try again.". A year of 0000 is not a real date. `participant.created`'s
-  `Details` name `givenName`, `familyName`, `dateOfBirth` and `status`, as §6.6's list does. `apiWithHeaders()` gives
-  a save's answer with its `Date`; `SaveStatus` is at the body's size, as status-messages.md has it, where T03's is at
-  the small size that guide-prompts.md gives its own, so the second of T02 and T03 to merge keeps one component for
-  both. `FieldGroup`'s fieldset says its `group` role again for every group, as govuk-frontend's date input does.
+  `Details` name `givenName`, `familyName`, `dateOfBirth` and `status`, as §6.6's list does. A save's `Date` comes
+  from T03's `apiWithHeaders()`, and "Saved 4:12 pm" is T03's `SaveStatus`, at `--font-size-small` (design.md A63;
+  the review Note below). `FieldGroup`'s fieldset says its `group` role again for every group, as govuk-frontend's
+  date input does.
 - Also the simplest options where the design is silent (15 October 2026, step 5): the `PUT` finds the participant first,
   so another organisation's is `404`, then checks `If-Match`, then the fields, so a stale correction with a refused
   field gets `412`; it answers `200` with no body and no `ETag`, as the page reads the next version from the list, as
@@ -577,11 +577,6 @@ found and `403`.
   there, and that run's ID then goes here. Locally, CI's `dotnet ef migrations script --idempotent` command, from
   `AddAuditEvent` to `AddParticipant`, gives only additions: `CREATE TABLE [Participant]`, its `CREATE INDEX` and
   `DENY DELETE ON [dbo].[Participant] TO [grow2notes_runtime]`.
-- `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
-  whichever of T02 and T03 merges second reuses the other's, so one version ships.
-- T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
-  sign-in focus that this task moves into the shell's one focus owner: whichever of T01 and T02 merges second routes
-  the move after signing in again through that owner's pending flag, so one version ships.
 - Parts of the absorbed criteria arrive with later tasks: the Goals section with T05, which checks that the next Tab
   after the `201` reaches it and that an archived participant's goals are read-only; Today with T08, which checks
   "gone from Today" and "back on Today" and adds Today's query to what these saves invalidate; the Past notes, Write
@@ -594,6 +589,43 @@ found and `403`.
   row on Back, the no-match sentence heard once after its pause, and the archived notice read exactly once as it takes
   focus after Archive; on a phone, Clear keeping the keyboard open and no autofill offered on the name and date fields
   (participants.md open question 6).
+- 18 October 2026, review: 6 findings were confirmed and are fixed here, four of them about the branch being behind
+  `main`:
+  - The branch was cut before T03 (#55) and T01 (#56) merged and conflicted with both, so its pull request's CI could
+    not run and the shared pieces had two copies. It is rebased onto `origin/main` at `b56824c`, keeping one copy of
+    each: T03's `SaveStatus`, with its hidden "Saving…", at `--font-size-small` with `tabular-nums`, which
+    status-messages.md now gives too (design.md A63); T03's `apiWithHeaders()`, whose `dateUtc` Details' Save reads; and
+    T01's `ValidationProblems.Fields`. T02's copies and their tests are gone. The routes, `Program.cs`, the endpoint
+    matrix, `SignedOutTests`, `shell.spec.ts`'s walk and the copy hold both sides. Neither added a migration, so
+    `AddParticipant` and the model snapshot stand. CI's run on the pull request and its `migrate.sql` stay step 7's to
+    record.
+  - The by-hand checks reused T03's step numbers 24 and 25: they are steps 26 to 28 of ops/first-use-in-test.md, with
+    "Do step 27 again", as the step 7 Note above says.
+  - The hand-offs to T02 that T03 and T01 left on `main` (the Notes above) were not done. Guide prompts now proves T02's
+    route focus, in `GuidePromptsPage.test.tsx` and `guide-prompts.spec.ts`: the `<h1>`, not the field, on arriving from
+    Manage, at the top; Today's `<h1>` after Leave without saving; and Manage's after Back and Leave. S01.04.01's and
+    S01.04.02's Notes from T02 record it, and S00.05.02's. Invite user's interim `flushSync` replace and
+    `focusPageHeading()` are gone: the shell's rule focuses the list's `<h1>` after the replace, and the back link pops
+    to the list that opened the form, as Back does, or pushes it from a pasted address (`InviteUserPage.test.tsx`). The
+    focus after signing in again goes through `focusPageHeading()`'s pending flag, so a user's name that loads after the
+    sign-in takes it (`signedOutInPlace.test.tsx`); only the page's own `PageHeading` takes a pending focus, never view
+    C's, whose heading the shell focuses in place of the page's (`PageHeading.test.tsx`). The shared audit-events test
+    has rows for `user.invited`, `user.setup_link_sent` and `guide_prompts.updated`, the last in an organisation of its
+    own, so no seeded row changes (tests/README.md).
+  - The shell's memory is keyed by `location.key`, and a memory router gives every test's first entry the key
+    "default", so a row or a position could carry from one test into the next. Each test helper that renders the shell
+    and goes back now gives every entry a key of its own. `ParticipantsPage.test.tsx`'s Back from Add participant,
+    with the `<h1>` focused at the top, failed after the tests before it until then; `ParticipantPage.test.tsx`'s two
+    Backs after a `201` now check the `<h1>`'s focus and the list's position; and `routeChange.test.tsx` drops its two
+    workarounds. In a shuffled order, `AppShell.test.tsx`'s made-up screens, which had no `<h1>`, left a new screen's
+    focus pending for the next test's heading; each now has its `<h1>`, as every screen has, and Vitest passes in six
+    shuffled orders.
+  - Nothing showed that `participants.spec.ts`'s live-region watcher fails a test. A test marked `test.fail()` puts a
+    status region with words into the list, so the run fails once the watcher misses it, as it does with its address
+    check changed (tests/README.md).
+  - Run locally: every xUnit test but the two that stop the database passes on a temporary LocalDB, and all 154
+    Playwright tests pass against the published app on it, the Guide prompts, Invite user and sign-in-again ones among
+    them, under T02's route-change rule.
 
 ### Steps
 

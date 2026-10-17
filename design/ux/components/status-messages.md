@@ -142,7 +142,7 @@ Inline status (Guide prompts, participant Details)
 
 | State | Success banner | Notice | Inline status |
 |---|---|---|---|
-| **Default** | Green bar, tick, bold sentence | Neutral bar, "i", sentence | "Saved 4:12 pm" in secondary text, same size as body |
+| **Default** | Green bar, tick, bold sentence | Neutral bar, "i", sentence | "Saved 4:12 pm" in secondary text at `--font-size-small`, its figures all one width (foundations.md; design.md A63) |
 | **Empty** | Not rendered | Not rendered when it does not apply | The `<p role="status">` is rendered but empty, with no border or padding. Never `display: none` (it would break the live region). |
 | **Loading** | No loading state. It appears only after `201`. | No loading state. It renders with the page data. | None. The Save button owns its pending state. |
 | **Focus** | When focused by the route rule: a 3 px focus outline with 2 px offset, ≥3:1, via `:focus-visible` (the browser decides whether to draw it after programmatic focus). `scroll-margin-block-start` keeps it clear of a sticky top bar (SC 2.4.11). | Not focusable, except the archived notice just after Archive (same outline). The Restore button has the standard button focus. | Not focusable |
@@ -314,7 +314,13 @@ export function SaveStatus({ savedAtUtc }: { savedAtUtc: string | null }) {
   .icon { color: CanvasText; }
 }
 
-.saveStatus { margin: 0; min-block-size: 0; color: var(--colour-text-secondary); }  /* never display:none */
+.saveStatus {  /* never display:none */
+  margin: 0;
+  min-block-size: 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
 ```
 
 - Tokens: the notice reuses `--colour-action` and `--colour-action-tint`, and the success banner takes

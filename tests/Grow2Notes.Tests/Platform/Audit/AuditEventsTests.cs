@@ -6,6 +6,7 @@ using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,7 +18,8 @@ namespace Grow2Notes.Tests.Platform.Audit;
 /// exactly one new entry, with its <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>,
 /// <c>EntityId</c>, <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its
 /// row here, and T24 completes the table. Rows act in seeded organisation A and add rows of their own to it, changing
-/// no seeded row (tests/README.md).
+/// no seeded row, but for a change to an organisation's own row, such as its guide prompts, which a row makes in an
+/// organisation that it adds (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -28,10 +30,13 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     /// </summary>
     private static readonly Dictionary<string, Func<AuditEventsTests, Task<WrittenEvent>>> Rows = new()
     {
+        [AuditEventTypes.User.Invited] = test => test.InviteUserAsync(),
+        [AuditEventTypes.User.SetupLinkSent] = test => test.ResendInviteAsync(),
         [AuditEventTypes.Participant.Created] = test => test.AddParticipantAsync(),
         [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
         [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
+        [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
     };
 
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
@@ -55,6 +60,58 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     private static JsonNode? Parse(string? details) => details is null ? null : JsonNode.Parse(details);
+
+    /// <summary>
+    /// <c>user.invited</c>: A's manager invites a worker with an address of the row's own with
+    /// <c>POST /api/admin/users</c>, which records the new user as the entity, with no participant, and their address,
+    /// name and role as <c>new</c> alone, as sent.
+    /// </summary>
+    private async Task<WrittenEvent> InviteUserAsync()
+    {
+        var email = $"avery.brooks.{Guid.NewGuid():N}@example.org";
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(
+            "/api/admin/users",
+            await client.FetchTokenAsync(),
+            new { displayName = "Avery Brooks", email, role = "Worker" });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var values = new JsonObject { ["email"] = email, ["displayName"] = "Avery Brooks", ["role"] = "Worker" };
+        return new(
+            AuditEventTypes.User.Invited,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            (await StoredUserAsync(email)).Id,
+            null,
+            new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>user.setup_link_sent</c>: A's manager resends the invite of a worker invited for the row through the invite
+    /// core, which writes no event, with <c>POST /api/admin/users/{id}/setup-link</c> and the worker's ETag, which
+    /// records the worker as the entity, with no participant and no <c>Details</c>, so no address (A28).
+    /// </summary>
+    private async Task<WrittenEvent> ResendInviteAsync()
+    {
+        var invited = await factory.InviteAsync(a);
+        var user = await StoredUserAsync(invited.Email);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(
+            $"/api/admin/users/{user.Id}/setup-link",
+            await client.FetchTokenAsync(),
+            ifMatch: IfMatch.ETag(user.ConcurrencyStamp!));
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        return new(
+            AuditEventTypes.User.SetupLinkSent,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            user.Id,
+            null,
+            null);
+    }
 
     /// <summary>
     /// <c>participant.created</c>: A's manager adds a participant with <c>POST /api/admin/participants</c>, which
@@ -171,6 +228,92 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             participant.Id,
             participant.Id,
             details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>guide_prompts.updated</c>: the manager of an organisation that the row adds, so that no seeded row changes,
+    /// loads its guide prompts with <c>GET /api/admin/guide-prompts</c> and saves new ones with <c>PUT</c> and the
+    /// <c>ETag</c> loaded, which records the organisation as the entity, with no participant, and the text before and
+    /// after.
+    /// </summary>
+    private async Task<WrittenEvent> SaveGuidePromptsAsync()
+    {
+        const string path = "/api/admin/guide-prompts";
+        const string oldText = "What did they enjoy today?";
+        const string newText = "What did they enjoy today?\nWho did they see?";
+        var (organisationId, managerId) = await AddOrganisationAsync(oldText);
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        string etag;
+        using (var loaded = await client.GetAsync(path, TestContext.Current.CancellationToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, loaded.StatusCode);
+            Assert.NotNull(loaded.Headers.ETag);
+            etag = loaded.Headers.ETag.ToString();
+        }
+
+        using var saved = await client.PutWithTokenAsync(
+            path, await client.FetchTokenAsync(), new { text = newText }, etag);
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["text"] = oldText },
+            ["new"] = new JsonObject { ["text"] = newText },
+        };
+        return new(
+            AuditEventTypes.GuidePrompts.Updated,
+            organisationId,
+            managerId,
+            AuditEntityTypes.Organisation,
+            organisationId,
+            null,
+            details.ToJsonString());
+    }
+
+    // An organisation of the row's own, with its guide prompts and one Active manager with an address of their own, as
+    // setup leaves them apart from the passkey or password, which the test-only sign-in does not need. An organisation
+    // is the tenant, not tenant-owned, and AspNetUsers is not filtered, so this needs no tenant.
+    private async Task<(Guid OrganisationId, Guid ManagerId)> AddOrganisationAsync(string guidePrompts)
+    {
+        var addedAtUtc = new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var organisation = new Organisation
+        {
+            Name = "Audit events test",
+            GuidePrompts = guidePrompts,
+            CreatedAtUtc = addedAtUtc,
+        };
+        db.Organisations.Add(organisation);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var email = $"{Guid.NewGuid():N}@example.org";
+        var manager = new ApplicationUser
+        {
+            OrganisationId = organisation.Id,
+            DisplayName = "Quinn Harper",
+            Role = UserRole.Manager,
+            Status = UserStatus.Active,
+            InvitedAtUtc = addedAtUtc,
+            ActivatedAtUtc = addedAtUtc,
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+        };
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var created = await users.CreateAsync(manager);
+        Assert.True(created.Succeeded, string.Join(" ", created.Errors.Select(error => error.Code)));
+        return (organisation.Id, manager.Id);
+    }
+
+    // The user who has the address, as Identity stores them.
+    private async Task<ApplicationUser> StoredUserAsync(string email)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await users.FindByEmailAsync(email);
+        Assert.NotNull(user);
+        return user;
     }
 
     // An archive or a restore by A's manager, with the participant's ETag as If-Match and no body, which answers 204.

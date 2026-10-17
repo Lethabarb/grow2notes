@@ -356,6 +356,8 @@ Every test in `e2e/participants.spec.ts` also watches the live regions, the elem
 an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and reports, through
 `page.exposeFunction`, each region that the Participants screens put into the document with words already in it, which a
 screen reader may not announce. After the test, any region so reported fails it, as does any whose `display` is `none`.
+A test marked `test.fail()`, as the one in `e2e/fixtures.spec.ts` is, puts a status region with words into the list's
+`<main>`, which shows that the watcher sees it and fails a test.
 
 ### Signing in with a passkey, end to end
 
@@ -871,6 +873,7 @@ story adds one as follows.
   `SaveChangesInterceptor` holds back while another request changes the user.
 - Give each event type that it writes a row in the shared audit-events test,
   `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
-  through the real endpoint, in seeded organisation A, adding the rows it acts on, and returns the entry that it must
-  write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new entry, and
-  compares the `Details` as JSON. `participant.created`'s row, the first, is the example.
+  through the real endpoint, in seeded organisation A, adding the rows it acts on, or, for a change to an
+  organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the entry
+  that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new
+  entry, and compares the `Details` as JSON. `participant.created`'s row is the example.
