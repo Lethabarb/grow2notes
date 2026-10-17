@@ -8,19 +8,6 @@
   padding-inline-start: var(--space-3);
 }
 
-/* The count under the box, from 900 characters, in the hint's look while within the limit (6c). */
-.count {
-  margin: var(--space-2) 0 0;
-  font-size: var(--font-size-small);
-  color: var(--colour-text-secondary);
-}
-
-/* Over the limit: bold, in the error colour, which the box's border takes too (TextBox.module.css). */
-.count[data-over-limit] {
-  font-weight: 700;
-  color: var(--colour-error);
-}
-
 /* The alert, then Save and its status, inline under the field, never sticky (6d to 6f). */
 .actions {
   margin-block-start: var(--space-5);

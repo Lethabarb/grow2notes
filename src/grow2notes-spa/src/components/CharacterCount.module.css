@@ -1,0 +1,12 @@
+/* The count under the field, in the hint's look while within the limit (conditional-reveal.md *States*). */
+.count {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}
+
+/* Over the limit: bold as well as in the error colour, so that colour is not the only cue (SC 1.4.1). */
+.count[data-over-limit] {
+  font-weight: 700;
+  color: var(--colour-error);
+}

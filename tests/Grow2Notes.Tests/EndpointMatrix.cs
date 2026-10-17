@@ -167,6 +167,36 @@ internal static class EndpointMatrix
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "archive", archived: false)),
         new(Post,      "/api/admin/participants/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "restore", archived: true)),
+
+        // A participant's goals (§6.6), in the same group, at A's seeded participant, whom B's manager does not find
+        // (§9.2): the list belongs to that one participant, so the 404 is its isolation check.
+        new(Get,       "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, OK, NotFound,
+            call => Task.FromResult(
+                new HttpRequestMessage(call.Method, $"/api/admin/participants/{call.Seeded.A.ParticipantId}/goals"))),
+
+        // Adding a goal (§6.6), in the same group. Each call adds a goal to a participant of its own, whom its request
+        // first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, Created, NotFound,
+            AddingAGoalToAParticipantOfItsOwn),
+
+        // Rewording a goal (§6.6), in the same group. Each call rewords a goal of its own, which its request first adds
+        // to a participant whom it adds to A, so B's manager, to whom A's goals are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/goals/{goalId:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RewordingAGoalOfItsOwn),
+
+        // Reordering a participant's goals (§6.6), in the same group. Each call reorders the active goals of a
+        // participant of its own, whom its request first adds to A, so B's manager, to whom A's participants are not
+        // found, gets 404 (§9.2).
+        new(Put,       "/api/admin/participants/{participantId:guid}/goals/order", Unauthorized, Forbidden, NoContent,
+            NotFound, ReorderingTheGoalsOfAParticipantOfItsOwn),
+
+        // Archiving and restoring a goal (§6.6), in the same group, as the reword is: each call archives an active
+        // goal, or restores an archived one, of its own, which its request first adds to a participant whom it adds to
+        // A, so B's manager gets 404.
+        new(Post,      "/api/admin/goals/{goalId:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAGoalOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/goals/{goalId:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAGoalOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -299,6 +329,65 @@ internal static class EndpointMatrix
         var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/{action}");
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
         return request;
+    }
+
+    // A goal added to a participant whom the request first adds to A, so that each call adds to a participant of its
+    // own, never the seeded one (tests/README.md).
+    private static async Task<HttpRequestMessage> AddingAGoalToAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        return new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/goals")
+        {
+            Content = JsonContent.Create(new { text = "Makes own breakfast" }),
+        };
+    }
+
+    // A reword of a goal that the request first adds to a participant whom it adds to A, sent with the goal's ETag as
+    // If-Match, so that each call changes a goal of its own (tests/README.md).
+    private static async Task<HttpRequestMessage> RewordingAGoalOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goal = await call.Services.AddGoalAsync(call.Seeded.A, participant.Id, new("Makes own breakfast", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/goals/{goal.Id}")
+        {
+            Content = JsonContent.Create(new { text = "Makes own lunch" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
+        return request;
+    }
+
+    // An archive or a restore, with no body, of a goal that the request first adds to a participant whom it adds to A,
+    // archived or not, sent with the goal's ETag as If-Match, so that each call changes a goal of its own
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingThePlaceOfAGoalOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goal = await call.Services.AddGoalAsync(
+            call.Seeded.A,
+            participant.Id,
+            new("Makes own breakfast", 0, ArchivedAtUtc: archived ? TestGoals.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/goals/{goal.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
+        return request;
+    }
+
+    // A reorder of the active goals of a participant whom the request first adds to A with two active goals and an
+    // archived one, sending the active ones' IDs the other way round, so that each call changes goals of its own
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheGoalsOfAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goals = await call.Services.AddGoalsAsync(
+            call.Seeded.A,
+            participant.Id,
+            new("Makes own breakfast", 0),
+            new("Uses the washing machine", 1, ArchivedAtUtc: TestGoals.AddedAtUtc),
+            new("Phones her sister", 2));
+        return new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/goals/order")
+        {
+            Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
+        };
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

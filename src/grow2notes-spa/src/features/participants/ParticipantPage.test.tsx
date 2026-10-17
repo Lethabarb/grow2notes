@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter, parsePath } from 'react-router';
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import type { ListRow } from '../../components/ListEditor.tsx';
 import { routes } from '../../routes/routes.tsx';
 import type { AdminParticipant } from './participantsQuery.ts';
 
@@ -16,6 +17,11 @@ const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
 const participantsPath = '/api/admin/participants';
 const listPath = '/api/admin/participants?includeArchived=true';
+
+/** The one request with which a participant's page reads their goals, archived ones too. */
+function goalsPath(participantId: string): string {
+  return `/api/admin/participants/${participantId}/goals?includeArchived=true`;
+}
 
 // participants.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts,
 // and a worker. Today in Melbourne is 1 October 2026.
@@ -137,6 +143,9 @@ const fetchMock = vi.fn<typeof fetch>();
 /** How the stubbed server answers each request, by its method and path: a new answer for each. */
 const answers = new Map<string, Answer>();
 
+/** The query client of the app that the test rendered last, whose cache a test can look into. */
+let queryClient: QueryClient;
+
 /** Stubs `fetch` as the server, which answers each `method` request for `path` with `answer` from now on. */
 function serve(method: 'GET' | 'POST' | 'PUT', path: string, answer: Answer) {
   answers.set(`${method} ${path}`, answer);
@@ -190,6 +199,7 @@ function requests(): string[] {
 function renderApp(path: string | string[], me: Me = manager): Router {
   serve('GET', mePath, json(me));
   const client = createQueryClient();
+  queryClient = client;
   client.setQueryData(meQuery.queryKey, me);
   // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
   // key "default", under which the shell's memory would carry a row or a position from one test into the next.
@@ -341,6 +351,9 @@ beforeEach(() => {
   serve('GET', antiforgeryPath, () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );
+  // No goals, unless a test gives them, so that a page whose goals a test is not about loads with its participant.
+  serve('GET', goalsPath(jane.id), json([]));
+  serve('GET', goalsPath(priya.id), json([]));
   fetchMock.mockImplementation((path, init) => {
     const answer = typeof path === 'string' ? answers.get(`${init?.method ?? 'GET'} ${path}`) : undefined;
     if (answer === undefined) {
@@ -1316,7 +1329,7 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  it('is in Actions under Details, alone, its empty alert above it, and the next Tab stop after Save', async () => {
+  it('is in Actions under Details, alone, its empty alert above it, and the next Tab stop after Add goal', async () => {
     await openJane();
 
     const actions = actionsSection()!;
@@ -1328,12 +1341,12 @@ describe('Archive participant', () => {
     expect(button).toHaveAttribute('type', 'button');
     expect(archiveAlert()).toBeEmptyDOMElement();
     expect(follows(archiveAlert(), button)).toBe(true);
-    expect(nextTabStop(saveButton())).toBe(button);
+    expect(nextTabStop(addGoalButton())).toBe(button);
     expect(notice()).toBeNull();
     expect(backLink()).toHaveAttribute('href', '/manage/participants');
   });
 
-  it('comes with the participant on Add participant, the next Tab stop after Save once the 201 is in', async () => {
+  it('comes with the participant on Add participant, the next Tab stop after Add goal once the 201 is in', async () => {
     await openAdd();
     expect(actionsSection()).toBeNull();
     serve('POST', participantsPath, added);
@@ -1341,7 +1354,7 @@ describe('Archive participant', () => {
 
     await save();
 
-    expect(nextTabStop(saveButton())).toBe(archiveButton());
+    expect(nextTabStop(addGoalButton())).toBe(archiveButton());
   });
 
   it(
@@ -1739,5 +1752,536 @@ describe('The list after Archive and Restore', () => {
     await press(within(main()).getByRole('link', { name: 'Active' }));
 
     expect(rowNames()).toEqual(['Jane Citizen', 'Priya Kumar']);
+  });
+});
+
+// Jane's goals as the API gives them (A35), in its order, two active and two archived, the newer archived second.
+const janesGoals: ListRow[] = [
+  {
+    id: '6b1e9d4a-3c27-4f58-8a90-1d2e3f4a5b6c',
+    text: 'Makes own breakfast',
+    sortOrder: 0,
+    archivedAtUtc: null,
+    rowVersion: 'AAAAAAAAC9E=',
+  },
+  {
+    id: '7c2f0e5b-4d38-4a69-9b01-2e3f4a5b6c7d',
+    text: 'Uses the washing machine',
+    sortOrder: 1,
+    archivedAtUtc: '2026-09-21T02:30:00Z',
+    rowVersion: 'AAAAAAAAC9I=',
+  },
+  {
+    id: '8d3a1f6c-5e49-4b7a-8c12-3f4a5b6c7d8e',
+    text: 'Catches the bus to day program and phones when she arrives',
+    sortOrder: 2,
+    archivedAtUtc: null,
+    rowVersion: 'AAAAAAAAC9M=',
+  },
+  {
+    id: '9e4b2a7d-6f5a-4c8b-9d23-4a5b6c7d8e9f',
+    text: 'Walks to the shop',
+    sortOrder: 3,
+    archivedAtUtc: '2026-09-28T05:45:00Z',
+    rowVersion: 'AAAAAAAAC9Q=',
+  },
+];
+
+// Jane's active goals' texts, in the API's order.
+const janesActiveGoals = ['Makes own breakfast', 'Catches the bus to day program and phones when she arrives'];
+
+const goalsHelp =
+  'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
+  + 'with.';
+
+const noGoals = 'No goals yet. Notes will show an empty Goals section.';
+
+/** The Goals section, or `null` while the page has none. */
+function goalsSection(): HTMLElement | null {
+  return within(main()).queryByRole('region', { name: 'Goals' });
+}
+
+/** The texts of the active goals, numbered in the Goals section's `<ol>`, in order, each its row's first paragraph. */
+function activeGoals(): (string | undefined)[] {
+  return Array.from(goalsSection()!.querySelectorAll('ol > li'), (item) => item.querySelector('p')?.textContent);
+}
+
+/** The texts of the archived goals, in the Goals section's `<details>`, in order, each its row's first paragraph. */
+function archivedGoals(): (string | undefined)[] {
+  return Array.from(
+    goalsSection()!.querySelectorAll('details ul > li'),
+    (item) => item.querySelector('p')?.textContent,
+  );
+}
+
+/** The Goals section's New goal field. */
+function newGoal(): HTMLElement {
+  return within(goalsSection()!).getByRole('textbox', { name: 'New goal' });
+}
+
+/** The Goals section's Add goal, by its name while it is not busy. */
+function addGoalButton(): HTMLElement {
+  return within(goalsSection()!).getByRole('button', { name: 'Add goal' });
+}
+
+/** The page's status region, which a goal's add writes to. */
+function pageStatus(): HTMLElement {
+  return main().querySelector<HTMLElement>('p.visually-hidden[role="status"]')!;
+}
+
+/** The path that a goal of the participant whose ID is `participantId` is added at. */
+function goalAddPath(participantId: string): string {
+  return `${participantsPath}/${participantId}/goals`;
+}
+
+/** The bare `201` of a goal's add. */
+const goalAdded: Answer = () => Promise.resolve(new Response(null, { status: 201 }));
+
+/** The goals' adds sent, each as its path, its token and the JSON of its body. */
+function goalAdds(): { path: string; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'POST' && (path as string).endsWith('/goals'))
+    .map(([path, init]) => ({
+      path: path as string,
+      token: new Headers(init?.headers).get('X-XSRF-TOKEN'),
+      body: JSON.parse(init?.body as string) as unknown,
+    }));
+}
+
+/** The path that the goal whose ID is `goalId` is reworded at. */
+function goalUpdatePath(goalId: string): string {
+  return `/api/admin/goals/${goalId}`;
+}
+
+/** The bare `200` of a goal's reword, with the goal's new `ETag`, which the page does not read. */
+const goalReworded: Answer = () =>
+  Promise.resolve(new Response(null, { status: 200, headers: { ETag: '"AAAAAAAAD9F="' } }));
+
+/** The goals' rewords sent, each as its path, its `If-Match`, its token and the JSON of its body. */
+function goalRewords(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'PUT' && (path as string).startsWith('/api/admin/goals/'))
+    .map(([path, init]) => {
+      const headers = new Headers(init?.headers);
+      return {
+        path: path as string,
+        ifMatch: headers.get('If-Match'),
+        token: headers.get('X-XSRF-TOKEN'),
+        body: JSON.parse(init?.body as string) as unknown,
+      };
+    });
+}
+
+/** The path at which the goals of the participant whose ID is `participantId` are put in order. */
+function goalOrderPath(participantId: string): string {
+  return `${participantsPath}/${participantId}/goals/order`;
+}
+
+/** The bare `204` of a reorder of goals. */
+const goalsReordered: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
+/** The goals' reorders sent, each as its path, its `If-Match`, its token and the JSON of its body. */
+function goalReorders(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'PUT' && (path as string).endsWith('/goals/order'))
+    .map(([path, init]) => {
+      const headers = new Headers(init?.headers);
+      return {
+        path: path as string,
+        ifMatch: headers.get('If-Match'),
+        token: headers.get('X-XSRF-TOKEN'),
+        body: JSON.parse(init?.body as string) as unknown,
+      };
+    });
+}
+
+/** The path at which the goal whose ID is `goalId` is archived, or restored with `action` `'restore'`. */
+function goalStatusPath(goalId: string, action: 'archive' | 'restore'): string {
+  return `/api/admin/goals/${goalId}/${action}`;
+}
+
+/** The goals' archives and restores sent, each as its path, its `If-Match`, its token and its body. */
+function goalStatusChanges(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return statusChanges().filter(({ path }) => path.startsWith('/api/admin/goals/'));
+}
+
+/** A goal as the list gives it once it is added, first in the list. */
+const breakfastAdded: ListRow = {
+  id: '8d3a1f6c-5e49-4b7a-ac12-3f4a5b6c7d8e',
+  text: 'Makes own breakfast',
+  sortOrder: 0,
+  archivedAtUtc: null,
+  rowVersion: 'AAAAAAAAD9E=',
+};
+
+/** Opens Jane's page from her row of the list, as the manager does, her goals being `goals`. */
+async function openJaneWithGoals(goals: ListRow[]): Promise<Router> {
+  serve('GET', goalsPath(jane.id), json(goals));
+  return openJane();
+}
+
+describe("A participant's goals", () => {
+  it('are in Goals, between Details and Actions: the help text, then the active ones numbered, in order', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const goals = goalsSection()!;
+    expect(within(goals).getByRole('heading', { level: 2 })).toHaveAccessibleName('Goals');
+    expect(follows(detailsSection(), goals)).toBe(true);
+    expect(follows(goals, actionsSection()!)).toBe(true);
+    expect(follows(within(goals).getByText(goalsHelp), goals.querySelector('ol')!)).toBe(true);
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    for (const item of goals.querySelectorAll<HTMLElement>('ol > li')) {
+      expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+    }
+  });
+
+  it('show the archived ones newest archived first, in a closed section after the list', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const details = goalsSection()!.querySelector('details')!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary')?.textContent).toBe('Archived goals');
+    expect(follows(goalsSection()!.querySelector('ol')!, details)).toBe(true);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+  });
+
+  it('say "No goals yet." in place of the list when there are none, with no archived section', async () => {
+    await openJaneWithGoals([]);
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+    expect(goalsSection()!.querySelector('ol')).toBeNull();
+    expect(goalsSection()!.querySelector('details')).toBeNull();
+  });
+
+  it('are keyed by the participant alone, never by their words', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const keys = queryClient.getQueryCache().getAll().map(({ queryKey }) => JSON.stringify(queryKey));
+    expect(keys).toContain(JSON.stringify(['admin', 'goals', jane.id]));
+    for (const { text } of janesGoals) {
+      expect(keys.filter((key) => key.includes(text))).toEqual([]);
+    }
+  });
+
+  it('of an archived participant are numbered text, with no help, button or alert, and no Restore', async () => {
+    serve('GET', goalsPath(jane.id), json(janesGoals));
+    await openArchivedJane();
+
+    const goals = goalsSection()!;
+    expect(follows(detailsSection(), goals)).toBe(true);
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+    expect(within(goals).queryByText(goalsHelp)).toBeNull();
+    expect(within(goals).queryAllByRole('button')).toEqual([]);
+    expect(within(goals).queryAllByRole('alert')).toEqual([]);
+    expect(within(goals).queryAllByRole('textbox')).toEqual([]);
+  });
+
+  it('of an archived participant with none say "No goals yet."', async () => {
+    await openArchivedJane();
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+  });
+
+  it("after Add participant's 201, are the next Tab stop from Save, at New goal, past the help", async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+
+    await save();
+
+    expect(saveButton()).toHaveFocus();
+    expect(nextTabStop(saveButton())).toBe(newGoal());
+    expect(follows(within(goalsSection()!).getByText(noGoals), newGoal())).toBe(true);
+  });
+
+  it('take one added on the page: sent with the token, the list read again, then focus kept in New goal', async () => {
+    await openJaneWithGoals([]);
+    serve('POST', goalAddPath(jane.id), goalAdded);
+    serve('GET', goalsPath(jane.id), json([breakfastAdded]));
+    type(newGoal(), ' Makes own\nbreakfast ');
+
+    await press(addGoalButton());
+
+    expect(goalAdds()).toEqual([
+      { path: goalAddPath(jane.id), token: 'token-1', body: { text: 'Makes own breakfast' } },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${goalAddPath(jane.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual(['Makes own breakfast']);
+    expect(newGoal()).toHaveValue('');
+    expect(newGoal()).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal added to the end of the list');
+  });
+
+  it('take one reworded on the page: sent with token and version, the list read again, focus on Edit', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast] = janesGoals;
+    serve('PUT', goalUpdatePath(breakfast.id), goalReworded);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json(janesGoals.map((goal) => (goal === breakfast ? { ...goal, text: 'Makes own lunch' } : goal))),
+    );
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` }));
+    type(within(goalsSection()!).getByRole('textbox', { name: 'Edit goal' }), ' Makes own\nlunch ');
+
+    await press(within(goalsSection()!).getByRole('button', { name: 'Save' }));
+
+    expect(goalRewords()).toEqual([
+      {
+        path: goalUpdatePath(breakfast.id),
+        ifMatch: `"${breakfast.rowVersion}"`,
+        token: 'token-1',
+        body: { text: 'Makes own lunch' },
+      },
+    ]);
+    expect(requests().slice(-2)).toEqual([`PUT ${goalUpdatePath(breakfast.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual(['Makes own lunch', janesActiveGoals[1]]);
+    expect(within(goalsSection()!).getByRole('button', { name: 'Edit, Makes own lunch' })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal saved');
+  });
+
+  it('take one moved on the page: the order sent with token and no If-Match, the list read again', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    serve('PUT', goalOrderPath(jane.id), goalsReordered);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([
+        { ...bus, sortOrder: 0, rowVersion: 'AAAAAAAAD9E=' },
+        washing,
+        { ...breakfast, sortOrder: 1, rowVersion: 'AAAAAAAAD9F=' },
+        shop,
+      ]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Move down, ${breakfast.text}` }));
+
+    expect(goalReorders()).toEqual([
+      { path: goalOrderPath(jane.id), ifMatch: null, token: 'token-1', body: { goalIds: [bus.id, breakfast.id] } },
+    ]);
+    expect(requests().slice(-2)).toEqual([`PUT ${goalOrderPath(jane.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([janesActiveGoals[1], janesActiveGoals[0]]);
+    expect(within(goalsSection()!).getByRole('button', { name: `Move down, ${breakfast.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved down to number 2 of 2');
+  });
+
+  it('take one archived on the page: sent with token and version, the list read again, Restore focused', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    const path = goalStatusPath(breakfast.id, 'archive');
+    serve('POST', path, noContent);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([{ ...breakfast, archivedAtUtc: '2026-10-01T06:12:00Z', rowVersion: 'AAAAAAAAD9E=' }, washing, bus, shop]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Archive, ${breakfast.text}` }));
+
+    expect(goalStatusChanges()).toEqual([
+      { path, ifMatch: `"${breakfast.rowVersion}"`, token: 'token-1', body: undefined },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${path}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([janesActiveGoals[1]]);
+    expect(goalsSection()!.querySelector('details')!.open).toBe(true);
+    expect(archivedGoals()).toEqual([breakfast.text, 'Walks to the shop', 'Uses the washing machine']);
+    expect(within(goalsSection()!).getByRole('button', { name: `Restore, ${breakfast.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal archived');
+  });
+
+  it('take one restored on the page: sent with token and version, the list read again, Archive focused', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    const path = goalStatusPath(washing.id, 'restore');
+    serve('POST', path, noContent);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([breakfast, bus, shop, { ...washing, sortOrder: 3, archivedAtUtc: null, rowVersion: 'AAAAAAAAD9E=' }]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Restore, ${washing.text}` }));
+
+    expect(goalStatusChanges()).toEqual([
+      { path, ifMatch: `"${washing.rowVersion}"`, token: 'token-1', body: undefined },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${path}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([...janesActiveGoals, washing.text]);
+    expect(archivedGoals()).toEqual(['Walks to the shop']);
+    expect(within(goalsSection()!).getByRole('button', { name: `Archive, ${washing.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal restored to the end of the list');
+  });
+
+  // participants.md *Interactions and focus*, "Archive while something is unsaved", and S01.02.04's hand-off.
+  it('lose their controls, and what was typed in them, to Archive participant, and get only them back', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast] = janesGoals;
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` }));
+    type(within(goalsSection()!).getByRole('textbox', { name: 'Edit goal' }), 'Makes own lunch');
+    type(newGoal(), 'Phones her sister');
+    serve('POST', archivePath, noContent);
+    serve('GET', listPath, json([janeArchived, priya]));
+    const goalRequests = () => requests().filter((request) => request.includes('/goals'));
+    const goalRequestsBefore = goalRequests();
+
+    await press(archiveButton());
+
+    expect(notice()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+    expect(within(goalsSection()!).queryAllByRole('button')).toEqual([]);
+    expect(within(goalsSection()!).queryAllByRole('textbox')).toEqual([]);
+    expect(within(goalsSection()!).queryAllByRole('alert')).toEqual([]);
+    expect(within(goalsSection()!).queryByText(goalsHelp)).toBeNull();
+    expect(goalRewords()).toEqual([]);
+    expect(goalAdds()).toEqual([]);
+    serve('POST', restorePath, noContent);
+    serve('GET', listPath, json([janeRestored, priya]));
+
+    await press(restoreButton());
+
+    expect(pageHeading()).toHaveFocus();
+    expect(within(goalsSection()!).getByText(goalsHelp)).toBeInTheDocument();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    for (const text of janesActiveGoals) {
+      for (const label of ['Move up', 'Move down', 'Edit', 'Archive']) {
+        expect(within(goalsSection()!).getByRole('button', { name: `${label}, ${text}` })).toBeInTheDocument();
+      }
+    }
+    for (const text of ['Walks to the shop', 'Uses the washing machine']) {
+      expect(within(goalsSection()!).getByRole('button', { name: `Restore, ${text}` })).toBeInTheDocument();
+    }
+    expect(within(goalsSection()!).getAllByRole('button')).toHaveLength(11);
+    expect(within(goalsSection()!).queryByRole('textbox', { name: 'Edit goal' })).toBeNull();
+    expect(newGoal()).toHaveValue('');
+    expect(goalRequests()).toEqual(goalRequestsBefore);
+  });
+
+  it('of a participant just added take one added on the page, reading their list only after it', async () => {
+    await openAdd();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+    await save();
+    serve('POST', goalAddPath(newId), goalAdded);
+    serve('GET', goalsPath(newId), json([breakfastAdded]));
+    type(newGoal(), 'Makes own breakfast');
+
+    await press(addGoalButton());
+
+    expect(requests().slice(-2)).toEqual([`POST ${goalAddPath(newId)}`, `GET ${goalsPath(newId)}`]);
+    expect(activeGoals()).toEqual(['Makes own breakfast']);
+    expect(newGoal()).toHaveFocus();
+  });
+
+  it.each([
+    ['lost', noConnection, 0],
+    ['not given in 10 seconds', noAnswer, 10_000],
+  ])('are added once when the answer is %s, which says so above Add goal, the text kept', async (_, answer, ms) => {
+    await openJaneWithGoals([]);
+    serve('POST', goalAddPath(jane.id), answer);
+    type(newGoal(), 'Makes own breakfast');
+    const button = addGoalButton();
+
+    await press(button);
+    await wait(ms);
+    await wait(60_000);
+
+    expect(goalAdds()).toHaveLength(1);
+    expect(within(goalsSection()!).getByRole('alert')).toHaveTextContent('Not added: no connection. Try again.');
+    expect(newGoal()).toHaveValue('Makes own breakfast');
+    expect(button).toHaveFocus();
+    expect(activeGoals()).toEqual([]);
+  });
+
+  it('are not on Add participant before its 201, then come empty, with no request for them', async () => {
+    await openAdd();
+    expect(goalsSection()).toBeNull();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+
+    await save();
+    await wait(60_000);
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+    expect(follows(detailsSection(), goalsSection()!)).toBe(true);
+    expect(follows(goalsSection()!, actionsSection()!)).toBe(true);
+    expect(requests().filter((request) => request.includes('/goals'))).toEqual([]);
+  });
+});
+
+describe("A participant's page while their goals load", () => {
+  it('shows "Loading participant…" at 1 s while their goals are held, then the page, the name focused', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), later(2000, json(janesGoals)));
+    await openFromManage(`/manage/participants/${jane.id}`);
+
+    await wait(999);
+    expect(line()).toBeEmptyDOMElement();
+    expect(headingOrNone()).not.toBeInTheDocument();
+    expect(backLink()).toBeInTheDocument();
+
+    await wait(1);
+    expect(line()).toHaveTextContent('Loading participant…');
+    expect(headingOrNone()).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+
+    await wait(1000);
+    await settle();
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+  });
+
+  it('says that the participant did not load when their goals did not, and shows them after a Try again', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), noConnection);
+    await openFromManage(`/manage/participants/${jane.id}`);
+
+    // After the query client's silent retry.
+    await wait(1000);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Participant');
+    expect(pageHeading()).toHaveFocus();
+    expect(line().textContent).toBe('This participant did not load: no connection. Try again.');
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(goalsSection()).toBeNull();
+    expect(backLink()).toBeInTheDocument();
+
+    serve('GET', goalsPath(jane.id), json(janesGoals));
+    await press(within(main()).getByRole('button', { name: 'Try again' }));
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toEqual([pageHeading()]);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+  });
+
+  it('shows Page not found in place of the whole page when their goals are not found', async () => {
+    // React and React Router report the refusal that the route's boundary catches, which is expected here.
+    const report = console.error;
+    const reported = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((arg) => arg instanceof ApiError && arg.status === 404)) {
+        report(...args);
+      }
+    });
+    onTestFinished(() => reported.mockRestore());
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), problem(404));
+    renderApp(`/manage/participants/${jane.id}`);
+
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
+    expect(document.title).toBe('Grow2Notes – Page not found');
+    expect(backLink()).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
   });
 });

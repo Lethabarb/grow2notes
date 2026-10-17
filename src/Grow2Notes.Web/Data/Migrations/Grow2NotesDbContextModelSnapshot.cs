@@ -176,6 +176,48 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.ToTable("AuditEvent");
                 });
 
+            modelBuilder.Entity("Grow2Notes.Web.Data.Goal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("ArchivedAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<Guid>("OrganisationId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("OrganisationId", "Id");
+
+                    b.HasIndex("OrganisationId", "ParticipantId", "ArchivedAtUtc", "SortOrder");
+
+                    b.ToTable("Goal");
+                });
+
             modelBuilder.Entity("Grow2Notes.Web.Data.Organisation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -247,8 +289,6 @@ namespace Grow2Notes.Web.Data.Migrations
                         .HasColumnType("tinyint");
 
                     b.HasKey("Id");
-
-                    b.HasAlternateKey("OrganisationId", "Id");
 
                     b.HasIndex("OrganisationId", "Status", "FamilyName", "GivenName");
 
@@ -363,6 +403,16 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.HasOne("Grow2Notes.Web.Data.Organisation", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.Goal", b =>
+                {
+                    b.HasOne("Grow2Notes.Web.Data.Participant", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ParticipantId")
+                        .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

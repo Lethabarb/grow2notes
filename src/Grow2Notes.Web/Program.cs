@@ -242,6 +242,8 @@ builder.Services.AddScoped<UserEdit>();
 builder.Services.AddScoped<GuidePromptsHandler>();
 builder.Services.AddScoped<ParticipantList>();
 builder.Services.AddScoped<ParticipantChanges>();
+builder.Services.AddScoped<GoalList>();
+builder.Services.AddScoped<GoalChanges>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, those of the
 // invite, the reset or the new security stamps it makes, and its audit events share the scope's context, and so the one
@@ -359,7 +361,12 @@ api.MapAdminGroup()
     .MapParticipantListEndpoint()
     .MapAddParticipantEndpoint()
     .MapUpdateParticipantEndpoint()
-    .MapArchiveParticipantEndpoints();
+    .MapArchiveParticipantEndpoints()
+    .MapGoalListEndpoint()
+    .MapAddGoalEndpoint()
+    .MapUpdateGoalEndpoint()
+    .MapReorderGoalsEndpoint()
+    .MapArchiveGoalEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

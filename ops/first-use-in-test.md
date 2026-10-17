@@ -375,3 +375,29 @@ the testing mailbox (*Before you start*), and accounts B and C, the other two ma
     and look for each one's row on Users read with "Manager". (S00.06.06's screen-reader spot check, as backlog README
     §9 asks of a changed form; users.md's NVDA pass over Edit user: its hints, the Role radios, a failed Save and the
     last-manager notice.)
+
+### Goals, once T05 is in test
+
+These steps hold T05's by-hand checks ([tasks.md](../design/backlog/tasks.md), T05's Notes). They need account A and
+the kit of steps 26 to 28. Every goal typed is made up (A35), such as `Makes own breakfast`.
+
+38. The database, as in step 26: run `infra/sql/check-database.sql` for test after T05's deploy. Look for PASS on
+    every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Goal` for `grow2notes_runtime`, and B7
+    and B8, which list the `Goal` table and the `AddGoal` migration. (S01.02.05's first criterion, in test.)
+39. Ask a manager who has not used the Participants screens before to set up a made-up participant with five goals
+    on their own phone, without help, while you watch and say nothing. Write down whether they finished, how long it
+    took and where they stopped or asked. (design.md §14 M1's *Done when*; F01.02's feature check.)
+40. On the iPhone, as account A, open a participant with a goal and press Edit on it. Look for the keyboard opening
+    at once, with the cursor after the goal's words; then press Cancel. Do the same on the Android phone.
+    (participants.md open question 6; list-editor.md *Implementation notes*, "test it".)
+41. With NVDA and Chrome on the laptop, VoiceOver and Safari on the iPhone, and TalkBack and Chrome on the Android
+    phone, as account A, open a participant, add three goals, then on row 2 press Move up, then press Move up on
+    row 1, then Edit a goal and Save it, Archive a goal and Restore it, and open and close Archived goals. Look for
+    each reading in list-editor.md's *Screen reader announcements* and participants.md's *Accessibility checklist*,
+    *Screen reader*, heard once each: "Move up" and the goal's words, then "button", on row 2; "Moved up to number 1
+    of 3" after the press; "dimmed" or "unavailable" on row 1's Move up, and "Already at the top" when it is pressed;
+    on Edit, "Edit goal", the words, then "You can enter up to 200 characters" and the help text; "Goal saved", with
+    focus on Edit; "Goal archived", with focus on Restore and the goal's words; "Goal restored to the end of the
+    list", with focus on Archive; "Goal added to the end of the list" after each Add, with focus still in New goal;
+    and "Archived goals" with "collapsed" or "expanded". (participants.md's screen-reader pass; list-editor.md
+    *Implementation notes*, the manual pass.)

@@ -61,6 +61,8 @@ public sealed class SignedOutTests : IAsyncDisposable
     [InlineData("/api/admin/users")]
     [InlineData("/api/admin/participants")]
     [InlineData("/api/admin/participants?includeArchived=true")]
+    [InlineData("/api/admin/participants/5d8c2f71-0a4e-4b39-9e16-7f3a2c8b1d05/goals")]
+    [InlineData("/api/admin/participants/5d8c2f71-0a4e-4b39-9e16-7f3a2c8b1d05/goals?includeArchived=true")]
     public async Task An_admin_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
     {
         using var client = app.CreateHttpsClient();

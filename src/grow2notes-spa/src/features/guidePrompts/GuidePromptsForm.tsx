@@ -3,6 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEve
 import { ApiError, apiWithHeaders, classify } from '../../api/api.ts';
 import { refreshMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
+import { CharacterCount } from '../../components/CharacterCount.tsx';
 import { FieldError } from '../../components/FieldError.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { SaveStatus, type SaveState } from '../../components/SaveStatus.tsx';
@@ -21,8 +22,6 @@ import { LeaveWarning } from './LeaveWarning.tsx';
 const promptsPath = '/api/admin/guide-prompts';
 // The count shows from 900 characters, 90% of the limit, GOV.UK's threshold (guide-prompts.md 6c).
 const countFrom = 900;
-// Its twin speaks once typing has stopped for 1 s, never at each keystroke.
-const countPause = 1000;
 // When Save's busy label shows (Button), at which the save status holds its hidden "Saving…" too (6f).
 const savingDelay = 400;
 
@@ -55,9 +54,8 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
   // The presses that found the text too long, so that each moves focus to the field, even with the error showing;
   // `0` while it shows no error.
   const [tooLong, setTooLong] = useState(0);
-  // The latest input's count, a new object at each, from which the twin speaks once typing has stopped.
-  const [typed, setTyped] = useState<{ count: string }>();
-  const [spoken, setSpoken] = useState('');
+  // The field's inputs, after which the count's twin speaks once typing has stopped.
+  const [inputs, setInputs] = useState(0);
   const field = useRef<HTMLTextAreaElement>(null);
   const grow = useRef<HTMLDivElement>(null);
   const length = trimmed.length;
@@ -82,17 +80,6 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
     }
   }, [tooLong]);
 
-  useEffect(() => {
-    if (typed === undefined) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setSpoken(typed.count);
-    }, countPause);
-    return () => window.clearTimeout(timer);
-  }, [typed]);
-
   function onInput(event: FormEvent<HTMLTextAreaElement>) {
     const { value } = event.currentTarget;
     grow.current?.setAttribute('data-value', value);
@@ -105,7 +92,7 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
       setTooLong(0);
     }
 
-    setTyped({ count: next.length >= countFrom ? msg.characterCount(next.length, limits.guidePrompts) : '' });
+    setInputs((count) => count + 1);
   }
 
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -197,15 +184,7 @@ export function GuidePromptsForm({ loaded }: { loaded: GuidePrompts }) {
               onInput={onInput}
             />
           </div>
-          {/* Hidden from screen readers, which hear its twin instead, once typing has stopped. */}
-          {length >= countFrom && (
-            <p aria-hidden="true" className={styles.count} data-over-limit={over || undefined}>
-              {msg.characterCount(length, limits.guidePrompts)}
-            </p>
-          )}
-          <p aria-live="polite" className="visually-hidden">
-            {spoken}
-          </p>
+          <CharacterCount length={length} limit={limits.guidePrompts} from={countFrom} inputs={inputs} />
         </div>
         <div className={styles.actions}>
           <RequestAlert>{failure}</RequestAlert>

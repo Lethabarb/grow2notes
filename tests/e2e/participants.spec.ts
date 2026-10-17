@@ -2,6 +2,18 @@ import type { Locator, Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import {
+  breakfast,
+  bus,
+  goals,
+  goalWrites,
+  madeUpGoal,
+  serveGoals,
+  shop,
+  sister,
+  washing,
+  type AdminGoal,
+} from './goals.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import {
@@ -16,10 +28,12 @@ import {
 } from './participants.ts';
 import { holdNext } from './requests.ts';
 
-// The Participants screens in the published app (S01.02.01 to S01.02.04), against participants.md's criteria. The
-// first three tests sign in for real, through setup with a passkey on the virtual authenticator, and add, correct,
-// archive and restore a participant on the app's own answers; the others answer /api/auth/me, the list and each change
-// in the browser with made-up people (me.ts, participants.ts), so that none of those requests reaches the app.
+// The Participants screens and a participant's goals in the published app (S01.02.01 to S01.02.08), against
+// participants.md's criteria. The first four tests sign in for real, through setup with a passkey on the virtual
+// authenticator, and add, correct, archive and restore a participant, and add, reword, move, archive and restore their
+// goals, on the app's own answers; the others answer /api/auth/me, the list, each participant's goals and each change
+// in the browser with made-up people and goals (me.ts, participants.ts, goals.ts), so that none of those requests
+// reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -50,9 +64,11 @@ const tryAgain = (page: Page) => main(page).getByRole('button', { name: 'Try aga
 // Add participant and a participant's page (participants.md component B).
 type FieldName = 'Given name' | 'Family name' | 'Day' | 'Month' | 'Year';
 const field = (page: Page, name: FieldName) => main(page).getByRole('textbox', { name, exact: true });
-const save = (page: Page) => main(page).getByRole('button', { name: 'Save', exact: true });
-const saveStatus = (page: Page) => main(page).locator('form').getByRole('status');
-const saveAlert = (page: Page) => main(page).locator('form').getByRole('alert');
+// The Details form's Save, not an open goal edit's.
+const save = (page: Page) => details(page).getByRole('button', { name: 'Save', exact: true });
+const details = (page: Page) => main(page).getByRole('region', { name: 'Details' });
+const saveStatus = (page: Page) => details(page).getByRole('status');
+const saveAlert = (page: Page) => details(page).getByRole('alert');
 const archive = (page: Page) => main(page).getByRole('button', { name: 'Archive participant' });
 const archiveAlert = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('alert');
 const restore = (page: Page) => main(page).getByRole('button', { name: 'Restore', exact: true });
@@ -62,6 +78,46 @@ const archivedWords = (name: string) =>
   'Their past notes are kept.';
 const noticeWords = (page: Page) => main(page).getByText(/ is archived, so this page is read-only\./);
 const restoreAlert = (page: Page) => noticeWords(page).locator('xpath=..').getByRole('alert');
+
+// A participant's goals (participants.md B6, list-editor.md *Anatomy*).
+const goalsSection = (page: Page) => main(page).getByRole('region', { name: 'Goals' });
+// Each active goal's text, in the numbered list's order: in its row, or, read-only, as the row itself.
+const goalTexts = (page: Page) => goalsSection(page).locator('ol > li > p, ol > li > div > p');
+const archivedSection = (page: Page) => goalsSection(page).locator('details');
+const archivedSummary = (page: Page) => archivedSection(page).locator('summary');
+const archivedTexts = (page: Page) => archivedSection(page).locator('li > p, li > div > p');
+const goalRow = (page: Page, text: string) => goalsSection(page).getByRole('listitem').filter({ hasText: text });
+type RowButton = 'Move up' | 'Move down' | 'Edit' | 'Archive' | 'Restore';
+/**
+ * A goal row's button as its name and its focus stop read: its label, then the goal's text, hidden but for screen
+ * readers, with a space before the comma, as the hidden text is a block of its own, which screen readers do not voice
+ * (tests/README.md).
+ */
+const rowName = (label: RowButton, text: string) => `${label} , ${text}`;
+const goalButton = (page: Page, label: RowButton, text: string) =>
+  goalsSection(page).getByRole('button', { name: rowName(label, text), exact: true });
+/** An active goal row's four focus stops, in order (list-editor.md *Anatomy*). */
+const rowStops = (text: string) =>
+  (['Move up', 'Move down', 'Edit', 'Archive'] as const).map((label) => rowName(label, text));
+const newGoal = (page: Page) => goalsSection(page).getByRole('textbox', { name: 'New goal', exact: true });
+const addGoal = (page: Page) => goalsSection(page).getByRole('button', { name: 'Add goal', exact: true });
+const editGoal = (page: Page) => goalsSection(page).getByRole('textbox', { name: 'Edit goal', exact: true });
+const editForm = (page: Page) =>
+  goalsSection(page).locator('form').filter({ has: page.getByRole('textbox', { name: 'Edit goal', exact: true }) });
+const saveGoal = (page: Page) => editForm(page).getByRole('button', { name: 'Save', exact: true });
+const cancelGoal = (page: Page) => editForm(page).getByRole('button', { name: 'Cancel', exact: true });
+// A goal field's message above its box, with its hidden "Error: " (form-validation.md).
+const goalError = (page: Page) => goalsSection(page).locator('[id$="-error"]');
+const conflictMessage = (page: Page) =>
+  goalsSection(page).getByText('Someone else changed this list just now. Check it, then try again.', { exact: true });
+// The page's one status region, visually hidden, where the goal list says what each change did (participants.md B8).
+const pageStatus = (page: Page) => main(page).locator('p.visually-hidden[role="status"]');
+// A button busy for 400 ms, which then shows its busy label, and is named by it, in place of the one it rests with.
+const busyButton = (page: Page) => main(page).locator('button[data-busy]');
+const goalsHelp =
+  'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
+  + 'with.';
+const noGoals = 'No goals yet. Notes will show an empty Goals section.';
 
 /** "Saved 4:12 pm", at whatever time the app saved, the time with its non-breaking space (status-messages.md). */
 const savedAtAnyTime = /^Saved (\d{1,2}:\d{2}\s[ap]m|midday|midnight)$/;
@@ -73,6 +129,15 @@ const isListRead = (response: Response) =>
 /** Whether the response answers a change by `method` to the path after `/api/admin/participants`. */
 const isChange = (method: 'POST' | 'PUT', path = '') => (response: Response) =>
   response.request().method() === method && new URL(response.url()).pathname === `/api/admin/participants${path}`;
+
+/** Whether the response answers the participant's goals read, the Goals section's one read. */
+const isGoalsRead = (participantId: string) => (response: Response) =>
+  response.request().method() === 'GET'
+  && new URL(response.url()).pathname === `/api/admin/participants/${participantId}/goals`;
+
+/** Whether the response answers a goal write by `method` to the path after `/api/admin` (design.md §6.6). */
+const isGoalWrite = (method: 'POST' | 'PUT', path: string) => (response: Response) =>
+  response.request().method() === method && new URL(response.url()).pathname === `/api/admin${path}`;
 
 // The time of each change that the browser answers, 4:12 pm in Melbourne on 1 October 2026, before daylight saving.
 const answeredAt = 'Thu, 01 Oct 2026 06:12:00 GMT';
@@ -194,8 +259,8 @@ const ring: Ring = { focusVisible: true, style: 'solid', width: '3px', colour: '
 
 /**
  * Where focus is, as `whereFocusIs` says, but by the text that shows, so that a button's busy label, hidden until it is
- * busy, is left out, and naming a field by its label; with the ring that shows on the element or, for a row's link, on
- * the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
+ * busy, is left out, and naming a field, a text box included, by its label; with the ring that shows on the element or,
+ * for a row's link, on the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
  */
 function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
   return page.evaluate(() => {
@@ -208,7 +273,10 @@ function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
       return { name: 'the page itself' };
     }
 
-    const text = element instanceof HTMLInputElement ? element.labels?.[0]?.innerText : element.innerText;
+    const text =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.labels?.[0]?.innerText
+        : element.innerText;
     const own = getComputedStyle(element);
     const drawn = own.outlineStyle === 'none' ? getComputedStyle(element, '::after') : own;
     const box = element.getBoundingClientRect();
@@ -294,6 +362,41 @@ async function expectAtLeast(locator: Locator, width: number, height: number) {
     expect(Math.round(box.width), `the width of ${name}`).toBeGreaterThanOrEqual(width);
     expect(Math.round(box.height), `the height of ${name}`).toBeGreaterThanOrEqual(height);
   }
+}
+
+/**
+ * Expects each button that the locator finds, once one shows, to take its label's width, at least 44 px wide and 48 px
+ * high (common-items.md *Conflicts resolved* 6): as wide as it is when sized to what it holds, with the 44 px minimum
+ * alone, so that it is neither stretched across its row, as the shared button is on a phone, nor held to the shared
+ * button's 8rem minimum on a laptop.
+ */
+async function expectLabelWidth(buttons: Locator) {
+  await expectAtLeast(buttons, 44, 48);
+  for (const button of await buttons.all()) {
+    const [laidOut, sizedToLabel] = await button.evaluate((element: HTMLElement) => {
+      const width = () => element.getBoundingClientRect().width;
+      const asLaidOut = width();
+      element.style.inlineSize = 'max-content';
+      element.style.minInlineSize = 'var(--target-min)';
+      const asLabel = width();
+      element.style.removeProperty('inline-size');
+      element.style.removeProperty('min-inline-size');
+      return [asLaidOut, asLabel];
+    });
+    expect(Math.round(laidOut), `the width of ${(await button.textContent()) ?? ''}`).toBe(Math.round(sizedToLabel));
+  }
+}
+
+/** The colour that a system colour, such as `Highlight`, takes under the forced colours that the page emulates. */
+function systemColour(page: Page, keyword: string): Promise<string> {
+  return page.evaluate((colour) => {
+    const probe = document.createElement('span');
+    probe.style.color = colour;
+    document.body.append(probe);
+    const { color } = getComputedStyle(probe);
+    probe.remove();
+    return color;
+  }, keyword);
 }
 
 /** Sets up the invited manager's account through setup with a passkey on the virtual authenticator, ending on Today. */
@@ -429,8 +532,140 @@ test("signed in for real at 375 px, a manager adds O'Brien, corrects the date of
   await expectNothingKept(page, [siobhan.givenName, siobhan.familyName, '1987-03-0', '8 March']);
 });
 
+// Five made-up goals (A35), for design.md §14 M1's "a participant with five goals on a phone".
+const fiveGoals = [
+  'Makes own breakfast',
+  'Catches the bus to day program and phones when she arrives',
+  'Phones her sister',
+  'Walks to the shop',
+  'Uses the washing machine',
+];
+
+test('signed in for real at 375 px, a manager adds five goals, then rewords, moves, archives and restores one', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Manage', exact: true }).click();
+  await main(page).getByRole('link', { name: 'Participants', exact: true }).click();
+  await addParticipant(page).click();
+  await fillDetails(page, siobhan.givenName, siobhan.familyName, ['7', '3', '1987']);
+  const added = page.waitForResponse(isChange('POST'));
+  await save(page).click();
+  const { id } = (await (await added).json()) as { id: string };
+  await expect(heading(page)).toHaveText(siobhan.name);
+  await expect(save(page)).toBeFocused();
+
+  // No goals yet, and none fetched, so the next Tab from Save is New goal (participants.md *Interactions*).
+  await expect(goalsSection(page).getByText(noGoals)).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(newGoal(page)).toBeFocused();
+
+  // Five goals, one after another, each typed into the field that the Add before it left focus in (design.md §14 M1):
+  // each the app's 201 with no body, then the list read again with it at the end, the field emptied and the add said.
+  let listed: AdminGoal[] = [];
+  for (const [index, text] of fiveGoals.entries()) {
+    await page.keyboard.type(text);
+    const posted = page.waitForResponse(isGoalWrite('POST', `/participants/${id}/goals`));
+    const reread = page.waitForResponse(isGoalsRead(id));
+    await addGoal(page).click();
+    const post = await posted;
+    expect(post.status()).toBe(201);
+    expect(post.request().postDataJSON()).toEqual({ text });
+    expect(await post.text()).toBe('');
+    listed = (await (await reread).json()) as AdminGoal[];
+    expect(listed.map((goal) => [goal.text, goal.sortOrder, goal.archivedAtUtc])).toEqual(
+      fiveGoals.slice(0, index + 1).map((each, sortOrder) => [each, sortOrder, null]),
+    );
+    await expect(goalTexts(page)).toHaveText(fiveGoals.slice(0, index + 1));
+    await expect(newGoal(page)).toBeFocused();
+    await expect(newGoal(page)).toHaveValue('');
+    await expect(pageStatus(page)).toHaveText('Goal added to the end of the list');
+  }
+  const ids = listed.map((goal) => goal.id);
+
+  // The second reworded in its row: Edit focuses the box with the caret after the words; Save sends the row's version
+  // as If-Match and gets the app's 200 with the goal's new version as its ETag; focus goes back to Edit.
+  const reworded = 'Catches the bus to day program and texts when she arrives';
+  await goalButton(page, 'Edit', fiveGoals[1]).click();
+  await expect(editGoal(page)).toBeFocused();
+  await expect(editGoal(page)).toHaveValue(fiveGoals[1]);
+  expect(await editGoal(page).evaluate((box: HTMLTextAreaElement) => [box.selectionStart, box.selectionEnd])).toEqual(
+    [fiveGoals[1].length, fiveGoals[1].length],
+  );
+  await editGoal(page).fill(reworded);
+  const put = page.waitForResponse(isGoalWrite('PUT', `/goals/${ids[1]}`));
+  let reread = page.waitForResponse(isGoalsRead(id));
+  await saveGoal(page).click();
+  const putAnswer = await put;
+  expect(putAnswer.status()).toBe(200);
+  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded });
+  expect(await putAnswer.request().headerValue('if-match')).toBe(`"${listed[1].rowVersion}"`);
+  listed = (await (await reread).json()) as AdminGoal[];
+  expect(listed[1]).toMatchObject({ id: ids[1], text: reworded, sortOrder: 1 });
+  expect(await putAnswer.headerValue('etag')).toBe(`"${listed[1].rowVersion}"`);
+  const afterReword = [fiveGoals[0], reworded, ...fiveGoals.slice(2)];
+  await expect(goalTexts(page)).toHaveText(afterReword);
+  await expect(goalButton(page, 'Edit', reworded)).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Goal saved');
+
+  // The first moved down: the whole order, built from the list, sent; the app's 204; the list read again in the new
+  // order, and focus back on the goal's Move down.
+  const reordered = page.waitForResponse(isGoalWrite('PUT', `/participants/${id}/goals/order`));
+  reread = page.waitForResponse(isGoalsRead(id));
+  await goalButton(page, 'Move down', fiveGoals[0]).click();
+  const order = await reordered;
+  expect(order.status()).toBe(204);
+  expect(order.request().postDataJSON()).toEqual({ goalIds: [ids[1], ids[0], ...ids.slice(2)] });
+  listed = (await (await reread).json()) as AdminGoal[];
+  expect(listed.map((goal) => [goal.id, goal.sortOrder])).toEqual(
+    [ids[1], ids[0], ...ids.slice(2)].map((each, sortOrder) => [each, sortOrder]),
+  );
+  const afterMove = [reworded, fiveGoals[0], ...fiveGoals.slice(2)];
+  await expect(goalTexts(page)).toHaveText(afterMove);
+  await expect(goalButton(page, 'Move down', fiveGoals[0])).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Moved down to number 2 of 5');
+
+  // The third archived: its version as If-Match, the app's 204, then Archived goals open with it, its Restore focused.
+  const archived = page.waitForResponse(isGoalWrite('POST', `/goals/${ids[2]}/archive`));
+  reread = page.waitForResponse(isGoalsRead(id));
+  await goalButton(page, 'Archive', fiveGoals[2]).click();
+  const archiveAnswer = await archived;
+  expect(archiveAnswer.status()).toBe(204);
+  expect(await archiveAnswer.request().headerValue('if-match')).toBe(`"${listed[2].rowVersion}"`);
+  listed = (await (await reread).json()) as AdminGoal[];
+  expect(listed.find((goal) => goal.id === ids[2])).toMatchObject({ sortOrder: 2, archivedAtUtc: expect.any(String) });
+  await expect(goalTexts(page)).toHaveText([reworded, fiveGoals[0], fiveGoals[3], fiveGoals[4]]);
+  await expect(archivedSection(page)).toHaveAttribute('open', '');
+  await expect(archivedTexts(page)).toHaveText([fiveGoals[2]]);
+  await expect(goalButton(page, 'Restore', fiveGoals[2])).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Goal archived');
+
+  // Restored: the app's 204, the goal at the end of the list, focus on its Archive, and Archived goals gone.
+  const restored = page.waitForResponse(isGoalWrite('POST', `/goals/${ids[2]}/restore`));
+  reread = page.waitForResponse(isGoalsRead(id));
+  await goalButton(page, 'Restore', fiveGoals[2]).click();
+  const restoreAnswer = await restored;
+  expect(restoreAnswer.status()).toBe(204);
+  expect(await restoreAnswer.request().headerValue('if-match')).toBe(
+    `"${listed.find((goal) => goal.id === ids[2])?.rowVersion}"`,
+  );
+  listed = (await (await reread).json()) as AdminGoal[];
+  expect(listed.find((goal) => goal.id === ids[2])).toMatchObject({ sortOrder: 5, archivedAtUtc: null });
+  await expect(goalTexts(page)).toHaveText([reworded, fiveGoals[0], fiveGoals[3], fiveGoals[4], fiveGoals[2]]);
+  await expect(archivedSection(page)).toHaveCount(0);
+  await expect(goalButton(page, 'Archive', fiveGoals[2])).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Goal restored to the end of the list');
+  await expectNothingKept(page, [...fiveGoals, reworded, siobhan.givenName, siobhan.familyName]);
+});
+
+// Two made-up goals (A35) for the keyboard-only check, one of which is archived.
+const [kept, archivedLater] = ['Makes own breakfast', 'Phones her sister'];
+
 for (const width of [375, 1280]) {
-  test(`keyboard only at ${width} px: add, correct, archive and restore, with the focus ring at each stop`, async ({
+  test(`keyboard only at ${width} px: a participant and their goals, with the focus ring at each stop`, async ({
     page,
     invite,
     authenticator,
@@ -463,6 +698,8 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText('Add participant');
     await expect(heading(page)).toBeFocused();
     const form = ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'];
+    // Goals' add form alone, while the participant has no goal yet.
+    const addForm = ['New goal', 'Add goal'];
     await expectStops(page, 'Shift+Tab', ['Participants', 'Manage']);
     await expectStops(page, 'Tab', ['Participants', ...form, 'outside the page']);
     await expectStops(page, 'Shift+Tab', [...form].reverse());
@@ -478,11 +715,18 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText(siobhan.name);
     await expect(saveStatus(page)).toHaveText(savedAtAnyTime);
     await expect(save(page)).toBeFocused();
-    // Until T05 builds Goals, Archive participant follows Save.
-    await expectStops(page, 'Tab', ['Archive participant', 'outside the page']);
+    // The next Tab reaches Goals (participants.md *Interactions*), then Archive participant.
+    await expectStops(page, 'Tab', [...addForm, 'Archive participant', 'outside the page']);
 
     // The date of birth corrected.
-    await expectStops(page, 'Shift+Tab', ['Archive participant', 'Save', 'Year', 'Month', 'Day']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      ...[...addForm].reverse(),
+      'Save',
+      'Year',
+      'Month',
+      'Day',
+    ]);
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type('8');
     await expectStops(page, 'Tab', ['Month', 'Year', 'Save']);
@@ -492,25 +736,78 @@ for (const width of [375, 1280]) {
     await expect(saveStatus(page)).toHaveText(savedAtAnyTime);
     await expect(save(page)).toBeFocused();
 
-    // Archived: the notice takes focus, then an archived participant's page has the back link and Restore.
+    // Two goals, each typed into New goal and added with Enter on Add goal, which leaves focus in New goal.
+    await expectStops(page, 'Tab', ['New goal']);
+    let listed: AdminGoal[] = [];
+    for (const text of [kept, archivedLater]) {
+      await page.keyboard.type(text);
+      await expectStops(page, 'Tab', ['Add goal']);
+      const addedGoal = page.waitForResponse(isGoalWrite('POST', `/participants/${id}/goals`));
+      const reread = page.waitForResponse(isGoalsRead(id));
+      await page.keyboard.press('Enter');
+      expect((await addedGoal).status()).toBe(201);
+      listed = (await (await reread).json()) as AdminGoal[];
+      await expect(newGoal(page)).toBeFocused();
+      await expect(newGoal(page)).toHaveValue('');
+    }
+    await expect(goalTexts(page)).toHaveText([kept, archivedLater]);
+
+    // From Save, each goal row's Move up, Move down, Edit and Archive, the end ones unavailable but there, then New
+    // goal and Add goal, then Archive participant (participants.md *Keyboard*).
+    const bothRows = [...rowStops(kept), ...rowStops(archivedLater)];
+    await expectStops(page, 'Shift+Tab', [...bothRows].reverse().concat('Save'));
+    await expectStops(page, 'Tab', [...bothRows, ...addForm, 'Archive participant', 'outside the page']);
+
+    // The second archived from its row: Archived goals opens, with focus on its Restore, which comes after the summary
+    // and before Archive participant while the section is open.
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      ...[...addForm].reverse(),
+      rowName('Archive', archivedLater),
+    ]);
+    const archivedGoal = page.waitForResponse(isGoalWrite('POST', `/goals/${listed[1].id}/archive`));
+    await page.keyboard.press('Enter');
+    expect((await archivedGoal).status()).toBe(204);
+    await expect(goalButton(page, 'Restore', archivedLater)).toBeFocused();
+    await expect(archivedSection(page)).toHaveAttribute('open', '');
+    const goalStops = [...rowStops(kept), ...addForm, 'Archived goals'];
+    await expectStops(page, 'Tab', ['Archive participant', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      rowName('Restore', archivedLater),
+      ...[...goalStops].reverse(),
+      'Save',
+    ]);
+
+    // Enter on the summary closes it, and Tab then passes Restore by.
+    await expectStops(page, 'Tab', goalStops);
+    await page.keyboard.press('Enter');
+    await expect(archivedSection(page)).not.toHaveAttribute('open');
     await expectStops(page, 'Tab', ['Archive participant']);
+
+    // Archived: the notice takes focus, then an archived participant's page has the back link, Restore and the
+    // Archived goals summary, as its goals are text alone.
     const archived = page.waitForResponse(isChange('POST', `/${id}/archive`));
     await page.keyboard.press('Enter');
     expect((await archived).status()).toBe(204);
     await expect.poll(() => whereFocusIs(page)).toContain(archivedWords(siobhan.name));
-    await expectStops(page, 'Tab', ['Restore', 'outside the page']);
-    await expectStops(page, 'Shift+Tab', ['Restore', 'Participants', 'Manage']);
+    await expectStops(page, 'Tab', ['Restore', 'Archived goals', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Archived goals', 'Restore', 'Participants', 'Manage']);
     await expectStops(page, 'Tab', ['Participants', 'Restore']);
 
-    // Restored: the <h1> takes focus, and the form and Archive participant are back.
+    // Restored: the <h1> takes focus, and the form, the goal's buttons, the add form and Archive participant are back.
     const restored = page.waitForResponse(isChange('POST', `/${id}/restore`));
     await page.keyboard.press('Enter');
     expect((await restored).status()).toBe(204);
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', [...form, 'Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', [...form, ...goalStops, 'Archive participant', 'outside the page']);
 
     // Back to the list, where they are now to be found: Find a participant, then Clear while it holds text.
-    await expectStops(page, 'Shift+Tab', ['Archive participant', ...[...form].reverse(), 'Participants']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archive participant',
+      ...[...form, ...goalStops].reverse(),
+      'Participants',
+    ]);
     await page.keyboard.press('Enter');
     await expect(heading(page)).toHaveText('Participants');
     await expect(heading(page)).toBeFocused();
@@ -539,6 +836,7 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Shift+Tab', ['Participants']);
     await page.keyboard.press('Enter');
     await expect(rows(page).first()).toBeFocused();
+    await expectNothingKept(page, [siobhan.givenName, siobhan.familyName, kept, archivedLater]);
   });
 }
 
@@ -692,6 +990,7 @@ test('Add participant: the form, a failed Save, no connection and the 201, each 
 test("a participant's page saved, stale, refused, archived and restored, each passing axe", async ({ page }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
   await page.goto(`/manage/participants/${jane.id}`);
 
   await expect(heading(page)).toHaveText('Jane Citizen');
@@ -768,6 +1067,7 @@ test("an archived participant's page, a page that did not load and an unknown ID
 }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
 
   // Opened on an archived participant: the notice there as plain content, which takes no focus, and no Actions.
   await page.goto(`/manage/participants/${ben.id}`);
@@ -808,8 +1108,7 @@ test("a participant's page loading, then saving, archiving and restoring, each p
   page,
 }) => {
   await serveMe(page, manager);
-  // A button busy for 400 ms, which then shows its busy label, and is named by it, in place of the one it rests with.
-  const busyButton = main(page).locator('button[data-busy]');
+  await serveGoals(page, []);
 
   // "Loading participant…" from 1 s, with the back link alone before it.
   const heldList = await holdNext(page, '**/api/admin/participants?includeArchived=true');
@@ -834,10 +1133,10 @@ test("a participant's page loading, then saving, archiving and restoring, each p
     await serveParticipants(page, [ben, { ...jane, status: index === 1 ? 'Archived' : 'Active' }, ravi]);
     await press(page).click();
     const change = await heldChange();
-    await expect(busyButton).toHaveText(busy, { useInnerText: true });
+    await expect(busyButton(page)).toHaveText(busy, { useInnerText: true });
     await expectAxeToPass(page);
     await change.fulfill({ status, headers: { date: answeredAt } });
-    await expect(busyButton).toHaveCount(0);
+    await expect(busyButton(page)).toHaveCount(0);
   }
 });
 
@@ -845,6 +1144,7 @@ test('at 320 px with text at 200%, nothing on the Participants screens scrolls s
   const long = madeUpParticipant('6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52', 'Bartholomew', 'Featherstonehaugh-Montgomery');
   await serveMe(page, manager);
   await serveParticipants(page, [ben, jane, ravi, long]);
+  await serveGoals(page, []);
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/manage/participants');
   await setTextTo200Percent(page);
@@ -876,11 +1176,12 @@ test('at 320 px with text at 200%, nothing on the Participants screens scrolls s
   expect(await scrollsSideways(page), 'an archived participant, not restored').toBe(false);
 });
 
-test('targets: 44 px links and fields, 48 px buttons and search, 56 px rows, at phone and laptop width', async ({
+test('targets: 44 px links, fields and summary, 48 px buttons and search, 56 px rows, on phone and laptop', async ({
   page,
 }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, goals);
 
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 800 });
@@ -898,29 +1199,32 @@ test('targets: 44 px links and fields, 48 px buttons and search, 56 px rows, at 
     await expectAtLeast(main(page).getByRole('textbox'), 44, 44);
     await expectAtLeast(save(page), 48, 48);
     await expectAtLeast(archive(page), 48, 48);
+    // Each goal row's four buttons and Add goal, then the Archived goals summary and, once it is open, each Restore.
+    await expectAtLeast(goalsSection(page).getByRole('button'), 44, 48);
+    await expectAtLeast(archivedSummary(page), 44, 44);
+    await archivedSummary(page).click();
+    await expectAtLeast(archivedSection(page).getByRole('button'), 44, 48);
 
     await page.goto(`/manage/participants/${ben.id}`);
     await expectAtLeast(restore(page), 48, 48);
+    await expectAtLeast(archivedSummary(page), 44, 44);
   }
 });
 
-test('in forced colours, the focus ring shows in the system Highlight colour at each stop', async ({ page }) => {
+test('in forced colours, the focus ring shows in Highlight at each stop, and unavailable buttons in GrayText', async ({
+  page,
+}) => {
   await page.emulateMedia({ forcedColors: 'active' });
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, goals);
   await page.goto('/manage/participants');
   await expect(rows(page)).toHaveCount(2);
   await heading(page).focus();
-  // The colour that forced colours give Highlight, which base.css's ring takes there.
-  const highlight = await page.evaluate(() => {
-    const probe = document.createElement('span');
-    probe.style.outlineColor = 'Highlight';
-    document.body.append(probe);
-    const colour = getComputedStyle(probe).outlineColor;
-    probe.remove();
-    return colour;
-  });
-  expect(highlight).not.toBe(ring.colour);
+  // The colours that forced colours give Highlight, which base.css's ring takes there, and GrayText, which an
+  // unavailable button takes, each unlike the ring's own colour and the other.
+  const [highlight, grayText] = await Promise.all([systemColour(page, 'Highlight'), systemColour(page, 'GrayText')]);
+  expect(new Set([highlight, grayText, ring.colour]).size).toBe(3);
   const forcedRing = { ...ring, colour: highlight };
 
   await expectStops(page, 'Tab', ['Add participant', 'Find a participant'], forcedRing);
@@ -938,15 +1242,253 @@ test('in forced colours, the focus ring shows in the system Highlight colour at 
   await expectStops(
     page,
     'Tab',
-    ['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save', 'Archive participant'],
+    [
+      ...['Given name', 'Family name', 'Day', 'Month', 'Year', 'Save'],
+      ...[breakfast, bus, sister].flatMap((goal) => rowStops(goal.text)),
+      ...['New goal', 'Add goal', 'Archived goals'],
+    ],
     forcedRing,
   );
+  await page.keyboard.press('Enter');
+  await expectStops(page, 'Tab', [rowName('Restore', washing.text), rowName('Restore', shop.text)], forcedRing);
+  await expectStops(page, 'Tab', ['Archive participant'], forcedRing);
+
+  // Move up on the first goal and Move down on the last, unavailable: GrayText words and dashed GrayText borders, where
+  // the others keep theirs (list-editor.md *States*).
+  for (const end of [goalButton(page, 'Move up', breakfast.text), goalButton(page, 'Move down', sister.text)]) {
+    await expect(end).toHaveCSS('color', grayText);
+    await expect(end).toHaveCSS('border-top-color', grayText);
+    await expect(end).toHaveCSS('border-top-style', 'dashed');
+  }
+  await expect(goalButton(page, 'Move down', breakfast.text)).not.toHaveCSS('color', grayText);
+  await expect(goalButton(page, 'Move down', breakfast.text)).toHaveCSS('border-top-style', 'solid');
 
   await serveParticipants(page, [ben, { ...jane, status: 'Archived', rowVersion: 'AAAAAAAB3e8b=' }, ravi]);
   await answerChanges(page, 'POST', `/${jane.id}/archive`, { status: 204 });
   await page.keyboard.press('Enter');
   await expect.poll(() => whereFocusIs(page)).toContain(archivedWords('Jane Citizen'));
-  await expectStops(page, 'Tab', ['Restore'], forcedRing);
+  await expectStops(page, 'Tab', ['Restore', 'Archived goals'], forcedRing);
+});
+
+test("a participant's goals in each of their states pass axe at phone and laptop width", async ({ page }) => {
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  const store = await serveGoals(page, goals);
+  await page.goto(`/manage/participants/${jane.id}`);
+
+  // Default: the help text, the active goals numbered in the list's order, Move up on the first and Move down on the
+  // last unavailable, in place and dashed, saying why when pressed, and the archived goals' section closed.
+  await expect(goalsSection(page).getByText(goalsHelp)).toBeVisible();
+  await expect(goalTexts(page)).toHaveText([breakfast.text, bus.text, sister.text]);
+  for (const end of [goalButton(page, 'Move up', breakfast.text), goalButton(page, 'Move down', sister.text)]) {
+    await expect(end).toBeVisible();
+    await expect(end).toHaveAttribute('aria-disabled', 'true');
+    await expect(end).toHaveCSS('border-top-style', 'dashed');
+  }
+  await goalButton(page, 'Move up', breakfast.text).press('Enter');
+  await expect(pageStatus(page)).toHaveText('Already at the top');
+  await expect(archivedSection(page)).not.toHaveAttribute('open');
+  await expectAxeToPass(page);
+
+  // Busy: a move held until Move down shows "Moving…" and axe has passed, the order on screen unchanged meanwhile.
+  const heldMove = await holdNext(page, goalWrites.reorder);
+  await goalButton(page, 'Move down', breakfast.text).click();
+  const move = await heldMove();
+  await expect(busyButton(page)).toHaveText('Moving…', { useInnerText: true });
+  await expect(goalTexts(page)).toHaveText([breakfast.text, bus.text, sister.text]);
+  await expectAxeToPass(page);
+  await move.fallback();
+  await expect(goalTexts(page)).toHaveText([bus.text, breakfast.text, sister.text]);
+  await expect(goalButton(page, 'Move down', breakfast.text)).toBeFocused();
+
+  // Editing: the row's form in its place, its box focused and holding the goal's words.
+  await goalButton(page, 'Edit', bus.text).click();
+  await expect(editGoal(page)).toBeFocused();
+  await expect(editGoal(page)).toHaveValue(bus.text);
+  await expectAxeToPass(page);
+
+  // Field error: whitespace alone, refused on Save above the box, with focus in it, no error summary and no "Error: "
+  // in the title.
+  await editGoal(page).fill('   ');
+  await saveGoal(page).click();
+  await expect(goalError(page)).toHaveText('Error: Enter the goal');
+  await expect(editGoal(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(editGoal(page)).toBeFocused();
+  await expect(page).toHaveTitle(title('Participant'));
+  await expectAxeToPass(page);
+
+  // Edit conflict: someone else rewords the goal first, so the Save is stale; the typed words stay, with theirs.
+  const theirs = 'Catches the bus to day program';
+  const typed = 'Catches the bus to day program and texts when she arrives';
+  store.changeElsewhere(bus.id, { text: theirs });
+  await editGoal(page).fill(typed);
+  await expect(goalError(page)).toHaveCount(0);
+  await saveGoal(page).click();
+  await expect(editForm(page).getByRole('alert')).toHaveText(
+    `Someone else changed this goal while you were editing. It now says: ${theirs}. Save to replace it with your `
+      + 'wording, or Cancel to keep it.',
+  );
+  await expect(editGoal(page)).toHaveValue(typed);
+  await expectAxeToPass(page);
+  await cancelGoal(page).click();
+  await expect(goalButton(page, 'Edit', theirs)).toBeFocused();
+
+  // Request error: an Archive with no connection says so in its row, with focus kept on Archive.
+  await page.route(goalWrites.archive, (route) => route.abort('internetdisconnected'), { times: 1 });
+  await goalButton(page, 'Archive', sister.text).click();
+  await expect(goalRow(page, sister.text).getByRole('alert')).toHaveText('Not archived: no connection. Try again.');
+  await expect(goalButton(page, 'Archive', sister.text)).toBeFocused();
+  await expectAxeToPass(page);
+
+  // List conflict: someone else archives the last goal, so a move built from the list as the page last read it is
+  // refused; the list is read again, with the message above it, focused.
+  store.changeElsewhere(sister.id, { archived: true });
+  await goalButton(page, 'Move down', theirs).click();
+  await expect(conflictMessage(page)).toBeFocused();
+  await expect(goalTexts(page)).toHaveText([theirs, breakfast.text]);
+  await expectAxeToPass(page);
+
+  // Archived section open: Archive puts the goal first in it, opening it, with focus on its Restore, and the list
+  // conflict goes.
+  await goalButton(page, 'Archive', breakfast.text).click();
+  await expect(goalButton(page, 'Restore', breakfast.text)).toBeFocused();
+  await expect(archivedSection(page)).toHaveAttribute('open', '');
+  await expect(archivedTexts(page)).toHaveText([breakfast.text, sister.text, washing.text, shop.text]);
+  await expect(goalTexts(page)).toHaveText([theirs]);
+  await expect(conflictMessage(page)).toHaveCount(0);
+  await expect(pageStatus(page)).toHaveText('Goal archived');
+  await expectAxeToPass(page);
+
+  // Field error on Add: nothing typed.
+  await addGoal(page).click();
+  await expect(goalError(page)).toHaveText('Error: Enter the goal');
+  await expect(newGoal(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(newGoal(page)).toBeFocused();
+  await expectAxeToPass(page);
+  await expectNothingKept(page, [breakfast.text, bus.text, sister.text, washing.text, shop.text, theirs, typed]);
+
+  // No goals: the sentence in place of the list, the add form, and no archived goals' section.
+  await serveGoals(page, []);
+  await page.goto(`/manage/participants/${jane.id}`);
+  await expect(goalsSection(page).getByText(noGoals)).toBeVisible();
+  await expect(goalsSection(page).getByRole('list')).toHaveCount(0);
+  await expect(archivedSection(page)).toHaveCount(0);
+  await expect(newGoal(page)).toBeVisible();
+  await expectAxeToPass(page);
+
+  // Read-only, for an archived participant: the goals numbered as text, with no help text, buttons or add form, and
+  // the archived ones as text too.
+  await serveGoals(page, goals);
+  await page.goto(`/manage/participants/${ben.id}`);
+  await expect(goalTexts(page)).toHaveText([breakfast.text, bus.text, sister.text]);
+  await expect(goalsSection(page).locator('ol')).toBeVisible();
+  await expect(goalsSection(page).getByRole('button')).toHaveCount(0);
+  await expect(goalsSection(page).getByText(goalsHelp)).toHaveCount(0);
+  await expect(newGoal(page)).toHaveCount(0);
+  await archivedSummary(page).click();
+  await expect(archivedTexts(page)).toHaveText([washing.text, shop.text]);
+  await expect(archivedSection(page).getByRole('button')).toHaveCount(0);
+  await expectAxeToPass(page);
+  await expectNothingKept(page, [breakfast.text, bus.text, sister.text, washing.text, shop.text]);
+});
+
+test('goal rows: two lines of label-width buttons at 375 px, beside the text at 1280 px, and under it at 200%', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await serveGoals(page, goals);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(`/manage/participants/${jane.id}`);
+  await expect(goalTexts(page)).toHaveText([breakfast.text, bus.text, sister.text]);
+  const labels = ['Move up', 'Move down', 'Edit', 'Archive'] as const;
+  const boxesOf = (text: string) => Promise.all(labels.map((label) => boxOf(goalButton(page, label, text))));
+
+  // On a phone, Move up and Move down share a line under the text, and Edit and Archive the next (list-editor.md
+  // *Phone and laptop*), each label width, at least 44 by 48 px.
+  for (const goal of [breakfast, bus, sister]) {
+    const text = await boxOf(goalRow(page, goal.text).locator('p').first());
+    const [up, down, edit, archive] = await boxesOf(goal.text);
+    expect(up.y, `Move up under "${goal.text}"`).toBeGreaterThanOrEqual(text.y + text.height);
+    expect(down.y, `Move down beside Move up, "${goal.text}"`).toBeCloseTo(up.y, 0);
+    expect(archive.y, `Archive beside Edit, "${goal.text}"`).toBeCloseTo(edit.y, 0);
+    expect(edit.y, `Edit on the line after Move up, "${goal.text}"`).toBeGreaterThanOrEqual(up.y + up.height);
+  }
+  await expectLabelWidth(goalsSection(page).locator('ol button'));
+  await archivedSummary(page).click();
+  await expectLabelWidth(archivedSection(page).getByRole('button'));
+  await goalButton(page, 'Edit', bus.text).click();
+  await expectLabelWidth(editForm(page).getByRole('button'));
+  expect((await boxOf(cancelGoal(page))).y, 'Cancel beside Save').toBeCloseTo((await boxOf(saveGoal(page))).y, 0);
+  // Add goal keeps the shared button's rule: as wide as the field on a phone.
+  expect((await boxOf(addGoal(page))).width).toBeCloseTo((await boxOf(newGoal(page))).width, 0);
+  await cancelGoal(page).click();
+
+  // On a laptop, the four sit at the top of the row, after the text, on its line; Add goal is its label's width, and
+  // the field stays in the reading column while the list uses the wider page.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const goal of [breakfast, bus, sister]) {
+    const text = await boxOf(goalRow(page, goal.text).locator('p').first());
+    for (const [index, button] of (await boxesOf(goal.text)).entries()) {
+      expect(button.y, `${labels[index]} on the line of "${goal.text}"`).toBeCloseTo(text.y, 0);
+      expect(button.x, `${labels[index]} after "${goal.text}"`).toBeGreaterThanOrEqual(text.x + text.width);
+    }
+  }
+  await expectLabelWidth(goalsSection(page).locator('ol button, details button'));
+  expect((await boxOf(addGoal(page))).width).toBeLessThan((await boxOf(newGoal(page))).width);
+  expect((await boxOf(newGoal(page))).width).toBeLessThan((await boxOf(goalsSection(page).locator('ol'))).width);
+
+  // At 200% text, the text keeps its 16rem, so the four drop under it by themselves.
+  await setTextTo200Percent(page);
+  for (const goal of [breakfast, bus, sister]) {
+    const text = await boxOf(goalRow(page, goal.text).locator('p').first());
+    for (const [index, button] of (await boxesOf(goal.text)).entries()) {
+      expect(button.y, `${labels[index]} under "${goal.text}"`).toBeGreaterThanOrEqual(text.y + text.height);
+    }
+  }
+});
+
+test('at 320 px with text at 200%, no goal state scrolls sideways', async ({ page }) => {
+  const long = madeUpGoal('1a6c4d9f-8b7c-4e0a-9c5b-7c3e0f2b6a48', 'Wolfeschlegelsteinhausenbergerdorff'.repeat(5), 0);
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  const store = await serveGoals(page, [long, ...goals]);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto(`/manage/participants/${jane.id}`);
+  await setTextTo200Percent(page);
+  await expect(goalTexts(page)).toHaveText([long.text, breakfast.text, bus.text, sister.text]);
+  expect(await scrollsSideways(page), 'the goals, one a word of 175 letters').toBe(false);
+
+  await goalButton(page, 'Edit', long.text).click();
+  expect(await scrollsSideways(page), 'its edit form').toBe(false);
+
+  await newGoal(page).fill('a'.repeat(250));
+  await addGoal(page).click();
+  await expect(goalError(page)).toHaveText('Error: Goal must be 200 characters or less');
+  expect(await scrollsSideways(page), 'the add form with 250 characters, refused').toBe(false);
+  await newGoal(page).fill('');
+
+  await page.route(goalWrites.archive, (route) => route.abort('internetdisconnected'), { times: 1 });
+  await goalButton(page, 'Archive', bus.text).click();
+  await expect(goalRow(page, bus.text).getByRole('alert')).toHaveText('Not archived: no connection. Try again.');
+  expect(await scrollsSideways(page), 'a goal not archived').toBe(false);
+
+  store.changeElsewhere(sister.id, { archived: true });
+  await goalButton(page, 'Move down', breakfast.text).click();
+  await expect(conflictMessage(page)).toBeFocused();
+  expect(await scrollsSideways(page), 'the list conflict').toBe(false);
+
+  await goalButton(page, 'Archive', breakfast.text).click();
+  await expect(goalButton(page, 'Restore', breakfast.text)).toBeFocused();
+  expect(await scrollsSideways(page), 'the archived goals open').toBe(false);
+
+  // The same goals, as the browser holds them, read-only on an archived participant's page.
+  await page.goto(`/manage/participants/${ben.id}`);
+  await archivedSummary(page).click();
+  await expect(goalTexts(page)).toHaveText([long.text, bus.text]);
+  await expect(archivedTexts(page)).toHaveText([breakfast.text, sister.text, washing.text, shop.text]);
+  expect(await scrollsSideways(page), "an archived participant's goals").toBe(false);
+  await expectNothingKept(page, [long.text, breakfast.text, bus.text, sister.text, 'a'.repeat(20)]);
 });
 
 test("a worker meets Page not found at the list, Add participant and a participant's page, sending no request", async ({

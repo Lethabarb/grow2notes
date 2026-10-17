@@ -77,3 +77,32 @@ describe("a user's actions and their dialogs", () => {
     );
   });
 });
+
+describe("an Add's failure (list-editor.md *Request errors*)", () => {
+  it('says it was not added, and why', () => {
+    expect(msg.notAdded('offline')).toBe('Not added: no connection. Try again.');
+    expect(msg.notAdded('server')).toBe('Not added: something went wrong. Try again.');
+  });
+});
+
+describe("a list row's move (list-editor.md *Behaviour* and *Request errors*)", () => {
+  it('says where the row went, counted from 1, with no full stop', () => {
+    expect(msg.moved('up', 2, 5)).toBe('Moved up to number 2 of 5');
+    expect(msg.moved('down', 4, 5)).toBe('Moved down to number 4 of 5');
+  });
+
+  it('says it was not moved, and why', () => {
+    expect(msg.notMoved('offline')).toBe('Not moved: no connection. Try again.');
+    expect(msg.notMoved('server')).toBe('Not moved: something went wrong. Try again.');
+  });
+});
+
+describe("a list row's Save refused as stale (list-editor.md *Request errors*)", () => {
+  const words =
+    'Someone else changed this goal while you were editing. It now says: Phones her sister. Save to replace it with '
+    + 'your wording, or Cancel to keep it.';
+
+  it('names the row by its kind, says its wording now, and says what Save and Cancel each do', () => {
+    expect(msg.rowChangedWhileEditing('goal', 'Phones her sister')).toBe(words);
+  });
+});

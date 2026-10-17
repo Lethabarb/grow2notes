@@ -715,6 +715,8 @@ describe('Participants, back from a participant', () => {
   /** Opens the list at `path`, scrolled to 600, types `typed`, and opens the row of `participant` from it. */
   async function openParticipant(participant: AdminParticipant, path = '/manage/participants', typed = '') {
     const { router, client } = await openList(path);
+    // Their page reads their goals with them.
+    serve(`/api/admin/participants/${participant.id}/goals?includeArchived=true`, json([]));
     scrollPage(600);
     if (typed !== '') {
       type(typed);

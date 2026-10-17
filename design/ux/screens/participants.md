@@ -138,7 +138,7 @@ appears next to Save, and the Goals and Actions sections appear under it.
 | were written with.                  |
 |  1. Makes own breakfast             |  <ol> numbered rows
 |     [^ Move up ] [v Move down ]     |  Move up on row 1: unavailable (dashed)
-|     [ Edit ] [ Archive ]            |  every button >= 44 x 44 px, 8 px gaps
+|     [ Edit ] [ Archive ]            |  every button label width, >= 44 x 48 px; 8 px apart in a pair
 | ----------------------------------- |
 |  2. Catches the bus to day program  |
 |     and phones when she arrives     |
@@ -230,7 +230,7 @@ order and reading order are the same on every device.
 | Page | Gutters 32 px, section gaps 48 px, h1 32 px, h2 24 px. The setup screens may use `--page-max` (60rem) (design 4.0: "the setup screens use the extra space"). |
 | Participants list | Content column capped at `--measure` (40rem), as on Today (`participant-list-rows.md`): a name and its chevron far apart on a wide screen help nobody. **Add participant** sizes to its label. The search field stops at about 32rem with Clear beside it. The Active / Archived links are a fixed 12em each, left-aligned (`tabs-segmented.md`). |
 | Details form | Stays in a 40rem column. Name inputs stop at 20.5em. **Given name and Family name stay stacked**, never side by side (`text-and-date-inputs.md`, [Opinion]: same order and tab order as the phone). Save sizes to its label, with "Saved 4:12 pm" on the same line. |
-| Goals | The list uses the wider page. Each row is a **wrapping flex line** (the same CSS as common-items.md, `list-editor.md`): text `flex: 1 1 16rem` on the left, the four buttons at their natural width on one line at the right when they fit, in the same order. When the text column would fall under 16rem (200% text, a narrow window) the buttons drop under the text by themselves. No container query and no breakpoint of its own. **Add goal** sizes to its label. |
+| Goals | The list uses the wider page. Each row is a **wrapping flex line** (the same CSS as common-items.md, `list-editor.md`): text `flex: 1 1 16rem` on the left, the four buttons at their natural width on one line at the right when they fit, in the same order. When the text column would fall under 16rem (200% text, a narrow window) the buttons drop under the text by themselves. No container query and no breakpoint of its own. **Add goal** sizes to its label. The help text, New goal and Edit goal stay in the 40rem column, as on common-items.md. |
 | Archived notice | Restore follows the text in a wrapping flex line, so it sits after the text when there is room and drops under it otherwise. No container query. |
 | Read-only Details | `<dl>` as two columns: label left, value right. |
 | Actions | The three links sit side by side and wrap; the rule, then **Archive participant**, sized to its label. |
@@ -392,7 +392,9 @@ participant turns the page into the detail page **without remounting it** (see I
 - `<section aria-labelledby>` with `<h2>` "Goals" **(V)**. Rendered only once the participant exists (goals need a
   participant ID).
 - Help text **(V)**: "Changes apply to notes started from now on. Notes already started or submitted keep the wording
-  they were written with." Linked by `aria-describedby` to the New goal and Edit goal textareas.
+  they were written with." Linked by `aria-describedby` to the New goal and Edit goal textareas, after the field's
+  error while it shows one and a visually hidden "You can enter up to 200 characters" hint (common-items.md
+  *Conflicts resolved* 12); never to the visible count, which changes at each keystroke and has a polite twin.
 - Active goals: numbered native `<ol>` (each `<li>` stays `display: list-item`). Each row: the goal text, an
   always-rendered empty `role="alert"` slot, then **Move up**, **Move down**, **Edit**, **Archive** **(V)**, in that
   order, all secondary `<button type="button">`s with words (decorative arrows `aria-hidden`). Each button carries the
@@ -418,10 +420,14 @@ participant turns the page into the detail page **without remounting it** (see I
   (the app-wide mutation default, form-validation.md): `POST …/goals` has no idempotency key, so a silent retry after
   a lost response could add the goal twice. [Convention: TanStack scope,
   https://tanstack.com/query/v5/docs/framework/react/guides/mutations; Opinion grounded in invariant I5]
+- The goals query is `['admin', 'goals', participantId]`, outside `['admin', 'participants']`, so that the participant
+  list's invalidations fetch no goals; it is keyed by the ID alone, never by a goal's words. After Add participant's
+  `201` the page puts an empty list in it rather than fetching it, so that Goals is there for the next Tab.
 - **Row layout:** the wrapping flex row from common-items.md and `list-editor.md` (text `flex: 1 1 16rem`, the
   actions at their natural width), never a container query.
-- **Read-only variant** (archived participant): numbered goal texts only; no help text, no buttons, no add form;
-  archived goals as text with no Restore.
+- **Read-only variant** (archived participant): numbered goal texts only; no help text, no buttons, no add form and
+  no alert slots, as no request can fail there; archived goals as text with no Restore. With no goals, the "No goals
+  yet." sentence, as for an active participant.
 
 **B7. Actions** → [`primary-actions.md`](../components/primary-actions.md),
 [`confirm-dialog.md`](../components/confirm-dialog.md), [`date-navigation.md`](../components/date-navigation.md),
@@ -643,7 +649,7 @@ Do not show design 3.7's "Rewording is for typos and clarifications…" on scree
 | **Goal: Edit** | — | Row becomes the edit form | The textarea, caret at the end, inside the tap | The label, value, help text and count are read |
 | **Goal: Save** | Save busy; textarea `readOnly` | Text trimmed, line breaks become spaces. Unchanged text closes like Cancel and sends nothing. Otherwise `PUT /api/admin/goals/{id}` with `If-Match`, then re-read. | The row's Edit | `Goal saved` |
 | **Goal: Cancel** | — | Row back to normal; typed text discarded | The row's Edit | — |
-| **Add goal** | Add busy | `POST …/goals` (adds at the end; `retry: 0`), re-read; field cleared | Stays in the New goal field, ready for the next goal | `Goal added to the end of the list` |
+| **Add goal** | Add busy | `POST …/goals` (adds at the end; `retry: 0`), re-read; field cleared if it still holds the text sent | Stays in the New goal field, ready for the next goal | `Goal added to the end of the list` |
 | **Goal: Archive** | Busy | `POST /api/admin/goals/{id}/archive` with `If-Match`, re-read; Archived goals appears if hidden, **opens**, lists it first | That goal's Restore | `Goal archived` |
 | **Goal: Restore** | Busy | `POST …/restore`, re-read; goal goes to the end of the active list (A2); empty Archived goals section disappears | That goal's Archive in the active list | `Goal restored to the end of the list` |
 | **Past notes / Write past-day note / Export record** | — | Ordinary navigation (push) | The next screen's `<h1>` | Via focus |
@@ -662,6 +668,14 @@ Notes on these interactions:
   questions]
 - **Someone else archived the participant while this page was open.** No polling (6.8). The next write on this page
   gets `412`; the page re-reads and shows the archived state.
+- **Focus after a goal write.** A write moves focus as the table says only while focus is still where the press left
+  it: in the goal's form, on the pressed button, or on `<body>`. A write that ends after the manager has moved on,
+  such as one queued behind another, never pulls focus from another row's box. Cancel stays free while a Save is out
+  or queued: it closes the form, the Save still runs, and the list then shows what the server holds. A queued write
+  whose goal has meanwhile left its list sends nothing and shows the list conflict; a queued move whose goal has
+  reached its end sends nothing and says "Already at the top" or "Already at the bottom", as the unavailable button
+  does. New goal stays editable while an add is out, and a successful add empties it only while it still holds the
+  text sent, so the next goal typed meanwhile is kept.
 - **No confirmation dialog** for Archive participant, Restore, or any goal action (`confirm-dialog.md`).
 - **Nothing is optimistic.** Every result on screen is the server's answer (invariant I5).
 

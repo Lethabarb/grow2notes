@@ -46,6 +46,11 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
         [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
+        [AuditEventTypes.Goal.Created] = test => test.AddGoalAsync(),
+        [AuditEventTypes.Goal.Updated] = test => test.RewordGoalAsync(),
+        [AuditEventTypes.Goal.Reordered] = test => test.ReorderGoalsAsync(),
+        [AuditEventTypes.Goal.Archived] = test => test.ArchiveGoalAsync(),
+        [AuditEventTypes.Goal.Restored] = test => test.RestoreGoalAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -360,6 +365,161 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
+    /// <c>goal.created</c>: A's manager adds a goal, typed over two lines, to a participant added for the row with
+    /// <c>POST /api/admin/participants/{participantId}/goals</c>, which records the new goal as the entity and its
+    /// participant as the participant, and the goal's values as <c>new</c> alone, named as design.md §6.6's list names
+    /// them: its text as stored, on one line, its place at the end of a list that had no goal, and no time archived.
+    /// </summary>
+    private async Task<WrittenEvent> AddGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(
+            $"/api/admin/participants/{participant.Id}/goals",
+            await client.FetchTokenAsync(),
+            new { text = " Makes own\nbreakfast " });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var values = new JsonObject { ["text"] = "Makes own breakfast", ["sortOrder"] = 0, ["archivedAtUtc"] = null };
+        return new(
+            AuditEventTypes.Goal.Created,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            await StoredGoalIdAsync(participant.Id),
+            participant.Id,
+            new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.updated</c>: A's manager rewords a goal of a participant added for the row, typing it over two lines,
+    /// with <c>PUT /api/admin/goals/{goalId}</c> and the goal's ETag, which records the goal as the entity and its
+    /// participant as the participant, and the old and new text alone, the new as stored, on one line, not its place or
+    /// time archived, which a reword leaves as they were.
+    /// </summary>
+    private async Task<WrittenEvent> RewordGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goal = await factory.Services.AddGoalAsync(a, participant.Id, new("Makes own breakfast", 3));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/goals/{goal.Id}",
+            await client.FetchTokenAsync(),
+            new { text = " Makes own\nlunch " },
+            goal.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["text"] = "Makes own breakfast" },
+            ["new"] = new JsonObject { ["text"] = "Makes own lunch" },
+        };
+        return new(
+            AuditEventTypes.Goal.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.reordered</c>: A's manager moves the second of a participant's two active goals to the top with
+    /// <c>PUT /api/admin/participants/{participantId}/goals/order</c>, which records no goal as the entity, as it is
+    /// about the list, and the participant as the participant, and the active goals' IDs in their old and new order,
+    /// the archived goal left out of both.
+    /// </summary>
+    private async Task<WrittenEvent> ReorderGoalsAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goals = await factory.Services.AddGoalsAsync(
+            a,
+            participant.Id,
+            new("Makes own breakfast", 0),
+            new("Uses the washing machine", 1, ArchivedAtUtc: TestGoals.AddedAtUtc),
+            new("Phones her sister", 2));
+        var (breakfast, sister) = (goals[0], goals[2]);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/participants/{participant.Id}/goals/order",
+            await client.FetchTokenAsync(),
+            new { goalIds = new[] { sister, breakfast } },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["order"] = new JsonArray(breakfast.ToString(), sister.ToString()) },
+            ["new"] = new JsonObject { ["order"] = new JsonArray(sister.ToString(), breakfast.ToString()) },
+        };
+        return new(
+            AuditEventTypes.Goal.Reordered,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            null,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.archived</c>: A's manager archives an active goal of a participant added for the row with
+    /// <c>POST /api/admin/goals/{goalId}/archive</c> and the goal's ETag, which records the goal as the entity and its
+    /// participant as the participant, and the time it was archived at, before and after, the time as stored; not its
+    /// <c>sortOrder</c>, which archiving leaves as it was.
+    /// </summary>
+    private async Task<WrittenEvent> ArchiveGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goal = await factory.Services.AddGoalAsync(a, participant.Id, new("Makes own breakfast", 3));
+        await PostAsync($"/api/admin/goals/{goal.Id}/archive", goal.ETag);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["archivedAtUtc"] = null },
+            ["new"] = new JsonObject { ["archivedAtUtc"] = await StoredGoalArchivedAtUtcAsync(goal.Id) },
+        };
+        return new(
+            AuditEventTypes.Goal.Archived,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.restored</c>: A's manager restores an archived goal of a participant added for the row with
+    /// <c>POST /api/admin/goals/{goalId}/restore</c> and the goal's ETag, which records the goal as the entity and its
+    /// participant as the participant, and its place before and after: from where it was archived to one after the
+    /// highest active <c>sortOrder</c>, and from the time it was archived at to none.
+    /// </summary>
+    private async Task<WrittenEvent> RestoreGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        await factory.Services.AddGoalAsync(a, participant.Id, new("Phones her sister", 4));
+        var goal = await factory.Services.AddGoalAsync(
+            a, participant.Id, new("Makes own breakfast", 1, ArchivedAtUtc: TestGoals.AddedAtUtc));
+        await PostAsync($"/api/admin/goals/{goal.Id}/restore", goal.ETag);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["sortOrder"] = 1, ["archivedAtUtc"] = TestGoals.AddedAtUtc },
+            ["new"] = new JsonObject { ["sortOrder"] = 5, ["archivedAtUtc"] = null },
+        };
+        return new(
+            AuditEventTypes.Goal.Restored,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
     /// <c>guide_prompts.updated</c>: the manager of an organisation that the row adds, so that no seeded row changes,
     /// loads its guide prompts with <c>GET /api/admin/guide-prompts</c> and saves new ones with <c>PUT</c> and the
     /// <c>ETag</c> loaded, which records the organisation as the entity, with no participant, and the text before and
@@ -522,6 +682,32 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             return await db.Participants.Where(p => p.Id == participantId)
                 .Select(p => p.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The time that the goal was archived at, as its row holds it, through the app's context under A's tenant.
+    private async Task<DateTime?> StoredGoalArchivedAtUtcAsync(Guid goalId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.Goals.Where(g => g.Id == goalId)
+                .Select(g => g.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The ID of the one goal of a participant added for a row, through the app's context under A's tenant.
+    private async Task<Guid> StoredGoalIdAsync(Guid participantId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.Goals.Where(g => g.ParticipantId == participantId)
+                .Select(g => g.Id)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
     }

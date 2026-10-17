@@ -9,6 +9,7 @@ import { DateOfBirthField } from '../../components/DateOfBirthField.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
 import { focusPageHeading } from '../../components/focusPageHeading.ts';
+import { ListEditor } from '../../components/ListEditor.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
@@ -26,6 +27,7 @@ import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { limits } from '../../limits.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
+import { goalsApi, goalsQuery } from './goalsQuery.ts';
 import styles from './ParticipantPage.module.css';
 import { fullName, participantsQuery, type AdminParticipant, type ParticipantStatus } from './participantsQuery.ts';
 
@@ -260,13 +262,15 @@ function BackToParticipants({ archived }: { archived: boolean }) {
 }
 
 /**
- * A participant's page opened at their address (participants.md B9): the back link alone while the list loads, as the
- * `<h1>` is their name, then "Loading participant…" after 1 s; then their page, from the list, whose `<h1>` takes the
- * focus left pending for it; or the fallback `<h1>` "Participant" with the failure sentence and Try again; or, for an
- * ID not on the list, Page not found in place of the whole page.
+ * A participant's page opened at their address (participants.md B9): the back link alone while the list and their
+ * goals load, together, as the `<h1>` is their name, then "Loading participant…" after 1 s; then their page, from the
+ * list, whose `<h1>` takes the focus left pending for it; or the fallback `<h1>` "Participant" with the failure
+ * sentence and Try again, when either did not load; or, for an ID not on the list, or goals refused as not found, Page
+ * not found in place of the whole page.
  */
 function ListedParticipant({ participantId }: { participantId: string }) {
   const participants = useQuery(participantsQuery);
+  const goals = useQuery(goalsQuery(participantId));
   // Found in the list rather than picked out by a `select`, whose `undefined` for an ID not on it the region would
   // take for a list not loaded yet.
   const participant = participants.data?.find(({ id }) => id === participantId);
@@ -278,14 +282,14 @@ function ListedParticipant({ participantId }: { participantId: string }) {
   return (
     <PageStatus>
       {/* Until the region shows the page, whose own back link follows their status from then on. */}
-      {participant === undefined && <BackToParticipants archived={false} />}
+      {(participant === undefined || goals.data === undefined) && <BackToParticipants archived={false} />}
       <LoadRegion
-        queries={[participants]}
+        queries={[participants, goals]}
         loading={strings.participants.participantLoading}
         what={strings.participants.thisParticipant}
         fallbackHeading={pageName.participant}
       >
-        {/* Called only once the query has data, which then holds the participant. */}
+        {/* Called only once both queries have data, the list then holding the participant. */}
         {() => <Participant participant={participant!} />}
       </LoadRegion>
     </PageStatus>
@@ -301,30 +305,32 @@ type ParticipantProps =
   | { participant?: never; onAdded: (id: string) => void };
 
 /**
- * Add participant or a participant's page (participants.md B1 to B5 and B7): the back link, the error summary after a
- * failed Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on
- * any field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that
- * failed and the save status beside it; then, once the participant exists, Actions, which holds Archive participant
- * alone until the screens that its links open are built. Nothing is checked before Save, which checks every field in
- * page order and sends nothing while one fails; once a field shows a message, each edit checks it again. A `201` shows
- * "Saved 4:12 pm" from its `Date`, makes the name the `<h1>` and replaces the address with the participant's, in the
+ * Add participant or a participant's page (participants.md B1 to B7): the back link, the error summary after a failed
+ * Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any
+ * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed
+ * and the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Archive
+ * participant alone until the screens that its links open are built. Nothing is checked before Save, which checks
+ * every field in page order and sends nothing while one fails; once a field shows a message, each edit checks it again.
+ * A `201` shows "Saved 4:12 pm" from its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's
+ * goals query, as they have none, rather than fetching it, and replaces the address with the participant's, in the
  * screen. A save of a participant who exists is a `PUT` with their version as `If-Match`, whose `200` shows "Saved
  * 4:12 pm" and the saved name as the `<h1>`, and whose `412` says that someone else changed the details, the fields
  * kept as typed. Focus stays on Save.
  *
  * An archived participant's page is read-only (participants.md B3, *Archive and Restore*): the archived notice under
- * the `<h1>`, with Restore, then Details as a summary list, and no Actions until the screens of the links that an
- * archived participant keeps are built. Archive participant, with no dialog, turns the page read-only, dropping what
- * was typed (participants.md open question 3), and focuses the notice, as its button has gone; Restore turns it back
- * into the form, filled in afresh, and focuses the `<h1>`. A press refused as stale reads the list again: when that
- * finds the status changed already, by someone else, the page simply shows it, as that action's success does;
- * otherwise the alert above the button says so.
+ * the `<h1>`, with Restore, then Details as a summary list, their goals as text alone, and no Actions until the
+ * screens of the links that an archived participant keeps are built. Archive participant, with no dialog, turns the
+ * page read-only, dropping what was typed (participants.md open question 3), and focuses the notice, as its button has
+ * gone; Restore turns it back into the form, filled in afresh, and focuses the `<h1>`. A press refused as stale reads
+ * the list again: when that finds the status changed already, by someone else, the page simply shows it, as that
+ * action's success does; otherwise the alert above the button says so.
  */
 function Participant({ participant, onAdded }: ParticipantProps) {
   const me = useMe();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const detailsHeadingId = useId();
+  const goalsHeadingId = useId();
   const actionsHeadingId = useId();
   const [known, setKnown] = useState<Known | undefined>(() =>
     participant === undefined ? undefined : knownOf(participant),
@@ -471,6 +477,8 @@ function Participant({ participant, onAdded }: ParticipantProps) {
 
     add.mutate(details, {
       onSuccess: ({ body, dateUtc }) => {
+        // Before the Goals section appears, so that it shows them at once, with nothing to wait for.
+        queryClient.setQueryData(goalsQuery(body.id).queryKey, []);
         setKnown({ id: body.id, details, status: 'Active', version: undefined });
         onAdded?.(body.id);
         setSaved({ savedAtUtc: dateUtc });
@@ -530,10 +538,10 @@ function Participant({ participant, onAdded }: ParticipantProps) {
               <RequestAlert>{statusFailure}</RequestAlert>
               <Button
                 busy={statusChange.isPending}
-                busyLabel={strings.participantActions.restoring}
+                busyLabel={strings.restoring}
                 onClick={() => changeStatusTo(known, 'Active')}
               >
-                {strings.participantActions.restore}
+                {strings.restore}
               </Button>
             </>
           }
@@ -591,13 +599,19 @@ function Participant({ participant, onAdded }: ParticipantProps) {
           </form>
         )}
       </section>
+      {known !== undefined && (
+        <section aria-labelledby={goalsHeadingId} className={styles.goals}>
+          <h2 id={goalsHeadingId}>{strings.participantGoals.heading}</h2>
+          <ListEditor kind="goal" api={goalsApi(known.id)} readOnly={archived} />
+        </section>
+      )}
       {known !== undefined && !archived && (
         <section aria-labelledby={actionsHeadingId} className={styles.actions}>
           <h2 id={actionsHeadingId}>{strings.participantActions.heading}</h2>
           <RequestAlert>{statusFailure}</RequestAlert>
           <Button
             busy={statusChange.isPending}
-            busyLabel={strings.participantActions.archiving}
+            busyLabel={strings.archiving}
             onClick={() => changeStatusTo(known, 'Archived')}
           >
             {strings.participantActions.archive}

@@ -1,0 +1,134 @@
+/* The help text stays in the reading column while the list uses the wider page (participants.md *Layout - laptop*). */
+.help {
+  margin-block: 0 var(--space-4);
+  max-inline-size: var(--measure);
+}
+
+/* The native numbers stay, in a column of their own, so each <li> stays display: list-item (list-editor.md). */
+.list {
+  margin: 0;
+  padding-inline-start: 2.25rem;
+}
+
+.list > li::marker {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A rule under each row, active or archived. */
+.row {
+  padding-block: var(--space-3);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/*
+ * A wrapping flex line (common-items.md *Layout - laptop*): the text on the left, and beside it, while the text keeps
+ * 16rem, the alert slot and the row's controls; under it otherwise, with no breakpoint or container query of its own.
+ */
+.rowInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* A long word or pasted link wraps rather than pushing the page sideways (SC 1.4.10). */
+.text {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.side {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+
+/*
+ * A row's two pairs of buttons, 16 px apart, or its edit form's Save and Cancel, wrapping onto the next line when they
+ * do not fit (common-items.md *Layout - laptop*).
+ */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* A pair of a row's buttons, Move up and Move down, then its others, 8 px apart, on one line at 375 px. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/*
+ * Every row button, and the edit form's Save and Cancel, takes its label's width, at least 44 px wide and the shared
+ * 48 px high, on a phone and a laptop alike: neither the shared button's full width below 40rem nor its 8rem minimum
+ * from there (common-items.md *Conflicts resolved* 6). Its sides are narrower than the shared 1.25rem, so that Move up
+ * and Move down share one line in the 307 px that the numbered list leaves at 375 px, where they take about 311 px
+ * with them (list-editor.md *Phone and laptop*). Two classes, so that it outranks the shared rule whichever
+ * stylesheet comes first.
+ */
+.actions .rowButton {
+  inline-size: auto;
+  min-inline-size: var(--target-min);
+  padding-inline: var(--space-3);
+}
+
+/* A move button's arrow before its words, the text's size whatever the label's length. */
+.arrow {
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: var(--space-1);
+  vertical-align: -0.125em;
+}
+
+/*
+ * The list conflict above the list, with the 4 px bar of a field in error (list-editor.md *States*), in the reading
+ * column. The bar is a border, so that forced colours keep it.
+ */
+.conflict {
+  max-inline-size: var(--measure);
+  margin-block: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 4px solid var(--colour-error);
+}
+
+/*
+ * The add form under the list, in the reading column (TextBox.module.css), as are the help text and the box, while
+ * the list uses the wider page (participants.md *Layout - laptop*).
+ */
+.addForm {
+  margin-block-start: var(--space-5);
+}
+
+/* The field, then the alert, which takes space only while it holds words, then the buttons. */
+.field {
+  margin-block-end: var(--space-5);
+}
+
+/*
+ * Three lines' minimum height (list-editor.md *Implementation notes*: rows={3}), in place of the shared box's six,
+ * as field-sizing sizes the box by its CSS rather than by rows. Two classes, so that it outranks the shared rule
+ * whichever stylesheet comes first.
+ */
+.field .box {
+  min-block-size: calc(3em * var(--line-height-body) + 2 * var(--space-3) + 2 * var(--border-control));
+}
+
+.archived {
+  margin-block-start: var(--space-6);
+}
+
+/* A 44 px target, with the default marker kept, so that every browser says whether it is open. */
+.summary {
+  min-block-size: var(--target-min);
+  padding-block: var(--space-2);
+  cursor: pointer;
+}
+
+.archivedList {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: 1.25rem;
+}

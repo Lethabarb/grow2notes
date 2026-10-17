@@ -35,10 +35,41 @@ export const msg = {
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
   /** A Save that failed, in the alert above it, such as "Not saved: no connection. Try again." */
   notSaved: (cause: Cause): string => msg.notDone('saved', cause),
-  /** An Archive participant that failed, in the alert above it (participants.md *States*). */
+  /**
+   * An Archive participant or a list row's Archive that failed, in the alert above it (participants.md *States*,
+   * list-editor.md *Request errors*).
+   */
   notArchived: (cause: Cause): string => msg.notDone('archived', cause),
-  /** A Restore that failed, in the alert above it, in the archived notice (participants.md *States*). */
+  /**
+   * A Restore that failed, in the alert above it: in the archived notice, or in an archived row of a list
+   * (participants.md *States*, list-editor.md *Request errors*).
+   */
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
+  /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
+  notAdded: (cause: Cause): string => msg.notDone('added', cause),
+  /** A list row's Move up or Move down that failed, in the row's alert above its buttons (list-editor.md). */
+  notMoved: (cause: Cause): string => msg.notDone('moved', cause),
+  /**
+   * A list row's move, in the page's status region once the list shows it (list-editor.md *Behaviour*): where the row
+   * went, counted from 1 among the active rows, such as "Moved down to number 4 of 5", one phrase with no full stop.
+   */
+  moved: (direction: 'up' | 'down', position: number, total: number) =>
+    `Moved ${direction} to number ${position} of ${total}`,
+  /**
+   * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
+   * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather
+   * than `aria-label`, which automatic translation misses, and after the label, so that the name starts with the words
+   * on screen (SC 2.5.3).
+   */
+  rowContext: (text: string) => `, ${text}`,
+  /**
+   * A list row's Save refused as stale (`412`) that finds the row still active once the list is read again
+   * (list-editor.md *Request errors*), in the edit form's alert, naming the row as its kind does and with its wording
+   * now, as stored.
+   */
+  rowChangedWhileEditing: (row: string, text: string) =>
+    `Someone else changed this ${row} while you were editing. It now says: ${text}. Save to replace it with your `
+    + 'wording, or Cancel to keep it.',
   /**
    * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
    * design.md §3.7.
