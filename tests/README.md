@@ -659,6 +659,9 @@ sessions.
   (`POST /api/auth/ping`, with the device's token), or `NextRequest.Get(path)` and `NextRequest.Post(path)` for
   others. A `401` must also be problem details that clear the session cookie, as the session check answers once it
   ends a session.
+- `AssertNextAnswersAsync(status, answer, requests)` does the same for requests answered with JSON, and asserts
+  `answer` of each device's body too, as Edit user's tests read the role that `GET /api/auth/me` gives each session
+  after a change to Worker (`Grow2Notes.Tests/Features/Users/UserEditEndpointTests.cs`).
 
 ```csharp
 await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));

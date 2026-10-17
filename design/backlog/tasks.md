@@ -1192,6 +1192,12 @@ protected. From the console the operator can reset the last manager's sign-in or
   T01's resend test's interceptor that holds a save back, `HoldsTheFirstSaveOfTheUser`, moves to the test fixtures,
   for Reset sign-in's tests and the steps after them; the race test lets the first reset go on once
   `sys.dm_exec_requests` shows the second waiting for the lock.
+- Where design.md is silent (step 3): Invite's checks and words move to `UserDetailsChecks`, with the mapping of
+  Identity's refusals, and the body that `POST` and `PUT /api/admin/users` share is `UserDetailsRequest`, so that
+  Invite user and Edit user refuse a field alike. For a new address, `user.updated` is written before
+  `user.setup_link_sent`, as the change comes before the reset it causes. `SignedInDevices` gains
+  `AssertNextAnswersAsync`, which also reads each device's JSON answer, for the role that `/api/auth/me` gives after a
+  change to Worker.
 
 ### Steps
 
@@ -1229,7 +1235,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       signs in with it and a code, and Invited to one deactivated while Invited, whose Resend invite then works; a
       repeat on a user already in that state changes and writes nothing; a stale `If-Match` gets `412` and a missing
       one `428`, changing and writing nothing; B's manager gets `404` for A's user; and a worker gets `403`
-- [ ] Add `PUT /api/admin/users/{id}` (S00.06.06's four specific criteria, and S00.06.04's Note from S00.04.02 for the
+- [x] Add `PUT /api/admin/users/{id}` (S00.06.06's four specific criteria, and S00.06.04's Note from S00.04.02 for the
       reset step; design.md §4.11 *Edit*, §6.6's `PUT` row, §8.4's role on the next request, §8.6's email change on a
       Deactivated person; D75, D76, A27, A53; see Notes): a handler in `Features/Users/` that takes an `Actor`, checks
       `{displayName, email, role}` with Invite's shared checks, and changes the user through `UserChanges`, with the

@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Time.Testing;
 
@@ -70,7 +72,27 @@ internal sealed class SignedInDevices : IDisposable
     /// problem details that clear the session cookie, as the session check answers once it ends a session, so the
     /// browser stops sending it.
     /// </summary>
-    public async Task AssertNextRequestsAsync(HttpStatusCode status, params NextRequest[] requests)
+    public Task AssertNextRequestsAsync(HttpStatusCode status, params NextRequest[] requests) =>
+        AssertNextAsync(status, answer: null, requests);
+
+    /// <summary>
+    /// As <see cref="AssertNextRequestsAsync"/>, for requests whose answer has a JSON body, and asserts
+    /// <paramref name="answer"/> of each device's body too, such as the role that <see cref="Me"/> gives after a change
+    /// of role.
+    /// </summary>
+    public Task AssertNextAnswersAsync(
+        HttpStatusCode status, Action<JsonElement> answer, params NextRequest[] requests) =>
+        AssertNextAsync(status, answer, requests);
+
+    public void Dispose()
+    {
+        foreach (var device in devices)
+        {
+            device.Client.Dispose();
+        }
+    }
+
+    private async Task AssertNextAsync(HttpStatusCode status, Action<JsonElement>? answer, NextRequest[] requests)
     {
         if (requests.Length == 0)
         {
@@ -91,14 +113,9 @@ internal sealed class SignedInDevices : IDisposable
             {
                 Assert.Equal(status, response.StatusCode);
             }
-        }
-    }
 
-    public void Dispose()
-    {
-        foreach (var device in devices)
-        {
-            device.Client.Dispose();
+            answer?.Invoke(
+                await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken));
         }
     }
 

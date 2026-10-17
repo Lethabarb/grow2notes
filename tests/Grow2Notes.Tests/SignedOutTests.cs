@@ -13,7 +13,10 @@ namespace Grow2Notes.Tests;
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
 /// behind the fallback policy, the app's own <c>/api/auth/me</c>, its admin lists, its <c>/api/admin/users</c> posted
-/// to, and a user's setup link, deactivation and reactivation show; so the others show that the page, its files and
+/// to, and a user's edit, setup link, deactivation and reactivation show; so the others show that the page, its files
+/// and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers
+/// still matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with
+/// no cookie never reaches one.
 /// the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still
 /// matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with no
 /// cookie never reaches one.
@@ -101,6 +104,22 @@ public sealed class SignedOutTests : IAsyncDisposable
 
         using var response = await client.PostAsync(
             $"/api/admin/users/{Guid.NewGuid()}/{action}", content: null, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
+    // As a change to a user's, with the body that Edit user sends.
+    [Fact]
+    public async Task Edit_user_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PutAsJsonAsync(
+            $"/api/admin/users/{Guid.NewGuid()}",
+            new { displayName = "Avery Brooks", email = "avery.brooks@example.org", role = "Worker" },
+            TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());

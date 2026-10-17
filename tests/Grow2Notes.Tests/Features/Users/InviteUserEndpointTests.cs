@@ -44,29 +44,6 @@ public sealed class InviteUserEndpointTests : IClassFixture<Grow2NotesFactory>, 
         app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
     }
 
-    public static TheoryData<string?, string> InvalidNames { get; } = new()
-    {
-        { null, UserInvite.NameMissing },
-        { "", UserInvite.NameMissing },
-        { "   ", UserInvite.NameMissing },
-        { new string('n', Limits.DisplayName + 1), UserInvite.NameTooLong },
-    };
-
-    // An address that the server refuses but the screen's loose check passes (one "@" with text either side) gets the
-    // format message too: one with a letter outside ASCII, which Identity's user name refuses, and one longer than the
-    // columns that hold an address, which Identity's check of an address passes.
-    public static TheoryData<string?, string> InvalidEmails { get; } = new()
-    {
-        { null, UserInvite.EmailMissing },
-        { "", UserInvite.EmailMissing },
-        { "alex", UserInvite.EmailNotAnAddress },
-        { "zoë@example.org", UserInvite.EmailNotAnAddress },
-        { new string('a', Limits.Email + 1 - "@example.org".Length) + "@example.org", UserInvite.EmailNotAnAddress },
-    };
-
-    // A role is named exactly, never by its number or in another letter case (mcp-server.md §3.5, convention 4).
-    public static TheoryData<string?> InvalidRoles { get; } = [(string?)null, "", "Admin", "worker", "1"];
-
     [Theory]
     [InlineData(Caller.ManagerOfA, "Worker")]
     [InlineData(Caller.ManagerOfB, "Manager")]
@@ -158,31 +135,31 @@ public sealed class InviteUserEndpointTests : IClassFixture<Grow2NotesFactory>, 
     }
 
     [Theory]
-    [MemberData(nameof(InvalidNames))]
+    [MemberData(nameof(InvalidUserDetails.Names), MemberType = typeof(InvalidUserDetails))]
     public Task A_missing_or_overlong_name_gets_a_422_for_displayName_and_nothing_is_done(
         string? displayName, string error) =>
         AssertInvalidAsync(Body(displayName, NewAddress(), "Worker"), ("displayName", error));
 
     [Theory]
-    [MemberData(nameof(InvalidEmails))]
+    [MemberData(nameof(InvalidUserDetails.Emails), MemberType = typeof(InvalidUserDetails))]
     public Task A_missing_overlong_or_malformed_address_gets_a_422_for_email_and_nothing_is_done(
         string? email, string error) =>
         AssertInvalidAsync(Body(DisplayName, email, "Worker"), ("email", error));
 
     [Theory]
-    [MemberData(nameof(InvalidRoles))]
+    [MemberData(nameof(InvalidUserDetails.Roles), MemberType = typeof(InvalidUserDetails))]
     public Task A_missing_role_or_one_that_is_neither_Worker_nor_Manager_gets_a_422_for_role_and_nothing_is_done(
         string? role) =>
-        AssertInvalidAsync(Body(DisplayName, NewAddress(), role), ("role", UserInvite.RoleMissing));
+        AssertInvalidAsync(Body(DisplayName, NewAddress(), role), ("role", UserDetailsChecks.RoleMissing));
 
     // So the screen can show every error at once.
     [Fact]
     public Task Every_field_at_fault_is_named_at_once() =>
         AssertInvalidAsync(
             Body(displayName: "", email: "", role: null),
-            ("displayName", UserInvite.NameMissing),
-            ("email", UserInvite.EmailMissing),
-            ("role", UserInvite.RoleMissing));
+            ("displayName", UserDetailsChecks.NameMissing),
+            ("email", UserDetailsChecks.EmailMissing),
+            ("role", UserDetailsChecks.RoleMissing));
 
     // The email goes before the commit, so a send that fails rolls back the user and their event (T01's Notes). The
     // sender's exception holds the address and the link, which the app keeps out of its logs (design.md §9.5).
