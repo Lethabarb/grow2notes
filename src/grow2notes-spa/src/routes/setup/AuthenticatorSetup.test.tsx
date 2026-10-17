@@ -1,7 +1,7 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery } from '../../api/me.ts';
@@ -195,8 +195,10 @@ function recordAdded(): () => Element[] {
  * StrictMode.
  */
 async function open(path: string, before: string[] = []) {
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
   const router = createMemoryRouter(withSetupMemory(routes), {
-    initialEntries: [...before, path],
+    initialEntries: [...before, path].map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() })),
     initialIndex: before.length,
   });
   const client = createQueryClient();
@@ -735,6 +737,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(router.state.location.pathname).toBe('/setup/password');
     const field = screen.getByLabelText('Create a password');
     expect(field).toHaveValue(password);
+    // The shell's arrival focus, as the field is F's error summary while it shows the server's refusal.
+    expect(field).toHaveAttribute('data-route-focus');
     expect(field).toHaveFocus();
     expect(field).toHaveAttribute('aria-invalid', 'true');
     expect(field).toHaveAccessibleDescription(
@@ -751,7 +755,9 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(document.title).toBe(title);
     fireEvent.click(backLink());
     await wait(0);
+    expect(router.state.historyAction).toBe('POP');
     expect(screen.getByLabelText('Create a password')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText('Create a password')).not.toHaveAttribute('data-route-focus');
     expect(heading()).toHaveFocus();
   });
 

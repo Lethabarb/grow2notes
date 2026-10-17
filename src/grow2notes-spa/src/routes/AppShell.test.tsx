@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { buttonClass } from '../components/buttonClass.ts';
+import { PageHeading } from '../components/PageHeading.tsx';
 import { pageName } from '../copy/pageNames.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
@@ -29,12 +30,17 @@ const worker: Me = {
 };
 
 // Made-up screens under the shell: a section that names its page, with one child that names its own and one that
-// names none.
+// names none. Each has its <h1>, as every screen has, so that none leaves the focus that the shell gives a new screen
+// pending for the next test's heading.
 const madeUp: AppRoute[] = [
   {
     path: 'made-up',
     handle: { pageName: pageName.participants },
-    children: [{ path: 'named', handle: { pageName: pageName.participant } }, { path: 'unnamed' }],
+    children: [
+      { index: true, element: <PageHeading>Participants</PageHeading> },
+      { path: 'named', element: <PageHeading>Participant</PageHeading>, handle: { pageName: pageName.participant } },
+      { path: 'unnamed', element: <PageHeading>Unnamed</PageHeading> },
+    ],
   },
 ];
 

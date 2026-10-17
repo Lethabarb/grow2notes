@@ -24,7 +24,7 @@ internal static class Limits
     /// </summary>
     public const int Email = 256;
 
-    /// <summary><c>Participant.GivenName</c> and <c>Participant.FamilyName</c>, each (§5.1).</summary>
+    /// <summary><see cref="Participant.GivenName"/> and <see cref="Participant.FamilyName"/>, each (§5.1).</summary>
     public const int ParticipantName = 100;
 
     /// <summary>

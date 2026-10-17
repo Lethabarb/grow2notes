@@ -1,0 +1,38 @@
+/*
+ * Details in the reading column, a section's gap below the <h1>, or the archived notice under it, and Actions a
+ * section's gap below Details (participants.md *Layout - laptop*).
+ */
+.details,
+.actions {
+  max-inline-size: var(--measure);
+  margin-block-start: var(--section-gap);
+}
+
+/* One under another at every width, so that the order on screen is the tab order (text-and-date-inputs.md). */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-block-end: var(--space-6);
+}
+
+/* About as wide as a name, never wider than the column (GOV.UK's 20.5em). */
+.name {
+  max-inline-size: 20.5em;
+}
+
+/* Save full width on a phone, the status under it; from 40rem sized to its label, the status beside it. */
+.save {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+@media (min-width: 40rem) {
+  .save {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+  }
+}

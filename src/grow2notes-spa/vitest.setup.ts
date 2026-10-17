@@ -28,3 +28,26 @@ if ('HTMLDialogElement' in globalThis) {
     });
   };
 }
+
+// jsdom's scrollTo() only reports that it is not implemented, as jsdom lays nothing out, so this stands in for it, as
+// far as the position that scrollY then reads, which it takes whatever the page's length, with no scroll event. Where
+// a page is on screen is checked end to end.
+if ('window' in globalThis) {
+  window.scrollTo = function scrollTo(xOrOptions?: number | ScrollToOptions, y?: number) {
+    const top = typeof xOrOptions === 'object' ? xOrOptions.top : y;
+    if (top !== undefined) {
+      Object.defineProperty(window, 'scrollY', { value: top, configurable: true, writable: true });
+    }
+  };
+}
+
+// jsdom has no <search> element, which every browser the app supports has had since 2023, so React warns in tests
+// alone that Find a participant's landmark is unrecognised. Only that warning is let go: every other one still shows.
+const consoleError = console.error;
+console.error = (...args: unknown[]) => {
+  const unrecognisedSearch =
+    typeof args[0] === 'string' && args[0].startsWith('The tag <%s> is unrecognized') && args[1] === 'search';
+  if (!unrecognisedSearch) {
+    consoleError(...args);
+  }
+};

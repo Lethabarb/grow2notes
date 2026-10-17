@@ -9,6 +9,7 @@ import { PageStatus } from '../../components/PageStatus.tsx';
 import { pageName } from '../../copy/pageNames.ts';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
+import { useReturnFocusReady } from '../../routes/routeChange.ts';
 import { byName } from './userRules.ts';
 import { usersQuery, type AdminUser } from './usersQuery.ts';
 import styles from './UsersPage.module.css';
@@ -16,10 +17,12 @@ import styles from './UsersPage.module.css';
 /**
  * Users at `/manage/users` (users.md component A): its `<h1>` and Invite user at once, then the region that loads the
  * organisation's users, the current ones, Invited and Active, and then, only when someone is Deactivated, their own
- * section. Invite user is a link, as it changes the address, styled as the primary button.
+ * section. Invite user is a link, as it changes the address, styled as the primary button. Each row is a return point,
+ * which the shell focuses on a pop back to the list once its rows, or the failure to load them, are in the page.
  */
 export function UsersPage() {
   const users = useQuery(usersQuery);
+  useReturnFocusReady(!users.isPending);
 
   return (
     <PageStatus>
@@ -70,6 +73,7 @@ function UserRows({ users }: { users: readonly AdminUser[] }) {
           key={id}
           to={`/manage/users/${id}`}
           name={displayName}
+          returnKey={id}
           detail={[
             email,
             <>

@@ -94,7 +94,10 @@ export const strings = {
   sending: 'Sending…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
-  /** The button of a page that saves what it shows and stays, such as Guide prompts (primary-actions.md). */
+  /**
+   * The button of a page or form that saves what it shows and stays, such as Guide prompts or a participant's Details
+   * (primary-actions.md).
+   */
   save: 'Save',
   /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
   saving: 'Saving…',
@@ -269,6 +272,78 @@ export const strings = {
      */
     resendInvite: 'Resend invite',
     resendInviteDescription: 'Sends a new setup link. The old link stops working.',
+  },
+  /**
+   * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and
+   * the participant page's loading lines, and what did not load, as each failure sentence starts
+   * (empty-loading-error.md); the list's empty sentences, in place of its rows, for no participants at all and for a
+   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md).
+   */
+  participants: {
+    listLoading: 'Loading participants…',
+    theList: 'The participant list',
+    participantLoading: 'Loading participant…',
+    thisParticipant: 'This participant',
+    noneYet: 'No participants yet.',
+    noneActive: 'No active participants.',
+    noneArchived: 'No archived participants.',
+    active: 'Active',
+    archived: 'Archived',
+  },
+  /**
+   * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
+   * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above
+   * Save, a save refused as stale (`412`), the typed details kept.
+   */
+  participantDetails: {
+    heading: 'Details',
+    givenName: 'Given name',
+    familyName: 'Family name',
+    enterGivenName: 'Enter the given name',
+    enterFamilyName: 'Enter the family name',
+    changedMeanwhile:
+      'Someone else changed these details while you were editing. Check the details, then save again.',
+  },
+  /**
+   * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>`, Archive
+   * participant in it and Restore in the archived notice, each with its busy label; then, in the alert above either, a
+   * press refused as stale (`412`) that finds the participant still as they were.
+   */
+  participantActions: {
+    heading: 'Actions',
+    archive: 'Archive participant',
+    archiving: 'Archiving…',
+    restore: 'Restore',
+    restoring: 'Restoring…',
+    changedMeanwhile: 'Someone else changed this participant just now. Check the page, then try again.',
+  },
+  /**
+   * The date of birth's three fields (text-and-date-inputs.md): the group's legend, which also starts its messages,
+   * its hint and each part's label; each part as a message names it, as in "a day and month"; then the messages, in
+   * the order the checks run.
+   */
+  dateOfBirth: {
+    legend: 'Date of birth',
+    hint: 'For example, 27 3 1987',
+    day: 'Day',
+    month: 'Month',
+    year: 'Year',
+    partNames: { day: 'day', month: 'month', year: 'year' },
+    enter: 'Enter the date of birth',
+    yearFourNumbers: 'Year must include 4 numbers',
+    notReal: 'Date of birth must be a real date',
+    inThePast: 'Date of birth must be in the past',
+  },
+  /**
+   * The Find a participant box (search-filter.md), on Today and Manage > Participants: its label; the description that
+   * screen readers read once as the field takes focus, as the list changing shows itself on screen; and Clear, with
+   * the word only screen readers get after it, so that the button is named "Clear search".
+   */
+  findParticipant: {
+    label: 'Find a participant',
+    description: 'The list of participants below changes as you type.',
+    clear: 'Clear',
+    clearHidden: 'search',
   },
   /**
    * A user's status, by its name in the API (status-tags.md): plain words, never a tag. "Deactivated" also heads the

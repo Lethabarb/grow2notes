@@ -1,6 +1,7 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.GuidePrompts;
+using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
@@ -233,6 +234,8 @@ builder.Services.AddScoped<UserList>();
 builder.Services.AddScoped<UserInvite>();
 builder.Services.AddScoped<UserSetupLink>();
 builder.Services.AddScoped<GuidePromptsHandler>();
+builder.Services.AddScoped<ParticipantList>();
+builder.Services.AddScoped<ParticipantChanges>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
 // its audit event's share the scope's context, and so the one transaction.
@@ -341,7 +344,11 @@ api.MapAdminGroup()
     .MapUserListEndpoint()
     .MapInviteUserEndpoint()
     .MapUserSetupLinkEndpoint()
-    .MapGuidePromptsEndpoints();
+    .MapGuidePromptsEndpoints()
+    .MapParticipantListEndpoint()
+    .MapAddParticipantEndpoint()
+    .MapUpdateParticipantEndpoint()
+    .MapArchiveParticipantEndpoints();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

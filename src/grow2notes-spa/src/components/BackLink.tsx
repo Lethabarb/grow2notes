@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useLocation, useNavigate, useResolvedPath } from 'react-router';
+import { openerBefore } from '../routes/routeChange.ts';
 import styles from './BackLink.module.css';
 
 type BackLinkProps = {
@@ -7,24 +8,24 @@ type BackLinkProps = {
   to: string;
   /** The destination's name and nothing more: no "Back to …" and no bare "Back". */
   children: string;
-  /**
-   * Set when the previous history entry is the destination, so that a plain click goes back to it, as browser Back
-   * does, rather than adding it again. The page says so until the shell's opened-from memory (S00.05.02) can.
-   */
-  previousIsDestination?: boolean;
 };
 
 /**
  * The one back link of the app (app-shell.md component 3a), for a screen's `PageBar`: a real link to its destination
- * with a decorative chevron, never disabled, as there must always be a way out.
+ * with a decorative chevron, never disabled, as there must always be a way out. A plain click goes back one entry, as
+ * browser Back does, rather than adding the destination again, when the shell's opened-from memory says that the entry
+ * before is the one that opened this screen, at the destination's pathname, whatever its search, as a list's other
+ * view; otherwise, as after a reload or from a pasted address, it pushes the destination.
  */
-export function BackLink({ to, children, previousIsDestination = false }: BackLinkProps) {
+export function BackLink({ to, children }: BackLinkProps) {
   const navigate = useNavigate();
+  const { key } = useLocation();
+  const destination = useResolvedPath(to).pathname;
 
   // Anything else falls through to the Link, which pushes the destination on a plain click and leaves a modified one
   // to the browser, which opens the href in a new tab or window.
   function goBack(event: MouseEvent<HTMLAnchorElement>) {
-    if (previousIsDestination && isPlainClick(event)) {
+    if (isPlainClick(event) && openerBefore(key)?.path === destination) {
       event.preventDefault();
       void navigate(-1);
     }

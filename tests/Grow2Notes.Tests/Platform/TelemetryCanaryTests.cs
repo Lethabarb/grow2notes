@@ -23,15 +23,21 @@ namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// The canary test of design.md §9.5, its M0 part: a unique string sent in request bodies, and placed in the values
-/// that SQL Server puts in its error text, appears in no log, no telemetry and no response. The app runs with telemetry
-/// on, as in Azure, and everything it writes or sends goes to a sink here. Note text joins the canary in E02.
+/// that SQL Server puts in its error text, appears in no log, no telemetry and no response. Since S01.02.02 it is also
+/// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event. The
+/// app runs with telemetry on, as in Azure, and everything it writes or sends goes to a sink here. Note text joins the
+/// canary in E02.
 /// </summary>
 [Collection<SqlServerCollection>]
-public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
+public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
+    : IClassFixture<Grow2NotesFactory>
 {
     // Endpoints that only this test maps. No real endpoint forces a database failure on purpose.
     private const string TruncationPath = "/api/test-only/truncation";
     private const string DuplicateEmailPath = "/api/test-only/duplicate-email";
+
+    // The app's own endpoint that adds a participant.
+    private const string ParticipantsPath = "/api/admin/participants";
 
     private static readonly DateTime TimeUtc = new(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
 
@@ -49,15 +55,28 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
             TruncationPath, new CanaryRequest(Canary), cancellationToken);
         using var duplicate = await client.PostAsJsonAsync(
             DuplicateEmailPath, new CanaryRequest($"{Canary}@example.org"), cancellationToken);
-        HttpResponseMessage[] responses = [truncation, duplicate];
+        HttpResponseMessage[] failures = [truncation, duplicate];
 
-        // The app answered each request with a 500 problem, whose body the check below looks in too.
-        var bodies = await Task.WhenAll(
-            responses.Select(r => r.ReadProblemAsync(HttpStatusCode.InternalServerError)));
+        // As a manager adds one, over HTTPS with a token, as the /api group needs.
+        using var manager = app.CreateHttpsClient().SignInAs(sqlServer.Seeded.A.ManagerId);
+        using var added = await manager.PostWithTokenAsync(
+            ParticipantsPath,
+            await manager.FetchTokenAsync(),
+            new { givenName = Canary, familyName = Canary, dateOfBirth = "1987-03-07" });
+        Assert.Equal(HttpStatusCode.Created, added.StatusCode);
+
+        // The app answered each failing request with a 500 problem, whose body the check below looks in too, as it does
+        // in the added participant's.
+        var bodies = (await Task.WhenAll(
+                failures.Select(r => r.ReadProblemAsync(HttpStatusCode.InternalServerError))))
+            .Append(await added.Content.ReadAsStringAsync(cancellationToken));
+        HttpResponseMessage[] responses = [.. failures, added];
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
         Assert.True(
-            SpinWait.SpinUntil(() => sinks.Spans.Spans.Count(IsCanaryRequest) == 2, TimeSpan.FromSeconds(10)),
+            SpinWait.SpinUntil(
+                () => sinks.Spans.Spans.Count(IsFailingRequest) == 2 && sinks.Spans.Spans.Any(IsAddRequest),
+                TimeSpan.FromSeconds(10)),
             "The requests' spans did not end.");
         Assert.True(app.Services.GetRequiredService<TracerProvider>().ForceFlush());
         Assert.True(app.Services.GetRequiredService<LoggerProvider>().ForceFlush());
@@ -85,7 +104,7 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         Assert.Collection(sinks.ExportedLogs.Logs.Where(l => l.CategoryName == handler),
             l => Assert.Contains(new("SqlErrorNumber", 2628), l.Attributes),
             l => Assert.Contains(new("SqlErrorNumber", 2601), l.Attributes));
-        Assert.All(sinks.Spans.Spans.Where(IsCanaryRequest), request =>
+        Assert.All(sinks.Spans.Spans.Where(IsFailingRequest), request =>
         {
             Assert.Contains(sinks.Spans.Spans, s => s.TraceId == request.TraceId
                 && s.GetTagItem("db.system") is not null && s.Status == ActivityStatusCode.Error);
@@ -96,6 +115,14 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
                 && (string?)i["tags"]?["ai.operation.id"] == request.TraceId.ToHexString()
                 && (bool?)i["data"]?["baseData"]?["success"] == false);
         });
+
+        // And the request that added the participant, whose body held the names.
+        var add = sinks.Spans.Spans.Single(IsAddRequest);
+        Assert.Contains(sinks.Metrics.Points, p => p.Name == "http.server.request.duration"
+            && p.Tags.Contains(new("http.route", ParticipantsPath))
+            && p.Tags.Contains(new("http.response.status_code", 201)));
+        Assert.Contains(sinks.Ingestion.Items, i => (string?)i["name"] == "Request"
+            && (string?)i["tags"]?["ai.operation.id"] == add.TraceId.ToHexString());
     }
 
     private static void RouteEverythingToSinks(IWebHostBuilder builder, Sinks sinks)
@@ -127,8 +154,11 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory) : IClassFixt
         });
     }
 
-    private static bool IsCanaryRequest(Activity span) =>
+    private static bool IsFailingRequest(Activity span) =>
         span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is TruncationPath or DuplicateEmailPath;
+
+    private static bool IsAddRequest(Activity span) =>
+        span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is ParticipantsPath;
 
     private static IEnumerable<(string Sink, string? Text)> ResponseHeaders(HttpResponseMessage response)
     {

@@ -1,0 +1,57 @@
+/* A block, as a browser that does not know <search> makes it inline. */
+.search {
+  display: block;
+}
+
+.label {
+  display: block;
+  margin-block-end: var(--space-2);
+  font-weight: 700;
+}
+
+/*
+ * The field and Clear on one line, the field taking what Clear leaves, stopping at about 32rem on a wide screen. At
+ * 320 px with text at 200%, Clear wraps under the field rather than squeeze it (search-filter.md *Phone and laptop*).
+ */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  max-inline-size: 32rem;
+}
+
+/* The containing block of the icon, which sits inside the field's left edge. */
+.field {
+  position: relative;
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+.icon {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: var(--space-3);
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  translate: 0 -50%;
+  color: var(--colour-text-secondary);
+  pointer-events: none;
+}
+
+/* Room for the icon before the text, over the text field's own padding. */
+.field > .input {
+  padding-inline-start: 2.75rem;
+}
+
+/* The secondary button's look at its own width, which on a phone is otherwise the column's. */
+.row > .clear {
+  flex: none;
+  inline-size: auto;
+}
+
+@media (forced-colors: active) {
+  /* As LinkRow's chevron: an <svg> keeps its colour under forced colours, which could leave it faint. */
+  .icon {
+    color: CanvasText;
+  }
+}

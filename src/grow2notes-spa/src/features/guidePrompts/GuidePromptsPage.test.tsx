@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
@@ -157,7 +157,10 @@ function renderApp(path: string, me: Me = manager, before: string[] = []) {
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: [...before, path] });
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = [...before, path].map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() }));
+  const router = createMemoryRouter(routes, { initialEntries });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -475,6 +478,22 @@ describe('Guide prompts', () => {
 
     expect(field()).not.toHaveFocus();
     expect(document.body).toHaveFocus();
+  });
+
+  it('focuses its <h1>, not the field, on arriving from Manage, at the top of the page', async () => {
+    serve(promptsPath, prompts(saved));
+    const { router } = renderApp('/manage');
+    await settle();
+    Object.defineProperty(window, 'scrollY', { value: 300, configurable: true, writable: true });
+
+    fireEvent.click(within(main()).getByRole('link', { name: 'Guide prompts' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(address);
+    expect(pageHeading()).toHaveAccessibleName('Guide prompts');
+    expect(pageHeading()).toHaveFocus();
+    expect(field()).not.toHaveFocus();
+    expect(window.scrollY).toBe(0);
   });
 
   it('shows an empty saved value as an empty box, with no placeholder', async () => {
@@ -1254,6 +1273,17 @@ describe('Guide prompts, leaving', () => {
     expect(leaveDialog()).not.toBeInTheDocument();
   });
 
+  it("focuses Today's <h1> on Leave without saving, as on any new screen", async () => {
+    await openWith();
+    enter(typed);
+    await follow('Today');
+
+    await pressInDialog(leave);
+
+    expect(pageHeading()).toHaveTextContent(/^Today/);
+    expect(pageHeading()).toHaveFocus();
+  });
+
   it.each([
     ['as loaded', []],
     ['typed, then deleted back', [typed, saved]],
@@ -1304,6 +1334,7 @@ describe('Guide prompts, leaving', () => {
 
     expect(router.state.location.pathname).toBe('/manage');
     expect(pageHeading()).toHaveAccessibleName('Manage');
+    expect(pageHeading()).toHaveFocus();
   });
 
   it.each(staying)('asks Sign out the same dialog while the text is not saved, staying after %s', async (_, close) => {

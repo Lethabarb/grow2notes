@@ -5,8 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, signing in again in place, the Users screens and Guide prompts, with axe accessibility checks,
-  run against the published app.
+  the idle sign-out, signing in again in place, the Users and Participants screens and Guide prompts, with axe
+  accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -113,13 +113,14 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
-(`e2e/sign-in-again.spec.ts`) and the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their
-setup links from the published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the
-second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
-app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
-each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
-database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
-Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) and the
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) get their setup links from the
+published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the second terminal gives
+them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
+string and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs
+a link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
+failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
+database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -315,6 +316,49 @@ the calls so far, as the file's own test of the spies does. A second test, marke
 `e2e/fixtures.spec.ts` is, writes to `localStorage` without naming it, which shows that the fixture runs, and fails a
 test, by itself.
 
+### Answering `/api/admin/participants`
+
+The Participants screens read the organisation's participants with `GET /api/admin/participants?includeArchived=true`,
+their one read, which needs a manager's session too. `e2e/participants.ts`, beside `e2e/users.ts`, has made-up
+participants (A35), in the JSON that `ParticipantListEndpointTests` asserts: Jane Citizen and Ravi de Silva, active, and
+Ben Archer, archived, together in `participants`, in the API's order, by family name, then given name.
+`madeUpParticipant` makes others, such as one with a long name, and a test changes one by spreading it with another
+`status`, date of birth or `rowVersion`. Each of the two helpers routes the page's requests through `page.route`,
+overriding the answer before it, as `serveUsers` does. Call them before `page.goto`.
+
+- `serveParticipants(page, list)` answers each request with `list`.
+- `failParticipants(page)` aborts each, as `failUsers` does. The failure then shows about 1 s after the page loads,
+  after the query client's silent retry, and the "still" sentence about 1 s after Try again. For the next Try again to
+  bring the list, the test then calls `serveParticipants`.
+
+```ts
+await serveMe(page, manager);
+await serveParticipants(page, participants);
+await page.goto('/manage/participants');
+```
+
+`e2e/shell.spec.ts`'s walk, whose Participants link opens the list, answers it too. A change to a participant, sent
+after an antiforgery token that the app gives anyone, is answered in the browser as well, by `answerChanges` in
+`e2e/participants.spec.ts`: Add participant's `POST`, a correction's `PUT`, and Archive participant's and Restore's
+`POST`s, each with a status, a body if any, and a `Date` of 4:12 pm in Melbourne, from which "Saved 4:12 pm" reads, or
+aborted, for no connection. The page reads the list again after each change, so the test first serves the list as the
+change leaves it, calling `serveParticipants` again with the participant changed.
+
+The tests that meet the app's own answers sign in for real, through the `invite` fixture and setup with a passkey on
+the `authenticator` fixture, so that the organisation that `admin bootstrap` made starts with no participants: one adds,
+corrects, archives and restores a participant at 375 px, and two more do it with the keyboard alone, at 375 px and at
+a laptop's width. `expectStops` there presses Tab or Shift+Tab and reads each stop: the focused element by the text
+that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and "outside the
+page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is drawn, on a row's
+link on the `::after` that covers the row.
+
+Every test in `e2e/participants.spec.ts` also watches the live regions, the elements whose role is `status` or `alert`:
+an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and reports, through
+`page.exposeFunction`, each region that the Participants screens put into the document with words already in it, which a
+screen reader may not announce. After the test, any region so reported fails it, as does any whose `display` is `none`.
+A test marked `test.fail()`, as the one in `e2e/fixtures.spec.ts` is, puts a status region with words into the list's
+`<main>`, which shows that the watcher sees it and fails a test.
+
 ### Signing in with a passkey, end to end
 
 A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no
@@ -460,7 +504,8 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
   changes something sends the token that `FetchTokenAsync()` fetched with the same client, which keeps the cookie, in
   its `X-XSRF-TOKEN` header, as the SPA does (design.md §9.8), and sends any body as `application/json`, as
   `PostAsJsonAsync` and `JsonContent` do: the group answers `415` to a request with any other `Content-Type`, or with
-  a body and none. A token is issued to the user a request is signed in as, so fetch it after signing the client in.
+  a body and none. `PostWithTokenAsync` and `PutWithTokenAsync` send a change so, each with a row's ETag, if given,
+  as `If-Match`. A token is issued to the user a request is signed in as, so fetch it after signing the client in.
   In `AppWithoutDatabase`, Data Protection, which protects the tokens, has no key ring until `KeepKeysInMemory()` gives
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
@@ -480,11 +525,11 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
 ### The seeded organisations and the tenant
 
 After migrating the shared database, `SqlServerFixture` adds two made-up organisations (A35) for the two-organisation
-tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address. A test
-takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs in `sqlServer.Seeded`:
-`Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId` and `WorkerId`. A two-organisation test acts in A
-and checks that nothing of B's reaches it. `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is
-seeded.
+tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address, and an
+active participant. A test takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs
+in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId`, `WorkerId` and
+`ParticipantId`. A two-organisation test acts in A and checks that nothing of B's reaches it.
+`Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is seeded.
 
 - Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
   and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. An endpoint call
@@ -492,9 +537,17 @@ seeded.
   to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
   deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
-  database of its own from `SqlServerFixture.CreateDatabaseAsync`.
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`. Likewise no test archives, restores or changes a
+  seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
+  (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
+  and their ETag, the `If-Match` of a change to them, as
+  `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
+- A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation
+  (below), as `Grow2Notes.Tests/Features/Participants/ParticipantListEndpointTests.cs` does: EF Core gives a
+  participant added with no `OrganisationId` a new GUID, as the column is in its alternate key and its foreign key to
+  `Organisation`, and the save then refuses it as another organisation's (`Participant.OrganisationId`).
 
 Tenant-owned rows are read and written under a tenant (design.md §5.9). In a request, the app takes it from the
 signed-in user's session. A test that uses the app's context outside a request sets it as sign-in and the operator
@@ -755,13 +808,16 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
   on, in organisation A, as the seeded-rows rule above says, with the app's services and the seeded organisations
   that `EndpointCall` carries: `POST /api/admin/users/{id}/setup-link`'s row, the first, invites a user into A
-  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`.
+  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`;
+  `PUT /api/admin/participants/{id:guid}`'s adds a participant to A for each call with `AddParticipantAsync`
+  (above); and the archive's and restore's rows add an active and an archived one.
 - A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
   caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
   row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
   from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
   whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
-  organisation's seeded users and neither of the other's.
+  organisation's seeded users and neither of the other's, and `GET /api/admin/participants`' row their own
+  organisation's seeded participant and not the other's.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,
@@ -815,3 +871,9 @@ story adds one as follows.
   handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
   stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
   `SaveChangesInterceptor` holds back while another request changes the user.
+- Give each event type that it writes a row in the shared audit-events test,
+  `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
+  through the real endpoint, in seeded organisation A, adding the rows it acts on, or, for a change to an
+  organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the entry
+  that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new
+  entry, and compares the `Details` as JSON. `participant.created`'s row is the example.

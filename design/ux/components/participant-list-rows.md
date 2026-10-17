@@ -9,7 +9,10 @@ Component key: `participant-list-rows`. This covers the rows on **Today** (desig
 
 ## Where it's used
 
-One screen, Today (4.2). The same row is used in two lists on that screen. Both are the same for workers and managers. Only the destination changes by role, and the row never shows that difference.
+One screen, Today (4.2). The same row is used in two lists on that screen. Both are the same for workers and managers.
+Only the destination changes by role, and the row never shows that difference. The row itself is shared beyond Today, by
+the Users list and the participants list (participants.md), each with lines of its own under the name or none
+(*Implementation notes*).
 
 | Where | What the row shows | What tapping does | What differs |
 |---|---|---|---|
@@ -136,7 +139,14 @@ Each row has three parts, in DOM order:
 - **One render pass.** The drafts section and the main list render only when both `/api/today` and `/api/me/drafts` have loaded, so the drafts section can never appear above rows that are already showing and push them down under a finger.
 - **Refresh:** TanStack Query refetches on mount and on window focus (6.8). New data replaces the rows silently: no animation, no announcement, and no change of scroll position or focus.
 - **After Submit** (4.3): the form drops the cached `today` and `me/drafts` queries (`removeQueries`), then navigates to Today, so the row can never show "Draft" for a moment and then change. Today loads fresh, usually in under a second, so no loading text appears. The row then shows Submitted, as 4.3 requires.
-- **Returning to Today** by "< Today", the browser Back button or after Submit: focus moves to the link of the row the user opened, if it is still on the list. Calling `focus()` scrolls it into view. The row key is held **in memory only** (a module variable, never storage; D22, 9.6). If the row has gone, for example an earlier-day draft that was just submitted, focus is left alone. If the success-message component ("Note for Jane Citizen submitted") moves focus itself, that rule wins.
+- **Returning to Today** by "< Today" or the browser Back button: focus moves to the link of the row the user opened, if
+  it is still on the list, through the shell's one route-change rule (app-shell.md, 3b), as on the Users and
+  participants lists: each row's link carries `data-return-key`, the shell records the key and the row's index on the
+  list's history entry, **in memory only** (never storage or `history.state`; D22, 9.6), and on a pop back, once the
+  list says its rows are in (`useReturnFocusReady`), focuses the row with `preventScroll` and puts the page back where
+  it was. If the row has gone, for example an earlier-day draft that was just submitted, the route's fallback takes
+  focus. After Submit, the success message ("Note for Jane Citizen submitted") takes focus instead, as it carries
+  `data-route-focus`, which wins.
 - **No hover-only content**, tooltips, long-press, swipe actions or inline buttons. A row has one action, and any other action belongs on the destination page.
 
 ### States
@@ -157,7 +167,7 @@ Each row has three parts, in DOM order:
 | **Load failed** | `Couldn't load the participant list. Check your connection and try again.` and a **Try again** button, which refetches. | Use the same status container. The button sits outside it so that it is not re-announced. 401s go through the global sign-in handling. *This copy is not in design.md.* |
 | **Background refresh failed** | Nothing changes. The rows that are already shown stay. | Each destination fetches its own fresh data, so a stale row cannot cause a wrong action. |
 | **Empty: no participants** | `No participants yet.` Managers also see an **Add participant** link to Manage > Participants. | 4.2. A worker sees only the sentence. |
-| **Empty: no search match** | `No participant matches 'xyz'`, with the user's text shown as plain text. | 4.2. The search component owns its live region. The drafts section stays visible. |
+| **Empty: no search match** | `No participant matches ‘xyz’.`, with the user's text shown as plain text. | 4.2. The search component owns its live region. The drafts section stays visible. |
 | **Drafts section empty** | The whole section, including its heading, is not rendered. | 4.2: "shown only when…" |
 
 ### Phone vs laptop
@@ -194,7 +204,7 @@ All sizes are in `rem`, so they follow the user's text size.
 | Drafts-row detail | `Wednesday 30 September 2026` (note date) | 4.2 "participant and note date" |
 | Hidden heading for the main list | `Participants` (visually hidden) | the Manage menu's term (4.0) |
 | No participants | `No participants yet.` and, for managers, `Add participant` | 4.2 |
-| No match | `No participant matches 'xyz'` | 4.2 |
+| No match | `No participant matches ‘xyz’.` | 4.2, with typographic quotes and a full stop (search-filter.md) |
 | Loading | `Loading participants…` | **proposed, not in design.md** |
 | Load failed | `Couldn't load the participant list. Check your connection and try again.` and `Try again` | **proposed, not in design.md** |
 
@@ -245,7 +255,8 @@ the built files, but for some comments; Today's status line, its tag and its two
   email and `{Status}<Sep/>{Role}`, and Today one, the status line or the note date. A row given no detail, as Today's
   with no note and participants.md's are, has no `<p>` and no `aria-describedby`.
 - It has no `onOpen` or `linkRef`: focus on return is the shell's (the editorial note at the top, and app-shell.md's
-  route-change rule), and S00.05.02 adds the link's `data-return-key` to the row, as a prop that each list gives.
+  route-change rule), so the row's link carries only its `data-return-key`, from `returnKey`, a prop that each list
+  gives: the person's ID on Users and Participants (S00.05.02).
 - Its tokens are foundations.md's, where the sketches here named others: `--colour-hover` and `--colour-pressed` for
   *States*' `--colour-row-hover` and `--colour-row-active`, and `--colour-text-secondary`, at 3:1 or better, for the
   chevron's `--colour-icon`. The name is at weight 700 and the list changes at 40rem, foundations.md's two weights and
@@ -273,17 +284,23 @@ import styles from './LinkRow.module.css';
 
 type LinkRowProps = {
   to: string;                          // IDs and dates only (4.0)
+  returnKey: string;                   // the row's key in its list, by which the shell focuses it on a pop back
   name: string;                        // "Jane Citizen": the link's text, so its whole accessible name
   detail?: readonly ReactNode[];       // the lines under the name; none for a row with none
 };
 
-export function LinkRow({ to, name, detail = [] }: LinkRowProps) {
+export function LinkRow({ to, name, returnKey, detail = [] }: LinkRowProps) {
   const detailId = useId();
   const hasDetail = detail.length > 0;
   return (
     <li className={styles.row}>
       <div className={styles.text}>
-        <Link to={to} className={styles.link} aria-describedby={hasDetail ? detailId : undefined}>
+        <Link
+          to={to}
+          className={styles.link}
+          aria-describedby={hasDetail ? detailId : undefined}
+          data-return-key={returnKey}
+        >
           {name}
         </Link>
         {hasDetail && (
@@ -308,7 +325,8 @@ export function LinkRow({ to, name, detail = [] }: LinkRowProps) {
 }
 ```
 
-Today gives each row its one line: `<LinkRow to={…} name={…} detail={note ? [<NoteStatus note={note} />] : []} />`.
+Today gives each row its one line:
+`<LinkRow to={…} name={…} returnKey={…} detail={note ? [<NoteStatus note={note} />] : []} />`.
 
 ```tsx
 // src/today/NoteStatus.tsx  (main-list detail line)
@@ -459,16 +477,14 @@ const failed = today.isError || drafts.isError;           // either failing = "L
 
 If either query fails, treat the whole load as failed. Showing the list without the drafts section would hide unfinished work without saying so.
 
-**Focus on return (memory only):**
-
-```ts
-// src/today/lastOpened.ts: module scope; never localStorage or sessionStorage (D22, 9.6)
-let lastOpened: string | null = null;            // `${participantId}/${noteDate}`
-export const rememberOpened = (key: string) => { lastOpened = key; };
-export const takeLastOpened = () => { const k = lastOpened; lastOpened = null; return k; };
-```
-
-In `Today`, after `ready`, call `takeLastOpened()` and `focus()` the matching link through a `Map` of refs. Do **not** use React Router's `<ScrollRestoration>`. It works only in data or framework mode, and it stores scroll positions in `sessionStorage`. That is not note data, but 9.6 and the delivery check keep that storage empty. Focusing the row scrolls it into view, which is enough.
+**Focus on return (memory only):** the shell's, built with the Users list and used by the participants list too
+(S00.05.02; app-shell.md *The route-change rule (one owner)*), so Today keeps no module variable or ref map of its own.
+Each row gives `LinkRow` its `returnKey`, the participant ID on the main list and `participantId/noteDate` in the
+drafts section, which the link carries as `data-return-key`; Today's route declares `handle.returnFocus`, and the
+screen calls `useReturnFocusReady(ready)`, so that the shell, on a pop back, focuses the row once both lists are in,
+and puts the page back where it was from its in-memory map. Do **not** use React Router's `<ScrollRestoration>`. It
+works only in data or framework mode, and it stores scroll positions in `sessionStorage`. That is not note data, but
+9.6 and the delivery check keep that storage empty.
 
 **Other notes**
 
@@ -496,7 +512,8 @@ In `Today`, after `ready`, call `takeLastOpened()` and `focus()` the matching li
 
 **Coordination with neighbouring components**
 
-- **Search box:** owns the filter, its label "Find a participant", and the live region for "No participant matches 'xyz'". This component renders the empty-state text inside the list area.
+- **Search box:** owns the filter, its label "Find a participant", and the live region for "No participant matches
+  ‘xyz’.". This component renders the empty-state text inside the list area.
 - **Success message after Submit:** owns "Note for Jane Citizen submitted" and its announcement. This component only returns focus to the row, and gives way if that component moves focus itself.
 - **Notification badge:** the `Flagged` tag must stay visually distinct from the count pill (notification-badge.md, Colour).
 

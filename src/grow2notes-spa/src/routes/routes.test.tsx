@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { pageName } from '../copy/pageNames.ts';
+import type { AdminParticipant } from '../features/participants/participantsQuery.ts';
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
@@ -40,14 +41,27 @@ const users: AdminUser[] = [
   },
 ];
 
+// Between a day and its month, so that the two never split across lines (microcopy.md §3).
+const nbsp = ' ';
+
+// One made-up participant (A35), on the made-up list of participants.
+const participants: AdminParticipant[] = [
+  {
+    id: '6c2f9a1e-3b7d-4e05-a8c4-1d9e7f3b2a60',
+    givenName: 'Jane',
+    familyName: 'Citizen',
+    dateOfBirth: '1987-03-07',
+    status: 'Active',
+    rowVersion: 'AAAAAAAAB9E=',
+  },
+];
+
 // The made-up answers of the manager screens' requests, by path.
 const managerAnswers: Readonly<Record<string, unknown>> = {
   '/api/admin/users': users,
+  '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
 };
-
-// Between a day and its month, so that the two never split across lines (microcopy.md §3).
-const nbsp = ' ';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -62,8 +76,8 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers `GET /api/admin/users` and `GET /api/admin/guide-prompts` with their
- * made-up answers and any other request, `GET /api/auth/me`, with `me`, or, for none, never answers.
+ * Stubs `fetch` as the server, which answers the users' and the participants' lists and `GET /api/admin/guide-prompts`
+ * with their made-up answers and any other request, `GET /api/auth/me`, with `me`, or, for none, never answers.
  */
 function serveMe(me: Me | undefined) {
   fetchMock.mockImplementation((path, init) =>
@@ -181,7 +195,7 @@ describe('Manage', () => {
     expect(within(main).getAllByRole('link')).toEqual(listed);
   });
 
-  it.each(links.filter(({ name }) => name !== 'Guide prompts' && name !== 'Users'))(
+  it.each(links.filter(({ name }) => !['Participants', 'Guide prompts', 'Users'].includes(name)))(
     'opens Page not found from $name, until its screen is built',
     async ({ name, address }) => {
       serveMe(manager);
@@ -195,6 +209,21 @@ describe('Manage', () => {
       expectPageNotFound();
     },
   );
+
+  it('opens the participant list from Participants, not Page not found, with Manage still marked', async () => {
+    serveMe(manager);
+    const router = renderApp('/manage');
+    await settle();
+
+    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Participants' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/manage/participants');
+    expect(pageHeading()).toHaveAccessibleName('Participants');
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Jane Citizen' })).toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Participants');
+    expect(currentItems()).toEqual(['Manage true']);
+  });
 
   it('opens the user list from Users, not Page not found, with Manage still marked', async () => {
     serveMe(manager);

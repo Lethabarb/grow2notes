@@ -1,0 +1,30 @@
+/* The three parts on one line, which wraps at 320 px with text at 200%, with no sideways scrolling. */
+.parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  display: block;
+}
+
+/*
+ * Each as wide as what it holds, in em, so that it grows with the text: Day and Month 2.75em, never under 44 px, and
+ * Year 4.5em (GOV.UK's widths). Two classes each, so that they win over the text field's full width.
+ */
+.part > .day,
+.part > .month {
+  inline-size: 2.75em;
+  min-inline-size: var(--target-min);
+}
+
+.part > .year {
+  inline-size: 4.5em;
+}

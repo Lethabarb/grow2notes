@@ -8,6 +8,11 @@ type LinkRowProps = {
   to: string;
   /** The link's text, and so its whole accessible name, such as a person's name. */
   name: string;
+  /**
+   * What tells the row apart in its list, such as the person's ID, by which the shell finds it again on a pop back to
+   * the list, to focus it (app-shell.md *The route-change rule (one owner)*, 3b).
+   */
+  returnKey: string;
   /** The lines under the name, which describe the link, each on a line of its own; none for a row with none. */
   detail?: readonly ReactNode[];
 };
@@ -15,16 +20,22 @@ type LinkRowProps = {
 /**
  * A row of a `LinkRowList` (participant-list-rows.md): one link, whose text is the name alone and whose `::after`
  * covers the whole row, so that a tap anywhere in it opens the same page, then the detail, which describes the link,
- * and a decorative chevron. Nothing else in the row is interactive.
+ * and a decorative chevron. Nothing else in the row is interactive. The link is the row's return point, by its
+ * `data-return-key`.
  */
-export function LinkRow({ to, name, detail = [] }: LinkRowProps) {
+export function LinkRow({ to, name, returnKey, detail = [] }: LinkRowProps) {
   const detailId = useId();
   const hasDetail = detail.length > 0;
 
   return (
     <li className={styles.row}>
       <div className={styles.text}>
-        <Link to={to} className={styles.link} aria-describedby={hasDetail ? detailId : undefined}>
+        <Link
+          to={to}
+          className={styles.link}
+          aria-describedby={hasDetail ? detailId : undefined}
+          data-return-key={returnKey}
+        >
           {name}
         </Link>
         {hasDetail && (

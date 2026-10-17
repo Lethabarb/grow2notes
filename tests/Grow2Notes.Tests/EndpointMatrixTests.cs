@@ -81,6 +81,29 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
             differences);
     }
 
+    // As above, for B's manager: a list of A's participant alone lacks B's and holds A's.
+    [Fact]
+    public async Task A_participant_list_that_lacks_the_caller_s_participant_or_holds_another_s_fails_the_run()
+    {
+        var (a, b) = sqlServer.Seeded;
+        var check = Assert.Single(
+            EndpointMatrix.Rows, row => EndpointMatrix.NameOf(row) == "GET /api/admin/participants").Answer;
+        Assert.NotNull(check);
+        using var answer = new HttpResponseMessage
+        {
+            Content = JsonContent.Create(new[] { new { id = a.ParticipantId } }),
+        };
+
+        var differences = await check(answer, Caller.ManagerOfB, sqlServer.Seeded);
+
+        Assert.Equal(
+            [
+                $"lacks the caller's own organisation's participant {b.ParticipantId}",
+                $"holds the other organisation's participant {a.ParticipantId}",
+            ],
+            differences);
+    }
+
     [Theory]
     [MemberData(nameof(Callers))]
     public async Task Every_endpoint_answers_the_caller_with_the_status_in_its_row(Caller caller)

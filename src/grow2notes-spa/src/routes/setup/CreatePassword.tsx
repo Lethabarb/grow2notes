@@ -2,7 +2,6 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
-import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { useErrorTitle } from '../../components/useErrorTitle.ts';
@@ -42,10 +41,10 @@ export function CreatePassword() {
 /**
  * View F (sign-in.md, its *Setup* states and *Interactions* 6, 10 and 14): one new password, checked here and sent
  * nowhere, which Continue puts in setup's memory for view G to send with the code. A hidden `username` field holding
- * the email tells a password manager whose password it is. Its back link to view E pops, as F's entry always follows
- * E's while setup's memory lives, and the `h1` takes focus as F shows, as the shell's focus on a new screen is
- * S00.05.02's. When view G has come back because the server refused the password, F shows the message for it on the
- * field instead, which then takes focus (*Password rejected by server*).
+ * the email tells a password manager whose password it is. Its back link to view E pops, as view E opened F, and the
+ * shell focuses the `h1` as F shows. When view G has come back because the server refused the password, F shows the
+ * message for it on the field instead, which then carries `data-route-focus`, as a one-field form's error summary, so
+ * that the shell focuses it as F shows (*Password rejected by server*).
  */
 function PasswordForm({ account }: { account: SetupAccount }) {
   const { password: held, setPassword, passwordRefused } = useSetup();
@@ -56,17 +55,14 @@ function PasswordForm({ account }: { account: SetupAccount }) {
   const [error, setError] = useState(() =>
     passwordRefused ? msg.passwordTooShort(limits.passwordMinLength) : undefined,
   );
-  // The number of refusals, the server's among them, so that each moves focus to the field, even with the same
+  // The number of presses that F's own check refused, so that each moves focus to the field, even with the same
   // message.
-  const [attempt, setAttempt] = useState(passwordRefused ? 1 : 0);
+  const [attempt, setAttempt] = useState(0);
   useErrorTitle(error !== undefined);
 
-  // The field after a refusal, once the render has named the message in its description, so that a screen reader
-  // reads it with focus; otherwise the h1.
+  // After the render that names the message in the field's description, so that a screen reader reads it with focus.
   useEffect(() => {
-    if (attempt === 0) {
-      focusPageHeading();
-    } else {
+    if (attempt > 0) {
       document.getElementById(fieldId)?.focus();
     }
   }, [attempt]);
@@ -88,9 +84,7 @@ function PasswordForm({ account }: { account: SetupAccount }) {
   return (
     <div className={styles.view}>
       <PageBar>
-        <BackLink to="/setup" previousIsDestination>
-          {pageName.setUpYourAccount}
-        </BackLink>
+        <BackLink to="/setup">{pageName.setUpYourAccount}</BackLink>
       </PageBar>
       <form noValidate onSubmit={onSubmit}>
         <PasswordInput
@@ -99,6 +93,7 @@ function PasswordForm({ account }: { account: SetupAccount }) {
           labelIsHeading
           hint={msg.passwordHint(limits.passwordMinLength)}
           error={error}
+          routeFocus={passwordRefused}
           autoComplete="new-password"
           minLength={limits.passwordMinLength}
           toggle

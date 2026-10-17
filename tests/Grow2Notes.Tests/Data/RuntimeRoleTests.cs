@@ -41,6 +41,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 "DENY DELETE ON dbo.AspNetUsers",
                 "DENY DELETE ON dbo.AuditEvent",
                 "DENY DELETE ON dbo.Organisation",
+                "DENY DELETE ON dbo.Participant",
                 "DENY UPDATE ON dbo.AuditEvent",
             ],
             permissions);
@@ -50,6 +51,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     [InlineData("Organisation")]
     [InlineData("AspNetUsers")]
     [InlineData("AuditEvent")]
+    [InlineData("Participant")]
     public async Task A_member_of_the_role_gets_error_229_for_a_delete(string table)
     {
         await AsMemberOfTheRoleAsync(async session =>
@@ -106,7 +108,8 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
             // A denied statement fails the whole call with error 229, naming the permission and the table. The
             // authenticator key is one of the rows the app does delete, in a sign-in reset (design.md §5.1, Deletes).
             var row = await session.ReadRowAsync("""
-                DECLARE @organisationId uniqueidentifier = NEWID(), @userId uniqueidentifier = NEWID();
+                DECLARE @organisationId uniqueidentifier = NEWID(), @userId uniqueidentifier = NEWID(),
+                        @participantId uniqueidentifier = NEWID();
 
                 INSERT INTO [dbo].[Organisation] ([Id], [Name], [CreatedAtUtc])
                 VALUES (@organisationId, N'Added', SYSUTCDATETIME());
@@ -116,19 +119,24 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 VALUES (@userId, @organisationId, N'Added', 1, 0, SYSUTCDATETIME(), 0, 0, 0, 0, 0);
                 INSERT INTO [dbo].[AspNetUserTokens] ([UserId], [LoginProvider], [Name], [Value])
                 VALUES (@userId, N'[AspNetUserStore]', N'AuthenticatorKey', N'key');
+                INSERT INTO [dbo].[Participant]
+                    ([Id], [OrganisationId], [GivenName], [FamilyName], [DateOfBirth], [Status], [CreatedAtUtc])
+                VALUES (@participantId, @organisationId, N'Added', N'Added', '1990-01-01', 1, SYSUTCDATETIME());
 
                 UPDATE [dbo].[Organisation] SET [Name] = N'Changed' WHERE [Id] = @organisationId;
                 UPDATE [dbo].[AspNetUsers] SET [DisplayName] = N'Changed' WHERE [Id] = @userId;
+                UPDATE [dbo].[Participant] SET [FamilyName] = N'Changed' WHERE [Id] = @participantId;
                 DELETE FROM [dbo].[AspNetUserTokens] WHERE [UserId] = @userId;
 
                 SELECT o.[Name], u.[DisplayName],
-                       (SELECT COUNT(*) FROM [dbo].[AspNetUserTokens] AS t WHERE t.[UserId] = u.[Id])
+                       (SELECT COUNT(*) FROM [dbo].[AspNetUserTokens] AS t WHERE t.[UserId] = u.[Id]),
+                       (SELECT p.[FamilyName] FROM [dbo].[Participant] AS p WHERE p.[Id] = @participantId)
                 FROM [dbo].[AspNetUsers] AS u
                 JOIN [dbo].[Organisation] AS o ON o.[Id] = u.[OrganisationId]
                 WHERE u.[Id] = @userId;
                 """);
 
-            Assert.Equal(["Changed", "Changed", 0], row);
+            Assert.Equal(["Changed", "Changed", 0, "Changed"], row);
         });
     }
 

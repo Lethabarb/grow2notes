@@ -24,12 +24,28 @@ export const msg = {
     `Not ${done}: ${strings.cause[cause]}.${safe === undefined ? '' : ` ${safe}`} Try again.`,
   /** The setup link check's failure (sign-in.md *Setup*), with Try again, which sends the link held in memory. */
   setupLinkNotChecked: (cause: Cause) => `Your setup link was not checked: ${strings.cause[cause]}. Try again.`,
+  /**
+   * In place of a list that Find a participant has emptied, and read out after a pause in typing (search-filter.md),
+   * with the text as typed, its ends trimmed, in typographic quotes.
+   */
+  noParticipantMatches: (typed: string) => `No participant matches ‘${typed}’.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
   /** A Save that failed, in the alert above it, such as "Not saved: no connection. Try again." */
   notSaved: (cause: Cause): string => msg.notDone('saved', cause),
+  /** An Archive participant that failed, in the alert above it (participants.md *States*). */
+  notArchived: (cause: Cause): string => msg.notDone('archived', cause),
+  /** A Restore that failed, in the alert above it, in the archived notice (participants.md *States*). */
+  notRestored: (cause: Cause): string => msg.notDone('restored', cause),
+  /**
+   * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
+   * design.md §3.7.
+   */
+  participantArchived: (name: string) =>
+    `${name} is archived, so this page is read-only. They are not on Today and no new notes can be written for them. `
+    + 'Their past notes are kept.',
   /**
    * A Send invite or a Resend invite that failed, above its button, and a refusal that names no field of Invite user's
    * (users.md *States*).
@@ -44,6 +60,12 @@ export const msg = {
   /** A page action refused `412`, as someone changed the user first, once the page shows them as they are now. */
   userChanged: (displayName: string) =>
     `Someone else has just changed ${displayName}’s account. The page now shows the latest details.`,
+  /**
+   * The date of birth's message for the parts left empty when another is not (text-and-date-inputs.md), named in
+   * their order, as in "Date of birth must include a day and month".
+   */
+  dateOfBirthMustInclude: (parts: readonly string[]) =>
+    `${strings.dateOfBirth.legend} must include a ${parts.join(' and ')}`,
   /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
   passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
   /** View F's message for a password shorter than `limits.passwordMinLength`. */

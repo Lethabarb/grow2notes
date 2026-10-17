@@ -210,7 +210,7 @@ test('a manager sees the <h1>, help and limit hint, the saved text exactly in #0
   await expect(field(page)).toBeFocused();
 });
 
-test('the field is never focused by itself, on a first load or after a press of Guide prompts on Manage', async ({
+test('the field is never focused by itself; a press of Guide prompts on Manage focuses the <h1> instead', async ({
   page,
 }) => {
   await serveMe(page, manager);
@@ -223,6 +223,7 @@ test('the field is never focused by itself, on a first load or after a press of 
   await main(page).getByRole('link', { name: 'Guide prompts', exact: true }).click();
   await expect(field(page)).toHaveValue(savedPrompts);
   await expect(field(page)).not.toBeFocused();
+  await expect(heading(page)).toBeFocused();
 });
 
 test('a worker at the address meets Page not found, and no request for the prompts is sent', async ({ page }) => {
@@ -852,7 +853,9 @@ test('with text not saved, Today opens the leave dialog on Stay, and Escape keep
   await expect(navLink(page, 'Today')).toBeFocused();
 });
 
-test('with text not saved, Leave without saving goes on to Today, which then asks nothing', async ({ page }) => {
+test('with text not saved, Leave without saving goes on to Today, its <h1> focused, which then asks nothing', async ({
+  page,
+}) => {
   await openWith(page);
   const dialogs = browserDialogs(page);
   await typeAtEnd(page, added);
@@ -862,6 +865,7 @@ test('with text not saved, Leave without saving goes on to Today, which then ask
 
   await expect(page).toHaveURL('/');
   await expect(heading(page)).toContainText('Today');
+  await expect(heading(page)).toBeFocused();
   await expectNoLeaveDialog(page);
   // The page's warning went with it.
   await page.reload();
@@ -939,6 +943,7 @@ test('from Manage, with text not saved, Back asks; Escape and Stay keep the page
   await leaveWithoutSaving(page).click();
   await expect(page).toHaveURL('/manage');
   await expect(heading(page)).toHaveText('Manage');
+  await expect(heading(page)).toBeFocused();
 });
 
 test('a click on the backdrop leaves the leave dialog open and the address as it was', async ({ page }) => {

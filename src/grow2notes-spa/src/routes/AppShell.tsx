@@ -4,12 +4,13 @@ import { Outlet, useMatches, type UIMatch } from 'react-router';
 import { classify } from '../api/api.ts';
 import { meQuery, useMeAnswers } from '../api/me.ts';
 import { getPhase, signInCount, subscribe } from '../api/session.ts';
-import { focusPageHeading, signedOutHeadingId } from '../components/focusPageHeading.ts';
+import { focusInsteadOfHeading, focusPageHeading, signedOutHeadingId } from '../components/focusPageHeading.ts';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
 import { fullPageLoad } from './fullPageLoad.ts';
 import { disarmUnloadGuard } from './leaveGuard.ts';
+import { useRouteChange } from './routeChange.ts';
 import type { RouteHandle } from './routes.tsx';
 import { SessionTimeoutWarning } from './SessionTimeoutWarning.tsx';
 import { ShellFrame } from './ShellFrame.tsx';
@@ -29,7 +30,8 @@ type SignedOutInPlace = { page: PageName | undefined; meAnswers: number };
  * sign-in puts its `Me` in the same query, so the route's screen then shows in sign-in's place, at the same address,
  * with no new history entry. A route whose handle says `signedOutFrame`, setup's, shows its page in the signed-out
  * frame at once, whatever `/me` answers and whoever is signed in (sign-in.md component 1). After the frame comes the
- * warning before the idle sign-out, which opens over a signed-in screen only (component 6).
+ * warning before the idle sign-out, which opens over a signed-in screen only (component 6). The shell alone moves focus
+ * and scroll as the screen changes (*The route-change rule (one owner)*), and focus after a sign-in or Try again.
  *
  * When the session ends over a signed-in screen, the frame becomes the signed-out frame again, with sign-in's view C in
  * `<main>` and the screen after it, hidden but mounted, with its before-main bar, so that what it holds comes back as
@@ -48,6 +50,7 @@ export function AppShell() {
   // The table's type gives every route's handle as a RouteHandle, or none.
   const matches = useMatches() as UIMatch<unknown, RouteHandle | undefined>[];
   const handle = matches.findLast((match) => match.handle !== undefined)?.handle;
+  useRouteChange(handle);
   const signedOutFrame = handle?.signedOutFrame === true;
   const shown = signedIn || signedOutFrame;
   // The page name of a whole-page message in place of the route's screen, such as the crash page, which the title and
@@ -107,6 +110,8 @@ export function AppShell() {
   // answer brings takes focus on its <h1>, as the button has gone (app-shell.md *Accessibility checklist*). Not cleared
   // as focus leaves it, as a blur can come as the button itself goes.
   const tryAgainUsed = useRef(false);
+  // Neither move changes the location, so the route-change rule does not make them, but they go to the <h1> as its
+  // own do: pending for a heading that is data still loading, such as a user's name, which takes focus as it mounts.
   useEffect(() => {
     if (!signedIn && !signedOut) {
       return;
@@ -128,18 +133,23 @@ export function AppShell() {
   // What view C took over as it showed, the screen's title and the sign-ins until then, to give back as it closes.
   const shownOver = useRef<{ title: string; signIns: number }>(undefined);
   // As view C shows, it takes the title and focus, as the element focused is now hidden: in the shell's effect, after
-  // the warning's, which closes as the clock ends, as a page behind an open modal cannot take focus. As it closes over
-  // the same person's screen, after every effect of the sign-in view's own has ended, it gives the screen back its
-  // title, "Error: " and all, unless Back has moved the screen on meanwhile; after a sign-in, though not after a
-  // refresh, which shows that the session was never lost, it fetches the screen's queries again, as invalidating every
-  // query does, `['me']` having no observer that fetches; and it focuses the screen's <h1>. No change that met the 401
-  // is sent again (app-shell.md *Sign in again, same person*).
+  // the warning's, which closes as the clock ends, as a page behind an open modal cannot take focus, and in place of
+  // the page's <h1>, so that a heading of the hidden screen that mounts meanwhile takes none that it had pending. As it
+  // closes over the same person's screen, after every effect of the sign-in view's own has ended, it gives the screen
+  // back its title, "Error: " and all, unless Back has moved the screen on meanwhile; after a sign-in, though not after
+  // a refresh, which shows that the session was never lost, it fetches the screen's queries again, as invalidating
+  // every query does, `['me']` having no observer that fetches; and it focuses the screen's <h1>, or leaves the focus
+  // pending for one that is data still loading. No change that met the 401 is sent again (app-shell.md *Sign in again,
+  // same person*).
   useEffect(() => {
     const signInTitle = msg.pageTitle(pageName.signIn);
     if (inPlace) {
       shownOver.current = { title: document.title, signIns: signInCount() };
       document.title = signInTitle;
-      document.getElementById(signedOutHeadingId)?.focus();
+      const signedOutHeading = document.getElementById(signedOutHeadingId);
+      if (signedOutHeading !== null) {
+        focusInsteadOfHeading(signedOutHeading);
+      }
       return;
     }
 

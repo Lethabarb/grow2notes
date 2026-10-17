@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -39,18 +40,21 @@ internal static class AntiforgeryTokens
 
     /// <summary>
     /// Posts to <paramref name="path"/> as the SPA does: with <paramref name="token"/> in the <see cref="Header"/>
-    /// header, and <paramref name="body"/>, if any, as JSON.
+    /// header, <paramref name="body"/>, if any, as JSON, and <paramref name="ifMatch"/>, a row's ETag, if any, as
+    /// <c>If-Match</c>.
     /// </summary>
-    public static async Task<HttpResponseMessage> PostWithTokenAsync(
-        this HttpClient client, string path, string token, object? body = null)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, path)
-        {
-            Content = body is null ? null : JsonContent.Create(body),
-        };
-        request.Headers.Add(Header, token);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
-    }
+    public static Task<HttpResponseMessage> PostWithTokenAsync(
+        this HttpClient client, string path, string token, object? body = null, string? ifMatch = null) =>
+        client.SendWithTokenAsync(HttpMethod.Post, path, token, body, ifMatch);
+
+    /// <summary>
+    /// Puts <paramref name="body"/> to <paramref name="path"/> as the SPA does: as JSON, with <paramref name="token"/>
+    /// in the <see cref="Header"/> header, and with <paramref name="ifMatch"/>, a row's ETag, if any, as
+    /// <c>If-Match</c>.
+    /// </summary>
+    public static Task<HttpResponseMessage> PutWithTokenAsync(
+        this HttpClient client, string path, string token, object body, string? ifMatch) =>
+        client.SendWithTokenAsync(HttpMethod.Put, path, token, body, ifMatch);
 
     /// <summary>
     /// For the app hosted without a database (<see cref="AppWithoutDatabase"/>): Data Protection, which protects the
@@ -58,4 +62,20 @@ internal static class AntiforgeryTokens
     /// </summary>
     public static IWebHostBuilder KeepKeysInMemory(this IWebHostBuilder builder) =>
         builder.ConfigureTestServices(services => services.AddDataProtection().UseEphemeralDataProtectionProvider());
+
+    private static async Task<HttpResponseMessage> SendWithTokenAsync(
+        this HttpClient client, HttpMethod method, string path, string token, object? body, string? ifMatch)
+    {
+        using var request = new HttpRequestMessage(method, path)
+        {
+            Content = body is null ? null : JsonContent.Create(body),
+        };
+        request.Headers.Add(Header, token);
+        if (ifMatch is not null)
+        {
+            request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(ifMatch));
+        }
+
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
 }

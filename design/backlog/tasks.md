@@ -425,7 +425,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
 
 ```yaml
 id: T02
-status: new
+status: doing
 release: R1
 lane: B
 size: L
@@ -472,10 +472,309 @@ found and `403`.
   link "Users" pushes the list, as the user's page's does. T02 removes that interim focus once its route-change rule
   focuses the new screen's heading, so that one focus mechanism ships, and gives the back link T02's opened-from
   behaviour (T01's Notes, step 5). If T02 merges first, T01 does this at rebase.
+- The route-change rule is built whole, as app-shell.md writes it, so later tasks only declare handles and write to
+  the store: `[data-route-focus]` and the success-message store first serve Submit (T09), a replace that focuses the
+  `<h1>` serves Discard (T12), `handle.screenKey` the Report dates (T17) and the `'sameIndex'` fallback Flagged (T19).
+  Each case is proven here with test routes. The store is built here because S00.05.02's criterion names it.
+- Where the design is silent, the simplest option (14 October 2026): sign-in's and the start-up Try again's moves to
+  the `<h1>` (S00.05.02's Notes) go through the shell's one focus owner, not kept as exceptions, so that a screen whose
+  `<h1>` is data, such as a user's page reached by signing in, takes it as it mounts; `status` in
+  `GET /api/admin/participants` is the `ParticipantStatus` name, `Active` or `Archived`, as the user list gives its
+  status, and without `includeArchived=true` the list holds active participants only; participants.md open question 3
+  (typed values dropped on Archive) is built as the spec says.
+- Where a screen has one opener, as every screen in this task has, BackLink keeps the page's own label and `to`, and
+  the opened-from record decides only pop or push. When a participant opened from the Active view is archived on their
+  page, the back link pops to the Active view, as browser Back does, since its opener is the previous entry; the row
+  has gone there, so the `<h1>` takes focus, and the Archived view stays the `href` for a modified click or a push
+  (14 October 2026, the simplest option).
+- Also the simplest options where the design is silent (14 October 2026): until T09 and T21 add Past notes and Export
+  record, an archived participant's page has no Actions section, as it would be empty, and an active one's holds
+  Archive participant alone, with no divider; a `412` on Archive or Restore whose re-read finds the status already
+  changed sends focus where that action's success would, the notice or the `<h1>`, since the pressed button has gone.
+- Also the simplest options where the design is silent (14 October 2026, step 1), the first two now in app-shell.md's
+  rule: a location with the same `pathname` is the same screen whatever else changed, the search, the fragment that
+  setup takes out of the address, or nothing but the key, so a nav link to the screen already open keeps focus, as
+  `session-warning.spec.ts` expects; `inScreen` counts on the push or replace that writes it, as a pop back to that
+  entry from another screen, such as Back from a page opened from the new participant, is a new screen; a pop to an
+  entry with no position kept, as one from before a reload, goes to the top; the shell keeps an entry's position from
+  the page's `scroll` events and, on a change that is not a new screen, from the change itself; and a whole-page
+  message takes focus when the element that had focus as it rendered has left the page.
+- Also the simplest options where the design is silent (14 October 2026, step 2), the first two now in app-shell.md's
+  *Where a screen was opened from*: the shell follows the order of the history's entries in memory, so that it knows
+  the previous entry, and a pop to an entry that it has not followed, as one from before a reload, starts that order
+  afresh from it; the record's `path` is the opener's pathname, so a back link whose `to` differs from it only in the
+  search still pops; the shell records a row as any click of its link reaches `<main>`, before the router takes it;
+  a list is ready for its return point once its rows, or the failure to load them, are in the page, as the Users list
+  says with `useReturnFocusReady(!users.isPending)`; a pop back to a list not ready yet moves no focus until it is,
+  then puts the page back at the position kept, which the page was too short for as it arrived, and focuses the row,
+  while Page not found or a crash page that takes the list's place first takes the focus instead; and setup's view F
+  keeps `[data-route-focus]` on its field for as long as setup holds the server's refusal of the password.
+- Also the simplest options where the design is silent (14 October 2026, step 3): the list is sorted in SQL Server's
+  collation, which ignores case, so "de Silva" sorts under D, with the ID last so that two people of one name keep one
+  order; with no participants at all, the Active / Archived links stay, as participants.md's *States* table has it,
+  and "No participants yet." shows in either view; `ViewLinks` passes no `preventScrollReset`, as the app has no
+  `<ScrollRestoration>` and the shell's rule keeps focus and scroll for a change of the search alone, and it sits in
+  the reading column with the list; `useView` takes out only `view` when it puts a wrong one right; Clear is the shared
+  secondary `Button`; the `['admin', 'participants']` query is not fetched again on window focus, as app-shell.md does
+  not list it; and Vitest's setup lets go React's warning that jsdom, alone, does not know `<search>`. A participant's
+  `OrganisationId` is `required` and set by the code that adds one: EF Core gives an empty one a new GUID as the row is
+  tracked, the column being in its alternate key and its foreign key to `Organisation`, which the save then refuses, so
+  step 4's `POST` and the tests set it to the tenant's. As Manage > Participants now opens the list, `shell.spec.ts`'s
+  walk marks Manage there and answers the list with `serveParticipants`, which step 3 adds to `e2e/participants.ts`
+  for it; step 7 adds `failParticipants` beside it. S01.02.01's third criterion stays open until step 7 proves Page not
+  found for a worker on all three Participants routes.
+- Also the simplest options where the design is silent (15 October 2026, step 4): the server words each refused field
+  as participants.md does, with its first failing check alone, as Release 2's tools will give them (mcp-server.md
+  §5.5); a body's other fields are passed over, and a `dateOfBirth` that is not a calendar date gets binding's `400`,
+  which the SPA never sends. The SPA sends the names trimmed and words a `422` itself: as it checks what the server
+  checks, a name refused there is one that the server's own trimming leaves empty, "Enter the given name" or "Enter the
+  family name", and a date of birth one that is no longer before today, Melbourne's day having changed since
+  `me.today`, "Date of birth must be in the past" on all three parts; a refusal of a field that the form does not have
+  gets "Not saved: something went wrong. Try again.". A year of 0000 is not a real date. `participant.created`'s
+  `Details` name `givenName`, `familyName`, `dateOfBirth` and `status`, as §6.6's list does. A save's `Date` comes
+  from T03's `apiWithHeaders()`, and "Saved 4:12 pm" is T03's `SaveStatus`, at `--font-size-small` (design.md A63;
+  the review Note below). `FieldGroup`'s fieldset says its `group` role again for every group, as govuk-frontend's
+  date input does.
+- Also the simplest options where the design is silent (15 October 2026, step 5): the `PUT` finds the participant first,
+  so another organisation's is `404`, then checks `If-Match`, then the fields, so a stale correction with a refused
+  field gets `412`; it answers `200` with no body and no `ETag`, as the page reads the next version from the list, as
+  participants.md has it; and its route takes a GUID, another ID getting the unknown path's `404`. The page keeps the
+  version that it loaded the details at, copied once with them, and reads the list again after each `200` and each
+  `412`, within the save, so that Save stays busy until the next version is known, calling off a read already under way,
+  which began before the answer. So a refetch in between, as the list's as the page opens, brings the page no version,
+  and a save over another manager's change gets `412` rather than overwriting it unseen. A participant that the page has
+  just added has no version, as the `201` gives none, and nor has one whose read after a save did not load: the next
+  save reads the list first, and says "Not saved: …" when it cannot, sending nothing. The `<h1>` shows the name as the
+  `200` saved it, never the list's after a `412`. The `412`'s words are participants.md's, without
+  text-and-date-inputs.md's "below", as the alert is above Save. `EndpointCall` carries the app's services and the
+  seeded organisations, with which the `PUT`'s matrix row adds a participant to A for each call (tests/README.md).
+- Also the simplest options where the design is silent (15 October 2026, step 6): archive and restore, as the `PUT`
+  does, find the participant first, so another organisation's is `404`, then check `If-Match`, and answer `204` with
+  no body, their routes taking a GUID. The page knows the participant's status as it knows their version, from the list
+  as it opens, then from its own read after each change, never from a refetch in between; so a Details save followed
+  by a read that finds them archived by someone else shows them archived, as participants.md's *Interactions* has the
+  next write do, the notice taking focus, as Save has gone. After a `204` the page shows what its read gives, or, when
+  that read does not load, the details that it knew, with no version, so that the next press reads the list first; a
+  `412` whose read finds the status unchanged changes the version alone, the fields and the `<h1>` staying, as on a
+  Details `412`. Restore fills the form afresh with the details as read. The notice is `Notice` in `src/components`,
+  its "i" an inline SVG, as the app has no icon set and no words in JSX, in the action colour on its tint, as setup's
+  notice is, there being no notice tokens; from 40rem its Restore, with the alert above it, is one item of the wrapping
+  line. The page renders its own back link once it shows the participant, so that the link follows their status, and
+  the Active view's while the list loads. Archive participant and Restore share one mutation, as they never show
+  together, and a press of Archive participant while a Details save is under way is not held back.
+- Also the simplest options where the design is silent (17 October 2026, step 7): the flow on the app's own answers
+  and the keyboard-only check, at 375 px and at 1280 px, sign in for real, each test in an organisation of its own, as
+  `admin bootstrap` makes one, setup's button pressed with the mouse, as `setup.spec.ts` proves setup, and every move
+  from Today on a key; the other tests answer the changes in the browser too, as well as the list. A visible focus ring
+  at a stop is the element matching `:focus-visible` with base.css's 3 px solid ring in `--colour-focus`, or in
+  `Highlight` under forced colours, drawn on the element on screen, or for a row on the `::after` that covers it. Every
+  test of the file checks the live regions, by wrapping `appendChild` and `insertBefore` on the Participants routes,
+  rather than region by region. The targets are 44 px for links and fields, 48 px for the buttons, Clear among them as
+  the shared `Button`, and the search field's height, and 56 px for a row. `history.state` holds nothing but React
+  Router's `usr`, `key` and `idx` with a value, the first entry its `idx` alone. The by-hand checks are steps 26 to 28
+  of ops/first-use-in-test.md, after T03's 24 and 25, at its end, as other files cite the numbers of the steps before
+  them. CI's run 39042194147 on the pull request (#57) passed, with 883 xUnit and 154 Playwright tests. Its
+  `migrate.sql` artifact, read there, gives `AddParticipant` only additions, as the same command did locally:
+  `CREATE TABLE [Participant]` with its primary key, the `(OrganisationId, Id)` alternate key and the foreign key to
+  `Organisation`, its `CREATE INDEX` and `DENY DELETE ON [dbo].[Participant] TO [grow2notes_runtime]`.
+- Parts of the absorbed criteria arrive with later tasks: the Goals section with T05, which checks that the next Tab
+  after the `201` reaches it and that an archived participant's goals are read-only; Today with T08, which checks
+  "gone from Today" and "back on Today" and adds Today's query to what these saves invalidate; the Past notes, Write
+  past-day note and Export record actions with T09, T18 and T21, T18 checking the "Grow2Notes – Write past-day note"
+  title. Until T05, the next Tab after Save reaches Archive participant. T05's, T08's and T18's Notes, and S01.02.02's
+  and S01.02.04's, say so too (15 October 2026).
+- By-hand checks for ops/first-use-in-test.md: the operator runs `infra/sql/check-database.sql` after this deploy, its
+  D3 and D5 rows now naming the `Participant` deny; with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and
+  Chrome, the readings in participants.md's *Accessibility checklist*, the `<h1>` heard on each screen change and the
+  row on Back, the no-match sentence heard once after its pause, and the archived notice read exactly once as it takes
+  focus after Archive; on a phone, Clear keeping the keyboard open and no autofill offered on the name and date fields
+  (participants.md open question 6).
+- 18 October 2026, review: 6 findings were confirmed and are fixed here, four of them about the branch being behind
+  `main`:
+  - The branch was cut before T03 (#55) and T01 (#56) merged and conflicted with both, so its pull request's CI could
+    not run and the shared pieces had two copies. It is rebased onto `origin/main` at `b56824c`, keeping one copy of
+    each: T03's `SaveStatus`, with its hidden "Saving…", at `--font-size-small` with `tabular-nums`, which
+    status-messages.md now gives too (design.md A63); T03's `apiWithHeaders()`, whose `dateUtc` Details' Save reads; and
+    T01's `ValidationProblems.Fields`. T02's copies and their tests are gone. The routes, `Program.cs`, the endpoint
+    matrix, `SignedOutTests`, `shell.spec.ts`'s walk and the copy hold both sides. Neither added a migration, so
+    `AddParticipant` and the model snapshot stand. Step 7 records CI's run on the pull request and its `migrate.sql`.
+  - The by-hand checks reused T03's step numbers 24 and 25: they are steps 26 to 28 of ops/first-use-in-test.md, with
+    "Do step 27 again", as the step 7 Note above says.
+  - The hand-offs to T02 that T03 and T01 left on `main` (the Notes above) were not done. Guide prompts now proves T02's
+    route focus, in `GuidePromptsPage.test.tsx` and `guide-prompts.spec.ts`: the `<h1>`, not the field, on arriving from
+    Manage, at the top; Today's `<h1>` after Leave without saving; and Manage's after Back and Leave. S01.04.01's and
+    S01.04.02's Notes from T02 record it, and S00.05.02's. Invite user's interim `flushSync` replace and
+    `focusPageHeading()` are gone: the shell's rule focuses the list's `<h1>` after the replace, and the back link pops
+    to the list that opened the form, as Back does, or pushes it from a pasted address (`InviteUserPage.test.tsx`). The
+    focus after signing in again goes through `focusPageHeading()`'s pending flag, so a user's name that loads after the
+    sign-in takes it (`signedOutInPlace.test.tsx`); only the page's own `PageHeading` takes a pending focus, never view
+    C's, whose heading the shell focuses in place of the page's (`PageHeading.test.tsx`). The shared audit-events test
+    has rows for `user.invited`, `user.setup_link_sent` and `guide_prompts.updated`, the last in an organisation of its
+    own, so no seeded row changes (tests/README.md).
+  - The shell's memory is keyed by `location.key`, and a memory router gives every test's first entry the key
+    "default", so a row or a position could carry from one test into the next. Each test helper that renders the shell
+    and goes back now gives every entry a key of its own. `ParticipantsPage.test.tsx`'s Back from Add participant,
+    with the `<h1>` focused at the top, failed after the tests before it until then; `ParticipantPage.test.tsx`'s two
+    Backs after a `201` now check the `<h1>`'s focus and the list's position; and `routeChange.test.tsx` drops its two
+    workarounds. In a shuffled order, `AppShell.test.tsx`'s made-up screens, which had no `<h1>`, left a new screen's
+    focus pending for the next test's heading; each now has its `<h1>`, as every screen has, and Vitest passes in six
+    shuffled orders.
+  - Nothing showed that `participants.spec.ts`'s live-region watcher fails a test. A test marked `test.fail()` puts a
+    status region with words into the list, so the run fails once the watcher misses it, as it does with its address
+    check changed (tests/README.md).
+  - Run locally: every xUnit test but the two that stop the database passes on a temporary LocalDB, and all 154
+    Playwright tests pass against the published app on it, the Guide prompts, Invite user and sign-in-again ones among
+    them, under T02's route-change rule.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The shell's one route-change rule (S00.05.02; app-shell.md *The route-change rule (one owner)*;
+      empty-loading-error.md's pending focus; status-messages.md's message store): a location change is a new screen
+      unless only the search changed, `state.inScreen` is `true`, or both routes share a `handle.screenKey`, alike for
+      push, replace and pop; a first load moves nothing; a push or replace scrolls to the top and a pop restores the
+      position kept in one module-level `Map` keyed by `location.key` (by `screenKey` where a route declares one), with
+      `history.scrollRestoration = 'manual'`, no `<ScrollRestoration>` and nothing in `sessionStorage`; arrival focus
+      goes to `[data-route-focus]`, else the `<h1>`, a data `<h1>`, a failed load's fallback `<h1>` or Page not found's
+      taking the in-memory pending focus through `PageHeading` as it mounts; Page not found and the crash pages also
+      take focus when they replace what had focus with no location change, which this step writes into app-shell.md's
+      rule; sign-in's and Try again's moves go through the same owner (Notes); and the success-message store, in
+      memory only. Vitest, with test routes for Submit, Discard and Today: a nav link focuses the new `<h1>` and
+      scrolls to the top; a `data-route-focus` banner wins on a push and on a pop and shows the top; a replace focuses
+      the `<h1>`; a search-only change, an `inScreen` replace and a shared `screenKey` move neither focus nor scroll; a
+      first load moves nothing; the user page's name takes focus as the list arrives; a refused region's Page not
+      found, a crash after a refresh, a sign-in to a data-heading screen and a Try again that loads each focus the
+      `<h1>`; and the store and the pending flag are empty after a reload. Proves app-shell.md's *Screen changes,
+      focus and scroll* bullets 1, 2, 4, 5, 7 and 8 (the skip link's stays proven by `shell.spec.ts`) and S00.05.02's
+      two criteria; T08, T09 and T12 check the Today, Submit and Discard bullets again.
+- [x] Return points and the opened-from memory, checked on Users (S00.05.02's Notes items (1) to (4); app-shell.md
+      component 3a; users.md AC8): `LinkRow` takes a `returnKey`, rendered as `data-return-key`; `RouteHandle` gains
+      `returnFocus` (fallback `'h1'` or `'sameIndex'`) and `backKey`; activating a row records its key and index on
+      the list's entry, and a pop back focuses that row with `preventScroll` once the list calls
+      `useReturnFocusReady(isReady)`, else the fallback; each in-app push records its opener (`entryKey`, `backKey`
+      and a path of IDs only) on the new entry, and a replace copies it. The record decides only pop or push: where a
+      screen has one opener, as every screen here has, `BackLink` keeps the page's own label and `to` (the
+      participant page's `to` following its status, step 6), and a plain click pops when the record names the
+      previous entry and its path has the pathname of the `to`, else pushes the `to`; a label and `href` from the
+      record are only for screens with several openers (component 3a), none of them here, which this step writes into
+      the rule's *Where a screen was opened from*. So `previousIsDestination` goes, and setup's views F and G drop it
+      and their own arrival focus, F keeping only the move to its field when its own check refuses a press; while F
+      shows the server's refusal of the password, its field carries `[data-route-focus]`, a one-field form's error
+      summary, so the pop back from G focuses the field, which this step adds to item 3a of app-shell.md's
+      route-change rule with step 1's edit. The Users list declares `returnFocus` and `backKey: 'users'`, its rows'
+      key is the user's ID, and the user page's back link pops to it. Vitest (`UsersPage.test.tsx`,
+      `UserPage.test.tsx`, `BackLink.test.tsx`, the setup tests): the back link and browser Back each focus the row
+      just opened; a row gone gives the `<h1>`, and `'sameIndex'` the row at that index, else the last, else the
+      `<h1>`; a replace never focuses an old row; a pasted detail address's back link pushes the list and focuses its
+      `<h1>`; a modified click follows the `href`; F and G still pop; and a refused password still lands on F's
+      focused field, as `AuthenticatorSetup.test.tsx` checks. Playwright (`tests/e2e/users.spec.ts`): with more
+      users than fit at 320 px, the back link and browser Back land on the row with its scroll kept, and
+      `history.state` holds only React Router's key and `inScreen`, with the origin's storage empty. Proves
+      app-shell.md's bullets 3 and 6 and users.md AC8.
+- [x] See and find participants (S01.02.01; design.md §4.8 *List screen*, §5.3, §6.6; participants.md A1 to A6): the
+      `Participant` entity (`ITenantOwned`, `IVersionedRow`, `IArchivableRow`; `ParticipantStatus` with `Active = 1`,
+      `Archived = 2`) and its migration, with the alternate key `(OrganisationId, Id)` that T05's composite `Goal`
+      foreign key points at (§5.1 *Tenancy*), the index `(OrganisationId, Status, FamilyName, GivenName)` and
+      `DENY DELETE` for `grow2notes_runtime`, added to `RuntimeRoleTests` and to `infra/sql/check-database.sql` (B7, B8,
+      D3, D5); `GET /api/admin/participants?includeArchived=` in the `/api/admin` group, its handler class in
+      `Features/Participants` taking an `Actor`, with its matrix row (`401`, `403` for A's worker, `200` for both
+      managers), whose `Answer` checks, as the users row does (tests/README.md), that each caller's list holds their own
+      organisation's seeded participant and not the other's, each seeded organisation gaining one active participant
+      (`SeededOrganisation.ParticipantId`, checked in `SeededOrganisationsTests`), and a `SignedOutTests` row.
+      Integration tests: A's manager gets only A's participants, sorted by family name then given name, each with
+      `rowVersion` (the stored `RowVersion` as base64) and `status` by name, active only unless `includeArchived=true`,
+      with `no-store` and no audit event; B's manager gets none of A's. The list at `/manage/participants` under
+      `ManagerOnly`: the `<h1>`, Add participant, the Find a participant box (with `matchesName`) and the Active /
+      Archived `ViewLinks`, both in `src/components` for Today (T08) and Flagged (T19), then the rows as `LinkRow`s with
+      `returnKey`, the route declaring `returnFocus` and `backKey: 'participants'`, from one `['admin', 'participants']`
+      query with `includeArchived=true` in a `LoadRegion`. Vitest: every participants.md *Participants list* bullet (the
+      order kept while filtering; Add participant in one place; the `matchesName` cases; the switch keeping the text and
+      focus, with the URL, Back and reload, and `?view=other` replaced; one `aria-current`; the empty sentences; the
+      no-match sentence once after 500 ms; Clear refocusing the field with `mousedown` prevented; Back focusing the row;
+      "Loading participants…" at 1,000 ms, not 999 ms), the failed load's "The participant list did not load: no
+      connection. Try again." or "…: something went wrong. Try again." with Try again, then "The participant list still
+      did not load: …" with focus kept on Try again, the title, no name in the query key, and a worker's Page not found
+      with no request sent.
+- [x] Add a participant (S01.02.02; participants.md B1, B2, B4, B5, B8 and *Add participant*):
+      `POST /api/admin/participants`, given and family names of 1 to 100 characters after trimming the ends and kept as
+      typed, a date of birth before today in Melbourne, `201 {id}` or `422 validation.failed` with field errors, saved
+      with `participant.created` through `ConfigurationChanges.SaveAsync`, its ID as `entityId` and `participantId`,
+      `Details` holding `new` alone; its matrix row (the policy refuses A's worker before the handler, so nothing is
+      created); the shared audit-events test, one table-driven integration test with a row per event type, each
+      triggered through the real endpoint and finding exactly one new entry with its `EventType`, `OrganisationId`,
+      `ActorUserId`, `EntityType`, `EntityId`, `ParticipantId` and values, started with `participant.created` (T24
+      completes it); and the canary test sending a participant's names. On the SPA, one route component for
+      `/manage/participants/new` and `/manage/participants/:participantId`: the back link "Participants", the Details
+      form (`autoComplete="off"`, no `name`, no `maxLength`), its name limit as `participantName` in `limits.ts` beside
+      `Limits.ParticipantName`, which `SpaLimitsTests` checks, the date-of-birth fields with `parseDob`, for Today
+      (T08), the error summary and "Error: " title, `SaveStatus` from the `Date` header, `retry: 0`, and on `201` a
+      replace with `inScreen` that keeps the instance mounted. Integration tests: blank and 101-character names, a date
+      of birth of today and in the future, "de Silva", "O'Brien", "Nguyễn" and "Smith-Jones" stored as typed, and no
+      field beyond §5.3's (no NDIS number). Vitest: no error before Save, each clearing once fixed; the summary focused
+      on every failed Save, its links matching and focusing their fields with no URL change; the `parseDob` cases; and
+      after `201` the URL replaced, Back reaching the list, focus on Save, "Saved 4:12 pm" in Melbourne time with its
+      non-breaking space, the name as the `<h1>`, and one request after a lost response.
+- [x] Correct a participant's details (S01.02.03; participants.md *Participant detail*):
+      `PUT /api/admin/participants/{id}` with `If-Match` (`IfMatch.Check` against `RowVersionToken.Of`) and the `POST`'s
+      rules, saving `participant.updated` with the old and new value of each changed field only; its matrix row (`404`
+      for B's manager) and audit-events row. Integration tests: `428` with no `If-Match`; a stale one `412` with nothing
+      written; another organisation's participant `404`; a `PUT` of the stored values `200` with no event (D84). On the
+      page: the detail's `LoadRegion` (B9) over the list query, which T05 joins the goals query to: the back link alone
+      while waiting, "Loading participant…" after 1 s, and on a failed load the fallback `<h1>` "Participant", taking
+      the pending focus, with "This participant did not load: no connection. Try again." or "…: something went wrong.
+      Try again." and Try again, then "This participant still did not load: …"; the form copied once from the list;
+      after a `200`, "Saved 4:12 pm" from its `Date` header, cleared on the next edit, and the `<h1>` changing only
+      then; and a `412` that refetches the list for the new `rowVersion`, keeps the typed values and shows "Someone else
+      changed these details…" above Save, with focus on Save, as "Not saved: …" does for no connection or a server
+      error. Vitest: those, a refetch never overwriting typed values, one request after a lost response, an ID not in
+      the list showing Page not found, and the name taking focus on arrival.
+- [x] Archive and restore a participant (S01.02.04; design.md §3.7, §4.8 *States*; participants.md B3, B7 and
+      *Archive and Restore*): `POST /api/admin/participants/{id}/archive` and `/restore` with `If-Match`, setting
+      `Status` and `ArchivedAtUtc` through `Archiving.Archive` and clearing both on restore, with
+      `participant.archived` and `participant.restored` and `204`, a repeat saving nothing and writing no event; their
+      matrix and audit-events rows. Integration tests: `428`, `412`, `404` for B's manager, and the participant in
+      the Archived view only after Archive and the Active view only after Restore. On the page: Actions with Archive
+      participant and no dialog, and no Actions section for an archived participant until T09 and T21 fill it
+      (Notes); the archived notice, in status-messages.md's notice style in `src/components`, focused after Archive
+      with Restore the next Tab, and static and unfocused when the page opens on an archived participant; Details as a
+      `SummaryList` with the date as `datePlain`; Restore removing the notice and focusing the `<h1>`, with no banner;
+      the back link's `href` the Archived view for an archived participant; the always-rendered empty `role="alert"`
+      slots above Archive participant and inside the notice above Restore, for "Not archived: …" and
+      "Not restored: …"; and a `412` that re-reads the participant and, when its status has already changed, simply
+      shows the new state, focus going where that action's success sends it (Notes), else shows "Someone else changed
+      this participant just now. Check the page, then try again." in the slot. Vitest: those; the list showing the
+      person in the right view after each; and a participant opened from the Active view and archived on its page,
+      whose back link, like browser Back, pops to the Active view, where the row has gone, so the `<h1>` takes focus.
+- [x] Prove the participant flows end to end and bring the documents into line: `tests/e2e/participants.ts` with
+      `serveParticipants` and `failParticipants` beside `e2e/users.ts`, described in tests/README.md, and
+      `tests/e2e/participants.spec.ts`: signed in for real through the `invite` fixture and a passkey on the
+      `authenticator` fixture, a manager at 375 px adds "O'Brien", corrects the date of birth, comes back to the row
+      by the back link, archives and restores, each on the app's own answers; the keyboard-only check (README §9) at
+      375 px and laptop width, adding, correcting, archiving and restoring with no mouse and a visible focus ring at
+      each stop, in participants.md's *Keyboard* order for what this task builds: on the list the skip link and nav,
+      then Add participant, Find a participant, Clear when shown, Active, Archived and the rows; on Add participant
+      and an active participant's page Participants (back), Given name, Family name, Day, Month, Year and Save, then
+      Archive participant once saved; on an archived participant's page Participants (back), then Restore (Goals and
+      the other actions come with T05, T09, T18 and T21); with the lists answered in the browser, axe on every state
+      at phone and laptop width, no sideways scroll at 320 px with 200% text, targets of 44, 48 and 56 px, live
+      regions in the DOM before their text, the focus ring in forced colours, a worker's Page not found on the three
+      routes, and no name, date of birth or search text in `location`, `document.title`, `history.state` or the
+      origin's storage after each flow. Docs, each to the code as built: participants.md, its criterion for no
+      participants at all reworded to its *States* table ("No participants yet.", Add participant and the Active /
+      Archived links, no search box); status-messages.md, its "restored" banner marked not built unless the owner
+      approves it (ux/README.md open question 2), focus going to the `<h1>` after Restore, and the notice's Restore
+      following its words on a wrapping line from 40rem, with no container query; search-filter.md,
+      participant-list-rows.md and sign-in.md component 15; the by-hand checks (Notes) on ops/first-use-in-test.md;
+      `migrate.sql` from CI's artifact read in the pull request, expand-only, with the `Participant` `DENY DELETE`;
+      and CI's run on the pull request passing.
+- [ ] After the deploy to test, check with requests that change nothing: `/` serves this build's `index.html`, its
+      hashed assets answering `200`; `GET /api/admin/participants`, with and without `includeArchived=true`, answers
+      a `401` problem with `no-store` when no cookie is sent; then headless Chromium under Playwright, whose
+      `page.route` answers `/api/auth/me` with a made-up manager and `/api/admin/participants` with made-up
+      participants (A35), so that test receives only `GET`s: at 375 px and laptop width, Manage, then Participants,
+      lists them by family name, Find a participant filters, Archived switches the view, a row opens its page with the
+      name focused, its back link focuses the row again, and Add participant shows its form; the console reports no
+      CSP violation or script error, and the origin's storage is empty; Application Insights shows no exception and
+      no `5xx` from the deploy to the checks; the deploy's migration and smoke test passed; record the run IDs.
 
 ---
 
@@ -828,6 +1127,10 @@ moves, archives and restores them. Changes apply to notes started from then on.
 ### Notes
 
 - Builds the shared buttons-only list editor that T06 and T07 reuse for common items, and uses T03's `count()` helper.
+- From T02 (15 October 2026): three of the criteria that T02's stories absorb need Goals, so this task checks them:
+  after Add participant's `201`, the next Tab reaches the Goals section (S01.02.02); an archived participant's goals
+  show as numbered text with no buttons; and the goal controls are gone after Archive participant and back after
+  Restore (S01.02.04; participants.md *Archive and Restore* and *Interactions*).
 
 ### Steps
 
@@ -951,6 +1254,10 @@ lets workers write only today's note, using the Melbourne date.
   which T03 left unticked naming T08: guide-prompts.md › Field's comparison of the two boxes' computed metrics at
   375 and 1280 px, and design.md §4.10's "straight away … including open drafts" and empty prompts showing no
   placeholder (S02.02.02's Notes).
+- From T02 (15 October 2026): Add participant's `POST`, the details `PUT`, and Archive participant's and Restore's
+  `POST`s refresh the participants list alone, as there is no Today query yet; this task adds Today's query to what
+  each invalidates (participants.md *Interactions*) and checks S01.02.04's "gone from Today" after Archive and "back
+  on Today" after Restore.
 
 ### Steps
 
@@ -1329,6 +1636,10 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 ### Notes
 
 - Runs after T16, because both change the read view and the version-saving code.
+- From T02 (15 October 2026): S01.02.04's checks that need Write past-day note are this task's, as S02.08.01 adds the
+  action: it shows in an active participant's Actions, is gone after Archive participant and back after Restore
+  (participants.md *Archive and Restore* and *Interactions*); and the page's title is "Grow2Notes – Write past-day
+  note" (participants.md *Access and privacy*).
 
 ### Steps
 

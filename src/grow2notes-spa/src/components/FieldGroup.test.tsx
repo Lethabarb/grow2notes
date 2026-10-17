@@ -80,6 +80,8 @@ describe('FieldGroup', () => {
     expect(hint).toHaveAttribute('id', 'invite-role-hint');
     expect(message).toHaveAttribute('id', 'invite-role-error');
     expect(fieldset).toHaveAttribute('aria-describedby', 'invite-role-hint invite-role-error');
+    // Said again, for JAWS (govuk-frontend's date input).
+    expect(fieldset).toHaveAttribute('role', 'group');
   });
 
   it("puts a field's label in the page's h1, then its hint, message and control, when the label is the heading", () => {

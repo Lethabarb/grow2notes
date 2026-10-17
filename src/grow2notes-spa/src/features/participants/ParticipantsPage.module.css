@@ -1,0 +1,9 @@
+/* Add participant, then the region, with more than the 8 px between separate targets (A32). */
+.add {
+  margin-block-end: var(--space-5);
+}
+
+/* Plain body text, not an error: a long name typed wraps rather than make the page scroll sideways. */
+.noMatch {
+  overflow-wrap: anywhere;
+}

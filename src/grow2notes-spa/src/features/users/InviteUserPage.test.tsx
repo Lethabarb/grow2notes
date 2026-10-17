@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter } from 'react-router';
+import { createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
@@ -141,7 +141,10 @@ function renderApp(entries: string[], me: Me = manager) {
   serve('GET', mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  const router = createMemoryRouter(routes, { initialEntries: entries, initialIndex: entries.length - 1 });
+  // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
+  // key "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = entries.map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() }));
+  const router = createMemoryRouter(routes, { initialEntries, initialIndex: entries.length - 1 });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -289,6 +292,38 @@ describe('Invite user', () => {
 
     expect(sendInvite()).toHaveAttribute('type', 'submit');
     expect(sendInvite().closest('form')).toHaveAttribute('novalidate');
+  });
+
+  it("goes back by its back link to the list that opened it, as Back does, which focuses the list's <h1>", async () => {
+    const router = renderApp(['/manage/users']);
+    await settle();
+    fireEvent.click(within(main()).getByRole('link', { name: 'Invite user' }));
+    await settle();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Users' }));
+    await settle();
+
+    // Back one entry, adding none, so that Forward reaches the form again.
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/manage/users');
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('from a pasted address, pushes the list by its back link, which focuses the <h1> at the top', async () => {
+    // After the list, as the tab may hold it, but opened afresh, so that nothing says that the list opened the page.
+    const router = renderApp(['/manage/users', '/manage/users/new']);
+    await settle();
+    Object.defineProperty(window, 'scrollY', { value: 300, configurable: true, writable: true });
+
+    fireEvent.click(screen.getByRole('link', { name: 'Users' }));
+    await settle();
+
+    expect(router.state.historyAction).toBe('PUSH');
+    expect(router.state.location.pathname).toBe('/manage/users');
+    expect(pageHeading()).toHaveAccessibleName('Users');
+    expect(pageHeading()).toHaveFocus();
+    expect(window.scrollY).toBe(0);
   });
 
   it('labels each field, describes it by its hint, and keeps autofill, spelling and a length limit off', async () => {

@@ -14,6 +14,11 @@ type PasswordInputProps = {
   hint?: string;
   /** The field's message once a submit has found one. */
   error?: string;
+  /**
+   * The field takes focus as its screen arrives, in place of the `<h1>`, as an error summary does (app-shell.md *The
+   * route-change rule (one owner)*, 3a): on Create a password, while it shows the server's refusal of the password.
+   */
+  routeFocus?: boolean;
   /** `new-password` where a password is made, so that a password manager offers one; `current-password` at sign-in. */
   autoComplete: 'new-password' | 'current-password';
   /** The shortest password taken, which guides a password manager's suggestion; the form's `noValidate` stops it. */
@@ -37,6 +42,7 @@ export function PasswordInput({
   labelIsHeading = false,
   hint,
   error,
+  routeFocus = false,
   autoComplete,
   minLength,
   toggle = false,
@@ -81,6 +87,7 @@ export function PasswordInput({
       autoCorrect="off"
       aria-describedby={description === '' ? undefined : description}
       aria-invalid={error === undefined ? undefined : true}
+      data-route-focus={routeFocus || undefined}
       value={value}
       onChange={(event) => onChange(event.currentTarget.value)}
     />

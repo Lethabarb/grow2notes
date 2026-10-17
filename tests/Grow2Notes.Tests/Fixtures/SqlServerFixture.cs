@@ -37,8 +37,9 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public string ConnectionString => ConnectionStringFor(Database);
 
     /// <summary>
-    /// The IDs of the two made-up organisations in the app's database, each with an Active manager and an Active
-    /// worker, which are there before the first test. Tests leave the seeded rows as they are (tests/README.md).
+    /// The IDs of the two made-up organisations in the app's database, each with an Active manager, an Active worker
+    /// and an active participant, which are there before the first test. Tests leave the seeded rows as they are
+    /// (tests/README.md).
     /// </summary>
     public SeededOrganisations Seeded { get; private set; } = null!;
 
@@ -116,26 +117,33 @@ public sealed class SqlServerFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Adds the made-up organisations and users (A35) of the two-organisation tests (design.md §5.9 item 7). The users
-    /// are created through <see cref="UserManager{TUser}"/>, as the app creates accounts, so each has the normalised
-    /// email and user name and the security stamp that Identity reads when it signs someone in.
+    /// Adds the made-up organisations, users and participants (A35) of the two-organisation tests (design.md §5.9 item
+    /// 7). The users are created through <see cref="UserManager{TUser}"/>, as the app creates accounts, so each has the
+    /// normalised email and user name and the security stamp that Identity reads when it signs someone in.
     /// </summary>
     private static async Task<SeededOrganisations> SeedAsync(
         IServiceProvider services, CancellationToken cancellationToken)
     {
-        // An organisation is the tenant, not tenant-owned, and AspNetUsers is not filtered, so this needs no tenant.
+        // An organisation is the tenant, not tenant-owned, and AspNetUsers is not filtered, so only the save of the
+        // participant, which is tenant-owned, needs a tenant.
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
 
         return new(
             await AddOrganisationAsync("Seeded organisation A",
-                ("Jordan Ellis", "jordan.ellis@example.org"), ("Casey Nguyen", "casey.nguyen@example.org")),
+                ("Jordan Ellis", "jordan.ellis@example.org"), ("Casey Nguyen", "casey.nguyen@example.org"),
+                ("Priya", "Kumar", new DateOnly(1985, 6, 14))),
             await AddOrganisationAsync("Seeded organisation B",
-                ("Morgan Reid", "morgan.reid@example.org"), ("Riley Chen", "riley.chen@example.org")));
+                ("Morgan Reid", "morgan.reid@example.org"), ("Riley Chen", "riley.chen@example.org"),
+                ("Tom", "Ward", new DateOnly(1992, 11, 3))));
 
         async Task<SeededOrganisation> AddOrganisationAsync(
-            string name, (string Name, string Email) manager, (string Name, string Email) worker)
+            string name,
+            (string Name, string Email) manager,
+            (string Name, string Email) worker,
+            (string GivenName, string FamilyName, DateOnly DateOfBirth) person)
         {
             var organisation = new Organisation { Name = name, CreatedAtUtc = SeededAtUtc };
             db.Organisations.Add(organisation);
@@ -144,7 +152,22 @@ public sealed class SqlServerFixture : IAsyncLifetime
             // The manager stands in for the one the admin bootstrap command invites, so the manager invites the worker.
             var managerId = await AddUserAsync(organisation.Id, UserRole.Manager, manager, invitedByUserId: null);
             var workerId = await AddUserAsync(organisation.Id, UserRole.Worker, worker, invitedByUserId: managerId);
-            return new(organisation.Id, managerId, workerId);
+
+            var participant = new Participant
+            {
+                OrganisationId = organisation.Id,
+                GivenName = person.GivenName,
+                FamilyName = person.FamilyName,
+                DateOfBirth = person.DateOfBirth,
+                CreatedAtUtc = SeededAtUtc,
+            };
+            db.Participants.Add(participant);
+            using (tenant.Use(organisation.Id))
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+
+            return new(organisation.Id, managerId, workerId, participant.Id);
         }
 
         async Task<Guid> AddUserAsync(

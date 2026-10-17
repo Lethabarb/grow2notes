@@ -118,7 +118,7 @@ internal static class EndpointMatrix
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
-            Answer: HoldsTheCallersOwnSeededUsersOnly),
+            Answer: HoldsTheCallersOwnSeeded("user", organisation => [organisation.ManagerId, organisation.WorkerId])),
 
         // Each manager invites into their own organisation, which a call commits, so each call invites an address of
         // its own (tests/README.md).
@@ -135,6 +135,31 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
         new(Put,       "/api/admin/guide-prompts", Unauthorized, Forbidden, PreconditionRequired, PreconditionRequired,
             WithJson("/api/admin/guide-prompts", new { text = "What did they enjoy today?" })),
+
+        // The participant list (§6.6), in the same group. Each manager's list holds their own organisation's seeded
+        // participant and not the other's.
+        new(Get,       "/api/admin/participants", Unauthorized, Forbidden, OK, OK,
+            Answer: HoldsTheCallersOwnSeeded("participant", organisation => [organisation.ParticipantId])),
+
+        // Adding a participant (§6.6), in the same group. The policy refuses A's worker before the handler runs, so
+        // the worker's call adds no one. Each manager's call adds a made-up participant to their own organisation,
+        // which the seeded-rows rule allows (tests/README.md), and loads nothing of another's, so B's manager gets
+        // what A's does.
+        new(Post,      "/api/admin/participants", Unauthorized, Forbidden, Created, Created,
+            WithJson("/api/admin/participants",
+                new { givenName = "Matrix", familyName = "Caller", dateOfBirth = "1990-01-01" })),
+
+        // Correcting a participant (§6.6), in the same group. Each call corrects a participant of its own, whom its
+        // request first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/participants/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+            CorrectingAParticipantOfItsOwn),
+
+        // Archiving and restoring a participant (§6.6), in the same group, as the correction is: each call archives an
+        // active participant, or restores an archived one, of its own in A, so B's manager gets 404.
+        new(Post,      "/api/admin/participants/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingTheStatusOfAParticipantOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/participants/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingTheStatusOfAParticipantOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -229,6 +254,31 @@ internal static class EndpointMatrix
         return request;
     }
 
+    // A correction of a participant whom the request first adds to A, sent with their ETag as If-Match, so that each
+    // call changes a participant of its own, as the seeded-rows rule asks (tests/README.md).
+    private static async Task<HttpRequestMessage> CorrectingAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}")
+        {
+            Content = JsonContent.Create(
+                new { givenName = "Matrix", familyName = "Corrected", dateOfBirth = "1990-01-01" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
+        return request;
+    }
+
+    // An archive or a restore, with no body, of a participant whom the request first adds to A, archived or not, sent
+    // with their ETag as If-Match, so that each call changes a participant of its own (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingTheStatusOfAParticipantOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A, archived);
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
+        return request;
+    }
+
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
     // the challenge, so a made-up one does, with no options asked for first, and the call changes nothing.
     private static Task<HttpRequestMessage> WithAPasskeyNoAccountHolds(EndpointCall _)
@@ -238,28 +288,30 @@ internal static class EndpointMatrix
             authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
     }
 
-    // For an endpoint that lists an organisation's users: a JSON array of users, each with its id, that holds both of
-    // the caller's own organisation's seeded users and neither of the other's. Tests add users to the seeded
-    // organisations, so it may hold others of the caller's own.
-    private static async Task<IReadOnlyList<string>> HoldsTheCallersOwnSeededUsersOnly(
-        HttpResponseMessage response, Caller caller, SeededOrganisations seeded)
-    {
-        var (own, other) = caller switch
+    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id,
+    // that holds every one of the caller's own organisation's seeded rows that `seededIds` gives and none of the
+    // other's, each named in a difference as `what`. Tests add rows to the seeded organisations, so it may hold others
+    // of the caller's own.
+    private static Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>
+        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds) =>
+        async (response, caller, seeded) =>
         {
-            Caller.WorkerOfA or Caller.ManagerOfA => (seeded.A, seeded.B),
-            Caller.ManagerOfB => (seeded.B, seeded.A),
-            _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, "A signed-out caller has no users."),
+            var (own, other) = caller switch
+            {
+                Caller.WorkerOfA or Caller.ManagerOfA => (seeded.A, seeded.B),
+                Caller.ManagerOfB => (seeded.B, seeded.A),
+                _ => throw new ArgumentOutOfRangeException(
+                    nameof(caller), caller, $"A signed-out caller has no {what}s."),
+            };
+            var rows = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var ids = rows.EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ToHashSet();
+            return
+            [
+                .. seededIds(own).Where(id => !ids.Contains(id))
+                    .Select(id => $"lacks the caller's own organisation's {what} {id}"),
+                .. seededIds(other).Where(ids.Contains).Select(id => $"holds the other organisation's {what} {id}"),
+            ];
         };
-        var users = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        var ids = users.EnumerateArray().Select(user => user.GetProperty("id").GetGuid()).ToHashSet();
-        return
-        [
-            .. new[] { own.ManagerId, own.WorkerId }.Where(id => !ids.Contains(id))
-                .Select(id => $"lacks the caller's own organisation's user {id}"),
-            .. new[] { other.ManagerId, other.WorkerId }.Where(ids.Contains)
-                .Select(id => $"holds the other organisation's user {id}"),
-        ];
-    }
 }
 
 /// <summary>
