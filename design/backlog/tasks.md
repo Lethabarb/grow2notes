@@ -2356,10 +2356,19 @@ lets workers write only today's note, using the Melbourne date.
   both phones, Clear keeping the keyboard open, the top bar staying in view with the keyboard open, the prompts while
   the empty box has focus, and the keyboard's dictation into Guided notes ending in "Saved" (A31; note-form.md open
   question 11).
+- Where design.md is silent (step 1), the simplest options: EF Core's convention gives each foreign key that no other
+  index starts with an index of its own, so beside §5.3's indexes `Note` has `(OrganisationId, AuthorUserId)` and
+  `(OrganisationId, DiscardedByUserId)`, and `NoteDraft` has `(OrganisationId, NoteId)`; the participant's and the
+  editor's foreign keys need none, as the one-live-note index and `(OrganisationId, EditorUserId)` start with their
+  columns. The check constraint is `CK_Note_Status`. The JSON of `NoteDraft.Groups` and `Items` has §5.3's property
+  names, `section` holding `NoteSection`'s stored number (`Goal = 1`, `CommonItem = 2`, as
+  `NoteVersionItem.Section` will). EF Core writes the check constraint's SQL, the included columns and the two JSON
+  collections on lines longer than 120 characters, which are wrapped in `AddNote`, its designer file and the model
+  snapshot; the next migration writes the snapshot again.
 
 ### Steps
 
-- [ ] The `Note` and `NoteDraft` tables, whole, which every later note task uses (S02.02.02's first criterion;
+- [x] The `Note` and `NoteDraft` tables, whole, which every later note task uses (S02.02.02's first criterion;
       S02.02.07's database test; design.md §5.3, §5.5, §5.8, §5.10; D83): the `Note` entity (`ITenantOwned`, with
       `NoteStatus` `Draft = 0`, `Submitted = 1`, `Discarded = 2` and `FlagStatus` `None = 0`, `ToReview = 1`,
       `Reviewed = 2`) with §5.3's columns, the alternate key `(OrganisationId, Id)`, composite foreign keys to the
