@@ -1560,6 +1560,19 @@ moves, archives and restores them. Changes apply to notes started from then on.
   question 6); with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome, the goal readings in
   participants.md's *Accessibility checklist* and list-editor.md's *Screen reader announcements*; and the operator
   running `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming the `Goal` deny.
+- Also the simplest options where the design is silent (18 October 2026, step 6): the flow on the app's own answers
+  signs in for real at 375 px and adds a participant, then five goals, the next one typed each time into the field
+  that Add left focus in; the keyboard-only check extends T02's two, adding two goals from the keyboard, Enter on Add
+  goal, and archiving one, with Enter on the summary closing the section. `serveGoals` keeps one list in memory for
+  every participant, as a test opens one participant at a time. A button takes its label's width when it is as wide
+  as it is sized to what it holds, with the 44 px minimum alone; measured in Chromium, Move up and Move down take
+  283 px of the 307 px left at 375 px, and the four buttons 494 px. A row button's name and its focus stop read "Move
+  up , Makes own breakfast", with a space before the comma, as the absolutely positioned hidden text is a block to
+  both, which screen readers do not voice, so the app keeps it. The by-hand checks are steps 38 to 41 of
+  ops/first-use-in-test.md, after T04's. `migrate.sql`, scripted locally as CI scripts it, gives `AddGoal` only
+  additions: `CREATE TABLE [Goal]` with its primary key, the `(OrganisationId, Id)` alternate key and the foreign key
+  to the participant's, its `CREATE INDEX` and `DENY DELETE ON [dbo].[Goal] TO [grow2notes_runtime]`; CI's run on the
+  pull request, and its artifact, are recorded here once it has passed.
 
 ### Steps
 
@@ -1700,7 +1713,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       goal edit and in New goal dropped with them (participants.md *Interactions and focus*, "Archive while something
       is unsaved"), and only the controls back after Restore, with every row closed and New goal empty (S01.02.04's
       hand-off from T02).
-- [ ] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
+- [x] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
       answers the goals list and each goal write in the browser from a list in memory, described in tests/README.md
       beside `serveParticipants`; and in `participants.spec.ts`, signed in for real through the `invite` fixture and
       a passkey on the `authenticator` fixture, a manager at 375 px adds a participant, Tabs from Save to New goal,

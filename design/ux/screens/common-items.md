@@ -245,10 +245,12 @@ Same parts, same order, same words and the same behaviour. Only these things cha
 | ▸ Archived groups                                                                     |
 ```
 
-Arithmetic, [Opinion], to be checked in the browser: at 18 px bold with 1.25rem side padding, the four row buttons
-take about 33rem. With the 16rem text minimum, the 1rem gap and the 2.25rem number column, rows sit side by side
-from a list width of about 52rem. That is reached on a normal laptop window at the 60rem page width. No number is
-hard-coded, so wrong estimates cannot cause overflow. The row just stacks.
+Arithmetic, measured in Chromium on the goal rows (T05): at 18 px bold with 0.75rem side padding, the four row
+buttons take 494 px, about 31rem, with their gaps. With the 16rem text minimum, the 1rem gap and the 2.25rem number
+column, rows sit side by side from a list width of about 50rem. That is reached on a normal laptop window at the 60rem
+page width. No number is hard-coded, so wrong estimates cannot cause overflow. The row just stacks. At 375 px, Move up
+and Move down take 283 px of the 307 px that the numbered list leaves; with the shared button's 1.25rem sides they
+would take about 311 px, and the pair would split.
 
 ```css
 /* ListEditor.module.css, row layout. Replaces list-editor.md's @container rule (Conflicts resolved, 5) */
@@ -258,7 +260,8 @@ hard-coded, so wrong estimates cannot cause overflow. The row just stacks.
 .side     { flex: 0 1 auto; min-inline-size: 0; }            /* holds the row alert slot, then the actions */
 .actions  { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); } /* 16 px between the pairs */
 .pair     { display: flex; flex-wrap: wrap; gap: var(--space-2); }                 /* 8 px inside a pair */
-.actions .rowButton { inline-size: auto; min-inline-size: var(--target-min); }    /* not full width, no 8rem minimum */
+/* Not full width, no 8rem minimum, and 0.75rem sides, so that the move pair shares a line at 375 px */
+.actions .rowButton { inline-size: auto; min-inline-size: var(--target-min); padding-inline: var(--space-3); }
 .list     { margin: 0; padding-inline-start: 2.25rem; }
 .list > li::marker { font-weight: 700; font-variant-numeric: tabular-nums; }
 
@@ -755,9 +758,9 @@ Messages.
    technique.
 6. **Row button width.** primary-actions: buttons are full width on phones, and at least 8rem wide from 40em.
    **Chosen: row and group buttons (Move up, Move down, Edit, Rename, Archive, Restore, Save, Cancel) and Add group
-   take their label width, with a 44 px minimum width and a 48 px height.** This is needed for the pairs on phones,
-   and it gives the item text about 4rem more room on laptops. **Add item** and **Try again** keep the shared rule.
-   [Opinion]
+   take their label width, with a 44 px minimum width and a 48 px height; the row buttons also have 0.75rem sides in
+   place of the shared 1.25rem (T05; *Layout - laptop*).** This is needed for the pairs on phones, and it gives the item
+   text about 4rem more room on laptops. **Add item** and **Try again** keep the shared rule. [Opinion]
 7. **Announcement punctuation.** list-editor ends its announcements with full stops ("Item archived."). microcopy:
    one-phrase status and success messages have no full stop. **Chosen: microcopy** ("Item archived", "Group
    archived", "Moved up to number 2 of 5"). Message sentences ("Not moved: no connection. Try again.") keep their

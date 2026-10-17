@@ -1295,11 +1295,11 @@ Every `PUT` (except the reorder endpoints, which check the set of IDs instead), 
 | POST | /api/admin/participants | Add a participant. The new participant's ID comes back in the body (D79). | `{givenName, familyName, dateOfBirth}` → `201 {id}` |
 | PUT | /api/admin/participants/{id} | Update a participant. | same body → `200` |
 | POST | /api/admin/participants/{id}/archive · /restore | Archive or restore. Never deleted. | → `204` |
-| GET | /api/admin/participants/{participantId}/goals?includeArchived= | The participant's goals. `rowVersion` is the row's `RowVersion` as base64, for `If-Match`. | → `[{id, text, sortOrder, archivedAtUtc, rowVersion}]` |
-| POST | /api/admin/participants/{participantId}/goals | Add a goal at the end. | `{text}` → `201` |
-| PUT | /api/admin/goals/{goalId} | Reword a goal; notes keep their snapshot. | `{text}` → `200` |
+| GET | /api/admin/participants/{participantId}/goals?includeArchived= | The participant's goals. `rowVersion` is the row's `RowVersion` as base64, for `If-Match`. | → `[{id, text, sortOrder, archivedAtUtc, rowVersion}]`; `404` for a participant not in the organisation |
+| POST | /api/admin/participants/{participantId}/goals | Add a goal at the end. | `{text}` → `201`; `404` for a participant not in the organisation |
+| PUT | /api/admin/goals/{goalId} | Reword a goal; notes keep their snapshot. | `{text}` → `200` with the goal's `ETag`, the same one when the text was already stored (D84) |
 | POST | /api/admin/goals/{goalId}/archive · /restore | Archive or restore; a restored goal goes to the end. | → `204` |
-| PUT | /api/admin/participants/{participantId}/goals/order | Reorder the active goals; the ID set must equal the current active set. | `{goalIds: [...]}` → `204`; `422 config.order_mismatch` |
+| PUT | /api/admin/participants/{participantId}/goals/order | Reorder the active goals; the ID set must equal the current active set. | `{goalIds: [...]}` → `204`; `422 config.order_mismatch`; `404` for a participant not in the organisation |
 | GET | /api/admin/common-item-groups?includeArchived= | The groups with their items: the Every note group first, then the other groups in order (D44, D45). Each group's and each item's `rowVersion` is its `RowVersion` as base64, for `If-Match`. | → `[{id, name, isEveryNote, sortOrder, archivedAtUtc, rowVersion, items: [{id, text, sortOrder, archivedAtUtc, rowVersion}]}]` |
 | POST | /api/admin/common-item-groups | Add a group at the end, with no items. | `{name}` → `201` |
 | PUT | /api/admin/common-item-groups/{groupId} | Rename a group; notes keep their snapshot. Refused for Every note. | `{name}` → `200`; `422 config.every_note_fixed` |

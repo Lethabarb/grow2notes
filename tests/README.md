@@ -5,8 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, signing in again in place, the Users and Participants screens and Guide prompts, with axe
-  accessibility checks, run against the published app.
+  the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals and Guide
+  prompts, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -379,11 +379,15 @@ change leaves it, calling `serveParticipants` again with the participant changed
 
 The tests that meet the app's own answers sign in for real, through the `invite` fixture and setup with a passkey on
 the `authenticator` fixture, so that the organisation that `admin bootstrap` made starts with no participants: one adds,
-corrects, archives and restores a participant at 375 px, and two more do it with the keyboard alone, at 375 px and at
-a laptop's width. `expectStops` there presses Tab or Shift+Tab and reads each stop: the focused element by the text
-that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and "outside the
-page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is drawn, on a row's
-link on the `::after` that covers the row.
+corrects, archives and restores a participant at 375 px; one adds a participant and five goals at 375 px, then
+rewords, moves, archives and restores one of them; and two more add, correct, archive and restore a participant, and
+add two goals and archive one, with the keyboard alone, at 375 px and at a laptop's width. `expectStops` there presses
+Tab or Shift+Tab and reads each stop: the focused element by the text that shows, so that a button's busy label, hidden
+until it is busy, is left out, a field by its label, and "outside the page" past the last stop, from where the next
+Shift+Tab comes back to it; and its focus ring as it is drawn, on a row's link on the `::after` that covers the row. A
+goal row's button reads as its label, then its goal's hidden text after a space and a comma, "Move up , Makes own
+breakfast", as its accessible name does too: the hidden text is a block of its own to both, and screen readers do not
+voice the space.
 
 Every test in `e2e/participants.spec.ts` also watches the live regions, the elements whose role is `status` or `alert`:
 an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and reports, through
@@ -396,10 +400,42 @@ A test marked `test.fail()`, as the one in `e2e/fixtures.spec.ts` is, puts a sta
 
 A participant's page reads their goals with them, with
 `GET /api/admin/participants/{participantId}/goals?includeArchived=true`, and shows neither until both have loaded, so
-a test that opens a participant's page with a made-up manager answers that request too. `e2e/goals.ts`, beside
-`e2e/participants.ts`, routes it through `page.route`, as `serveParticipants` does, for every participant: call
-`serveGoals(page, goals)` before `page.goto`, with `[]` for no goals. Add participant needs none: after its `201` the
-page puts the new participant's empty list in place itself, and sends no request for it.
+a test that opens a participant's page with a made-up manager answers that request too, and each goal write after it.
+`e2e/goals.ts`, beside `e2e/participants.ts`, has made-up goals (A35), in the JSON that `GoalListEndpointTests` asserts:
+participants.md's three, Makes own breakfast, Catches the bus to day program and phones when she arrives, and Phones
+her sister, active, and list-editor.md's two archived ones, Uses the washing machine and Walks to the shop, together in
+`goals`, in the API's order. `madeUpGoal` makes others, such as one with a long word. Add participant needs none: after
+its `201` the page puts the new participant's empty list in place itself, and sends no request for it.
+
+`serveGoals(page, goals)`, beside `serveParticipants`, answers the goals read and each goal write in the browser,
+through `page.route`, from a copy of `goals` that it keeps in memory as the API keeps them, for every participant, so
+that no goal request reaches the app: the list in its order; an add at the end, `201`; a reword, an archive and a
+restore, each with the goal's version as `If-Match`, `428` without one and `412` with an old one, the reword then `200`
+with the goal's `ETag`, and the others `204`, a restored goal going to the end; and a reorder `204` when it names the
+active goals, each once, and `422 config.order_mismatch` otherwise. A goal whose words or place change takes a new
+version, as its `RowVersion` would, so that the page meets what the API would say to its next write. Call it before
+`page.goto`, with `[]` for no goals; a later call overrides it, as Playwright tries the latest route first.
+
+It gives the list's `changeElsewhere(id, change)`, which rewords a goal, `{ text }`, or archives it,
+`{ archived: true }`, with a new version, as another manager would: a Save then meets the edit conflict, and a move or
+an Archive built from the list as the page last read it meets the list conflict. `goalWrites` names a move's and an
+Archive's addresses, for a route added after `serveGoals`'s, which Playwright tries first:
+`holdNext(page, goalWrites.reorder)` holds the next move, for its busy label, until the test lets it go on to
+`serveGoals` with `route.fallback()`, and a route that aborts the next archive, with `{ times: 1 }`, gives a write with
+no connection.
+
+```ts
+await serveMe(page, manager);
+await serveParticipants(page, participants);
+const store = await serveGoals(page, goals);
+await page.goto(`/manage/participants/${jane.id}`);
+```
+
+The goal tests check every state with axe; at 375 px, each row's two pairs of buttons on a line each, and each row
+button as wide as its label, as when sized to what it holds (`expectLabelWidth`, which sizes it so for a moment through
+its `style`, which the policy allows); at 1280 px the buttons on the text's line, and under it at 200% text; nothing
+scrolling sideways at 320 px with 200% text; and, under forced colours, the focus ring in `Highlight` and the
+unavailable buttons in `GrayText`.
 
 ### Signing in with a passkey, end to end
 

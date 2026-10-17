@@ -220,7 +220,7 @@ already started or submitted keep the wording they
 were written with.
                                                            [conflict message slot, only when needed]
  1. Makes own breakfast                                    <ol> > <li>: number + text
-    [ ↑ Move up ] [ ↓ Move down ]                          actions wrap; every button ≥ 44 × 44 px
+    [ ↑ Move up ] [ ↓ Move down ]                          actions wrap; every button label width, ≥ 44 × 48 px
     [ Edit ] [ Archive ]                                   row alert slot (role=alert, empty) sits above them
  ───────────────────────────────────────────
  2. Catches the bus to day program and
@@ -341,7 +341,7 @@ two open at once, and moving other rows doesn't close or reset them. **[Opinion]
 | | Phone | Laptop |
 |---|---|---|
 | Row layout | Number and text on top, full width. The actions wrap underneath (`flex-wrap`, 0.5rem gaps). At 375 px the move pair fits on one line, with Edit and Archive on the next. | A **wrapping flex line** (text `flex: 1 1 16rem`, actions at their natural width): text on the left and the actions in one line on the right when they fit, aligned to the top of the text; at 200% text or in a narrow window the actions drop underneath by themselves. No container query and no breakpoint of its own (common-items.md showed a 44rem container leaves the text about 4rem wide). |
-| Buttons | At least 44 × 44 px (A32), at least 0.5rem apart | Same |
+| Buttons | Label width, with 0.75rem sides, at least 44 px wide and 48 px high (A32; common-items.md *Conflicts resolved* 6): never the shared button's full width or its 8rem minimum. 0.5rem apart within a pair, 1rem between the pairs. At 375 px Move up and Move down take about 283 px of the 307 px that the numbered list leaves, measured in Chromium | Same |
 | Add button | Full width (`primary-actions.md`) | Width of its label |
 | Edit form | Full row width | Full row width, so the textarea is not squeezed into the text column |
 | Archived section | Below the add form, 2rem above it | Same |
@@ -386,8 +386,10 @@ manager training. **[Opinion]**
 - Archived rows are a `<ul>` inside `<details>`, with a plain-text `<summary>` and its **default marker** kept.
 - Every button is `<button type="button">`, except Add and Save, which are `type="submit"` in their own
   `<form noValidate>`. Each textarea has a `<label for>`.
-- The help text is linked to the Add and Edit textareas with `aria-describedby` (with the count hint), because it
-  is what a manager most needs to know while rewording.
+- The help text is linked to the Add and Edit textareas with `aria-describedby`, because it is what a manager most
+  needs to know while rewording. Each textarea is described by its error while it shows one, then a visually hidden
+  "You can enter up to 200 characters" hint, then the help text (common-items.md *Conflicts resolved* 12), never by
+  the visible count, which changes at each keystroke and has a polite twin of its own (`conditional-reveal.md`).
 
 **ARIA only where needed.** `aria-disabled="true"` for unavailable and busy buttons. `aria-invalid` and
 `aria-describedby` on fields in error. `tabIndex={-1}` on the conflict message so it can take focus. Use no
@@ -410,7 +412,7 @@ become spaces on save.
 | Press it | Polite: "Already at the top." |
 | Press Archive | Focus: "Restore, Phones her sister, button". Polite: "Goal archived." |
 | Press Restore | Focus: "Archive, Phones her sister, button". Polite: "Goal restored to the end of the list." |
-| Press Edit | Focus: "Edit goal, edit text, multi-line, [current text], Changes apply to notes…, You can enter up to 200 characters" |
+| Press Edit | Focus: "Edit goal, edit text, multi-line, [current text], You can enter up to 200 characters, Changes apply to notes…" |
 | Save | Focus: "Edit, [new text], button". Polite: "Goal saved." |
 | Add | Focus stays in the now-empty field. Polite: "Goal added to the end of the list." |
 | Summary | "Archived goals, collapsed" plus "button" or "disclosure triangle", depending on the reader |
@@ -497,7 +499,9 @@ import s from './ListEditor.module.css';
 
 type Dir = 'up' | 'down';
 const clean = (t: string) => t.replace(/\s*[\r\n]+\s*/g, ' ').trim();
-const activeOf = (rows: Row[]) => rows.filter((r) => !r.archivedAtUtc).sort((a, b) => a.sortOrder - b.sortOrder);
+// The API's order, SortOrder, CreatedAtUtc, then Id, kept as it is: never sorted again by sortOrder, which two rows
+// may share (design.md 5.3), as the reorder reads them in the API's order too.
+const activeOf = (rows: Row[]) => rows.filter((r) => !r.archivedAtUtc);
 
 export function ListEditor({ kind, api, readOnly = false }: { kind: Kind; api: ListApi; readOnly?: boolean }) {
   const c = COPY[kind];
@@ -653,16 +657,18 @@ export function ListEditor({ kind, api, readOnly = false }: { kind: Kind; api: L
               <li key={row.id} className={s.archivedRow}>
                 <p className={s.text}>{row.text}</p>
                 {!readOnly && (
-                  <>
+                  <div className={s.side}>
                     <div role="alert" className={s.alert}>{say(row.id)}</div>
-                    <ActionButton
-                      ref={reg(`${row.id}:restore`)} type="button" variant="secondary"
-                      busy={isBusy('restore', row.id)} busyLabel="Restoring…"
-                      onClick={() => restore.mutate(begin(row.id))}
-                    >
-                      Restore<span className="visually-hidden">, {row.text}</span>
-                    </ActionButton>
-                  </>
+                    <div className={s.actions}>
+                      <ActionButton
+                        ref={reg(`${row.id}:restore`)} type="button" variant="secondary" className={s.rowButton}
+                        busy={isBusy('restore', row.id)} busyLabel="Restoring…"
+                        onClick={() => restore.mutate(begin(row.id))}
+                      >
+                        Restore<span className="visually-hidden">, {row.text}</span>
+                      </ActionButton>
+                    </div>
+                  </div>
                 )}
               </li>
             ))}
@@ -695,20 +701,21 @@ function startEdit() {
 // Normal mode: the buttons, in this order.
 <div role="alert" className={s.alert}>{error}</div>
 <div className={s.actions}>
-  <ActionButton ref={reg(`${row.id}:up`)} type="button" variant="secondary"
+  <ActionButton ref={reg(`${row.id}:up`)} type="button" variant="secondary" className={s.rowButton}
     unavailable={isFirst} onUnavailablePress={() => onAtEnd('up')}
     busy={busy.up} busyLabel="Moving…" onClick={() => onMove('up')}>
     <ArrowUp /> Move up<span className="visually-hidden">, {row.text}</span>
   </ActionButton>
-  <ActionButton ref={reg(`${row.id}:down`)} type="button" variant="secondary"
+  <ActionButton ref={reg(`${row.id}:down`)} type="button" variant="secondary" className={s.rowButton}
     unavailable={isLast} onUnavailablePress={() => onAtEnd('down')}
     busy={busy.down} busyLabel="Moving…" onClick={() => onMove('down')}>
     <ArrowDown /> Move down<span className="visually-hidden">, {row.text}</span>
   </ActionButton>
-  <ActionButton ref={reg(`${row.id}:edit`)} type="button" variant="secondary" onClick={startEdit}>
+  <ActionButton ref={reg(`${row.id}:edit`)} type="button" variant="secondary" className={s.rowButton}
+    onClick={startEdit}>
     Edit<span className="visually-hidden">, {row.text}</span>
   </ActionButton>
-  <ActionButton ref={reg(`${row.id}:archive`)} type="button" variant="secondary"
+  <ActionButton ref={reg(`${row.id}:archive`)} type="button" variant="secondary" className={s.rowButton}
     busy={busy.archive} busyLabel="Archiving…" onClick={onArchive}>
     Archive<span className="visually-hidden">, {row.text}</span>
   </ActionButton>
@@ -735,6 +742,11 @@ function startEdit() {
 .side { flex: 0 1 auto; min-inline-size: 0; }               /* the row alert slot (empty = no height), then the actions */
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .pair { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+/* Every row button, Restore and the edit form's Save and Cancel: label width, at least 44 px wide, the shared 48 px
+   high, never the shared button's full width or its 8rem minimum (common-items.md, Conflicts resolved 6). Two
+   classes, so that it outranks the shared rule whichever stylesheet comes first. 0.75rem sides, not the shared
+   1.25rem, so that Move up and Move down share one line at 375 px. */
+.actions .rowButton { inline-size: auto; min-inline-size: var(--target-min); padding-inline: var(--space-3); }
 .icon { inline-size: 1em; block-size: 1em; flex: none; }    /* fill: currentColor, so it survives forced colours */
 
 .conflict { margin-block: 0 1rem; padding: 0.5rem 0.75rem; border-inline-start: 4px solid var(--error); }
