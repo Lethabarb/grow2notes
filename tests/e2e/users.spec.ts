@@ -521,10 +521,10 @@ test('an ID not on the list shows Page not found with the nav and no back link',
   await expect(pageBar(page).getByRole('link')).toHaveCount(0);
 });
 
-test("a worker at the Users list, Invite user and a user's page meets Page not found", async ({ page }) => {
+test("a worker at the Users list, Invite user, a user's page and Edit user meets Page not found", async ({ page }) => {
   await serveMe(page, worker);
 
-  for (const path of ['/manage/users', '/manage/users/new', `/manage/users/${jo.id}`]) {
+  for (const path of ['/manage/users', '/manage/users/new', `/manage/users/${jo.id}`, `/manage/users/${jo.id}/edit`]) {
     await page.goto(path);
     await expect(heading(page)).toHaveText('Page not found');
     await expect(main(page).getByRole('link', { name: 'Go to Today' })).toHaveAttribute('href', '/');

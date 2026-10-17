@@ -114,11 +114,12 @@ tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own l
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
-Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) and the two tests of a user's actions
-that meet the app's own (`e2e/user-actions.spec.ts`) get their setup links from the published app's own
-`admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
-second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
-app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the two tests of a user's actions
+that meet the app's own (`e2e/user-actions.spec.ts`) and the Edit user test that meets the app's own save
+(`e2e/edit-user.spec.ts`) get their setup links from the published app's own `admin bootstrap` and
+`admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the second terminal gives
+them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
+string and `App__Origin`, which must be the address that the tests open. Without one of the three,
 each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
 database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
 Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
@@ -297,6 +298,17 @@ sets up on the `secondDevice` from the link that `resetSignIn` gives, and whose 
 `e2e/user-actions.spec.ts` is the example of each, `expectNothingKept(page, ...values)` from `e2e/kept.ts` checks that
 no name or address is kept where a page could keep it (users.md AC3), and `signInInPlaceAs(page, me)` from
 `e2e/signedOut.ts` signs in again on view C, the password and code steps answered in the browser.
+
+Edit user's Save sends `PUT /api/admin/users/{id}`, whose path `edits` in `e2e/users.ts` matches for any user.
+`answerEdits(page, answer)` answers each save in the browser: `'saved'`, the app's `200` with no body and no `ETag`, or
+as `answerInvites` answers an invite. `holdNext(page, edits)` holds the next one, for the busy button, or, in a test of
+your own change, until the test has changed what `/api/auth/me` answers, which the page asks again on the entry that
+it lands on: `serveMe` with the role Worker or the new name, or `failMe(page, 401)` after a new address, which ends
+the session. `recordRequests(page)` from `e2e/requests.ts` records each request that the page sends, with its
+`If-Match`, and `signInAndOpenUsers(page, invite, authenticator)` and `inviteThroughThePage(page, person, role)` from
+`e2e/users.ts` sign in for real and invite through Invite user, for each test that meets the app's own Users screens.
+The test that meets the app's own save renames a worker invited through Invite user and gives them a new address.
+`e2e/edit-user.spec.ts` is the example of each.
 
 ### Answering `/api/admin/guide-prompts`
 

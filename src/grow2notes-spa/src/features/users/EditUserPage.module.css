@@ -1,0 +1,9 @@
+/* One reading column, left-aligned in the page's container, at most 40rem wide (users.md *Layout - laptop*). */
+.view {
+  max-inline-size: var(--measure);
+}
+
+/* The last-manager notice under the <h1>, a group's gap above the fields, as they are apart (foundations.md). */
+.notice {
+  margin-block-end: var(--space-5);
+}

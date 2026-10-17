@@ -342,3 +342,18 @@ from the email, so keep the testing mailbox open.
     worker up again as in step 32. Write down, for each dialog, whether the back gesture closed it and whether it did
     nothing while busy.
     (users.md AC24 and AC31, the Android back gesture, which Playwright's Escape stands in for in CI.)
+
+### Edit user, on the laptop
+
+This step uses the passkey worker that step 18 set up, Active again after steps 33 to 35, and a new address for them
+at the testing mailbox (*Before you start*).
+
+36. As account A on the laptop in Chrome, as in step 9, choose Manage, then Users, open the passkey worker's page and
+    press Edit. Look for the hint "Changing the email resets sign-in and sends a setup link to the new address." under
+    Email address. Type the new address in its place and press Save. Look for the worker's page, with focus on its
+    `<h1>`, the new address under Email address, the Status Invited and no banner. Within 5 minutes, look for one email
+    to the new address in the testing mailbox (junk included), with the subject "Set up your Grow2Notes sign-in",
+    naming Grow2Notes and no other organisation, product or person, and holding one link of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and none to the old address. Follow the link on the
+    iPhone in Safari, set up with Use a passkey (recommended), and look for Today. (S00.06.06's new address and its
+    setup-link email in test; users.md AC36.)

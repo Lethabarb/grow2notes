@@ -1175,9 +1175,9 @@ protected. From the console the operator can reset the last manager's sign-in or
     T04 merges second leaves both to T02's rule and opened-from memory, and has the Status row take its focus through
     T02's `focusInsteadOfHeading()`, so that no `<h1>` mounting later takes a focus still pending for it.
   - Your own account: your own reset, deactivation or new address ends in `fullPageLoad()`, as no Users page arms the
-    leave guard; your own new name refreshes `/me`, for the Account panel; and your own change to Worker refreshes
-    `/me`, then goes to Today, whose nav has no Manage. The page takes the viewer's ID for `isOnlyActiveManager` from
-    `['me']`.
+    leave guard; your own change to Worker goes to Today, whose nav has no Manage; and the shell's refresh of `/me` on
+    the new entry then brings your own new name and role to the Account panel and the nav (step 7's Note gives the
+    reason for that order). The page takes the viewer's ID for `isOnlyActiveManager` from `['me']`.
 - §3.7's "Their open drafts stay until a manager discards them" needs drafts, which come with T08 to T10; T04 changes
   no draft or note, and T24 proves it (S05.03.02).
 - If T02's shared audit-events test is on `main` at rebase, T04 adds its rows to it: `user.updated`,
@@ -1245,6 +1245,24 @@ protected. From the console the operator can reset the last manager's sign-in or
   7's notice on Edit user reuses too. In the end-to-end tests, `signInInPlaceAs` moves to `signedOut.ts` and
   `expectNothingKept` to `kept.ts`, for the specs that share them, and the fixtures gain `resetSignIn` and
   `secondDevice`.
+- Where design.md is silent (step 7): T02 merged first (#57), so Save's replace leaves focus to T02's route-change
+  rule and the back link to its opened-from memory, with no `flushSync`. Invite user's fields and error summary move to
+  `UserFields.tsx` (`UserFields`, `UserErrorSummary`), built once for both forms, Email address taking its hint from
+  the page; a field the server named that the form does not have reads "Not saved: something went wrong. Try again."
+  on Edit user, as Invite user's reads "Not sent: …". Until the list names the user, the back link reads "‹ User",
+  the user page's name and its fallback `<h1>`, so that there is a way out while the list loads or after it failed.
+  The notice and the rule follow the list as it is fetched again, so that a manager added or gone meanwhile counts,
+  and the rule compares with the user as the form took them, whose stamp Save sends; a new address is one that differs
+  from theirs in more than letter case, compared in upper case, as Identity's normaliser compares the ASCII addresses
+  that its user-name check allows (D76). The form is mounted afresh for each user's address, as T02's participant page
+  is, so that a history jump between two users' Edit user keeps neither one's values nor stamp. A
+  `409 user.last_manager` fetches the list, as a `412` does, so that the notice shows. Your own change to Worker goes
+  to Today, and your own new address loads the app afresh, neither fetching the list, which the server would refuse
+  (§8.4) or the ended session would meet as a `401`; your own new name and role reach the Account panel and the nav
+  through the shell's refresh of `/me` on the new entry (`useRefreshMe`), which comes after the replace, as a `/me`
+  refreshed first would show a worker Page not found on the Edit user page for a moment. In the end-to-end tests,
+  `recordRequests` moves to `requests.ts`, and `signInAndOpenUsers` and `inviteThroughThePage` to `users.ts`, for the
+  specs that share them, beside the new `edits` and `answerEdits`.
 
 ### Steps
 
@@ -1379,7 +1397,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       of both dialogs, and, on the Android phone, that the back gesture closes each dialog with nothing sent and focus
       on its trigger, and does nothing while the dialog is busy (AC24, AC31), which Playwright, pressing Escape,
       cannot prove
-- [ ] Add Edit user at `/manage/users/{userId}/edit` (users.md component D, *States* › Edit user, *Interactions*,
+- [x] Add Edit user at `/manage/users/{userId}/edit` (users.md component D, *States* › Edit user, *Interactions*,
       AC34 to AC38, AC33 for the `PUT`, AC1, AC3, AC39 and AC40; S00.06.06's criteria linked to users.md, and its
       Note from S00.06.01; see Notes): the route beside the user's page under `ManagerOnly`, with the back link
       "‹ {name}", the error summary, the `<h1>` "Edit user", the last-manager notice on your own page as the only

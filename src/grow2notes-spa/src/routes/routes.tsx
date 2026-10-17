@@ -3,6 +3,7 @@ import { pageName, type PageName } from '../copy/pageNames.ts';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
+import { EditUserPage } from '../features/users/EditUserPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
 import { UserPage } from '../features/users/UserPage.tsx';
 import { UsersPage } from '../features/users/UsersPage.tsx';
@@ -119,6 +120,7 @@ export const routes: AppRoute[] = [
               // React Router ranks this static segment above :userId, so "new" is never taken for a user's ID.
               { path: 'manage/users/new', element: <InviteUserPage />, handle: { pageName: pageName.inviteUser } },
               { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },
+              { path: 'manage/users/:userId/edit', element: <EditUserPage />, handle: { pageName: pageName.editUser } },
             ],
           },
           // Inside the shell, so that the header and nav stay on an address no route matches (component 4).

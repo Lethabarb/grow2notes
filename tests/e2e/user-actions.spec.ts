@@ -1,16 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
-import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
+import { expect, test } from './fixtures.ts';
 import { expectNothingKept } from './kept.ts';
 import { failMe, manager, serveMe } from './me.ts';
-import { holdNext } from './requests.ts';
+import { holdNext, recordRequests } from './requests.ts';
 import { expectViewA, signInInPlaceAs } from './signedOut.ts';
 import {
   alex,
   answerChanges,
   chris,
   deactivations,
+  inviteThroughThePage,
   jo,
   kim,
   people,
@@ -18,6 +19,7 @@ import {
   sam,
   serveUsers,
   setupLinks,
+  signInAndOpenUsers,
   withChanged,
   type AdminUser,
   type ChangeAnswer,
@@ -89,29 +91,6 @@ async function openPage(page: Page, user: AdminUser, users: readonly AdminUser[]
   await serveUsers(page, users);
   await page.goto(`/manage/users/${user.id}`);
   await expect(heading(page)).toHaveText(user.displayName);
-}
-
-/**
- * Records each request that the page sends from now on, but the test's own `GET /healthz`, as its method, path and,
- * for a change, its `If-Match`. Gives a function that gives them once the browser has reported every request that the
- * page sent before the call: it reports them in the order they were sent (tests/README.md).
- */
-function recordRequests(page: Page): () => Promise<string[]> {
-  const sent: string[] = [];
-  page.on('request', (request) => {
-    const { pathname } = new URL(request.url());
-    if (pathname !== '/healthz' && pathname !== '/api/auth/antiforgery') {
-      const ifMatch = request.headers()['if-match'];
-      sent.push(`${request.method()} ${pathname}${ifMatch === undefined ? '' : ` ${ifMatch}`}`);
-    }
-  });
-
-  return async () => {
-    await page.evaluate(async () => {
-      await fetch('/healthz');
-    });
-    return sent;
-  };
 }
 
 /** Whether the response answers a change to a user whose path ends with `change`. */
@@ -599,38 +578,6 @@ test.describe('Reactivate', () => {
     });
   }
 });
-
-/**
- * Signs the invited manager in through setup with a passkey on the virtual authenticator, as setup.spec.ts does, and
- * opens the Users list through Manage, as a manager does.
- */
-async function signInAndOpenUsers(page: Page, invite: Invite, authenticator: VirtualAuthenticator) {
-  await page.goto(invite.setupLink);
-  await main(page).getByRole('button', { name: 'Use a passkey (recommended)' }).click();
-  await expect(heading(page)).toContainText('Today');
-  expect(await authenticator.credentials()).toHaveLength(1);
-  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Manage', exact: true }).click();
-  await main(page).getByRole('link', { name: 'Users', exact: true }).click();
-  await expect(heading(page)).toHaveText('Users');
-}
-
-/** Invites `person` as a `role` through Invite user, from the Users list, to which the page comes back. */
-async function inviteThroughThePage(
-  page: Page,
-  person: { displayName: string; email: string },
-  role: 'Worker' | 'Manager',
-) {
-  await main(page).getByRole('link', { name: 'Invite user', exact: true }).click();
-  await main(page).getByRole('textbox', { name: 'Name' }).fill(person.displayName);
-  await main(page).getByRole('textbox', { name: 'Email address' }).fill(person.email);
-  await main(page).getByRole('radio', { name: role }).check();
-  const invited = page.waitForResponse(
-    (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/admin/users',
-  );
-  await main(page).getByRole('button', { name: 'Send invite' }).click();
-  expect((await invited).status()).toBe(201);
-  await expect(heading(page)).toHaveText('Users');
-}
 
 test('signed in for real, a worker invited through Invite user is deactivated, then reactivated: Invited', async ({
   page,

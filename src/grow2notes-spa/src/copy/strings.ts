@@ -234,8 +234,8 @@ export const strings = {
   },
   /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
-   * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md); then the
-   * user detail's and Invite user's own words.
+   * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md), which
+   * Edit user shares with the user detail; then the user detail's, Invite user's and Edit user's own words.
    */
   users: {
     listLoading: 'Loading users…',
@@ -258,6 +258,18 @@ export const strings = {
       Worker: 'Writes notes and reads past notes',
       Manager: 'Can also review flagged notes, download reports, and set up participants and users',
     },
+    /**
+     * Edit user's hints under Email address (users.md component D item 5), for someone else, then on your own page;
+     * Name's is `nameHint`, as on Invite user.
+     */
+    editEmailHint: 'Changing the email resets sign-in and sends a setup link to the new address.',
+    ownEmailHint:
+      'Changing your email resets your sign-in. You will be signed out, and a setup link will be sent to the new '
+      + 'address.',
+    /** Under Edit user's `<h1>`, on your own page as the only active manager (A26). */
+    editLastManagerNotice:
+      'You are the only active manager, so you cannot change your email or make yourself a worker. First make '
+      + 'someone else a manager.',
     /** Invite user's button (users.md component B item 8), whose busy label is `sending`. */
     sendInvite: 'Send invite',
     /**
@@ -268,6 +280,16 @@ export const strings = {
     enterName: 'Enter the person’s name',
     enterEmail: 'Enter an email address',
     chooseRole: 'Choose Worker or Manager',
+    /**
+     * Role's and Email address's messages on your own Edit user page as the only active manager (users.md *States* ›
+     * Edit user), for Worker and for a new address, from Save's own check or the server's `409 user.last_manager`.
+     */
+    lastManagerRole:
+      'You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first.',
+    lastManagerEmail:
+      'You are the only active manager, so you cannot change your email. Make someone else a manager first.',
+    /** In the alert above Edit user's Save, for a save refused as stale (`412`), the typed values kept. */
+    changedWhileEditing: 'Someone else changed this user while you were editing. Check the details, then save again.',
     /**
      * The user detail's Resend invite, for an Invited user (users.md component C item 6), with the description above
      * it; its busy label is `sending`, and its result `msg.setupLinkSent`.

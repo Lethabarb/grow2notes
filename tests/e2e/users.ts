@@ -1,4 +1,5 @@
 import type { Page, Route } from '@playwright/test';
+import { expect, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { manager, type Me } from './me.ts';
 
 /** A user as `GET /api/admin/users` lists them (design.md §6.6). */
@@ -150,6 +151,22 @@ export function answerSetupLinks(page: Page, answer: ChangeAnswer): Promise<void
   return answerChanges(page, setupLinks, answer);
 }
 
+/** The pattern of Edit user's save, `PUT /api/admin/users/{id}` (design.md §6.6), for any user. */
+export const edits = '**/api/admin/users/*';
+
+/** How a test answers Edit user's save: the app's `200`, with no body and no `ETag` (D78), or as an invite is. */
+export type EditAnswer = 'saved' | InviteAnswer;
+
+/**
+ * Answers each save that Edit user sends from now on, in the browser, as `answer` says, so that none reaches the app.
+ * A later call overrides it, as Playwright tries the latest route first.
+ */
+export async function answerEdits(page: Page, answer: EditAnswer): Promise<void> {
+  await page.route(edits, async (route) => {
+    await (answer === 'saved' ? route.fulfill({ status: 200 }) : answerWith(route, answer));
+  });
+}
+
 /**
  * Holds the page's next `POST /api/admin/users` until the test lets it go on to the app, as `holdNext` holds a request
  * (requests.ts), and passes every other request on. Gives a function that waits for the invite and gives its route.
@@ -169,4 +186,38 @@ export async function holdNextInvite(page: Page): Promise<() => Promise<Route>> 
     }
   });
   return () => held;
+}
+
+/**
+ * Signs the invited manager in through setup with a passkey on the virtual authenticator, as setup.spec.ts does, and
+ * opens the Users list through Manage, as a manager does, for a test that meets the app's own Users screens.
+ */
+export async function signInAndOpenUsers(page: Page, invite: Invite, authenticator: VirtualAuthenticator) {
+  const main = page.getByRole('main');
+  await page.goto(invite.setupLink);
+  await main.getByRole('button', { name: 'Use a passkey (recommended)' }).click();
+  await expect(main.getByRole('heading', { level: 1 })).toContainText('Today');
+  expect(await authenticator.credentials()).toHaveLength(1);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Manage', exact: true }).click();
+  await main.getByRole('link', { name: 'Users', exact: true }).click();
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Users');
+}
+
+/** Invites `person` as a `role` through the app's own Invite user, from the Users list, to which the page returns. */
+export async function inviteThroughThePage(
+  page: Page,
+  person: { displayName: string; email: string },
+  role: 'Worker' | 'Manager',
+) {
+  const main = page.getByRole('main');
+  await main.getByRole('link', { name: 'Invite user', exact: true }).click();
+  await main.getByRole('textbox', { name: 'Name' }).fill(person.displayName);
+  await main.getByRole('textbox', { name: 'Email address' }).fill(person.email);
+  await main.getByRole('radio', { name: role }).check();
+  const invited = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/admin/users',
+  );
+  await main.getByRole('button', { name: 'Send invite' }).click();
+  expect((await invited).status()).toBe(201);
+  await expect(main.getByRole('heading', { level: 1 })).toHaveText('Users');
 }
