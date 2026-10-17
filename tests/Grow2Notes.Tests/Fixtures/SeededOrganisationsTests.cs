@@ -15,13 +15,14 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
     : IClassFixture<Grow2NotesFactory>
 {
     [Fact]
-    public void The_two_organisations_their_four_users_and_two_participants_are_distinct()
+    public void The_two_organisations_their_four_users_two_participants_and_two_Every_note_groups_are_distinct()
     {
         var (a, b) = sqlServer.Seeded;
 
         Assert.NotEqual(a.OrganisationId, b.OrganisationId);
         Assert.Distinct([a.ManagerId, a.WorkerId, b.ManagerId, b.WorkerId]);
         Assert.NotEqual(a.ParticipantId, b.ParticipantId);
+        Assert.NotEqual(a.EveryNoteGroupId, b.EveryNoteGroupId);
     }
 
     [Fact]
@@ -76,6 +77,33 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
                 Assert.Equal(seeded.OrganisationId, participant.OrganisationId);
                 Assert.Equal(ParticipantStatus.Active, participant.Status);
                 Assert.Null(participant.ArchivedAtUtc);
+            }
+        }
+    }
+
+    // As admin bootstrap gives an organisation its group (design.md §7.4).
+    [Fact]
+    public async Task Each_organisation_has_its_one_active_Every_note_group_and_sees_none_of_the_other_s()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        var (a, b) = sqlServer.Seeded;
+
+        foreach (var seeded in new[] { a, b })
+        {
+            // Other tests may add groups to a seeded organisation, but none can add a second Every note group.
+            using (tenant.Use(seeded.OrganisationId))
+            {
+                var everyNote = Assert.Single(await db.CommonItemGroups
+                    .Where(group => group.IsEveryNote)
+                    .ToListAsync(cancellationToken));
+
+                Assert.Equal(
+                    (seeded.EveryNoteGroupId, seeded.OrganisationId, "Every note", 0, (DateTime?)null),
+                    (everyNote.Id, everyNote.OrganisationId, everyNote.Name, everyNote.SortOrder,
+                        everyNote.ArchivedAtUtc));
             }
         }
     }

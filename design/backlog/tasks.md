@@ -1898,7 +1898,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
 
 ### Steps
 
-- [ ] The `CommonItemGroup` and `CommonItem` tables, and the built-in Every note group (S01.03.01's first four
+- [x] The `CommonItemGroup` and `CommonItem` tables, and the built-in Every note group (S01.03.01's first four
       criteria and its sixth; design.md §5.3 *CommonItemGroup* with its *Constraints*, and *CommonItem*, §5.10, §7.4
       and §10.6; §14 M1's Every note line, its database part; A43's "built in and created with the organisation"):
       the two entities (`ITenantOwned`, `IVersionedRow`, `IOrderedRow`) and their `AddCommonItems` migration, each

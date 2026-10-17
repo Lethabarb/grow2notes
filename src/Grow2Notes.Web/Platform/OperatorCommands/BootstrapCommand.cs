@@ -8,10 +8,11 @@ using Microsoft.AspNetCore.Identity;
 namespace Grow2Notes.Web.Platform.OperatorCommands;
 
 /// <summary>
-/// <c>admin bootstrap</c> (design.md §7.4): creates an organisation and invites its first manager, in one transaction
-/// with its <c>admin.bootstrap</c> event, and prints the manager's setup link. There is no sign-up screen (A1), so this
-/// is how each organisation starts. It logs nothing, because the link holds the setup token and the address is
-/// personal (§9.5): the link goes to the output writer only, and the command keeps no copy of it.
+/// <c>admin bootstrap</c> (design.md §7.4): creates an organisation, with its Every note group (A43), and invites its
+/// first manager, in one transaction with its <c>admin.bootstrap</c> event, and prints the manager's setup link. There
+/// is no sign-up screen (A1), so this is how each organisation starts. It logs nothing, because the link holds the
+/// setup token and the address is personal (§9.5): the link goes to the output writer only, and the command keeps no
+/// copy of it.
 /// </summary>
 internal sealed class BootstrapCommand(
     Grow2NotesDbContext db,
@@ -41,12 +42,12 @@ internal sealed class BootstrapCommand(
     ];
 
     /// <summary>
-    /// Reads <paramref name="options"/>, then, in one transaction, adds the organisation, invites its first manager
-    /// through the invite core, and writes <c>admin.bootstrap</c>; once that has committed, writes the manager's setup
-    /// link on <paramref name="output"/>. A refused run says why on <paramref name="error"/> and has written nothing:
-    /// an unknown, missing, empty or overlong option and an <c>App:Origin</c> that is missing or not an absolute
-    /// address are refused before the transaction, and an address that Identity refuses, such as one that already has
-    /// an account (A27), rolls it back.
+    /// Reads <paramref name="options"/>, then, in one transaction, adds the organisation with its Every note group,
+    /// invites its first manager through the invite core, and writes <c>admin.bootstrap</c>; once that has committed,
+    /// writes the manager's setup link on <paramref name="output"/>. A refused run says why on <paramref name="error"/>
+    /// and has written nothing: an unknown, missing, empty or overlong option and an <c>App:Origin</c> that is missing
+    /// or not an absolute address are refused before the transaction, and an address that Identity refuses, such as
+    /// one that already has an account (A27), rolls it back.
     /// </summary>
     /// <returns><see cref="AdminCommands.Done"/>, or <see cref="AdminCommands.Refused"/>.</returns>
     public async Task<int> RunAsync(
@@ -71,19 +72,24 @@ internal sealed class BootstrapCommand(
         {
             await db.InTransactionAsync(async ct =>
             {
-                var organisation = new Organisation
-                {
-                    Name = values.OrganisationName,
-                    CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
-                };
+                var createdAtUtc = timeProvider.GetUtcNow().UtcDateTime;
+                var organisation = new Organisation { Name = values.OrganisationName, CreatedAtUtc = createdAtUtc };
                 db.Organisations.Add(organisation);
-                await db.SaveChangesAsync(ct);
+
+                // The group is part of the organisation, which admin.bootstrap records, so it has no event of its own.
+                // It is saved now, under its organisation as the tenant, because the invite's saves run with no tenant
+                // and so could not save it; a refused invite rolls it back with the organisation.
+                using (tenant.Use(organisation.Id))
+                {
+                    db.CommonItemGroups.Add(CommonItemGroup.EveryNote(organisation.Id, createdAtUtc));
+                    await db.SaveChangesAsync(ct);
+                }
 
                 var invite = await invitations.InviteAsync(
                     organisation.Id, values.ManagerName, values.ManagerEmail, UserRole.Manager, invitedByUserId: null);
                 if (!invite.Succeeded)
                 {
-                    // Thrown, so that the transaction rolls back the organisation saved above.
+                    // Thrown, so that the transaction rolls back the organisation and its group saved above.
                     throw new InviteRefusedException(invite.Errors);
                 }
 

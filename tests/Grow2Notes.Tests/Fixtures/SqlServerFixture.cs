@@ -37,9 +37,9 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public string ConnectionString => ConnectionStringFor(Database);
 
     /// <summary>
-    /// The IDs of the two made-up organisations in the app's database, each with an Active manager, an Active worker
-    /// and an active participant, which are there before the first test. Tests leave the seeded rows as they are
-    /// (tests/README.md).
+    /// The IDs of the two made-up organisations in the app's database, each with an Active manager, an Active worker,
+    /// an active participant and its Every note group, which are there before the first test. Tests leave the seeded
+    /// rows as they are (tests/README.md).
     /// </summary>
     public SeededOrganisations Seeded { get; private set; } = null!;
 
@@ -84,9 +84,10 @@ public sealed class SqlServerFixture : IAsyncLifetime
     /// <summary>
     /// The app's context on the database at <paramref name="connectionString"/>, with what migrating and seeding use
     /// registered as Program.cs registers it: the tenant, and Identity's user manager and store at Program.cs's schema
-    /// version. Neither uses the sign-in manager, the claims factory or the session cookie, so they are left out.
+    /// version. Neither uses the sign-in manager, the claims factory or the session cookie, so they are left out. A
+    /// test of a migration takes it too, to migrate a database of its own one migration at a time.
     /// </summary>
-    private static ServiceProvider AppDataServices(string connectionString)
+    internal static ServiceProvider AppDataServices(string connectionString)
     {
         var services = new ServiceCollection();
         services.AddDbContext<Grow2NotesDbContext>(options => options.UseSqlServer(connectionString));
@@ -117,15 +118,16 @@ public sealed class SqlServerFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Adds the made-up organisations, users and participants (A35) of the two-organisation tests (design.md §5.9 item
-    /// 7). The users are created through <see cref="UserManager{TUser}"/>, as the app creates accounts, so each has the
-    /// normalised email and user name and the security stamp that Identity reads when it signs someone in.
+    /// Adds the made-up organisations, with their Every note groups, users and participants (A35) of the
+    /// two-organisation tests (design.md §5.9 item 7). The users are created through
+    /// <see cref="UserManager{TUser}"/>, as the app creates accounts, so each has the normalised email and user name
+    /// and the security stamp that Identity reads when it signs someone in.
     /// </summary>
     private static async Task<SeededOrganisations> SeedAsync(
         IServiceProvider services, CancellationToken cancellationToken)
     {
-        // An organisation is the tenant, not tenant-owned, and AspNetUsers is not filtered, so only the save of the
-        // participant, which is tenant-owned, needs a tenant.
+        // An organisation is the tenant, not tenant-owned, and AspNetUsers is not filtered, so only the saves of the
+        // Every note group and the participant, which are tenant-owned, need a tenant.
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
@@ -145,9 +147,15 @@ public sealed class SqlServerFixture : IAsyncLifetime
             (string Name, string Email) worker,
             (string GivenName, string FamilyName, DateOnly DateOfBirth) person)
         {
+            // With its Every note group, as admin bootstrap adds an organisation (design.md §7.4).
             var organisation = new Organisation { Name = name, CreatedAtUtc = SeededAtUtc };
             db.Organisations.Add(organisation);
-            await db.SaveChangesAsync(cancellationToken);
+            var everyNote = CommonItemGroup.EveryNote(organisation.Id, SeededAtUtc);
+            db.CommonItemGroups.Add(everyNote);
+            using (tenant.Use(organisation.Id))
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
 
             // The manager stands in for the one the admin bootstrap command invites, so the manager invites the worker.
             var managerId = await AddUserAsync(organisation.Id, UserRole.Manager, manager, invitedByUserId: null);
@@ -167,7 +175,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
                 await db.SaveChangesAsync(cancellationToken);
             }
 
-            return new(organisation.Id, managerId, workerId, participant.Id);
+            return new(organisation.Id, managerId, workerId, participant.Id, everyNote.Id);
         }
 
         async Task<Guid> AddUserAsync(

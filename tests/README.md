@@ -603,10 +603,11 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
 ### The seeded organisations and the tenant
 
 After migrating the shared database, `SqlServerFixture` adds two made-up organisations (A35) for the two-organisation
-tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address, and an
-active participant. A test takes `SqlServerFixture` in its constructor, beside `Grow2NotesFactory`, and finds their IDs
-in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`, `ManagerId`, `WorkerId` and
-`ParticipantId`. A two-organisation test acts in A and checks that nothing of B's reaches it.
+tests (design.md §5.9 item 7), each with an Active manager and an Active worker with an `example.org` address, an
+active participant, and its Every note group, as `admin bootstrap` adds it. A test takes `SqlServerFixture` in its
+constructor, beside `Grow2NotesFactory`, and finds their IDs in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each
+hold the `OrganisationId`, `ManagerId`, `WorkerId`, `ParticipantId` and `EveryNoteGroupId`. A two-organisation test
+acts in A and checks that nothing of B's reaches it.
 `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is seeded.
 
 - Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
