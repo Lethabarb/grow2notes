@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter, parsePath } from 'react-router';
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import type { ListRow } from '../../components/ListEditor.tsx';
 import { routes } from '../../routes/routes.tsx';
 import type { AdminParticipant } from './participantsQuery.ts';
 
@@ -16,6 +17,11 @@ const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
 const participantsPath = '/api/admin/participants';
 const listPath = '/api/admin/participants?includeArchived=true';
+
+/** The one request with which a participant's page reads their goals, archived ones too. */
+function goalsPath(participantId: string): string {
+  return `/api/admin/participants/${participantId}/goals?includeArchived=true`;
+}
 
 // participants.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts,
 // and a worker. Today in Melbourne is 1 October 2026.
@@ -137,6 +143,9 @@ const fetchMock = vi.fn<typeof fetch>();
 /** How the stubbed server answers each request, by its method and path: a new answer for each. */
 const answers = new Map<string, Answer>();
 
+/** The query client of the app that the test rendered last, whose cache a test can look into. */
+let queryClient: QueryClient;
+
 /** Stubs `fetch` as the server, which answers each `method` request for `path` with `answer` from now on. */
 function serve(method: 'GET' | 'POST' | 'PUT', path: string, answer: Answer) {
   answers.set(`${method} ${path}`, answer);
@@ -190,6 +199,7 @@ function requests(): string[] {
 function renderApp(path: string | string[], me: Me = manager): Router {
   serve('GET', mePath, json(me));
   const client = createQueryClient();
+  queryClient = client;
   client.setQueryData(meQuery.queryKey, me);
   // Each entry with a key of its own, as a browser gives it, where a memory router gives every test's first entry the
   // key "default", under which the shell's memory would carry a row or a position from one test into the next.
@@ -341,6 +351,9 @@ beforeEach(() => {
   serve('GET', antiforgeryPath, () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );
+  // No goals, unless a test gives them, so that a page whose goals a test is not about loads with its participant.
+  serve('GET', goalsPath(jane.id), json([]));
+  serve('GET', goalsPath(priya.id), json([]));
   fetchMock.mockImplementation((path, init) => {
     const answer = typeof path === 'string' ? answers.get(`${init?.method ?? 'GET'} ${path}`) : undefined;
     if (answer === undefined) {
@@ -1739,5 +1752,216 @@ describe('The list after Archive and Restore', () => {
     await press(within(main()).getByRole('link', { name: 'Active' }));
 
     expect(rowNames()).toEqual(['Jane Citizen', 'Priya Kumar']);
+  });
+});
+
+// Jane's goals as the API gives them (A35), in its order, two active and two archived, the newer archived second.
+const janesGoals: ListRow[] = [
+  {
+    id: '6b1e9d4a-3c27-4f58-8a90-1d2e3f4a5b6c',
+    text: 'Makes own breakfast',
+    sortOrder: 0,
+    archivedAtUtc: null,
+    rowVersion: 'AAAAAAAAC9E=',
+  },
+  {
+    id: '7c2f0e5b-4d38-4a69-9b01-2e3f4a5b6c7d',
+    text: 'Uses the washing machine',
+    sortOrder: 1,
+    archivedAtUtc: '2026-09-21T02:30:00Z',
+    rowVersion: 'AAAAAAAAC9I=',
+  },
+  {
+    id: '8d3a1f6c-5e49-4b7a-8c12-3f4a5b6c7d8e',
+    text: 'Catches the bus to day program and phones when she arrives',
+    sortOrder: 2,
+    archivedAtUtc: null,
+    rowVersion: 'AAAAAAAAC9M=',
+  },
+  {
+    id: '9e4b2a7d-6f5a-4c8b-9d23-4a5b6c7d8e9f',
+    text: 'Walks to the shop',
+    sortOrder: 3,
+    archivedAtUtc: '2026-09-28T05:45:00Z',
+    rowVersion: 'AAAAAAAAC9Q=',
+  },
+];
+
+// Jane's active goals' texts, in the API's order.
+const janesActiveGoals = ['Makes own breakfast', 'Catches the bus to day program and phones when she arrives'];
+
+const goalsHelp =
+  'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written '
+  + 'with.';
+
+const noGoals = 'No goals yet. Notes will show an empty Goals section.';
+
+/** The Goals section, or `null` while the page has none. */
+function goalsSection(): HTMLElement | null {
+  return within(main()).queryByRole('region', { name: 'Goals' });
+}
+
+/** The texts of the active goals, numbered in the Goals section's `<ol>`, in order. */
+function activeGoals(): string[] {
+  return Array.from(goalsSection()!.querySelectorAll('ol > li'), (item) => item.textContent);
+}
+
+/** The texts of the archived goals, in the Goals section's `<details>`, in order. */
+function archivedGoals(): string[] {
+  return Array.from(goalsSection()!.querySelectorAll('details ul > li'), (item) => item.textContent);
+}
+
+/** Opens Jane's page from her row of the list, as the manager does, her goals being `goals`. */
+async function openJaneWithGoals(goals: ListRow[]): Promise<Router> {
+  serve('GET', goalsPath(jane.id), json(goals));
+  return openJane();
+}
+
+describe("A participant's goals", () => {
+  it('are in Goals, between Details and Actions: the help text, then the active ones numbered, in order', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const goals = goalsSection()!;
+    expect(within(goals).getByRole('heading', { level: 2 })).toHaveAccessibleName('Goals');
+    expect(follows(detailsSection(), goals)).toBe(true);
+    expect(follows(goals, actionsSection()!)).toBe(true);
+    expect(follows(within(goals).getByText(goalsHelp), goals.querySelector('ol')!)).toBe(true);
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    for (const item of goals.querySelectorAll<HTMLElement>('ol > li')) {
+      expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+    }
+  });
+
+  it('show the archived ones newest archived first, in a closed section after the list', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const details = goalsSection()!.querySelector('details')!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary')?.textContent).toBe('Archived goals');
+    expect(follows(goalsSection()!.querySelector('ol')!, details)).toBe(true);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+  });
+
+  it('say "No goals yet." in place of the list when there are none, with no archived section', async () => {
+    await openJaneWithGoals([]);
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+    expect(goalsSection()!.querySelector('ol')).toBeNull();
+    expect(goalsSection()!.querySelector('details')).toBeNull();
+  });
+
+  it('are keyed by the participant alone, never by their words', async () => {
+    await openJaneWithGoals(janesGoals);
+
+    const keys = queryClient.getQueryCache().getAll().map(({ queryKey }) => JSON.stringify(queryKey));
+    expect(keys).toContain(JSON.stringify(['admin', 'goals', jane.id]));
+    for (const { text } of janesGoals) {
+      expect(keys.filter((key) => key.includes(text))).toEqual([]);
+    }
+  });
+
+  it('of an archived participant are numbered text, with no help, button or alert, and no Restore', async () => {
+    serve('GET', goalsPath(jane.id), json(janesGoals));
+    await openArchivedJane();
+
+    const goals = goalsSection()!;
+    expect(follows(detailsSection(), goals)).toBe(true);
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+    expect(within(goals).queryByText(goalsHelp)).toBeNull();
+    expect(within(goals).queryAllByRole('button')).toEqual([]);
+    expect(within(goals).queryAllByRole('alert')).toEqual([]);
+    expect(within(goals).queryAllByRole('textbox')).toEqual([]);
+  });
+
+  it('of an archived participant with none say "No goals yet."', async () => {
+    await openArchivedJane();
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+  });
+
+  it('are not on Add participant before its 201, then come empty, with no request for them', async () => {
+    await openAdd();
+    expect(goalsSection()).toBeNull();
+    serve('POST', participantsPath, added);
+    fill('Jane', 'Citizen', '7', '3', '1987');
+
+    await save();
+    await wait(60_000);
+
+    expect(within(goalsSection()!).getByText(noGoals)).toBeInTheDocument();
+    expect(follows(detailsSection(), goalsSection()!)).toBe(true);
+    expect(follows(goalsSection()!, actionsSection()!)).toBe(true);
+    expect(requests().filter((request) => request.includes('/goals'))).toEqual([]);
+  });
+});
+
+describe("A participant's page while their goals load", () => {
+  it('shows "Loading participant…" at 1 s while their goals are held, then the page, the name focused', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), later(2000, json(janesGoals)));
+    await openFromManage(`/manage/participants/${jane.id}`);
+
+    await wait(999);
+    expect(line()).toBeEmptyDOMElement();
+    expect(headingOrNone()).not.toBeInTheDocument();
+    expect(backLink()).toBeInTheDocument();
+
+    await wait(1);
+    expect(line()).toHaveTextContent('Loading participant…');
+    expect(headingOrNone()).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+
+    await wait(1000);
+    await settle();
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+  });
+
+  it('says that the participant did not load when their goals did not, and shows them after a Try again', async () => {
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), noConnection);
+    await openFromManage(`/manage/participants/${jane.id}`);
+
+    // After the query client's silent retry.
+    await wait(1000);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Participant');
+    expect(pageHeading()).toHaveFocus();
+    expect(line().textContent).toBe('This participant did not load: no connection. Try again.');
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(goalsSection()).toBeNull();
+    expect(backLink()).toBeInTheDocument();
+
+    serve('GET', goalsPath(jane.id), json(janesGoals));
+    await press(within(main()).getByRole('button', { name: 'Try again' }));
+
+    expect(screen.getAllByRole('heading', { level: 1 })).toEqual([pageHeading()]);
+    expect(pageHeading()).toHaveAccessibleName('Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+  });
+
+  it('shows Page not found in place of the whole page when their goals are not found', async () => {
+    // React and React Router report the refusal that the route's boundary catches, which is expected here.
+    const report = console.error;
+    const reported = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      if (!args.some((arg) => arg instanceof ApiError && arg.status === 404)) {
+        report(...args);
+      }
+    });
+    onTestFinished(() => reported.mockRestore());
+    serve('GET', listPath, json([jane, priya]));
+    serve('GET', goalsPath(jane.id), problem(404));
+    renderApp(`/manage/participants/${jane.id}`);
+
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Page not found');
+    expect(document.title).toBe('Grow2Notes – Page not found');
+    expect(backLink()).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
   });
 });

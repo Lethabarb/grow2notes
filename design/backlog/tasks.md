@@ -1516,6 +1516,8 @@ moves, archives and restores them. Changes apply to notes started from then on.
     fetching it, as a new participant has no goals, so that the Goals section and its New goal field are there for
     the next Tab (participants.md *Interactions*).
   - An archived participant with no goals shows the empty sentence, as the read-only variant names no words of its own.
+    The read-only variant leaves out the rows' alert slots too, with the help text, buttons and form, as no request
+    can fail on it (step 1).
   - `CharacterCount` (conditional-reveal.md, list-editor.md's shared count) is built here, in `src/components`, as
     the goal count is its first user; T09's flag Reason reuses it. Guide prompts' own count and its spoken twin move
     onto it, with their 900-character threshold, so that one count ships.
@@ -1535,7 +1537,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
 
 ### Steps
 
-- [ ] The `Goal` table and the goals list, shown on the participant's page (S01.02.05's first two criteria; design.md
+- [x] The `Goal` table and the goals list, shown on the participant's page (S01.02.05's first two criteria; design.md
       §3.7, §4.8 item 2 and *States*, §5.3; participants.md B6, B9 and the read-only variant; list-editor.md
       *Anatomy* and *States*): the `Goal` entity (`ITenantOwned`, `IVersionedRow`, `IOrderedRow`) and its `AddGoal`
       migration, with the alternate key `(OrganisationId, Id)`, the composite foreign key

@@ -1,10 +1,15 @@
 /*
- * Details in the reading column, a section's gap below the <h1>, or the archived notice under it, and Actions a
- * section's gap below Details (participants.md *Layout - laptop*).
+ * Details in the reading column, a section's gap below the <h1>, or the archived notice under it, and Goals and
+ * Actions each a section's gap below the section before (participants.md *Layout - laptop*).
  */
 .details,
 .actions {
   max-inline-size: var(--measure);
+  margin-block-start: var(--section-gap);
+}
+
+/* On the wider page, where the goals' rows have room; the list keeps its help text in the reading column itself. */
+.goals {
   margin-block-start: var(--section-gap);
 }
 

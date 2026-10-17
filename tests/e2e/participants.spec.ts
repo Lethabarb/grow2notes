@@ -2,6 +2,7 @@ import type { Locator, Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import { serveGoals } from './goals.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import {
@@ -18,8 +19,9 @@ import { holdNext } from './requests.ts';
 
 // The Participants screens in the published app (S01.02.01 to S01.02.04), against participants.md's criteria. The
 // first three tests sign in for real, through setup with a passkey on the virtual authenticator, and add, correct,
-// archive and restore a participant on the app's own answers; the others answer /api/auth/me, the list and each change
-// in the browser with made-up people (me.ts, participants.ts), so that none of those requests reaches the app.
+// archive and restore a participant on the app's own answers; the others answer /api/auth/me, the list, each
+// participant's goals and each change in the browser with made-up people (me.ts, participants.ts, goals.ts), so that
+// none of those requests reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -692,6 +694,7 @@ test('Add participant: the form, a failed Save, no connection and the 201, each 
 test("a participant's page saved, stale, refused, archived and restored, each passing axe", async ({ page }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
   await page.goto(`/manage/participants/${jane.id}`);
 
   await expect(heading(page)).toHaveText('Jane Citizen');
@@ -768,6 +771,7 @@ test("an archived participant's page, a page that did not load and an unknown ID
 }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
 
   // Opened on an archived participant: the notice there as plain content, which takes no focus, and no Actions.
   await page.goto(`/manage/participants/${ben.id}`);
@@ -808,6 +812,7 @@ test("a participant's page loading, then saving, archiving and restoring, each p
   page,
 }) => {
   await serveMe(page, manager);
+  await serveGoals(page, []);
   // A button busy for 400 ms, which then shows its busy label, and is named by it, in place of the one it rests with.
   const busyButton = main(page).locator('button[data-busy]');
 
@@ -845,6 +850,7 @@ test('at 320 px with text at 200%, nothing on the Participants screens scrolls s
   const long = madeUpParticipant('6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52', 'Bartholomew', 'Featherstonehaugh-Montgomery');
   await serveMe(page, manager);
   await serveParticipants(page, [ben, jane, ravi, long]);
+  await serveGoals(page, []);
   await page.setViewportSize({ width: 320, height: 640 });
   await page.goto('/manage/participants');
   await setTextTo200Percent(page);
@@ -881,6 +887,7 @@ test('targets: 44 px links and fields, 48 px buttons and search, 56 px rows, at 
 }) => {
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
 
   for (const width of [375, 1280]) {
     await page.setViewportSize({ width, height: 800 });
@@ -908,6 +915,7 @@ test('in forced colours, the focus ring shows in the system Highlight colour at 
   await page.emulateMedia({ forcedColors: 'active' });
   await serveMe(page, manager);
   await serveParticipants(page, participants);
+  await serveGoals(page, []);
   await page.goto('/manage/participants');
   await expect(rows(page)).toHaveCount(2);
   await heading(page).focus();

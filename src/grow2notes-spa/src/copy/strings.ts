@@ -362,6 +362,22 @@ export const strings = {
     changedMeanwhile:
       'Someone else changed these details while you were editing. Check the details, then save again.',
   },
+  /** A participant's Goals section (participants.md B6): its `<h2>`. The list's own words are `listEditor.goal`. */
+  participantGoals: { heading: 'Goals' },
+  /**
+   * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
+   * (design.md §4.8): the help text above the list, unless it is read-only; the sentence in place of the list when no
+   * row is active; and the summary of the archived rows' section.
+   */
+  listEditor: {
+    goal: {
+      help:
+        'Changes apply to notes started from now on. Notes already started or submitted keep the wording they were '
+        + 'written with.',
+      empty: 'No goals yet. Notes will show an empty Goals section.',
+      archivedSummary: 'Archived goals',
+    },
+  },
   /**
    * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>`, Archive
    * participant in it and Restore in the archived notice, each with its busy label; then, in the alert above either, a

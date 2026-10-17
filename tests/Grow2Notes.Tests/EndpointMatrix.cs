@@ -167,6 +167,12 @@ internal static class EndpointMatrix
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "archive", archived: false)),
         new(Post,      "/api/admin/participants/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "restore", archived: true)),
+
+        // A participant's goals (§6.6), in the same group, at A's seeded participant, whom B's manager does not find
+        // (§9.2): the list belongs to that one participant, so the 404 is its isolation check.
+        new(Get,       "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, OK, NotFound,
+            call => Task.FromResult(
+                new HttpRequestMessage(call.Method, $"/api/admin/participants/{call.Seeded.A.ParticipantId}/goals"))),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.

@@ -392,6 +392,15 @@ screen reader may not announce. After the test, any region so reported fails it,
 A test marked `test.fail()`, as the one in `e2e/fixtures.spec.ts` is, puts a status region with words into the list's
 `<main>`, which shows that the watcher sees it and fails a test.
 
+### Answering a participant's goals
+
+A participant's page reads their goals with them, with
+`GET /api/admin/participants/{participantId}/goals?includeArchived=true`, and shows neither until both have loaded, so
+a test that opens a participant's page with a made-up manager answers that request too. `e2e/goals.ts`, beside
+`e2e/participants.ts`, routes it through `page.route`, as `serveParticipants` does, for every participant: call
+`serveGoals(page, goals)` before `page.goto`, with `[]` for no goals. Add participant needs none: after its `201` the
+page puts the new participant's empty list in place itself, and sends no request for it.
+
 ### Signing in with a passkey, end to end
 
 A sign-in test names the `authenticator` fixture, so that Chromium answers the page's passkey prompts and shows no

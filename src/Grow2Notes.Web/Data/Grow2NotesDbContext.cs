@@ -21,6 +21,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<Participant> Participants => Set<Participant>();
 
+    public DbSet<Goal> Goals => Set<Goal>();
+
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
     private Guid TenantId => tenant.OrganisationId;
@@ -106,6 +108,24 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             // Every list of participants is one organisation's, of one status or both, by family name, then given
             // name (A5).
             participant.HasIndex(p => new { p.OrganisationId, p.Status, p.FamilyName, p.GivenName });
+        });
+
+        builder.Entity<Goal>(goal =>
+        {
+            // Composite, so the database keeps a goal within its participant's organisation (design.md §5.1, Tenancy).
+            goal.HasOne<Participant>().WithMany()
+                .HasForeignKey(g => new { g.OrganisationId, g.ParticipantId })
+                .HasPrincipalKey(p => new { p.OrganisationId, p.Id });
+
+            // The principal of the composite foreign key from a note version's goal rows (design.md §5.3).
+            goal.HasAlternateKey(g => new { g.OrganisationId, g.Id });
+
+            goal.Property(g => g.Text).HasMaxLength(Limits.ItemText);
+            goal.Property(g => g.RowVersion).IsRowVersion();
+
+            // Every list of goals is one participant's, the active ones or all, in their order. It starts with the
+            // foreign key's columns, so the foreign key needs no index of its own.
+            goal.HasIndex(g => new { g.OrganisationId, g.ParticipantId, g.ArchivedAtUtc, g.SortOrder });
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).
