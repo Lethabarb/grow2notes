@@ -257,7 +257,7 @@ export const strings = {
     sendInvite: 'Send invite',
     /**
      * The messages of a user's fields, inline and linked in the error summary (users.md *States* › Invite user), with
-     * the shared `emailFormat` and `msg.nameTooLong`. Role's is met only through a server `422`, as Worker starts
+     * the shared `emailFormat` and `msg.tooLong`. Role's is met only through a server `422`, as Worker starts
      * selected.
      */
     enterName: 'Enter the person’s name',

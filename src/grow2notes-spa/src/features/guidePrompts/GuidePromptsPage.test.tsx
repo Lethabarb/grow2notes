@@ -1169,12 +1169,14 @@ describe('Guide prompts, saving', () => {
     expect(putsSent()).toHaveLength(1);
   });
 
-  it('shows nothing for a 401, which ends the session, for the shell to sign the person in again', async () => {
+  it('shows nothing of its own for a 401, which ends the session, as the shell signs the person in', async () => {
     await openWith();
     const ended = vi.fn();
     const stopListening = onSessionEnded(ended);
     serve(savePath, problem(401));
     const typed = 'What went well today?';
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const page = { field: field(), alert: alert(), saveStatus: saveStatus() };
 
     enter(typed);
     const save = pressSave();
@@ -1182,12 +1184,15 @@ describe('Guide prompts, saving', () => {
     stopListening();
 
     expect(ended).toHaveBeenCalledOnce();
-    expect(alert()).toBeEmptyDOMElement();
-    expect(saveStatus()).toBeEmptyDOMElement();
-    expect(field()).not.toHaveAttribute('aria-invalid');
-    expect(field()).toHaveValue(typed);
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(page.field).not.toBeVisible();
+    expect(page.alert).toBeEmptyDOMElement();
+    expect(page.saveStatus).toBeEmptyDOMElement();
+    expect(page.field).not.toHaveAttribute('aria-invalid');
+    expect(page.field).toHaveValue(typed);
     expect(save).not.toHaveAttribute('aria-disabled');
-    expect(document.title).toBe(title);
+    // Sign-in's own title, never the page's with "Error: ", which the shell gives back as the same person signs in.
+    expect(document.title).toBe('Grow2Notes – Sign in');
     expect(putsSent()).toHaveLength(1);
   });
 });

@@ -46,7 +46,7 @@ export function validateUser({ displayName, email }: UserValues): UserErrors {
   if (name === '') {
     errors.displayName = strings.users.enterName;
   } else if (name.length > limits.displayName) {
-    errors.displayName = msg.nameTooLong(limits.displayName);
+    errors.displayName = msg.tooLong(strings.name, limits.displayName);
   }
 
   const address = email.trim();
@@ -92,7 +92,7 @@ export function userRefusal(error: unknown, sent: UserValues): UserRefusal | und
     switch (key) {
       case 'displayName':
         refusal.errors.displayName =
-          sent.displayName === '' ? strings.users.enterName : msg.nameTooLong(limits.displayName);
+          sent.displayName === '' ? strings.users.enterName : msg.tooLong(strings.name, limits.displayName);
         break;
       case 'email':
         refusal.errors.email = strings.emailFormat;

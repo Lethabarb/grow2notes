@@ -11,6 +11,7 @@ import { createQueryClient } from '../api/queryClient.ts';
 import { getPhase } from '../api/session.ts';
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { fullPageLoad } from './fullPageLoad.ts';
+import { rearmUnloadGuard, unloadGuardArmed } from './leaveGuard.ts';
 import { routes } from './routes.tsx';
 
 // The signed-out-in-place view, sign-in's view C (S00.04.08; sign-in.md *Sign in again, in place*; app-shell.md
@@ -272,6 +273,7 @@ afterEach(() => {
   fetchMock.mockReset();
   ceremony.mockReset();
   vi.mocked(fullPageLoad).mockReset();
+  rearmUnloadGuard();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -464,6 +466,11 @@ describe('the signed-out-in-place view', () => {
       },
     },
   ])('loads the page afresh for another person, from $way, with the form still hidden', async ({ answer }) => {
+    // Whether a page's beforeunload warning would still ask, as the reload starts.
+    const armedAtReload: boolean[] = [];
+    vi.mocked(fullPageLoad).mockImplementation(() => {
+      armedAtReload.push(unloadGuardArmed());
+    });
     await renderApp('/manage/users/new');
     fillInviteHalfWay();
     await endTheSession();
@@ -472,6 +479,7 @@ describe('the signed-out-in-place view', () => {
     await wait(60_000);
 
     expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(armedAtReload).toEqual([false]);
     expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
     expect(hiddenScreen()).not.toBeNull();
     expect(screen.queryByText('Signed in as Riley Ng')).not.toBeInTheDocument();

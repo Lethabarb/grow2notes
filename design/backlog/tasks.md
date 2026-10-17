@@ -155,7 +155,8 @@ with their typing kept (checked with a half-filled Invite form), and a different
   argument with `isOnlyActiveManager`, Reset sign-in, Deactivate and Reactivate, so no argument goes unused before then.
   Invite user and T04's Edit user share `validateUser()` and the Role radios (`RoleField`, in `src/features/users/`).
 - A way for `api()` to give a response's `Date` header is built once, by whichever of T01, T02 and T03 merges first;
-  the others reuse it at rebase.
+  the others reuse it at rebase. T03 merged first, with `apiWithHeaders()`, so Resend invite reads its `dateUtc`
+  (the rebase Note below).
 - Two edge cases that S00.04.08's Notes leave to be weighed, taken the simple way: a `/me` refresh that answers another
   `userId` than `['me']` holds reloads the page with `fullPageLoad()`, as a different person's sign-in in place does;
   and a `401` to a request sent before the newest sign-in raises no session-ended event, so it neither ends the clock
@@ -208,9 +209,9 @@ with their typing kept (checked with a half-filled Invite form), and a different
   email format message, word for word the same as view E's term and sign-in's message, are now `strings.name` and
   `strings.emailFormat`, shared. users.md AC17's autofill check is by hand, in Chrome, Edge and Safari
   (ops/first-use-in-test.md steps 12, 13 and 18), with the Invite page's screen-reader readings (steps 12 and 18).
-- Where design.md is silent (step 6), the simplest options: `apiWithDate()`, beside `api()` in `src/api/api.ts`, sends
-  a request as `api()` does and gives `{ body, date }`, the time of the answer's `Date` header in UTC with `Z`, as the
-  API gives its times, or `undefined` when there is none or it is not a time; T02 and T03 reuse it at rebase.
+- Where design.md is silent (step 6), the simplest options: the time of the answer's `Date` header comes from T03's
+  `apiWithHeaders()`, beside `api()` in `src/api/api.ts`, as its `dateUtc`, in UTC, or `undefined` when there is none
+  or it is not a time (built as `apiWithDate()` here, and dropped at the rebase onto T03).
   `allowedActions(user)` gives the actions as a list, in the order the page shows them. The actions are
   `UserActions` (`src/features/users/`), which T04 adds to. Resend invite's line is emptied at the press, so that its
   sentence, written once the list has been refetched, always goes into an empty line, and it goes when a refetch shows
@@ -231,7 +232,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
   session-ended event for a `401` to a request sent before the newest sign-in; after a sign-in the shell invalidates
   every query, which refetches the screen's, as `['me']` has no observer that fetches. The shell remembers whose
   screens it shows, and a `Me` for any other `userId`, from a sign-in in view C or from a refresh, calls
-  `fullPageLoad()`, `disarmUnloadGuard()` not being on `main`. View C's `<h1>` has the id `signed-out-heading`
+  `disarmUnloadGuard()`, then `fullPageLoad()`. View C's `<h1>` has the id `signed-out-heading`
   (`PageHeading` takes an `id`); the shell focuses that `<h1>` once the warning has closed, as a page behind an open
   modal cannot take focus. The code step's label is in an `<h2>` (`FieldGroup`'s `headingLevel`), as app-shell.md
   has the sign-in controls' headings as `<h2>`, where sign-in.md had a plain label styled as h2 (design.md A62). View
@@ -272,6 +273,20 @@ with their typing kept (checked with a half-filled Invite form), and a different
     `<h2>` is sign-in.md's label styled as h2.
   - The hand-offs to T04 and T02 were only in these Notes: T04's and T02's sections now say what they take over, and
     design.md §6.6's setup-link row gives `409 user.not_active` with §6.9.
+- 18 October 2026, the rebase onto T03 (#55), which merged first, keeping one copy of each shared piece:
+  - The `Date` header comes from T03's `apiWithHeaders()`; T01's `apiWithDate()`, its tests and its `Dated` type
+    are gone, and `UserActions` reads `dateUtc`. The name's length message is T03's `msg.tooLong(strings.name, …)`,
+    the same words, in place of T01's `msg.nameTooLong`.
+  - The shell runs `disarmUnloadGuard()` before the reload for a different person, from a sign-in in view C or a
+    refresh, so that Guide prompts' `beforeunload` asks no one about the first person's text;
+    `signedOutInPlace.test.tsx` shows the guard disarmed as the reload starts.
+  - `guide-prompts.spec.ts` proves guide-prompts.md › Leaving's last two bullets (T03's hand-off above): a Save that
+    meets a `401` shows view C, and the same manager's sign-in brings the page back with the text still not saved,
+    the `401`'s `PUT` not sent again, and one `PUT` at the next Save; and another person's sign-in loads Today
+    afresh, with no browser dialog and the text gone. Both answer the sign-in steps in the browser, as
+    `sign-in-again.spec.ts`'s test on a user's page does.
+  - T03's Vitest test of a Save's `401` expected the form still shown; it now expects view C over the hidden form,
+    which still holds the text, with no alert, no save status and Save not busy.
 
 ### Steps
 

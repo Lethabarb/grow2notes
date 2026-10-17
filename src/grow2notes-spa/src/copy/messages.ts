@@ -44,8 +44,6 @@ export const msg = {
   /** A page action refused `412`, as someone changed the user first, once the page shows them as they are now. */
   userChanged: (displayName: string) =>
     `Someone else has just changed ${displayName}’s account. The page now shows the latest details.`,
-  /** A user's name longer than `limits.displayName`, so that the words say the rule that the field checks. */
-  nameTooLong: (maxLength: number) => `Name must be ${maxLength} characters or less`,
   /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
   passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
   /** View F's message for a password shorter than `limits.passwordMinLength`. */

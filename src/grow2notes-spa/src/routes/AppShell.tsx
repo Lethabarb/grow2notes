@@ -9,6 +9,7 @@ import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
 import { fullPageLoad } from './fullPageLoad.ts';
+import { disarmUnloadGuard } from './leaveGuard.ts';
 import type { RouteHandle } from './routes.tsx';
 import { SessionTimeoutWarning } from './SessionTimeoutWarning.tsx';
 import { ShellFrame } from './ShellFrame.tsx';
@@ -93,6 +94,8 @@ export function AppShell() {
 
   useEffect(() => {
     if (anotherPerson) {
+      // What the page holds was the first person's, so the browser asks no one about leaving it.
+      disarmUnloadGuard();
       fullPageLoad();
     }
   }, [anotherPerson]);
