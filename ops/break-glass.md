@@ -122,7 +122,8 @@ so neither goes to telemetry (design.md §9.5).
   is in the link's fragment, after `#`, which a browser never sends to a server, so no server log holds it either
   (design.md §8.1 step 2).
 - If it is lost, or 7 days pass before setup, do not run `admin bootstrap` again: the address already has an account,
-  so the run is refused. `admin reset-signin` (S00.03.06) prints a new link.
+  so the run is refused. [admin reset-signin](#admin-reset-signin) prints a new link for the manager, and ends the
+  old one.
 
 ### If it is refused or fails
 
@@ -138,8 +139,161 @@ so neither goes to telemetry (design.md §9.5).
   account.** That happens only when a brief database failure hid the commit of the run's first attempt, and the
   retry was refused on the address that attempt had saved. The organisation and the Invited manager exist, but no
   link was printed. Do not run it again with another address or organisation name, which would add a second
-  organisation: the manager's link comes from `admin reset-signin` (S00.03.06).
+  organisation: the manager's link comes from [admin reset-signin](#admin-reset-signin).
 - **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
   its retries; .NET writes the exception on standard error. Check `/healthz/ready` as above, then run it again with
   the same three values. If the failed run had committed, the address refuses this one, which is the exception above;
   if not, it runs as usual.
+
+## admin reset-signin
+
+**Run it only once the person's organisation has confirmed who the person is** (design.md §7.4, §8.6). Someone at
+the organisation who knows the person, such as one of its managers, tells you, by phone or in person, that the person
+asking for a new link is the one whose address it is. Whoever opens the printed link can set up the account and read
+every participant's notes (D20), so never run it on a request that came only by email or chat, or from the person
+alone.
+
+It does what a manager's Reset sign-in does in the app (design.md §4.11, §8.6), and prints the new setup link instead
+of emailing it. For an Active person, it removes their password and passkeys, turns off their authenticator app's
+codes, gives them a new authenticator key and makes them Invited, which ends every session of theirs on every device
+on its next request; they then set up again from the link (§8.1 steps 3 to 5). For an Invited person, it gives them a
+new key and link, as Resend invite does. Either way, every link made for them before stops working.
+
+### When to run it
+
+- **When no manager of the organisation can sign in to reset another's sign-in,** because the only Active manager, or
+  every one, has lost their phone, has a new phone without their passkey, or has forgotten their password. The app
+  never lets the last Active manager be reset, deactivated or made a worker (A26), and this command is the way out:
+  it skips that rule. With two Active managers, which the go-live checklist asks for, one resets the other from the
+  person's page in Users, and no operator is needed.
+- **When an Invited manager's setup link is lost or past its 7 days, and no manager can resend it,** such as the
+  first manager's link from `admin bootstrap` (*The setup link*, above).
+- **Not for a Deactivated person,** whom it refuses: a manager reactivates them in the app first (D75). If no manager
+  can sign in to do that, reset a manager's sign-in first.
+- **In test,** only for made-up accounts (A35), as step 29 of [first-use-in-test.md](first-use-in-test.md) does.
+
+### What to have ready
+
+- The organisation's confirmation of who the person is (above), and a way to give the person the link directly, as
+  for the first manager's link (*The setup link*, above).
+- The person's email address, as their account has it, in any letter case: the app compares addresses ignoring case
+  (A27), so `Sam.Taylor@Example.org` finds `sam.taylor@example.org`.
+- The app answering `200` at `/healthz/ready`, as for `admin bootstrap` above.
+
+### Running it
+
+Open the SSH console and check its settings (above). Then paste this block in one go: it asks for the address and
+runs the command from `/home/site/wwwroot`, as for `admin bootstrap`, so the address is not saved in the shell's
+history.
+
+```shell
+cd /home/site/wwwroot && {
+  printf 'Email address: '; read -r email
+  dotnet Grow2Notes.Web.dll admin reset-signin "$email"
+  echo "Exit code: $?"
+  unset email
+}
+```
+
+### What it writes and prints
+
+It finds the account by its address, in whichever organisation it is, and in one transaction (design.md §5.9), so all
+of it or none of it, writes:
+
+- for an Active person: no password, no passkeys, two-factor sign-in off, a new authenticator key and so a new
+  security stamp, and the status Invited; the dates of their invite and activation, their confirmed address and their
+  lockout stay as they were, as a manager's reset leaves them;
+- for an Invited person: a new authenticator key and so a new security stamp, and nothing else;
+- the audit event `admin.signin_reset`, with no actor, for the person's organisation, about the person by their ID,
+  and never their name or address (A28).
+
+Once that has committed, it prints the new setup link on standard output, and nothing else, and the block then prints
+`Exit code: 0`:
+
+```text
+https://app-grow2notes-test.azurewebsites.net/setup#u=<the person's ID>&t=<the setup token>
+```
+
+It sends no email, logs nothing and keeps no copy of the link (design.md §9.5). The link is handled as the first
+manager's is (*The setup link*, above): it works once and for 7 days, it goes to the person directly and to no one
+else, and it is kept nowhere else, so close the console's tab once it has gone to them. The person opens it, sets up
+a passkey, or a password and an authenticator app, and is signed in.
+
+### If it is refused or fails
+
+- **Exit code 1: refused.** It writes one line on standard error, `Refused: <why> Nothing was written.`, followed by
+  the usage line, `Usage: admin reset-signin <email>`, when the arguments were at fault. Before writing anything, it
+  refuses no address (`No address was given.`), an address that is empty or spaces alone (`The address is empty.`),
+  more than one argument, as when the command is typed by hand with an unquoted address that holds a space, rather
+  than run from the block above (`More than one argument was given, but admin reset-signin takes one address.`), and
+  an `App__Origin` that is missing or not an absolute address, which the refusal calls `App:Origin`. Inside the
+  transaction, it refuses:
+  - `No account has that address.`: check the address with the organisation, and type it again rather than pasting
+    it, as a paste can bring an invisible character with it;
+  - `The account is Deactivated, so a manager reactivates it in the app first.`: see *When to run it*;
+  - `The account changed while the command ran, so run it again.`: a manager changed the account in the app at the
+    same moment. Paste the block again, which reads the account as it is now.
+- **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
+  its retries; .NET writes the exception on standard error. No link was printed and the person's sign-in is as it
+  was, so check `/healthz/ready` as above, then run it again with the same address.
+
+## admin signout-all
+
+Ends every session of every user, in every organisation in the environment, at once, to contain a breach (design.md
+§7.4, §9.10 *Contain*). Each person's next request finds them signed out, and they sign in again as before: it
+removes no passkey, password or authenticator app, and changes no one's status or role.
+
+### When to run it
+
+- **To contain a suspected breach, when a session may be in the wrong hands and it is not known whose,** such as when
+  the key ring that protects the session cookies, or a copy of the database, may have been exposed. When the misused
+  account is known, a manager deactivates it in the app instead, which ends that person's sessions on their next
+  request (§9.10), or resets their sign-in.
+- **Knowing that it signs out everyone in every organisation in the environment,** not one organisation alone, and
+  that it ends every setup link not yet used. Tell the managers of each organisation, so that their people expect to
+  sign in again, and the managers resend the invites not yet used.
+- **In test,** only as step 30 of [first-use-in-test.md](first-use-in-test.md) does.
+
+### What to have ready
+
+- The time you run it, written down for the record of decisions and dates that a breach needs (design.md §9.10).
+- The app answering `200` at `/healthz/ready`, as for `admin bootstrap` above.
+- Nothing else: it takes no address and no option.
+
+### Running it
+
+Open the SSH console and check its settings (above). Then paste this block, which runs the command from
+`/home/site/wwwroot`, as for `admin bootstrap`:
+
+```shell
+cd /home/site/wwwroot && {
+  dotnet Grow2Notes.Web.dll admin signout-all
+  echo "Exit code: $?"
+}
+```
+
+### What it writes and prints
+
+In one transaction (design.md §5.9), so all of it or none of it, it writes:
+
+- a new security stamp for every user in every organisation, Invited and Deactivated ones included;
+- one audit event `admin.signout_all` for each organisation, with no actor, about the organisation, so that each
+  organisation's audit records show it (A28).
+
+It prints nothing, and the block then prints `Exit code: 0`. It sends no email and logs nothing.
+
+Then each session's next request gets `401`, so the person sees "You've been signed out", and signs in again with
+their passkey, or their password and a code. The stamp is in every setup link too (design.md §5.3), so a link not yet
+used says "This link has expired": a manager sends a new one with Resend invite on the person's page in Users. An
+organisation whose only manager is still Invited, as straight after `admin bootstrap`, has no one to resend it, so
+run [admin reset-signin](#admin-reset-signin) for that manager.
+
+### If it is refused or fails
+
+- **Exit code 1: refused.** Anything typed after `signout-all` is refused with one line on standard error, such as
+  `Refused: "--all" is not an option of admin signout-all. Nothing was written.`, followed by the usage line,
+  `Usage: admin signout-all`. Paste the block again as it is.
+- **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
+  its retries, or an account that changed while the command ran, such as by a failed sign-in counted at the same
+  moment; .NET writes the exception on standard error. Nothing was written, so everyone is still signed in: check
+  `/healthz/ready` as above, then run it again.

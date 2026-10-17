@@ -256,3 +256,38 @@ added is made up (A35), such as `Siobhan O'Brien`, with an apostrophe in the fam
     second made-up participant on each. On each phone, also look for: Clear in Find a participant leaving the keyboard
     open, with the cursor still in the field; and no autofill, saved name or saved date offered on Given name, Family
     name, Day, Month and Year, nor on Find a participant. (participants.md open question 6.)
+
+### Break-glass, from the SSH console
+
+These steps run the two break-glass commands in test as [break-glass.md](break-glass.md) says, on accounts set up in
+the steps above. Step 30 signs out everyone in test, so run these when no one else is using it.
+
+29. On the laptop, sign in as account C (step 18) in Chrome, and on the iPhone, in Safari, so that C has two sessions,
+    and leave Today open on each. You are the organisation here, and you know who account C is, which in production
+    the organisation confirms before the command is run. Open the web app's SSH console, check its six settings as in
+    step 2, and run `admin reset-signin` for account C's address as [break-glass.md](break-glass.md) says. Look for
+    `Exit code: 0` after one printed line, a link of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`. On each device, choose Manage, then Users: look
+    for "You've been signed out". Copy the link into a new tab in Chrome on the laptop and choose Use a passkey
+    (recommended): look for setup ending on Today. Wait 5 minutes and look for no new email to account C in the
+    testing mailbox, junk included. Then paste the block again with a made-up `example.org` address that no account
+    holds, and look for `Refused: No account has that address. Nothing was written.` and `Exit code: 1`. Leave the
+    console open for step 30. (S00.03.06's first criterion, in test.)
+30. Sign in as account A on the laptop in Chrome, as in step 9, and as account B on the iPhone, as in step 14, and
+    leave Today open on each. Run `admin signout-all` as [break-glass.md](break-glass.md) says. Look for
+    `Exit code: 0` with nothing printed before it. On each device, choose Manage, then Users: look for "You've been
+    signed out". Then sign each in again, A with Sign in with a passkey and B with email, password and a 6-digit code,
+    and look for Today each time. Type `exit` in the console and close its tab, so step 29's link is kept nowhere.
+    (S00.03.06's second criterion, in test.)
+31. The developer reads the audit rows as in step 15:
+
+    ```sql
+    SELECT EventType, OccurredAtUtc, ActorUserId, EntityType, OrganisationId, IpAddress
+    FROM dbo.AuditEvent
+    WHERE EventType IN ('admin.signin_reset', 'admin.signout_all')
+    ORDER BY OccurredAtUtc;
+    ```
+
+    Look for: one `admin.signin_reset` row from step 29, with no actor, the `EntityType` `User` and no `IpAddress`,
+    and none from its refused run; and, from step 30, one `admin.signout_all` row for each organisation in test, each
+    with no actor and the `EntityType` `Organisation`. (S00.03.06, the audit events in test.)

@@ -57,10 +57,9 @@ internal sealed class BootstrapCommand(
             return await AdminCommands.RefuseAsync(error, problem, Usage);
         }
 
-        if (FindOriginProblem() is { } originProblem)
+        if (AdminCommands.FindOriginProblem(configuration) is { } originProblem)
         {
-            return await AdminCommands.RefuseAsync(
-                error, $"{originProblem}, so no setup link can be made.", usage: null);
+            return await AdminCommands.RefuseAsync(error, originProblem, usage: null);
         }
 
         // Set by each attempt, so that once a transient failure has run the work again, it holds the link of the
@@ -158,20 +157,6 @@ internal sealed class BootstrapCommand(
         values = new(given[OrganisationOption], given[ManagerNameOption], given[ManagerEmailOption]);
         problem = null;
         return true;
-    }
-
-    // Checked here, so that a setting the invite core could not make a link from is refused before the transaction,
-    // rather than thrown from inside it.
-    private string? FindOriginProblem()
-    {
-        try
-        {
-            return AppOrigin.Find(configuration) is null ? $"{AppOrigin.Key} is not set" : null;
-        }
-        catch (UriFormatException)
-        {
-            return $"{AppOrigin.Key} is not an absolute address";
-        }
     }
 
     // The user name holds the address too (§5.3), so an address in use is refused as a duplicate user name as well.

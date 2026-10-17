@@ -537,8 +537,10 @@ in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`,
   to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
   deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
-  database of its own from `SqlServerFixture.CreateDatabaseAsync`. Likewise no test archives, restores or changes a
-  seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`, as a test that runs `admin signout-all` must,
+  since it gives every user a new security stamp, the seeded users' too
+  (`Grow2Notes.Tests/Platform/OperatorCommands/SignOutAllCommandTests.cs`). Likewise no test archives, restores or
+  changes a seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
   (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
   and their ETag, the `If-Match` of a change to them, as
   `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
@@ -815,11 +817,15 @@ used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase
 writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
 set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
-`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email as
-`SetupLinks.InviteAsync` reads the invite core's, for a test that opens it, such as with `StartSetupAsync`. A test of an
-email that cannot be sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender
-sends nothing and throws an exception that holds the address and the whole text, link and all, so the test shows that
-neither reaches the logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both.
+`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email, and
+`SetupLinks.Read(link, email)` one that an operator command printed, as `SetupLinks.InviteAsync` reads the invite
+core's, for a test that opens it, such as with `StartSetupAsync`, or shows that it has ended with
+`client.AssertSetupLinkEndedAsync(link)`, which expects `410 auth.setup_link_invalid`. A test of an email that cannot be
+sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender sends nothing and
+throws an exception that holds the address and the whole text, link and all, so the test shows that neither reaches the
+logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both. A test that looks for a setup
+token in the logs (`RecordedLog.Holds`) looks for it escaped too, as a link holds it, since its base64 almost always has
+a `+`, `/` or `=` in it.
 
 ### The endpoint matrix
 

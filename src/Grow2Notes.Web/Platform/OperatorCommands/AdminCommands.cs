@@ -2,16 +2,21 @@ namespace Grow2Notes.Web.Platform.OperatorCommands;
 
 /// <summary>
 /// The operator commands' one entry (design.md §7.4): it runs the command that its first argument names with the rest,
-/// as <c>admin bootstrap</c>. <c>admin reset-signin</c> and <c>admin signout-all</c> (S00.03.06), and Release 2's
-/// <c>admin mcp-client</c> (mcp-server.md §11.2), join it here.
+/// <c>admin bootstrap</c>, <c>admin reset-signin</c> or <c>admin signout-all</c>. Release 2's <c>admin mcp-client</c>
+/// (mcp-server.md §11.2) joins them here.
 /// </summary>
-internal sealed class AdminCommands(BootstrapCommand bootstrap)
+internal sealed class AdminCommands(
+    BootstrapCommand bootstrap, ResetSignInCommand resetSignIn, SignOutAllCommand signOutAll)
 {
     /// <summary>The exit code of a command that has done its work.</summary>
     public const int Done = 0;
 
     /// <summary>The exit code of a command that was refused, which has written nothing.</summary>
     public const int Refused = 1;
+
+    /// <summary>How each command is used, one to a line, for a run that names no command or an unknown one.</summary>
+    public static readonly string Usage = string.Join(
+        Environment.NewLine, BootstrapCommand.Usage, ResetSignInCommand.Usage, SignOutAllCommand.Usage);
 
     /// <summary>
     /// Runs the command that <paramref name="arguments"/> names, or refuses an unknown one, or none, saying why on
@@ -29,8 +34,12 @@ internal sealed class AdminCommands(BootstrapCommand bootstrap)
         {
             [BootstrapCommand.Name, ..] =>
                 await bootstrap.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
-            [var command, ..] => await RefuseAsync(error, $"\"{command}\" is not a command.", BootstrapCommand.Usage),
-            _ => await RefuseAsync(error, "No command was given.", BootstrapCommand.Usage),
+            [ResetSignInCommand.Name, ..] =>
+                await resetSignIn.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
+            [SignOutAllCommand.Name, ..] =>
+                await signOutAll.RunAsync([.. arguments.Skip(1)], error, cancellationToken),
+            [var command, ..] => await RefuseAsync(error, $"\"{command}\" is not a command.", Usage),
+            _ => await RefuseAsync(error, "No command was given.", Usage),
         };
 
     /// <summary>
@@ -46,5 +55,24 @@ internal sealed class AdminCommands(BootstrapCommand bootstrap)
         }
 
         return Refused;
+    }
+
+    /// <summary>
+    /// Why the setup-link step can make no link from <paramref name="configuration"/>'s <c>App:Origin</c>, as a
+    /// refusal's reason, or null when it can. A command that prints a link checks it before its transaction, so that
+    /// such a setting is refused, rather than thrown from inside the transaction.
+    /// </summary>
+    public static string? FindOriginProblem(IConfiguration configuration)
+    {
+        try
+        {
+            return AppOrigin.Find(configuration) is null
+                ? $"{AppOrigin.Key} is not set, so no setup link can be made."
+                : null;
+        }
+        catch (UriFormatException)
+        {
+            return $"{AppOrigin.Key} is not an absolute address, so no setup link can be made.";
+        }
     }
 }

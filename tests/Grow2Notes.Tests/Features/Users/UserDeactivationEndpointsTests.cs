@@ -115,7 +115,8 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(UserStatus.Deactivated, (await StoredAsync(userId)).Status);
-        await AssertSetupLinkGoneAsync(invited);
+        using var client = app.CreateHttpsClient();
+        await client.AssertSetupLinkEndedAsync(invited);
     }
 
     // S00.06.05's third criterion (A26). An Invited manager has not set up, a Deactivated one cannot sign in, and a
@@ -208,12 +209,12 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
 
         await AssertReactivatedAfterDeactivatingAsync(userId, UserStatus.Invited);
 
-        await AssertSetupLinkGoneAsync(invited);
+        using var client = app.CreateHttpsClient();
+        await client.AssertSetupLinkEndedAsync(invited);
         using var resend = await PostAsync(app, a.ManagerId, "setup-link", userId, await ETagAsync(userId));
         Assert.Equal(HttpStatusCode.NoContent, resend.StatusCode);
         var sent = Assert.Single(Sent(app));
         Assert.Equal(invited.Email, sent.To);
-        using var client = app.CreateHttpsClient();
         await client.StartSetupAsync(SetupLinks.FromEmail(sent));
     }
 
@@ -407,16 +408,6 @@ public sealed class UserDeactivationEndpointsTests : IClassFixture<Grow2NotesFac
         Assert.Equal(before, await StoredAsync(userId));
         Assert.Empty(await StoredEventsAboutAsync(userId));
         Assert.Empty(Sent(app));
-    }
-
-    private async Task AssertSetupLinkGoneAsync(SetupLink link)
-    {
-        using var client = app.CreateHttpsClient();
-        var token = await client.FetchTokenAsync();
-        using var start = await client.PostWithTokenAsync(
-            SetupLinks.StartPath, token, new { userId = link.UserId, token = link.Token });
-        using var problem = JsonDocument.Parse(await start.ReadProblemAsync(HttpStatusCode.Gone));
-        Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
     }
 
     private async Task AssertSignsInWithPasskeyAsync(TestAuthenticator authenticator, HttpStatusCode status)

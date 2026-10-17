@@ -74,11 +74,7 @@ public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory
             sent);
 
         using var client = app.CreateHttpsClient();
-        var token = await client.FetchTokenAsync();
-        using var oldStart = await client.PostWithTokenAsync(
-            SetupLinks.StartPath, token, new { userId = old.UserId, token = old.Token });
-        using var problem = JsonDocument.Parse(await oldStart.ReadProblemAsync(HttpStatusCode.Gone));
-        Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty("code").GetString());
+        await client.AssertSetupLinkEndedAsync(old);
         await client.StartSetupAsync(link);
     }
 

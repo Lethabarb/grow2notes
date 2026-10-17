@@ -1198,6 +1198,24 @@ protected. From the console the operator can reset the last manager's sign-in or
   `user.setup_link_sent`, as the change comes before the reset it causes. `SignedInDevices` gains
   `AssertNextAnswersAsync`, which also reads each device's JSON answer, for the role that `/api/auth/me` gives after a
   change to Worker.
+- Where design.md is silent (step 4): the refusals read as `admin bootstrap`'s, `Refused: <why> Nothing was
+  written.`, with the usage line only when an argument is at fault. `admin reset-signin` refuses "No address was
+  given.", "The address is empty.", "More than one argument was given, but admin reset-signin takes one address.",
+  "No account has that address." and "The account is Deactivated, so a manager reactivates it in the app first.";
+  and, when the app changed the user after the command loaded them, so that the reset's or the new link's first save
+  matches no row, as for two resets at once in the app, "The account changed while the command ran, so run it
+  again.". `admin signout-all` refuses anything after it as `"<argument>" is not an option of admin signout-all.`.
+  No command, or an unknown one, is refused with every command's usage line, one to a line (`AdminCommands.Usage`),
+  in place of `admin bootstrap`'s alone. The `App:Origin` check moves from `BootstrapCommand` to
+  `AdminCommands.FindOriginProblem`, which both commands that print a link run before their transaction, in
+  `admin bootstrap`'s words. `admin.signin_reset` is about the user (`EntityType` `User`, the user's ID), and
+  `admin.signout_all` about the organisation whose event it is (`EntityType` `Organisation`, its ID). In
+  `admin signout-all`, Identity refusing a user's new stamp, which only a change to that user since the command loaded
+  them can cause, such as a failed sign-in counted meanwhile, is thrown rather than refused: the transaction rolls
+  back, the run ends with an exit code other than 0 and 1, and ops/break-glass.md says to run it again. The
+  operator-command tests share `AdminCommandRuns`, the tests that a link has ended share
+  `SetupLinks.AssertSetupLinkEndedAsync`, and the tests of what is logged look for a setup token escaped too, as a
+  link holds it (`RecordedLog.Holds`).
 
 ### Steps
 
@@ -1259,7 +1277,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       which Identity's email check passes and its user-name check refuses, gets the email field's `422` and keeps the
       stamp, the sessions, the address and the status, with nothing written or sent; and a stale `If-Match` gets
       `412`, a missing one `428`, B's manager `404` and a worker `403`, each changing, writing and sending nothing
-- [ ] Add `admin reset-signin` and `admin signout-all`, with ops/break-glass.md's sections on them (S00.03.06, every
+- [x] Add `admin reset-signin` and `admin signout-all`, with ops/break-glass.md's sections on them (S00.03.06, every
       criterion; design.md §7.4's two rows, §8.6 *Break-glass*, §9.10 *Contain*; see Notes): the two commands in
       `Platform/OperatorCommands/`, run from `AdminCommands`, each with its usage line and refusals as
       `admin bootstrap` has them; in ops/break-glass.md, for each, when to run it, what to have ready, the block to

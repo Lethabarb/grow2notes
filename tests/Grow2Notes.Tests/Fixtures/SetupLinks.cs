@@ -1,6 +1,8 @@
 using System.Net;
+using System.Text.Json;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Users;
+using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Email;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -50,6 +52,17 @@ internal static class SetupLinks
         email.To);
 
     /// <summary>
+    /// <paramref name="setupLink"/>, a link as the app makes it, such as one that an operator command printed, for the
+    /// user whose address is <paramref name="email"/>: its user ID and token, read with <c>ParseQuery</c>, which
+    /// matches the SPA's <c>URLSearchParams</c>: + is a space, then %XX is decoded.
+    /// </summary>
+    public static SetupLink Read(string setupLink, string email)
+    {
+        var fragment = QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..]);
+        return new(fragment["u"].ToString(), fragment["t"].ToString(), email);
+    }
+
+    /// <summary>
     /// Starts setup with <paramref name="link"/> as the SPA does, with an antiforgery token fetched first, which it
     /// keeps for the later setup steps, and checks that the start succeeded. Returns that token and the enrolment
     /// cookie that the start set, which <paramref name="client"/>, one from
@@ -65,6 +78,21 @@ internal static class SetupLinks
         return (token, Assert.Single(response.SetCookies()));
     }
 
+    /// <summary>
+    /// Checks that <paramref name="link"/> no longer works: the link check, made with it as
+    /// <see cref="StartSetupAsync"/> makes it, gets <c>410 auth.setup_link_invalid</c>, for which the setup page shows
+    /// "This link has expired". <paramref name="client"/> is one from
+    /// <see cref="AntiforgeryTokens.CreateHttpsClient"/>.
+    /// </summary>
+    public static async Task AssertSetupLinkEndedAsync(this HttpClient client, SetupLink link)
+    {
+        var token = await client.FetchTokenAsync();
+        using var response = await client.PostWithTokenAsync(
+            StartPath, token, new { userId = link.UserId, token = link.Token });
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(HttpStatusCode.Gone));
+        Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
+    }
+
     /// <summary>The security stamp in the row of the user whose ID is <paramref name="userId"/>.</summary>
     public static async Task<string?> SecurityStampAsync(this WebApplicationFactory<Program> app, string userId)
     {
@@ -73,13 +101,6 @@ internal static class SetupLinks
         var user = await users.FindByIdAsync(userId);
         Assert.NotNull(user);
         return user.SecurityStamp;
-    }
-
-    // With ParseQuery, which matches the SPA's URLSearchParams: + is a space, then %XX is decoded.
-    private static SetupLink Read(string setupLink, string email)
-    {
-        var fragment = QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..]);
-        return new(fragment["u"].ToString(), fragment["t"].ToString(), email);
     }
 }
 

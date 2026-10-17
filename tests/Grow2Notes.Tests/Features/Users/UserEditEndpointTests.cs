@@ -215,8 +215,8 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
             await afterTheChange.ReadProblemAsync(HttpStatusCode.Unauthorized);
         }
 
-        await AssertSetupLinkGoneAsync(old);
         using var client = app.CreateHttpsClient();
+        await client.AssertSetupLinkEndedAsync(old);
         await client.StartSetupAsync(SetupLinks.FromEmail(sent));
     }
 
@@ -594,15 +594,6 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
         Assert.Empty(await StoredEventsAboutAsync(userId));
         Assert.Empty(Sent(app));
         return problem.RootElement.Clone();
-    }
-
-    private async Task AssertSetupLinkGoneAsync(SetupLink link)
-    {
-        using var client = app.CreateHttpsClient();
-        var token = await client.FetchTokenAsync();
-        using var start = await client.PostWithTokenAsync(
-            SetupLinks.StartPath, token, new { userId = link.UserId, token = link.Token });
-        await AssertCodeAsync(start, HttpStatusCode.Gone, "auth.setup_link_invalid");
     }
 
     // An organisation is the tenant, not tenant-owned, so this needs no tenant.
