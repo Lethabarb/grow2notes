@@ -1461,7 +1461,7 @@ protected. From the console the operator can reset the last manager's sign-in or
 
 ```yaml
 id: T05
-status: new
+status: doing
 release: R1
 lane: B
 size: M
@@ -1487,11 +1487,225 @@ moves, archives and restores them. Changes apply to notes started from then on.
 - From T02 (15 October 2026): three of the criteria that T02's stories absorb need Goals, so this task checks them:
   after Add participant's `201`, the next Tab reaches the Goals section (S01.02.02); an archived participant's goals
   show as numbered text with no buttons; and the goal controls are gone after Archive participant and back after
-  Restore (S01.02.04; participants.md *Archive and Restore* and *Interactions*).
+  Restore (S01.02.04; participants.md *Archive and Restore* and *Interactions*). Steps 2, 1 and 5 check them.
+- Planned on 18 October 2026 from `origin/main` at `c6c69ff`, with T02 (#57) and T03 (#55) merged. No owner question
+  holds it. Where the design is silent, the simplest option is taken:
+  - `POST …/goals` answers `201` with no body and no `Location`: design.md §6.6 gives it none, and the screen re-reads
+    the list after every write, so it needs no ID, unlike Add participant's `201 {id}` (D79).
+  - The server cleans the text as the screen does (list-editor.md *Implementation notes*): it trims it and turns each
+    line break, with the spaces around it, into one space, then takes 1 to 200 characters. A refusal is
+    `422 validation.failed` under `text`, worded as the screen words it ("Enter the goal", "Goal must be 200
+    characters or less"), its first failing check alone, as T02's server words a participant's fields; a body with no
+    `text`, or a `null` one, is refused the same way. The count counts the text as Add or Save would send it, so that
+    the count and the check agree.
+  - The goals `GET`, the add and the reorder find the participant through the tenant filter first, so that an unknown
+    participant or another organisation's is `404` (tests/README.md *Adding an admin endpoint*); an archived
+    participant's goals change as an active one's do (D86). Rewording an archived goal is not refused either, as §6.6
+    names no refusal, though the screen offers Edit on active goals alone. Every route takes a GUID.
+  - The `PUT`'s `200` has no body and carries the goal's `ETag`, the same one when nothing changed (S01.02.06's Note);
+    archive, restore and the reorder answer `204` with none. The screen reads each next version from the list.
+  - `goal.created` holds the goal's `text`, `sortOrder` and `archivedAtUtc` as `new`, named as §6.6's list names
+    them; the other four events hold what S01.02.06 to S01.02.08's Notes give them.
+  - The goals list's matrix row needs no `Answer`: the list belongs to one participant, so B's manager's `404` at A's
+    participant is its isolation check.
+  - The goals query is `['admin', 'goals', participantId]`, with `includeArchived=true`, outside
+    `['admin', 'participants']`, so that T02's invalidations of the list fetch no goals. The screen keeps the list's
+    order for the active goals and never sorts them again, as `ListOrder`'s SQL breaks ties (S01.02.05's Note), and
+    shows the archived ones newest archived first.
+  - After Add participant's `201` the page puts an empty list in the new participant's goals query rather than
+    fetching it, as a new participant has no goals, so that the Goals section and its New goal field are there for
+    the next Tab (participants.md *Interactions*).
+  - An archived participant with no goals shows the empty sentence, as the read-only variant names no words of its own.
+  - `CharacterCount` (conditional-reveal.md, list-editor.md's shared count) is built here, in `src/components`, as
+    the goal count is its first user; T09's flag Reason reuses it. Guide prompts' own count and its spoken twin move
+    onto it, with their 900-character threshold, so that one count ships.
+  - The goal textareas reuse T03's `TextBox.module.css` box and column, with one ListEditor rule giving them three
+    lines' minimum height in place of the box's 11em, as participants.md and list-editor.md give `rows={3}` and
+    `field-sizing: content` sizes the box by its CSS rather than `rows`. They are described by the error, the hidden
+    hint, then the help text, the order common-items.md *Conflicts resolved* 12 chose, so that ListEditor has one
+    order for goals and items; list-editor.md's expected Edit reading is brought into line in step 6.
+  - ListEditor ships with its goal kind alone: the item kind's words, its group adapter and the Group radios come with
+    T06 and T07, so that no part of it ships unused.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after the steps already there: design.md
+  §14 M1's check, a manager who has not used the screen setting up a participant with five goals on their own phone
+  without help (F01.02's feature check); on an iPhone, the keyboard opening on Edit goal (participants.md open
+  question 6); with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome, the goal readings in
+  participants.md's *Accessibility checklist* and list-editor.md's *Screen reader announcements*; and the operator
+  running `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming the `Goal` deny.
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] The `Goal` table and the goals list, shown on the participant's page (S01.02.05's first two criteria; design.md
+      §3.7, §4.8 item 2 and *States*, §5.3; participants.md B6, B9 and the read-only variant; list-editor.md
+      *Anatomy* and *States*): the `Goal` entity (`ITenantOwned`, `IVersionedRow`, `IOrderedRow`) and its `AddGoal`
+      migration, with the alternate key `(OrganisationId, Id)`, the composite foreign key
+      `(OrganisationId, ParticipantId)` to T02's `Participant` alternate key, `Text` at `Limits.ItemText`, the index
+      `(OrganisationId, ParticipantId, ArchivedAtUtc, SortOrder)` and `DENY DELETE` for `grow2notes_runtime`, in a
+      model test as `ParticipantModelTests` has, `RuntimeRoleTests` and `infra/sql/check-database.sql` (B7, B8, D3,
+      D5); `GET /api/admin/participants/{participantId}/goals?includeArchived=` in the `/api/admin` group, its handler
+      class `GoalList` in `Features/Participants` taking an `Actor`, reading the goals with
+      `ORDER BY SortOrder, CreatedAtUtc, Id` and giving each its `rowVersion` through `RowVersionToken.Of`, with its
+      matrix row (`401`, `403` for A's worker, `200` for A's manager and `404` for B's at A's seeded participant) and
+      a `SignedOutTests` row. Integration tests on SQL Server: two goals of one `SortOrder` in `CreatedAtUtc`, then
+      `Id`, order; active goals only unless `includeArchived=true`; each `rowVersion` the stored one as base64;
+      `no-store` and no audit event; and an unknown participant and another organisation's each `404`. On the SPA:
+      `ListEditor` in `src/components`, its goal kind and an API adapter, showing the help text "Changes apply to
+      notes started from now on. Notes already started or submitted keep the wording they were written with.", the
+      active goals as a numbered `<ol>` in the list's own order, each `<li>` a list item with its text wrapping
+      anywhere and then its always-rendered row alert slot (the existing `RequestAlert`), "No goals yet. Notes will
+      show an empty Goals section." when there are none, and the archived goals newest first as a `<ul>` in a closed,
+      uncontrolled `<details>` with the plain summary "Archived goals" (list-editor.md decision 7), left out when
+      there are none; its `readOnly` variant with no help text, buttons or form; and on the participant's page the
+      "Goals" `<section>` between Details and Actions, from the goals query joined to the detail's one `LoadRegion`
+      (B9), read-only for an archived participant, with an empty list put in that query on Add participant's `201`
+      (Notes). Vitest: those states, no goal text in a query key, and an archived participant's goals as numbered text
+      with no buttons and their archived goals with no Restore (S01.02.04's hand-off from T02); and the joined region:
+      "Loading participant…" after 1 s while the goals query is held and the participant has loaded, a failed goals
+      load showing "This participant did not load: …" with Try again (list-editor.md's *Load failure* row, superseded
+      by microcopy.md §9), a goals `404` showing Page not found, and Add participant showing no Goals section before
+      its `201` (B6: "Rendered only once the participant exists").
+- [ ] Add goals one after another (S01.02.05's last two criteria; design.md §14 M1's five goals; participants.md
+      *Goals*' "A manager can add five goals…" and "Typing past 200 characters…", and *Add participant and Details*'
+      "A Details Save or any goal write whose response is lost…"): `POST /api/admin/participants/{participantId}/goals`
+      with `{text}`, its handler class `GoalChanges` in `Features/Participants` taking an `Actor`, as steps 3 to 5's
+      are too, the text cleaned and checked as Notes say, and the goal put at `ListOrder.End` of the participant's
+      goals and saved with `goal.created`, its ID as `entityId` and the `ParticipantId`, `Details` holding `new` alone,
+      through `ConfigurationChanges.SaveAsync`, and `201`; its matrix row (`201` for A's manager, `404` for B's at A's
+      participant), the audit-events row and the canary test sending a goal's text (design.md §9.5). Integration
+      tests: 200 characters saved and 201 refused; whitespace alone, no `text` and a `null` one refused; line breaks
+      saved as spaces; a goal added after archived ones at one more than the highest active `SortOrder`; an archived
+      participant's goal added (D86); and another organisation's participant `404` with nothing added. On the SPA:
+      `itemText: 200` in `limits.ts` (`SpaLimitsTests`); `CharacterCount` in `src/components` (conditional-reveal.md
+      *Character count*: the hint "You can enter up to 200 characters" while empty, then "You have 142 characters
+      remaining" or "You have 3 characters too many", bold in the error colour, `aria-hidden` beside an
+      always-rendered polite twin that speaks 1 s after typing stops), onto which Guide prompts' count moves (Notes);
+      ListEditor's writes, every one in the one TanStack scope `goals:<participantId>` with `retry: 0`, reading the
+      cached list as it runs, then refetching the list before the next write starts; and its add form, in the
+      existing `FieldGroup` with its `FieldError`: the label "New goal"; a `<textarea rows={3}>` with no `maxLength`,
+      in T03's `TextBox.module.css` box and `--measure` column (Notes), described by its error while it shows one,
+      then a static, visually hidden hint "You can enter up to 200 characters" (conditional-reveal.md's `-hint`),
+      then the help text (common-items.md *Conflicts resolved* 12), never by the changing `aria-hidden` count; and
+      "Add goal", primary and `type="submit"`, full width on a phone and label width from 40rem, as the shared Button
+      is. The text is checked on Add alone, in the one-field pattern (form-validation.md rules 2 and 6, common-items.md
+      *Validation*): "Enter the goal" or "Goal must be 200 characters or less" above the field with the hidden
+      "Error: " prefix, the 4 px bar, `aria-invalid` and focus on the field, no error summary and no "Error: " in the
+      page title (participants.md *Acceptance criteria*: only while a Details error shows); once in error, the field
+      is re-checked on each input, and the message and `aria-invalid` clear silently once it is valid; and a server
+      `422` under `text` is shown at the field the same way. Add is busy with "Adding…" after 400 ms, then the field
+      is cleared with focus kept in it and "Goal added to the end of the list" in the page status region, or "Not
+      added: no connection. Try again." or "Not added: something went wrong. Try again." shows in its alert slot (the
+      existing `RequestAlert`, above Add), the text kept. Vitest: those, each validation rule among them; five adds
+      in a row with focus in the field after each; 250 characters pasted kept whole, the count saying 50 too many and
+      Add showing the error; one `POST` after a lost answer; and after Add participant's `201` the next Tab from Save
+      reaching New goal (S01.02.02's hand-off from T02).
+- [ ] Reword a goal in its row (S01.02.06; design.md §3.7's rewording bullet; participants.md *Goals*' "Save and Cancel
+      return focus…" and "Typing past 200 characters…" for Save; list-editor.md *Behaviour*):
+      `PUT /api/admin/goals/{goalId}` with `{text}`, loading the goal through the tenant filter, checking `If-Match`
+      with `IfMatch.Check` against `RowVersionToken.Of(goal)` and answering its code's `Problem()`, cleaning and
+      checking the text as the add does, then saving `goal.updated` with the old and new `text` and the
+      `ParticipantId` through `ConfigurationChanges.SaveAsync`, and `200` with the goal's `ETag`; its matrix row (a
+      goal added to A for each call, `404` for B's manager) and audit-events row. Integration tests: `428` with no
+      `If-Match`; a stale one `412` with nothing written; a goal changed after the handler loaded it `412`
+      (`PreconditionFailed`); the stored text `200` with the same `ETag` and no event (D84); and the add's `422`s. On
+      the SPA: Edit, a `<button>`, turning the row into a `<form noValidate>` with the label "Edit goal", the current
+      text in the same `FieldGroup` and text box as New goal and described the same way, by its error while it shows
+      one, the hidden hint "You can enter up to 200 characters" and the help text (list-editor.md *Accessibility*),
+      and the count, opened with `flushSync` and focused with the caret at the end; Save, primary and
+      `type="submit"`, checked as Add is, in step 2's one-field pattern with a server `422` under `text` included,
+      then busy with "Saving…" and the textarea `readOnly`, closing as Cancel does when the cleaned text is unchanged
+      and sending nothing, else the `PUT` with the row's version read as it runs, then "Goal saved" and focus on the
+      row's Edit; Cancel, secondary, dropping the typed text, focus on Edit; Save and Cancel both label width (step
+      4); two rows edited at once, each kept as typed while other rows move; a `412` whose re-read finds the goal
+      active keeping the typed text with "Someone else changed this goal while you were editing. It now says: [their
+      text]. Save to replace it with your wording, or Cancel to keep it.", the next Save sending the new version, and
+      one that finds it archived showing ListEditor's list conflict, "Someone else changed this list just now. Check
+      it, then try again.", above the list and focused, kept until the next change on the list succeeds; and "Not
+      saved: …" in the form's alert slot (the existing `RequestAlert`, above Save). Vitest: those; a Save over 200
+      characters showing "Goal must be 200 characters or less" and a whitespace-only Save showing "Enter the goal",
+      each sending nothing; the error clearing silently once the text is fixed; and a server `422` shown at the field.
+- [ ] Reorder goals with Move up and Move down (S01.02.07; participants.md *Goals*' "After Move down on row 1…", "Move
+      up on row 1 and Move down on the last row…", "Goal rows use the wrapping flex layout…", "Two quick presses…" and
+      "No drag handle…"): `PUT /api/admin/participants/{participantId}/goals/order` with `{goalIds}`, finding the
+      participant first, reading their active goals alone with the list's SQL and giving them to `ListOrder.Reorder`,
+      whose `OrderMismatch`, like the save's `PreconditionFailed`, answers `422 config.order_mismatch`; otherwise
+      `goal.reordered` with the old and new order, the `ParticipantId` and no `EntityId`, through
+      `ConfigurationChanges.SaveAsync`, and `204`, the order already stored saving nothing; its matrix row (`204` for
+      A's manager with A's participant's active IDs, `404` for B's) and audit-events row. Integration tests on SQL
+      Server: the active goals rewritten as 0 to n-1 with their event; a missing ID, an extra one (another
+      participant's goal), an archived one and a repeated one, each `422` with every `SortOrder` as it was and no
+      `goal.reordered`; and two scopes, as `ConfigurationChangesOnSqlServerTests`' race test has them, where a goal
+      that one changes after the other has read the list gives the other's reorder that `422`, with no order or event
+      written. On the SPA: each active row's Move up, Move down, Edit and Archive, in that order and in two pairs,
+      secondary `<button type="button">`s with words, the arrows decorative `aria-hidden` SVG, and the goal's text as
+      hidden text after each label, never `aria-label`, in list-editor.md's wrapping flex row with no `@container`
+      and common-items.md's row CSS. Every row button takes its label width: Move up, Move down, Edit, Archive and
+      Restore, and the edit form's Save and Cancel, carry a `rowButton` class on the shared Button, `inline-size:
+      auto` and `min-inline-size: var(--target-min)`, with the two-class weight that common-items.md gives
+      `.actions .rowButton`, so that neither Button's full width below 40rem nor its 8rem minimum from 40rem applies
+      and its 48 px height stays (common-items.md *Conflicts resolved* 6 and *Layout - laptop*; participants.md
+      *Layout - laptop*: "at their natural width", "the same CSS as common-items.md"). Add goal keeps the shared rule
+      (step 2). The Goals list uses the wider page, while the help text and both textareas stay capped at `--measure`
+      (common-items.md *Layout - laptop*, participants.md *Layout - laptop*). A move sending the order built from the
+      list as the write runs, the list unchanged until the re-read, then focus put back on the same button of the
+      moved goal in a layout effect and "Moved up to number 2 of 5" or "Moved down to number 4 of 5"; the end buttons
+      in place, `aria-disabled` and dashed, a press sending nothing and saying "Already at the top" or "Already at the
+      bottom"; busy with "Moving…"; a queued move whose goal has reached the end sending nothing; a `422` refetching
+      the list and showing the list conflict (step 3); and "Not moved: …" in the row's alert slot. Vitest: after Move
+      down on row 1, `document.activeElement` is that goal's Move down; with the `PUT` held, the order on screen
+      unchanged; an unavailable press sending nothing and announcing once; two quick presses on different rows sending
+      two `PUT`s one after the other, the second built from the first's re-read; and no `draggable`, no
+      `display: none` on an end button and no `aria-label` on a row button.
+- [ ] Archive and restore goals (S01.02.08; design.md §3.7's Goal row and §4.8 item 2's archived section;
+      participants.md *Goals*' "Archive opens Archived goals…"): `POST /api/admin/goals/{goalId}/archive` and
+      `/restore` with `If-Match`, loading the goal through the tenant filter, archiving it with `Archiving.Archive`,
+      which keeps its `SortOrder`, and restoring it with `Archiving.Restore` to `ListOrder.End` of the participant's
+      goals, each saving `goal.archived` or `goal.restored` with `sortOrder` and `archivedAtUtc` old and new and the
+      `ParticipantId`, and answering `204`, a repeat saving nothing (D84); their matrix rows (an active and an
+      archived goal added to A for each call) and audit-events rows. Integration tests: `428`, `412`, another
+      organisation's goal `404`, a restored goal at one more than the highest active `SortOrder`, and a repeat with
+      no event. On the SPA: Archive, busy with "Archiving…", then the goal gone from the list with the numbers closing
+      up, the archived section appearing if it was hidden and opening with the goal first, focus on its Restore and
+      "Goal archived"; Restore, a label-width row button (step 4), busy with "Restoring…", then the goal at the end of
+      the list, focus on its Archive and "Goal restored to the end of the list", the section gone once it is empty; a
+      `412` showing the list conflict; and "Not archived: …" or "Not restored: …" in the row's alert slot. Vitest:
+      those; and on the participant's page the goal controls gone after Archive participant, the typed text in an open
+      goal edit and in New goal dropped with them (participants.md *Interactions and focus*, "Archive while something
+      is unsaved"), and only the controls back after Restore, with every row closed and New goal empty (S01.02.04's
+      hand-off from T02).
+- [ ] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
+      answers the goals list and each goal write in the browser from a list in memory, described in tests/README.md
+      beside `serveParticipants`; and in `participants.spec.ts`, signed in for real through the `invite` fixture and
+      a passkey on the `authenticator` fixture, a manager at 375 px adds a participant, Tabs from Save to New goal,
+      adds five goals with focus in the field after each (design.md §14 M1, by Playwright), then rewords, moves,
+      archives and restores one, on the app's own answers. The keyboard-only check (README §9) at 375 px and 1280 px,
+      in participants.md's *Keyboard* order for what is built: Save, then each goal row's Move up, Move down, Edit and
+      Archive, New goal, Add goal, the Archived goals summary and each Restore while it is open, then Archive
+      participant; and on an archived participant's page Restore, then the Archived goals summary; with a visible
+      focus ring at each stop. With the lists answered in the browser: axe on every goal state (default, with its
+      unavailable end buttons; busy, a held write; no goals; editing; field error; request error; edit conflict; list
+      conflict; archived section open; read-only) at both widths; at 375 px each pair, Move up and Move down, and Edit
+      and Archive, on one line, and every row button label width and at least 44 × 48 px (list-editor.md *Phone and
+      laptop*, step 4); at 1280 px the four buttons on the text's line, and under it at 200% text; no sideways scroll
+      at 320 px with 200% text; targets of at least 44 px; live regions in the DOM before their text; the focus ring
+      and the unavailable buttons in forced colours; and no goal text in `location`, `document.title`, `history.state`
+      or the origin's storage after each flow. Docs, each to the code as built: list-editor.md, its sketch keeping the
+      list's order rather than sorting by `sortOrder`, its CSS taking common-items.md's `rowButton` rule and its
+      expected Edit reading in the order Notes give; participants.md; design.md §6.6's goal rows (an unknown
+      participant's `404`, the `PUT`'s `ETag`); the by-hand checks (Notes) on ops/first-use-in-test.md; `migrate.sql`
+      from CI's artifact, read in the pull request, expand-only, with the `Goal` `DENY DELETE`; and CI's run on the
+      pull request passing.
+- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
+      passed every step, the deploy's migration added `Goal` and its smoke test passed; `/` serves this build's
+      `index.html`, its hashed assets answering `200`; `GET /api/admin/participants/{a made-up GUID}/goals`, with and
+      without `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless
+      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the
+      participants list, the goals list and every goal write with made-up data (A35), so that test receives only
+      `GET`s: at 375 px and 1280 px a participant's page shows Goals, five Adds keep focus in New goal, Move down on
+      row 1 keeps focus on that goal's Move down, Archive opens Archived goals with focus on Restore, and an archived
+      participant's goals are numbered text with no buttons; the console reports no CSP violation or script error,
+      and the origin's storage is empty; Application Insights shows no exception and no `5xx` from the deploy to the
+      checks. Record the run IDs in Notes, then set T05's `status` here and its stories' to `done` together, ticking
+      their criteria.
 
 ---
 
@@ -1653,6 +1867,7 @@ past notes.
 - The version tables are append-only, with their denies in `grow2notes_runtime`, and a Playwright run at 375 px fills in
   and submits a note. The Submit confirm uses T03's dialog shell.
 - Waits for T06 because note versions point at common items.
+- Reuses T05's `CharacterCount` (src/components) for the Reason count.
 
 ### Steps
 
