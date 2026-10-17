@@ -1184,10 +1184,18 @@ protected. From the console the operator can reset the last manager's sign-in or
   `admin.signout_all`.
 - The by-hand checks go in a section of their own after step 25 of ops/first-use-in-test.md, so that no step a Note
   cites is renumbered.
+- Where design.md is silent (step 1): Identity saves each part of the reset on its own, so the reset step saves the
+  new status first (`UpdateAsync`). That save is the one that can find the user changed since they were loaded, which
+  gives the `412` with nothing saved; once it is made, the transaction holds the user's row, so no later part can, and
+  any later refusal is a fault that rolls the whole reset back. The last-manager rule (`LastManagerRule`) takes the
+  organisation's lock only for an Active manager, as no change to anyone else can leave the organisation without one.
+  T01's resend test's interceptor that holds a save back, `HoldsTheFirstSaveOfTheUser`, moves to the test fixtures,
+  for Reset sign-in's tests and the steps after them; the race test lets the first reset go on once
+  `sys.dm_exec_requests` shows the second waiting for the lock.
 
 ### Steps
 
-- [ ] Build the sign-in reset, the last-manager rule and the session-revocation helper that T24 and T32 reuse
+- [x] Build the sign-in reset, the last-manager rule and the session-revocation helper that T24 and T32 reuse
       (S00.06.04's four specific criteria; design.md §4.11 *Reset sign-in*, §4.13 *Lost phone*, §6.6's `setup-link` row,
       §8.6 *Reset sign-in* and *Last active manager*, A26; see Notes): the reset step in `Features/Users/`;
       `UserSetupLink` resends an Invited user's invite as before, resets an Active user's sign-in with

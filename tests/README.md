@@ -637,6 +637,38 @@ Signing in changes no row, so a test may sign in as a seeded user; one that then
 their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
 `Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
+### Ending a user's sessions on every device
+
+A change to a user reaches each session of theirs on its next request (design.md §8.4, §8.6): a reset, a deactivation
+or `admin signout-all` rotates the security stamp, which ends each with `401`, and a change to Worker leaves the stamp,
+so a manager's request then gets `403`. `SignedInDevices` (`Grow2Notes.Tests/Fixtures/SignedInDevices.cs`) shows it on
+several devices at once. Reset sign-in's tests use it (`Grow2Notes.Tests/Features/Users/SignInResetTests.cs`, the
+example), and so does every later test of a change that ends sessions or a role: deactivation, a change of role or
+email, and the operator's `admin reset-signin` and `admin signout-all`; T24's, that a deactivated person is signed out
+everywhere (S05.03.02); and T32's, that such a change ends a connected assistant's access as well as the person's own
+sessions.
+
+- Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
+  changes (the seeded-rows rule above).
+- `SignedInDevices.SignInAsync(app, clock, userId, count)` signs the user in on `count` devices, two by default, each a
+  client from `CreateHttpsClient()` with the session cookie; fetches each device's antiforgery token, while the session
+  still stands, for a `POST` later; and checks that each device's next request is let in.
+- After the change, `AssertNextRequestsAsync(status, requests)` moves the clock a second before each device's next
+  request, so the session check runs on it, and asserts its status: one request for each device, in order, such as
+  `SignedInDevices.Me` (`GET /api/auth/me`, sent to each when none is given) or `SignedInDevices.Ping`
+  (`POST /api/auth/ping`, with the device's token), or `NextRequest.Get(path)` and `NextRequest.Post(path)` for
+  others. A `401` must also be problem details that clear the session cookie, as the session check answers once it
+  ends a session.
+
+```csharp
+await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));
+using var devices = await SignedInDevices.SignInAsync(app, clock, userId);
+
+// The change, such as a manager's reset of the user's sign-in.
+
+await devices.AssertNextRequestsAsync(HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
+```
+
 ### Setting up an account, with a test-only passkey handler or a computed code
 
 A test of the setup endpoints (design.md §8.1) calls them as the SPA does, for a user of its own:
@@ -869,8 +901,11 @@ story adds one as follows.
   the second manager's `412`, the `428`, and a save of the stored values that writes nothing.
   `Grow2Notes.Tests/Features/Users/UserSetupLinkEndpointTests.cs` is the example for a change to a user, which the
   handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
-  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
-  `SaveChangesInterceptor` holds back while another request changes the user.
+  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which
+  `HoldsTheFirstSaveOfTheUser` (`Grow2Notes.Tests/Fixtures/HoldsTheFirstSaveOfTheUser.cs`), a `SaveChangesInterceptor`,
+  holds back while another request changes the user. A change under the last-manager rule (A26) is tested in an
+  organisation the test adds, so that it alone decides who is an Active manager there; with the same interceptor,
+  `Grow2Notes.Tests/Features/Users/SignInResetTests.cs` shows two managers resetting each other at once.
 - Give each event type that it writes a row in the shared audit-events test,
   `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
   through the real endpoint, in seeded organisation A, adding the rows it acts on, or, for a change to an

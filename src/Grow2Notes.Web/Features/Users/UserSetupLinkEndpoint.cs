@@ -7,11 +7,13 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Web.Features.Users;
 
 /// <summary>
-/// <c>POST /api/admin/users/{id}/setup-link</c> (design.md §4.11 <i>Resend invite</i>, §6.6): sends an Invited user of
-/// the signed-in manager's organisation a new setup link, as <see cref="UserSetupLink"/> does, and answers <c>204</c>
-/// with no <c>ETag</c>, as the screen takes the user's next one from the refetched list (D78); or <c>404</c> for a user
-/// not in the organisation, <c>428 precondition.required</c> or <c>412 precondition.failed</c> for the
-/// <c>If-Match</c> the request sent, or <c>409 user.not_active</c> for a user who is not Invited.
+/// <c>POST /api/admin/users/{id}/setup-link</c> (design.md §4.11 <i>Resend invite</i> and <i>Reset sign-in</i>, §6.6):
+/// resends an Invited user's invite, or resets an Active user's sign-in, for a user of the signed-in manager's
+/// organisation, as <see cref="UserSetupLink"/> does, and answers <c>204</c> with no <c>ETag</c>, as the screen takes
+/// the user's next one from the refetched list (D78); or <c>404</c> for a user not in the organisation,
+/// <c>428 precondition.required</c> or <c>412 precondition.failed</c> for the <c>If-Match</c> the request sent,
+/// <c>409 user.last_manager</c> for the organisation's only Active manager, or <c>409 user.not_active</c> for a
+/// Deactivated user.
 /// </summary>
 /// <remarks>
 /// It is mapped in the <c>/api/admin</c> group, whose <see cref="Policies.Manager"/> policy gives a worker a

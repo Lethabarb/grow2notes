@@ -215,18 +215,22 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 // and its event are saved by one SaveChanges on the scope's context.
 builder.Services.AddScoped<ConfigurationChanges>();
 
-// One per scope, for the same reason: their UserManager saves through the scope's context, so an invite, and the new
-// key of the setup-link step, join the transaction their caller opens there, with the audit event that records them.
+// One per scope, for the same reason: their UserManager saves through the scope's context, so an invite, the new key
+// of the setup-link step and a sign-in reset join the transaction their caller opens there, with the audit event that
+// records them.
 builder.Services.AddScoped<Invitations>();
 builder.Services.AddScoped<SetupLinkIssuer>();
+builder.Services.AddScoped<SignInReset>();
 
 // One per scope, for the same reason: setup's completion opens its transaction on the scope's context, through which
 // the method that the endpoint adds, the user's changes and their audit event are all saved.
 builder.Services.AddScoped<SetupCompletion>();
 
 // One per scope, for the same reason: a change to a user who exists opens its transaction on the scope's context, in
-// which the user is loaded and their If-Match checked, and the change and its audit event are saved.
+// which the user is loaded and their If-Match checked, and the change and its audit event are saved. The last-manager
+// rule's lock is taken in that transaction too.
 builder.Services.AddScoped<UserChanges>();
+builder.Services.AddScoped<LastManagerRule>();
 
 // The admin handler classes (mcp-server.md §3.5, convention 1), one per scope, as each reads and writes through the
 // scope's context.
