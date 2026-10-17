@@ -35,6 +35,8 @@ type Rendered = {
   add: (text: string) => Promise<unknown>;
   /** The rewords sent, each with its goal's ID and version, which nothing answers unless a test does. */
   update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
+  /** The reorders sent, each with the active goals' IDs in a new order, which nothing answers unless a test does. */
+  reorder: (ids: string[]) => Promise<unknown>;
 };
 
 /**
@@ -48,11 +50,13 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   const queryFn = vi.fn<() => Promise<ListRow[]>>();
   const add = vi.fn<(text: string) => Promise<unknown>>();
   const update = vi.fn<(id: string, text: string, rowVersion: string) => Promise<unknown>>();
+  const reorder = vi.fn<(ids: string[]) => Promise<unknown>>();
   const api: ListApi = {
     query: queryOptions({ queryKey, queryFn }),
     scopeId: `goals:${participantId}`,
     add,
     update,
+    reorder,
   };
   render(
     <QueryClientProvider client={client}>
@@ -62,7 +66,7 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
       </PageStatus>
     </QueryClientProvider>,
   );
-  return { client, queryFn, add, update };
+  return { client, queryFn, add, update, reorder };
 }
 
 /** The numbered list of active goals, or `null` while there is none. */
@@ -264,9 +268,11 @@ async function press(element: HTMLElement) {
 /**
  * Has the writes and the list's reads answered by a server that holds the list, which it gives back, so that a test
  * can change it as someone else would: an add puts a goal at its end; a reword sent with the goal's version stores the
- * text with a new version, and one sent with another is refused `412`; and a read gives what it holds.
+ * text with a new version, and one sent with another is refused `412`; a reorder of the active goals, each once, puts
+ * them in that order, then the archived ones, each moved goal with a new version, and any other is refused `422`; and
+ * a read gives what it holds.
  */
-function serveList({ add, update, queryFn }: Rendered, rows: ListRow[]): ListRow[] {
+function serveList({ add, update, reorder, queryFn }: Rendered, rows: ListRow[]): ListRow[] {
   const list = [...rows];
   let versions = 0;
   vi.mocked(add).mockImplementation((text) => {
@@ -281,6 +287,26 @@ function serveList({ add, update, queryFn }: Rendered, rows: ListRow[]): ListRow
 
     versions += 1;
     list[index] = { ...list[index], text, rowVersion: `AAAAAAAAD${versions}=` };
+    return Promise.resolve(undefined);
+  });
+  vi.mocked(reorder).mockImplementation((ids) => {
+    const active = list.filter((row) => row.archivedAtUtc === null);
+    const archived = list.filter((row) => row.archivedAtUtc !== null);
+    const eachOnce = new Set(ids).size === ids.length && ids.length === active.length;
+    if (!eachOnce || active.some((row) => !ids.includes(row.id))) {
+      return Promise.reject(new ApiError(422, 'config.order_mismatch'));
+    }
+
+    const reordered = ids.map((id, sortOrder) => {
+      const row = active.find((listed) => listed.id === id)!;
+      if (row.sortOrder === sortOrder) {
+        return row;
+      }
+
+      versions += 1;
+      return { ...row, sortOrder, rowVersion: `AAAAAAAAD${versions}=` };
+    });
+    list.splice(0, list.length, ...reordered, ...archived);
     return Promise.resolve(undefined);
   });
   vi.mocked(queryFn).mockImplementation(() => Promise.resolve([...list]));
@@ -1124,6 +1150,373 @@ describe('ListEditor, rewording', () => {
     retype(await openEdit(breakfast.text), 'Makes own lunch');
 
     await press(saveButton(rowOf('Makes own lunch')));
+
+    const [write] = rendered.client.getMutationCache().getAll();
+    expect(write.options.scope).toEqual({ id: `goals:${participantId}` });
+    expect(write.options.retry).toBe(0);
+    expect(rendered.client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([queryKey]);
+  });
+});
+
+/** The row's Move up or Move down, by its name, which ends with the row's text. */
+function moveButton(direction: 'up' | 'down', text: string): HTMLElement {
+  return screen.getByRole('button', { name: `Move ${direction}, ${text}` });
+}
+
+/** The alert slot of the active goal's row whose text is `text`. */
+function rowAlert(text: string): HTMLElement {
+  return within(rowOf(text)).getByRole('alert');
+}
+
+/** Records each text written into the page's status region from now on, leaving out its emptying. */
+function recordAnnouncements(): () => string[] {
+  const region = pageStatus();
+  const written: string[] = [];
+  new MutationObserver(() => {
+    if (region.textContent !== '') {
+      written.push(region.textContent ?? '');
+    }
+  }).observe(region, { childList: true, characterData: true, subtree: true });
+  return () => written;
+}
+
+describe('ListEditor, moving', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('gives each row Move up, Move down, then Edit, in two pairs after its alert, its text hidden after each', () => {
+    renderEditor([breakfast, bus, sister]);
+
+    for (const row of [breakfast, bus, sister]) {
+      const item = rowOf(row.text);
+      const up = moveButton('up', row.text);
+      const down = moveButton('down', row.text);
+      const edit = editButton(row.text);
+      expect(within(item).getAllByRole('button')).toEqual([up, down, edit]);
+      expect(up.parentElement).toBe(down.parentElement);
+      expect(edit.parentElement).not.toBe(up.parentElement);
+      expect(edit.parentElement?.parentElement).toBe(up.parentElement?.parentElement);
+      expect(follows(within(item).getByRole('alert'), up)).toBe(true);
+      for (const button of [up, down]) {
+        expect(button.tagName).toBe('BUTTON');
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button.className).toMatch(/secondary/);
+        expect(button.className).toMatch(/rowButton/);
+        expect(button.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+        expect(within(button).getByText(`, ${row.text}`)).toHaveClass('visually-hidden');
+      }
+    }
+  });
+
+  it('keeps Move up on the first row and Move down on the last in place, focusable but unavailable and dashed', () => {
+    renderEditor([breakfast, bus, sister]);
+
+    const ends = [moveButton('up', breakfast.text), moveButton('down', sister.text)];
+    for (const button of ends) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+      expect(button).toHaveAttribute('data-unavailable');
+      expect(button).toBeEnabled();
+      expect(getComputedStyle(button).display).not.toBe('none');
+    }
+    const others = [moveButton('down', breakfast.text), moveButton('up', bus.text), moveButton('down', bus.text)];
+    for (const button of [...others, moveButton('up', sister.text)]) {
+      expect(button).not.toHaveAttribute('aria-disabled');
+    }
+  });
+
+  it('makes both unavailable on the one row of a list of one', () => {
+    renderEditor([breakfast, washing]);
+
+    expect(moveButton('up', breakfast.text)).toHaveAttribute('aria-disabled', 'true');
+    expect(moveButton('down', breakfast.text)).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('on a press of an unavailable one, sends nothing and says why, once, focus staying on it', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    const announced = recordAnnouncements();
+
+    await press(moveButton('up', breakfast.text));
+    await wait(16);
+    expect(announced()).toEqual(['Already at the top']);
+    expect(moveButton('up', breakfast.text)).toHaveFocus();
+    await press(moveButton('down', bus.text));
+    await wait(16);
+
+    expect(announced()).toEqual(['Already at the top', 'Already at the bottom']);
+    expect(rendered.reorder).not.toHaveBeenCalled();
+    expect(rendered.client.getMutationCache().getAll()).toEqual([]);
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+  });
+
+  // Move down on row 1 is the case in which React moves the focused button's row (list-editor.md).
+  it('on Move down on row 1, sends the order with it second, shows it read again, focus on its Move down', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+
+    await press(moveButton('down', breakfast.text));
+
+    expect(rendered.reorder).toHaveBeenCalledExactlyOnceWith([bus.id, breakfast.id, sister.id]);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([bus.text, breakfast.text, sister.text]);
+    expect(document.activeElement).toBe(moveButton('down', breakfast.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved down to number 2 of 3');
+  });
+
+  // As Safari leaves it after a click, which does not focus the button clicked.
+  it("puts focus on the moved goal's button when the press left it on the page", async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+
+    fireEvent.click(moveButton('down', breakfast.text));
+    await wait(1);
+
+    expect(activeTexts()).toEqual([bus.text, breakfast.text, sister.text]);
+    expect(document.activeElement).toBe(moveButton('down', breakfast.text));
+  });
+
+  it('leaves focus where the person has gone while the move was out', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.reorder).getMockImplementation()!;
+    vi.mocked(rendered.reorder).mockImplementationOnce(async (ids) => {
+      await answer.promise;
+      return serve(ids);
+    });
+    await press(moveButton('down', breakfast.text));
+
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    elsewhere.focus();
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(activeTexts()).toEqual([bus.text, breakfast.text, sister.text]);
+    expect(elsewhere).toHaveFocus();
+  });
+
+  it('on Move up, sends the order with it a place higher, focus on its Move up, saying where it went', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+
+    await press(moveButton('up', sister.text));
+
+    expect(rendered.reorder).toHaveBeenCalledExactlyOnceWith([breakfast.id, sister.id, bus.id]);
+    expect(activeTexts()).toEqual([breakfast.text, sister.text, bus.text]);
+    expect(document.activeElement).toBe(moveButton('up', sister.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved up to number 2 of 3');
+  });
+
+  it('keeps the order on screen while the reorder is out, busy at once and "Moving…" after 400 ms', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.reorder).mockReturnValue(answer.promise);
+    vi.mocked(rendered.queryFn).mockResolvedValue([
+      { ...bus, sortOrder: 0 },
+      { ...breakfast, sortOrder: 1 },
+      sister,
+    ]);
+    const down = moveButton('down', breakfast.text);
+
+    await press(down);
+    expect(activeTexts()).toEqual([breakfast.text, bus.text, sister.text]);
+    expect(down).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(down).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(down).toHaveAttribute('data-busy');
+    expect(within(down).getByText('Moving…')).toBeInTheDocument();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moving…');
+    await press(down);
+    expect(rendered.reorder).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([breakfast.text, bus.text, sister.text]);
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(activeTexts()).toEqual([bus.text, breakfast.text, sister.text]);
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(down).toHaveFocus();
+  });
+
+  it("runs two quick presses on different rows one after the other, the second from the first's re-read", async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.reorder).getMockImplementation()!;
+    vi.mocked(rendered.reorder).mockImplementationOnce(async (ids) => {
+      await answer.promise;
+      return serve(ids);
+    });
+
+    await press(moveButton('down', breakfast.text));
+    await press(moveButton('up', sister.text));
+    expect(rendered.reorder).toHaveBeenCalledOnce();
+    expect(moveButton('up', sister.text)).toHaveAttribute('aria-disabled', 'true');
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(vi.mocked(rendered.reorder).mock.calls).toEqual([
+      [[bus.id, breakfast.id, sister.id]],
+      [[bus.id, sister.id, breakfast.id]],
+    ]);
+    expect(rendered.queryFn).toHaveBeenCalledTimes(2);
+    expect(activeTexts()).toEqual([bus.text, sister.text, breakfast.text]);
+    expect(moveButton('up', sister.text)).toHaveFocus();
+  });
+
+  it('sends nothing for a move whose goal the move before it took to the end, saying so after it', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.reorder).getMockImplementation()!;
+    vi.mocked(rendered.reorder).mockImplementationOnce(async (ids) => {
+      await answer.promise;
+      return serve(ids);
+    });
+    await press(moveButton('down', breakfast.text));
+    await press(moveButton('up', bus.text));
+    const announced = recordAnnouncements();
+
+    answer.resolve(undefined);
+    await wait(1);
+    await wait(16);
+
+    expect(rendered.reorder).toHaveBeenCalledOnce();
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([bus.text, breakfast.text]);
+    expect(announced()).toEqual(['Moved down to number 2 of 2', 'Already at the top']);
+    const up = moveButton('up', bus.text);
+    expect(up).toHaveFocus();
+    expect(up).toHaveAttribute('data-unavailable');
+  });
+
+  it('sends nothing for a move whose goal the write before it found archived, showing the list conflict', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.add).mockReturnValue(answer.promise);
+    vi.mocked(rendered.queryFn).mockResolvedValue([
+      { ...breakfast, archivedAtUtc: '2026-10-05T01:00:00Z', rowVersion: 'AAAAAAAAC1E=' },
+      bus,
+      goal('6', 'Phones her sister', 2),
+    ]);
+    type('Phones her sister');
+    await press(addButton());
+    await press(moveButton('down', breakfast.text));
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(rendered.reorder).not.toHaveBeenCalled();
+    expect(conflict()).toHaveFocus();
+    expect(activeTexts()).toEqual([bus.text, 'Phones her sister']);
+  });
+
+  it('on a 422, shows the list read again and the list conflict, focused, until a write succeeds', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    const server = serveList(rendered, [breakfast, bus, sister]);
+    // Another manager archives a goal meanwhile.
+    server[2] = { ...sister, archivedAtUtc: '2026-10-05T01:00:00Z', rowVersion: 'AAAAAAAAC3E=' };
+
+    await press(moveButton('down', breakfast.text));
+
+    expect(rendered.reorder).toHaveBeenCalledExactlyOnceWith([bus.id, breakfast.id, sister.id]);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(conflict()).toHaveFocus();
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+    expect(archivedTexts()).toEqual([sister.text]);
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+
+    await press(moveButton('down', breakfast.text));
+
+    expect(conflict()).toBeNull();
+    expect(activeTexts()).toEqual([bus.text, breakfast.text]);
+  });
+
+  it("on no connection or a server failure, says so in the row's alert, keeping the order and focus", async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    let fail: (failure: ApiError) => void = () => {};
+    const failing = new Promise((_, reject) => {
+      fail = reject;
+    });
+    vi.mocked(rendered.reorder).mockRejectedValueOnce(new ApiError(0)).mockReturnValueOnce(failing);
+    const down = moveButton('down', breakfast.text);
+
+    await press(down);
+    expect(rowAlert(breakfast.text)).toHaveTextContent('Not moved: no connection. Try again.');
+    expect(down).toHaveFocus();
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+    expect(rendered.queryFn).not.toHaveBeenCalled();
+    expect(conflict()).toBeNull();
+
+    // Emptied at the next press, so that a failure that repeats is announced again.
+    await press(down);
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+    fail(new ApiError(500));
+    await wait(1);
+
+    expect(rowAlert(breakfast.text)).toHaveTextContent('Not moved: something went wrong. Try again.');
+    expect(down).toHaveFocus();
+  });
+
+  it("empties the row's alert as Edit opens, so that Cancel or Save brings back no stale failure", async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+    vi.mocked(rendered.reorder).mockRejectedValueOnce(new ApiError(0)).mockRejectedValueOnce(new ApiError(0));
+    const notMoved = 'Not moved: no connection. Try again.';
+
+    await press(moveButton('down', breakfast.text));
+    expect(rowAlert(breakfast.text)).toHaveTextContent(notMoved);
+    await openEdit(breakfast.text);
+    await press(cancelButton(rowOf(breakfast.text)));
+
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+
+    await press(moveButton('down', breakfast.text));
+    expect(rowAlert(breakfast.text)).toHaveTextContent(notMoved);
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+    await press(saveButton(rowOf('Makes own lunch')));
+    await wait(16);
+
+    expect(pageStatus()).toHaveTextContent(saved);
+    expect(rowAlert('Makes own lunch')).toBeEmptyDOMElement();
+  });
+
+  it('shows nothing for a 401, which the session flow has', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    vi.mocked(rendered.reorder).mockRejectedValue(new ApiError(401));
+
+    await press(moveButton('down', breakfast.text));
+
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+    expect(conflict()).toBeNull();
+  });
+
+  it('has no drag, hides no end button and gives no row button an aria-label', () => {
+    renderEditor([breakfast, bus, sister]);
+
+    expect(document.querySelectorAll('[draggable]')).toHaveLength(0);
+    for (const button of [moveButton('up', breakfast.text), moveButton('down', sister.text)]) {
+      expect(getComputedStyle(button).display).not.toBe('none');
+    }
+    for (const button of within(activeList()!).getAllByRole('button')) {
+      expect(button).not.toHaveAttribute('aria-label');
+    }
+  });
+
+  it("sends each move in the list's one scope, with no retry", async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+
+    await press(moveButton('down', breakfast.text));
 
     const [write] = rendered.client.getMutationCache().getAll();
     expect(write.options.scope).toEqual({ id: `goals:${participantId}` });

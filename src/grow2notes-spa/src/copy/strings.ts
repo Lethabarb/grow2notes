@@ -394,10 +394,16 @@ export const strings = {
     },
   },
   /**
-   * What every kind of list that `ListEditor` edits shares (list-editor.md *Exact copy*): each active row's Edit, and,
-   * above the list, focused, a write that found the list changed by someone else.
+   * What every kind of list that `ListEditor` edits shares (list-editor.md *Exact copy*): each active row's Move up and
+   * Move down, with their busy label and, in the page's status region, what a press of one that is unavailable at the
+   * row's end says; its Edit; and, above the list, focused, a write that found the list changed by someone else.
    */
   listRows: {
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    moving: 'Moving…',
+    atTop: 'Already at the top',
+    atBottom: 'Already at the bottom',
     edit: 'Edit',
     listChanged: 'Someone else changed this list just now. Check it, then try again.',
   },

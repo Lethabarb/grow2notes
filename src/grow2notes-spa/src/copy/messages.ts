@@ -41,6 +41,14 @@ export const msg = {
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
   /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),
+  /** A list row's Move up or Move down that failed, in the row's alert above its buttons (list-editor.md). */
+  notMoved: (cause: Cause): string => msg.notDone('moved', cause),
+  /**
+   * A list row's move, in the page's status region once the list shows it (list-editor.md *Behaviour*): where the row
+   * went, counted from 1 among the active rows, such as "Moved down to number 4 of 5", one phrase with no full stop.
+   */
+  moved: (direction: 'up' | 'down', position: number, total: number) =>
+    `Moved ${direction} to number ${position} of ${total}`,
   /**
    * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
    * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather

@@ -183,6 +183,12 @@ internal static class EndpointMatrix
         // to a participant whom it adds to A, so B's manager, to whom A's goals are not found, gets 404 (§9.2).
         new(Put,       "/api/admin/goals/{goalId:guid}", Unauthorized, Forbidden, OK, NotFound,
             RewordingAGoalOfItsOwn),
+
+        // Reordering a participant's goals (§6.6), in the same group. Each call reorders the active goals of a
+        // participant of its own, whom its request first adds to A, so B's manager, to whom A's participants are not
+        // found, gets 404 (§9.2).
+        new(Put,       "/api/admin/participants/{participantId:guid}/goals/order", Unauthorized, Forbidden, NoContent,
+            NotFound, ReorderingTheGoalsOfAParticipantOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -340,6 +346,24 @@ internal static class EndpointMatrix
         };
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
         return request;
+    }
+
+    // A reorder of the active goals of a participant whom the request first adds to A with two active goals and an
+    // archived one, sending the active ones' IDs the other way round, so that each call changes goals of its own
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheGoalsOfAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goals = await call.Services.AddGoalsAsync(
+            call.Seeded.A,
+            participant.Id,
+            new("Makes own breakfast", 0),
+            new("Uses the washing machine", 1, ArchivedAtUtc: TestGoals.AddedAtUtc),
+            new("Phones her sister", 2));
+        return new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/goals/order")
+        {
+            Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
+        };
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

@@ -5,7 +5,7 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <summary>
 /// What <see cref="GoalChanges"/> did with a change to a participant's goals: found no such participant or goal in the
 /// tenant's organisation, another organisation's included (design.md §9.2); refused the change with a design.md §6.9
-/// code, <c>If-Match</c>'s or the save's (<see cref="Error"/>); refused the text, with its message
+/// code, <c>If-Match</c>'s, the reorder's or the save's (<see cref="Error"/>); refused the text, with its message
 /// (<see cref="Errors"/>); or took the change, and saved it with its audit event when a value changed, giving the
 /// goal's <c>ETag</c> after a reword (<see cref="ETag"/>).
 /// </summary>

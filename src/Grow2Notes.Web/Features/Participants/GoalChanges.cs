@@ -10,10 +10,10 @@ namespace Grow2Notes.Web.Features.Participants;
 
 /// <summary>
 /// The handler that changes a participant's goals (design.md §6.6), as a handler class that takes the
-/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants/{participantId}/goals</c>
-/// and <c>PUT /api/admin/goals/{goalId}</c> call it with <see cref="Actor.InApp"/>, and Release 2's tools will call it
-/// with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
-/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants/{participantId}/goals</c>,
+/// <c>PUT /api/admin/goals/{goalId}</c> and <c>PUT /api/admin/participants/{participantId}/goals/order</c> call it with
+/// <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved
+/// with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class GoalChanges(
     Grow2NotesDbContext db,
@@ -128,6 +128,57 @@ internal sealed class GoalChanges(
         return saved.Error is { } error
             ? GoalChangeResult.Refused(error)
             : GoalChangeResult.Reworded(RowVersionToken.ETag(goal));
+    }
+
+    /// <summary>
+    /// Puts the active goals of a participant of the tenant's organisation, found through the tenant filter, so that
+    /// another organisation's is not found, in the order of <paramref name="goalIds"/> (S01.02.07): reads them in the
+    /// list's order (<see cref="GoalList.InListOrder"/>), the archived ones left out, so that
+    /// <see cref="ListOrder.Reorder"/> refuses an archived ID as one it was not given; then saves the new order with
+    /// <c>goal.reordered</c>, which names no goal as its entity, whose participant is theirs, and whose <c>Details</c>
+    /// hold the old and new order; or, for the order already stored, saves nothing and writes no event (D84). An
+    /// archived participant's goals are reordered as an active one's are (D86).
+    /// </summary>
+    /// <param name="actor">Who reorders them.</param>
+    /// <param name="participantId">The participant.</param>
+    /// <param name="goalIds">The IDs of the participant's active goals, in their new order.</param>
+    /// <param name="cancellationToken">Cancels the reorder.</param>
+    /// <returns>
+    /// <see cref="GoalChangeResult.Saved"/>, whether the order changed or not; or
+    /// <see cref="ErrorCode.OrderMismatch"/>, with nothing written, when the IDs are not the active goals, each once,
+    /// or when a goal changed after the list was read, which the save finds as
+    /// <see cref="ErrorCode.PreconditionFailed"/>: a reorder sends no <c>If-Match</c>, and the screen reads the list
+    /// again for either (list-editor.md <i>Request errors</i>), so both are the one code.
+    /// </returns>
+    public async Task<GoalChangeResult> ReorderAsync(
+        Actor actor, Guid participantId, IReadOnlyList<Guid> goalIds, CancellationToken cancellationToken)
+    {
+        if (!await db.Participants.AnyAsync(participant => participant.Id == participantId, cancellationToken))
+        {
+            return GoalChangeResult.NotFound;
+        }
+
+        // Tracked, so that the save writes the SortOrder that each moved goal is given, checking the version it was
+        // read at.
+        var activeGoals = await GoalList.InListOrder(
+                db.Goals.Where(goal => goal.ParticipantId == participantId && goal.ArchivedAtUtc == null))
+            .ToListAsync(cancellationToken);
+        var reordered = ListOrder.Reorder(activeGoals, goalIds);
+        if (reordered.Error is { } refused)
+        {
+            return GoalChangeResult.Refused(refused);
+        }
+
+        var saved = await changes.SaveAsync(
+            actor,
+            AuditEventTypes.Goal.Reordered,
+            AuditEntityTypes.Goal,
+            entityId: null,
+            participantId,
+            reordered.Before,
+            reordered.After,
+            cancellationToken: cancellationToken);
+        return saved.Error is null ? GoalChangeResult.Saved : GoalChangeResult.Refused(ErrorCode.OrderMismatch);
     }
 
     /// <summary>

@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+  type RefObject,
+} from 'react';
 import { flushSync } from 'react-dom';
 import { ApiError, classify } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
@@ -42,6 +51,11 @@ export type ListApi = {
    * answer, as it reads the row's next version from the list.
    */
   update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
+  /**
+   * Puts the list's active rows in the order of `ids`, each active row's ID once, as the API's `PUT …/order` does; the
+   * editor reads nothing of the answer, as it reads the new order, and each row's next version, from the list.
+   */
+  reorder: (ids: string[]) => Promise<unknown>;
 };
 
 type ListEditorProps = {
@@ -77,12 +91,35 @@ type ListContext = {
 // The list conflict's key among the elements that take focus after a change.
 const conflictKey = 'conflict';
 
+/** Which way a row's move button moves it. */
+type Direction = 'up' | 'down';
+
+/** Each move button's words: its label, and what a press says where the row is already at the button's end. */
+const moveWords = {
+  up: { label: strings.listRows.moveUp, atEnd: strings.listRows.atTop },
+  down: { label: strings.listRows.moveDown, atEnd: strings.listRows.atBottom },
+} as const;
+
+// Each move button's arrow, filled with the button's colour, which forced colours give it too.
+const arrowPaths = {
+  up: 'M10 2.5 3.5 9h4.25v8.5h4.5V9h4.25z',
+  down: 'M10 17.5 16.5 11h-4.25V2.5h-4.5V11H3.5z',
+} as const;
+
 /**
  * A write that found its row no longer active, as someone else archived it, once the list was read again; the list
  * conflict then shows, as the row has left the list with its form (list-editor.md *Request errors*).
  */
 class ListChanged extends Error {
   override name = 'ListChanged';
+}
+
+/**
+ * A move that waited its turn behind a write that took its row to the end it moves towards, so that it sends nothing
+ * (list-editor.md *Queueing*).
+ */
+class AlreadyAtEnd extends Error {
+  override name = 'AlreadyAtEnd';
 }
 
 /**
@@ -126,12 +163,13 @@ function activeRow(rows: ListRow[], id: string): ListRow | undefined {
 }
 
 /**
- * Whether focus is still in `form`, which started a write, or nowhere: only then does the write's end move it, as
- * focus is never pulled away from where the person has gone while the write was out (common-items.md *Queueing*).
+ * Whether focus is still in `origin`, the form or the button that started a write, or nowhere: only then does the
+ * write's end move it, as focus is never pulled away from where the person has gone while the write was out
+ * (common-items.md *Queueing*).
  */
-function focusStayedIn(form: HTMLFormElement | null): boolean {
+function focusStayedIn(origin: HTMLElement | null): boolean {
   const focused = document.activeElement;
-  return focused === null || focused === document.body || form?.contains(focused) === true;
+  return focused === null || focused === document.body || origin?.contains(focused) === true;
 }
 
 /**
@@ -193,13 +231,19 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
         <p>{copy.empty}</p>
       ) : (
         <ol className={styles.list}>
-          {active.map((row) =>
+          {active.map((row, index) =>
             readOnly ? (
               <li key={row.id} className={styles.row}>
                 <p className={styles.text}>{row.text}</p>
               </li>
             ) : (
-              <ActiveRow key={row.id} row={row} list={list} />
+              <ActiveRow
+                key={row.id}
+                row={row}
+                list={list}
+                first={index === 0}
+                last={index === active.length - 1}
+              />
             ),
           )}
         </ol>
@@ -254,15 +298,16 @@ function useFocusAfterRender() {
 /**
  * A write to the list (list-editor.md *Implementation notes*): in the list's one scope, so that it waits for the write
  * before it; sent once, never again by itself, as an add sent again after a lost answer would add the row twice; then
- * the list read again before the next write starts, as the screen shows a change only once the server has it. Once it
- * succeeds, the list conflict goes; once it finds the list changed, the conflict shows, though the form that sent it
- * may have gone with its row.
+ * the list read again before the next write starts, as the screen shows a change only once the server has it, and
+ * what `send` gave passed on. Once it succeeds, the list conflict goes; once it finds the list changed, the conflict
+ * shows, though the form or the row that sent it may have gone.
  */
-function useListWrite<T>(list: ListContext, send: (variables: T) => Promise<unknown>) {
+function useListWrite<T, R>(list: ListContext, send: (variables: T) => Promise<R>) {
   return useMutation({
     mutationFn: async (variables: T) => {
-      await send(variables);
+      const result = await send(variables);
       await list.reread();
+      return result;
     },
     onSuccess: () => {
       list.written();
@@ -334,23 +379,35 @@ function useItemText(kind: ListKind, initial: string, field: RefObject<HTMLTextA
   };
 }
 
-type ActiveRowProps = { row: ListRow; list: ListContext };
+type ActiveRowProps = {
+  row: ListRow;
+  list: ListContext;
+  /** Whether the row is the first active one, where Move up is unavailable. */
+  first: boolean;
+  /** Whether the row is the last active one, where Move down is unavailable. */
+  last: boolean;
+};
 
 /**
  * An active row (list-editor.md *Anatomy*, *Behaviour*): its text, wrapping anywhere, then its alert slot, always
- * rendered, and Edit, label width, with the row's text after its label for screen readers alone; or, once Edit is
- * pressed, the edit form in their place, in the same numbered item, until Save or Cancel closes it and focus goes back
- * to Edit, unless a Save finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes
- * to its box, with the caret after the text, while the tap still runs, which is what lets a phone open its keyboard.
- * Its typed text is the row's own, so it stays as typed while other rows move.
+ * rendered, which a failed move writes to, then its buttons in two pairs, Move up and Move down, then Edit, each label
+ * width, with the row's text after its label for screen readers alone; or, once Edit is pressed, the edit form in
+ * their place, in the same numbered item, until Save or Cancel closes it and focus goes back to Edit, unless a Save
+ * finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes to its box, with the
+ * caret after the text, while the tap still runs, which is what lets a phone open its keyboard. Its typed text is the
+ * row's own, so it stays as typed while other rows move.
  */
-function ActiveRow({ row, list }: ActiveRowProps) {
+function ActiveRow({ row, list, first, last }: ActiveRowProps) {
   const [editing, setEditing] = useState(false);
+  // The alert's words while it holds a move's failure, which the row's next move, or Edit, clears.
+  const [failure, setFailure] = useState<string>();
   const field = useRef<HTMLTextAreaElement>(null);
   const editKey = `${row.id}:edit`;
 
   function edit() {
     flushSync(() => {
+      // The form takes the alert's place, which comes back as it closes, so it must come back empty, not stale.
+      setFailure(undefined);
       setEditing(true);
     });
     const box = field.current;
@@ -375,17 +432,128 @@ function ActiveRow({ row, list }: ActiveRowProps) {
         <div className={styles.rowInner}>
           <p className={styles.text}>{row.text}</p>
           <div className={styles.side}>
-            <RequestAlert />
+            <RequestAlert>{failure}</RequestAlert>
             <div className={styles.actions}>
-              <Button ref={list.focusTarget(editKey)} className={styles.rowButton} onClick={edit}>
-                {strings.listRows.edit}
-                <span className="visually-hidden">{msg.rowContext(row.text)}</span>
-              </Button>
+              <div className={styles.pair}>
+                <MoveButton row={row} list={list} direction="up" atEnd={first} onFailure={setFailure} />
+                <MoveButton row={row} list={list} direction="down" atEnd={last} onFailure={setFailure} />
+              </div>
+              <div className={styles.pair}>
+                <Button ref={list.focusTarget(editKey)} className={styles.rowButton} onClick={edit}>
+                  {strings.listRows.edit}
+                  <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       )}
     </li>
+  );
+}
+
+type MoveButtonProps = {
+  row: ListRow;
+  list: ListContext;
+  direction: Direction;
+  /** Whether the row is already at the end that the button moves it towards, where the button is unavailable. */
+  atEnd: boolean;
+  /** Shows a move's failure in the row's alert, or, given `undefined`, empties it. */
+  onFailure: (message: string | undefined) => void;
+};
+
+/**
+ * A row's Move up or Move down (list-editor.md *Behaviour*), in words after a decorative arrow, with the row's text
+ * after them for screen readers alone. At the row's end it stays in place, unavailable (`aria-disabled`, dashed), and a
+ * press sends nothing and says why in the page's status region. Otherwise a press is busy at once, "Moving…" after
+ * 400 ms, and waits its turn in the list's scope; when it runs, it swaps the row with its neighbour in the order of the
+ * list as last read, and sends that whole order, the list showing the new order only once it has been read again.
+ * Then focus goes back to the button, unless the person has gone elsewhere meanwhile, and the page's status region
+ * says where the row went. A move whose row an earlier one has taken to the end sends nothing, and says so as an
+ * unavailable press does; one whose row has left the list, or that the server refuses `422` as the list has changed,
+ * shows the list conflict over the list read again; and any other failure says so in the row's alert, focus staying on
+ * the button.
+ */
+function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps) {
+  const announce = useAnnounce();
+  const words = moveWords[direction];
+  const key = `${row.id}:${direction}`;
+  const move = useListWrite(list, async () => {
+    // The order as the write runs, which the list read after the write before it may have changed.
+    const ids = list.latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : []));
+    const from = ids.indexOf(row.id);
+    if (from === -1) {
+      throw new ListChanged();
+    }
+
+    const to = direction === 'up' ? from - 1 : from + 1;
+    if (to < 0 || to === ids.length) {
+      throw new AlreadyAtEnd();
+    }
+
+    [ids[from], ids[to]] = [ids[to], ids[from]];
+    try {
+      await list.api.reorder(ids);
+    } catch (failed) {
+      // The reorder's one 422, config.order_mismatch: the list changed after it was read (design.md §6.7).
+      if (!(failed instanceof ApiError && failed.status === 422)) {
+        throw failed;
+      }
+
+      await list.reread();
+      throw new ListChanged();
+    }
+
+    return { position: to + 1, total: ids.length };
+  });
+
+  function press(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    onFailure(undefined);
+    move.mutate(undefined, {
+      onSuccess: ({ position, total }) => {
+        if (focusStayedIn(button)) {
+          list.focusAfterRender(key);
+        }
+
+        announce?.(msg.moved(direction, position, total));
+      },
+      onError: (failed) => {
+        if (failed instanceof AlreadyAtEnd) {
+          if (focusStayedIn(button)) {
+            list.focusAfterRender(key);
+          }
+
+          announce?.(words.atEnd);
+          return;
+        }
+
+        // A list conflict shows above the list, and a 401 has the session flow, which `api()` started.
+        const cause = classify(failed);
+        if (!(failed instanceof ListChanged) && cause !== 'signedOut') {
+          onFailure(msg.notMoved(cause));
+        }
+      },
+    });
+  }
+
+  return (
+    <Button
+      ref={list.focusTarget(key)}
+      className={styles.rowButton}
+      unavailable={atEnd}
+      onUnavailablePress={() => announce?.(words.atEnd)}
+      busy={move.isPending}
+      busyLabel={strings.listRows.moving}
+      onClick={press}
+    >
+      <svg className={styles.arrow} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+        <path d={arrowPaths[direction]} fill="currentColor" />
+      </svg>
+      {words.label}
+      <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+    </Button>
   );
 }
 

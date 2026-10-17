@@ -45,22 +45,43 @@
   min-inline-size: 0;
 }
 
-/* A row's buttons, or its edit form's Save and Cancel, wrapping onto the next line when they do not fit. */
+/*
+ * A row's two pairs of buttons, 16 px apart, or its edit form's Save and Cancel, wrapping onto the next line when they
+ * do not fit (common-items.md *Layout - laptop*).
+ */
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-4);
 }
 
+/* A pair of a row's buttons, Move up and Move down, then its others, 8 px apart, on one line at 375 px. */
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 /*
  * Every row button, and the edit form's Save and Cancel, takes its label's width, at least 44 px wide and the shared
  * 48 px high, on a phone and a laptop alike: neither the shared button's full width below 40rem nor its 8rem minimum
- * from there (common-items.md *Conflicts resolved* 6). Two classes, so that it outranks the shared rule whichever
+ * from there (common-items.md *Conflicts resolved* 6). Its sides are narrower than the shared 1.25rem, so that Move up
+ * and Move down share one line in the 307 px that the numbered list leaves at 375 px, where they take about 311 px
+ * with them (list-editor.md *Phone and laptop*). Two classes, so that it outranks the shared rule whichever
  * stylesheet comes first.
  */
 .actions .rowButton {
   inline-size: auto;
   min-inline-size: var(--target-min);
+  padding-inline: var(--space-3);
+}
+
+/* A move button's arrow before its words, the text's size whatever the label's length. */
+.arrow {
+  inline-size: 1em;
+  block-size: 1em;
+  margin-inline-end: var(--space-1);
+  vertical-align: -0.125em;
 }
 
 /*

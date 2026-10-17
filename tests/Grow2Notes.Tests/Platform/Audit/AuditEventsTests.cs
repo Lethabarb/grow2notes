@@ -48,6 +48,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
         [AuditEventTypes.Goal.Created] = test => test.AddGoalAsync(),
         [AuditEventTypes.Goal.Updated] = test => test.RewordGoalAsync(),
+        [AuditEventTypes.Goal.Reordered] = test => test.ReorderGoalsAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -417,6 +418,45 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             a.ManagerId,
             AuditEntityTypes.Goal,
             goal.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.reordered</c>: A's manager moves the second of a participant's two active goals to the top with
+    /// <c>PUT /api/admin/participants/{participantId}/goals/order</c>, which records no goal as the entity, as it is
+    /// about the list, and the participant as the participant, and the active goals' IDs in their old and new order,
+    /// the archived goal left out of both.
+    /// </summary>
+    private async Task<WrittenEvent> ReorderGoalsAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goals = await factory.Services.AddGoalsAsync(
+            a,
+            participant.Id,
+            new("Makes own breakfast", 0),
+            new("Uses the washing machine", 1, ArchivedAtUtc: TestGoals.AddedAtUtc),
+            new("Phones her sister", 2));
+        var (breakfast, sister) = (goals[0], goals[2]);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/participants/{participant.Id}/goals/order",
+            await client.FetchTokenAsync(),
+            new { goalIds = new[] { sister, breakfast } },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["order"] = new JsonArray(breakfast.ToString(), sister.ToString()) },
+            ["new"] = new JsonObject { ["order"] = new JsonArray(sister.ToString(), breakfast.ToString()) },
+        };
+        return new(
+            AuditEventTypes.Goal.Reordered,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            null,
             participant.Id,
             details.ToJsonString());
     }

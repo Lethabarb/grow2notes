@@ -1533,6 +1533,20 @@ moves, archives and restores them. Changes apply to notes started from then on.
     Save whose `412` finds the goal archived does.
   - A Save that succeeds focuses its row's Edit only while focus is still in its form or on `<body>`, as Add keeps
     focus in New goal, so that it never pulls focus from another row's box (common-items.md *Queueing*).
+  - A reorder whose body has no `goalIds`, or a `null` one, is `422 validation.failed` under `goalIds`, as guide
+    prompts' body with no `text` is; IDs that are not the active goals, each once, are its `422 config.order_mismatch`.
+  - A move focuses its button again once the list is read again only while focus is on that button or on `<body>`, as
+    a Save does, so that a click that left focus on the page, as Safari leaves it, still ends on the button. Its
+    announcement counts the goal's place in the order it sent.
+  - Row buttons have 0.75rem sides in place of the shared button's 1.25rem (primary-actions.md's "about"), so that Move
+    up and Move down share one line at 375 px (list-editor.md *Phone and laptop*): with the shared sides the pair is
+    about 311 px wide, measured in Chromium, in the 307 px that the numbered list leaves, as common-items.md's
+    arithmetic left out the number column. list-editor.md's CSS and common-items.md's `.actions .rowButton` rule are
+    brought into line in step 6.
+  - A queued move whose goal an earlier move has taken to the end sends nothing and says "Already at the top" or
+    "Already at the bottom", as a press of the unavailable button does, as a press never does nothing
+    (primary-actions.md §5.1); one whose goal is no longer active sends nothing and shows the list conflict, as a queued
+    Save does.
   - ListEditor ships with its goal kind alone: the item kind's words, its group adapter and the Group radios come with
     T06 and T07, so that no part of it ships unused.
 - By-hand checks for ops/first-use-in-test.md, in a section of their own after the steps already there: design.md
@@ -1632,7 +1646,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       saved: …" in the form's alert slot (the existing `RequestAlert`, above Save). Vitest: those; a Save over 200
       characters showing "Goal must be 200 characters or less" and a whitespace-only Save showing "Enter the goal",
       each sending nothing; the error clearing silently once the text is fixed; and a server `422` shown at the field.
-- [ ] Reorder goals with Move up and Move down (S01.02.07; participants.md *Goals*' "After Move down on row 1…", "Move
+- [x] Reorder goals with Move up and Move down (S01.02.07; participants.md *Goals*' "After Move down on row 1…", "Move
       up on row 1 and Move down on the last row…", "Goal rows use the wrapping flex layout…", "Two quick presses…" and
       "No drag handle…"): `PUT /api/admin/participants/{participantId}/goals/order` with `{goalIds}`, finding the
       participant first, reading their active goals alone with the list's SQL and giving them to `ListOrder.Reorder`,

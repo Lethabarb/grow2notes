@@ -38,11 +38,15 @@ internal sealed class GoalList(Grow2NotesDbContext db)
             goals = goals.Where(goal => goal.ArchivedAtUtc == null);
         }
 
-        var ordered = await goals
-            .OrderBy(goal => goal.SortOrder)
-            .ThenBy(goal => goal.CreatedAtUtc)
-            .ThenBy(goal => goal.Id)
-            .ToListAsync(cancellationToken);
+        var ordered = await InListOrder(goals).ToListAsync(cancellationToken);
         return [.. ordered.Select(AdminGoal.Of)];
     }
+
+    /// <summary>
+    /// <paramref name="goals"/> in the list's order, <c>ORDER BY SortOrder, CreatedAtUtc, Id</c>, in which the list
+    /// shows them and the reorder reads them (<see cref="GoalChanges.ReorderAsync"/>), so that the order the screen
+    /// sends is checked against the one it showed.
+    /// </summary>
+    public static IQueryable<Goal> InListOrder(IQueryable<Goal> goals) =>
+        goals.OrderBy(goal => goal.SortOrder).ThenBy(goal => goal.CreatedAtUtc).ThenBy(goal => goal.Id);
 }

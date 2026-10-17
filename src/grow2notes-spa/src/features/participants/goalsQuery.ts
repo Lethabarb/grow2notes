@@ -2,7 +2,10 @@ import { queryOptions } from '@tanstack/react-query';
 import { api } from '../../api/api.ts';
 import type { ListApi, ListRow } from '../../components/ListEditor.tsx';
 
-/** The path of a participant's goals, which the list reads and an add posts to (design.md §6.6). */
+/**
+ * The path of a participant's goals, which the list reads and an add posts to, and under which their order is put
+ * (design.md §6.6).
+ */
 function goalsPath(participantId: string): string {
   return `/api/admin/participants/${encodeURIComponent(participantId)}/goals`;
 }
@@ -23,9 +26,10 @@ export function goalsQuery(participantId: string) {
 
 /**
  * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query; the one scope of
- * every write on them, `goals:<participantId>` (participants.md B6); the add, whose `201` has no body; and a goal's
+ * every write on them, `goals:<participantId>` (participants.md B6); the add, whose `201` has no body; a goal's
  * reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and whose `ETag` the editor does not read,
- * as it reads each goal's next version from the list.
+ * as it reads each goal's next version from the list; and the reorder of the active goals, with no `If-Match`, as the
+ * set of their IDs is its check (design.md §6.7), whose `204` has no body.
  */
 export function goalsApi(participantId: string): ListApi {
   return {
@@ -38,5 +42,6 @@ export function goalsApi(participantId: string): ListApi {
         body: { text },
         ifMatch: rowVersion,
       }),
+    reorder: (goalIds) => api<undefined>(`${goalsPath(participantId)}/order`, { method: 'PUT', body: { goalIds } }),
   };
 }

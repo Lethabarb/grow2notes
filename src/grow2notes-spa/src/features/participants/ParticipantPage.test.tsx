@@ -1869,6 +1869,29 @@ function goalRewords(): { path: string; ifMatch: string | null; token: string | 
     });
 }
 
+/** The path at which the goals of the participant whose ID is `participantId` are put in order. */
+function goalOrderPath(participantId: string): string {
+  return `${participantsPath}/${participantId}/goals/order`;
+}
+
+/** The bare `204` of a reorder of goals. */
+const goalsReordered: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
+/** The goals' reorders sent, each as its path, its `If-Match`, its token and the JSON of its body. */
+function goalReorders(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'PUT' && (path as string).endsWith('/goals/order'))
+    .map(([path, init]) => {
+      const headers = new Headers(init?.headers);
+      return {
+        path: path as string,
+        ifMatch: headers.get('If-Match'),
+        token: headers.get('X-XSRF-TOKEN'),
+        body: JSON.parse(init?.body as string) as unknown,
+      };
+    });
+}
+
 /** A goal as the list gives it once it is added, first in the list. */
 const breakfastAdded: ListRow = {
   id: '8d3a1f6c-5e49-4b7a-ac12-3f4a5b6c7d8e',
@@ -2005,6 +2028,33 @@ describe("A participant's goals", () => {
     expect(within(goalsSection()!).getByRole('button', { name: 'Edit, Makes own lunch' })).toHaveFocus();
     await wait(16);
     expect(pageStatus()).toHaveTextContent('Goal saved');
+  });
+
+  it('take one moved on the page: the order sent with token and no If-Match, the list read again', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    serve('PUT', goalOrderPath(jane.id), goalsReordered);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([
+        { ...bus, sortOrder: 0, rowVersion: 'AAAAAAAAD9E=' },
+        washing,
+        { ...breakfast, sortOrder: 1, rowVersion: 'AAAAAAAAD9F=' },
+        shop,
+      ]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Move down, ${breakfast.text}` }));
+
+    expect(goalReorders()).toEqual([
+      { path: goalOrderPath(jane.id), ifMatch: null, token: 'token-1', body: { goalIds: [bus.id, breakfast.id] } },
+    ]);
+    expect(requests().slice(-2)).toEqual([`PUT ${goalOrderPath(jane.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([janesActiveGoals[1], janesActiveGoals[0]]);
+    expect(within(goalsSection()!).getByRole('button', { name: `Move down, ${breakfast.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved down to number 2 of 2');
   });
 
   it('of a participant just added take one added on the page, reading their list only after it', async () => {
