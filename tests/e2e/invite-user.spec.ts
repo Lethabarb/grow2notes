@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Locator, Page, Request, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
+import { expectNothingKept } from './kept.ts';
 import { manager, serveMe } from './me.ts';
 import { answerInvites, holdNextInvite, people, serveUsers } from './users.ts';
 
@@ -80,33 +81,6 @@ async function expectKept(page: Page, name: string, email: string, role: 'Worker
   await expect(nameField(page)).toHaveValue(name);
   await expect(emailField(page)).toHaveValue(email);
   await expect(role === 'Worker' ? workerRadio(page) : managerRadio(page)).toBeChecked();
-}
-
-/**
- * Expects nothing of the person typed in where the page could keep it (users.md AC3): the title, the address, which
- * holds no query or fragment, `history.state`, which holds React Router's own key and index and nothing of the app's
- * in its usr (app-shell.md › Structure), and the browser's storage (D22, design.md §9.6).
- */
-async function expectNothingKept(page: Page, ...values: string[]) {
-  const kept = await page.evaluate(async () => ({
-    title: document.title,
-    address: location.href,
-    state: history.state as unknown,
-    storage: [
-      localStorage.length,
-      sessionStorage.length,
-      (await indexedDB.databases()).length,
-      (await caches.keys()).length,
-    ],
-  }));
-  for (const value of values) {
-    expect(kept.title).not.toContain(value);
-    expect(kept.address).not.toContain(value);
-    expect(kept.address).not.toContain(encodeURIComponent(value));
-  }
-
-  expect(kept.state).toEqual({ usr: null, key: expect.any(String), idx: expect.any(Number) });
-  expect(kept.storage).toEqual([0, 0, 0, 0]);
 }
 
 /**

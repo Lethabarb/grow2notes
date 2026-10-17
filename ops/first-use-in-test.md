@@ -291,3 +291,54 @@ the steps above. Step 30 signs out everyone in test, so run these when no one el
     Look for: one `admin.signin_reset` row from step 29, with no actor, the `EntityType` `User` and no `IpAddress`,
     and none from its refused run; and, from step 30, one `admin.signout_all` row for each organisation in test, each
     with no actor and the `EntityType` `Organisation`. (S00.03.06, the audit events in test.)
+
+### Reset sign-in, Deactivate and Reactivate, on the laptop and both phones
+
+These steps use the two workers that step 18 set up, the password one and the passkey one, and the Android phone,
+with Chrome and TalkBack, as well as the kit in *Before you start*. The worker whose sign-in is reset sets up again
+from the email, so keep the testing mailbox open.
+
+32. Sign the password worker in on the laptop in Edge and on the iPhone in Safari, with email, password and a 6-digit
+    code, and leave Today open on each. On the laptop in Chrome, sign in as account A as in step 9, with NVDA running,
+    choose Manage, then Users, and open the password worker's page. Press Reset sign-in. Look for NVDA saying "Reset
+    sign-in for", the worker's name, "alert dialog", then both lines of the dialog, the second ending with the worker's
+    address, and the heading once, with no ring drawn round it. Press Go back: look for focus back on Reset sign-in, and
+    the Status still Active. Press Reset sign-in again, Tab to the red "Reset sign-in for …" and press it. Look for:
+    NVDA saying "Status, Invited", with focus on the Status row; Resend invite in place of Reset sign-in; and no banner.
+    On each of the worker's devices, reload the page: look for the sign-in page. Within 5 minutes, look for one email to
+    the worker in the testing mailbox (junk included), with the subject "Set up your Grow2Notes sign-in", naming
+    Grow2Notes and no other organisation, product or person, and holding one link. Follow it on the iPhone, set up with
+    Use a password and authenticator app, and sign in once more with a code from the app. (S00.06.04's two devices and
+    its email in test; users.md AC4 for the reset email, AC24 and AC25, and its NVDA pass over the Reset sign-in
+    dialog.)
+33. Sign the passkey worker in on the iPhone in Safari, with the passkey, and on the laptop in Chrome, choosing the
+    iPhone when Chrome offers it, and leave Today open on each. On the iPhone, in Chrome, which keeps its own cookies
+    apart from Safari's, sign in as account B with email, password and a 6-digit code, with VoiceOver on, choose Manage,
+    then Users, and open the passkey worker's page. Press Deactivate. Look for VoiceOver saying "Deactivate", the name,
+    then design.md's words, "… will be signed out everywhere now and can't sign in. Their notes stay.", and the blue
+    "Deactivate …". Confirm. Look for VoiceOver saying "Status, Deactivated", and Reactivate as the only action under
+    the rule. On the laptop, reload the worker's tab: look for the sign-in page; in the worker's Safari tab, reload:
+    look for the sign-in page, and that signing in with the passkey fails. Back as account B, press Reactivate. Look for
+    "Reactivating…" if it takes more than a moment, then VoiceOver saying "Status, Active", with Reset sign-in and
+    Deactivate back. Sign the worker in again with the passkey, and look for Today. Wait 5 minutes and look for no email
+    to the worker from either change. (S00.06.05's two devices in test; users.md AC26, AC28, and its VoiceOver pass over
+    the Deactivate dialog and Reactivate.)
+34. On the Android phone, with TalkBack on, sign in as account B in Chrome, as in step 24, choose Manage, then Users,
+    and open the passkey worker's page. Press Reset sign-in, listen to the dialog as in step 32, and press Go back;
+    then press Deactivate, listen as in step 33, and press Go back. Look for TalkBack reading each dialog's title,
+    "alert dialog" and its words, and focus back on the button that opened it each time, with the Status still Active.
+    (users.md's TalkBack pass over both dialogs.)
+35. On the Android phone, with TalkBack off, open the passkey worker's page as in step 34. Press Reset sign-in, then go
+    back with the phone's back gesture, or Back. Look for: the dialog closes, the page and its address stay, the Status
+    is still Active, and no email reaches the worker. Do the same with Deactivate. To see where focus went, connect the
+    phone to the laptop by USB with USB debugging on, open `chrome://inspect` in Chrome on the laptop, inspect the tab,
+    and run `document.activeElement.textContent` in its console after each close: look for "Reset sign-in", then
+    "Deactivate". Then, in the inspected tab's Network panel, choose a throttling profile with a latency of 3,000 ms,
+    adding it as in step 24 if it is not there; keep it well under 10 seconds, after which the app gives up on a
+    request that the server may still carry out. Press Deactivate and its "Deactivate …", then the back gesture at
+    once. Look for: the dialog stays open with both buttons unchanged, and "Deactivating…" under them after a second;
+    once it ends, the Status reads Deactivated. Choose No throttling and press Reactivate. Do the same with Reset
+    sign-in on the password worker, whose sign-in it resets: then follow the new email's link on the iPhone and set the
+    worker up again as in step 32. Write down, for each dialog, whether the back gesture closed it and whether it did
+    nothing while busy.
+    (users.md AC24 and AC31, the Android back gesture, which Playwright's Escape stands in for in CI.)

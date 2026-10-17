@@ -5,12 +5,18 @@ import { whereFocusIs } from './focus.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
-import { alex, chris, failUsers, jo, madeUpUser, people, sam, serveUsers } from './users.ts';
+import { alex, chris, failUsers, jo, kim, madeUpUser, people, sam, serveUsers } from './users.ts';
 
 // The Users list and the user detail in the published app (S00.06.01), against users.md's criteria for access, the
-// list and the detail page. The first test signs in for real, through setup with a passkey on the virtual
-// authenticator, to meet the app's own GET /api/admin/users; the others answer /api/auth/me and /api/admin/users in
-// the browser with made-up people (me.ts, users.ts), so that neither request reaches the app.
+// list and the detail page, with the detail's actions for each status (S00.06.04, S00.06.05). The first test signs in
+// for real, through setup with a passkey on the virtual authenticator, to meet the app's own GET /api/admin/users; the
+// others answer /api/auth/me and /api/admin/users in the browser with made-up people (me.ts, users.ts), so that
+// neither request reaches the app.
+
+// The notice on the only active manager's own page (users.md *States* › User detail).
+const lastManagerNotice =
+  'You are the only active manager, so you cannot reset your own sign-in, deactivate your account or make yourself ' +
+  'a worker. To do any of these, first make someone else a manager.';
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -181,9 +187,11 @@ test('signed in for real, Manage then Users lists the new manager alone, Active 
   await expect(heading(page)).toHaveText(invite.displayName);
   await expect(main(page).getByRole('term')).toHaveText(['Email address', 'Role', 'Status']);
   await expect(main(page).getByRole('definition')).toHaveText([invite.email, 'Manager', 'Active']);
-  // An Active user's actions so far: Edit alone (users.md *Which actions show, by status*).
+  // The organisation's only active manager, on their own page: Edit, and the notice in place of Reset sign-in and
+  // Deactivate (users.md *Which actions show, by status*, AC22).
   await expect(main(page).getByRole('link')).toHaveText(['Edit']);
   await expect(main(page).getByRole('button')).toHaveCount(0);
+  await expect(main(page).getByText(lastManagerNotice)).toBeVisible();
 });
 
 test('the current users show by name, then the Deactivated under their <h2>, each row with email and status', async ({
@@ -403,19 +411,20 @@ test("in a dark contrast theme, each row's chevron is drawn in the theme's text 
   }
 });
 
-// users.md's *Which actions show, by status*, for the actions built so far (AC21): Edit, then Resend invite while
-// Invited.
-for (const { user, buttons } of [
-  { user: alex, buttons: ['Resend invite'] },
-  { user: jo, buttons: [] },
-  { user: chris, buttons: [] },
+// users.md's *Which actions show, by status* (AC21): Edit; Resend invite while Invited, or Reset sign-in while Active;
+// then Deactivate, or Reactivate while Deactivated. Sam Lee's own page offers both with a second active manager (AC22).
+for (const { user, users, buttons } of [
+  { user: alex, users: people, buttons: ['Resend invite', 'Deactivate'] },
+  { user: jo, users: people, buttons: ['Reset sign-in', 'Deactivate'] },
+  { user: chris, users: people, buttons: ['Reactivate'] },
+  { user: sam, users: [...people, kim], buttons: ['Reset sign-in', 'Deactivate'] },
 ]) {
-  const actions = ['Edit', ...buttons].join(' and ');
-  test(`a user's page, ${user.status}, shows the name, the summary list and ${actions}, and passes axe`, async ({
+  const actions = ['Edit', ...buttons].join(', ');
+  test(`${user.displayName}'s page, ${user.status}, shows the summary list and ${actions}, and passes axe`, async ({
     page,
   }) => {
     await serveMe(page, manager);
-    await serveUsers(page, people);
+    await serveUsers(page, users);
     await page.goto(`/manage/users/${user.id}`);
 
     await expect(heading(page)).toHaveText(user.displayName);
@@ -436,16 +445,52 @@ for (const { user, buttons } of [
     await expect(pageBar(page).getByRole('link')).toHaveText('Users');
     await expect(pageBar(page).getByRole('link')).toHaveAttribute('href', '/manage/users');
 
-    // From the back link, Edit, then each button (users.md *Focus order*).
+    // The serious action after the rule, apart from the routine ones (users.md component C item 7).
+    await expect(main(page).getByRole('separator')).toHaveCount(1);
+    await expect(main(page).getByText(lastManagerNotice)).toHaveCount(0);
+
+    // From the back link, Edit, then each button, and nothing after the last, as the Status row adds no stop (users.md
+    // *Focus order*).
     await pageBar(page).getByRole('link').focus();
     for (const stop of [edit, ...buttons.map((name) => main(page).getByRole('button', { name }))]) {
       await page.keyboard.press('Tab');
       await expect(stop).toBeFocused();
     }
+    await page.keyboard.press('Tab');
+    expect(await whereFocusIs(page)).toBe('outside the page');
 
     await expectAxeToPass(page);
   });
 }
+
+test("the only active manager's own page shows Edit, the rule and the notice, with no stop after Edit (AC22)", async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await serveUsers(page, people);
+  await page.goto(`/manage/users/${sam.id}`);
+
+  await expect(heading(page)).toHaveText(sam.displayName);
+  await expect(main(page).getByRole('link')).toHaveText(['Edit']);
+  await expect(main(page).getByRole('button')).toHaveCount(0);
+  await expect(main(page).getByRole('separator')).toHaveCount(1);
+  const notice = main(page).getByText(lastManagerNotice);
+  await expect(notice).toBeVisible();
+  // Below the rule, in the content column, never greyed: body text on the notice's tint (status-messages.md).
+  const [rule, noticeBox] = [await boxOf(main(page).getByRole('separator')), await boxOf(notice)];
+  expect(noticeBox.y).toBeGreaterThan(rule.y);
+  await expect(notice).toHaveCSS('color', 'rgb(11, 12, 12)');
+  await expect(page.locator('[disabled]')).toHaveCount(0);
+
+  // The notice and the Status row add no stop (users.md *Focus order*).
+  await pageBar(page).getByRole('link').focus();
+  await page.keyboard.press('Tab');
+  await expect(main(page).getByRole('link', { name: 'Edit' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  expect(await whereFocusIs(page)).toBe('outside the page');
+
+  await expectAxeToPass(page);
+});
 
 test("with no connection, a user's page shows its fallback <h1>, its failure and Try again, and passes axe", async ({
   page,

@@ -105,6 +105,8 @@ export const strings = {
   saved: 'Saved',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
+  /** The safe button of a dialog that confirms an action, under the one that confirms it (confirm-dialog.md). */
+  goBack: 'Go back',
   /**
    * A person's name and email address, each as a field's label or a summary's term (sign-in.md components 6 and 13,
    * users.md component B).
@@ -272,6 +274,40 @@ export const strings = {
      */
     resendInvite: 'Resend invite',
     resendInviteDescription: 'Sends a new setup link. The old link stops working.',
+    /** Reset sign-in, for an Active user, with the description above it; it opens `resetDialog`. */
+    resetSignIn: 'Reset sign-in',
+    resetSignInDescription: 'For a lost phone, a new phone or a forgotten password. Check who is asking first.',
+    /** Group 2's Deactivate, for an Invited or Active user, with its description; it opens `deactivateDialog`. */
+    deactivate: 'Deactivate',
+    deactivateDescription: 'For someone who no longer works here. Their notes stay.',
+    /** Group 2's Reactivate, for a Deactivated user, with the description above it and its busy label. */
+    reactivate: 'Reactivate',
+    reactivateDescription: 'Lets them sign in again.',
+    reactivating: 'Reactivating…',
+    /** In group 2, in place of Reset sign-in and Deactivate, on your own page as the only active manager (A26). */
+    lastManagerNotice:
+      'You are the only active manager, so you cannot reset your own sign-in, deactivate your account or make '
+      + 'yourself a worker. To do any of these, first make someone else a manager.',
+    /**
+     * The Reset sign-in dialog's words for your own account, its busy line, and its refusal when you are the only
+     * active manager after all (users.md *Dialogs*); its words for someone else name them, in `msg`.
+     */
+    resetDialog: {
+      ownTitle: 'Reset your own sign-in?',
+      ownConfirm: 'Reset my sign-in',
+      busy: 'Resetting sign-in…',
+      lastManager:
+        'You are the only active manager, so you cannot reset your own sign-in. Make someone else a manager first.',
+    },
+    /** The Deactivate dialog's words, as `resetDialog`'s are. */
+    deactivateDialog: {
+      ownTitle: 'Deactivate your own account?',
+      ownBody: 'You will be signed out everywhere now and cannot sign in again. Your notes stay.',
+      ownConfirm: 'Deactivate my account',
+      busy: 'Deactivating…',
+      lastManager:
+        'You are the only active manager, so you cannot deactivate your account. Make someone else a manager first.',
+    },
   },
   /**
    * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and

@@ -18,14 +18,41 @@ export function byName(a: AdminUser, b: AdminUser): number {
 }
 
 /** An action on a user's page (users.md component C). */
-export type UserAction = 'edit' | 'resendInvite';
+export type UserAction = 'edit' | 'resendInvite' | 'resetSignIn' | 'deactivate' | 'reactivate';
+
+/**
+ * Whether the user `id` is the organisation's only Active manager (A26): exactly one of `users` is a manager whose
+ * status is Active, and it is them. The page asks it of the viewer, whose ID `['me']` gives.
+ */
+export function isOnlyActiveManager(users: readonly AdminUser[], id: string): boolean {
+  const activeManagers = users.filter(({ role, status }) => role === 'Manager' && status === 'Active');
+  return activeManagers.length === 1 && activeManagers[0].id === id;
+}
 
 /**
  * The actions that a user's page offers for `user` now, in the order that it shows them (users.md component C, *Which
- * actions show, by status*): Edit for every status, and Resend invite while Invited. The server is still the gate.
+ * actions show, by status*): Edit for every status; Resend invite while Invited, or Reset sign-in while Active; then,
+ * after the rule, Deactivate while Invited or Active, or Reactivate while Deactivated. `onlyManager`, on the viewer's
+ * own page while they are the only Active manager, takes away Reset sign-in and Deactivate, whose place the
+ * last-manager notice takes. The server is still the gate (`409 user.last_manager`).
  */
-export function allowedActions(user: AdminUser): readonly UserAction[] {
-  return user.status === 'Invited' ? ['edit', 'resendInvite'] : ['edit'];
+export function allowedActions(user: AdminUser, onlyManager: boolean): readonly UserAction[] {
+  const actions: UserAction[] = ['edit'];
+  if (user.status === 'Invited') {
+    actions.push('resendInvite');
+  }
+
+  if (user.status === 'Active' && !onlyManager) {
+    actions.push('resetSignIn');
+  }
+
+  if (user.status === 'Deactivated') {
+    actions.push('reactivate');
+  } else if (!onlyManager) {
+    actions.push('deactivate');
+  }
+
+  return actions;
 }
 
 /** A user's fields as a manager types them, by the names that the API's JSON gives them (design.md §6.6). */

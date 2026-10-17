@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../api/api.ts';
-import { allowedActions, userRefusal, validateUser, type UserValues } from './userRules.ts';
+import type { Role } from '../../api/me.ts';
+import { allowedActions, isOnlyActiveManager, userRefusal, validateUser, type UserValues } from './userRules.ts';
 import type { AdminUser, UserStatus } from './usersQuery.ts';
 
 const alex: UserValues = { displayName: 'Alex Park', email: 'alex.park@example.org', role: 'Worker' };
@@ -23,13 +24,46 @@ describe('allowedActions', () => {
     concurrencyStamp: 'stamp-alex',
   });
 
-  // users.md's *Which actions show, by status*, for the actions built so far.
+  // users.md's *Which actions show, by status*.
   it.each<{ status: UserStatus; actions: string[] }>([
-    { status: 'Invited', actions: ['edit', 'resendInvite'] },
-    { status: 'Active', actions: ['edit'] },
-    { status: 'Deactivated', actions: ['edit'] },
+    { status: 'Invited', actions: ['edit', 'resendInvite', 'deactivate'] },
+    { status: 'Active', actions: ['edit', 'resetSignIn', 'deactivate'] },
+    { status: 'Deactivated', actions: ['edit', 'reactivate'] },
   ])('gives $actions for someone $status, in the order the page shows them', ({ status, actions }) => {
-    expect(allowedActions(alexWhen(status))).toEqual(actions);
+    expect(allowedActions(alexWhen(status), false)).toEqual(actions);
+  });
+
+  it("gives Edit alone on the only active manager's own page, where the notice takes the others' place", () => {
+    expect(allowedActions({ ...alexWhen('Active'), role: 'Manager' }, true)).toEqual(['edit']);
+  });
+});
+
+describe('isOnlyActiveManager', () => {
+  /** A made-up user with this ID, role and status. */
+  const user = (id: string, role: Role, status: UserStatus): AdminUser => ({
+    id,
+    email: `${id}@example.org`,
+    displayName: id,
+    role,
+    status,
+    invitedAtUtc: '2026-09-01T00:00:00Z',
+    activatedAtUtc: status === 'Invited' ? null : '2026-09-02T00:00:00Z',
+    deactivatedAtUtc: status === 'Deactivated' ? '2026-09-30T00:00:00Z' : null,
+    concurrencyStamp: `stamp-${id}`,
+  });
+  const sam = user('sam', 'Manager', 'Active');
+  const workers = [user('jo', 'Worker', 'Active'), user('alex', 'Worker', 'Invited')];
+
+  it('is true for the one Active manager, beside workers and managers who are not Active', () => {
+    const users = [sam, ...workers, user('kim', 'Manager', 'Invited'), user('lee', 'Manager', 'Deactivated')];
+    expect(isOnlyActiveManager(users, 'sam')).toBe(true);
+  });
+
+  it('is false for anyone else, and for each of two Active managers', () => {
+    expect(isOnlyActiveManager([sam, ...workers], 'jo')).toBe(false);
+    const both = [sam, user('kim', 'Manager', 'Active'), ...workers];
+    expect(isOnlyActiveManager(both, 'sam')).toBe(false);
+    expect(isOnlyActiveManager(both, 'kim')).toBe(false);
   });
 });
 

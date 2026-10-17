@@ -17,8 +17,9 @@ import {
   serveSaves,
 } from './guidePrompts.ts';
 import { boxOf } from './layout.ts';
-import { failMe, manager, serveMe, worker, type Me } from './me.ts';
+import { failMe, manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
+import { signInInPlaceAs } from './signedOut.ts';
 import { people, serveUsers } from './users.ts';
 
 // Manage > Guide prompts in the published app (S01.04.01, S01.04.02), against guide-prompts.md's criteria for access
@@ -1145,22 +1146,6 @@ test('at 28:00 the warning closes the leave dialog as Stay, sending nothing; aft
 
 // Sign-in in place, sign-in.md's view C, over text not saved (guide-prompts.md *Leaving*'s last two criteria).
 const signedOutHeading = 'You’ve been signed out';
-const codeLabel = 'Enter the 6-digit code from your authenticator app';
-
-/**
- * Signs in on view C as `me`, through the password and code steps, which the browser answers for the app, as it
- * answers `/api/auth/me` for the new session from then on, so that the address and password can be any.
- */
-async function signInInPlaceAs(page: Page, me: Me) {
-  await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
-  await page.route('**/api/auth/login/totp', (route) => route.fulfill({ json: me }));
-  await serveMe(page, me);
-  await main(page).getByRole('textbox', { name: 'Email address' }).fill('someone@example.org');
-  await page.getByLabel('Password', { exact: true }).fill('made-up password');
-  await main(page).getByRole('button', { name: 'Continue' }).click();
-  await page.getByLabel(codeLabel).fill('123456');
-  await main(page).getByRole('button', { name: 'Sign in', exact: true }).click();
-}
 
 test('a Save that meets a 401 signs out in place; the same manager signing in finds the text kept, not saved', async ({
   page,

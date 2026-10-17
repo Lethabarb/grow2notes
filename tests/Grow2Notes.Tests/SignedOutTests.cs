@@ -17,9 +17,6 @@ namespace Grow2Notes.Tests;
 /// and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers
 /// still matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with
 /// no cookie never reaches one.
-/// the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still
-/// matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with no
-/// cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {

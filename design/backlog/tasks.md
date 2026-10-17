@@ -1230,6 +1230,21 @@ protected. From the console the operator can reset the last manager's sign-in or
   and blue in the standard one; busy, both buttons are `aria-disabled`, presses and Escape do nothing, and the busy
   line shows at 1 s and not before; an error leaves focus on the confirm button; and once confirming is no longer
   possible, Go back has focus.
+- Where design.md is silent (step 6): one rule moves focus to the Status row, for each action's `204`, for Resend
+  invite's and Reactivate's `412`, and for Go back from a dialog that was no longer possible: once the page shows the
+  user as the list fetched again gives them, focus that the change left on the page itself goes to the row, as when
+  the button pressed has gone, or the dialog has been unmounted after its `204`; while the button stays, focus stays on
+  it (confirm-dialog.md *Behaviour* 6's "its owner", where users.md names none for a trigger gone by Go back). A
+  dialog keeps the words and the stamp of the user as it opened, while the page behind it shows the list fetched
+  again. A `409 user.last_manager` fetches the list, as a `412` does, so that Go back shows the page as it now is
+  (confirm-dialog.md *Behaviour* 5). A dialog that a browser closes while busy (*Behaviour* 7) shows its `204` as an
+  open one does, and its failure in the page's error region, in the page's words: the `412` as Resend invite's, and
+  the `409` and the rest as the dialog has them. Resend invite, Reactivate and the dialogs' confirmation each have a
+  mutation of their own, so that a Deactivate confirmed while a resend is out keeps both callbacks. The last-manager
+  notice is status-messages.md's notice, T02's `Notice` in `src/components/`, given its words as a string, which step
+  7's notice on Edit user reuses too. In the end-to-end tests, `signInInPlaceAs` moves to `signedOut.ts` and
+  `expectNothingKept` to `kept.ts`, for the specs that share them, and the fixtures gain `resetSignIn` and
+  `secondDevice`.
 
 ### Steps
 
@@ -1321,7 +1336,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       nothing sent and the warning is open, and after Stay signed in's `204` focus is on its trigger; a `401` with a
       confirmation open closes it before view C shows; and Resend invite's `412`, when the refetched user is no
       longer Invited, focuses the Status row, in place of the `<h1>`
-- [ ] Add Reset sign-in, Deactivate and Reactivate to a user's page (users.md component C items 2 and 5 to 8,
+- [x] Add Reset sign-in, Deactivate and Reactivate to a user's page (users.md component C items 2 and 5 to 8,
       *States* › User detail and *Dialogs*, *Interactions*, AC4, AC21, AC22, AC24 to AC33 and AC40; S00.06.04's and
       S00.06.05's criteria linked to users.md and app-shell.md, and their Notes from S00.06.01; see Notes):
       `isOnlyActiveManager` and `allowedActions(user, onlyManager)` in `userRules.ts`; Reset sign-in in group 1 for

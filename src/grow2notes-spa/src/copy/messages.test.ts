@@ -30,3 +30,50 @@ describe("a Save's failure (microcopy.md §4's Action failed)", () => {
     expect(msg.notSaved('server')).toBe('Not saved: something went wrong. Try again.');
   });
 });
+
+// users.md *States* › User detail and *Dialogs*, word for word (AC40), with the typographic apostrophe of src/copy.
+describe("a user's actions and their dialogs", () => {
+  it('say that Reset sign-in, Deactivate or Reactivate failed, and why', () => {
+    expect(msg.notReset('offline')).toBe('Not reset: no connection. Try again.');
+    expect(msg.notReset('server')).toBe('Not reset: something went wrong. Try again.');
+    expect(msg.notDeactivated('offline')).toBe('Not deactivated: no connection. Try again.');
+    expect(msg.notDeactivated('server')).toBe('Not deactivated: something went wrong. Try again.');
+    expect(msg.notReactivated('offline')).toBe('Not reactivated: no connection. Try again.');
+    expect(msg.notReactivated('server')).toBe('Not reactivated: something went wrong. Try again.');
+  });
+
+  it("give the Reset sign-in dialog's words for someone else, naming them and their address", () => {
+    expect(msg.resetTitle('Alex Park')).toBe('Reset sign-in for Alex Park?');
+    expect(msg.resetCheckWhoIsAsking('Alex Park')).toBe(
+      'Only do this after you have checked, by phone or in person, that Alex Park is the one asking.',
+    );
+    expect(msg.resetWhatHappens('alex.park@example.org')).toBe(
+      'Their current way of signing in will be removed, and they will be signed out everywhere. ' +
+        'A new setup link will be emailed to alex.park@example.org.',
+    );
+    expect(msg.resetConfirm('Alex Park')).toBe('Reset sign-in for Alex Park');
+    expect(msg.resetOwnWhatHappens('sam.lee@example.org')).toBe(
+      'You will be signed out everywhere now. A new setup link will be emailed to sam.lee@example.org.',
+    );
+  });
+
+  it("give the Deactivate dialog's words, design.md's body kept with its contraction", () => {
+    expect(msg.deactivateTitle('Alex Park')).toBe('Deactivate Alex Park?');
+    expect(msg.deactivateBody('Alex Park')).toBe(
+      'Alex Park will be signed out everywhere now and can’t sign in. Their notes stay.',
+    );
+    expect(msg.deactivateInvitedBody('Alex Park')).toBe(
+      'Alex Park has not set up their account yet. Their setup link will stop working.',
+    );
+    expect(msg.deactivateConfirm('Alex Park')).toBe('Deactivate Alex Park');
+  });
+
+  it('give the sentences for a user someone else changed first, on the page and in a dialog', () => {
+    expect(msg.userChanged('Alex Park')).toBe(
+      'Someone else has just changed Alex Park’s account. The page now shows the latest details.',
+    );
+    expect(msg.userChangedGoBack('Alex Park')).toBe(
+      'Someone else has just changed Alex Park’s account. Go back to see the latest details.',
+    );
+  });
+});

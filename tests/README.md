@@ -113,14 +113,15 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
-(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) and the
-Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) get their setup links from the
-published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the second terminal gives
-them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
-string and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs
-a link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
-failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
-database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) and the two tests of a user's actions
+that meet the app's own (`e2e/user-actions.spec.ts`) get their setup links from the published app's own
+`admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
+second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
+app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
+database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
+Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -135,7 +136,7 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Three more fixtures are there for the tests that name them, and only those run them:
+Five more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
   `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
@@ -143,12 +144,18 @@ Three more fixtures are there for the tests that name them, and only those run t
   printed.
 - `secondInvite` runs it once more, for another made-up organisation and manager, Jordan Sample, for a test of two
   people on one browser.
+- `resetSignIn(email)` runs the published app's `admin reset-signin` for that address in the same way, and gives the
+  link that it printed: a new one for someone invited from the Users screen, whose emailed link the test cannot read,
+  or for someone whose sign-in it resets.
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
   `credentials()` lists the passkeys that it holds, and `addPasskey(rpId)` adds one that no account holds (below).
   With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
   it does.
+- `secondDevice` gives a second device: a `page` in a browser context of its own, with none of the test page's
+  cookies, under the same options and the same check of the policy, and its own `authenticator`, for a second person
+  signed in beside the first, or one person on two devices.
 
 A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
 key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
@@ -276,6 +283,20 @@ the busy button and its emptied line, until the test answers it with `route.fulf
 time zone sets the zone with `test.use({ timezoneId })` and the day with `page.clock.install({ time })`, both before
 the page loads. The test that meets the app's own resend invites a worker through Invite user first, and reads the
 time from the app's own `Date` header. `e2e/resend-invite.spec.ts` is the example of each.
+
+Reset sign-in sends the same `POST …/setup-link`, and Deactivate and Reactivate send theirs to the paths that
+`deactivations` and `reactivations` match. `answerChanges(page, pattern, answer)` answers each change to `pattern`, one
+of the three, as `answerSetupLinks` answers a resend, which it is with `setupLinks`; `holdNext(page, pattern)` holds
+the next one, for a busy dialog. Beside users.md's four, `kim` is a second Active manager, Kim Tran, so that Sam Lee's
+own page offers Reset sign-in and Deactivate, and `withChanged(users, user, changed)` gives the list as the app gives
+it after a change to `user`, with a new stamp, which a test serves before the press, for the refetch that follows the
+change. A test of your own reset or deactivation calls `failMe(page, 401)` before it confirms, as the change ends the
+session, so that the page that it loads afresh meets the app's `401`. The two tests that meet the app's own changes
+sign in for real and invite through Invite user: a worker, deactivated and then reactivated; and a second manager, who
+sets up on the `secondDevice` from the link that `resetSignIn` gives, and whose sign-in the first then resets.
+`e2e/user-actions.spec.ts` is the example of each, `expectNothingKept(page, ...values)` from `e2e/kept.ts` checks that
+no name or address is kept where a page could keep it (users.md AC3), and `signInInPlaceAs(page, me)` from
+`e2e/signedOut.ts` signs in again on view C, the password and code steps answered in the browser.
 
 ### Answering `/api/admin/guide-prompts`
 
