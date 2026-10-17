@@ -1172,7 +1172,8 @@ protected. From the console the operator can reset the last manager's sign-in or
     focus stays on it, and nothing is sent again by itself. Until T02's route-change rule is on `main`, Edit user's
     Save focuses the user page's `<h1>`, or Today's after your own change to Worker, itself after its replace, drawn
     at once with `flushSync`, as Invite user does, and Edit's back link pushes the user's page; whichever of T02 and
-    T04 merges second leaves both to T02's rule and opened-from memory.
+    T04 merges second leaves both to T02's rule and opened-from memory, and has the Status row take its focus through
+    T02's `focusInsteadOfHeading()`, so that no `<h1>` mounting later takes a focus still pending for it.
   - Your own account: your own reset, deactivation or new address ends in `fullPageLoad()`, as no Users page arms the
     leave guard; your own new name refreshes `/me`, for the Account panel; and your own change to Worker refreshes
     `/me`, then goes to Today, whose nav has no Manage. The page takes the viewer's ID for `isOnlyActiveManager` from
@@ -1216,6 +1217,19 @@ protected. From the console the operator can reset the last manager's sign-in or
   operator-command tests share `AdminCommandRuns`, the tests that a link has ended share
   `SetupLinks.AssertSetupLinkEndedAsync`, and the tests of what is logged look for a setup token escaped too, as a
   link holds it (`RecordedLog.Holds`).
+- Where design.md is silent (step 5): the alert line is bold in the error colour, as `RequestAlert`'s is; the shell
+  sets an `autofocus` attribute on what has first focus before `showModal()`, which then focuses it, and focuses it
+  directly too; and the warning, as it opens again after a failed ping, closes any confirmation opened while it was
+  closed, as it does at 28:00. No dialog in the app sends a request or opens on its title until step 6, so step 5
+  proves those parts of the shell in Vitest alone, on a dialog that the test renders, and its Playwright tests prove
+  what the app already shows: the leave dialog opening on Stay on this page with its alert and status lines empty,
+  the 28:00 warning and a `401` closing it, and Resend invite's `412` focusing the Status row. jsdom proves no focus
+  ring, as base.css is not loaded there, and its stand-in for `showModal()` moves no focus, so step 6 adds these
+  checks in the browser, on the Reset sign-in and Deactivate dialogs: no ring shows round the focused title; Enter
+  pressed as the dialog opens sends nothing; the confirm button's computed background is red in the warning tone
+  and blue in the standard one; busy, both buttons are `aria-disabled`, presses and Escape do nothing, and the busy
+  line shows at 1 s and not before; an error leaves focus on the confirm button; and once confirming is no longer
+  possible, Go back has focus.
 
 ### Steps
 
@@ -1293,7 +1307,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       of B signed in on two devices each, makes every device's next request get `401`, writes one `admin.signout_all`
       for each organisation with no actor, and ends an Invited user's unused link; neither command logs an address or
       a link; and ops/first-use-in-test.md gains the operator's run of both commands in test
-- [ ] Add to the confirm-dialog shell, the session warning and the user page what the action dialogs share
+- [x] Add to the confirm-dialog shell, the session warning and the user page what the action dialogs share
       (confirm-dialog.md *Anatomy*, *Behaviour* 2, 3, 5, 7 and 8, *States*; app-shell.md's 28:00 row and
       session-timeout.md *The warning* step 1, which S00.06.04 and S00.06.05 link, and their Notes from S00.04.07;
       users.md component C item 2; see Notes): `ConfirmDialog`'s focus on its title, warning tone, alert line, busy
@@ -1315,8 +1329,9 @@ protected. From the console the operator can reset the last manager's sign-in or
       as the only active manager, the last-manager notice; the Reset sign-in dialog in the warning tone and the
       Deactivate dialog in the standard one, each with its "your own" words and Deactivate's for an Invited person;
       mutations that send `If-Match`, are never retried and await the users refetch; the words in `src/copy`, which
-      its tests check for AC40's words; Vitest and Playwright tests: each status shows users.md's actions in order,
-      nothing is `disabled`, and the Tab order is users.md's, the notice and the Status row adding no stop (AC21); as
+      its tests check for AC40's words; Vitest and Playwright tests, among them the shell's checks in the browser that
+      step 5 left to these two dialogs (see Notes): each status shows users.md's actions in order, nothing is
+      `disabled`, and the Tab order is users.md's, the notice and the Status row adding no stop (AC21); as
       the only active manager, your own page shows Edit and the notice and no Reset sign-in or Deactivate, and with a
       second active manager both (AC22); Reset sign-in opens "Reset sign-in for {name}?" with focus on its title and
       a red "Reset sign-in for {name}", and Go back and Escape close it with focus on Reset sign-in and nothing sent

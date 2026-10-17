@@ -8,6 +8,7 @@ import type { Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { getPhase } from '../api/session.ts';
 import { buttonClass } from '../components/buttonClass.ts';
+import { ConfirmDialog } from '../components/ConfirmDialog.tsx';
 import { routes } from './routes.tsx';
 
 const mePath = '/api/auth/me';
@@ -500,6 +501,54 @@ describe('SessionTimeoutWarning', () => {
       expect(warning()).toHaveAttribute('open');
       expect(line()).toHaveTextContent(noConnection);
       expect(heading()).toHaveTextContent(twoMinutes);
+    });
+
+    // While the ping is out, the warning is closed and the page behind it can open a confirmation, which closes as
+    // Go back before the warning opens over it again, as at 28:00 (app-shell.md *28:00 idle on a visible page*).
+    it('on no connection after a close, close a confirmation opened since as Go back, then open again', async () => {
+      // No connection, which the ping finds 2 seconds after it is sent.
+      pings = [
+        () =>
+          new Promise((_resolve, reject) => {
+            setTimeout(() => {
+              reject(new TypeError('Failed to fetch'));
+            }, 2_000);
+          }),
+      ];
+      await openWarning();
+      act(() => {
+        warning().close();
+      });
+      await wait(0);
+      expect(warning()).not.toHaveAttribute('open');
+      const onClose = vi.fn<(confirmed: boolean) => void>();
+      render(
+        <ConfirmDialog
+          title="Leave without saving?"
+          primary="Stay on this page"
+          secondary="Leave without saving"
+          confirmButton="secondary"
+          initialFocus="primary"
+          onClose={onClose}
+        >
+          <p>Your changes to the guide prompts are not saved.</p>
+        </ConfirmDialog>,
+      );
+      const confirmation = screen.getByRole('alertdialog');
+
+      await wait(2_000);
+
+      expect(pingsSent()).toHaveLength(1);
+      expect(close.mock.contexts).toEqual([warning(), confirmation]);
+      expect(showModal.mock.contexts).toEqual([warning(), confirmation, warning()]);
+      expect(close.mock.invocationCallOrder[1]).toBeLessThan(showModal.mock.invocationCallOrder[2]);
+      expect(confirmation).not.toHaveAttribute('open');
+      expect(warning()).toHaveAttribute('open');
+      expect(line()).toHaveTextContent(noConnection);
+      // The confirmation's `close` event comes in a task of its own, which the fake clock puts a millisecond on, as the
+      // close came while the clock was running on.
+      await wait(1);
+      expect(onClose.mock.calls).toEqual([[false]]);
     });
 
     it('leave it closed when the ping for a close in a warning phase gets its 204', async () => {

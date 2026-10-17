@@ -4,7 +4,6 @@ import { Link } from 'react-router';
 import { ApiError, apiWithHeaders, classify } from '../../api/api.ts';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
-import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { time } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
@@ -31,7 +30,7 @@ function isStale(error: unknown): boolean {
  * Focus stays on it, and its line says when the server sent the link. A failure shows in the error region: for a
  * `412`, once the page shows the user as they are now.
  */
-export function UserActions({ user }: { user: AdminUser }) {
+export function UserActions({ user, focusStatus }: { user: AdminUser; focusStatus: () => void }) {
   const queryClient = useQueryClient();
   const actions = allowedActions(user);
   const resendButton = useRef<HTMLButtonElement>(null);
@@ -89,14 +88,14 @@ export function UserActions({ user }: { user: AdminUser }) {
         setSending(false);
         if (isStale(error)) {
           setFailure(msg.userChanged(user.displayName));
-          // The refetch can show the user no longer Invited, which takes the button away, so the <h1> takes focus
-          // rather than the page (users.md *Accessibility checklist*), whether the button is still there or has
-          // already gone and left focus on the page.
+          // The refetch can show the user no longer Invited, which takes the button away, so the Status row, which
+          // shows why, takes focus rather than the page (users.md component C item 2), whether the button is still
+          // there or has already gone and left focus on the page. While the button stays, so does focus.
           const now = queryClient.getQueryData(usersQuery.queryKey)?.find(({ id }) => id === user.id);
           const focused = document.activeElement;
           const onButtonOrPage = focused === resendButton.current || focused === document.body || focused === null;
           if (now !== undefined && !allowedActions(now).includes('resendInvite') && onButtonOrPage) {
-            focusPageHeading();
+            focusStatus();
           }
 
           return;

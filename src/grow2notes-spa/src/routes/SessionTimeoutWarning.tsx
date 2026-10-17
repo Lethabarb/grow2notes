@@ -3,6 +3,7 @@ import { api, classify } from '../api/api.ts';
 import { getPhase, isWarning, subscribe, type WarningPhase } from '../api/session.ts';
 import { Button } from '../components/Button.tsx';
 import dialogStyles from '../components/dialog.module.css';
+import { closeOpenDialogs } from '../components/openDialogs.ts';
 import { useDelayed } from '../components/useDelayed.ts';
 import { strings } from '../copy/strings.ts';
 import styles from './SessionTimeoutWarning.module.css';
@@ -57,8 +58,11 @@ export function SessionTimeoutWarning({ signedIn }: SessionTimeoutWarningProps) 
       return;
     }
 
-    // The button is the only thing in it that takes focus, so showModal() focuses it.
+    // The button is the only thing in it that takes focus, so showModal() focuses it. An open confirmation closes
+    // first, as Go back, so that the warning gives focus back to what opened it (app-shell.md *28:00 idle on a visible
+    // page*).
     if (open && !dialog.open) {
+      closeOpenDialogs();
       dialog.showModal();
     } else if (!open && dialog.open) {
       dialog.close();
@@ -82,6 +86,7 @@ export function SessionTimeoutWarning({ signedIn }: SessionTimeoutWarningProps) 
         // warning: the clock, held until the request settled, has already taken the step that the time gives.
         const dialog = dialogRef.current;
         if (dialog !== null && !dialog.open && isWarning(getPhase())) {
+          closeOpenDialogs();
           dialog.showModal();
         }
       }

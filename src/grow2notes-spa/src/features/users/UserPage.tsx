@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { useParams } from 'react-router';
 import { BackLink } from '../../components/BackLink.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
@@ -49,17 +50,24 @@ export function UserPage() {
   );
 }
 
-/** The user's name as the `<h1>`, their email, role and status in plain words, and the actions for their status. */
+/**
+ * The user's name as the `<h1>`, their email, role and status in plain words, and the actions for their status. The
+ * Status row takes focus when an action has changed the status, and so taken its own button away, as it shows what
+ * changed, in the place it is shown (users.md component C item 2).
+ */
 function UserDetail({ user }: { user: AdminUser }) {
+  const statusRow = useRef<HTMLDivElement>(null);
   return (
     <>
       <PageHeading>{user.displayName}</PageHeading>
       <SummaryList>
         <SummaryRow term={strings.emailAddress}>{user.email}</SummaryRow>
         <SummaryRow term={strings.users.role}>{strings.role[user.role]}</SummaryRow>
-        <SummaryRow term={strings.users.status}>{strings.userStatus[user.status]}</SummaryRow>
+        <SummaryRow ref={statusRow} tabIndex={-1} term={strings.users.status}>
+          {strings.userStatus[user.status]}
+        </SummaryRow>
       </SummaryList>
-      <UserActions user={user} />
+      <UserActions user={user} focusStatus={() => statusRow.current?.focus()} />
     </>
   );
 }

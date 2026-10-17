@@ -5,8 +5,25 @@
   margin: 0;
 }
 
+/* A dialog that opens on its title draws no ring round it, as it is not a control (confirm-dialog.md *States*). */
+.title:focus {
+  outline: none;
+}
+
 .body p {
   margin: var(--space-3) 0 0;
+}
+
+/* A request's failure, bold in the error colour, above the buttons, as a form's is (RequestAlert). */
+.error {
+  margin: 0;
+  color: var(--colour-error);
+  font-weight: 700;
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.error:not(:empty) {
+  margin-block-start: var(--space-4);
 }
 
 /* Stacked, the top button first, at every size. */
@@ -19,4 +36,13 @@
 /* The full width at every size, where the shared Button is as wide as its label from 40rem. */
 .button {
   inline-size: 100%;
+}
+
+/* In the page from the first render too, and taking no space while empty. */
+.busyLine {
+  margin: 0;
+}
+
+.busyLine:not(:empty) {
+  margin-block-start: var(--space-3);
 }

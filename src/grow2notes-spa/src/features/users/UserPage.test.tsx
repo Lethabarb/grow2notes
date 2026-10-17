@@ -231,6 +231,13 @@ function facts(): string[][] {
   });
 }
 
+/** The summary list's Status row, its third, the `<div>` that takes focus once an action has changed the status. */
+function statusRow(): Element | undefined {
+  const row = main().querySelector('dl')?.children[2];
+  expect(row?.firstElementChild).toHaveTextContent(/^Status$/);
+  return row;
+}
+
 /** Each element of the header that has `aria-current`, as its text and the attribute's value. */
 function currentItems(): string[] {
   const current = screen.getByRole('banner').querySelectorAll('[aria-current]');
@@ -390,6 +397,18 @@ describe('User', () => {
       expect(line()).toBeEmptyDOMElement();
     },
   );
+
+  it('makes the Status row alone a target that script can focus, out of the tab order, with no live role', async () => {
+    serve(usersPath, json(people));
+    renderApp(`/manage/users/${jo.id}`);
+    await settle();
+
+    const rows = Array.from(main().querySelector('dl')?.children ?? []);
+    expect(rows.map((row) => row.getAttribute('tabindex'))).toEqual([null, null, '-1']);
+    expect(statusRow()).not.toHaveAttribute('role');
+    expect(statusRow()).not.toHaveAttribute('aria-live');
+    expect(statusRow()).not.toHaveFocus();
+  });
 
   it('shows Invited Alex Park with Edit, then Resend invite under its description, then its empty line', async () => {
     serve(usersPath, json(people));
@@ -736,7 +755,7 @@ describe('Resend invite', () => {
     expect(resendLine().textContent).toBe(sentAt412pm);
   });
 
-  it('on a 412 whose list shows Alex now Active, takes Resend invite away, focus going to the <h1>', async () => {
+  it('on a 412 whose list shows Alex now Active, takes Resend invite away, focus going to the Status row', async () => {
     await openAlex();
     serve(setupLinkPath, problem(412, 'precondition.failed'));
     serve(
@@ -750,7 +769,7 @@ describe('Resend invite', () => {
     expect(actionAlert().textContent).toBe(someoneChangedAlex);
     expect(facts()[2]).toEqual(['Status', 'Active']);
     expect(resendButton()).not.toBeInTheDocument();
-    expect(pageHeading()).toHaveFocus();
+    expect(statusRow()).toHaveFocus();
   });
 
   it.each([
