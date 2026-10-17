@@ -345,8 +345,8 @@ from the email, so keep the testing mailbox open.
 
 ### Edit user, on the laptop
 
-This step uses the passkey worker that step 18 set up, Active again after steps 33 to 35, and a new address for them
-at the testing mailbox (*Before you start*).
+These steps use the passkey worker that step 18 set up, Active again after steps 33 to 35, a new address for them at
+the testing mailbox (*Before you start*), and accounts B and C, the other two managers.
 
 36. As account A on the laptop in Chrome, as in step 9, choose Manage, then Users, open the passkey worker's page and
     press Edit. Look for the hint "Changing the email resets sign-in and sends a setup link to the new address." under
@@ -357,3 +357,21 @@ at the testing mailbox (*Before you start*).
     `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and none to the old address. Follow the link on the
     iPhone in Safari, set up with Use a passkey (recommended), and look for Today. (S00.06.06's new address and its
     setup-link email in test; users.md AC36.)
+37. As account A on the laptop in Chrome, with NVDA running, open the passkey worker's page again as in step 36 and
+    press Edit. Tab through the form. Look for NVDA reading Name and Email address each with its label, value and
+    hint, Email address's being step 36's, then "Role, group" and "Worker, radio button, checked, 1 of 2, Writes notes
+    and reads past notes". Clear Name and press Save. Look for: the page titled "Error: Grow2Notes – Edit user"; NVDA
+    saying "There is a problem, heading level 2", then "Enter the person's name" as a link, which moves focus to Name.
+    Type the name again, put account B's address in place of the worker's, and press Save. Look for NVDA saying "There
+    is a problem, heading level 2", then "Another account already uses this email address. …" as a link. Leave by the
+    back link, which saves nothing. Then make accounts B and C workers: on each one's page press Edit, choose Worker,
+    listening for "Worker, radio button, checked", and press Save. Account A is now the only active manager. Open your
+    own page from Users and press Edit. Look for NVDA reading, after "Edit user, heading level 1", the notice "You are
+    the only active manager, so you cannot change your email or make yourself a worker. First make someone else a
+    manager.", and, with Email address, the hint "Changing your email resets your sign-in. …". Choose Worker and press
+    Save. Look for: NVDA saying "There is a problem, heading level 2", then "You are the only active manager, so you
+    cannot make yourself a worker. Make someone else a manager first." as a link; and no `PUT /api/admin/users/…` in
+    the Network panel. Leave by the back link, then make accounts B and C managers again, as you made them workers,
+    and look for each one's row on Users read with "Manager". (S00.06.06's screen-reader spot check, as backlog README
+    §9 asks of a changed form; users.md's NVDA pass over Edit user: its hints, the Role radios, a failed Save and the
+    last-manager notice.)

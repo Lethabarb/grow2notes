@@ -950,7 +950,11 @@ story adds one as follows.
   `Grow2Notes.Tests/Features/Users/SignInResetTests.cs` shows two managers resetting each other at once.
 - Give each event type that it writes a row in the shared audit-events test,
   `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
-  through the real endpoint, in seeded organisation A, adding the rows it acts on, or, for a change to an
-  organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the entry
-  that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new
-  entry, and compares the `Details` as JSON. `participant.created`'s row is the example.
+  through the real endpoint or operator command, in seeded organisation A, adding the rows it acts on, or, for a change
+  to an organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the
+  entry that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one
+  new entry, and compares the `Details` as JSON. `participant.created`'s row is the example. An event type with more
+  than one trigger gets a row for each, named by the event type, " by " and the trigger, as `user.setup_link_sent`'s
+  Resend invite and Reset sign-in are. A trigger that changes every organisation, as `admin signout-all` does, writes
+  one entry for each, so its row runs on a migrated database of its own, which `DatabasesOfTheirOwn` names, in an
+  organisation that it adds there.

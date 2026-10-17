@@ -6,58 +6,93 @@ using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Platform.Audit;
 
 /// <summary>
 /// The shared audit-events test (design.md §5.3, §5.4, §14 M5; S05.02.01): one table-driven test with a row for each
-/// event type of the catalogue, which triggers the event through the real endpoint, as the app's callers do, and finds
-/// exactly one new entry, with its <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>,
-/// <c>EntityId</c>, <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its
-/// row here, and T24 completes the table. Rows act in seeded organisation A and add rows of their own to it, changing
-/// no seeded row, but for a change to an organisation's own row, such as its guide prompts, which a row makes in an
-/// organisation that it adds (tests/README.md).
+/// event type of the catalogue, and for each trigger of an event type that has more than one, which triggers the event
+/// through the real endpoint or operator command, as the app's callers do, and finds exactly one new entry, with its
+/// <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>, <c>EntityId</c>,
+/// <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its row here, and T24
+/// completes the table. Rows act in seeded organisation A and add rows of their own to it, changing no seeded row, but
+/// for a change to an organisation's own row, such as its guide prompts, which a row makes in an organisation that it
+/// adds, and for a change to every organisation, which a row makes on a database of its own (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
-    : IClassFixture<Grow2NotesFactory>
+    : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
 {
     /// <summary>
-    /// Each event type's row: what triggers it, through the real endpoint, which gives the entry that it must write.
+    /// Each row: what triggers its event, through the real endpoint or operator command, which gives the entry that it
+    /// must write. A row is named by its event type, followed, for an event type with more than one trigger, by " by "
+    /// and the trigger.
     /// </summary>
     private static readonly Dictionary<string, Func<AuditEventsTests, Task<WrittenEvent>>> Rows = new()
     {
         [AuditEventTypes.User.Invited] = test => test.InviteUserAsync(),
-        [AuditEventTypes.User.SetupLinkSent] = test => test.ResendInviteAsync(),
+        [AuditEventTypes.User.Updated] = test => test.RenameUserAsync(),
+        [$"{AuditEventTypes.User.SetupLinkSent} by Resend invite"] = test => test.ResendInviteAsync(),
+        [$"{AuditEventTypes.User.SetupLinkSent} by Reset sign-in"] = test => test.ResetSignInAsync(),
+        [AuditEventTypes.User.Deactivated] = test => test.DeactivateUserAsync(),
+        [AuditEventTypes.User.Reactivated] = test => test.ReactivateUserAsync(),
         [AuditEventTypes.Participant.Created] = test => test.AddParticipantAsync(),
         [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
         [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
+        [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
+        [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
 
+    /// <summary>
+    /// The rows whose trigger changes every organisation, each with the name of the migrated database of its own, with
+    /// nothing seeded, on which it runs, so that the one organisation it adds there is the only one.
+    /// </summary>
+    private static readonly Dictionary<string, string> DatabasesOfTheirOwn = new()
+    {
+        [AuditEventTypes.Admin.SignOutAll] = "AuditEventsSignOutAll",
+    };
+
+    private readonly SqlServerFixture sqlServer = sqlServer;
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
 
-    public static TheoryData<string> EventTypes { get; } = new(Rows.Keys);
+    // The app on the database of the row's own, for a row in DatabasesOfTheirOwn.
+    private WebApplicationFactory<Program>? appOnItsOwnDatabase;
+
+    public static TheoryData<string> RowNames { get; } = new(Rows.Keys);
+
+    // The app that the row acts through, and on whose database the test finds the entry.
+    private WebApplicationFactory<Program> App => appOnItsOwnDatabase ?? factory;
 
     [Theory]
-    [MemberData(nameof(EventTypes))]
-    public async Task Its_trigger_writes_exactly_one_entry_with_its_fields_and_values(string eventType)
+    [MemberData(nameof(RowNames))]
+    public async Task Its_trigger_writes_exactly_one_entry_with_its_fields_and_values(string row)
     {
+        if (DatabasesOfTheirOwn.TryGetValue(row, out var database))
+        {
+            appOnItsOwnDatabase = await OnADatabaseOfItsOwnAsync(database);
+        }
+
         var lastEventId = await LastEventIdAsync();
 
-        var expected = await Rows[eventType](this);
+        var expected = await Rows[row](this);
 
         var written = Assert.Single(await EventsAfterAsync(lastEventId));
-        Assert.Equal(eventType, expected.EventType);
+        Assert.Equal(row.Split(' ')[0], expected.EventType);
         Assert.Equal(expected with { Details = null }, written with { Details = null });
         Assert.True(
             JsonNode.DeepEquals(Parse(expected.Details), Parse(written.Details)),
             $"Details: expected {expected.Details}, written {written.Details}.");
     }
+
+    public ValueTask DisposeAsync() => appOnItsOwnDatabase?.DisposeAsync() ?? ValueTask.CompletedTask;
 
     private static JsonNode? Parse(string? details) => details is null ? null : JsonNode.Parse(details);
 
@@ -88,9 +123,43 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
-    /// <c>user.setup_link_sent</c>: A's manager resends the invite of a worker invited for the row through the invite
-    /// core, which writes no event, with <c>POST /api/admin/users/{id}/setup-link</c> and the worker's ETag, which
-    /// records the worker as the entity, with no participant and no <c>Details</c>, so no address (A28).
+    /// <c>user.updated</c>: A's manager renames an Active worker added for the row with
+    /// <c>PUT /api/admin/users/{id}</c> and the worker's ETag, which records the worker as the entity, with no
+    /// participant, and the old and new name alone, in <c>ChangeDetails.Of</c>'s shape, not the address or the role,
+    /// sent as they were.
+    /// </summary>
+    private async Task<WrittenEvent> RenameUserAsync()
+    {
+        const string newName = "Sam Taylor-Jones";
+        var worker = await AddWorkerAsync(UserStatus.Active);
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/users/{worker.Id}",
+            await client.FetchTokenAsync(),
+            new { displayName = newName, email = worker.Email, role = "Worker" },
+            IfMatch.ETag(worker.ConcurrencyStamp!));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["displayName"] = PasswordSignIn.DisplayName },
+            ["new"] = new JsonObject { ["displayName"] = newName },
+        };
+        return new(
+            AuditEventTypes.User.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            worker.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>user.setup_link_sent</c>, by Resend invite: A's manager resends the invite of a worker invited for the row
+    /// through the invite core, which writes no event, with <c>POST /api/admin/users/{id}/setup-link</c> and the
+    /// worker's ETag, which records the worker as the entity, with no participant and no <c>Details</c>, so no address
+    /// (A28).
     /// </summary>
     private async Task<WrittenEvent> ResendInviteAsync()
     {
@@ -109,6 +178,66 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             a.ManagerId,
             AuditEntityTypes.User,
             user.Id,
+            null,
+            null);
+    }
+
+    /// <summary>
+    /// <c>user.setup_link_sent</c>, by Reset sign-in: A's manager resets the sign-in of an Active worker added for the
+    /// row with <c>POST /api/admin/users/{id}/setup-link</c> and the worker's ETag, which records the worker as the
+    /// entity, with no participant and no <c>Details</c>, as a resend does.
+    /// </summary>
+    private async Task<WrittenEvent> ResetSignInAsync()
+    {
+        var worker = await AddWorkerAsync(UserStatus.Active);
+        await PostAsync($"/api/admin/users/{worker.Id}/setup-link", IfMatch.ETag(worker.ConcurrencyStamp!));
+
+        return new(
+            AuditEventTypes.User.SetupLinkSent,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            worker.Id,
+            null,
+            null);
+    }
+
+    /// <summary>
+    /// <c>user.deactivated</c>: A's manager deactivates an Active worker added for the row with
+    /// <c>POST /api/admin/users/{id}/deactivate</c> and the worker's ETag, which records the worker as the entity, with
+    /// no participant and no <c>Details</c>, the event type saying what changed.
+    /// </summary>
+    private async Task<WrittenEvent> DeactivateUserAsync()
+    {
+        var worker = await AddWorkerAsync(UserStatus.Active);
+        await PostAsync($"/api/admin/users/{worker.Id}/deactivate", IfMatch.ETag(worker.ConcurrencyStamp!));
+
+        return new(
+            AuditEventTypes.User.Deactivated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            worker.Id,
+            null,
+            null);
+    }
+
+    /// <summary>
+    /// <c>user.reactivated</c>: A's manager reactivates a Deactivated worker added for the row with
+    /// <c>POST /api/admin/users/{id}/reactivate</c> and the worker's ETag, which records the worker as the entity, with
+    /// no participant and no <c>Details</c>, the event type saying what changed.
+    /// </summary>
+    private async Task<WrittenEvent> ReactivateUserAsync()
+    {
+        var worker = await AddWorkerAsync(UserStatus.Deactivated);
+        await PostAsync($"/api/admin/users/{worker.Id}/reactivate", IfMatch.ETag(worker.ConcurrencyStamp!));
+
+        return new(
+            AuditEventTypes.User.Reactivated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.User,
+            worker.Id,
             null,
             null);
     }
@@ -270,13 +399,67 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             details.ToJsonString());
     }
 
-    // An organisation of the row's own, with its guide prompts and one Active manager with an address of their own, as
-    // setup leaves them apart from the passkey or password, which the test-only sign-in does not need. An organisation
-    // is the tenant, not tenant-owned, and AspNetUsers is not filtered, so this needs no tenant.
-    private async Task<(Guid OrganisationId, Guid ManagerId)> AddOrganisationAsync(string guidePrompts)
+    /// <summary>
+    /// <c>admin.signin_reset</c>: the operator runs <c>admin reset-signin</c> with the address of an Active worker
+    /// added for the row, which records the worker as the entity, with no actor, as the operator is no user, no
+    /// participant and no <c>Details</c>, so no address (A28).
+    /// </summary>
+    private async Task<WrittenEvent> RunResetSignInAsync()
+    {
+        var worker = await AddWorkerAsync(UserStatus.Active);
+
+        var run = await factory.RunAdminCommandAsync(["reset-signin", worker.Email!]);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        return new(
+            AuditEventTypes.Admin.SignInReset,
+            a.OrganisationId,
+            null,
+            AuditEntityTypes.User,
+            worker.Id,
+            null,
+            null);
+    }
+
+    /// <summary>
+    /// <c>admin.signout_all</c>: the operator runs <c>admin signout-all</c>, on a database of the row's own, where an
+    /// organisation that the row adds is the only one, which records that organisation as the entity, with no actor,
+    /// no participant and no <c>Details</c>. It writes one entry for each organisation and gives every user a new
+    /// security stamp, the seeded users' too, so it cannot run on the collection's database (tests/README.md).
+    /// </summary>
+    private async Task<WrittenEvent> RunSignOutAllAsync()
+    {
+        var (organisationId, _) = await AddOrganisationAsync();
+
+        var run = await App.RunAdminCommandAsync(["signout-all"]);
+
+        Assert.Equal((0, "", ""), (run.ExitCode, run.Output, run.Error));
+        return new(
+            AuditEventTypes.Admin.SignOutAll,
+            organisationId,
+            null,
+            AuditEntityTypes.Organisation,
+            organisationId,
+            null,
+            null);
+    }
+
+    // An app on a migrated database of the row's own, with nothing seeded, named database.
+    private async Task<WebApplicationFactory<Program>> OnADatabaseOfItsOwnAsync(string database)
+    {
+        var connectionString = await sqlServer.CreateDatabaseAsync(database, TestContext.Current.CancellationToken);
+        return factory.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration(configuration =>
+            configuration.AddInMemoryCollection([new("ConnectionStrings:Grow2Notes", connectionString)])));
+    }
+
+    // An organisation of the row's own, on the database of the app that the row acts through, with any guide prompts
+    // given and one Active manager with an address of their own, as setup leaves them apart from the passkey or
+    // password, which the test-only sign-in does not need. An organisation is the tenant, not tenant-owned, and
+    // AspNetUsers is not filtered, so this needs no tenant.
+    private async Task<(Guid OrganisationId, Guid ManagerId)> AddOrganisationAsync(string guidePrompts = "")
     {
         var addedAtUtc = new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc);
-        await using var scope = factory.Services.CreateAsyncScope();
+        await using var scope = App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var organisation = new Organisation
         {
@@ -316,7 +499,13 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         return user;
     }
 
-    // An archive or a restore by A's manager, with the participant's ETag as If-Match and no body, which answers 204.
+    // A worker added to A with a password and a code, as setup leaves one (PasswordSignIn), in status, as Identity
+    // stores them, which writes no event.
+    private async Task<ApplicationUser> AddWorkerAsync(UserStatus status) =>
+        await StoredUserAsync((await factory.AddPasswordUserAsync(a, status)).Email);
+
+    // A change with no body by A's manager, such as an archive or a deactivation, with the ETag of what it changes as
+    // If-Match, which answers 204.
     private async Task PostAsync(string path, string ifMatch)
     {
         using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
@@ -337,11 +526,11 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         }
     }
 
-    // The ID of the last event written, by any test. The tests of the collection run one at a time, so the events after
-    // it are the row's alone.
+    // The ID of the last event written on the row's database, by any test. The tests of the collection run one at a
+    // time, so the events after it are the row's alone.
     private async Task<long> LastEventIdAsync()
     {
-        await using var scope = factory.Services.CreateAsyncScope();
+        await using var scope = App.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
             .SqlQuery<long>($"SELECT COALESCE(MAX([Id]), 0) AS [Value] FROM [AuditEvent]")
             .SingleAsync(TestContext.Current.CancellationToken);
@@ -350,7 +539,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen.
     private async Task<List<WrittenEvent>> EventsAfterAsync(long eventId)
     {
-        await using var scope = factory.Services.CreateAsyncScope();
+        await using var scope = App.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         return await db.Database.SqlQuery<WrittenEvent>($"""
             SELECT [EventType], [OrganisationId], [ActorUserId], [EntityType], [EntityId], [ParticipantId], [Details]

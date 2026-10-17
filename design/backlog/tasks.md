@@ -1172,19 +1172,21 @@ protected. From the console the operator can reset the last manager's sign-in or
     focus stays on it, and nothing is sent again by itself. Until T02's route-change rule is on `main`, Edit user's
     Save focuses the user page's `<h1>`, or Today's after your own change to Worker, itself after its replace, drawn
     at once with `flushSync`, as Invite user does, and Edit's back link pushes the user's page; whichever of T02 and
-    T04 merges second leaves both to T02's rule and opened-from memory, and has the Status row take its focus through
-    T02's `focusInsteadOfHeading()`, so that no `<h1>` mounting later takes a focus still pending for it.
+    T04 merges second leaves both to T02's rule and opened-from memory. The Status row takes its focus with a plain
+    `focus()`, as in-page focus moves such as the error summary's do, not through T02's `focusInsteadOfHeading()`:
+    it is drawn only beside the user page's own `<h1>`, which takes any focus pending for it as it mounts, so no
+    focus is still pending when the row takes it.
   - Your own account: your own reset, deactivation or new address ends in `fullPageLoad()`, as no Users page arms the
     leave guard; your own change to Worker goes to Today, whose nav has no Manage; and the shell's refresh of `/me` on
     the new entry then brings your own new name and role to the Account panel and the nav (step 7's Note gives the
     reason for that order). The page takes the viewer's ID for `isOnlyActiveManager` from `['me']`.
 - §3.7's "Their open drafts stay until a manager discards them" needs drafts, which come with T08 to T10; T04 changes
   no draft or note, and T24 proves it (S05.03.02).
-- If T02's shared audit-events test is on `main` at rebase, T04 adds its rows to it: `user.updated`,
+- T02's shared audit-events test was on `main` at rebase, so T04 adds its rows to it: `user.updated`,
   `user.deactivated`, `user.reactivated`, Reset sign-in's `user.setup_link_sent`, `admin.signin_reset` and
-  `admin.signout_all`.
-- The by-hand checks go in a section of their own after step 25 of ops/first-use-in-test.md, so that no step a Note
-  cites is renumbered.
+  `admin.signout_all` (the review Note of 14 October 2026 below).
+- The by-hand checks go in sections of their own after step 28 of ops/first-use-in-test.md, as steps 29 to 37, so
+  that no step a Note cites is renumbered.
 - Where design.md is silent (step 1): Identity saves each part of the reset on its own, so the reset step saves the
   new status first (`UpdateAsync`). That save is the one that can find the user changed since they were loaded, which
   gives the `412` with nothing saved; once it is made, the transaction holds the user's row, so no later part can, and
@@ -1263,6 +1265,26 @@ protected. From the console the operator can reset the last manager's sign-in or
   refreshed first would show a worker Page not found on the Edit user page for a moment. In the end-to-end tests,
   `recordRequests` moves to `requests.ts`, and `signInAndOpenUsers` and `inviteThroughThePage` to `users.ts`, for the
   specs that share them, beside the new `edits` and `answerEdits`.
+- 14 October 2026, review: 5 findings were confirmed and are fixed here:
+  - Two findings: none of T04's six event writes had a row in T02's shared audit-events test, though the Note above
+    planned them and tests/README.md asks for them, so an extra entry about anything but the user, such as the actor
+    or the organisation, would have passed every T04 test, as each reads the events about the user alone.
+    `AuditEventsTests.cs` now has a row for each, acting on a worker it adds to A: `user.updated` for a new name,
+    `user.deactivated`, `user.reactivated`, Reset sign-in's `user.setup_link_sent`, and `admin.signin_reset` through
+    `AdminCommandRuns`. A row is now named by its event type, followed by " by " and the trigger for an event type
+    with more than one, so `user.setup_link_sent` has a row for Resend invite and one for Reset sign-in. As
+    `admin signout-all` writes one entry for each organisation and gives every user a new stamp, the seeded users'
+    too, its row runs on a migrated database of its own (`DatabasesOfTheirOwn`), in an organisation that it adds
+    there. tests/README.md says how to add both kinds of row. No design changed, so no A-number is added.
+  - The focus Note above said that the Status row would take its focus through T02's `focusInsteadOfHeading()`, but
+    it takes it with a plain `focus()`, which behaves the same, as no focus can be pending while the user page's own
+    `<h1>` is drawn. The Note now says so and why, and the code is unchanged, so there is no new test.
+  - The Note on where the by-hand checks go still said after step 25, though T02's steps 26 to 28 come first; it
+    now says after step 28, as steps 29 to 37.
+  - Edit user, a changed form, had no screen-reader check, which backlog README §9 asks for. ops/first-use-in-test.md
+    step 37 now has one with NVDA in Chrome: the fields' labels and hints, the Role radios, a Save refused by the
+    client and one refused by the server, each with its summary and linked error, and, with account A made the only
+    active manager for a moment, the notice under the `<h1>`, the hint for your own address and the refusal of Worker.
 
 ### Steps
 
