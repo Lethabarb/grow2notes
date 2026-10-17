@@ -1784,7 +1784,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
 
 ```yaml
 id: T06
-status: new
+status: doing
 release: R1
 lane: B
 size: L
@@ -1808,10 +1808,273 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
 
 - Creates the `CommonItemGroup` and `CommonItem` tables that note versions point at, which is why T09 waits for it.
   Reuses T05's list editor.
+- Planned on 18 October 2026 from `origin/main` at `c55cec5`, with T05 (#59) merged. No owner question holds it: D82
+  confirmed A41 to A46, the 200-character group name and S01.03.01's migration, and D67 the screen's (P) strings.
+  Where the design is silent, the simplest option is taken:
+  - What T07 builds instead: T06 builds the Common items screen with a section for each active group that the list
+    gives, Every note first, each with its items, its add form and its Archived items; every item write within a
+    group; and the page's help text, load region, list conflict and status region. Until T07 adds groups, Every note
+    is the only group an organisation has. T07 adds the other groups' buttons and Rename form, New group, Archived
+    groups, the Group radios and the move, the group endpoints and `config.every_note_fixed`. So T06 checks
+    common-items.md's *Content and copy* for what it builds, and T07 the New group, Add group, Archived groups and
+    group-button parts of its first and third bullets (S01.03.01: "the group sections fill in as S01.03.02 and
+    S01.03.05 add rows"); likewise the axe states renaming a group, archived groups open and an item's edit with the
+    Group radios are T07's. Each hand-off, with `groupId` on the item `PUT` (below), is also written, dated 18 October
+    2026, in T07's Notes, where T07 reads it, as T03's hand-offs were; S01.03.01's Content and copy criterion stays
+    open, with a dated Note naming T07, until T07 proves its parts (step 8).
+  - Parts of the absorbed criteria that other tasks prove: A43's note side (Every note on every note, and not shown
+    with no items) and the last paragraph of design.md §5.3 *CommonItem* (an item shows on a new note only when it
+    and its group are active) are the note form's, T13's (S02.05.01, S02.05.02); that paragraph's archived group, and
+    §14 M1's Every note line, its API part, are S01.03.05 to S01.03.07's, T07's (F01.03's *Feature checks*).
+  - The item `PUT` takes `{text}`, a reword in the item's own group, which is S01.03.02's "with an unchanged group";
+    T07 adds `groupId` to the same request with the move, as design.md §6.6's `{text, groupId}` and S01.03.08 give
+    it, so that no part of the move ships before its screen.
+  - The item add answers `201` with no body and no `Location`, as the goal add does, and the reword `200` with no body
+    and no `ETag`, as §6.6 gives it none and the screen reads each next version from the list, as the participant and
+    user `PUT`s do; archive, restore and the reorder answer `204`.
+  - The add finds the group through the tenant filter first (`404` for an unknown group or another organisation's),
+    then refuses an archived group (`409 config.group_archived`), then reads the text (`422`), as the goal add finds
+    the participant before the text. The reword finds the item (`404`), checks `If-Match` (`428`, `412`), refuses an
+    item whose group is archived (`409`), then reads the text. The group is read in the same request just before the
+    save; it carries no token of the item's (§6.9), so a group archived in that instant is not caught.
+  - Reordering, archiving and restoring the items of an archived group are not refused, as §6.6 gives them no
+    `config.group_archived`, and the screen shows no archived group's items (T07). A restored item goes to the end of
+    its group's active items (A2). Rewording an archived item in an active group is not refused either, as §6.6 names
+    no refusal, though the screen offers Edit on active items alone, as T05's Notes say for goals.
+  - One cleaning rule for goals and items: `GoalText`'s rule (each line break, with the spaces around it, as one
+    space, the ends trimmed, then 1 to 200 characters) moves into one helper that takes each kind's two messages,
+    "Enter the goal" or "Enter the common item", and "Goal must be…" or "Common item must be 200 characters or less",
+    under `text`; a body with no `text`, or a `null` one, is refused as an empty one.
+  - Event `Details`: `common_item.created` holds the item's `groupId`, `text`, `sortOrder` and `archivedAtUtc` as
+    `new`, `groupId` named as S01.03.08's Note names it, so that the event says which group; `common_item.updated` the
+    old and new `text`; `common_item.archived` and `common_item.restored` `sortOrder` and `archivedAtUtc`; and
+    `common_item.reordered` the old and new `order` with `groupId` beside them (S01.03.03's Note). None names a
+    participant.
+  - A reorder whose body has no `commonItemIds`, or a `null` one, is `422 validation.failed` under `commonItemIds`, as
+    the goals' reorder is; IDs that are not the group's active items, each once, are `422 config.order_mismatch`.
+  - The list gives the groups `ORDER BY IsEveryNote DESC, SortOrder, CreatedAtUtc, Id` (§5.3's "lists sort by
+    `IsEveryNote DESC, SortOrder`", with T05's tie-breaks) and each group's items `ORDER BY SortOrder, CreatedAtUtc,
+    Id`; without `includeArchived=true` it leaves out the archived groups and the archived items. The screen keeps the
+    list's order for the active rows and shows a group's archived items newest archived first, as the goals'.
+  - The Every note group is named "Every note", with `SortOrder` 0. `CommonItemGroup.EveryNote(…)` is the one way to
+    make one in code and `IsEveryNote` has no public setter, so no endpoint can create one (S01.03.01's sixth
+    criterion), with the filtered unique index behind it. The migration's `INSERT` writes the name as a literal, as a
+    migration keeps what it shipped with, and `SortOrder` 0; each row's `Id` is `NEWID()`, as EF Core makes its
+    sequential GUIDs (§5.1) in the app and SQL Server allows `NEWSEQUENTIALID()` only as a column default, and a
+    random ID matters little for one row per organisation; and its `CreatedAtUtc` is `SYSUTCDATETIME()`, the time the
+    migration ran. Bootstrap adds the group with the organisation, under `tenant.Use(organisation.Id)`, and saves it
+    before the invite, so that a refused invite rolls it back with the organisation, as step 1's test shows. Bootstrap
+    writes no event of the group's, which is part of the organisation that `admin.bootstrap` records, and the migration
+    writes none.
+  - The test fixture's seeded organisations get Every note as bootstrap gives it, its ID as
+    `SeededOrganisation.EveryNoteGroupId`. Tests add other groups and items straight through the context
+    (`TestCommonItems`, as `TestGoals`), as no endpoint adds a group until T07. The matrix rows act on groups and items
+    of their own, added to A, so that B's manager gets `404` at A's; the list, which loads none of A's, gives B's
+    manager B's.
+  - The groups list's matrix row needs an `Answer`, where the goals list's did not (T05's Notes): the goals list
+    belongs to one participant, so B's manager's `404` at A's is its isolation check, but the groups list loads no
+    record of A's, so B's manager gets `200` with B's own list, and only its answer can show that it holds nothing of
+    A's (tests/README.md *The endpoint matrix*). As other tests add groups to the seeded organisations, it looks for
+    the seeded Every note groups alone, as the users and participants rows look for their seeded rows.
+  - Common item wording is the organisation's, not a participant's, and §9.5 names goal wording and note text, so the
+    canary test is not extended.
+  - On the SPA, the help text and the list conflict are the page's, one each above every group (common-items.md 2 and
+    4), and the conflict takes focus after a write in any group's list, so T06 lifts the help text, the list conflict
+    and the focus map out of `ListEditor` into a wrapper that every list on a page shares (list-editor.md
+    *Implementation notes*: "the focus map is shared by the page"); the Goals section has its one list in it and shows
+    what it showed. Each group's list reads its rows from the page's one query with `select`, and its writes read that
+    query's cache as they run, in the one scope `common-items`. A group other than Every note shows its `<h2>` and its
+    items alone until T07 adds its buttons.
+  - Playwright covers common-items.md's keyboard-only and forced-colours passes, as T05's run did (README §9).
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T05's: the operator running
+  `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming the `DENY DELETE` on `CommonItemGroup`
+  and `CommonItem`, and B7 and B8 the tables and `AddCommonItems`; as account A on the laptop, Common items showing
+  Every note with "Always shown first, on every note.", which shows that the migration gave the organisation
+  bootstrapped in test its group (S01.03.01's fourth criterion, in test); on the iPhone and the Android phone, the
+  keyboard opening at once on Edit (common-items.md's "keyboard open on iOS Safari and Android Chrome", open question
+  7); and with NVDA and Chrome, and VoiceOver and iOS Safari, the item rows' names, "dimmed" or "unavailable", heading
+  and region navigation by group, each item announcement in common-items.md's table, and focus after each item action
+  (its *Accessibility runs*' manual pass; T07 adds the group parts).
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] The `CommonItemGroup` and `CommonItem` tables, and the built-in Every note group (S01.03.01's first four
+      criteria and its sixth; design.md §5.3 *CommonItemGroup* with its *Constraints*, and *CommonItem*, §5.10, §7.4
+      and §10.6; §14 M1's Every note line, its database part; A43's "built in and created with the organisation"):
+      the two entities (`ITenantOwned`, `IVersionedRow`, `IOrderedRow`) and their `AddCommonItems` migration, each
+      with the alternate key `(OrganisationId, Id)`, the item's composite foreign key `(OrganisationId, GroupId)` to
+      the group's, `Name` at `Limits.GroupName` and `Text` at `Limits.ItemText`, the indexes
+      `(OrganisationId, ArchivedAtUtc, SortOrder)` and `(OrganisationId, GroupId, ArchivedAtUtc, SortOrder)`, the
+      unique index on `OrganisationId` filtered `[IsEveryNote] = 1`, the check constraint
+      `CK_CommonItemGroup_EveryNoteActive`, `DENY DELETE` on both tables for `grow2notes_runtime`, and an `INSERT`
+      that gives each organisation already there its Every note group; `CommonItemGroup.EveryNote` (Notes);
+      `admin bootstrap` adding the group with the organisation, under `tenant.Use(organisation.Id)`, and saving it
+      before the invite, in the one transaction (Notes); the fixture's seeded organisations given theirs; model tests
+      as `GoalModelTests` has, `RuntimeRoleTests`, `infra/sql/check-database.sql` (B7, B8, D3, D5) and
+      ops/break-glass.md's account of the command. Tests on SQL Server: a second Every note row for an organisation
+      refused by the filtered index, and archiving Every note refused by the check constraint, each writing nothing,
+      while an organisation's other groups meet neither; the migration, applied to a database that holds three
+      organisations, migrated to the migration just before `AddCommonItems`, found from the context's list of
+      migrations so that a rebase onto another lane's migration needs no change, giving each exactly one Every note
+      group, active and named "Every note"; a bootstrap run giving its organisation exactly one, and a refused run (an
+      address in use) leaving none, which shows the group in the transaction, as it is saved before the invite is
+      refused; and `IsEveryNote` with no public setter.
+- [ ] The groups list and the Common items screen that shows it (S01.03.01's fifth criterion; design.md §4.9 items 1
+      and 2, §6.6's list row; common-items.md *Content and copy*, for what T06 builds (Notes), and *Loading, empty,
+      errors*, every bullet): `GET /api/admin/common-item-groups?includeArchived=` in the `/api/admin` group, its
+      handler class `CommonItemGroupList` in `Features/CommonItems` taking an `Actor`, reading the groups and each
+      group's items in the orders Notes give, through list-order helpers that step 5's reorder and T07's reuse, with
+      each `rowVersion` through `RowVersionToken.Of`; its matrix row (`401`, `403` for A's worker, `200` for A's
+      manager and for B's, acting in B), with
+      `Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])`, so
+      that each manager's list holds their own organisation's seeded Every note and not the other's (Notes); and a
+      `SignedOutTests` row. Integration tests on SQL Server: Every note first, though added last with the highest
+      `SortOrder`; two groups, and two items of one group, of one `SortOrder` in `CreatedAtUtc`, then `Id`, order,
+      with fixed IDs that SQL Server orders the other way round from their `CreatedAtUtc` (T05's review); a test
+      needing no database that each query's SQL ends with its `ORDER BY`, as `GoalListOrderTests` has; archived
+      groups and items left out unless `includeArchived=true`, which lists an archived group with its items; each
+      `rowVersion` the stored one as base64; `no-store` and no audit event; and B's manager's list holding B's seeded
+      Every note and nothing of A's. On the SPA: the route `/manage/common-items` among the manager
+      screens, titled "Grow2Notes – Common items"; `CommonItemsPage`, with the shared `PageHeading` "Common items"
+      focused on arrival and the help text `<p id="items-help">` shown before the list loads, then one `LoadRegion`
+      ("Loading common items…" after 1 s, `what` "common items", microcopy.md §9's lines and Try again) around the
+      list conflict's slot and the group sections, from the one query `['admin', 'common-item-groups']` with
+      `includeArchived=true`, gated on `isLoadingError`; a `<section aria-labelledby>` per active group in the list's
+      order with its `<h2>`, Every note's with "Always shown first, on every note." and no group buttons; each group's
+      items through `ListEditor`'s item kind, its words in `strings.listEditor`, "No items in this group. It does not
+      show on notes until it has one." when it has none, and its archived items in a closed, uncontrolled `<details>`
+      with the summary "Archived items" and the hidden " in [group name]"; the page's `PageStatus`; and the shared
+      list wrapper (Notes), which the Goals section takes too. Vitest: with three groups served, the page in order,
+      Every note first with its line and no group buttons (no Rename, and no Move up, Move down or Archive named
+      ", Every note group"), each group's `<h2>` in order, numbers restarting at 1 in each group, each row's full
+      text, then Move up, Move down, Edit and Archive, and archived rows' text and Restore alone; the empty line only
+      once the data has come, and never "No common items yet."; nothing extra at 999 ms, "Loading common items…" at
+      1,000 ms, and no add form before the data; offline, "Common items did not load: no connection. Try again." with
+      Try again, then "Common items still did not load: no connection. Try again.", and success focusing the `<h1>`; a
+      `503`'s "something went wrong" line; a failed re-read leaving the page as it was; a worker, and a `403` or `404`
+      on the list, getting Page not found; no item text in a query key; the new strings in `copy.test.ts`; and the
+      Goals section's tests passing as they are.
+- [ ] Add items to a group (S01.03.02's first and third criteria; design.md §4.9 item 4's add form, A2, A6;
+      common-items.md *Add, edit, rename, move*' "Add item in a group with an empty or spaces-only field…", "A
+      successful Add item…" and "Line breaks typed or pasted…", and *Failures and conflicts*' "With the network
+      cut…" and "A `401` during any write…" for Add): `POST /api/admin/common-item-groups/{groupId}/items` with
+      `{text}`, its handler class `CommonItemChanges` in `Features/CommonItems` taking an `Actor`, as steps 4 to 6's
+      are too, checking in the order Notes give, with `ErrorCode.GroupArchived` for `409 config.group_archived` and
+      the text read by the rule that goals and items share (Notes), then the item put at `ListOrder.End` of its
+      group's items and saved with `common_item.created` through `ConfigurationChanges.SaveAsync`, and `201`; its
+      matrix row (`201` for A's manager at a group of its own, `404` for B's) and audit-events row. Integration tests:
+      200 characters saved and 201 refused; whitespace alone, no `text` and a `null` one refused; line breaks saved as
+      single spaces; an item added after archived ones at one more than the highest active `SortOrder` of its group,
+      with another group's items as they were; an archived group's `409` and another organisation's group's `404`,
+      each adding nothing and writing no event; and the goals' refusals worded as before on the shared rule. On the
+      SPA: each group's add form, in `FieldGroup` with its `FieldError`: the label "New item in [group name]", a
+      `<textarea id="item-new-{groupId}" rows={3}>` with no `maxLength` in T03's text box, described by its error
+      while it shows one, the hidden count hint, then `items-help`; the `CharacterCount`; and "Add item", primary,
+      `type="submit"`, full width below 40rem. The one-field check on Add alone, "Enter the common item" or "Common
+      item must be 200 characters or less", as goals show theirs; busy with "Adding…" after 400 ms, then the field
+      cleared while it still holds the text sent, focus kept in it and "Item added to the end of the list"; or "Not
+      added: no connection. Try again." or "Not added: something went wrong. Try again." in its alert slot, the text
+      kept and focus on Add item; a `409` reading the list again and showing the list conflict; and a `401` handing
+      over to sign-in in place, the text kept, with the list read again after signing in. Vitest: each message, with
+      `aria-invalid`, focus on the field and nothing sent, cleared silently once the text is fixed; five adds in a row
+      with focus in the field after each; 210 characters typed kept whole; a pasted line break sent as one space; the
+      item last in its own group alone; one `POST` after a lost answer; and the `409` and the `401`.
+- [ ] Reword an item in its row (S01.03.02's second criterion; common-items.md *Add, edit, rename, move*' "Edit opens
+      the row form…", its wording part, and *Failures and conflicts*' "A `412` on an item Save…", with the network
+      and `401` bullets for Save): `PUT /api/admin/common-items/{id}` with `{text}` (Notes), loading the item through
+      the tenant filter, checking `If-Match` with `IfMatch.Check` against `RowVersionToken.Of(item)`, refusing an
+      item whose group is archived with `409 config.group_archived`, reading the text as the add does, then saving
+      `common_item.updated` with the old and new `text`, and `200`; its matrix row (an item of its own in a group
+      added to A, `404` for B's manager) and audit-events row. Integration tests: `428` with no `If-Match`; a stale
+      one `412` with nothing written; an item changed after the handler loaded it `412`; the stored text `200` with no
+      event (D84); the add's `422`s; an archived group's item `409` with nothing written; and another organisation's
+      item `404`, with or without its `ETag`. On the SPA: Edit turning the row into a `<form noValidate>` with the
+      label "Edit item" and `id="item-{id}-text"`, the current text in the same box, described as the add's field is,
+      opened with `flushSync` and focused with the caret at the end; Save, primary, checked as Add is, busy with
+      "Saving…" and the textarea `readOnly`, closing as Cancel does when the cleaned text is unchanged and sending
+      nothing, else the `PUT` with the row's version read as it runs, then "Item saved" and focus on the row's Edit;
+      Cancel, dropping the typed text, focus on Edit; both label width; a `412` whose re-read finds the item active
+      keeping the typed text with "Someone else changed this item while you were editing. It now says: ‘[their
+      text]’. Save to replace it with your wording, or Cancel to keep it.", the next Save sending the new version and
+      succeeding; one that finds it archived, or a `409`, showing the list conflict; and "Not saved: …" in the form's
+      alert slot. Vitest: those; Save's two messages, each sending nothing; rows of two groups edited at once, each
+      kept as typed; and a `401` on Save keeping the text.
+- [ ] Reorder items within a group (S01.03.03; common-items.md *Reordering*' item-row bullets, "Move up on row 2 of a
+      group…", "Move down on row 1…", "End buttons…", "Two quick presses…" and "The screen never shows a new
+      order…", and *Failures and conflicts*' order part; its *Layout* item-row bullets are step 7's):
+      `PUT /api/admin/common-item-groups/{groupId}/items/order` with `{commonItemIds}`, finding the group first,
+      reading its active items alone with the list's SQL and giving them to `ListOrder.Reorder`, whose
+      `OrderMismatch`, like the save's `PreconditionFailed`, answers `422 config.order_mismatch`; otherwise
+      `common_item.reordered` with the old and new order, `groupId` beside them and no `EntityId`, and `204`, the
+      order already stored saving nothing; its matrix row (a group of its own with two active items and an archived
+      one, `404` for B's manager) and audit-events row. Integration tests on SQL Server: the group's active items
+      rewritten as 0 to n-1 with their event, and another group's items as they were; a missing ID, an extra one
+      (another group's item), an archived one and a repeated one, each `422` with every `SortOrder` as it was and no
+      event; no `commonItemIds` `422 validation.failed`; another organisation's group `404`, with every `SortOrder` as
+      it was and no `common_item.reordered`; and two scopes, as `ConfigurationChangesOnSqlServerTests`' race test has
+      them, where an item changed after the other read the list gives that reorder `422`, writing no order or event.
+      On the SPA: the item rows' Move up and Move down, as the goal rows have them, sending the
+      group's active IDs alone with the item swapped, built from the list as the write runs; the list unchanged until
+      the re-read; focus back on the same button of the moved item; "Moved up to number 2 of 5" or "Moved down to
+      number 4 of 5", counted within the group; each group's end buttons `aria-disabled`, dashed and in place, a
+      press sending nothing and saying "Already at the top" or "Already at the bottom"; a `422` showing the list
+      conflict; and "Not moved: …" in the row's alert slot. Vitest: Move up on row 2 of a group sending one `PUT` with
+      that group's IDs, rows 1 and 2 swapped, and nothing of another group, then focus on the moved item's Move up;
+      after Move down on row 1, `document.activeElement` that item's Move down; with the `PUT` held, the order on
+      screen unchanged; an end press sending nothing and announcing once; and two quick presses on rows of two groups
+      sending two `PUT`s one after the other, the second built from the first's re-read.
+- [ ] Archive and restore items (S01.03.04; design.md §3.7's Common item row; common-items.md *Archive and restore*'
+      "Archiving an item…" and "Each archived `<details>` keeps…", and *Failures and conflicts*' item Archive and
+      Restore part): `POST /api/admin/common-items/{id}/archive` and `/restore` with `If-Match`, loading the item
+      through the tenant filter, archiving it with `Archiving.Archive`, which keeps its `SortOrder`, and restoring it
+      with `Archiving.Restore` to `ListOrder.End` of its group's items, each saving `common_item.archived` or
+      `common_item.restored` with `sortOrder` and `archivedAtUtc` old and new, and `204`, a repeat saving nothing
+      (D84); their matrix rows (an active and an archived item added to A for each call) and audit-events rows.
+      Integration tests: `428`, `412`, another organisation's item `404`, a restored item at one more than the highest
+      active `SortOrder` of its own group, whatever another group holds, and a repeat with no event. On the SPA:
+      Archive, busy with "Archiving…", then the row gone with the numbers closing up, the group's Archived items
+      appearing if it was absent and opening with the item first, focus on its Restore and "Item archived", and the
+      empty line once the group's last item goes; Restore, busy with "Restoring…", then the item last in its group,
+      focus on its Archive and "Item restored to the end of the list", the section gone once it is empty; a `412`
+      showing the list conflict; and "Not archived: …" or "Not restored: …" in the row's alert slot. Vitest: those;
+      and an Archived items section that the manager closed staying closed, and one opened staying open, after a
+      write in another group.
+- [ ] Prove the item flows end to end and bring the documents into line: `tests/e2e/commonItems.ts` with
+      `serveCommonItems`, which answers the groups list and each item write in the browser from a list in memory,
+      described in tests/README.md beside `serveGoals`, as are the seeded Every note and `TestCommonItems`; and in
+      `common-items.spec.ts`, signed in for real through the `invite` fixture, whose `admin bootstrap` makes the
+      organisation's Every note, and a passkey on the `authenticator` fixture, a manager at 375 px opens Manage, then
+      Common items, finds Every note with its line and the empty sentence, adds five items with focus in "New item in
+      Every note" after each, then rewords, moves, archives and restores one, on the app's own answers. The
+      keyboard-only check (README §9) at 375 px and 1280 px, in common-items.md's *Focus order* for what is built: each
+      item row's Move up, Move down, Edit and Archive, or Edit item, Save and Cancel while it is edited, then the
+      group's New item field, Add item, its Archived items summary and each Restore while it is open; with a visible
+      focus ring at each stop. With the list answered in the browser: axe at both widths in the states loading, load
+      failed, only Every note, ready with three groups, busy, editing an item, field error, request error, edit
+      conflict, archived items open and list conflict; at 375 px each item row's Move up and Move down on one line and
+      Edit and Archive on the next, Add item full width, and every row button label width and at least 44 × 48 px; at
+      1280 px, on the 60rem page, each item row's text and its four buttons on one line, stacked with no overlap or
+      clipping at 200% text; the help text and the textareas no wider than 40rem; no sideways scroll at 320 px with
+      200% text; live regions in the DOM before their text; the focus ring, the dashed unavailable buttons, the summary
+      markers and the row dividers in forced colours; and no item text in `location`, `document.title`,
+      `history.state` or the origin's storage after each flow. Docs, each to the code as built: common-items.md and
+      list-editor.md (the item kind and the shared list wrapper); design.md §6.6's common item rows (the `404` for a
+      group or an item not in the organisation); the by-hand checks (Notes) on ops/first-use-in-test.md;
+      `migrate.sql` from CI's artifact, read in the pull request, expand-only, with both tables, the filtered index,
+      the check constraint, the Every note `INSERT` and both `DENY DELETE`s; and CI's run on the pull request passing.
+- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
+      passed every step, the deploy's migration applied `AddCommonItems` and its smoke test passed; `/` serves this
+      build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with and without
+      `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless Chromium
+      under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the groups list and every
+      item write with made-up data (A35), so that test receives only `GET`s: at 375 px and 1280 px
+      `/manage/common-items` shows the heading, the help text and Every note with its line, five Adds keep focus in
+      "New item in Every note", Move down on row 1 keeps focus on that item's Move down, and Archive opens Archived
+      items with focus on Restore; the console reports no CSP violation or script error, and the origin's storage is
+      empty; Application Insights shows no exception and no `5xx` from the deploy to the checks. Record the run IDs in
+      Notes, then set T06's `status` here and its stories' to `done` together, ticking their criteria and leaving
+      S01.03.01's Content and copy criterion open for T07's parts, with a Note in S01.03.01, dated, naming T07 and
+      those parts (Notes, *What T07 builds instead*), as T03 left its hand-offs open.
 
 ---
 
@@ -1843,6 +2106,18 @@ group; Every note stays first and fixed.
 
 - Reuses T05's list editor. The shared audit-events test then covers all 20 configuration events with old and new
   values. A41 to A46 are confirmed as written (D82).
+- From T06 (18 October 2026, its plan): T06 builds the Common items screen with a section for each active group,
+  Every note first, each with its items, its add form and its Archived items, and every item write within a group
+  (T06's Notes, *What T07 builds instead*). This task proves what T06 hands on:
+  - common-items.md › Content and copy, the New group field, Add group and Archived groups of its first bullet, and
+    the group parts of its third: each other group's Move up, Move down, Rename and Archive, and an archived group's
+    name and Restore. S01.03.01's Content and copy criterion stays open, with a dated Note naming this task, until
+    this task proves them.
+  - The axe states renaming a group, archived groups open and an item's edit with the Group radios (common-items.md
+    › Accessibility runs).
+  - `groupId` on `PUT /api/admin/common-items/{id}`, which T06 ships taking `{text}` alone, a reword in the item's own
+    group; this task adds it with the move (design.md §6.6, S01.03.08).
+  - The group parts of common-items.md's by-hand screen-reader pass, beside T06's on ops/first-use-in-test.md.
 
 ### Steps
 
