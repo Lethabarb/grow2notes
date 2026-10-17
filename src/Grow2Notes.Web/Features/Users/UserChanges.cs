@@ -9,7 +9,7 @@ namespace Grow2Notes.Web.Features.Users;
 /// How a handler changes a user who exists (design.md §6.6, §6.7): in one transaction, the user is loaded in the
 /// tenant's organisation and the version the client sent is checked against theirs, before the handler makes its
 /// change, so that every change to a user answers <c>404</c>, <c>428</c> and <c>412</c> alike, and in that order.
-/// Resend invite and Reset sign-in take it, as the other changes to a user will (T04).
+/// Resend invite, Reset sign-in, Deactivate and Reactivate take it, as Edit will (T04).
 /// </summary>
 /// <remarks>
 /// One per scope, as the transaction is opened on the scope's context, which the handler's saves, through

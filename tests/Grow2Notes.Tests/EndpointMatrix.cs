@@ -125,10 +125,15 @@ internal static class EndpointMatrix
         new(Post,      "/api/admin/users",       Unauthorized, Forbidden, Created, Created,
             AnInviteOfANewAddress),
 
-        // Each call resends the invite of a user it first invites into A, as a call commits (tests/README.md), with the
-        // user's ETag. B's manager does not find A's user (§9.2).
+        // Each call resends the invite of, deactivates or reactivates a user it first invites into A, as a call commits
+        // (tests/README.md), with the user's ETag. B's manager does not find A's user (§9.2). Reactivating someone who
+        // is not Deactivated changes nothing, and answers as a reactivation does.
         new(Post,      "/api/admin/users/{id:guid}/setup-link", Unauthorized, Forbidden, NoContent, NotFound,
-            AResendOfANewInviteInA),
+            OnANewInviteInA("setup-link")),
+        new(Post,      "/api/admin/users/{id:guid}/deactivate", Unauthorized, Forbidden, NoContent, NotFound,
+            OnANewInviteInA("deactivate")),
+        new(Post,      "/api/admin/users/{id:guid}/reactivate", Unauthorized, Forbidden, NoContent, NotFound,
+            OnANewInviteInA("reactivate")),
 
         // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
         // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
@@ -238,9 +243,10 @@ internal static class EndpointMatrix
             }),
         });
 
-    // A resend to a worker whom it first invites into A through the invite core, with an address that no other call or
-    // test uses (A35), sending the worker's ETag, as the Users screen sends it (D78).
-    private static async Task<HttpRequestMessage> AResendOfANewInviteInA(EndpointCall call)
+    // For a change to a user, at /api/admin/users/{id}/{action}: a request for a worker whom it first invites into A
+    // through the invite core, with an address that no other call or test uses (A35), sending the worker's ETag, as the
+    // Users screen sends it (D78).
+    private static Func<EndpointCall, Task<HttpRequestMessage>> OnANewInviteInA(string action) => async call =>
     {
         var a = call.Seeded.A;
         await using var scope = call.Services.CreateAsyncScope();
@@ -249,10 +255,10 @@ internal static class EndpointMatrix
             a.ManagerId);
         Assert.True(invite.Succeeded, string.Join(" ", invite.Errors.Select(error => error.Code)));
 
-        var request = new HttpRequestMessage(call.Method, $"/api/admin/users/{invite.User.Id}/setup-link");
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/users/{invite.User.Id}/{action}");
         request.Headers.IfMatch.Add(new EntityTagHeaderValue(IfMatch.ETag(invite.User.ConcurrencyStamp!)));
         return request;
-    }
+    };
 
     // A correction of a participant whom the request first adds to A, sent with their ETag as If-Match, so that each
     // call changes a participant of its own, as the seeded-rows rule asks (tests/README.md).

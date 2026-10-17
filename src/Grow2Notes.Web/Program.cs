@@ -237,6 +237,7 @@ builder.Services.AddScoped<LastManagerRule>();
 builder.Services.AddScoped<UserList>();
 builder.Services.AddScoped<UserInvite>();
 builder.Services.AddScoped<UserSetupLink>();
+builder.Services.AddScoped<UserDeactivation>();
 builder.Services.AddScoped<GuidePromptsHandler>();
 builder.Services.AddScoped<ParticipantList>();
 builder.Services.AddScoped<ParticipantChanges>();
@@ -348,6 +349,7 @@ api.MapAdminGroup()
     .MapUserListEndpoint()
     .MapInviteUserEndpoint()
     .MapUserSetupLinkEndpoint()
+    .MapUserDeactivationEndpoints()
     .MapGuidePromptsEndpoints()
     .MapParticipantListEndpoint()
     .MapAddParticipantEndpoint()

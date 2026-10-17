@@ -1213,7 +1213,7 @@ protected. From the console the operator can reset the last manager's sign-in or
       made; two managers resetting each other at once, the first held after its check, give one `204` and one
       `409 user.last_manager`, so an active manager remains; a sender that fails leaves the person as they were; and
       the endpoint's T01 tests hold, its `409 user.not_active` theory now for a Deactivated user alone
-- [ ] Add `POST /api/admin/users/{id}/deactivate` and `…/reactivate` (S00.06.05's four specific criteria; design.md
+- [x] Add `POST /api/admin/users/{id}/deactivate` and `…/reactivate` (S00.06.05's four specific criteria; design.md
       §3.7's User row, §4.11 *Deactivate* and *Reactivate*, §6.6, §8.6 *Deactivate*, §14 M0's "After deactivation,
       the user's next request is rejected (tested)"; D75; see Notes): handlers in `Features/Users/` that take an
       `Actor` and change the user through `UserChanges`, deactivate with the last-manager check, each answering `204`,
