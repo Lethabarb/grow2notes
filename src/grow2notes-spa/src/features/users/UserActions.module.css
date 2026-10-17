@@ -5,8 +5,8 @@
 }
 
 /*
- * Group 1, one action under another at every width, as each but Edit has its description above it, and left-aligned,
- * so that from 40rem each button is as wide as its label (users.md *Layout - laptop*).
+ * Each group, one action under another at every width, as each but Edit has its description above it, and
+ * left-aligned, so that from 40rem each button is as wide as its label (users.md *Layout - laptop*).
  */
 .group {
   display: flex;
@@ -36,4 +36,14 @@
 
 .result:not(:empty) {
   margin-block-start: var(--space-2);
+}
+
+/*
+ * The 1 px rule that keeps the serious actions of group 2 apart from the routine ones, with 24 px above and below
+ * (users.md component C item 7). A border, so that forced colours draw it.
+ */
+.rule {
+  margin-block: var(--space-5);
+  border: 0;
+  border-block-start: var(--border-divider) solid var(--colour-divider);
 }

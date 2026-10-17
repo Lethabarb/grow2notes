@@ -125,10 +125,17 @@ internal static class EndpointMatrix
         new(Post,      "/api/admin/users",       Unauthorized, Forbidden, Created, Created,
             AnInviteOfANewAddress),
 
-        // Each call resends the invite of a user it first invites into A, as a call commits (tests/README.md), with the
-        // user's ETag. B's manager does not find A's user (§9.2).
+        // Each call renames, resends the invite of, deactivates or reactivates a user it first invites into A, as a
+        // call commits (tests/README.md), with the user's ETag. B's manager does not find A's user (§9.2).
+        // Reactivating someone who is not Deactivated changes nothing, and answers as a reactivation does.
+        new(Put,       "/api/admin/users/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+            ARenameOfANewInviteInA),
         new(Post,      "/api/admin/users/{id:guid}/setup-link", Unauthorized, Forbidden, NoContent, NotFound,
-            AResendOfANewInviteInA),
+            OnANewInviteInA("setup-link")),
+        new(Post,      "/api/admin/users/{id:guid}/deactivate", Unauthorized, Forbidden, NoContent, NotFound,
+            OnANewInviteInA("deactivate")),
+        new(Post,      "/api/admin/users/{id:guid}/reactivate", Unauthorized, Forbidden, NoContent, NotFound,
+            OnANewInviteInA("reactivate")),
 
         // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
         // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
@@ -238,9 +245,24 @@ internal static class EndpointMatrix
             }),
         });
 
-    // A resend to a worker whom it first invites into A through the invite core, with an address that no other call or
-    // test uses (A35), sending the worker's ETag, as the Users screen sends it (D78).
-    private static async Task<HttpRequestMessage> AResendOfANewInviteInA(EndpointCall call)
+    // For a change to a user, at /api/admin/users/{id}/{action}: a request for a worker whom it first invites into A,
+    // sending the worker's ETag (WithETagOfANewInviteInA).
+    private static Func<EndpointCall, Task<HttpRequestMessage>> OnANewInviteInA(string action) => call =>
+        WithETagOfANewInviteInA(
+            call, user => new HttpRequestMessage(call.Method, $"/api/admin/users/{user.Id}/{action}"));
+
+    // For an edit of a user, at /api/admin/users/{id}: as for a change, a request with a body that gives the worker a
+    // new name, so that the call changes them and sends nothing.
+    private static Task<HttpRequestMessage> ARenameOfANewInviteInA(EndpointCall call) =>
+        WithETagOfANewInviteInA(call, user => new HttpRequestMessage(call.Method, $"/api/admin/users/{user.Id}")
+        {
+            Content = JsonContent.Create(new { displayName = "Avery Morgan", email = user.Email, role = "Worker" }),
+        });
+
+    // The request that requestFor builds for a worker whom it first invites into A through the invite core, with an
+    // address that no other call or test uses (A35), sending the worker's ETag, as the Users screen sends it (D78).
+    private static async Task<HttpRequestMessage> WithETagOfANewInviteInA(
+        EndpointCall call, Func<ApplicationUser, HttpRequestMessage> requestFor)
     {
         var a = call.Seeded.A;
         await using var scope = call.Services.CreateAsyncScope();
@@ -249,7 +271,7 @@ internal static class EndpointMatrix
             a.ManagerId);
         Assert.True(invite.Succeeded, string.Join(" ", invite.Errors.Select(error => error.Code)));
 
-        var request = new HttpRequestMessage(call.Method, $"/api/admin/users/{invite.User.Id}/setup-link");
+        var request = requestFor(invite.User);
         request.Headers.IfMatch.Add(new EntityTagHeaderValue(IfMatch.ETag(invite.User.ConcurrencyStamp!)));
         return request;
     }

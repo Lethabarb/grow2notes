@@ -35,4 +35,14 @@ public sealed class RecordingLoggerProvider : ILoggerProvider
 /// <summary>A log entry as a logger provider receives it, with the values the message was formatted from.</summary>
 public sealed record RecordedLog(
     string Category, LogLevel Level, string Message, Exception? Exception,
-    IReadOnlyList<KeyValuePair<string, object?>> Values);
+    IReadOnlyList<KeyValuePair<string, object?>> Values)
+{
+    /// <summary>
+    /// Whether <paramref name="text"/> is in the message, the exception or a value the message was formatted from,
+    /// letter case aside.
+    /// </summary>
+    public bool Holds(string text) =>
+        Message.Contains(text, StringComparison.OrdinalIgnoreCase)
+        || Exception?.ToString().Contains(text, StringComparison.OrdinalIgnoreCase) == true
+        || Values.Any(value => value.Value?.ToString()?.Contains(text, StringComparison.OrdinalIgnoreCase) == true);
+}

@@ -17,8 +17,9 @@ import {
   serveSaves,
 } from './guidePrompts.ts';
 import { boxOf } from './layout.ts';
-import { failMe, manager, serveMe, worker, type Me } from './me.ts';
+import { failMe, manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
+import { signInInPlaceAs } from './signedOut.ts';
 import { people, serveUsers } from './users.ts';
 
 // Manage > Guide prompts in the published app (S01.04.01, S01.04.02), against guide-prompts.md's criteria for access
@@ -841,7 +842,12 @@ test('with text not saved, Today opens the leave dialog on Stay, and Escape keep
   await expect(leaveDialog(page)).toHaveAccessibleDescription('Your changes to the guide prompts are not saved.');
   await expect(leaveDialog(page).getByRole('heading', { level: 2 })).toHaveText('Leave without saving?');
   await expect(leaveDialog(page).getByRole('button')).toHaveText(['Stay on this page', 'Leave without saving']);
+  // On Stay, not on its title, which the action dialogs open on (guide-prompts.md *Conflicts resolved* 9).
   await expect(stayOnPage(page)).toBeFocused();
+  await expect(leaveDialog(page).getByRole('heading', { level: 2 })).not.toHaveAttribute('tabindex');
+  // The shell's alert and status lines, in it, empty, from the start (confirm-dialog.md *Anatomy*).
+  await expect(leaveDialog(page).getByRole('alert')).toBeEmpty();
+  await expect(leaveDialog(page).getByRole('status')).toBeEmpty();
   // Not red: a few lines of prompts are easy to type again (guide-prompts.md component 7).
   await expect(leaveWithoutSaving(page)).toHaveCSS('background-color', surface);
   await expect(page).toHaveURL(address);
@@ -1096,24 +1102,50 @@ test("a plain close() of the leave dialog, as the shell's warning gives it, is S
   await expect(field(page)).toHaveValue(typed);
 });
 
+test('at 28:00 the warning closes the leave dialog as Stay, sending nothing; after its 204, focus is on Today', async ({
+  page,
+}) => {
+  // Before the page loads, so that its timers and Date run on Playwright's clock, which the test runs on to 28:00.
+  await page.clock.install();
+  await openWith(page);
+  await page.route('**/api/auth/ping', (route) => route.fulfill({ status: 204 }));
+  await typeAtEnd(page, added);
+  await navLink(page, 'Today').click();
+  await expect(stayOnPage(page)).toBeFocused();
+  // Each request that the page sends from now on, but the test's own GET /healthz, as its method and path.
+  const sent: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (pathname !== '/healthz') {
+      sent.push(`${request.method()} ${pathname}`);
+    }
+  });
+
+  await page.clock.runFor('28:00');
+
+  const warning = page.getByRole('dialog', { name: 'You’ll be signed out in 2 minutes' });
+  const staySignedIn = warning.getByRole('button', { name: 'Stay signed in' });
+  await expect(warning).toBeVisible();
+  await expect(staySignedIn).toBeFocused();
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
+  // Every request that the page sent before the test's own has been reported once the test has its answer.
+  await page.evaluate(() => fetch('/healthz'));
+  expect(sent).toEqual([]);
+
+  await staySignedIn.click();
+
+  await expect(warning).toBeHidden();
+  // Where the closed leave dialog gave focus back, and so the warning too: never its Leave without saving.
+  await expect(navLink(page, 'Today')).toBeFocused();
+  await expect(page).toHaveURL(address);
+  await expect(field(page)).toHaveValue(typed);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(sent.filter((request) => request !== 'GET /api/auth/antiforgery')).toEqual(['POST /api/auth/ping']);
+});
+
 // Sign-in in place, sign-in.md's view C, over text not saved (guide-prompts.md *Leaving*'s last two criteria).
 const signedOutHeading = 'You’ve been signed out';
-const codeLabel = 'Enter the 6-digit code from your authenticator app';
-
-/**
- * Signs in on view C as `me`, through the password and code steps, which the browser answers for the app, as it
- * answers `/api/auth/me` for the new session from then on, so that the address and password can be any.
- */
-async function signInInPlaceAs(page: Page, me: Me) {
-  await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
-  await page.route('**/api/auth/login/totp', (route) => route.fulfill({ json: me }));
-  await serveMe(page, me);
-  await main(page).getByRole('textbox', { name: 'Email address' }).fill('someone@example.org');
-  await page.getByLabel('Password', { exact: true }).fill('made-up password');
-  await main(page).getByRole('button', { name: 'Continue' }).click();
-  await page.getByLabel(codeLabel).fill('123456');
-  await main(page).getByRole('button', { name: 'Sign in', exact: true }).click();
-}
 
 test('a Save that meets a 401 signs out in place; the same manager signing in finds the text kept, not saved', async ({
   page,
@@ -1153,6 +1185,37 @@ test('a Save that meets a 401 signs out in place; the same manager signing in fi
     { text: typed, ifMatch: `"${promptsVersion}"` },
     { text: typed, ifMatch: `"${promptsVersion}"` },
   ]);
+});
+
+test('a 401 with the leave dialog open closes it as Stay before view C takes focus, then gives the page back', async ({
+  page,
+}) => {
+  await openWith(page);
+  const nextSave = await holdNext(page, '**/api/admin/guide-prompts');
+  await typeAtEnd(page, added);
+  await save(page).click();
+  const heldSave = await nextSave();
+  // Not saved while its save is out, so a link asks.
+  await navLink(page, 'Today').click();
+  await expect(stayOnPage(page)).toBeFocused();
+  await failMe(page, 401);
+
+  await heldSave.fulfill({ status: 401 });
+
+  // A sign-in form behind an open modal would be inert, and its heading could not take focus (confirm-dialog.md
+  // *Behaviour* 8).
+  await expect(heading(page)).toHaveText(signedOutHeading);
+  await expect(heading(page)).toBeFocused();
+  await expect(page.locator('dialog[open]')).toHaveCount(0);
+  await expect(page).toHaveURL(address);
+
+  await signInInPlaceAs(page, manager);
+
+  await expect(heading(page)).toHaveText('Guide prompts');
+  await expect(heading(page)).toBeFocused();
+  await expect(field(page)).toHaveValue(typed);
+  await expectNoLeaveDialog(page);
+  await expect(page).toHaveURL(address);
 });
 
 test('a different person signing in in place loads Today afresh, with no browser dialog and the text gone', async ({

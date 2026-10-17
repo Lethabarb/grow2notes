@@ -4,48 +4,17 @@ import { useNavigate } from 'react-router';
 import { api, classify } from '../../api/api.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
-import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
-import { FieldGroup } from '../../components/FieldGroup.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
-import textInput from '../../components/textInput.module.css';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import styles from './InviteUserPage.module.css';
-import { firstRoleRadioId, RoleField } from './RoleField.tsx';
+import { UserErrorSummary, UserFields } from './UserFields.tsx';
 import { userRefusal, validateUser, type UserErrors, type UserValues } from './userRules.ts';
 import { usersQuery } from './usersQuery.ts';
-
-// Each field's id is its key in the API's JSON, so that a 422's errors{} name it (users.md component B).
-const nameId = 'displayName';
-const emailId = 'email';
-
-/** A field's `aria-describedby`: its hint, then its message while it shows one (form-validation.md *Anatomy*). */
-function describedBy(fieldId: string, error: string | undefined): string {
-  return error === undefined ? `${fieldId}-hint` : `${fieldId}-hint ${fieldId}-error`;
-}
-
-/**
- * The summary's items: a field the server named that the form does not have, with no link, then each field's message,
- * linked to its field, in the fields' order, the role's to its first radio.
- */
-function summaryItems(errors: UserErrors, unknownField: boolean): FormError[] {
-  const items: FormError[] = unknownField ? [{ message: msg.notSent('server') }] : [];
-  for (const [message, fieldId] of [
-    [errors.displayName, nameId],
-    [errors.email, emailId],
-    [errors.role, firstRoleRadioId],
-  ] as const) {
-    if (message !== undefined) {
-      items.push({ message, fieldId });
-    }
-  }
-
-  return items;
-}
 
 /**
  * Invite user at `/manage/users/new` (users.md component B, *States* › Invite user and *Interactions*): the back link
@@ -77,8 +46,7 @@ export function InviteUserPage() {
     },
   });
 
-  function change<K extends keyof UserValues>(field: K, value: UserValues[K]) {
-    const next = { ...values, [field]: value };
+  function change(next: UserValues, field: keyof UserValues) {
     setValues(next);
     // Once a field shows a message, each change checks that field again, and the message goes as soon as it passes
     // (form-validation.md *Fixing*); a field with no message is checked on the next press only.
@@ -133,49 +101,14 @@ export function InviteUserPage() {
         <BackLink to="/manage/users">{pageName.users}</BackLink>
       </PageBar>
       <div className={styles.view}>
-        <ErrorSummary errors={summaryItems(errors, unknownField)} attempt={attempt} />
+        <UserErrorSummary
+          errors={errors}
+          unknownField={unknownField ? msg.notSent('server') : undefined}
+          attempt={attempt}
+        />
         <PageHeading>{pageName.inviteUser}</PageHeading>
         <form noValidate onSubmit={send}>
-          <div className={styles.fields}>
-            {/* No maxLength, which would cut a longer name pasted in without a word; the press checks it. */}
-            <FieldGroup fieldId={nameId} label={strings.name} hint={strings.users.nameHint} error={errors.displayName}>
-              <input
-                id={nameId}
-                type="text"
-                className={textInput.input}
-                // Off on both fields, which describe another person, so that the manager's own details are not
-                // offered (SC 1.3.5 covers information about the person filling the form only).
-                autoComplete="off"
-                spellCheck={false}
-                autoCapitalize="words"
-                aria-describedby={describedBy(nameId, errors.displayName)}
-                aria-invalid={errors.displayName === undefined ? undefined : true}
-                value={values.displayName}
-                onChange={(event) => change('displayName', event.currentTarget.value)}
-              />
-            </FieldGroup>
-            <FieldGroup
-              fieldId={emailId}
-              label={strings.emailAddress}
-              hint={strings.users.inviteEmailHint}
-              error={errors.email}
-            >
-              <input
-                id={emailId}
-                type="email"
-                className={textInput.input}
-                autoComplete="off"
-                spellCheck={false}
-                autoCapitalize="none"
-                autoCorrect="off"
-                aria-describedby={describedBy(emailId, errors.email)}
-                aria-invalid={errors.email === undefined ? undefined : true}
-                value={values.email}
-                onChange={(event) => change('email', event.currentTarget.value)}
-              />
-            </FieldGroup>
-            <RoleField value={values.role} error={errors.role} onChange={(role) => change('role', role)} />
-          </div>
+          <UserFields values={values} errors={errors} emailHint={strings.users.inviteEmailHint} onChange={change} />
           <RequestAlert>{failure}</RequestAlert>
           <Button type="submit" variant="primary" busy={sending} busyLabel={strings.sending}>
             {strings.users.sendInvite}

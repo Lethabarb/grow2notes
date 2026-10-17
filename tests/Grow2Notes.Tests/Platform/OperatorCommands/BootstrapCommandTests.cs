@@ -19,9 +19,9 @@ using Microsoft.Extensions.Time.Testing;
 namespace Grow2Notes.Tests.Platform.OperatorCommands;
 
 /// <summary>
-/// <c>admin bootstrap</c> (design.md §7.4), run through the operator commands' entry in a scope of its own, as the
-/// app's binary runs it, with writers in place of the console. Each run has made-up names and an address of its own,
-/// which no other test or run of this one uses. The rows are read afresh, in a scope of their own, after each run.
+/// <c>admin bootstrap</c> (design.md §7.4), run through the operator commands' entry as the app's binary runs it, with
+/// writers in place of the console (<see cref="AdminCommandRuns"/>). Each run has made-up names and an address of its
+/// own, which no other test or run of this one uses. The rows are read afresh, in a scope of their own, after each run.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -36,8 +36,9 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     // Each with the whole of what it writes on the error writer: the usage line follows when an argument is at fault.
     public static TheoryData<string[], string> RefusedArguments { get; } = new()
     {
-        { [], RefusalWithUsage("No command was given.") },
-        { ["create-organisation"], RefusalWithUsage("\"create-organisation\" is not a command.") },
+        // Refused by the entry, which then says how each command is used, one to a line.
+        { [], RefusalWithEveryUsage("No command was given.") },
+        { ["create-organisation"], RefusalWithEveryUsage("\"create-organisation\" is not a command.") },
         { ["bootstrap"], RefusalWithUsage("--organisation is missing.") },
         { Bootstrap(organisation: null), RefusalWithUsage("--organisation is missing.") },
         { Bootstrap(managerName: null), RefusalWithUsage("--manager-name is missing.") },
@@ -85,11 +86,11 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
         var email = NewAddress();
 
-        var run = await RunAsync(app.Services, Bootstrap(managerEmail: email));
+        var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
 
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         var manager = await FindUserAsync(email);
-        var setupLink = ReadOnlyLine(run.Output);
+        var setupLink = run.SingleOutputLine();
         Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
         Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, TokenIn(setupLink)));
 
@@ -134,14 +135,13 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     public async Task A_second_run_with_the_address_in_another_letter_case_is_refused_and_changes_nothing()
     {
         var email = NewAddress();
-        var first = await RunAsync(factory.Services, Bootstrap(managerEmail: email));
+        var first = await factory.RunAdminCommandAsync(Bootstrap(managerEmail: email));
         Assert.Equal(0, first.ExitCode);
         var managerId = (await FindUserAsync(email)).Id;
         var managerRows = await ReadUserAsync(managerId);
         var counts = await CountRowsAsync();
 
-        var second = await RunAsync(
-            factory.Services,
+        var second = await factory.RunAdminCommandAsync(
             Bootstrap("Hillside Supports", "Alex Morgan", managerEmail: email.ToUpperInvariant()));
 
         Assert.Equal((1, ""), (second.ExitCode, second.Output));
@@ -152,7 +152,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
 
         // Its security stamp among them, so the first run's link still works.
         Assert.Equal(managerRows, await ReadUserAsync(managerId));
-        Assert.True(await VerifySetupTokenAsync(factory.Services, managerId, TokenIn(ReadOnlyLine(first.Output))));
+        Assert.True(await VerifySetupTokenAsync(factory.Services, managerId, TokenIn(first.SingleOutputLine())));
     }
 
     [Theory]
@@ -161,8 +161,8 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     {
         var counts = await CountRowsAsync();
 
-        var run = await RunAsync(
-            factory.Services, [.. arguments.Select(argument => argument == Address ? NewAddress() : argument)]);
+        var run = await factory.RunAdminCommandAsync(
+            [.. arguments.Select(argument => argument == Address ? NewAddress() : argument)]);
 
         Assert.Equal((1, "", error), (run.ExitCode, run.Output, run.Error));
         Assert.Equal(counts, await CountRowsAsync());
@@ -179,7 +179,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
             configuration => configuration.AddInMemoryCollection([new("App:Origin", origin)])));
         var counts = await CountRowsAsync();
 
-        var run = await RunAsync(app.Services, Bootstrap(managerEmail: NewAddress()));
+        var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: NewAddress()));
 
         Assert.Equal(
             (1, "", Refusal($"{reason}, so no setup link can be made.")), (run.ExitCode, run.Output, run.Error));
@@ -200,7 +200,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         using var error = new StringWriter();
 
         await Assert.ThrowsAsync<WorkFailedException>(
-            () => RunAsync(app.Services, Bootstrap(managerEmail: email), output, error));
+            () => app.RunAdminCommandAsync(Bootstrap(managerEmail: email), output, error));
 
         Assert.Equal(("", ""), (output.ToString(), error.ToString()));
         Assert.Equal(counts, await CountRowsAsync());
@@ -218,14 +218,14 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         var counts = await CountRowsAsync();
         var email = NewAddress();
 
-        var run = await RunAsync(app.Services, Bootstrap(managerEmail: email));
+        var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
 
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         Assert.Equal(2, commits.Attempts);
         Assert.Equal(
             new RowCounts(counts.Organisations + 1, counts.Users + 1, counts.AuditEvents + 1), await CountRowsAsync());
         var manager = await FindUserAsync(email);
-        var setupLink = ReadOnlyLine(run.Output);
+        var setupLink = run.SingleOutputLine();
         Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
         Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, TokenIn(setupLink)));
     }
@@ -238,7 +238,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         var email = $"sam.taylor.{Guid.NewGuid():N}".PadRight(Limits.Email - "@example.org".Length, 'r') +
             "@example.org";
 
-        var run = await RunAsync(factory.Services, Bootstrap(organisationName, managerName, email));
+        var run = await factory.RunAdminCommandAsync(Bootstrap(organisationName, managerName, email));
 
         Assert.Equal(0, run.ExitCode);
         var manager = await FindUserAsync(email);
@@ -252,7 +252,9 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
                 .SingleAsync(TestContext.Current.CancellationToken));
     }
 
-    // The link holds the setup token, and the names and the address are personal (design.md §9.5).
+    // The link holds the setup token, and the names and the address are personal (design.md §9.5). The token is looked
+    // for as the link holds it too, escaped, since its base64 almost always has a +, / or = in it, which the link has
+    // as %XX.
     [Fact]
     public async Task Neither_a_run_nor_a_refused_one_logs_the_names_the_address_or_the_link()
     {
@@ -261,12 +263,14 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
             builder => builder.ConfigureLogging(logging => logging.AddProvider(logs)));
         var email = NewAddress();
 
-        var done = await RunAsync(app.Services, Bootstrap(managerEmail: email));
-        var refused = await RunAsync(app.Services, Bootstrap(managerEmail: email));
+        var done = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+        var refused = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
 
         Assert.Equal((0, 1), (done.ExitCode, refused.ExitCode));
-        string[] personal = [OrganisationName, ManagerName, email, TokenIn(ReadOnlyLine(done.Output))];
-        Assert.DoesNotContain(logs.Entries, entry => personal.Any(value => Holds(entry, value)));
+        var setupLink = done.SingleOutputLine();
+        var token = TokenIn(setupLink);
+        string[] personal = [OrganisationName, ManagerName, email, setupLink, token, Uri.EscapeDataString(token)];
+        Assert.DoesNotContain(logs.Entries, entry => personal.Any(entry.Holds));
     }
 
     // admin bootstrap's arguments, with each option whose value is not null.
@@ -287,38 +291,13 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
     private static string RefusalWithUsage(string reason) =>
         $"{Refusal(reason)}{BootstrapCommand.Usage}{Environment.NewLine}";
 
-    private static async Task<Run> RunAsync(IServiceProvider services, string[] arguments)
-    {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        var exitCode = await RunAsync(services, arguments, output, error);
-        return new(exitCode, output.ToString(), error.ToString());
-    }
-
-    // As Program.cs runs the entry, in a scope of its own.
-    private static async Task<int> RunAsync(
-        IServiceProvider services, string[] arguments, TextWriter output, TextWriter error)
-    {
-        await using var scope = services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<AdminCommands>()
-            .RunAsync(arguments, output, error, TestContext.Current.CancellationToken);
-    }
-
-    // The one line that was written, which must end with a line break.
-    private static string ReadOnlyLine(string written)
-    {
-        Assert.EndsWith(Environment.NewLine, written, StringComparison.Ordinal);
-        return Assert.Single(written.Split(Environment.NewLine)[..^1]);
-    }
+    private static string RefusalWithEveryUsage(string reason) =>
+        $"{RefusalWithUsage(reason)}{ResetSignInCommand.Usage}{Environment.NewLine}" +
+        $"{SignOutAllCommand.Usage}{Environment.NewLine}";
 
     // As the SPA reads the fragment, with URLSearchParams, which ParseQuery matches: + is a space, then %XX is decoded.
     private static string TokenIn(string setupLink) =>
         QueryHelpers.ParseQuery(setupLink[(setupLink.IndexOf('#', StringComparison.Ordinal) + 1)..])["t"].ToString();
-
-    private static bool Holds(RecordedLog entry, string value) =>
-        entry.Message.Contains(value, StringComparison.OrdinalIgnoreCase)
-        || entry.Exception?.ToString().Contains(value, StringComparison.OrdinalIgnoreCase) == true
-        || entry.Values.Any(v => v.Value?.ToString()?.Contains(value, StringComparison.OrdinalIgnoreCase) == true);
 
     // An address that no other test or run of this one uses.
     private static string NewAddress() => $"sam.taylor.{Guid.NewGuid():N}@example.org";
@@ -378,8 +357,6 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         return await users.VerifyUserTokenAsync(
             user, SetupTokenProvider.ProviderName, SetupTokenProvider.Purpose, token);
     }
-
-    private sealed record Run(int ExitCode, string Output, string Error);
 
     private sealed record RowCounts(int Organisations, int Users, int AuditEvents);
 

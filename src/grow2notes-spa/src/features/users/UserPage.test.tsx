@@ -8,8 +8,12 @@ import { ApiError } from '../../api/api.ts';
 import { meQuery, type Me, type Role } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import { buttonClass } from '../../components/buttonClass.ts';
+import { fullPageLoad } from '../../routes/fullPageLoad.ts';
 import { routes } from '../../routes/routes.tsx';
 import type { AdminUser, UserStatus } from './usersQuery.ts';
+
+// jsdom does not navigate, so the tests see the full page load that your own reset or deactivation asks for.
+vi.mock('../../routes/fullPageLoad.ts');
 
 const mePath = '/api/auth/me';
 const usersPath = '/api/admin/users';
@@ -54,12 +58,26 @@ const chris = madeUp('7a1d4f9c-2e53-4b86-9c07-5f3e1a8d6b20', 'Chris Ng', 'chris.
 
 const people = [sam, chris, jo, alex];
 
+// A second Active manager, with whom Sam Lee is no longer the only one (A26).
+const kim = madeUp('b2d6f0a4-7e31-4c9b-8a5d-1f3e7c2b9d60', 'Kim Tran', 'kim.tran@example.org', 'Active', 'Manager');
+
 // Resend invite's request for Alex Park (design.md §6.6).
 const setupLinkPath = `/api/admin/users/${alex.id}/setup-link`;
+
+/** The request of a change to `user`: `setup-link`, which Reset sign-in sends too, `deactivate` or `reactivate`. */
+const changePath = (user: AdminUser, change: 'setup-link' | 'deactivate' | 'reactivate') =>
+  `/api/admin/users/${user.id}/${change}`;
 
 /** The four, with Alex Park as `changed` makes them, as the list gives them after a change to Alex. */
 function peopleWithAlex(changed: Partial<AdminUser>): AdminUser[] {
   return [sam, chris, jo, { ...alex, ...changed }];
+}
+
+/** `users` with `user` as `changed` makes them, and a new stamp, as the list gives them after a change to them. */
+function withChanged(users: readonly AdminUser[], user: AdminUser, changed: Partial<AdminUser>): AdminUser[] {
+  return users.map((listed) =>
+    listed.id === user.id ? { ...listed, concurrencyStamp: 'stamp-2', ...changed } : listed,
+  );
 }
 
 // The two times at which the tests' server sends a link, a minute apart: 4:12 pm and 4:13 pm in Melbourne, which is
@@ -231,6 +249,13 @@ function facts(): string[][] {
   });
 }
 
+/** The summary list's Status row, its third, the `<div>` that takes focus once an action has changed the status. */
+function statusRow(): Element | undefined {
+  const row = main().querySelector('dl')?.children[2];
+  expect(row?.firstElementChild).toHaveTextContent(/^Status$/);
+  return row;
+}
+
 /** Each element of the header that has `aria-current`, as its text and the attribute's value. */
 function currentItems(): string[] {
   const current = screen.getByRole('banner').querySelectorAll('[aria-current]');
@@ -290,9 +315,13 @@ function resendLine(): HTMLElement {
   return line as HTMLElement;
 }
 
-/** The action error region above the actions (users.md component C item 5). */
+/** The action error region above the actions (users.md component C item 5), apart from an open dialog's alert line. */
 function actionAlert(): HTMLElement {
-  return within(main()).getByRole('alert');
+  const regions = within(main())
+    .getAllByRole('alert')
+    .filter((region) => region.closest('dialog') === null);
+  expect(regions).toHaveLength(1);
+  return regions[0];
 }
 
 /** Each Resend invite request sent for Alex Park, as its method, its `If-Match` and its body. */
@@ -327,6 +356,117 @@ async function openAlex() {
   await settle();
 }
 
+/** Opens `user`'s page for Sam Lee, from a list of `users`, ready to send a change. */
+async function openPage(user: AdminUser, users: readonly AdminUser[] = people) {
+  serve(usersPath, json(users));
+  serve(antiforgeryPath, token);
+  renderApp(`/manage/users/${user.id}`);
+  await settle();
+}
+
+/**
+ * The actions as they read, in order: the error region's words, each link and button by its label, each description
+ * and the notice's words, and the rule, apart from Resend invite's line and an open dialog.
+ */
+function actionsAsRead(): string[] {
+  const actions = actionAlert().parentElement;
+  const parts = actions?.querySelectorAll('[role="alert"], a, button, p:not([role]), hr') ?? [];
+  return Array.from(parts)
+    .filter((part) => part.closest('dialog') === null)
+    .map((part) => {
+      switch (part.localName) {
+        case 'a':
+          return `link: ${part.textContent}`;
+        case 'button':
+          // Its label, without the busy label that shares its cell, hidden until it is busy.
+          return `button: ${part.firstElementChild?.textContent}`;
+        case 'hr':
+          return 'rule';
+        default:
+          return part.getAttribute('role') === 'alert' ? `alert: ${part.textContent}` : (part.textContent ?? '');
+      }
+    });
+}
+
+/** The page's button whose label is `name`, outside any dialog, or `null` when the page does not offer it. */
+function pageButton(name: string): HTMLElement | null {
+  const buttons = within(main())
+    .queryAllByRole('button', { name: new RegExp(`^${name}`) })
+    .filter((button) => button.closest('dialog') === null);
+  return buttons[0] ?? null;
+}
+
+/** Focuses the page's button whose label is `name` and presses it, as a person does, and returns it. */
+function press(name: string): HTMLElement {
+  const button = pageButton(name);
+  if (button === null) {
+    throw new Error(`The page offers no ${name}.`);
+  }
+
+  button.focus();
+  fireEvent.click(button);
+  return button;
+}
+
+/** The open dialog, or `null`. */
+function openDialog(): HTMLDialogElement | null {
+  const element = document.querySelector('dialog[open]');
+  return element instanceof HTMLDialogElement ? element : null;
+}
+
+/** The open dialog, which there must be. */
+function dialog(): HTMLDialogElement {
+  const element = openDialog();
+  if (element === null) {
+    throw new Error('No dialog is open.');
+  }
+
+  return element;
+}
+
+/** The dialog's buttons, in order, by their names. */
+function dialogButtons(): string[] {
+  return within(dialog())
+    .getAllByRole('button')
+    .map((button) => button.firstElementChild?.textContent ?? '');
+}
+
+/** The dialog's button named `name`. */
+function dialogButton(name: string): HTMLElement {
+  return within(dialog()).getByRole('button', { name });
+}
+
+/** Focuses the dialog's button named `name` and presses it, and returns it. */
+function pressInDialog(name: string): HTMLElement {
+  const button = dialogButton(name);
+  button.focus();
+  fireEvent.click(button);
+  return button;
+}
+
+/** As the browser does for Escape or Android's back gesture: `cancel`, then the close, unless `cancel` was stopped. */
+function closeRequest() {
+  const element = dialog();
+  const cancel = new Event('cancel', { cancelable: true });
+  fireEvent(element, cancel);
+  if (!cancel.defaultPrevented) {
+    element.close();
+  }
+}
+
+/** Each request sent to `path`, as its method and its `If-Match`. */
+function sentTo(path: string) {
+  return fetchMock.mock.calls
+    .filter(([sentPath]) => sentPath === path)
+    .map(([, init]) => ({ method: init?.method, ifMatch: new Headers(init?.headers).get('If-Match') }));
+}
+
+/** The `<p>`s of the dialog's body, by their text. */
+function dialogBody(): string[] {
+  const body = document.getElementById(dialog().getAttribute('aria-describedby') ?? '');
+  return Array.from(body?.children ?? [], (line) => line.textContent ?? '');
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string.
@@ -353,24 +493,47 @@ beforeEach(() => {
 afterEach(() => {
   answers.clear();
   fetchMock.mockReset();
+  vi.mocked(fullPageLoad).mockReset();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
+// The words of users.md's component C, items 6 and 7, and *States* › User detail.
+const resetDescription = 'For a lost phone, a new phone or a forgotten password. Check who is asking first.';
+const deactivateDescription = 'For someone who no longer works here. Their notes stay.';
+const reactivateDescription = 'Lets them sign in again.';
+const lastManagerNotice =
+  'You are the only active manager, so you cannot reset your own sign-in, deactivate your account or make yourself ' +
+  'a worker. To do any of these, first make someone else a manager.';
+
+// An Active user's actions after Edit: Reset sign-in, then the rule and Deactivate, each under its description.
+const resetThenDeactivate = [
+  resetDescription,
+  'button: Reset sign-in',
+  'rule',
+  deactivateDescription,
+  'button: Deactivate',
+];
+
 describe('User', () => {
-  // users.md's *Which actions show, by status*, for the actions built so far: Edit for every status.
+  // users.md's *Which actions show, by status* (AC21), and, on your own page with a second active manager, AC22.
   it.each([
-    { user: jo, role: 'Worker', status: 'Active' },
-    { user: sam, role: 'Manager', status: 'Active' },
-    { user: chris, role: 'Worker', status: 'Deactivated' },
+    { user: jo, role: 'Worker', status: 'Active', users: people, after: resetThenDeactivate },
+    {
+      user: chris,
+      role: 'Worker',
+      status: 'Deactivated',
+      users: people,
+      after: ['rule', reactivateDescription, 'button: Reactivate'],
+    },
+    { user: sam, role: 'Manager', status: 'Active', users: [...people, kim], after: resetThenDeactivate },
+    { user: kim, role: 'Manager', status: 'Active', users: [...people, kim], after: resetThenDeactivate },
   ])(
-    'shows $status $user.displayName: the name as the <h1>, the email, role and status, and Edit, no Resend invite',
-    async ({ user, role, status }) => {
-      serve(usersPath, json(people));
-      renderApp(`/manage/users/${user.id}`);
-      await settle();
+    'shows $status $user.displayName: the <h1>, the email, role and status, Edit, then its actions in order',
+    async ({ user, role, status, users, after }) => {
+      await openPage(user, users);
 
       expect(pageHeading()).toHaveAccessibleName(user.displayName);
       expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
@@ -383,15 +546,56 @@ describe('User', () => {
       expect(edit).toHaveAttribute('href', `/manage/users/${user.id}/edit`);
       expect(edit).toHaveClass(...buttonClass('secondary').split(' '));
       expect(within(main()).getAllByRole('link')).toEqual([edit]);
-      expect(within(main()).queryByRole('button')).not.toBeInTheDocument();
-      expect(actionAlert()).toBeEmptyDOMElement();
-      expect(actionAlert().compareDocumentPosition(edit)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+      expect(actionsAsRead()).toEqual(['alert: ', 'link: Edit', ...after]);
+      // Each button named again by the description above it (users.md component C items 6 and 7).
+      const described = after.filter((_, index) => after[index + 1]?.startsWith('button: '));
+      for (const [index, button] of within(main()).getAllByRole('button').entries()) {
+        expect(button).toHaveAccessibleDescription(described[index]);
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button).toHaveClass(...buttonClass('secondary').split(' '));
+      }
       expect(document.querySelector('[disabled]')).toBeNull();
+      expect(openDialog()).toBeNull();
       expect(line()).toBeEmptyDOMElement();
     },
   );
 
-  it('shows Invited Alex Park with Edit, then Resend invite under its description, then its empty line', async () => {
+  it("shows on the only active manager's own page Edit, the rule and the notice, never a button (AC22)", async () => {
+    await openPage(sam);
+
+    expect(facts()[2]).toEqual(['Status', 'Active']);
+    expect(actionsAsRead()).toEqual(['alert: ', 'link: Edit', 'rule', lastManagerNotice]);
+    expect(within(main()).queryByRole('button')).not.toBeInTheDocument();
+    // Plain content: no role, no live region and no focus stop of its own (status-messages.md).
+    const notice = within(main()).getByText(lastManagerNotice).closest('div:not([class*="body"])');
+    expect(notice).not.toHaveAttribute('role');
+    expect(notice).not.toHaveAttribute('aria-live');
+    expect(notice).not.toHaveAttribute('tabindex');
+    expect(notice?.querySelector('[tabindex], a, button')).toBeNull();
+    expect(document.querySelector('[disabled]')).toBeNull();
+  });
+
+  it('shows the notice only on your own page: Jo Smith, with Sam Lee the only active manager, has both', async () => {
+    await openPage(jo);
+
+    expect(within(main()).queryByText(lastManagerNotice)).not.toBeInTheDocument();
+    expect(pageButton('Reset sign-in')).toBeInTheDocument();
+    expect(pageButton('Deactivate')).toBeInTheDocument();
+  });
+
+  it('makes the Status row alone a target that script can focus, out of the tab order, with no live role', async () => {
+    serve(usersPath, json(people));
+    renderApp(`/manage/users/${jo.id}`);
+    await settle();
+
+    const rows = Array.from(main().querySelector('dl')?.children ?? []);
+    expect(rows.map((row) => row.getAttribute('tabindex'))).toEqual([null, null, '-1']);
+    expect(statusRow()).not.toHaveAttribute('role');
+    expect(statusRow()).not.toHaveAttribute('aria-live');
+    expect(statusRow()).not.toHaveFocus();
+  });
+
+  it('shows Invited Alex Park with Edit, Resend invite under its description, its line, then Deactivate', async () => {
     serve(usersPath, json(people));
     renderApp(`/manage/users/${alex.id}`);
     await settle();
@@ -405,7 +609,17 @@ describe('User', () => {
     const edit = within(main()).getByRole('link', { name: 'Edit' });
     expect(edit).toHaveAttribute('href', `/manage/users/${alex.id}/edit`);
     expect(within(main()).getAllByRole('link')).toEqual([edit]);
-    const resend = within(main()).getByRole('button');
+    expect(actionsAsRead()).toEqual([
+      'alert: ',
+      'link: Edit',
+      'Sends a new setup link. The old link stops working.',
+      'button: Resend invite',
+      'rule',
+      deactivateDescription,
+      'button: Deactivate',
+    ]);
+    expect(pageButton('Deactivate')).toHaveAccessibleDescription(deactivateDescription);
+    const [resend] = within(main()).getAllByRole('button');
     expect(resend).toHaveAccessibleName('Resend invite');
     expect(resend).toHaveAccessibleDescription('Sends a new setup link. The old link stops working.');
     expect(resend).toHaveAttribute('type', 'button');
@@ -736,7 +950,7 @@ describe('Resend invite', () => {
     expect(resendLine().textContent).toBe(sentAt412pm);
   });
 
-  it('on a 412 whose list shows Alex now Active, takes Resend invite away, focus going to the <h1>', async () => {
+  it('on a 412 whose list shows Alex now Active, takes Resend invite away, focus going to the Status row', async () => {
     await openAlex();
     serve(setupLinkPath, problem(412, 'precondition.failed'));
     serve(
@@ -750,7 +964,7 @@ describe('Resend invite', () => {
     expect(actionAlert().textContent).toBe(someoneChangedAlex);
     expect(facts()[2]).toEqual(['Status', 'Active']);
     expect(resendButton()).not.toBeInTheDocument();
-    expect(pageHeading()).toHaveFocus();
+    expect(statusRow()).toHaveFocus();
   });
 
   it.each([
@@ -829,5 +1043,577 @@ describe('Resend invite', () => {
     returnToWindow();
     await answered();
     expect(resendLine()).toBeEmptyDOMElement();
+  });
+});
+
+// The words of users.md's *Dialogs* for Jo Smith, with the typographic apostrophe of src/copy.
+const resetJoTitle = 'Reset sign-in for Jo Smith?';
+const resetJoBody = [
+  'Only do this after you have checked, by phone or in person, that Jo Smith is the one asking.',
+  'Their current way of signing in will be removed, and they will be signed out everywhere. A new setup link will ' +
+    'be emailed to jo.smith@example.org.',
+];
+const resetJo = 'Reset sign-in for Jo Smith';
+const someoneChangedJoGoBack =
+  'Someone else has just changed Jo Smith’s account. Go back to see the latest details.';
+const someoneChangedJo = 'Someone else has just changed Jo Smith’s account. The page now shows the latest details.';
+
+// Sam Lee and a second Active manager, Kim Tran, so that Sam Lee's own page offers Reset sign-in and Deactivate.
+const twoManagers = [...people, kim];
+
+// Jo Smith, Deactivated on 14 October, as the list gives them after a deactivation.
+const joDeactivated = withChanged(people, jo, { status: 'Deactivated', deactivatedAtUtc: '2026-10-14T05:00:00Z' });
+
+/** The dialog's alert line, above its buttons. */
+const dialogAlert = () => within(dialog()).getByRole('alert');
+
+/** The dialog's status line, below its buttons, which says that it is still busy after 1 s. */
+const dialogStatus = () => within(dialog()).getByRole('status');
+
+describe('Reset sign-in', () => {
+  const resetPath = changePath(jo, 'setup-link');
+
+  it('opens its dialog on its title, its confirm button red, sending nothing; Go back, Escape close it', async () => {
+    await openPage(jo);
+
+    const trigger = press('Reset sign-in');
+
+    expect(dialog()).toHaveAttribute('role', 'alertdialog');
+    expect(dialog()).toHaveAccessibleName(resetJoTitle);
+    expect(dialogBody()).toEqual(resetJoBody);
+    const title = within(dialog()).getByRole('heading', { level: 2 });
+    expect(title).toHaveAttribute('tabindex', '-1');
+    expect(title).toHaveFocus();
+    expect(dialogButtons()).toEqual([resetJo, 'Go back']);
+    expect(dialogButton(resetJo)).toHaveClass(...buttonClass('warning').split(' '));
+    expect(dialogButton('Go back')).toHaveClass(...buttonClass('secondary').split(' '));
+    // The trigger is not red: only the dialog's last step is (users.md component C item 6).
+    expect(trigger).toHaveClass(...buttonClass('secondary').split(' '));
+    expect(dialogAlert()).toBeEmptyDOMElement();
+    expect(dialogStatus()).toBeEmptyDOMElement();
+
+    pressInDialog('Go back');
+    await settle();
+    expect(openDialog()).toBeNull();
+
+    press('Reset sign-in');
+    closeRequest();
+    await settle();
+    expect(openDialog()).toBeNull();
+    expect(sentTo(resetPath)).toEqual([]);
+    expect(facts()[2]).toEqual(['Status', 'Active']);
+  });
+
+  it('sends one POST with If-Match, busy until the list comes, then shows Jo Invited, focus on Status', async () => {
+    await openPage(jo);
+    serve(resetPath, noContent(sentAt0512));
+    const list = held(json(withChanged(people, jo, { status: 'Invited' })));
+    serve(usersPath, list.answer);
+    press('Reset sign-in');
+
+    const confirm = pressInDialog(resetJo);
+    fireEvent.click(confirm);
+    await answered();
+
+    expect(sentTo(resetPath)).toEqual([{ method: 'POST', ifMatch: `"stamp-${jo.id}"` }]);
+    // Open and busy until the page holds Jo's new stamp.
+    expect(confirm).toHaveAttribute('aria-disabled', 'true');
+    expect(dialogButton('Go back')).toHaveAttribute('aria-disabled', 'true');
+
+    list.release();
+    await answered();
+
+    expect(openDialog()).toBeNull();
+    expect(facts()[2]).toEqual(['Status', 'Invited']);
+    expect(statusRow()).toHaveFocus();
+    // Resend invite in its place, and no banner: the error region and Resend invite's line are empty.
+    expect(actionsAsRead()).toEqual([
+      'alert: ',
+      'link: Edit',
+      'Sends a new setup link. The old link stops working.',
+      'button: Resend invite',
+      'rule',
+      deactivateDescription,
+      'button: Deactivate',
+    ]);
+    expect(resendLine()).toBeEmptyDOMElement();
+    expect(line()).toBeEmptyDOMElement();
+    expect(sentTo(resetPath)).toHaveLength(1);
+  });
+
+  it('while busy ignores presses and Escape, keeps its labels, and says "Resetting sign-in…" from 1 s', async () => {
+    await openPage(jo);
+    serve(resetPath, noAnswer);
+    press('Reset sign-in');
+
+    const confirm = pressInDialog(resetJo);
+    pressInDialog(resetJo);
+    pressInDialog('Go back');
+    closeRequest();
+    await wait(999);
+
+    expect(openDialog()).not.toBeNull();
+    expect(dialogButtons()).toEqual([resetJo, 'Go back']);
+    expect(confirm).toHaveAttribute('aria-disabled', 'true');
+    expect(dialogButton('Go back')).toHaveAttribute('aria-disabled', 'true');
+    expect(dialogStatus()).toBeEmptyDOMElement();
+
+    await wait(1);
+    expect(dialogStatus()).toHaveTextContent('Resetting sign-in…');
+    expect(dialogButtons()).toEqual([resetJo, 'Go back']);
+    expect(sentTo(resetPath)).toHaveLength(1);
+    expect(document.querySelector('[disabled]')).toBeNull();
+  });
+
+  it('on a 412 takes away its confirm button and says so, focus on Go back, the page fetched anew behind', async () => {
+    await openPage(jo);
+    serve(resetPath, problem(412, 'precondition.failed'));
+    serve(usersPath, json(withChanged(people, jo, { displayName: 'Jo Smithers' })));
+    press('Reset sign-in');
+
+    pressInDialog(resetJo);
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(someoneChangedJoGoBack);
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+    expect(dialogButton('Go back')).not.toHaveAttribute('aria-disabled');
+    // The dialog keeps the words it opened with, while the page behind it shows Jo as they are now.
+    expect(dialog()).toHaveAccessibleName(resetJoTitle);
+    expect(pageHeading()).toHaveAccessibleName('Jo Smithers');
+
+    pressInDialog('Go back');
+    await settle();
+
+    expect(openDialog()).toBeNull();
+    expect(pageButton('Reset sign-in')).toBeInTheDocument();
+    expect(sentTo(resetPath)).toHaveLength(1);
+  });
+
+  it('after a 412 whose list shows Jo now Deactivated, Go back leaves focus on the Status row', async () => {
+    await openPage(jo);
+    serve(resetPath, problem(412, 'precondition.failed'));
+    serve(usersPath, json(joDeactivated));
+    press('Reset sign-in');
+    pressInDialog(resetJo);
+    await answered();
+
+    pressInDialog('Go back');
+    await settle();
+
+    expect(openDialog()).toBeNull();
+    expect(facts()[2]).toEqual(['Status', 'Deactivated']);
+    expect(pageButton('Reset sign-in')).toBeNull();
+    expect(statusRow()).toHaveFocus();
+  });
+
+  it('on your own page with a second active manager has the "your own" words, and its 204 loads afresh', async () => {
+    await openPage(sam, twoManagers);
+    serve(changePath(sam, 'setup-link'), noContent(sentAt0512));
+    const listsBefore = sent(usersPath);
+
+    press('Reset sign-in');
+
+    expect(dialog()).toHaveAccessibleName('Reset your own sign-in?');
+    expect(dialogBody()).toEqual([
+      'You will be signed out everywhere now. A new setup link will be emailed to sam.lee@example.org.',
+    ]);
+    expect(dialogButtons()).toEqual(['Reset my sign-in', 'Go back']);
+    expect(dialogButton('Reset my sign-in')).toHaveClass(...buttonClass('warning').split(' '));
+
+    pressInDialog('Reset my sign-in');
+    await answered();
+
+    // Your session has ended, so the app loads afresh, on sign-in, with no list fetched before it goes.
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(sent(usersPath)).toBe(listsBefore);
+    expect(dialogButton('Reset my sign-in')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('on your own page, a 409 user.last_manager gives the "you" words with Go back alone, focused', async () => {
+    await openPage(sam, twoManagers);
+    serve(changePath(sam, 'setup-link'), problem(409, 'user.last_manager'));
+    // Kim Tran deactivated themselves at the same moment, so the list fetched again has Sam Lee the only one.
+    serve(usersPath, json(withChanged(twoManagers, kim, { status: 'Deactivated' })));
+    press('Reset sign-in');
+
+    pressInDialog('Reset my sign-in');
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(
+      'You are the only active manager, so you cannot reset your own sign-in. Make someone else a manager first.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+    expect(within(main()).getByText(lastManagerNotice)).toBeInTheDocument();
+
+    pressInDialog('Go back');
+    await settle();
+
+    expect(openDialog()).toBeNull();
+    expect(statusRow()).toHaveFocus();
+    expect(fullPageLoad).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { given: 'no connection', answer: noConnection, sentence: 'Not reset: no connection. Try again.' },
+    { given: 'a 500', answer: problem(500), sentence: 'Not reset: something went wrong. Try again.' },
+    {
+      given: 'a 409 user.not_active',
+      answer: problem(409, 'user.not_active'),
+      sentence: 'Not reset: something went wrong. Try again.',
+    },
+  ])('on $given says so, both buttons ready, focus on the confirm button, sending nothing by itself', async (case_) => {
+    await openPage(jo);
+    serve(resetPath, case_.answer);
+    const listsBefore = sent(usersPath);
+    press('Reset sign-in');
+
+    const confirm = pressInDialog(resetJo);
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(case_.sentence);
+    expect(dialogButtons()).toEqual([resetJo, 'Go back']);
+    expect(confirm).toHaveFocus();
+    expect(confirm).not.toHaveAttribute('aria-disabled');
+    expect(dialogButton('Go back')).not.toHaveAttribute('aria-disabled');
+    expect(sent(usersPath)).toBe(listsBefore);
+
+    await wait(60_000);
+    expect(sentTo(resetPath)).toHaveLength(1);
+  });
+
+  it('empties its alert line as the confirm button is pressed again', async () => {
+    await openPage(jo);
+    serve(resetPath, noConnection);
+    press('Reset sign-in');
+    pressInDialog(resetJo);
+    await answered();
+    expect(dialogAlert().textContent).toBe('Not reset: no connection. Try again.');
+    serve(resetPath, noAnswer);
+
+    pressInDialog(resetJo);
+
+    expect(dialogAlert()).toBeEmptyDOMElement();
+    await settle();
+    expect(sentTo(resetPath)).toHaveLength(2);
+  });
+
+  it('on a 401 closes the dialog before view C shows over the page, which keeps Reset sign-in', async () => {
+    await openPage(jo);
+    serve(resetPath, problem(401));
+    const shownWithViewC: (HTMLDialogElement | null)[] = [];
+    const close = vi.spyOn(HTMLDialogElement.prototype, 'close');
+    press('Reset sign-in');
+
+    pressInDialog(resetJo);
+    // As view C's <h1> mounts, the dialog has already been closed (confirm-dialog.md *Behaviour* 8).
+    const observer = new MutationObserver(() => {
+      if (document.getElementById('signed-out-heading') !== null && shownWithViewC.length === 0) {
+        shownWithViewC.push(openDialog());
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    await answered();
+    observer.disconnect();
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(close).toHaveBeenCalled();
+    expect(shownWithViewC).toEqual([null]);
+    expect(openDialog()).toBeNull();
+    const hiddenPage = main().querySelector<HTMLElement>(':scope > [hidden]');
+    if (hiddenPage === null) {
+      throw new Error('No page is hidden in <main>.');
+    }
+
+    expect(within(hiddenPage).getByRole('button', { name: 'Reset sign-in', hidden: true })).toBeInTheDocument();
+    expect(within(hiddenPage).getAllByRole('alert', { hidden: true })[0]).toBeEmptyDOMElement();
+    expect(sentTo(resetPath)).toHaveLength(1);
+  });
+
+  it('closed by the browser while busy, shows how its request went on the page: a 412 above the actions', async () => {
+    await openPage(jo);
+    const answer = held(problem(412, 'precondition.failed'));
+    serve(resetPath, answer.answer);
+    serve(usersPath, json(withChanged(people, jo, {})));
+    press('Reset sign-in');
+    pressInDialog(resetJo);
+
+    // A second Escape, which a browser may let through though the first was stopped (confirm-dialog.md *Behaviour* 7).
+    act(() => {
+      dialog().close();
+    });
+    await settle();
+    expect(openDialog()).toBeNull();
+    answer.release();
+    await answered();
+
+    expect(actionAlert().textContent).toBe(someoneChangedJo);
+    expect(openDialog()).toBeNull();
+  });
+});
+
+// The words of users.md's *Dialogs* for Deactivate.
+const deactivateJoBody = 'Jo Smith will be signed out everywhere now and can’t sign in. Their notes stay.';
+
+describe('Deactivate', () => {
+  const deactivatePath = changePath(jo, 'deactivate');
+
+  it("opens its dialog on its title, with design.md's words and a blue confirm button, sending nothing", async () => {
+    await openPage(jo);
+
+    press('Deactivate');
+
+    expect(dialog()).toHaveAccessibleName('Deactivate Jo Smith?');
+    expect(dialog()).toHaveAccessibleDescription(deactivateJoBody);
+    expect(dialogBody()).toEqual([deactivateJoBody]);
+    expect(within(dialog()).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(dialogButtons()).toEqual(['Deactivate Jo Smith', 'Go back']);
+    expect(dialogButton('Deactivate Jo Smith')).toHaveClass(...buttonClass('primary').split(' '));
+    expect(dialogAlert()).toBeEmptyDOMElement();
+    expect(dialogStatus()).toBeEmptyDOMElement();
+
+    closeRequest();
+    await settle();
+    expect(openDialog()).toBeNull();
+    press('Deactivate');
+    pressInDialog('Go back');
+    await settle();
+    expect(openDialog()).toBeNull();
+    expect(sentTo(deactivatePath)).toEqual([]);
+  });
+
+  it("has an Invited person's own words, of the setup link that will stop working", async () => {
+    await openPage(alex);
+
+    press('Deactivate');
+
+    expect(dialog()).toHaveAccessibleName('Deactivate Alex Park?');
+    expect(dialogBody()).toEqual(['Alex Park has not set up their account yet. Their setup link will stop working.']);
+    expect(dialogButtons()).toEqual(['Deactivate Alex Park', 'Go back']);
+  });
+
+  it('sends one POST with If-Match, then shows Jo Deactivated, focus on Status, Reactivate alone', async () => {
+    await openPage(jo);
+    serve(deactivatePath, noContent());
+    const list = held(json(joDeactivated));
+    serve(usersPath, list.answer);
+    press('Deactivate');
+
+    const confirm = pressInDialog('Deactivate Jo Smith');
+    fireEvent.click(confirm);
+    await wait(999);
+    expect(dialogStatus()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(dialogStatus()).toHaveTextContent('Deactivating…');
+    expect(dialogButtons()).toEqual(['Deactivate Jo Smith', 'Go back']);
+
+    list.release();
+    await answered();
+
+    expect(sentTo(deactivatePath)).toEqual([{ method: 'POST', ifMatch: `"stamp-${jo.id}"` }]);
+    expect(openDialog()).toBeNull();
+    expect(facts()[2]).toEqual(['Status', 'Deactivated']);
+    expect(statusRow()).toHaveFocus();
+    expect(actionsAsRead()).toEqual(['alert: ', 'link: Edit', 'rule', reactivateDescription, 'button: Reactivate']);
+    expect(line()).toBeEmptyDOMElement();
+  });
+
+  it('on your own page with a second active manager has the "your own" words, and its 204 loads afresh', async () => {
+    await openPage(sam, twoManagers);
+    serve(changePath(sam, 'deactivate'), noContent());
+    const listsBefore = sent(usersPath);
+
+    press('Deactivate');
+
+    expect(dialog()).toHaveAccessibleName('Deactivate your own account?');
+    expect(dialogBody()).toEqual(['You will be signed out everywhere now and cannot sign in again. Your notes stay.']);
+    expect(dialogButtons()).toEqual(['Deactivate my account', 'Go back']);
+
+    pressInDialog('Deactivate my account');
+    await answered();
+
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(sent(usersPath)).toBe(listsBefore);
+  });
+
+  it('on a 412 takes away its confirm button and says so, focus on Go back', async () => {
+    await openPage(jo);
+    serve(deactivatePath, problem(412, 'precondition.failed'));
+    serve(usersPath, json(withChanged(people, jo, {})));
+    press('Deactivate');
+
+    pressInDialog('Deactivate Jo Smith');
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(someoneChangedJoGoBack);
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+  });
+
+  it('on your own page, a 409 user.last_manager gives the "you" words with Go back alone', async () => {
+    await openPage(sam, twoManagers);
+    serve(changePath(sam, 'deactivate'), problem(409, 'user.last_manager'));
+    serve(usersPath, json(withChanged(twoManagers, kim, { role: 'Worker' })));
+    press('Deactivate');
+
+    pressInDialog('Deactivate my account');
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(
+      'You are the only active manager, so you cannot deactivate your account. Make someone else a manager first.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+  });
+
+  it.each([
+    { given: 'no connection', answer: noConnection, sentence: 'Not deactivated: no connection. Try again.' },
+    { given: 'a 500', answer: problem(500), sentence: 'Not deactivated: something went wrong. Try again.' },
+  ])('on $given says so, both buttons ready, focus on the confirm button, sending nothing by itself', async (case_) => {
+    await openPage(jo);
+    serve(deactivatePath, case_.answer);
+    press('Deactivate');
+
+    const confirm = pressInDialog('Deactivate Jo Smith');
+    await answered();
+
+    expect(dialogAlert().textContent).toBe(case_.sentence);
+    expect(confirm).toHaveFocus();
+    expect(confirm).not.toHaveAttribute('aria-disabled');
+
+    await wait(60_000);
+    expect(sentTo(deactivatePath)).toHaveLength(1);
+  });
+});
+
+describe('Reactivate', () => {
+  const reactivatePath = changePath(chris, 'reactivate');
+
+  it('sends one POST with If-Match, no dialog, busy, "Reactivating…" from 400 ms, then Active, focused', async () => {
+    await openPage(chris);
+    serve(reactivatePath, noContent());
+    const list = held(json(withChanged(people, chris, { status: 'Active', deactivatedAtUtc: null })));
+    serve(usersPath, list.answer);
+
+    const button = press('Reactivate');
+    press('Reactivate');
+    await wait(399);
+    press('Reactivate');
+
+    expect(openDialog()).toBeNull();
+    expect(sentTo(reactivatePath)).toEqual([{ method: 'POST', ifMatch: `"stamp-${chris.id}"` }]);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleName('Reactivate');
+    await wait(1);
+    expect(button).toHaveAccessibleName('Reactivating…');
+    act(() => {
+      vi.advanceTimersToNextFrame();
+    });
+    expect(main().querySelector('p.visually-hidden[role="status"]')).toHaveTextContent('Reactivating…');
+
+    list.release();
+    await answered();
+
+    expect(facts()[2]).toEqual(['Status', 'Active']);
+    expect(statusRow()).toHaveFocus();
+    expect(actionsAsRead()).toEqual(['alert: ', 'link: Edit', ...resetThenDeactivate]);
+    expect(sentTo(reactivatePath)).toHaveLength(1);
+  });
+
+  it('shows Invited, with Resend invite, focus on Status, for someone with no way to sign in', async () => {
+    await openPage(chris);
+    serve(reactivatePath, noContent());
+    serve(
+      usersPath,
+      json(withChanged(people, chris, { status: 'Invited', activatedAtUtc: null, deactivatedAtUtc: null })),
+    );
+
+    press('Reactivate');
+    await answered();
+
+    expect(facts()[2]).toEqual(['Status', 'Invited']);
+    expect(statusRow()).toHaveFocus();
+    expect(pageButton('Resend invite')).toBeInTheDocument();
+    expect(pageButton('Deactivate')).toBeInTheDocument();
+  });
+
+  it('on a 412 fetches the list, then says so, focus kept on Reactivate while Chris is still Deactivated', async () => {
+    await openPage(chris);
+    serve(reactivatePath, problem(412, 'precondition.failed'));
+    serve(usersPath, json(withChanged(people, chris, { displayName: 'Chris Nguyen' })));
+
+    const button = press('Reactivate');
+    await answered();
+
+    // Named as the page showed them as it was pressed, which now shows them as they are.
+    expect(actionAlert().textContent).toBe(
+      'Someone else has just changed Chris Ng’s account. The page now shows the latest details.',
+    );
+    expect(pageHeading()).toHaveAccessibleName('Chris Nguyen');
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+
+    await wait(60_000);
+    expect(sentTo(reactivatePath)).toHaveLength(1);
+    serve(reactivatePath, noAnswer);
+    press('Reactivate');
+    expect(actionAlert()).toBeEmptyDOMElement();
+    await settle();
+    expect(sentTo(reactivatePath).map(({ ifMatch }) => ifMatch)).toEqual([`"stamp-${chris.id}"`, '"stamp-2"']);
+  });
+
+  it('on a 412 whose list shows Chris now Active, focus goes to the Status row, as Reactivate has gone', async () => {
+    await openPage(chris);
+    serve(reactivatePath, problem(412, 'precondition.failed'));
+    serve(usersPath, json(withChanged(people, chris, { status: 'Active', deactivatedAtUtc: null })));
+
+    press('Reactivate');
+    await answered();
+
+    expect(actionAlert().textContent).toBe(
+      'Someone else has just changed Chris Ng’s account. The page now shows the latest details.',
+    );
+    expect(pageButton('Reactivate')).toBeNull();
+    expect(statusRow()).toHaveFocus();
+  });
+
+  it.each([
+    { given: 'no connection', answer: noConnection, sentence: 'Not reactivated: no connection. Try again.' },
+    { given: 'a 500', answer: problem(500), sentence: 'Not reactivated: something went wrong. Try again.' },
+  ])('on $given says so above the actions, keeps focus, and sends nothing by itself', async (case_) => {
+    await openPage(chris);
+    serve(reactivatePath, case_.answer);
+    const listsBefore = sent(usersPath);
+
+    const button = press('Reactivate');
+    await answered();
+
+    expect(actionAlert().textContent).toBe(case_.sentence);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(sent(usersPath)).toBe(listsBefore);
+
+    await wait(60_000);
+    expect(sentTo(reactivatePath)).toHaveLength(1);
+  });
+
+  it('says nothing of a 401, which the session flow has', async () => {
+    await openPage(chris);
+    serve(reactivatePath, problem(401));
+
+    press('Reactivate');
+    await answered();
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    const hiddenPage = main().querySelector<HTMLElement>(':scope > [hidden]');
+    if (hiddenPage === null) {
+      throw new Error('No page is hidden in <main>.');
+    }
+
+    expect(within(hiddenPage).getAllByRole('alert', { hidden: true })[0]).toBeEmptyDOMElement();
+    expect(within(hiddenPage).getByRole('button', { name: 'Reactivate', hidden: true })).not.toHaveAttribute(
+      'aria-disabled',
+    );
   });
 });

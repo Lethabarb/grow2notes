@@ -105,6 +105,8 @@ export const strings = {
   saved: 'Saved',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
+  /** The safe button of a dialog that confirms an action, under the one that confirms it (confirm-dialog.md). */
+  goBack: 'Go back',
   /**
    * A person's name and email address, each as a field's label or a summary's term (sign-in.md components 6 and 13,
    * users.md component B).
@@ -232,8 +234,8 @@ export const strings = {
   },
   /**
    * The Users screens (users.md), whose fixed `<h1>`s and Invite user are page names: the list's and the user
-   * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md); then the
-   * user detail's and Invite user's own words.
+   * detail's loading lines, and what did not load, as each failure sentence starts (empty-loading-error.md), which
+   * Edit user shares with the user detail; then the user detail's, Invite user's and Edit user's own words.
    */
   users: {
     listLoading: 'Loading users…',
@@ -256,6 +258,18 @@ export const strings = {
       Worker: 'Writes notes and reads past notes',
       Manager: 'Can also review flagged notes, download reports, and set up participants and users',
     },
+    /**
+     * Edit user's hints under Email address (users.md component D item 5), for someone else, then on your own page;
+     * Name's is `nameHint`, as on Invite user.
+     */
+    editEmailHint: 'Changing the email resets sign-in and sends a setup link to the new address.',
+    ownEmailHint:
+      'Changing your email resets your sign-in. You will be signed out, and a setup link will be sent to the new '
+      + 'address.',
+    /** Under Edit user's `<h1>`, on your own page as the only active manager (A26). */
+    editLastManagerNotice:
+      'You are the only active manager, so you cannot change your email or make yourself a worker. First make '
+      + 'someone else a manager.',
     /** Invite user's button (users.md component B item 8), whose busy label is `sending`. */
     sendInvite: 'Send invite',
     /**
@@ -267,11 +281,55 @@ export const strings = {
     enterEmail: 'Enter an email address',
     chooseRole: 'Choose Worker or Manager',
     /**
+     * Role's and Email address's messages on your own Edit user page as the only active manager (users.md *States* ›
+     * Edit user), for Worker and for a new address, from Save's own check or the server's `409 user.last_manager`.
+     */
+    lastManagerRole:
+      'You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first.',
+    lastManagerEmail:
+      'You are the only active manager, so you cannot change your email. Make someone else a manager first.',
+    /** In the alert above Edit user's Save, for a save refused as stale (`412`), the typed values kept. */
+    changedWhileEditing: 'Someone else changed this user while you were editing. Check the details, then save again.',
+    /**
      * The user detail's Resend invite, for an Invited user (users.md component C item 6), with the description above
      * it; its busy label is `sending`, and its result `msg.setupLinkSent`.
      */
     resendInvite: 'Resend invite',
     resendInviteDescription: 'Sends a new setup link. The old link stops working.',
+    /** Reset sign-in, for an Active user, with the description above it; it opens `resetDialog`. */
+    resetSignIn: 'Reset sign-in',
+    resetSignInDescription: 'For a lost phone, a new phone or a forgotten password. Check who is asking first.',
+    /** Group 2's Deactivate, for an Invited or Active user, with its description; it opens `deactivateDialog`. */
+    deactivate: 'Deactivate',
+    deactivateDescription: 'For someone who no longer works here. Their notes stay.',
+    /** Group 2's Reactivate, for a Deactivated user, with the description above it and its busy label. */
+    reactivate: 'Reactivate',
+    reactivateDescription: 'Lets them sign in again.',
+    reactivating: 'Reactivating…',
+    /** In group 2, in place of Reset sign-in and Deactivate, on your own page as the only active manager (A26). */
+    lastManagerNotice:
+      'You are the only active manager, so you cannot reset your own sign-in, deactivate your account or make '
+      + 'yourself a worker. To do any of these, first make someone else a manager.',
+    /**
+     * The Reset sign-in dialog's words for your own account, its busy line, and its refusal when you are the only
+     * active manager after all (users.md *Dialogs*); its words for someone else name them, in `msg`.
+     */
+    resetDialog: {
+      ownTitle: 'Reset your own sign-in?',
+      ownConfirm: 'Reset my sign-in',
+      busy: 'Resetting sign-in…',
+      lastManager:
+        'You are the only active manager, so you cannot reset your own sign-in. Make someone else a manager first.',
+    },
+    /** The Deactivate dialog's words, as `resetDialog`'s are. */
+    deactivateDialog: {
+      ownTitle: 'Deactivate your own account?',
+      ownBody: 'You will be signed out everywhere now and cannot sign in again. Your notes stay.',
+      ownConfirm: 'Deactivate my account',
+      busy: 'Deactivating…',
+      lastManager:
+        'You are the only active manager, so you cannot deactivate your account. Make someone else a manager first.',
+    },
   },
   /**
    * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and

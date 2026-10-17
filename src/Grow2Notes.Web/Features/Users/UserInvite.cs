@@ -25,22 +25,11 @@ internal sealed class UserInvite(
     IAuditWriter audit,
     IEmailSender emailSender)
 {
-    // users.md's words for each field (Invite user's States), which mcp-server.md §5.5 gives the tools too.
-    public const string NameMissing = "Enter the person's name";
-
-    public const string EmailMissing = "Enter an email address";
-
-    public const string EmailNotAnAddress = "Enter an email address in the correct format, like name@example.com";
-
-    public const string RoleMissing = "Choose Worker or Manager";
-
-    public static readonly string NameTooLong = $"Name must be {Limits.DisplayName} characters or less";
-
     /// <summary>
-    /// Checks the request's fields; then, in one transaction, invites the person through the invite core
-    /// (<see cref="Invitations.InviteAsync"/>) as Invited, with the actor as the one who invited them, writes
-    /// <c>user.invited</c>, and sends the setup-link email, before the commit, so that a send that fails leaves no user
-    /// and no event (T01's Notes).
+    /// Checks the request's fields (<see cref="UserDetailsChecks.Check"/>); then, in one transaction, invites the
+    /// person through the invite core (<see cref="Invitations.InviteAsync"/>) as Invited, with the actor as the one who
+    /// invited them, writes <c>user.invited</c>, and sends the setup-link email, before the commit, so that a send that
+    /// fails leaves no user and no event (T01's Notes).
     /// </summary>
     /// <returns>
     /// <see cref="UserChangeResult.Done"/>; <see cref="ErrorCode.ValidationFailed"/> for a missing or overlong name, a
@@ -56,15 +45,16 @@ internal sealed class UserInvite(
     /// Identity refused the user for a reason that only a fault can cause, and nothing was created.
     /// </exception>
     public async Task<UserChangeResult> InviteAsync(
-        Actor actor, InviteUserRequest request, CancellationToken cancellationToken)
+        Actor actor, UserDetailsRequest request, CancellationToken cancellationToken)
     {
-        if (Check(request) is { Count: > 0 } fieldErrors)
+        if (UserDetailsChecks.Check(request) is { Count: > 0 } fieldErrors)
         {
             return UserChangeResult.Invalid(fieldErrors);
         }
 
         // Each is there, as checked.
-        var (displayName, email, role) = (request.DisplayName!, request.Email!, RoleNamed(request.Role)!.Value);
+        var (displayName, email, role) =
+            (request.DisplayName!, request.Email!, UserDetailsChecks.RoleNamed(request.Role)!.Value);
         var organisationId = tenant.OrganisationId;
 
         // Set by each attempt, as a transient failure runs the whole work again.
@@ -92,61 +82,6 @@ internal sealed class UserInvite(
             await SetupLinkEmail.SendAsync(emailSender, email, invite.SetupLink, ct);
         }, cancellationToken);
 
-        return refusal switch
-        {
-            [] => UserChangeResult.Done,
-
-            // The user name holds the address too (§5.3), so Identity also gives DuplicateUserName for it.
-            _ when HasCode(refusal, nameof(IdentityErrorDescriber.DuplicateEmail)) =>
-                UserChangeResult.Refused(ErrorCode.EmailInUse),
-
-            // Identity's check of an address is loose, and the user name's characters are fewer, so one with a space,
-            // an invisible character or a letter outside ASCII, which the screen's own check passes, is refused here.
-            _ when HasCode(refusal, nameof(IdentityErrorDescriber.InvalidEmail))
-                || HasCode(refusal, nameof(IdentityErrorDescriber.InvalidUserName)) =>
-                UserChangeResult.Invalid(new Dictionary<string, string[]>
-                {
-                    [nameof(InviteUserRequest.Email)] = [EmailNotAnAddress],
-                }),
-
-            _ => throw new InvalidOperationException(
-                $"Identity refused the user: {string.Join(" ", refusal.Select(error => error.Code))}."),
-        };
+        return refusal is [] ? UserChangeResult.Done : UserDetailsChecks.Refused(refusal);
     }
-
-    // Every field is checked, so that the screen shows each one's error at once. The address's length is checked here,
-    // because Identity's check passes an address longer than the columns that hold it, which would fail as a 500.
-    private static Dictionary<string, string[]> Check(InviteUserRequest request)
-    {
-        var nameError = request.DisplayName switch
-        {
-            var name when string.IsNullOrWhiteSpace(name) => NameMissing,
-            { Length: > Limits.DisplayName } => NameTooLong,
-            _ => null,
-        };
-        var emailError = request.Email switch
-        {
-            var email when string.IsNullOrWhiteSpace(email) => EmailMissing,
-            { Length: > Limits.Email } => EmailNotAnAddress,
-            _ => null,
-        };
-        var roleError = RoleNamed(request.Role) is null ? RoleMissing : null;
-
-        return new (string Field, string? Error)[]
-            {
-                (nameof(InviteUserRequest.DisplayName), nameError),
-                (nameof(InviteUserRequest.Email), emailError),
-                (nameof(InviteUserRequest.Role), roleError),
-            }
-            .Where(check => check.Error is not null)
-            .ToDictionary(check => check.Field, check => new[] { check.Error! });
-    }
-
-    // By its name exactly, as GET /api/admin/users gives it, never inferred (mcp-server.md §3.5, convention 4):
-    // Enum.TryParse would also take a number or another letter case.
-    private static UserRole? RoleNamed(string? name) =>
-        Enum.GetValues<UserRole>().Cast<UserRole?>().SingleOrDefault(role => role.ToString() == name);
-
-    private static bool HasCode(IReadOnlyList<IdentityError> refusal, string code) =>
-        refusal.Any(error => error.Code == code);
 }

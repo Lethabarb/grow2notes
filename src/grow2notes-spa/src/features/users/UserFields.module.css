@@ -1,0 +1,10 @@
+/*
+ * The three field groups a group's gap apart, and that gap above the button and its alert line, Send invite or Save
+ * (foundations.md).
+ */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin-block-end: var(--space-5);
+}

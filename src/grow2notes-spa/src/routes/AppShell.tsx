@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Outlet, useMatches, type UIMatch } from 'react-router';
 import { classify } from '../api/api.ts';
 import { meQuery, useMeAnswers } from '../api/me.ts';
 import { getPhase, signInCount, subscribe } from '../api/session.ts';
 import { focusInsteadOfHeading, focusPageHeading, signedOutHeadingId } from '../components/focusPageHeading.ts';
+import { closeOpenDialogs } from '../components/openDialogs.ts';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
@@ -129,6 +130,15 @@ export function AppShell() {
       focusPageHeading();
     }
   }, [signedOut, signedIn]);
+
+  // As view C shows, any confirmation open over the screen closes, as Go back: a modal left open over the hidden screen
+  // would make view C inert (confirm-dialog.md *Behaviour* 8). In a layout effect, so that it closes before the browser
+  // paints view C and before the effect below gives view C focus.
+  useLayoutEffect(() => {
+    if (inPlace) {
+      closeOpenDialogs();
+    }
+  }, [inPlace]);
 
   // What view C took over as it showed, the screen's title and the sign-ins until then, to give back as it closes.
   const shownOver = useRef<{ title: string; signIns: number }>(undefined);

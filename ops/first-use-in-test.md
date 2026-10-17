@@ -256,3 +256,122 @@ added is made up (A35), such as `Siobhan O'Brien`, with an apostrophe in the fam
     second made-up participant on each. On each phone, also look for: Clear in Find a participant leaving the keyboard
     open, with the cursor still in the field; and no autofill, saved name or saved date offered on Given name, Family
     name, Day, Month and Year, nor on Find a participant. (participants.md open question 6.)
+
+### Break-glass, from the SSH console
+
+These steps run the two break-glass commands in test as [break-glass.md](break-glass.md) says, on accounts set up in
+the steps above. Step 30 signs out everyone in test, so run these when no one else is using it.
+
+29. On the laptop, sign in as account C (step 18) in Chrome, and on the iPhone, in Safari, so that C has two sessions,
+    and leave Today open on each. You are the organisation here, and you know who account C is, which in production
+    the organisation confirms before the command is run. Open the web app's SSH console, check its six settings as in
+    step 2, and run `admin reset-signin` for account C's address as [break-glass.md](break-glass.md) says. Look for
+    `Exit code: 0` after one printed line, a link of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`. On each device, choose Manage, then Users: look
+    for "You've been signed out". Copy the link into a new tab in Chrome on the laptop and choose Use a passkey
+    (recommended): look for setup ending on Today. Wait 5 minutes and look for no new email to account C in the
+    testing mailbox, junk included. Then paste the block again with a made-up `example.org` address that no account
+    holds, and look for `Refused: No account has that address. Nothing was written.` and `Exit code: 1`. Leave the
+    console open for step 30. (S00.03.06's first criterion, in test.)
+30. Sign in as account A on the laptop in Chrome, as in step 9, and as account B on the iPhone, as in step 14, and
+    leave Today open on each. Run `admin signout-all` as [break-glass.md](break-glass.md) says. Look for
+    `Exit code: 0` with nothing printed before it. On each device, choose Manage, then Users: look for "You've been
+    signed out". Then sign each in again, A with Sign in with a passkey and B with email, password and a 6-digit code,
+    and look for Today each time. Type `exit` in the console and close its tab, so step 29's link is kept nowhere.
+    (S00.03.06's second criterion, in test.)
+31. The developer reads the audit rows as in step 15:
+
+    ```sql
+    SELECT EventType, OccurredAtUtc, ActorUserId, EntityType, OrganisationId, IpAddress
+    FROM dbo.AuditEvent
+    WHERE EventType IN ('admin.signin_reset', 'admin.signout_all')
+    ORDER BY OccurredAtUtc;
+    ```
+
+    Look for: one `admin.signin_reset` row from step 29, with no actor, the `EntityType` `User` and no `IpAddress`,
+    and none from its refused run; and, from step 30, one `admin.signout_all` row for each organisation in test, each
+    with no actor and the `EntityType` `Organisation`. (S00.03.06, the audit events in test.)
+
+### Reset sign-in, Deactivate and Reactivate, on the laptop and both phones
+
+These steps use the two workers that step 18 set up, the password one and the passkey one, and the Android phone,
+with Chrome and TalkBack, as well as the kit in *Before you start*. The worker whose sign-in is reset sets up again
+from the email, so keep the testing mailbox open.
+
+32. Sign the password worker in on the laptop in Edge and on the iPhone in Safari, with email, password and a 6-digit
+    code, and leave Today open on each. On the laptop in Chrome, sign in as account A as in step 9, with NVDA running,
+    choose Manage, then Users, and open the password worker's page. Press Reset sign-in. Look for NVDA saying "Reset
+    sign-in for", the worker's name, "alert dialog", then both lines of the dialog, the second ending with the worker's
+    address, and the heading once, with no ring drawn round it. Press Go back: look for focus back on Reset sign-in, and
+    the Status still Active. Press Reset sign-in again, Tab to the red "Reset sign-in for …" and press it. Look for:
+    NVDA saying "Status, Invited", with focus on the Status row; Resend invite in place of Reset sign-in; and no banner.
+    On each of the worker's devices, reload the page: look for the sign-in page. Within 5 minutes, look for one email to
+    the worker in the testing mailbox (junk included), with the subject "Set up your Grow2Notes sign-in", naming
+    Grow2Notes and no other organisation, product or person, and holding one link. Follow it on the iPhone, set up with
+    Use a password and authenticator app, and sign in once more with a code from the app. (S00.06.04's two devices and
+    its email in test; users.md AC4 for the reset email, AC24 and AC25, and its NVDA pass over the Reset sign-in
+    dialog.)
+33. Sign the passkey worker in on the iPhone in Safari, with the passkey, and on the laptop in Chrome, choosing the
+    iPhone when Chrome offers it, and leave Today open on each. On the iPhone, in Chrome, which keeps its own cookies
+    apart from Safari's, sign in as account B with email, password and a 6-digit code, with VoiceOver on, choose Manage,
+    then Users, and open the passkey worker's page. Press Deactivate. Look for VoiceOver saying "Deactivate", the name,
+    then design.md's words, "… will be signed out everywhere now and can't sign in. Their notes stay.", and the blue
+    "Deactivate …". Confirm. Look for VoiceOver saying "Status, Deactivated", and Reactivate as the only action under
+    the rule. On the laptop, reload the worker's tab: look for the sign-in page; in the worker's Safari tab, reload:
+    look for the sign-in page, and that signing in with the passkey fails. Back as account B, press Reactivate. Look for
+    "Reactivating…" if it takes more than a moment, then VoiceOver saying "Status, Active", with Reset sign-in and
+    Deactivate back. Sign the worker in again with the passkey, and look for Today. Wait 5 minutes and look for no email
+    to the worker from either change. (S00.06.05's two devices in test; users.md AC26, AC28, and its VoiceOver pass over
+    the Deactivate dialog and Reactivate.)
+34. On the Android phone, with TalkBack on, sign in as account B in Chrome, as in step 24, choose Manage, then Users,
+    and open the passkey worker's page. Press Reset sign-in, listen to the dialog as in step 32, and press Go back;
+    then press Deactivate, listen as in step 33, and press Go back. Look for TalkBack reading each dialog's title,
+    "alert dialog" and its words, and focus back on the button that opened it each time, with the Status still Active.
+    (users.md's TalkBack pass over both dialogs.)
+35. On the Android phone, with TalkBack off, open the passkey worker's page as in step 34. Press Reset sign-in, then go
+    back with the phone's back gesture, or Back. Look for: the dialog closes, the page and its address stay, the Status
+    is still Active, and no email reaches the worker. Do the same with Deactivate. To see where focus went, connect the
+    phone to the laptop by USB with USB debugging on, open `chrome://inspect` in Chrome on the laptop, inspect the tab,
+    and run `document.activeElement.textContent` in its console after each close: look for "Reset sign-in", then
+    "Deactivate". Then, in the inspected tab's Network panel, choose a throttling profile with a latency of 3,000 ms,
+    adding it as in step 24 if it is not there; keep it well under 10 seconds, after which the app gives up on a
+    request that the server may still carry out. Press Deactivate and its "Deactivate …", then the back gesture at
+    once. Look for: the dialog stays open with both buttons unchanged, and "Deactivating…" under them after a second;
+    once it ends, the Status reads Deactivated. Choose No throttling and press Reactivate. Do the same with Reset
+    sign-in on the password worker, whose sign-in it resets: then follow the new email's link on the iPhone and set the
+    worker up again as in step 32. Write down, for each dialog, whether the back gesture closed it and whether it did
+    nothing while busy.
+    (users.md AC24 and AC31, the Android back gesture, which Playwright's Escape stands in for in CI.)
+
+### Edit user, on the laptop
+
+These steps use the passkey worker that step 18 set up, Active again after steps 33 to 35, a new address for them at
+the testing mailbox (*Before you start*), and accounts B and C, the other two managers.
+
+36. As account A on the laptop in Chrome, as in step 9, choose Manage, then Users, open the passkey worker's page and
+    press Edit. Look for the hint "Changing the email resets sign-in and sends a setup link to the new address." under
+    Email address. Type the new address in its place and press Save. Look for the worker's page, with focus on its
+    `<h1>`, the new address under Email address, the Status Invited and no banner. Within 5 minutes, look for one email
+    to the new address in the testing mailbox (junk included), with the subject "Set up your Grow2Notes sign-in",
+    naming Grow2Notes and no other organisation, product or person, and holding one link of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and none to the old address. Follow the link on the
+    iPhone in Safari, set up with Use a passkey (recommended), and look for Today. (S00.06.06's new address and its
+    setup-link email in test; users.md AC36.)
+37. As account A on the laptop in Chrome, with NVDA running, open the passkey worker's page again as in step 36 and
+    press Edit. Tab through the form. Look for NVDA reading Name and Email address each with its label, value and
+    hint, Email address's being step 36's, then "Role, group" and "Worker, radio button, checked, 1 of 2, Writes notes
+    and reads past notes". Clear Name and press Save. Look for: the page titled "Error: Grow2Notes – Edit user"; NVDA
+    saying "There is a problem, heading level 2", then "Enter the person's name" as a link, which moves focus to Name.
+    Type the name again, put account B's address in place of the worker's, and press Save. Look for NVDA saying "There
+    is a problem, heading level 2", then "Another account already uses this email address. …" as a link. Leave by the
+    back link, which saves nothing. Then make accounts B and C workers: on each one's page press Edit, choose Worker,
+    listening for "Worker, radio button, checked", and press Save. Account A is now the only active manager. Open your
+    own page from Users and press Edit. Look for NVDA reading, after "Edit user, heading level 1", the notice "You are
+    the only active manager, so you cannot change your email or make yourself a worker. First make someone else a
+    manager.", and, with Email address, the hint "Changing your email resets your sign-in. …". Choose Worker and press
+    Save. Look for: NVDA saying "There is a problem, heading level 2", then "You are the only active manager, so you
+    cannot make yourself a worker. Make someone else a manager first." as a link; and no `PUT /api/admin/users/…` in
+    the Network panel. Leave by the back link, then make accounts B and C managers again, as you made them workers,
+    and look for each one's row on Users read with "Manager". (S00.06.06's screen-reader spot check, as backlog README
+    §9 asks of a changed form; users.md's NVDA pass over Edit user: its hints, the Role radios, a failed Save and the
+    last-manager notice.)

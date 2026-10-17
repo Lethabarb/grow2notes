@@ -30,7 +30,7 @@ internal static class InviteUserEndpoint
     }
 
     private static async Task<Results<Created, ProblemHttpResult>> InviteAsync(
-        InviteUserRequest request,
+        UserDetailsRequest request,
         ClaimsPrincipal user,
         IOptions<IdentityOptions> identityOptions,
         UserInvite invite,

@@ -1402,6 +1402,74 @@ describe('Guide prompts, leaving', () => {
   });
 });
 
+// The shell closes an open confirmation, which the leave dialog is, as Go back, here Stay on this page, before its
+// warning opens (app-shell.md *28:00 idle on a visible page*) and before sign-in's view C shows (confirm-dialog.md
+// *Behaviour* 8).
+describe('Guide prompts, the leave dialog closed by the shell', () => {
+  const typed = `${saved}\nAny visitors?`;
+
+  /** The warning before the idle sign-out, which is always in the page, hidden while closed. */
+  const warning = () => screen.getByRole<HTMLDialogElement>('dialog', { hidden: true });
+
+  it('closes it as Stay before the 28:00 warning opens, sending nothing, and asks again afterwards', async () => {
+    const { router } = await openWith();
+    enter(typed);
+    await follow('Today');
+    const dialog = openDialog();
+    const close = vi.spyOn(HTMLDialogElement.prototype, 'close');
+    const showModal = vi.spyOn(HTMLDialogElement.prototype, 'showModal');
+    const requests = fetchMock.mock.calls.length;
+
+    await wait(28 * 60_000);
+
+    expect(close.mock.contexts).toEqual([dialog]);
+    expect(showModal.mock.contexts).toEqual([warning()]);
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(showModal.mock.invocationCallOrder[0]);
+    expect(leaveDialog()).not.toBeInTheDocument();
+    expect(warning()).toHaveAttribute('open');
+    expect(router.state.location.pathname).toBe(address);
+    expect(field()).toHaveValue(typed);
+    expect(fetchMock).toHaveBeenCalledTimes(requests);
+
+    serve('/api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+    fireEvent.click(within(warning()).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+    expect(warning()).not.toHaveAttribute('open');
+    // The navigation's blocker was reset, not left blocked.
+    await follow('Today');
+    expect(openDialog()).toHaveAccessibleName(leaveTitle);
+    expect(router.state.location.pathname).toBe(address);
+  });
+
+  it('closes it as Stay for a 401 before view C shows and takes focus, the page kept at its address', async () => {
+    const { router } = await openWith();
+    enter(typed);
+    serve(savePath, after(2_000, problem(401)));
+    pressSave();
+    await settle();
+    // Not saved while its save is out, so a link asks.
+    await follow('Today');
+    const dialog = openDialog();
+    // Found now, as the page leaves the accessibility tree once view C hides it.
+    const kept = field();
+    const close = vi.spyOn(HTMLDialogElement.prototype, 'close');
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await wait(2_000);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(pageHeading()).toHaveFocus();
+    expect(close.mock.contexts).toEqual([dialog]);
+    const viewCFocused = focus.mock.invocationCallOrder[focus.mock.contexts.indexOf(pageHeading())];
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(viewCFocused);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(router.state.location.pathname).toBe(address);
+    expect(kept).toHaveValue(typed);
+    expect(putsSent()).toHaveLength(1);
+  });
+});
+
 describe('Today, Manage and Users', () => {
   // S01.04.02's own criterion: design.md asks for a leave warning on Guide prompts alone.
   it.each([

@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
+import { useRef } from 'react';
 import { useParams } from 'react-router';
+import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
@@ -11,6 +13,7 @@ import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
 import { UserActions } from './UserActions.tsx';
+import { isOnlyActiveManager } from './userRules.ts';
 import { usersQuery, type AdminUser } from './usersQuery.ts';
 
 /**
@@ -43,23 +46,37 @@ export function UserPage() {
         fallbackHeading={pageName.user}
       >
         {/* Called only once the query has data, which then holds the user. */}
-        {() => <UserDetail user={user!} />}
+        {() => <UserDetail user={user!} users={users.data!} />}
       </LoadRegion>
     </PageStatus>
   );
 }
 
-/** The user's name as the `<h1>`, their email, role and status in plain words, and the actions for their status. */
-function UserDetail({ user }: { user: AdminUser }) {
+/**
+ * The user's name as the `<h1>`, their email, role and status in plain words, and the actions for their status, among
+ * `users`, the organisation's. The Status row takes focus when an action has changed the status, and so taken its own
+ * button away, as it shows what changed, in the place it is shown (users.md component C item 2).
+ */
+function UserDetail({ user, users }: { user: AdminUser; users: readonly AdminUser[] }) {
+  const { userId: viewerId } = useMe();
+  const isSelf = user.id === viewerId;
+  const statusRow = useRef<HTMLDivElement>(null);
   return (
     <>
       <PageHeading>{user.displayName}</PageHeading>
       <SummaryList>
         <SummaryRow term={strings.emailAddress}>{user.email}</SummaryRow>
         <SummaryRow term={strings.users.role}>{strings.role[user.role]}</SummaryRow>
-        <SummaryRow term={strings.users.status}>{strings.userStatus[user.status]}</SummaryRow>
+        <SummaryRow ref={statusRow} tabIndex={-1} term={strings.users.status}>
+          {strings.userStatus[user.status]}
+        </SummaryRow>
       </SummaryList>
-      <UserActions user={user} />
+      <UserActions
+        user={user}
+        isSelf={isSelf}
+        onlyManager={isSelf && isOnlyActiveManager(users, viewerId)}
+        focusStatus={() => statusRow.current?.focus()}
+      />
     </>
   );
 }

@@ -17,7 +17,10 @@ export const firstRoleRadioId = `${fieldId}-worker`;
 type RoleFieldProps = {
   value: Role;
   onChange: (role: Role) => void;
-  /** The role's message once the server has refused it; never the form's own, as a role is always chosen. */
+  /**
+   * The role's message once the server has refused it, or once the last-manager rule refuses Worker on your own Edit
+   * user page; never for no role, as one is always chosen.
+   */
   error?: string;
 };
 

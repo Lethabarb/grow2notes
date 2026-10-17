@@ -1046,7 +1046,7 @@ changes by a link, Back, reload or Sign out.
 
 ```yaml
 id: T04
-status: new
+status: doing
 release: R1
 lane: A
 size: M
@@ -1086,17 +1086,374 @@ protected. From the console the operator can reset the last manager's sign-in or
 - The operator's break-glass run and the two-device sign-out are by-hand checks on ops/first-use-in-test.md.
 - Handed on by T01 (its Notes): `POST /api/admin/users/{id}/setup-link` serves an Invited user only, and refuses an
   Active one, as a Deactivated one, with `409 user.not_active`. T04 makes the Active user's call the reset (§8.6),
-  leaving the code to Deactivated users, and with it updates design.md §6.9's `user.not_active` row, whose sentence
-  "Until Reset sign-in serves an Active user (S00.06.04), they get it too" goes, the comments on
-  `ErrorCode.UserNotActive` and on `UserSetupLink`, which say the reset comes with S00.06.04, and the user page's
-  handling of the code, which until then shows "Not sent: something went wrong. Try again.". T04 also adds
-  `allowedActions()`'s `onlyManager` argument, with `isOnlyActiveManager` (user-management.md), as `userRules.ts` has
-  no use for it before then, and makes the user page's Status row a focus target, for its own actions and for Resend
-  invite's `412` when the refetched user is no longer Invited, which until then focuses the `<h1>`.
+  leaving the code to Deactivated users. With it, design.md §6.9's `user.not_active` row reads "A setup link for a
+  Deactivated user, who is reactivated first (D75).", in place of "A setup link for a user who is not Invited" and
+  the sentence "Until Reset sign-in serves an Active user (S00.06.04), they get it too", which would contradict
+  §6.6's `setup-link` row; the comments on `ErrorCode.UserNotActive` and on `UserSetupLink`, which say the reset comes
+  with S00.06.04, are reworded to match; and the user page keeps its generic failure for the code, with no new words:
+  "Not sent: something went wrong. Try again." for Resend invite, as now, and "Not reset: something went wrong. Try
+  again." in the Reset sign-in dialog. The screen cannot get the code without a `412` first: `If-Match` is checked
+  before the status, and a deactivation saves the user, which gives them a new `ConcurrencyStamp`, so a page that
+  still offers Resend invite or Reset sign-in sends a stale one, and once the refetch shows the user Deactivated it
+  offers neither. UserPage.test.tsx keeps its `409 user.not_active` row, and the dialog's tests gain the matching
+  one. T04 also adds `allowedActions()`'s `onlyManager` argument, with `isOnlyActiveManager` (user-management.md),
+  as `userRules.ts` has no use for it before then, and makes the user page's Status row a focus target, for its own
+  actions and for Resend invite's `412` when the refetched user is no longer Invited, which until then focuses the
+  `<h1>`.
+- Planned on 18 October 2026 from `origin/main` at `b56824c`, after T01 (#56) and T03 (#55) merged. No owner question
+  holds it: D74 to D77 settle the dialogs and the edge cases, and app-shell.md's open question 5, the warning closing
+  an open confirmation, is built as the spec words it, as *Open owner questions* below says of everything still open.
+  No column is added, so there is no migration. Where the design is silent, the simplest option is taken:
+  - The reset step (`SignInReset` in `Features/Users/`), built once for Reset sign-in, an email change and
+    `admin reset-signin`: it removes the password (`RemovePasswordAsync`) and each passkey (`RemovePasskeyAsync`),
+    turns TOTP off (`SetTwoFactorEnabledAsync`), then takes T01's setup-link step for the new key, which rotates the
+    stamp, and the link. It sets `Status` to Invited, unless the person is Deactivated, who stays so (D75), so that
+    none of its callers sets a status. It leaves `InvitedAtUtc`, `ActivatedAtUtc`, `EmailConfirmed` and the lockout
+    fields as they are, as Resend invite does; setup completion sets the two it changes again (§8.1 step 5).
+    Identity's `ConcurrencyFailure` on any of its saves is a `412`, as for T01's step.
+  - The last-manager rule (A26): resetting, deactivating, giving a new address (not one that differs only in letter
+    case) or making a worker of the organisation's only Active manager gets `409 user.last_manager`, checked after
+    `If-Match` and before anything is saved. Azure SQL reads committed snapshots, so two such changes at once in one
+    organisation (users.md's race: two managers changing each other, or themselves) could each still see the other
+    active. So the check first locks the organisation's row (`UPDLOCK`) in its transaction, and the second waits, then
+    sees the first. Reactivate and setup completion, which can only add an Active manager, take no lock.
+  - Deactivate sets `LockoutEnd` to the maximum (`SetLockoutEndDateAsync`) and rotates the stamp. Reactivate sets
+    `LockoutEnd` to null, leaving `AccessFailedCount`, clears `DeactivatedAtUtc`, so that the list gives a deactivation
+    time only while the person is Deactivated, and gives Active for a password or a passkey (`GetPasskeysAsync`),
+    otherwise Invited (D75). Deactivating a Deactivated user, or reactivating one who is not, with a current
+    `If-Match`, changes and writes nothing and answers `204`, as mcp-server.md §5.1 makes those calls succeed with
+    nothing changed; the screen never sends them. `user.deactivated` and `user.reactivated` have no `Details`, as
+    `user.setup_link_sent` has none: the actor and the entity ID say who did it to whom. §6.6's "Every change writes
+    an audit event with old and new values" is read with §5.4's catalogue, which names old and new values for
+    `user.updated` alone among the user events, so the simplest reading gives these two none, the event type itself
+    saying that the status went to or from Deactivated.
+  - Edit's `PUT` checks its fields first, with Invite's checks and words, moved out of `UserInvite` for both to share,
+    then changes the user through `UserChanges`, and answers `200` with no body and no `ETag`, as the screen refetches
+    the list (D78); a `PUT` of the stored values writes nothing. It sets the new values on the user, `Email` and
+    `UserName` both taking the address as typed, and saves them with one `UpdateAsync`, which checks the address and
+    the user name together, as `CreateAsync` does for Invite, so that a refusal saves nothing. `UpdateAsync` leaves
+    the security stamp, so after a new name or role, or a change of letter case only, the person's sessions go on, a
+    new role applying on their next request (§8.4). `SetEmailAsync` and `SetUserNameAsync` are not used: each saves
+    on its own, so an address that Identity's loose email check passes and the user name's characters refuse, such as
+    `zoë@example.org`, would commit a new `Email` with the old user name and a rotated stamp, as `UserChanges`
+    commits what its change saved; and `SetEmailAsync`'s new stamp would sign out someone whose address only changed
+    case (D76). For a new address, the same save also sets `EmailConfirmed` to false, as `SetEmailAsync` would, until
+    setup confirms the address (§8.1 step 5); then the reset step follows, whose new key rotates the stamp: an
+    Invited or Active person is then Invited, `user.setup_link_sent` is written beside `user.updated`, as
+    S00.06.04's reset writes it, and the link goes to the new address; a Deactivated person gets the new key but no
+    link and no `user.setup_link_sent`, and stays Deactivated (D75). Identity's refusals map as for Invite:
+    `DuplicateEmail` or `DuplicateUserName` to `409 user.email_in_use`, and `InvalidEmail` or `InvalidUserName` to
+    the email field's `422`.
+  - `admin reset-signin <email>` finds the user by address in any organisation (A27) and sets the tenant from them
+    (§5.9 item 1). As the app's `setup-link` call does, an Active user gets the reset and an Invited one a new link,
+    the case of a lost bootstrap link (ops/break-glass.md). It skips the last-manager rule, as break-glass is A26's
+    way out, refuses a Deactivated user (reactivate them in the app first) and an address with no account, writing
+    nothing, and writes `admin.signin_reset`, with no actor and the user's ID, never the address, in the same
+    transaction. It prints the link once that has committed, and sends no email.
+  - `admin signout-all` takes no options. In one transaction it rotates the stamp of every user in every organisation
+    (`UpdateSecurityStampAsync`) and writes one `admin.signout_all` for each organisation, with no actor, as
+    `AuditEvent.OrganisationId` is required and each organisation's audit extract (A28) should show it. A rotated
+    stamp also ends every setup link not yet used (§5.3), so ops/break-glass.md tells the managers to resend those
+    invites. It prints nothing; the exit code says it ran.
+  - The session-revocation helper, `SignedInDevices` in the test fixtures, signs one user in on several clients with
+    the real session cookie on the fake clock (`CookieSignIn`, `UseClock`), moves the clock on a second, and asserts
+    what each client's next request to a path gets: `401` with the session cookie cleared, or a status such as `403`
+    after a change to Worker. tests/README.md says how T24 and T32 reuse it.
+  - The dialog shell (the Note from T03 above): `initialFocus` also takes `'title'`, the confirm button takes the
+    `warning` variant, and `busy`, `busyLabel`, `error` and `canConfirm` give the busy state, with presses, Escape and
+    Back ignored, the error line, and, once confirming is no longer possible, Go back alone, with focus on it. One
+    `closeOpenDialogs()` beside the shell closes every open confirmation with a plain `close()`, which each takes as
+    Go back: the warning calls it before `showModal()` (app-shell.md's 28:00 row), and the shell before it shows
+    sign-in's view C, which a modal left open over the hidden screen would make inert (confirm-dialog.md *Behaviour*
+    8, users.md AC32).
+  - Focus: the Status row (`SummaryRow`'s `<div>` with `tabIndex={-1}`, for that row alone) takes focus once the
+    refetched list shows the new status, and after a `412` on Resend invite or on Reactivate once the refetched user
+    is no longer Invited, or no longer Deactivated, which takes away the button pressed; while that button stays,
+    focus stays on it, and nothing is sent again by itself. Until T02's route-change rule is on `main`, Edit user's
+    Save focuses the user page's `<h1>`, or Today's after your own change to Worker, itself after its replace, drawn
+    at once with `flushSync`, as Invite user does, and Edit's back link pushes the user's page; whichever of T02 and
+    T04 merges second leaves both to T02's rule and opened-from memory. The Status row takes its focus with a plain
+    `focus()`, as in-page focus moves such as the error summary's do, not through T02's `focusInsteadOfHeading()`:
+    it is drawn only beside the user page's own `<h1>`, which takes any focus pending for it as it mounts, so no
+    focus is still pending when the row takes it.
+  - Your own account: your own reset, deactivation or new address ends in `fullPageLoad()`, as no Users page arms the
+    leave guard; your own change to Worker goes to Today, whose nav has no Manage; and the shell's refresh of `/me` on
+    the new entry then brings your own new name and role to the Account panel and the nav (step 7's Note gives the
+    reason for that order). The page takes the viewer's ID for `isOnlyActiveManager` from `['me']`.
+- §3.7's "Their open drafts stay until a manager discards them" needs drafts, which come with T08 to T10; T04 changes
+  no draft or note, and T24 proves it (S05.03.02).
+- T02's shared audit-events test was on `main` at rebase, so T04 adds its rows to it: `user.updated`,
+  `user.deactivated`, `user.reactivated`, Reset sign-in's `user.setup_link_sent`, `admin.signin_reset` and
+  `admin.signout_all` (the review Note of 14 October 2026 below).
+- The by-hand checks go in sections of their own after step 28 of ops/first-use-in-test.md, as steps 29 to 37, so
+  that no step a Note cites is renumbered.
+- Where design.md is silent (step 1): Identity saves each part of the reset on its own, so the reset step saves the
+  new status first (`UpdateAsync`). That save is the one that can find the user changed since they were loaded, which
+  gives the `412` with nothing saved; once it is made, the transaction holds the user's row, so no later part can, and
+  any later refusal is a fault that rolls the whole reset back. The last-manager rule (`LastManagerRule`) takes the
+  organisation's lock only for an Active manager, as no change to anyone else can leave the organisation without one.
+  T01's resend test's interceptor that holds a save back, `HoldsTheFirstSaveOfTheUser`, moves to the test fixtures,
+  for Reset sign-in's tests and the steps after them; the race test lets the first reset go on once
+  `sys.dm_exec_requests` shows the second waiting for the lock.
+- Where design.md is silent (step 3): Invite's checks and words move to `UserDetailsChecks`, with the mapping of
+  Identity's refusals, and the body that `POST` and `PUT /api/admin/users` share is `UserDetailsRequest`, so that
+  Invite user and Edit user refuse a field alike. For a new address, `user.updated` is written before
+  `user.setup_link_sent`, as the change comes before the reset it causes. `SignedInDevices` gains
+  `AssertNextAnswersAsync`, which also reads each device's JSON answer, for the role that `/api/auth/me` gives after a
+  change to Worker.
+- Where design.md is silent (step 4): the refusals read as `admin bootstrap`'s, `Refused: <why> Nothing was
+  written.`, with the usage line only when an argument is at fault. `admin reset-signin` refuses "No address was
+  given.", "The address is empty.", "More than one argument was given, but admin reset-signin takes one address.",
+  "No account has that address." and "The account is Deactivated, so a manager reactivates it in the app first.";
+  and, when the app changed the user after the command loaded them, so that the reset's or the new link's first save
+  matches no row, as for two resets at once in the app, "The account changed while the command ran, so run it
+  again.". `admin signout-all` refuses anything after it as `"<argument>" is not an option of admin signout-all.`.
+  No command, or an unknown one, is refused with every command's usage line, one to a line (`AdminCommands.Usage`),
+  in place of `admin bootstrap`'s alone. The `App:Origin` check moves from `BootstrapCommand` to
+  `AdminCommands.FindOriginProblem`, which both commands that print a link run before their transaction, in
+  `admin bootstrap`'s words. `admin.signin_reset` is about the user (`EntityType` `User`, the user's ID), and
+  `admin.signout_all` about the organisation whose event it is (`EntityType` `Organisation`, its ID). In
+  `admin signout-all`, Identity refusing a user's new stamp, which only a change to that user since the command loaded
+  them can cause, such as a failed sign-in counted meanwhile, is thrown rather than refused: the transaction rolls
+  back, the run ends with an exit code other than 0 and 1, and ops/break-glass.md says to run it again. The
+  operator-command tests share `AdminCommandRuns`, the tests that a link has ended share
+  `SetupLinks.AssertSetupLinkEndedAsync`, and the tests of what is logged look for a setup token escaped too, as a
+  link holds it (`RecordedLog.Holds`).
+- Where design.md is silent (step 5): the alert line is bold in the error colour, as `RequestAlert`'s is; the shell
+  sets an `autofocus` attribute on what has first focus before `showModal()`, which then focuses it, and focuses it
+  directly too; and the warning, as it opens again after a failed ping, closes any confirmation opened while it was
+  closed, as it does at 28:00. No dialog in the app sends a request or opens on its title until step 6, so step 5
+  proves those parts of the shell in Vitest alone, on a dialog that the test renders, and its Playwright tests prove
+  what the app already shows: the leave dialog opening on Stay on this page with its alert and status lines empty,
+  the 28:00 warning and a `401` closing it, and Resend invite's `412` focusing the Status row. jsdom proves no focus
+  ring, as base.css is not loaded there, and its stand-in for `showModal()` moves no focus, so step 6 adds these
+  checks in the browser, on the Reset sign-in and Deactivate dialogs: no ring shows round the focused title; Enter
+  pressed as the dialog opens sends nothing; the confirm button's computed background is red in the warning tone
+  and blue in the standard one; busy, both buttons are `aria-disabled`, presses and Escape do nothing, and the busy
+  line shows at 1 s and not before; an error leaves focus on the confirm button; and once confirming is no longer
+  possible, Go back has focus.
+- Where design.md is silent (step 6): one rule moves focus to the Status row, for each action's `204`, for Resend
+  invite's and Reactivate's `412`, and for Go back from a dialog that was no longer possible: once the page shows the
+  user as the list fetched again gives them, focus that the change left on the page itself goes to the row, as when
+  the button pressed has gone, or the dialog has been unmounted after its `204`; while the button stays, focus stays on
+  it (confirm-dialog.md *Behaviour* 6's "its owner", where users.md names none for a trigger gone by Go back). A
+  dialog keeps the words and the stamp of the user as it opened, while the page behind it shows the list fetched
+  again. A `409 user.last_manager` fetches the list, as a `412` does, so that Go back shows the page as it now is
+  (confirm-dialog.md *Behaviour* 5). A dialog that a browser closes while busy (*Behaviour* 7) shows its `204` as an
+  open one does, and its failure in the page's error region, in the page's words: the `412` as Resend invite's, and
+  the `409` and the rest as the dialog has them. Resend invite, Reactivate and the dialogs' confirmation each have a
+  mutation of their own, so that a Deactivate confirmed while a resend is out keeps both callbacks. The last-manager
+  notice is status-messages.md's notice, T02's `Notice` in `src/components/`, given its words as a string, which step
+  7's notice on Edit user reuses too. In the end-to-end tests, `signInInPlaceAs` moves to `signedOut.ts` and
+  `expectNothingKept` to `kept.ts`, for the specs that share them, and the fixtures gain `resetSignIn` and
+  `secondDevice`.
+- Where design.md is silent (step 7): T02 merged first (#57), so Save's replace leaves focus to T02's route-change
+  rule and the back link to its opened-from memory, with no `flushSync`. Invite user's fields and error summary move to
+  `UserFields.tsx` (`UserFields`, `UserErrorSummary`), built once for both forms, Email address taking its hint from
+  the page; a field the server named that the form does not have reads "Not saved: something went wrong. Try again."
+  on Edit user, as Invite user's reads "Not sent: …". Until the list names the user, the back link reads "‹ User",
+  the user page's name and its fallback `<h1>`, so that there is a way out while the list loads or after it failed.
+  The notice and the rule follow the list as it is fetched again, so that a manager added or gone meanwhile counts,
+  and the rule compares with the user as the form took them, whose stamp Save sends; a new address is one that differs
+  from theirs in more than letter case, compared in upper case, as Identity's normaliser compares the ASCII addresses
+  that its user-name check allows (D76). The form is mounted afresh for each user's address, as T02's participant page
+  is, so that a history jump between two users' Edit user keeps neither one's values nor stamp. A
+  `409 user.last_manager` fetches the list, as a `412` does, so that the notice shows. Your own change to Worker goes
+  to Today, and your own new address loads the app afresh, neither fetching the list, which the server would refuse
+  (§8.4) or the ended session would meet as a `401`; your own new name and role reach the Account panel and the nav
+  through the shell's refresh of `/me` on the new entry (`useRefreshMe`), which comes after the replace, as a `/me`
+  refreshed first would show a worker Page not found on the Edit user page for a moment. In the end-to-end tests,
+  `recordRequests` moves to `requests.ts`, and `signInAndOpenUsers` and `inviteThroughThePage` to `users.ts`, for the
+  specs that share them, beside the new `edits` and `answerEdits`.
+- 14 October 2026, review: 5 findings were confirmed and are fixed here:
+  - Two findings: none of T04's six event writes had a row in T02's shared audit-events test, though the Note above
+    planned them and tests/README.md asks for them, so an extra entry about anything but the user, such as the actor
+    or the organisation, would have passed every T04 test, as each reads the events about the user alone.
+    `AuditEventsTests.cs` now has a row for each, acting on a worker it adds to A: `user.updated` for a new name,
+    `user.deactivated`, `user.reactivated`, Reset sign-in's `user.setup_link_sent`, and `admin.signin_reset` through
+    `AdminCommandRuns`. A row is now named by its event type, followed by " by " and the trigger for an event type
+    with more than one, so `user.setup_link_sent` has a row for Resend invite and one for Reset sign-in. As
+    `admin signout-all` writes one entry for each organisation and gives every user a new stamp, the seeded users'
+    too, its row runs on a migrated database of its own (`DatabasesOfTheirOwn`), in an organisation that it adds
+    there. tests/README.md says how to add both kinds of row. No design changed, so no A-number is added.
+  - The focus Note above said that the Status row would take its focus through T02's `focusInsteadOfHeading()`, but
+    it takes it with a plain `focus()`, which behaves the same, as no focus can be pending while the user page's own
+    `<h1>` is drawn. The Note now says so and why, and the code is unchanged, so there is no new test.
+  - The Note on where the by-hand checks go still said after step 25, though T02's steps 26 to 28 come first; it
+    now says after step 28, as steps 29 to 37.
+  - Edit user, a changed form, had no screen-reader check, which backlog README §9 asks for. ops/first-use-in-test.md
+    step 37 now has one with NVDA in Chrome: the fields' labels and hints, the Role radios, a Save refused by the
+    client and one refused by the server, each with its summary and linked error, and, with account A made the only
+    active manager for a moment, the notice under the `<h1>`, the hint for your own address and the refusal of Worker.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Build the sign-in reset, the last-manager rule and the session-revocation helper that T24 and T32 reuse
+      (S00.06.04's four specific criteria; design.md §4.11 *Reset sign-in*, §4.13 *Lost phone*, §6.6's `setup-link` row,
+      §8.6 *Reset sign-in* and *Last active manager*, A26; see Notes): the reset step in `Features/Users/`;
+      `UserSetupLink` resends an Invited user's invite as before, resets an Active user's sign-in with
+      `user.setup_link_sent` and the email sent before the commit, and keeps `409 user.not_active` for a Deactivated
+      user; the last-manager check with its lock, and `ErrorCode.LastManager`; design.md §6.9's `user.not_active` row
+      reworded for a Deactivated user alone, and `ErrorCode.UserNotActive`'s and `UserSetupLink`'s comments to match,
+      the user page keeping its generic failure for the code (see Notes); `SignedInDevices`, with its section in
+      tests/README.md; tests on the SQL Server container with the fake sender: resetting an Active worker set up with
+      a password and TOTP, and one with two passkeys, leaves no password, passkey or TOTP, a new authenticator key and
+      stamp and Status Invited, writes one `user.setup_link_sent` with the manager as actor and no details, and sends
+      one email to their address, whose link `POST /api/auth/setup/start` accepts; signed in on two devices, each
+      device's next request gets `401`; after the reset the person completes setup with a passkey, and in a second
+      test with a password and a code, and signs in a second time; the only active manager resetting themselves gets
+      `409 user.last_manager`, with nothing changed, written or sent, and with a second active manager the reset is
+      made; two managers resetting each other at once, the first held after its check, give one `204` and one
+      `409 user.last_manager`, so an active manager remains; a sender that fails leaves the person as they were; and
+      the endpoint's T01 tests hold, its `409 user.not_active` theory now for a Deactivated user alone
+- [x] Add `POST /api/admin/users/{id}/deactivate` and `…/reactivate` (S00.06.05's four specific criteria; design.md
+      §3.7's User row, §4.11 *Deactivate* and *Reactivate*, §6.6, §8.6 *Deactivate*, §14 M0's "After deactivation,
+      the user's next request is rejected (tested)"; D75; see Notes): handlers in `Features/Users/` that take an
+      `Actor` and change the user through `UserChanges`, deactivate with the last-manager check, each answering `204`,
+      with their matrix rows and signed-out `401`s; tests on the SQL Server container: deactivating an Active worker
+      sets Status Deactivated, `DeactivatedAtUtc` from the clock, `LockoutEnd` at the maximum and a new stamp, and
+      writes one `user.deactivated` with the manager as actor, committed with the change; their two devices' next
+      requests, `GET /api/auth/me` on one and `POST /api/auth/ping` on the other, get `401`, and so does their passkey
+      sign-in; deactivating an Invited worker makes their link's `POST /api/auth/setup/start` get
+      `410 auth.setup_link_invalid`, for which the setup page already shows "This link has expired" (users.md AC27);
+      the only active manager deactivating themselves gets `409 user.last_manager` with nothing changed or written;
+      reactivating ends the lockout, clears `DeactivatedAtUtc`, writes one `user.reactivated`, sends no email, and
+      gives Status Active to a person with a passkey, who signs in with it again, and to one with a password, who
+      signs in with it and a code, and Invited to one deactivated while Invited, whose Resend invite then works; a
+      repeat on a user already in that state changes and writes nothing; a stale `If-Match` gets `412` and a missing
+      one `428`, changing and writing nothing; B's manager gets `404` for A's user; and a worker gets `403`
+- [x] Add `PUT /api/admin/users/{id}` (S00.06.06's four specific criteria, and S00.06.04's Note from S00.04.02 for the
+      reset step; design.md §4.11 *Edit*, §6.6's `PUT` row, §8.4's role on the next request, §8.6's email change on a
+      Deactivated person; D75, D76, A27, A53; see Notes): a handler in `Features/Users/` that takes an `Actor`, checks
+      `{displayName, email, role}` with Invite's shared checks, and changes the user through `UserChanges`, with the
+      last-manager check for a change to Worker or of address, answering `200`; its matrix row and signed-out `401`;
+      tests on the SQL Server container with the fake sender: a new name and role write one `user.updated` whose
+      `Details` hold the old and new values of those two alone, in `ChangeDetails.Of`'s shape, send nothing and keep the
+      stamp, so the session goes on; a manager signed in on two devices and made a worker gets `403` from
+      `GET /api/admin/users` on each device's next request, and `200` from `GET /api/auth/me` with the role Worker; a
+      new address for an Active worker writes `user.updated` with the old and new address and `user.setup_link_sent`,
+      resets sign-in as the reset step does (Status Invited, no password, passkey or TOTP, each device's next request
+      `401`), and sends the link to the new address alone, which completes setup; for an Invited person it sends a new
+      link there, the old link gets `410`, and a browser that had started setup with the old link gets `401` from
+      `POST /api/auth/setup/passkey/options`, the reset step's stamp having ended that setup (A53); for a Deactivated
+      person it resets sign-in, sends nothing, writes no `user.setup_link_sent` and leaves them Deactivated; a change of
+      letter case only saves the address as typed, writes `user.updated` with both spellings, and keeps the stamp, the
+      sessions and the status, sending nothing; a `PUT` of the stored values writes nothing; the only active manager
+      making themselves a worker, or giving themselves a new address, gets `409 user.last_manager`, while their new name
+      or a change of letter case is saved; another account's address, in another organisation and letter case, gets
+      `409 user.email_in_use`; an empty, overlong or malformed field, and a role that is not `Worker` or `Manager`
+      exactly, get the field's `422` in Invite's words; a new address with a letter outside ASCII (`zoë@example.org`),
+      which Identity's email check passes and its user-name check refuses, gets the email field's `422` and keeps the
+      stamp, the sessions, the address and the status, with nothing written or sent; and a stale `If-Match` gets
+      `412`, a missing one `428`, B's manager `404` and a worker `403`, each changing, writing and sending nothing
+- [x] Add `admin reset-signin` and `admin signout-all`, with ops/break-glass.md's sections on them (S00.03.06, every
+      criterion; design.md §7.4's two rows, §8.6 *Break-glass*, §9.10 *Contain*; see Notes): the two commands in
+      `Platform/OperatorCommands/`, run from `AdminCommands`, each with its usage line and refusals as
+      `admin bootstrap` has them; in ops/break-glass.md, for each, when to run it, what to have ready, the block to
+      paste (reading the address with `read`), what it writes and prints, and how a refusal reads, with
+      `admin reset-signin`'s section opening with the rule that the organisation must confirm who the person is
+      before it is run, and `admin bootstrap`'s section kept true where it names the command; tests on the SQL Server
+      container and from the app binary: `admin reset-signin` for the organisation's only active manager resets their
+      sign-in as a manager's reset does, with no `409`, prints only a link, which `POST /api/auth/setup/start`
+      accepts, sends no email, writes one `admin.signin_reset` with no actor and the user's ID and no address, and
+      ends their sessions on two devices; for an Invited user it prints a new link and the old one gets `410`; the
+      address in other letter case finds the user; a Deactivated user, an address with no account, and a missing or
+      extra argument are refused with exit code 1, writing nothing; `admin signout-all`, with two users of A and one
+      of B signed in on two devices each, makes every device's next request get `401`, writes one `admin.signout_all`
+      for each organisation with no actor, and ends an Invited user's unused link; neither command logs an address or
+      a link; and ops/first-use-in-test.md gains the operator's run of both commands in test
+- [x] Add to the confirm-dialog shell, the session warning and the user page what the action dialogs share
+      (confirm-dialog.md *Anatomy*, *Behaviour* 2, 3, 5, 7 and 8, *States*; app-shell.md's 28:00 row and
+      session-timeout.md *The warning* step 1, which S00.06.04 and S00.06.05 link, and their Notes from S00.04.07;
+      users.md component C item 2; see Notes): `ConfirmDialog`'s focus on its title, warning tone, alert line, busy
+      state and no-longer-possible state; `closeOpenDialogs()`, called before the warning opens and before view C
+      shows; and the Status row as a focus target; Vitest and Playwright tests: a dialog opened on its title shows no
+      focus ring there, and Enter at once does nothing; its alert and status lines are in the page, empty, as it
+      opens; busy, both buttons are `aria-disabled`, presses and Escape do nothing, the labels stay, and the busy line
+      shows at 1 s and not before; an error leaves both buttons ready and focus on the confirm button; once no longer
+      possible, the confirm button goes and Go back has focus; the warning tone draws the confirm button red; Guide
+      prompts' leave dialog still opens on Stay on this page; with a confirmation open at 28:00 it is closed with
+      nothing sent and the warning is open, and after Stay signed in's `204` focus is on its trigger; a `401` with a
+      confirmation open closes it before view C shows; and Resend invite's `412`, when the refetched user is no
+      longer Invited, focuses the Status row, in place of the `<h1>`
+- [x] Add Reset sign-in, Deactivate and Reactivate to a user's page (users.md component C items 2 and 5 to 8,
+      *States* › User detail and *Dialogs*, *Interactions*, AC4, AC21, AC22, AC24 to AC33 and AC40; S00.06.04's and
+      S00.06.05's criteria linked to users.md and app-shell.md, and their Notes from S00.06.01; see Notes):
+      `isOnlyActiveManager` and `allowedActions(user, onlyManager)` in `userRules.ts`; Reset sign-in in group 1 for
+      an Active user, then the rule and group 2, Deactivate or Reactivate with its description, or, on your own page
+      as the only active manager, the last-manager notice; the Reset sign-in dialog in the warning tone and the
+      Deactivate dialog in the standard one, each with its "your own" words and Deactivate's for an Invited person;
+      mutations that send `If-Match`, are never retried and await the users refetch; the words in `src/copy`, which
+      its tests check for AC40's words; Vitest and Playwright tests, among them the shell's checks in the browser that
+      step 5 left to these two dialogs (see Notes): each status shows users.md's actions in order, nothing is
+      `disabled`, and the Tab order is users.md's, the notice and the Status row adding no stop (AC21); as
+      the only active manager, your own page shows Edit and the notice and no Reset sign-in or Deactivate, and with a
+      second active manager both (AC22); Reset sign-in opens "Reset sign-in for {name}?" with focus on its title and
+      a red "Reset sign-in for {name}", and Go back and Escape close it with focus on Reset sign-in and nothing sent
+      (AC24); confirming sends one `POST …/setup-link` with `If-Match`, and on `204` the dialog goes, the Status row
+      reads Invited with focus on it, and Resend invite has replaced Reset sign-in, with no banner (AC25);
+      Deactivate's dialog has design.md's body word for word and a blue "Deactivate {name}", an Invited person's its
+      own body, and on `204` the Status row reads Deactivated with focus on it, and Reactivate is the only serious
+      action (AC26); Reactivate sends one `POST …/reactivate` with no dialog, and the Status row reads Active, or
+      Invited with Resend invite for a person the refetch shows with no way to sign in, with focus on it (AC28); a
+      `412` on Reactivate, after one `POST` with `If-Match`, refetches the users, then puts "Someone else has just
+      changed {name}'s account. The page now shows the latest details." in the action error region, with focus on the
+      Status row when the refetched user is no longer Deactivated, otherwise still on Reactivate, and nothing sent
+      again by itself (users.md *States* › User detail); on your own page with another active manager, each dialog
+      has the "your own" words and its `204` reloads to sign-in (AC29); a `412` in a dialog removes its confirm
+      button, says so and focuses Go back, and after Go back the page shows the refetched user (AC30); busy, each
+      dialog ignores presses and Escape and says "Resetting sign-in…" or "Deactivating…" after 1 s, its labels
+      unchanged (AC31); a `401` from a confirm closes the dialog before view C, and signing in again brings back the
+      same page (AC32); the 28:00 warning closes either dialog with nothing sent, and after Stay signed in focus is on
+      its trigger; `409 user.last_manager` gives the "you" words with Go back alone; no connection and a `500` give
+      "Not reset: …", "Not deactivated: …" or "Not reactivated: …", and nothing is sent again by itself (AC33); a
+      `409 user.not_active` in the Reset sign-in dialog gives "Not reset: something went wrong. Try again.", as
+      Resend invite's row keeps "Not sent: …" (see Notes); signed in for real in the published app, a worker invited
+      through Invite user is deactivated, then reactivated and reads Invited (D75); a second manager, invited through
+      the page and set up in a second browser context from the link that the published app's `admin reset-signin`
+      prints (a helper beside the `invite` fixture), makes the first manager's own page show Reset sign-in and
+      Deactivate, and once reset through its dialog, their open page shows "You've been signed out" on its next
+      request; no name or email reaches a title, an address, `history.state` or storage (AC3); axe passes on the page
+      in each state and with each dialog open (AC39); review finds the parent company's name on no page and in no
+      email (AC4, D72); and ops/first-use-in-test.md gains the two-device, email and screen-reader checks
+      of both dialogs, and, on the Android phone, that the back gesture closes each dialog with nothing sent and focus
+      on its trigger, and does nothing while the dialog is busy (AC24, AC31), which Playwright, pressing Escape,
+      cannot prove
+- [x] Add Edit user at `/manage/users/{userId}/edit` (users.md component D, *States* › Edit user, *Interactions*,
+      AC34 to AC38, AC33 for the `PUT`, AC1, AC3, AC39 and AC40; S00.06.06's criteria linked to users.md, and its
+      Note from S00.06.01; see Notes): the route beside the user's page under `ManagerOnly`, with the back link
+      "‹ {name}", the error summary, the `<h1>` "Edit user", the last-manager notice on your own page as the only
+      active manager, Name, Email address with its hint for someone else or for yourself, `RoleField` on the person's
+      role, the action error region and Save; the user found by ID in the users query's list, Page not found for one
+      not on it, and the values and `If-Match` taken once, as the form first fills; `validateUser()` with the
+      last-manager checks, and `userRefusal()` with `409 user.last_manager` on the field changed; the words in
+      `src/copy`; Vitest and Playwright tests: Edit opens with the user's values and the hint for someone else, or
+      yours on your own page (AC34); while the users query loads, the `<h1>` "Edit user" shows at once, with no
+      fields, and "Loading user…" after 1 s, and a failed load keeps that `<h1>` above "This user did not load: …"
+      and Try again (users.md *States* › Edit user); as the only active manager, choosing Worker or a new address
+      gives its "You are the only active manager…" message inline and in the focused summary and sends nothing, while
+      a change of letter case is sent (AC35); field errors after Save, the client's or the server's, title the page
+      "Error: Grow2Notes – Edit user" until the last is fixed, and an alert above Save leaves the title as it was
+      (form-validation.md); Save sends one `PUT` with `If-Match` and the trimmed values and lands on the user's page by
+      a replace, with focus on its `<h1>` and no banner, its Status as the refetched list gives it: Invited after a
+      new address, Deactivated for a Deactivated person, unchanged after a change of letter case (AC36); a `412` gives
+      the stale-save sentence above Save, keeps every typed value and focus on Save, and a second Save sends the new
+      `If-Match` and succeeds (AC37); saving your own role as Worker lands on Today with focus on its `<h1>`, no
+      banner and no Manage in the nav, and your own new address reloads to sign-in (AC38), while your own address in
+      other letter case, which the client compares ignoring case, lands on your page with no reload (D76); your own
+      new name shows in the Account panel; email in use and a `422` show as on Invite user, the
+      `409 user.last_manager` race on the field changed, and no connection or a `500` "Not saved: …" above Save, with
+      nothing sent again by itself (AC33); a refetch while the form is open changes no field; a worker at
+      `/manage/users/{id}/edit` meets Page not found (AC1); signed in for real in the published app, a worker invited
+      through Invite user is renamed and given a new address, and their page shows both and reads Invited; no name or
+      email reaches a title, an address, `history.state` or storage (AC3); axe passes in each state (AC39); and
+      ops/first-use-in-test.md gains the check that a new address gets the setup-link email
+- [ ] After the deploy to test, check read-only, with no sign-in: signed out, `PUT /api/admin/users/{a new GUID}`,
+      `POST /api/admin/users/{a new GUID}/deactivate`, `…/reactivate` and `…/setup-link` answer `401` problem+json
+      with `no-store`; a headless browser at `/manage/users/{a new GUID}/edit` meets sign-in's view A, titled
+      "Grow2Notes – Sign in", with no Content Security Policy violation; the deployed bundle holds "Deactivating…",
+      "Reactivating…", "Resetting sign-in…" and "Changing the email resets sign-in"; and Log Analytics holds no `5xx`
+      or exception from the app since the deploy
 
 ---
 

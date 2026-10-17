@@ -113,14 +113,16 @@ The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another addre
 tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
-(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) and the
-Participants tests that meet the app's own answers (`e2e/participants.spec.ts`) get their setup links from the
-published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the second terminal gives
+(`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the two tests of a user's actions
+that meet the app's own (`e2e/user-actions.spec.ts`) and the Edit user test that meets the app's own save
+(`e2e/edit-user.spec.ts`) get their setup links from the published app's own `admin bootstrap` and
+`admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the second terminal gives
 them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
-string and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs
-a link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a
-failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the
-database with `docker rm -f grow2notes-e2e-sql` when done.
+string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
+database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
+Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -135,7 +137,7 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Three more fixtures are there for the tests that name them, and only those run them:
+Five more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
   `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
@@ -143,12 +145,18 @@ Three more fixtures are there for the tests that name them, and only those run t
   printed.
 - `secondInvite` runs it once more, for another made-up organisation and manager, Jordan Sample, for a test of two
   people on one browser.
+- `resetSignIn(email)` runs the published app's `admin reset-signin` for that address in the same way, and gives the
+  link that it printed: a new one for someone invited from the Users screen, whose emailed link the test cannot read,
+  or for someone whose sign-in it resets.
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
   `credentials()` lists the passkeys that it holds, and `addPasskey(rpId)` adds one that no account holds (below).
   With no passkey for the domain that a prompt names, the prompt fails at once with `NotAllowedError`, as dismissing
   it does.
+- `secondDevice` gives a second device: a `page` in a browser context of its own, with none of the test page's
+  cookies, under the same options and the same check of the policy, and its own `authenticator`, for a second person
+  signed in beside the first, or one person on two devices.
 
 A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
 key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
@@ -276,6 +284,31 @@ the busy button and its emptied line, until the test answers it with `route.fulf
 time zone sets the zone with `test.use({ timezoneId })` and the day with `page.clock.install({ time })`, both before
 the page loads. The test that meets the app's own resend invites a worker through Invite user first, and reads the
 time from the app's own `Date` header. `e2e/resend-invite.spec.ts` is the example of each.
+
+Reset sign-in sends the same `POST …/setup-link`, and Deactivate and Reactivate send theirs to the paths that
+`deactivations` and `reactivations` match. `answerChanges(page, pattern, answer)` answers each change to `pattern`, one
+of the three, as `answerSetupLinks` answers a resend, which it is with `setupLinks`; `holdNext(page, pattern)` holds
+the next one, for a busy dialog. Beside users.md's four, `kim` is a second Active manager, Kim Tran, so that Sam Lee's
+own page offers Reset sign-in and Deactivate, and `withChanged(users, user, changed)` gives the list as the app gives
+it after a change to `user`, with a new stamp, which a test serves before the press, for the refetch that follows the
+change. A test of your own reset or deactivation calls `failMe(page, 401)` before it confirms, as the change ends the
+session, so that the page that it loads afresh meets the app's `401`. The two tests that meet the app's own changes
+sign in for real and invite through Invite user: a worker, deactivated and then reactivated; and a second manager, who
+sets up on the `secondDevice` from the link that `resetSignIn` gives, and whose sign-in the first then resets.
+`e2e/user-actions.spec.ts` is the example of each, `expectNothingKept(page, ...values)` from `e2e/kept.ts` checks that
+no name or address is kept where a page could keep it (users.md AC3), and `signInInPlaceAs(page, me)` from
+`e2e/signedOut.ts` signs in again on view C, the password and code steps answered in the browser.
+
+Edit user's Save sends `PUT /api/admin/users/{id}`, whose path `edits` in `e2e/users.ts` matches for any user.
+`answerEdits(page, answer)` answers each save in the browser: `'saved'`, the app's `200` with no body and no `ETag`, or
+as `answerInvites` answers an invite. `holdNext(page, edits)` holds the next one, for the busy button, or, in a test of
+your own change, until the test has changed what `/api/auth/me` answers, which the page asks again on the entry that
+it lands on: `serveMe` with the role Worker or the new name, or `failMe(page, 401)` after a new address, which ends
+the session. `recordRequests(page)` from `e2e/requests.ts` records each request that the page sends, with its
+`If-Match`, and `signInAndOpenUsers(page, invite, authenticator)` and `inviteThroughThePage(page, person, role)` from
+`e2e/users.ts` sign in for real and invite through Invite user, for each test that meets the app's own Users screens.
+The test that meets the app's own save renames a worker invited through Invite user and gives them a new address.
+`e2e/edit-user.spec.ts` is the example of each.
 
 ### Answering `/api/admin/guide-prompts`
 
@@ -537,8 +570,10 @@ in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`,
   to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
   deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
-  database of its own from `SqlServerFixture.CreateDatabaseAsync`. Likewise no test archives, restores or changes a
-  seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
+  database of its own from `SqlServerFixture.CreateDatabaseAsync`, as a test that runs `admin signout-all` must,
+  since it gives every user a new security stamp, the seeded users' too
+  (`Grow2Notes.Tests/Platform/OperatorCommands/SignOutAllCommandTests.cs`). Likewise no test archives, restores or
+  changes a seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
   (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
   and their ETag, the `If-Match` of a change to them, as
   `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
@@ -636,6 +671,41 @@ using var response = await client.GetAsync("/api/...", TestContext.Current.Cance
 Signing in changes no row, so a test may sign in as a seeded user; one that then changes the user, such as rotating
 their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
 `Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
+
+### Ending a user's sessions on every device
+
+A change to a user reaches each session of theirs on its next request (design.md §8.4, §8.6): a reset, a deactivation
+or `admin signout-all` rotates the security stamp, which ends each with `401`, and a change to Worker leaves the stamp,
+so a manager's request then gets `403`. `SignedInDevices` (`Grow2Notes.Tests/Fixtures/SignedInDevices.cs`) shows it on
+several devices at once. Reset sign-in's tests use it (`Grow2Notes.Tests/Features/Users/SignInResetTests.cs`, the
+example), and so does every later test of a change that ends sessions or a role: deactivation, a change of role or
+email, and the operator's `admin reset-signin` and `admin signout-all`; T24's, that a deactivated person is signed out
+everywhere (S05.03.02); and T32's, that such a change ends a connected assistant's access as well as the person's own
+sessions.
+
+- Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
+  changes (the seeded-rows rule above).
+- `SignedInDevices.SignInAsync(app, clock, userId, count)` signs the user in on `count` devices, two by default, each a
+  client from `CreateHttpsClient()` with the session cookie; fetches each device's antiforgery token, while the session
+  still stands, for a `POST` later; and checks that each device's next request is let in.
+- After the change, `AssertNextRequestsAsync(status, requests)` moves the clock a second before each device's next
+  request, so the session check runs on it, and asserts its status: one request for each device, in order, such as
+  `SignedInDevices.Me` (`GET /api/auth/me`, sent to each when none is given) or `SignedInDevices.Ping`
+  (`POST /api/auth/ping`, with the device's token), or `NextRequest.Get(path)` and `NextRequest.Post(path)` for
+  others. A `401` must also be problem details that clear the session cookie, as the session check answers once it
+  ends a session.
+- `AssertNextAnswersAsync(status, answer, requests)` does the same for requests answered with JSON, and asserts
+  `answer` of each device's body too, as Edit user's tests read the role that `GET /api/auth/me` gives each session
+  after a change to Worker (`Grow2Notes.Tests/Features/Users/UserEditEndpointTests.cs`).
+
+```csharp
+await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));
+using var devices = await SignedInDevices.SignInAsync(app, clock, userId);
+
+// The change, such as a manager's reset of the user's sign-in.
+
+await devices.AssertNextRequestsAsync(HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
+```
 
 ### Setting up an account, with a test-only passkey handler or a computed code
 
@@ -780,11 +850,15 @@ used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase
 writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
 set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
-`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email as
-`SetupLinks.InviteAsync` reads the invite core's, for a test that opens it, such as with `StartSetupAsync`. A test of an
-email that cannot be sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender
-sends nothing and throws an exception that holds the address and the whole text, link and all, so the test shows that
-neither reaches the logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both.
+`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email, and
+`SetupLinks.Read(link, email)` one that an operator command printed, as `SetupLinks.InviteAsync` reads the invite
+core's, for a test that opens it, such as with `StartSetupAsync`, or shows that it has ended with
+`client.AssertSetupLinkEndedAsync(link)`, which expects `410 auth.setup_link_invalid`. A test of an email that cannot be
+sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender sends nothing and
+throws an exception that holds the address and the whole text, link and all, so the test shows that neither reaches the
+logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both. A test that looks for a setup
+token in the logs (`RecordedLog.Holds`) looks for it escaped too, as a link holds it, since its base64 almost always has
+a `+`, `/` or `=` in it.
 
 ### The endpoint matrix
 
@@ -869,11 +943,18 @@ story adds one as follows.
   the second manager's `412`, the `428`, and a save of the stored values that writes nothing.
   `Grow2Notes.Tests/Features/Users/UserSetupLinkEndpointTests.cs` is the example for a change to a user, which the
   handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
-  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
-  `SaveChangesInterceptor` holds back while another request changes the user.
+  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which
+  `HoldsTheFirstSaveOfTheUser` (`Grow2Notes.Tests/Fixtures/HoldsTheFirstSaveOfTheUser.cs`), a `SaveChangesInterceptor`,
+  holds back while another request changes the user. A change under the last-manager rule (A26) is tested in an
+  organisation the test adds, so that it alone decides who is an Active manager there; with the same interceptor,
+  `Grow2Notes.Tests/Features/Users/SignInResetTests.cs` shows two managers resetting each other at once.
 - Give each event type that it writes a row in the shared audit-events test,
   `Grow2Notes.Tests/Platform/Audit/AuditEventsTests.cs` (design.md §5.4, §14 M5): a function that triggers the event
-  through the real endpoint, in seeded organisation A, adding the rows it acts on, or, for a change to an
-  organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the entry
-  that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one new
-  entry, and compares the `Details` as JSON. `participant.created`'s row is the example.
+  through the real endpoint or operator command, in seeded organisation A, adding the rows it acts on, or, for a change
+  to an organisation's own row, in an organisation that it adds, as `guide_prompts.updated`'s row does, and returns the
+  entry that it must write, with its organisation, actor, entity, participant and `Details`. The test finds exactly one
+  new entry, and compares the `Details` as JSON. `participant.created`'s row is the example. An event type with more
+  than one trigger gets a row for each, named by the event type, " by " and the trigger, as `user.setup_link_sent`'s
+  Resend invite and Reset sign-in are. A trigger that changes every organisation, as `admin signout-all` does, writes
+  one entry for each, so its row runs on a migrated database of its own, which `DatabasesOfTheirOwn` names, in an
+  organisation that it adds there.

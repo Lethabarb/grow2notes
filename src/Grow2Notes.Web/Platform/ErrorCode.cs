@@ -17,8 +17,14 @@ internal sealed class ErrorCode
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 
     /// <summary>
-    /// A setup link was asked for a user who is not Invited: a Deactivated user is reactivated first (D75), and an
-    /// Active user gets it too until Reset sign-in serves them (S00.06.04).
+    /// The change would leave the organisation with no Active manager: it would reset, deactivate, give a new address
+    /// to, or make a worker of, the only one (A26).
+    /// </summary>
+    public static readonly ErrorCode LastManager = new(StatusCodes.Status409Conflict, "user.last_manager");
+
+    /// <summary>
+    /// A setup link was asked for a Deactivated user, who is reactivated first (D75). An Invited user's invite is
+    /// resent, and an Active user's sign-in reset, instead.
     /// </summary>
     public static readonly ErrorCode UserNotActive = new(StatusCodes.Status409Conflict, "user.not_active");
 

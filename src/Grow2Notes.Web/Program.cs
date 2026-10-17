@@ -215,32 +215,41 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 // and its event are saved by one SaveChanges on the scope's context.
 builder.Services.AddScoped<ConfigurationChanges>();
 
-// One per scope, for the same reason: their UserManager saves through the scope's context, so an invite, and the new
-// key of the setup-link step, join the transaction their caller opens there, with the audit event that records them.
+// One per scope, for the same reason: their UserManager saves through the scope's context, so an invite, the new key
+// of the setup-link step and a sign-in reset join the transaction their caller opens there, with the audit event that
+// records them.
 builder.Services.AddScoped<Invitations>();
 builder.Services.AddScoped<SetupLinkIssuer>();
+builder.Services.AddScoped<SignInReset>();
 
 // One per scope, for the same reason: setup's completion opens its transaction on the scope's context, through which
 // the method that the endpoint adds, the user's changes and their audit event are all saved.
 builder.Services.AddScoped<SetupCompletion>();
 
 // One per scope, for the same reason: a change to a user who exists opens its transaction on the scope's context, in
-// which the user is loaded and their If-Match checked, and the change and its audit event are saved.
+// which the user is loaded and their If-Match checked, and the change and its audit event are saved. The last-manager
+// rule's lock is taken in that transaction too.
 builder.Services.AddScoped<UserChanges>();
+builder.Services.AddScoped<LastManagerRule>();
 
 // The admin handler classes (mcp-server.md §3.5, convention 1), one per scope, as each reads and writes through the
 // scope's context.
 builder.Services.AddScoped<UserList>();
 builder.Services.AddScoped<UserInvite>();
 builder.Services.AddScoped<UserSetupLink>();
+builder.Services.AddScoped<UserDeactivation>();
+builder.Services.AddScoped<UserEdit>();
 builder.Services.AddScoped<GuidePromptsHandler>();
 builder.Services.AddScoped<ParticipantList>();
 builder.Services.AddScoped<ParticipantChanges>();
 
-// The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, the invite's and
-// its audit event's share the scope's context, and so the one transaction.
+// The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, those of the
+// invite, the reset or the new security stamps it makes, and its audit events share the scope's context, and so the one
+// transaction.
 builder.Services.AddScoped<AdminCommands>();
 builder.Services.AddScoped<BootstrapCommand>();
+builder.Services.AddScoped<ResetSignInCommand>();
+builder.Services.AddScoped<SignOutAllCommand>();
 
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
@@ -344,6 +353,8 @@ api.MapAdminGroup()
     .MapUserListEndpoint()
     .MapInviteUserEndpoint()
     .MapUserSetupLinkEndpoint()
+    .MapUserDeactivationEndpoints()
+    .MapUserEditEndpoint()
     .MapGuidePromptsEndpoints()
     .MapParticipantListEndpoint()
     .MapAddParticipantEndpoint()

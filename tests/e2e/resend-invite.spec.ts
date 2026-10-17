@@ -19,6 +19,9 @@ const resendInvite = (page: Page) => main(page).getByRole('button', { name: /^(R
 const resendLine = (page: Page) => main(page).locator('button + [role="status"]');
 // The action error region above the actions (users.md component C item 5).
 const alertLine = (page: Page) => main(page).getByRole('alert');
+// The summary list's Status row, the <div> round its term and its fact (users.md component C items 2 and 4).
+const statusRow = (page: Page) =>
+  main(page).locator('dl > div').filter({ has: page.locator('dt', { hasText: /^Status$/ }) });
 
 // Two times at which the server sends a link, a minute apart, as its Date header writes them: 4:12 pm and 4:13 pm in
 // Melbourne, which is on daylight saving time (UTC+11) from 4 October 2026.
@@ -188,6 +191,31 @@ test('a 412 refetches the list, then says someone changed the account, with focu
   await expect(resendLine(page)).toHaveText(sentAt412pm);
   await expect(alertLine(page)).toBeEmpty();
   expect(await ifMatches()).toEqual(['"stamp-2"']);
+});
+
+test('a 412 whose refetch shows Alex now Active takes Resend invite away, focus going to the Status row', async ({
+  page,
+}) => {
+  await answerSetupLinks(page, { status: 412, problem: { code: 'precondition.failed' } });
+  await openAlex(page);
+  // The list as it now is: Alex Park has set up their account meanwhile.
+  await serveUsers(page, [
+    sam,
+    chris,
+    jo,
+    { ...alex, status: 'Active', activatedAtUtc: '2026-10-14T05:00:00Z', concurrencyStamp: 'stamp-2' },
+  ]);
+
+  await resendInvite(page).click();
+
+  await expect(alertLine(page)).toHaveText(
+    'Someone else has just changed Alex Park’s account. The page now shows the latest details.',
+  );
+  await expect(resendInvite(page)).toHaveCount(0);
+  // The row that shows why the button has gone, rather than the page itself (users.md component C item 2).
+  await expect(statusRow(page)).toBeFocused();
+  await expect(statusRow(page).getByRole('definition')).toHaveText('Active');
+  await expectAxeToPass(page);
 });
 
 for (const { cut, answer, sentence } of [

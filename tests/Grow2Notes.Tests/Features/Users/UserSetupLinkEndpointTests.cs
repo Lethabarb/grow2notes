@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
@@ -26,8 +25,9 @@ namespace Grow2Notes.Tests.Features.Users;
 /// organisations' users through the test-only sign-in. Each test invites a user of its own into organisation A through
 /// the invite core (<see cref="SetupLinks.InviteAsync"/>), which writes no audit event and sends no email, so the
 /// events about the user and the emails its app sent are the resend's alone. Each test's app records the emails it
-/// sends (<see cref="RecordingEmailSender"/>) and runs on a fake clock. The endpoint matrix covers who may call it, and
-/// <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// sends (<see cref="RecordingEmailSender"/>) and runs on a fake clock. The refusals that come before the user's status
+/// is read hold for an Active user's sign-in reset alike, whose own tests are <see cref="SignInResetTests"/>'. The
+/// endpoint matrix covers who may call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -74,11 +74,7 @@ public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory
             sent);
 
         using var client = app.CreateHttpsClient();
-        var token = await client.FetchTokenAsync();
-        using var oldStart = await client.PostWithTokenAsync(
-            SetupLinks.StartPath, token, new { userId = old.UserId, token = old.Token });
-        using var problem = JsonDocument.Parse(await oldStart.ReadProblemAsync(HttpStatusCode.Gone));
-        Assert.Equal("auth.setup_link_invalid", problem.RootElement.GetProperty("code").GetString());
+        await client.AssertSetupLinkEndedAsync(old);
         await client.StartSetupAsync(link);
     }
 
@@ -180,15 +176,12 @@ public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory
         Assert.Empty(Sent(app));
     }
 
-    // Only an Invited user's invite is resent: a Deactivated user is reactivated first (D75), and an Active user's
-    // sign-in is reset instead, which S00.06.04 builds.
-    [Theory]
-    [InlineData("Active")]
-    [InlineData("Deactivated")]
-    public async Task A_user_who_is_not_Invited_gets_409_user_not_active_and_nothing_is_done(string status)
+    // A Deactivated user is reactivated first (D75); an Active user's sign-in is reset instead (SignInResetTests).
+    [Fact]
+    public async Task A_Deactivated_user_gets_409_user_not_active_and_nothing_is_done()
     {
         var invited = await app.InviteAsync(seeded.A);
-        await ChangeUserAsync(invited.UserId, user => user.Status = Enum.Parse<UserStatus>(status));
+        await ChangeUserAsync(invited.UserId, user => user.Status = UserStatus.Deactivated);
 
         await AssertRefusedAsync(
             Caller.ManagerOfA, invited.UserId, await ETagAsync(invited.UserId), HttpStatusCode.Conflict,
@@ -253,8 +246,7 @@ public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory
     {
         var invited = await app.InviteAsync(seeded.A);
         var gate = new HoldsTheFirstSaveOfTheUser(Guid.Parse(invited.UserId));
-        await using var gated = app.WithWebHostBuilder(builder => builder.ConfigureTestServices(
-            services => services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(gate))));
+        await using var gated = gate.On(app);
         var loaded = await ETagAsync(invited.UserId);
 
         var first = PostAsync(gated, Caller.ManagerOfA, invited.UserId, loaded);
@@ -379,35 +371,4 @@ public sealed class UserSetupLinkEndpointTests : IClassFixture<Grow2NotesFactory
         Guid? EntityId,
         Guid? ParticipantId,
         string? Details);
-
-    /// <summary>
-    /// Holds back the first save, made inside a transaction, that changes the user whose ID it is given, until the test
-    /// lets it go: in a resend, the new key's, made once the transaction has loaded the user and checked their ETag.
-    /// Every other save passes.
-    /// </summary>
-    private sealed class HoldsTheFirstSaveOfTheUser(Guid userId) : SaveChangesInterceptor
-    {
-        private readonly TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int held;
-
-        public Task Reached => reached.Task;
-
-        public void Release() => released.TrySetResult();
-
-        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
-        {
-            if (eventData.Context is { Database.CurrentTransaction: not null } context
-                && context.ChangeTracker.Entries<ApplicationUser>().Any(
-                    entry => entry.State == EntityState.Modified && entry.Entity.Id == userId)
-                && Interlocked.Exchange(ref held, 1) == 0)
-            {
-                reached.SetResult();
-                await released.Task.WaitAsync(cancellationToken);
-            }
-
-            return result;
-        }
-    }
 }

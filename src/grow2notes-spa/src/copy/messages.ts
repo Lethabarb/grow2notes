@@ -66,6 +66,41 @@ export const msg = {
    */
   dateOfBirthMustInclude: (parts: readonly string[]) =>
     `${strings.dateOfBirth.legend} must include a ${parts.join(' and ')}`,
+  /** A dialog's action refused `412`, which leaves Go back alone, behind which the page shows the user as they are. */
+  userChangedGoBack: (displayName: string) =>
+    `Someone else has just changed ${displayName}’s account. Go back to see the latest details.`,
+  /** A Reset sign-in that failed, in its dialog (users.md *Dialogs*), such as "Not reset: no connection. Try again." */
+  notReset: (cause: Cause): string => msg.notDone('reset', cause),
+  /** A Deactivate that failed, in its dialog. */
+  notDeactivated: (cause: Cause): string => msg.notDone('deactivated', cause),
+  /** A Reactivate that failed, above the actions (users.md *States* › User detail). */
+  notReactivated: (cause: Cause): string => msg.notDone('reactivated', cause),
+  /**
+   * The Reset sign-in dialog for someone else (users.md *Dialogs*): its title; its first line, from design.md §4.11's
+   * "The manager confirms who is asking … by phone or in person"; its second, with the address the link goes to; and
+   * its confirming button. Your own reset has its words in `strings.users.resetDialog` and `resetOwnWhatHappens`.
+   */
+  resetTitle: (displayName: string) => `Reset sign-in for ${displayName}?`,
+  resetCheckWhoIsAsking: (displayName: string) =>
+    `Only do this after you have checked, by phone or in person, that ${displayName} is the one asking.`,
+  resetWhatHappens: (email: string) =>
+    'Their current way of signing in will be removed, and they will be signed out everywhere. A new setup link will '
+    + `be emailed to ${email}.`,
+  resetConfirm: (displayName: string) => `Reset sign-in for ${displayName}`,
+  /** Your own Reset sign-in dialog's one line, in place of the two for someone else. */
+  resetOwnWhatHappens: (email: string) =>
+    `You will be signed out everywhere now. A new setup link will be emailed to ${email}.`,
+  /**
+   * The Deactivate dialog for someone else (users.md *Dialogs*): its title; its body, design.md §4.11's word for word,
+   * its contraction included, or, for an Invited person, what deactivating does to their link; and its confirming
+   * button.
+   */
+  deactivateTitle: (displayName: string) => `Deactivate ${displayName}?`,
+  deactivateBody: (displayName: string) =>
+    `${displayName} will be signed out everywhere now and can’t sign in. Their notes stay.`,
+  deactivateInvitedBody: (displayName: string) =>
+    `${displayName} has not set up their account yet. Their setup link will stop working.`,
+  deactivateConfirm: (displayName: string) => `Deactivate ${displayName}`,
   /** View F's hint, with `limits.passwordMinLength`, so that the words say the rule that the field checks. */
   passwordHint: (minLength: number) => `Use at least ${minLength} characters.`,
   /** View F's message for a password shorter than `limits.passwordMinLength`. */
