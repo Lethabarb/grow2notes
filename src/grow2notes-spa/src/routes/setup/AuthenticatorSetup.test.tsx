@@ -840,7 +840,11 @@ describe('AuthenticatorSetup (view G), its code step', () => {
   });
 
   it('on 200, puts the Me in [\'me\'], then makes /setup\'s entry Today\'s, which sends only its own /me', async () => {
-    serve(passwordPath, () => json(me));
+    serve(passwordPath, () => {
+      // The session that setup starts, which /me then answers for.
+      serve(mePath, () => json(me));
+      return json(me);
+    });
     const { router, client } = await openViewG([entryBefore]);
     await settle();
     const requests = fetchMock.mock.calls.length;
@@ -854,8 +858,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(router.state.historyAction).toBe('REPLACE');
     expect(router.state.location.pathname).toBe('/');
     expect(router.state.location.state).toBeNull();
-    // Today for the Me's today, in the signed-in frame (sign-in.md *Interactions* 12), whatever the new location's one
-    // refresh of /me answers: here the test's 401.
+    // Today for the Me's today, in the signed-in frame (sign-in.md *Interactions* 12), which the new location's one
+    // refresh of /me, for the session that setup started, leaves as it is.
     expect(heading()).toHaveAccessibleName(`Today, Tuesday 13${nbsp}October`);
     expect(heading().querySelector('time')).toHaveAttribute('datetime', me.today);
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
@@ -894,6 +898,8 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     fireEvent.click(backLink());
     await wait(0);
 
+    // The session that setup starts, which /me then answers for.
+    serve(mePath, () => json(me));
     answer.give(new Response(JSON.stringify(me), { headers: { 'Content-Type': 'application/json' } }));
     await wait(0);
 

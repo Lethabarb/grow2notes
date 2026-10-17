@@ -1,12 +1,17 @@
 using System.Buffers.Text;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Users;
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticAssets;
+using Microsoft.Extensions.DependencyInjection;
 using static System.Net.HttpStatusCode;
 
 namespace Grow2Notes.Tests;
@@ -115,6 +120,16 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeededUsersOnly),
 
+        // Each manager invites into their own organisation, which a call commits, so each call invites an address of
+        // its own (tests/README.md).
+        new(Post,      "/api/admin/users",       Unauthorized, Forbidden, Created, Created,
+            AnInviteOfANewAddress),
+
+        // Each call resends the invite of a user it first invites into A, as a call commits (tests/README.md), with the
+        // user's ETag. B's manager does not find A's user (§9.2).
+        new(Post,      "/api/admin/users/{id:guid}/setup-link", Unauthorized, Forbidden, NoContent, NotFound,
+            AResendOfANewInviteInA),
+
         // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
         // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
         new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
@@ -127,14 +142,15 @@ internal static class EndpointMatrix
         Rows.ToDictionary(row => KeyOf(row.Methods, row.Route));
 
     /// <summary>
-    /// Every call of the endpoints in <paramref name="endpoints"/>: each endpoint with each method it names, or with
-    /// GET, POST, PUT and DELETE when it names none.
+    /// Every call of the endpoints of the app whose services are <paramref name="services"/>: each endpoint with each
+    /// method it names, or with GET, POST, PUT and DELETE when it names none. Each call carries the services and
+    /// <paramref name="seeded"/>, with which a row's builder adds the record that the call acts on.
     /// </summary>
-    public static IEnumerable<EndpointCall> CallsTo(EndpointDataSource endpoints) =>
-        from endpoint in endpoints.Endpoints.OfType<RouteEndpoint>()
+    public static IEnumerable<EndpointCall> CallsTo(IServiceProvider services, SeededOrganisations seeded) =>
+        from endpoint in services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
         let methods = MethodsOf(endpoint)
         from method in methods is [] ? CalledForAnyMethod : methods.Select(name => HttpMethod.Parse(name))
-        select new EndpointCall(method, endpoint);
+        select new EndpointCall(method, endpoint, services, seeded);
 
     /// <summary>The row of <paramref name="endpoint"/>, or <see langword="null"/> when the matrix has none.</summary>
     public static EndpointRow? RowOf(RouteEndpoint endpoint) => RowsByKey.GetValueOrDefault(KeyOf(endpoint));
@@ -184,6 +200,34 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // An invite of a worker with a made-up address (A35) that no other call or test uses.
+    private static Task<HttpRequestMessage> AnInviteOfANewAddress(EndpointCall call) =>
+        Task.FromResult(new HttpRequestMessage(call.Method, "/api/admin/users")
+        {
+            Content = JsonContent.Create(new
+            {
+                displayName = "Avery Brooks",
+                email = $"avery.brooks.{Guid.NewGuid():N}@example.org",
+                role = "Worker",
+            }),
+        });
+
+    // A resend to a worker whom it first invites into A through the invite core, with an address that no other call or
+    // test uses (A35), sending the worker's ETag, as the Users screen sends it (D78).
+    private static async Task<HttpRequestMessage> AResendOfANewInviteInA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        await using var scope = call.Services.CreateAsyncScope();
+        var invite = await scope.ServiceProvider.GetRequiredService<Invitations>().InviteAsync(
+            a.OrganisationId, "Avery Brooks", $"avery.brooks.{Guid.NewGuid():N}@example.org", UserRole.Worker,
+            a.ManagerId);
+        Assert.True(invite.Succeeded, string.Join(" ", invite.Errors.Select(error => error.Code)));
+
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/users/{invite.User.Id}/setup-link");
+        request.Headers.IfMatch.Add(new EntityTagHeaderValue(IfMatch.ETag(invite.User.ConcurrencyStamp!)));
+        return request;
+    }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
     // the challenge, so a made-up one does, with no options asked for first, and the call changes nothing.
@@ -253,8 +297,13 @@ internal sealed record EndpointRow(
     };
 }
 
-/// <summary>A call of an endpoint with one of the methods that <see cref="EndpointMatrix.CallsTo"/> gives it.</summary>
-internal sealed record EndpointCall(HttpMethod Method, RouteEndpoint Endpoint)
+/// <summary>
+/// A call of an endpoint with one of the methods that <see cref="EndpointMatrix.CallsTo"/> gives it, with the services
+/// of the app that maps the endpoint and the seeded organisations, for a row's builder that adds the record the call
+/// acts on.
+/// </summary>
+internal sealed record EndpointCall(
+    HttpMethod Method, RouteEndpoint Endpoint, IServiceProvider Services, SeededOrganisations Seeded)
 {
     // The methods that antiforgery leaves unchecked.
     private static readonly HttpMethod[] Safe = [HttpMethod.Get, HttpMethod.Head, HttpMethod.Options, HttpMethod.Trace];

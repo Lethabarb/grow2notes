@@ -9,7 +9,8 @@ namespace Grow2Notes.Tests.Fixtures;
 /// Hosts the app in memory against the migrated database in <paramref name="sqlServer"/>, with the web project as its
 /// content root, so it serves the real SPA build from that project's wwwroot. Its default authentication scheme sends a
 /// request with the test-only sign-in's headers to that sign-in (<see cref="TestSignIn"/>), so a test can call as a
-/// seeded user, and any other to the session cookie, as in the deployed app.
+/// seeded user, and any other to the session cookie, as in the deployed app. Its email sender records each message
+/// (<see cref="RecordingEmailSender"/>), so no test sends real email.
 /// </summary>
 public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicationFactory<Program>
 {
@@ -39,6 +40,10 @@ public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicati
             new("App:Origin", Origin),
         ]));
 
-        builder.ConfigureTestServices(services => services.AddTestSignIn());
+        builder.ConfigureTestServices(services =>
+        {
+            services.AddTestSignIn();
+            RecordingEmailSender.ReplaceAppSender(services);
+        });
     }
 }

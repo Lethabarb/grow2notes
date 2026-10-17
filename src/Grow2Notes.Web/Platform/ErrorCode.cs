@@ -13,6 +13,15 @@ internal sealed class ErrorCode
     /// <summary>The problem details extension member that holds the code (design.md §6.1).</summary>
     public const string Extension = "code";
 
+    /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
+    public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
+
+    /// <summary>
+    /// A setup link was asked for a user who is not Invited: a Deactivated user is reactivated first (D75), and an
+    /// Active user gets it too until Reset sign-in serves them (S00.06.04).
+    /// </summary>
+    public static readonly ErrorCode UserNotActive = new(StatusCodes.Status409Conflict, "user.not_active");
+
     /// <summary>The setup link is expired, used or replaced.</summary>
     public static readonly ErrorCode SetupLinkInvalid = new(StatusCodes.Status410Gone, "auth.setup_link_invalid");
 

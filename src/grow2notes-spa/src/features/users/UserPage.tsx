@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router';
+import { useParams } from 'react-router';
 import { BackLink } from '../../components/BackLink.tsx';
-import { buttonClass } from '../../components/buttonClass.ts';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
@@ -11,12 +10,12 @@ import { SummaryRow } from '../../components/SummaryRow.tsx';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
+import { UserActions } from './UserActions.tsx';
 import { usersQuery, type AdminUser } from './usersQuery.ts';
-import styles from './UserPage.module.css';
 
 /**
  * A user's detail at `/manage/users/{userId}` (users.md component C): the back link to Users, then the region that
- * loads the organisation's users, as there is no single-user endpoint, and the user's name, facts and Edit; or, for
+ * loads the organisation's users, as there is no single-user endpoint, and the user's name, facts and actions; or, for
  * an ID not on the list, Page not found in place of the whole page.
  */
 export function UserPage() {
@@ -50,10 +49,7 @@ export function UserPage() {
   );
 }
 
-/**
- * The user's name as the `<h1>`, their email, role and status in plain words, and Edit, a link styled as a secondary
- * button, as it changes the address; the other actions come with the stories that build them.
- */
+/** The user's name as the `<h1>`, their email, role and status in plain words, and the actions for their status. */
 function UserDetail({ user }: { user: AdminUser }) {
   return (
     <>
@@ -63,11 +59,7 @@ function UserDetail({ user }: { user: AdminUser }) {
         <SummaryRow term={strings.users.role}>{strings.role[user.role]}</SummaryRow>
         <SummaryRow term={strings.users.status}>{strings.userStatus[user.status]}</SummaryRow>
       </SummaryList>
-      <div className={styles.actions}>
-        <Link to="edit" className={buttonClass('secondary')}>
-          {strings.users.edit}
-        </Link>
-      </div>
+      <UserActions user={user} />
     </>
   );
 }

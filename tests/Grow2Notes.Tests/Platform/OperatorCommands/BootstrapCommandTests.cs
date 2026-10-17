@@ -93,6 +93,9 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
         Assert.True(await VerifySetupTokenAsync(app.Services, manager.Id, TokenIn(setupLink)));
 
+        // The operator gives the manager the printed link, so no email is sent.
+        Assert.Empty(app.Services.GetRequiredService<RecordingEmailSender>().Sent);
+
         await using var scope = app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var organisationId = manager.OrganisationId;

@@ -17,7 +17,7 @@ import {
   serveSaves,
 } from './guidePrompts.ts';
 import { boxOf } from './layout.ts';
-import { manager, serveMe, worker } from './me.ts';
+import { failMe, manager, serveMe, worker, type Me } from './me.ts';
 import { holdNext } from './requests.ts';
 import { people, serveUsers } from './users.ts';
 
@@ -1089,6 +1089,89 @@ test("a plain close() of the leave dialog, as the shell's warning gives it, is S
   expect(logouts()).toBe(0);
   await expect(page).toHaveURL(address);
   await expect(field(page)).toHaveValue(typed);
+});
+
+// Sign-in in place, sign-in.md's view C, over text not saved (guide-prompts.md *Leaving*'s last two criteria).
+const signedOutHeading = 'You’ve been signed out';
+const codeLabel = 'Enter the 6-digit code from your authenticator app';
+
+/**
+ * Signs in on view C as `me`, through the password and code steps, which the browser answers for the app, as it
+ * answers `/api/auth/me` for the new session from then on, so that the address and password can be any.
+ */
+async function signInInPlaceAs(page: Page, me: Me) {
+  await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
+  await page.route('**/api/auth/login/totp', (route) => route.fulfill({ json: me }));
+  await serveMe(page, me);
+  await main(page).getByRole('textbox', { name: 'Email address' }).fill('someone@example.org');
+  await page.getByLabel('Password', { exact: true }).fill('made-up password');
+  await main(page).getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel(codeLabel).fill('123456');
+  await main(page).getByRole('button', { name: 'Sign in', exact: true }).click();
+}
+
+test('a Save that meets a 401 signs out in place; the same manager signing in finds the text kept, not saved', async ({
+  page,
+}) => {
+  await openWith(page);
+  // The session has gone, so the PUT and the refresh of /api/auth/me meet a 401 until the sign-in below.
+  let signedIn = false;
+  const saves = await serveSaves(page, (route) =>
+    signedIn ? route.fulfill(savedAnswer()) : route.fulfill({ status: 401 }),
+  );
+  await typeAtEnd(page, added);
+  await failMe(page, 401);
+
+  await save(page).click();
+
+  await expect(heading(page)).toHaveText(signedOutHeading);
+  await expect(heading(page)).toBeFocused();
+  await expect(field(page)).toBeHidden();
+  expect(saves).toHaveLength(1);
+
+  signedIn = true;
+  await signInInPlaceAs(page, manager);
+
+  // The page as it was, still not saved, and the Save that met the 401 not sent again by itself.
+  await expect(heading(page)).toHaveText('Guide prompts');
+  await expect(heading(page)).toBeFocused();
+  await expect(field(page)).toHaveValue(typed);
+  await expect(requestAlert(page)).toBeEmpty();
+  await expect(saveStatus(page)).toBeEmpty();
+  expect(await warnsBeforeUnload(page)).toBe(true);
+  await page.evaluate(() => fetch('/healthz'));
+  expect(saves).toHaveLength(1);
+
+  await save(page).click();
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+  expect(saves).toEqual([
+    { text: typed, ifMatch: `"${promptsVersion}"` },
+    { text: typed, ifMatch: `"${promptsVersion}"` },
+  ]);
+});
+
+test('a different person signing in in place loads Today afresh, with no browser dialog and the text gone', async ({
+  page,
+}) => {
+  await openWith(page);
+  const saves = await serveSaves(page, (route) => route.fulfill(savedAnswer()));
+  const dialogs = browserDialogs(page);
+  await typeAtEnd(page, added);
+  await failMe(page, 401);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(heading(page)).toHaveText(signedOutHeading);
+  // The hidden page still holds the text, and would ask before a reload, until the other person signs in.
+  expect(await warnsBeforeUnload(page)).toBe(true);
+
+  const reload = page.waitForRequest((request) => request.isNavigationRequest());
+  await signInInPlaceAs(page, worker);
+
+  expect(new URL((await reload).url()).pathname).toBe('/');
+  await expect(heading(page)).toContainText('Today');
+  await expect(page).toHaveURL('/');
+  await expect(field(page)).toHaveCount(0);
+  expect(dialogs).toEqual([]);
+  expect(saves).toEqual([]);
 });
 
 // S01.04.02's own criterion: design.md asks for a leave warning on Guide prompts alone.

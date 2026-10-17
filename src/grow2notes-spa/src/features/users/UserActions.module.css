@@ -1,0 +1,39 @@
+/* A group's space below the summary list, in the reading column (users.md *Layout - phone* and *Layout - laptop*). */
+.actions {
+  margin-block-start: var(--space-5);
+  max-inline-size: var(--measure);
+}
+
+/*
+ * Group 1, one action under another at every width, as each but Edit has its description above it, and left-aligned,
+ * so that from 40rem each button is as wide as its label (users.md *Layout - laptop*).
+ */
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-5);
+}
+
+/* An action with its description above it, as wide as the group, so that on a phone its button is too. */
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch;
+}
+
+.description {
+  margin: 0 0 var(--space-2);
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.result {
+  margin: 0;
+  /* The address in it is shown whole, never cut, and wraps anywhere (users.md *Components, in order*). */
+  overflow-wrap: anywhere;
+}
+
+.result:not(:empty) {
+  margin-block-start: var(--space-2);
+}

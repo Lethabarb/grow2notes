@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
@@ -12,14 +12,18 @@ import { OneTimeCodeField } from './OneTimeCodeField.tsx';
 import styles from './SignIn.module.css';
 import { isRefusal, notSignedIn } from './signInFailure.ts';
 
-// The field's id and name, by which a password manager finds it, so they stay the same across releases.
-const codeId = 'code';
-
 // The code step lasts 5 minutes from the accepted password (D69). A refusal this long after it is taken as the step's
 // end, with 10 seconds' margin for a code sent just before it (sign-in.md *Conflicts resolved* 12).
 const codeStepEndsAfterMs = 4 * 60_000 + 50_000;
 
 type CodeStepProps = {
+  /** The code field's id and name, by which a password manager finds it, so they stay the same across releases. */
+  codeId: string;
+  /**
+   * View C's `<h1>` and sentence, above the form, under which the code field's label is an `<h2>`; left out in view B,
+   * whose `<h1>` is the label.
+   */
+  heading?: ReactNode;
   /** When the password was accepted, by `Date.now()`, from which the code step's 5 minutes run. */
   passwordAcceptedAt: number;
   /** For a refused code once the step has run out: view A shows again, with the A25 message. */
@@ -29,12 +33,12 @@ type CodeStepProps = {
 /**
  * Sign-in's view B, the code step (sign-in.md view B, components 2, 2a, 10 and 11; totp-setup.md), which `SignIn`
  * shows in view A's place, at the same address and with the same title, once the password is accepted. Its `<h1>` is
- * the code field's label, and the field takes focus as it shows. Sign in checks the code before it sends anything,
- * and a badly formed one shows its message on the field, which takes focus again; nothing is ever sent by itself. A
- * code that the server refuses shows the A25 message in the summary, which takes focus, and a request that got no
- * answer says so above Sign in, where focus stays for another press.
+ * the code field's label, or, in view C, its `<h2>`, and the field takes focus as it shows. Sign in checks the code
+ * before it sends anything, and a badly formed one shows its message on the field, which takes focus again; nothing is
+ * ever sent by itself. A code that the server refuses shows the A25 message in the summary, which takes focus, and a
+ * request that got no answer says so above Sign in, where focus stays for another press.
  */
-export function CodeStep({ passwordAcceptedAt, onExpired }: CodeStepProps) {
+export function CodeStep({ codeId, heading, passwordAcceptedAt, onExpired }: CodeStepProps) {
   const queryClient = useQueryClient();
   // As typed, in this view's memory only (sign-in.md *Privacy and storage*).
   const [code, setCode] = useState('');
@@ -62,7 +66,7 @@ export function CodeStep({ passwordAcceptedAt, onExpired }: CodeStepProps) {
   // names its message, so that a screen reader reads it with focus (sign-in.md *Where focus goes*).
   useEffect(() => {
     document.getElementById(codeId)?.focus();
-  }, [formatErrors]);
+  }, [codeId, formatErrors]);
 
   // Sign in, pressed or reached by Enter in the field. While the code is out, the busy button stops another.
   async function signIn(event: FormEvent<HTMLFormElement>) {
@@ -107,12 +111,14 @@ export function CodeStep({ passwordAcceptedAt, onExpired }: CodeStepProps) {
   return (
     <>
       <ErrorSummary errors={refused ? [{ message: strings.signIn.failed }] : []} attempt={attempt} />
+      {heading}
       <form noValidate className={styles.form} onSubmit={(event) => void signIn(event)}>
         <div className={styles.fields}>
           <OneTimeCodeField
             id={codeId}
             label={strings.oneTimeCode.label}
             labelIsHeading
+            headingLevel={heading === undefined ? 1 : 2}
             hint={strings.signIn.codeHint}
             error={formatError}
             value={code}

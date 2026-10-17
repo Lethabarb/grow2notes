@@ -12,6 +12,7 @@ let startClock: typeof SessionModule.startClock;
 let holdWhile: typeof SessionModule.holdWhile;
 let subscribe: typeof SessionModule.subscribe;
 let getPhase: typeof SessionModule.getPhase;
+let untilSessionSurelyEnded: typeof SessionModule.untilSessionSurelyEnded;
 type Phase = SessionModule.Phase;
 
 const antiforgeryPath = '/api/auth/antiforgery';
@@ -130,7 +131,7 @@ beforeEach(async () => {
   ({ api } = await import('./api.ts'));
   ({ refreshMe } = await import('./me.ts'));
   ({ createQueryClient } = await import('./queryClient.ts'));
-  ({ startClock, holdWhile, subscribe, getPhase } = await import('./session.ts'));
+  ({ startClock, holdWhile, subscribe, getPhase, untilSessionSurelyEnded } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.setSystemTime(startTime);
   fetchMock.mockImplementation((path) =>
@@ -198,6 +199,34 @@ describe('the session clock', () => {
     await at('38:00');
     expect(getPhase()).toBe('warn-2m');
     expect(told).toEqual(['warn-2m']);
+  });
+
+  // The server starts its 30 minutes as it takes the request, at some moment between the send and the answer, so the
+  // session has surely ended 30 minutes after the answer came, with 5 seconds more for the clocks' drift (A61).
+  it('has the session surely ended 30:05 after the latest accepted answer came, or at once on a 401', async () => {
+    start();
+    await at('10:00');
+    server = after(9_000, answer(200));
+    const request = api('/api/today');
+    await at('10:09');
+    await request;
+
+    await at('40:00');
+    expect(getPhase()).toBe('expired');
+    expect(untilSessionSurelyEnded()).toBe(14_000);
+    await at('40:13');
+    expect(untilSessionSurelyEnded()).toBe(1_000);
+    await at('40:14');
+    expect(untilSessionSurelyEnded()).toBe(0);
+    await at('50:00');
+    expect(untilSessionSurelyEnded()).toBe(0);
+
+    server = answer(200);
+    await api('/api/today');
+    expect(untilSessionSurelyEnded()).toBe(since('30:05'));
+    server = answer(401);
+    await api(mePath).catch(() => {});
+    expect(untilSessionSurelyEnded()).toBe(0);
   });
 
   // A clock in a warning phase, one expired at 30:00, and one that a 401 ended, each with when it warns once a request

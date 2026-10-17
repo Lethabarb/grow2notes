@@ -9,9 +9,18 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 ## Before you start
 
 - Test holds made-up data only (A35): made-up names, such as `Sample Support Services` and `Alex Sample`, and a new
-  `example.org` address for each account, such as `alex.sample.20261013@example.org`.
-- Have ready: a laptop with Chrome and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
-  Authenticator or Microsoft Authenticator), and the Azure portal signed in with your own account.
+  `example.org` address for each account that `admin bootstrap` creates, such as `alex.sample.20261013@example.org`.
+  An account invited from the Users screen gets its setup link by email instead, which an `example.org` address never
+  receives, so it gets a new address at a mailbox kept only for testing; if the mailbox takes `+` tags, as Gmail and
+  Outlook.com do, `name+20261015c@…` gives each account its own.
+- Test sends that email from an Azure-managed domain, which allows 5 emails a minute and 10 an hour for the whole
+  subscription, with no way to raise either. An invite or a resend over that says "Not sent: something went wrong. Try
+  again." and changes nothing: wait a minute, or until the hour is up, and press again. Steps 12 and 17 send five
+  between them.
+- Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
+  Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
+  your own account. Let each browser keep the name and email address it already offers on forms of your own, as
+  steps 12, 13 and 18 check that Invite user offers neither.
 - In Chrome, open the developer tools on the Network panel, with **Preserve log** on, before each step that names a
   request.
 - Write down each step's time and result (passed, or what you saw) for the developer, who records them in the
@@ -59,19 +68,33 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 11. Leave Today untouched for 28 minutes, in front and with the screen kept awake. Look for: the warning opens with
     focus on Stay signed in; NVDA says "You'll be signed out in 2 minutes", "dialog" and Stay signed in; left open, its
     sentence changes at 29:00, 29:20 and 29:40. Before 30:00 press Stay signed in. Look for `POST /api/auth/ping`
-    answering `204`, the warning closing and focus back where it was. Then sign out as in step 7. (S00.04.07; its
-    screen-reader spot check.)
+    answering `204`, the warning closing and focus back where it was. Then choose Manage, Users and Invite user, type a
+    made-up name and address, and leave the page untouched for 31 minutes. Look for: at 30:00, "You've been signed
+    out" in the form's place, at the same address, with no nav or Account, and NVDA saying "You've been signed out,
+    heading level 1"; then, after Sign in with a passkey, Invite user again, with what you typed, NVDA on its heading
+    and the address unchanged. Sign out as in step 7. (S00.04.07 and S00.04.08; their screen-reader spot checks, and
+    the session that the app itself ends after 30 idle minutes.)
 
 ### The second account: a password and an authenticator app
 
-12. Until Invite user is in test (S00.06.02), run `admin bootstrap` once more, as in steps 1 to 3, for a second
-    made-up organisation and manager (account B), with a new `example.org` address, and leave the console open. The
-    organisation stays in test for good, as every test organisation does.
-13. Open account B's link in Chrome on the laptop, with NVDA running. Choose Use a password and authenticator app,
-    create a password, then scan the QR code with the phone's authenticator app and enter its 6-digit code. Look for:
-    setup ends on Today, and NVDA reads views D to G as sign-in.md's *Accessibility checklist* says. Reopen the link and
-    look for "This link has expired", then close the console as in step 5, and sign out as in step 7. (S00.04.03's and
-    S00.04.05's screen-reader spot checks, handed to F00.04's feature check.)
+12. Sign in as account A with Sign in with a passkey, then choose Manage, Users and Invite user, with NVDA running.
+    Look for: the page titled "Grow2Notes – Invite user", with Worker chosen; clicking into Name and then Email
+    address fills in nothing by itself and offers none of your own names or addresses, a list of suggestions being
+    acceptable only if nothing is filled in until you choose from it; and NVDA reading each field's label and hint,
+    then "Role, group" and "Worker, radio button, checked, 1 of 2, Writes notes and reads past notes". Press Send
+    invite with both fields empty, and look for NVDA saying "There is a problem, heading level 2", then the two
+    messages as links. Then invite account B, a manager, with a made-up name and a new address at the testing mailbox
+    (*Before you start*), and look for: the Users list with NVDA saying "Users, heading level 1", no banner, and B's
+    row read, as you tab to it, as its name, "link", its address, "Invited" and "Manager". Sign out as in step 7.
+    (S00.06.02, the first invite in test; users.md AC17 in Chrome, and its screen-reader pass over Invite user.)
+13. Open account B's email in the testing mailbox and follow its link in Chrome on the laptop, with NVDA running.
+    Choose Use a password and authenticator app, create a password, then scan the QR code with the phone's
+    authenticator app and enter its 6-digit code. Look for: setup ends on Today, and NVDA reads views D to G as
+    sign-in.md's *Accessibility checklist* says. Follow the email's link once more and look for "This link has
+    expired", then sign out as in step 7. Then, in Edge, sign in as account B with email, password and a 6-digit code,
+    choose Manage, Users and Invite user, and click into Name and then Email address: look for the same as in step 12,
+    nothing filled in by itself. Sign out. (S00.04.03's and S00.04.05's screen-reader spot checks, handed to F00.04's
+    feature check; users.md AC17 in Edge.)
 14. On the iPhone, with VoiceOver on, sign in as account B with email, password and a 6-digit code. Look for Today,
     and VoiceOver reading the sign-in page and the code step as sign-in.md's *Accessibility checklist* says. Sign out
     with Sign out. (S00.04.05; F00.04's feature check, the phone, and the second sign-in on the password path.)
@@ -96,16 +119,31 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     and one "Password sign-in with an unknown email" entry holding no address, and no `400`, `415` or `5xx` on
     `/api/auth/*`, and no exception. (S00.04.05.)
 
-### Later, once Invite user is in test
+### More accounts, invited from Users
 
 17. F00.04's feature check also asks for a worker on each setup path, and for a manager's passkey on a phone, since
     account A's is on the laptop, each setting up and signing in a second time on a phone and a laptop. As account A,
-    invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a new made-up
-    `example.org` address, with the setup link as S00.02.07 and S00.06.02 make it reach a made-up address in test.
-18. On the iPhone, with VoiceOver on, set up account C and one worker with Use a passkey (recommended), and the other
-    worker with Use a password and authenticator app, typing the setup key into the phone's authenticator app. Look
-    for: each setup ends on Today, and VoiceOver reads views D to G as sign-in.md's *Accessibility checklist* says.
-    Sign each out with Sign out. (F00.04's feature check: setup on the phone, and its VoiceOver pass over views D to G.)
+    invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a made-up name and
+    a new address at the testing mailbox (*Before you start*). Open the first invite's email on the laptop, leaving its
+    link for step 18. Look for: it arrives within 5 minutes (look in junk too, and say which folder it was in), from a
+    `DoNotReply@…azurecomm.net` address, with the subject "Set up your Grow2Notes sign-in"; its text names Grow2Notes
+    and no other organisation, product or person, and holds one link, of the form
+    `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and its headers (Show original in Gmail, View
+    message source in Outlook.com) show `spf=pass`, `dkim=pass` and `dmarc=pass` in `Authentication-Results`.
+    (S00.02.07's third criterion, and its first seen in test.) Then, with NVDA running, open the second worker's page
+    from Users and press Resend invite. Look for: NVDA saying "Setup link sent to", the worker's address, the time
+    and "The old link no longer works.", with focus left on Resend invite; and a second email to that worker within 5
+    minutes, whose link step 18 follows in place of the first one's. (S00.06.03, the first resend in test; users.md's
+    screen-reader pass over Resend invite.)
+18. On the iPhone, with VoiceOver on, open each of the three invites' emails in the testing mailbox and follow its
+    setup link. Set up account C and one worker with Use a passkey (recommended), and the other worker with Use a
+    password and authenticator app, typing the setup key into the phone's authenticator app. Look for: each setup
+    ends on Today, and VoiceOver reads views D to G as sign-in.md's *Accessibility checklist* says. Then, as account C
+    in Safari, choose Manage, Users and Invite user, and look for the same as in step 12: nothing filled in by itself
+    in Name or Email address, and VoiceOver reading the fields, the Role radios and, after Send invite with both
+    fields empty, the summary as step 12 lists them. Sign each out with Sign out. (F00.04's feature check: setup on
+    the phone, and its VoiceOver pass over views D to G; users.md AC17 in Safari, and its VoiceOver pass over Invite
+    user.)
 19. Sign each of the three in a second time on the laptop: the passkey ones with Sign in with a passkey, choosing the
     iPhone when Chrome offers it, and the password worker with email, password and a 6-digit code. Look for Today each
     time, then sign out as in step 7, and repeat step 15's query for their `auth.setup_completed` and

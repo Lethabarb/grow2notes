@@ -102,6 +102,25 @@ describe('FieldGroup', () => {
     ]);
   });
 
+  it('puts the label in an <h2> at heading level 2, under the page\'s own <h1>', () => {
+    render(
+      <FieldGroup fieldId="code" label="Enter the code" labelIsHeading headingLevel={2} hint="From the app">
+        <input id="code" type="text" />
+      </FieldGroup>,
+    );
+    const heading = screen.getByRole('heading', { level: 2, name: 'Enter the code' });
+
+    expect(screen.queryByRole('heading', { level: 1 })).not.toBeInTheDocument();
+    expect(heading).not.toHaveAttribute('id');
+    expect(heading).not.toHaveAttribute('tabindex');
+    expect(heading.firstElementChild).toBe(screen.getByText('Enter the code', { selector: 'label' }));
+    expect(Array.from(groupOf(heading).children)).toEqual([
+      heading,
+      screen.getByText('From the app'),
+      screen.getByLabelText('Enter the code'),
+    ]);
+  });
+
   it("describes a group's fieldset by only the parts it has", () => {
     const { rerender } = render(<RoleField />);
     const fieldset = screen.getByRole('group', { name: 'Role' });

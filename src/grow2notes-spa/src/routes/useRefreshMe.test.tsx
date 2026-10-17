@@ -7,7 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { getPhase, subscribe, type Phase } from '../api/session.ts';
+import { fullPageLoad } from './fullPageLoad.ts';
 import { routes } from './routes.tsx';
+
+// jsdom does not navigate, so the reload for another person is a mock that the tests read.
+vi.mock('./fullPageLoad.ts');
 
 const mePath = '/api/auth/me';
 
@@ -163,6 +167,7 @@ beforeEach(() => {
 afterEach(() => {
   focusManager.setFocused(undefined);
   fetchMock.mockReset();
+  vi.mocked(fullPageLoad).mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -239,7 +244,6 @@ describe('the refresh of /api/auth/me', () => {
   it.each([
     { failure: 'no connection', answer: noConnection },
     { failure: 'a 503', answer: problem(503) },
-    { failure: 'a 401', answer: problem(401) },
   ])(
     'leaves the screen, the nav, the title and focus as they were after $failure, and writes to no status region',
     async ({ answer }) => {
@@ -269,6 +273,34 @@ describe('the refresh of /api/auth/me', () => {
       expect(stopWatching()).toEqual([]);
     },
   );
+
+  // A 401 has ended the session (app-shell.md *Window regains focus*).
+  it('shows the signed-out-in-place view after a 401, at the same address, over the screen as it was', async () => {
+    server = answerWith(manager);
+    const { client, router } = renderApp('/');
+    await wait(0);
+    const heading = pageHeading();
+    const { location } = router.state;
+    within(nav()).getByRole('link', { name: 'Report' }).focus();
+
+    server = problem(401);
+    act(focusWindow);
+    // Long enough for a retry, which a 4xx never gets.
+    await wait(60_000);
+
+    expect(meRequests()).toBe(2);
+    expect(client.getQueryState(meQuery.queryKey)).toMatchObject({ status: 'error', fetchStatus: 'idle' });
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(pageHeading()).toHaveFocus();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Account' })).not.toBeInTheDocument();
+    expect(router.state.location).toBe(location);
+    // Today's heading, the same element, hidden with its screen.
+    expect(heading).toBeInTheDocument();
+    expect(heading.closest('[hidden]')).not.toBeNull();
+    expect(heading).toHaveAccessibleName(`Today, Thursday 1${nbsp}October`);
+  });
 
   it.each([
     { failure: 'a 401', answer: problem(401), sent: 2 },
@@ -352,22 +384,23 @@ describe('the refresh of /api/auth/me', () => {
   });
 
   it.each([
-    { from: worker, to: manager, before: ['Today'], after: ['Today', 'Flagged', 'Report', 'Manage'] },
-    { from: manager, to: worker, before: ['Today', 'Flagged', 'Report', 'Manage'], after: ['Today'] },
-  ])('rebuilds the nav at once for a $from.role made a $to.role', async ({ from, to, before, after }) => {
+    { from: worker, to: 'Manager', before: ['Today'], after: ['Today', 'Flagged', 'Report', 'Manage'] },
+    { from: manager, to: 'Worker', before: ['Today', 'Flagged', 'Report', 'Manage'], after: ['Today'] },
+  ] as const)('rebuilds the nav at once for a $from.role made a $to', async ({ from, to, before, after }) => {
     server = answerWith(from);
     const { router } = renderApp('/');
     await wait(0);
     const { location } = router.state;
     expect(navItems()).toEqual(before);
 
-    server = answerWith(to);
+    server = answerWith({ ...from, role: to });
     act(focusWindow);
     await wait(0);
 
     expect(navItems()).toEqual(after);
     expect(currentItems()).toEqual(['Today page']);
     expect(router.state.location).toBe(location);
+    expect(fullPageLoad).not.toHaveBeenCalled();
   });
 
   it('shows a manager made a worker Page not found on /manage', async () => {
@@ -377,7 +410,7 @@ describe('the refresh of /api/auth/me', () => {
     const { location } = router.state;
     expect(pageHeading()).toHaveAccessibleName('Manage');
 
-    server = answerWith(worker);
+    server = answerWith({ ...manager, role: 'Worker' });
     act(focusWindow);
     await wait(0);
 
@@ -387,6 +420,23 @@ describe('the refresh of /api/auth/me', () => {
     expect(navItems()).toEqual(['Today']);
     expect(currentItems()).toEqual([]);
     expect(router.state.location).toBe(location);
+    expect(fullPageLoad).not.toHaveBeenCalled();
+  });
+
+  // A sign-in in another tab of the same browser, by someone else, whose cookie the refresh went with (T01's Notes).
+  it('loads the page afresh, once, when a refresh answers for another person', async () => {
+    server = answerWith(manager);
+    renderApp('/manage');
+    await wait(0);
+
+    server = answerWith(worker);
+    act(focusWindow);
+    await wait(0);
+    act(focusWindow);
+    await wait(0);
+
+    expect(meRequests()).toBe(3);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
   });
 });
 
@@ -427,5 +477,55 @@ describe('the session clock', () => {
     expect(getPhase()).toBe('active');
     expect(told).toEqual(['warn-2m', 'active']);
     unsubscribe();
+  });
+
+  /** Renders the worker's Today, and hides the page for 31 minutes, with no request sent. */
+  async function hideTodayFor31Minutes() {
+    server = answerWith(worker);
+    renderApp('/');
+    await wait(0);
+    act(() => {
+      becomes('hidden');
+    });
+    await wait(31 * 60_000);
+  }
+
+  // app-shell.md *Session*: "Hidden for 31 minutes, then visible: no warning flashes; the /me result decides".
+  it("after 31 minutes hidden, shows the signed-out view for the refresh's 401, with no warning first", async () => {
+    await hideTodayFor31Minutes();
+    const heading = pageHeading();
+
+    server = problem(401);
+    act(() => {
+      becomes('visible');
+    });
+    await wait(0);
+
+    expect(meRequests()).toBe(2);
+    expect(document.querySelector('dialog')).not.toHaveAttribute('open');
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(pageHeading()).toHaveFocus();
+    expect(heading.closest('[hidden]')).not.toBeNull();
+    expect(document.title).toBe('Grow2Notes – Sign in');
+  });
+
+  it("after 31 minutes hidden, leaves the screen as it was for the refresh's 200, with no warning", async () => {
+    await hideTodayFor31Minutes();
+    const heading = pageHeading();
+    const navigation = nav();
+    const stopWatching = watchStatusRegions();
+
+    act(() => {
+      becomes('visible');
+    });
+    await wait(0);
+
+    expect(meRequests()).toBe(2);
+    expect(document.querySelector('dialog')).not.toHaveAttribute('open');
+    expect(pageHeading()).toBe(heading);
+    expect(heading.closest('[hidden]')).toBeNull();
+    expect(nav()).toBe(navigation);
+    expect(document.title).toBe('Grow2Notes – Today');
+    expect(stopWatching()).toEqual([]);
   });
 });

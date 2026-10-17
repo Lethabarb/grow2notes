@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { manager, type Me } from './me.ts';
 
 /** A user as `GET /api/admin/users` lists them (design.md §6.6). */
@@ -69,4 +69,78 @@ export async function serveUsers(page: Page, users: readonly AdminUser[]): Promi
  */
 export async function failUsers(page: Page): Promise<void> {
   await page.route('**/api/admin/users', (route) => route.abort('internetdisconnected'));
+}
+
+/** How a test answers Invite user's `POST /api/admin/users`: a status, with a problem's members, or no connection. */
+export type InviteAnswer = { status: number; problem?: Record<string, unknown> } | 'no connection';
+
+/** Answers a request as `answer` says: with that status and an RFC 9457 problem, or, for no connection, not at all. */
+async function answerWith(route: Route, answer: InviteAnswer): Promise<void> {
+  if (answer === 'no connection') {
+    await route.abort('internetdisconnected');
+    return;
+  }
+
+  // An RFC 9457 problem, as the API answers a failure (design.md §6.1).
+  const problem = { type: 'about:blank', title: 'Problem', status: answer.status, ...answer.problem };
+  await route.fulfill({
+    status: answer.status,
+    contentType: 'application/problem+json',
+    body: JSON.stringify(problem),
+  });
+}
+
+/**
+ * Answers each `POST /api/admin/users` that the page sends from now on, in the browser, as `answer` says, so that the
+ * invite never reaches the app, and passes every other request on to the routes before it, such as `serveUsers`'s.
+ * Call it after them, as Playwright tries the latest route first.
+ */
+export async function answerInvites(page: Page, answer: InviteAnswer): Promise<void> {
+  await page.route('**/api/admin/users', async (route) => {
+    await (route.request().method() === 'POST' ? answerWith(route, answer) : route.fallback());
+  });
+}
+
+/** The pattern of Resend invite's `POST /api/admin/users/{id}/setup-link`, for any user. */
+export const setupLinks = '**/api/admin/users/*/setup-link';
+
+/**
+ * How a test answers Resend invite: the app's `204` sent at `sentAt`, its `Date` header, such as "Wed, 14 Oct 2026
+ * 05:12:00 GMT", from which the page takes the time; or as an invite is answered.
+ */
+export type SetupLinkAnswer = { sentAt: string } | InviteAnswer;
+
+/**
+ * Answers each Resend invite that the page sends from now on, in the browser, as `answer` says, so that none reaches
+ * the app. A later call overrides it, as Playwright tries the latest route first.
+ */
+export async function answerSetupLinks(page: Page, answer: SetupLinkAnswer): Promise<void> {
+  await page.route(setupLinks, async (route) => {
+    if (typeof answer === 'object' && 'sentAt' in answer) {
+      await route.fulfill({ status: 204, headers: { Date: answer.sentAt } });
+    } else {
+      await answerWith(route, answer);
+    }
+  });
+}
+
+/**
+ * Holds the page's next `POST /api/admin/users` until the test lets it go on to the app, as `holdNext` holds a request
+ * (requests.ts), and passes every other request on. Gives a function that waits for the invite and gives its route.
+ */
+export async function holdNextInvite(page: Page): Promise<() => Promise<Route>> {
+  let hold: (route: Route) => void = () => undefined;
+  const held = new Promise<Route>((resolve) => {
+    hold = resolve;
+  });
+  let holding = true;
+  await page.route('**/api/admin/users', async (route) => {
+    if (holding && route.request().method() === 'POST') {
+      holding = false;
+      hold(route);
+    } else {
+      await route.fallback();
+    }
+  });
+  return () => held;
 }

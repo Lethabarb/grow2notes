@@ -106,7 +106,7 @@ function recordRequests(page: Page): () => Promise<string[]> {
   };
 }
 
-test('the warning opens at 28:00 over the page, counts down, closes on its ping, and at 30:00 sends nothing', async ({
+test('warns from 28:00 to its ping; at 30:00 view C shows, sending nothing, until a live session’s refresh', async ({
   page,
   invite,
   authenticator,
@@ -184,15 +184,43 @@ test('the warning opens at 28:00 over the page, counts down, closes on its ping,
   expect(await sentSince()).toEqual(['POST /api/auth/ping']);
 
   // Left alone, it closes at 30:00, as the session has ended, with no request sent at any mark, as one would extend the
-  // session (session-timeout.md *The session clock*). The signed-out view that then shows is S00.04.08's.
+  // session (session-timeout.md *The session clock*), and the signed-out view shows in place of Today, with focus on
+  // its <h1> (app-shell.md *Session*).
   idle.restart();
   await idle.runTo('28:00');
   await expect(warning(page)).toBeVisible();
   await idle.runTo('29:59');
   await expect(warning(page)).toBeVisible();
+  expect(await sentSince()).toEqual([]);
   await idle.runTo('30:00');
   await expect(warning(page)).toBeHidden();
+  const pageHeading = page.getByRole('main').getByRole('heading', { level: 1 });
+  await expect(pageHeading).toHaveText('You’ve been signed out');
+  await expect(pageHeading).toBeFocused();
+  await expect(page).toHaveTitle('Grow2Notes – Sign in');
+  await expect(page).toHaveURL('/');
+  await expect(nav(page)).toHaveCount(0);
   expect(await sentSince()).toEqual([]);
+
+  // It asks for passkey options, as sign-in does, but only once the app has surely ended the session, 30:05 after the
+  // ping's answer came by the page's clock, which is paused, so that the ping went and came at the same moment: a
+  // request with the session cookie before then could reach the app inside its 30 minutes and renew them (A61).
+  await idle.runTo('30:04');
+  expect(await sentSince()).toEqual([]);
+  await idle.runTo('30:05');
+  expect(await sentSince()).toEqual(['POST /api/auth/passkey/options']);
+
+  // The app's own clock has barely moved, so the session is alive, as when another tab kept it: the window's focus
+  // refreshes /api/auth/me, whose 200 brings Today back as it was, with focus on its <h1> (session-timeout.md
+  // *Behaviour* 5).
+  const refreshed = page.waitForResponse(isMe);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  expect((await refreshed).status()).toBe(200);
+  await expect(pageHeading).toContainText('Today');
+  await expect(pageHeading).toBeFocused();
+  await expect(page).toHaveTitle('Grow2Notes – Today');
+  await expect(todayLink(page)).toBeVisible();
+  expect(await sentSince()).toEqual(['GET /api/auth/me']);
 });
 
 test('Tab and Shift+Tab take focus from Stay signed in out of the page and back, never behind the warning', async ({

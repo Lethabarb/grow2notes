@@ -39,6 +39,9 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
 
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         Assert.EndsWith(Environment.NewLine, run.Output, StringComparison.Ordinal);
+
+        // The link alone: with no Email:Endpoint, the binary's email sender writes to standard output, so an email
+        // sent would be there too.
         var setupLink = Assert.Single(run.Output.Split(Environment.NewLine)[..^1]);
         await using var scope = factory.Services.CreateAsyncScope();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

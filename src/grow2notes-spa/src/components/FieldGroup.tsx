@@ -25,6 +25,7 @@ type FieldGroupProps = {
        */
       group: true;
       labelIsHeading?: never;
+      headingLevel?: never;
     }
   | {
       group?: false;
@@ -33,6 +34,11 @@ type FieldGroupProps = {
        * (GOV.UK's label as page heading; sign-in.md components 7 and 10).
        */
       labelIsHeading?: boolean;
+      /**
+       * With `labelIsHeading`, 2 for an `<h2>` in place of the `<h1>`, under another `<h1>`: sign-in's code step in the
+       * signed-out-in-place view, whose headings drop a level (app-shell.md component 7).
+       */
+      headingLevel?: 1 | 2;
     }
 );
 
@@ -47,6 +53,7 @@ export function FieldGroup({
   label,
   group = false,
   labelIsHeading = false,
+  headingLevel = 1,
   hint,
   error,
   children,
@@ -68,9 +75,10 @@ export function FieldGroup({
         {label}
       </label>
     );
+    const heading = headingLevel === 1 ? <PageHeading>{labelElement}</PageHeading> : <h2>{labelElement}</h2>;
     return (
       <div className={styles.group} data-invalid={invalid || undefined}>
-        {labelIsHeading ? <PageHeading>{labelElement}</PageHeading> : labelElement}
+        {labelIsHeading ? heading : labelElement}
         {parts}
       </div>
     );

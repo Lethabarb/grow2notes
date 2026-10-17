@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using Azure.Identity;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Azure.Monitor.OpenTelemetry.Exporter;
@@ -47,7 +46,7 @@ public sealed class TelemetryTests
 
         Assert.Equal(ConnectionString, azureMonitor.ConnectionString);
         var credential = Assert.IsType<ManagedIdentityCredential>(azureMonitor.Credential);
-        Assert.Equal($"ClientId {ClientId}", IdentityOf(credential));
+        Assert.Equal($"ClientId {ClientId}", ManagedIdentities.IdentityOf(credential));
     }
 
     [Fact]
@@ -156,15 +155,5 @@ public sealed class TelemetryTests
     {
         using var services = ServicesWith(settings);
         return services.GetRequiredService<IOptions<AzureMonitorOptions>>().Value;
-    }
-
-    // ManagedIdentityCredential does not say publicly which identity it signs in as. Its internal ManagedIdentityId
-    // does, in ToString, so this reads that; if an Azure.Core or Azure.Identity update moves it, the test fails rather
-    // than passing unchecked.
-    private static string? IdentityOf(ManagedIdentityCredential credential)
-    {
-        const BindingFlags Internal = BindingFlags.Instance | BindingFlags.NonPublic;
-        var client = typeof(ManagedIdentityCredential).GetProperty("Client", Internal)?.GetValue(credential);
-        return client?.GetType().GetProperty("ManagedIdentityId", Internal)?.GetValue(client)?.ToString();
     }
 }

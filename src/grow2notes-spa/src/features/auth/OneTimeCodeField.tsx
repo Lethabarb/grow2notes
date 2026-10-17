@@ -7,6 +7,8 @@ type OneTimeCodeFieldProps = {
   label: string;
   /** The label is the page's `<h1>`, as on sign-in's code step, whose one question is this field (view B). */
   labelIsHeading?: boolean;
+  /** With `labelIsHeading`, 2 for an `<h2>`, as on the code step in the signed-out-in-place view (view C). */
+  headingLevel?: 1 | 2;
   hint: string;
   /** The field's message once a submit has found one, or the server has refused the code. */
   error?: string;
@@ -21,9 +23,25 @@ type OneTimeCodeFieldProps = {
  * a phone's number pad. It has no `maxLength`, which would cut a pasted "123 456" short, no `pattern`, which would
  * refuse its space, and no placeholder, which could pass for a code, and its form never submits by itself.
  */
-export function OneTimeCodeField({ id, label, labelIsHeading, hint, error, value, onChange }: OneTimeCodeFieldProps) {
+export function OneTimeCodeField({
+  id,
+  label,
+  labelIsHeading,
+  headingLevel,
+  hint,
+  error,
+  value,
+  onChange,
+}: OneTimeCodeFieldProps) {
   return (
-    <FieldGroup fieldId={id} label={label} labelIsHeading={labelIsHeading} hint={hint} error={error}>
+    <FieldGroup
+      fieldId={id}
+      label={label}
+      labelIsHeading={labelIsHeading}
+      headingLevel={headingLevel}
+      hint={hint}
+      error={error}
+    >
       <input
         id={id}
         name={id}

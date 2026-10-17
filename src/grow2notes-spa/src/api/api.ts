@@ -1,4 +1,4 @@
-import { holdWhile, requestAccepted, sessionEnded } from './session.ts';
+import { holdWhile, requestAccepted, sessionEnded, signedIn, signInCount } from './session.ts';
 
 /** A `422`'s field errors (design.md §6.1), each keyed by the field's name in the request's JSON. */
 export type FieldErrors = Readonly<Record<string, readonly string[]>>;
@@ -56,7 +56,12 @@ const signIns = new Set([
 // promise of its request, so that changes sent together wait on one request.
 let antiforgeryToken: Promise<string> | undefined;
 
-type Answer = { response: Response; text: string };
+type Answer = {
+  response: Response;
+  text: string;
+  /** `signInCount()` as the request went, which says which session cookie it carried. */
+  signInsWhenSent: number;
+};
 
 // A `2xx` answer: its JSON, or nothing when it has no body, and its headers.
 type Reply<T> = { body: T; headers: Headers };
@@ -119,18 +124,21 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
       timeoutMs,
       signal,
     );
-  const { response, text } = method === 'GET' ? await send() : await sendChange(send);
+  const { response, text, signInsWhenSent } = method === 'GET' ? await send() : await sendChange(send);
 
   if (response.ok) {
     if (signIns.has(path)) {
       antiforgeryToken = undefined;
+      signedIn();
     }
 
     // Several writes answer a bare 200 or 201 with no body (design.md §6.6), on which `response.json()` would throw.
     return { body: (text === '' ? undefined : JSON.parse(text)) as T, headers: response.headers };
   }
 
-  if (response.status === 401 && endsSession(path)) {
+  // Not for a request sent before the newest sign-in, which went with the cookie from before, so that its 401 neither
+  // ends the clock nor shows the signed-out view over the new session (T01's Notes).
+  if (response.status === 401 && endsSession(path) && signInsWhenSent === signInCount()) {
     sessionEnded();
   }
 
@@ -243,6 +251,7 @@ async function exchange(
     // The send time, not the answer's, as the server's 30 minutes start no earlier, so that a request that renewed the
     // session can make the clock end early but never late (session-timeout.md *The session clock* step 1).
     const sentAt = Date.now();
+    const signInsWhenSent = signInCount();
     const response = await fetch(path, { ...init, signal: controller.signal });
     // Counted once its head has come, whatever the body does: the session check runs before the endpoint and renews
     // the session cookie in the head (design.md §8.4), so a 5xx counts too. A 5xx that renewed nothing, from App
@@ -252,7 +261,7 @@ async function exchange(
       requestAccepted(sentAt);
     }
 
-    return { response, text: await response.text() };
+    return { response, text: await response.text(), signInsWhenSent };
   } catch (error) {
     if (signal?.aborted) {
       throw error;

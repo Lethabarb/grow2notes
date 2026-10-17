@@ -9,6 +9,7 @@ let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
 let isNotFound: typeof ApiModule.isNotFound;
 let onSessionEnded: typeof SessionModule.onSessionEnded;
+let signInCount: typeof SessionModule.signInCount;
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -125,7 +126,7 @@ function listen() {
 beforeEach(async () => {
   vi.resetModules();
   ({ api, apiWithHeaders, ApiError, classify, isNotFound } = await import('./api.ts'));
-  ({ onSessionEnded } = await import('./session.ts'));
+  ({ onSessionEnded, signInCount } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -366,6 +367,60 @@ describe('api', () => {
 
       expect(kept).toHaveBeenCalledOnce();
       expect(removed).not.toHaveBeenCalled();
+    });
+
+    // It went with the cookie from before, so its 401 says nothing of the session that the sign-in started.
+    it('is not raised by a 401 to a request sent before the newest sign-in, which lands after it', async () => {
+      const ended = listen();
+      let answerRefresh: (answer: Response) => void = () => {};
+      fetchMock.mockImplementation((path) => {
+        if (path === antiforgeryPath) {
+          return Promise.resolve(tokenAnswer('token-1'));
+        }
+
+        return path === '/api/auth/me'
+          ? new Promise((resolve) => {
+            answerRefresh = resolve;
+          })
+          : Promise.resolve(json(200, { userId: '7d1c' }));
+      });
+      const refresh = api('/api/auth/me');
+
+      await api('/api/auth/login/totp', { method: 'POST', body: { code: '123456' } });
+      answerRefresh(problem(401));
+
+      await expect(refresh).rejects.toStrictEqual(new ApiError(401));
+      expect(ended).not.toHaveBeenCalled();
+
+      // One sent after the sign-in is heard.
+      fetchMock.mockResolvedValueOnce(problem(401));
+      await expect(api('/api/auth/me')).rejects.toStrictEqual(new ApiError(401));
+      expect(ended).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe('the sign-in count', () => {
+    it.each(['/api/auth/login/totp', '/api/auth/passkey', '/api/auth/setup/password', '/api/auth/setup/passkey'])(
+      'goes up by one for a 2xx from %s, as it answers',
+      async (path) => {
+        const before = signInCount();
+        serve(json(200, { userId: '7d1c' }));
+
+        await api(path, { method: 'POST', body: {} });
+
+        expect(signInCount()).toBe(before + 1);
+      },
+    );
+
+    it('stays for a sign-in refused, for the password step and for any other request', async () => {
+      const before = signInCount();
+      serve(problem(401), json(200, { next: 'totp' }), json(200, { userId: '7d1c' }));
+
+      await expect(api('/api/auth/passkey', { method: 'POST', body: {} })).rejects.toStrictEqual(new ApiError(401));
+      await api('/api/auth/login', { method: 'POST', body: {} });
+      await api('/api/auth/me');
+
+      expect(signInCount()).toBe(before);
     });
   });
 

@@ -1,4 +1,6 @@
 using System.Net;
+using Grow2Notes.Web.Platform.Email;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Fixtures;
 
@@ -14,5 +16,11 @@ public sealed class Grow2NotesFactoryTests(Grow2NotesFactory factory) : IClassFi
         using var response = await client.GetAsync("/healthz/ready", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public void Records_each_email_in_place_of_sending_it()
+    {
+        Assert.IsType<RecordingEmailSender>(factory.Services.GetRequiredService<IEmailSender>());
     }
 }

@@ -1,0 +1,69 @@
+/*
+ * A radio's row (users.md component B item 6), drawn as checkbox-list.md draws its tick box: a native radio with
+ * appearance: none, never display: none, which would take it out of the accessibility tree, and never accent-color,
+ * whose mark is faint on Chrome for Android and older Safari (form-validation.md). The circle and its dot are borders,
+ * which forced colours keep, where they would drop a background.
+ */
+.choice + .choice {
+  margin-block-start: var(--space-2);
+}
+
+/* The whole row is the label: 40 px circle and 8 px above and below make it 56 px tall (foundations.md). */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-block-size: var(--target-row);
+  padding-block: var(--space-2);
+  cursor: pointer;
+  /* No double-tap zoom wait on a phone, as GOV.UK's radios have. */
+  touch-action: manipulation;
+}
+
+/* Only where a pointer can hover, so that a tap on a phone does not leave a tint stuck. */
+@media (hover: hover) {
+  .row:hover {
+    background: var(--colour-hover);
+  }
+}
+
+/* Sized in rem, so that it grows with the reader's text size; base.css draws its focus ring. */
+.radio {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  margin: 0;
+  border: var(--border-control) solid currentColor;
+  border-radius: 50%;
+  background: var(--colour-surface);
+  cursor: pointer;
+}
+
+/* The dot, a 20 px circle of border alone, shown only when chosen, with no transition. */
+.radio::before {
+  content: "";
+  border: 0.625rem solid currentColor;
+  border-radius: 50%;
+  visibility: hidden;
+}
+
+.radio:checked::before {
+  visibility: visible;
+}
+
+/* The first line centred on the circle; a longer label wraps under it rather than past the row (SC 1.4.10). */
+.text {
+  padding-block-start: max(0px, (2.5rem - 1lh) / 2);
+  overflow-wrap: anywhere;
+}
+
+/* Under the label's text, lined up with it, in the hint's size and colour (form-validation.md *Anatomy*). */
+.hint {
+  margin: 0;
+  padding-inline-start: calc(2.5rem + var(--space-3));
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}

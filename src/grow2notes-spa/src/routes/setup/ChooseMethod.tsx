@@ -139,7 +139,7 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
     <div className={styles.view}>
       <PageHeading>{pageName.setUpYourAccount}</PageHeading>
       <dl className={styles.account}>
-        <dt>{strings.setup.name}</dt>
+        <dt>{strings.name}</dt>
         <dd>{account.displayName}</dd>
         <dt>{strings.emailAddress}</dt>
         <dd>{account.email}</dd>

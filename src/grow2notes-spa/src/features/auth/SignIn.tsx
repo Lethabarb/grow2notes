@@ -8,9 +8,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
+import { untilSessionSurelyEnded } from '../../api/session.ts';
 import { Button } from '../../components/Button.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
+import { signedOutHeadingId } from '../../components/focusPageHeading.ts';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
@@ -27,9 +29,12 @@ import { isRefusal, notSignedIn } from './signInFailure.ts';
 const requestOptions = () =>
   api<PublicKeyCredentialRequestOptionsJSON>('/api/auth/passkey/options', { method: 'POST' });
 
-// The fields' ids and names, by which password managers find them, so they stay the same across releases.
-const emailId = 'email';
-const passwordId = 'password';
+// The fields' ids and names, by which password managers find them, so they stay the same across releases. View C has
+// its own, as the page hidden under it may have a field with one of view A's, such as Invite user's email.
+const fieldIds = {
+  signIn: { email: 'email', password: 'password', code: 'code' },
+  signedOut: { email: 'signed-out-email', password: 'signed-out-password', code: 'signed-out-code' },
+} as const;
 
 /** The form's messages, one for each field in error. */
 type FieldErrors = { email?: string; password?: string };
@@ -43,7 +48,7 @@ function emailError(email: string): string | undefined {
     return strings.signIn.enterEmail;
   }
 
-  return /^[^@]+@[^@]+$/.test(email) ? undefined : strings.signIn.emailFormat;
+  return /^[^@]+@[^@]+$/.test(email) ? undefined : strings.emailFormat;
 }
 
 /**
@@ -58,14 +63,14 @@ function passwordError(password: string): string | undefined {
  * The summary's items: the A25 message, with no link, as it marks no field (sign-in.md component 2), then each field's
  * message, linked to its field, in the fields' order.
  */
-function summaryItems(failed: boolean, errors: FieldErrors): FormError[] {
+function summaryItems(failed: boolean, errors: FieldErrors, ids: { email: string; password: string }): FormError[] {
   const items: FormError[] = failed ? [{ message: strings.signIn.failed }] : [];
   if (errors.email !== undefined) {
-    items.push({ message: errors.email, fieldId: emailId });
+    items.push({ message: errors.email, fieldId: ids.email });
   }
 
   if (errors.password !== undefined) {
-    items.push({ message: errors.password, fieldId: passwordId });
+    items.push({ message: errors.password, fieldId: ids.password });
   }
 
   return items;
@@ -93,8 +98,15 @@ function isDismissal(error: unknown): boolean {
  * Identity keeps a passkey ceremony in the cookie that keeps the code step (S00.04.05's Notes), so the answer to a
  * request for passkey options must never come after a password is accepted: Continue sends the password once no such
  * request is on its way, none starts while the password is out, and none while B shows.
+ *
+ * `inPlace` makes it view C (sign-in.md; app-shell.md component 7), which the shell shows in place of a signed-in
+ * screen whose session has ended, with that screen hidden after it: "You’ve been signed out" and its sentence take A's
+ * `<h1>`'s place, over A's hint and controls, and stay over B, whose label is then an `<h2>`. The fields have ids of
+ * their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs out, it asks for its
+ * passkey options only once the server has surely ended the session (A61).
  */
-export function SignIn() {
+export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
+  const ids = inPlace ? fieldIds.signedOut : fieldIds.signIn;
   const queryClient = useQueryClient();
   const supported = browserSupportsWebAuthn();
   const options = useOneOptions(requestOptions);
@@ -118,19 +130,32 @@ export function SignIn() {
   const passwordOut = useRef<Promise<void>>(undefined);
   // False once the view has gone, after which nothing that ends, its prompt among them, says or fetches anything.
   const mounted = useRef(false);
+  // View C's wait before it asks for passkey options, which either press ends, as each then asks for what it needs.
+  const optionsWait = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     mounted.current = true;
-    if (supported) {
-      // A failure says nothing yet: a press fetches the options again, and says so if that fails too.
+    // A failure says nothing yet: a press fetches the options again, and says so if that fails too.
+    const prefetch = () => {
       options.prefetch().catch(() => {});
+    };
+    if (supported) {
+      // View C, shown as the session clock runs out, asks once the server has surely ended the session, as a request
+      // with its cookie before then would renew it under "You've been signed out"; after a 401 it asks at once (A61).
+      const wait = inPlace ? untilSessionSurelyEnded() : 0;
+      if (wait === 0) {
+        prefetch();
+      } else {
+        optionsWait.current = setTimeout(prefetch, wait);
+      }
     }
 
     return () => {
+      clearTimeout(optionsWait.current);
       mounted.current = false;
       cancelPasskey();
     };
-  }, [supported, options]);
+  }, [supported, options, inPlace]);
 
   /**
    * New passkey options, asked for once no password is out and only while A shows, or nothing once the view has gone
@@ -147,6 +172,8 @@ export function SignIn() {
 
   // Everything before its first await runs in the press itself.
   async function signIn() {
+    // Options that view C's wait then asked for would end the ceremony of the prompt that this press opens.
+    clearTimeout(optionsWait.current);
     const fresh = options.take();
     // With fresh options, the prompt opens straight from the press, with no await before it, as older iPhones refuse
     // a prompt that an awaited fetch has parted from its tap (sign-in.md *Interactions* step 2).
@@ -221,6 +248,9 @@ export function SignIn() {
     }
 
     setChecking(true);
+    // View C's wait ends here too, as no request for options may start while the password is out; a passkey press
+    // later asks for its own.
+    clearTimeout(optionsWait.current);
     passwordOut.current = sendPassword(sentEmail).finally(() => {
       passwordOut.current = undefined;
     });
@@ -280,13 +310,21 @@ export function SignIn() {
     }
   }
 
+  // View C's <h1>, which the shell focuses as the view shows, and its sentence, in place of A's <h1> and over B.
+  const signedOutHeading = inPlace ? (
+    <>
+      <PageHeading id={signedOutHeadingId}>{strings.signedOut.heading}</PageHeading>
+      <p>{strings.signedOut.sentence}</p>
+    </>
+  ) : undefined;
+
   return (
     <PageStatus>
       <div className={styles.view}>
         {passwordAcceptedAt === undefined ? (
           <>
-            <ErrorSummary errors={summaryItems(failed, fieldErrors)} attempt={attempt} />
-            <PageHeading>{pageName.signIn}</PageHeading>
+            <ErrorSummary errors={summaryItems(failed, fieldErrors, ids)} attempt={attempt} />
+            {signedOutHeading ?? <PageHeading>{pageName.signIn}</PageHeading>}
             <p className={styles.hint}>{strings.signIn.hint}</p>
             {supported ? (
               <>
@@ -310,17 +348,17 @@ export function SignIn() {
             {/* The passkey button is outside it, so that Enter in a field sends the form, never the prompt. */}
             <form noValidate className={styles.form} onSubmit={continueWithPassword}>
               <div className={styles.fields}>
-                <FieldGroup fieldId={emailId} label={strings.emailAddress} error={fieldErrors.email}>
+                <FieldGroup fieldId={ids.email} label={strings.emailAddress} error={fieldErrors.email}>
                   <input
-                    id={emailId}
-                    name={emailId}
+                    id={ids.email}
+                    name={ids.email}
                     type="email"
                     className={textInput.input}
                     autoComplete="username"
                     spellCheck={false}
                     autoCapitalize="none"
                     autoCorrect="off"
-                    aria-describedby={fieldErrors.email === undefined ? undefined : `${emailId}-error`}
+                    aria-describedby={fieldErrors.email === undefined ? undefined : `${ids.email}-error`}
                     aria-invalid={fieldErrors.email === undefined ? undefined : true}
                     value={email}
                     onChange={(event) => {
@@ -335,7 +373,7 @@ export function SignIn() {
                   />
                 </FieldGroup>
                 <PasswordInput
-                  id={passwordId}
+                  id={ids.password}
                   label={strings.signIn.password}
                   error={fieldErrors.password}
                   autoComplete="current-password"
@@ -355,7 +393,12 @@ export function SignIn() {
             </form>
           </>
         ) : (
-          <CodeStep passwordAcceptedAt={passwordAcceptedAt} onExpired={codeStepExpired} />
+          <CodeStep
+            codeId={ids.code}
+            heading={signedOutHeading}
+            passwordAcceptedAt={passwordAcceptedAt}
+            onExpired={codeStepExpired}
+          />
         )}
         <p className={styles.help}>{strings.signIn.help}</p>
       </div>

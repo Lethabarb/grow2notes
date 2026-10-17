@@ -5,7 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, the Users screens and Guide prompts, with axe accessibility checks, run against the published app.
+  the idle sign-out, signing in again in place, the Users screens and Guide prompts, with axe accessibility checks,
+  run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -109,14 +110,16 @@ npm test
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
-tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`) and the Guide
-prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own
-`admin bootstrap` (the `invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them:
-the published app's folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the
-address that the tests open. Without one of the three, each test that needs a link fails and names it, and each that
-gets one adds a made-up organisation and manager to the database. After a failure, `npx playwright show-report` opens
-the HTML report, which holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql`
-when done.
+tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
+Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
+app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
+(`e2e/sign-in-again.spec.ts`) and the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their
+setup links from the published app's own `admin bootstrap` (the `invite` and `secondInvite` fixtures, below), so the
+second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
+app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
+database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
+Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -131,11 +134,14 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Two more fixtures are there for the tests that name them, and only those run them:
+Three more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
-  `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager with a new `example.org`
-  address (A35). It gives the manager's display name and address, and the setup link that the command printed.
+  `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
+  `example.org` address (A35). It gives the manager's display name and address, and the setup link that the command
+  printed.
+- `secondInvite` runs it once more, for another made-up organisation and manager, Jordan Sample, for a test of two
+  people on one browser.
 - `authenticator` adds Chromium's virtual authenticator to the page, through the DevTools protocol, in place of a
   phone: one built into the device, which makes discoverable passkeys and verifies the person, and answers each prompt
   at once. `setUserVerified(false)` fails the person's verification at the prompts that follow, so no passkey is made,
@@ -239,6 +245,36 @@ before each comma that only screen readers get, "alex.park@example.org , Invited
 setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made lists its
 first manager alone. `e2e/users.spec.ts` is the example of each, and `e2e/shell.spec.ts`'s walk, whose Users link opens
 the list, answers it too.
+
+Invite user sends `POST /api/admin/users` to the same address, so `e2e/users.ts` has two more helpers for it, each
+routing the invite alone and passing every other request on, through `route.fallback()`, to the routes before it,
+such as `serveUsers`'s. Call them after `serveUsers`, as Playwright tries the latest route first and `serveUsers`
+answers every method.
+
+- `answerInvites(page, answer)` answers each invite in the browser: `{ status, problem }` with that status and an RFC
+  9457 problem holding `problem`'s members, such as `{ code: 'validation.failed', errors: { role: ['…'] } }`, or
+  `'no connection'`, which aborts it.
+- `holdNextInvite(page)` holds the next invite until the test answers it or lets it go on to the app, as `holdNext`
+  holds a request, for the busy button's "Sending…" and a double tap.
+
+```ts
+await serveMe(page, manager);
+await serveUsers(page, people);
+await answerInvites(page, { status: 500 });
+```
+
+The tests that meet the app's own invite sign in for real, as above, and invite a made-up person with a new
+`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no `Email__Endpoint`
+and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
+
+Resend invite on an Invited user's page sends `POST /api/admin/users/{id}/setup-link`, whose path `setupLinks` in
+`e2e/users.ts` matches for any user. `answerSetupLinks(page, answer)` answers each resend in the browser:
+`{ sentAt }`, the app's `204` with that `Date` header, such as `'Wed, 14 Oct 2026 05:12:00 GMT'`, from which the page
+takes the time it shows, or as `answerInvites` answers an invite. `holdNext(page, setupLinks)` holds the next one, for
+the busy button and its emptied line, until the test answers it with `route.fulfill`. A test of the device's clock and
+time zone sets the zone with `test.use({ timezoneId })` and the day with `page.clock.install({ time })`, both before
+the page loads. The test that meets the app's own resend invites a worker through Invite user first, and reads the
+time from the app's own `Date` header. `e2e/resend-invite.spec.ts` is the example of each.
 
 ### Answering `/api/admin/guide-prompts`
 
@@ -356,6 +392,30 @@ await page.clock.runFor('28:00'); // the warning opens
 - From the warning's one button, Tab and Shift+Tab take focus out of the page, to the browser, and the next brings it
   back. As it comes back, the window's `focus` refreshes `/api/auth/me`, which closes the warning as any accepted
   request does, so a test of the keys holds that request with `holdNext` (above) until it has pressed them.
+- At 30:00 the signed-out-in-place view shows, and the app, whose session has not ended, answers the window's next
+  refresh of `/api/auth/me` with `200`, which brings the screen back, as when another tab kept the session alive. The
+  view sends nothing at 30:00: it asks for passkey options once the session has surely ended by the page's clock, 30:05
+  after the last answer came (design.md A61), which, on the paused clock, is 30:05 after the request that it answered.
+
+### Ending a session in place, and signing in again
+
+A test of signing in again in place (S00.04.08) ends a real session, which it signed in through setup, by removing the
+session cookie, `__Host-grow2notes`, with `page.context().clearCookies({ name })`, as the app's own 30 idle minutes
+would. The window's `focus`, dispatched in the page, then refreshes `/api/auth/me`, whose `401` shows the
+signed-out-in-place view at the same address; a change sent then, such as Send invite, meets the `401` too. The passkey
+that setup made on the `authenticator` fixture signs the same person in again. To sign in as another person, a test
+sets that person up first, with `secondInvite` on the password path, so that the virtual authenticator holds one
+passkey only, and clears the browser's cookies before the first person's setup.
+
+```ts
+await page.context().clearCookies({ name: '__Host-grow2notes' });
+await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+```
+
+A test that answers `/api/auth/me` in the browser shows the view with a change that it answers `401`, such as Resend
+invite with `answerSetupLinks(page, { status: 401 })`, after `failMe(page, 401)`, so that the window's focus, which Tab
+out of the page and back gives, finds no session and leaves the view up. It calls `serveMe` again before it signs in
+again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec.ts` is the example of each.
 
 ## Writing integration tests
 
@@ -382,7 +442,13 @@ await page.clock.runFor('28:00'); // the warning opens
   app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
   the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way. It hosts the app
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
-  show what a signed-out caller gets.
+  show what a signed-out caller gets. For the same reason it keeps the app's own email sender, the console one, as
+  local development has (below).
+- A test that reads what is written to standard output puts a writer of its own in its place with `Console.SetOut`,
+  and the old one back in a `finally`, in `[Collection<StandardOutputCollection>]`, which xUnit runs on its own, after
+  every collection that runs in parallel, so nothing else writes to it meanwhile. It hosts its app with
+  `logging.ClearProviders()` and a provider of its own, so the console logger writes nothing there either.
+  `Grow2Notes.Tests/Platform/Email/ConsoleEmailSenderTests.cs` is the example.
 - A test-only endpoint that a test maps is denied by default, like any endpoint of the app's (design.md §2), so mark
   it `AllowAnonymous` unless the test is about who may call it. A signed-out request to one that is not gets the
   session cookie's `401`, as problem details, as in the deployed app: in `AppWithoutDatabase`, where the cookie is the
@@ -641,6 +707,32 @@ using var response = await client.GetAsync("/api/auth/me", TestContext.Current.C
 As with a passkey, a test reads only the audit events of a user it added, by the user's ID.
 `Grow2Notes.Tests/Features/Auth/TotpSignInEndpointTests.cs` is the example.
 
+### Reading the emails the app sent
+
+No test sends real email (design.md A58). `Grow2NotesFactory` puts a `RecordingEmailSender`
+(`Grow2Notes.Tests/Fixtures/RecordingEmailSender.cs`) in place of the app's email sender, and it records each message
+that the app sends, as an `EmailMessage` with its `To`, `Subject` and `Text`, in the order sent, and sends nothing. A
+test reads them from the app it called:
+
+```csharp
+var sent = app.Services.GetRequiredService<RecordingEmailSender>().Sent;
+var email = Assert.Single(sent, message => message.To == address);
+```
+
+Each app has a recorder of its own. One made with `WithWebHostBuilder` starts with none recorded, so a test that shows
+that nothing was sent, or exactly what was, uses such an app, as
+`Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends nothing. The
+class fixture's app is shared by the class's tests, so a test that calls it finds its own messages by the address it
+used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` keeps the app's console sender, which
+writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
+set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
+
+`SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email as
+`SetupLinks.InviteAsync` reads the invite core's, for a test that opens it, such as with `StartSetupAsync`. A test of an
+email that cannot be sent hosts its app with `ConfigureTestServices(FailingEmailSender.ReplaceAppSender)`: its sender
+sends nothing and throws an exception that holds the address and the whole text, link and all, so the test shows that
+neither reaches the logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the example of both.
+
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
@@ -661,8 +753,9 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   request, such as `At("/api/no-such-path")`, and one whose endpoint reads a JSON body gives it one with `WithJson`,
   as `POST /api/auth/setup/start`'s gives a made-up link; a row's builder is asked again for each call. A call
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
-  on, in organisation A, as the seeded-rows rule above says; the first such row gives `EndpointCall` the app's
-  services and the seeded organisations to do it with.
+  on, in organisation A, as the seeded-rows rule above says, with the app's services and the seeded organisations
+  that `EndpointCall` carries: `POST /api/admin/users/{id}/setup-link`'s row, the first, invites a user into A
+  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`.
 - A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
   caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
   row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs
@@ -718,3 +811,7 @@ story adds one as follows.
   `Grow2Notes.Tests/Platform/Configuration/ConfigurationChangesOnSqlServerTests.cs` is the example for a change sent
   with `If-Match`: in an organisation the test adds with two managers, the `200` with its new `ETag` and audit event,
   the second manager's `412`, the `428`, and a save of the stored values that writes nothing.
+  `Grow2Notes.Tests/Features/Users/UserSetupLinkEndpointTests.cs` is the example for a change to a user, which the
+  handler makes through `UserChanges`: B's manager's `404` for A's user, with or without their ETag, the `428`, a
+  stale ETag's `412`, and the `412` of a save that finds the user changed after the handler loaded them, which a
+  `SaveChangesInterceptor` holds back while another request changes the user.

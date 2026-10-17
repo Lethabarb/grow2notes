@@ -181,7 +181,9 @@ test('signed in for real, Manage then Users lists the new manager alone, Active 
   await expect(heading(page)).toHaveText(invite.displayName);
   await expect(main(page).getByRole('term')).toHaveText(['Email address', 'Role', 'Status']);
   await expect(main(page).getByRole('definition')).toHaveText([invite.email, 'Manager', 'Active']);
+  // An Active user's actions so far: Edit alone (users.md *Which actions show, by status*).
   await expect(main(page).getByRole('link')).toHaveText(['Edit']);
+  await expect(main(page).getByRole('button')).toHaveCount(0);
 });
 
 test('the current users show by name, then the Deactivated under their <h2>, each row with email and status', async ({
@@ -401,8 +403,15 @@ test("in a dark contrast theme, each row's chevron is drawn in the theme's text 
   }
 });
 
-for (const user of [alex, jo, chris]) {
-  test(`a user's page, ${user.status}, shows the name, the summary list and Edit alone, and passes axe`, async ({
+// users.md's *Which actions show, by status*, for the actions built so far (AC21): Edit, then Resend invite while
+// Invited.
+for (const { user, buttons } of [
+  { user: alex, buttons: ['Resend invite'] },
+  { user: jo, buttons: [] },
+  { user: chris, buttons: [] },
+]) {
+  const actions = ['Edit', ...buttons].join(' and ');
+  test(`a user's page, ${user.status}, shows the name, the summary list and ${actions}, and passes axe`, async ({
     page,
   }) => {
     await serveMe(page, manager);
@@ -413,15 +422,26 @@ for (const user of [alex, jo, chris]) {
     await expect(page).toHaveTitle(title('User'));
     await expect(main(page).getByRole('term')).toHaveText(['Email address', 'Role', 'Status']);
     await expect(main(page).getByRole('definition')).toHaveText([user.email, user.role, user.status]);
-    // Edit is the one action, a link, and nothing is disabled (users.md AC21).
+    // Edit is a link, the other actions buttons, and nothing is disabled (users.md AC21).
     await expect(main(page).getByRole('link')).toHaveText(['Edit']);
     const edit = main(page).getByRole('link', { name: 'Edit' });
     await expect(edit).toHaveAttribute('href', `/manage/users/${user.id}/edit`);
-    await expect(main(page).getByRole('button')).toHaveCount(0);
+    // By name, as a button's text holds its busy label too, which only shows while it is busy.
+    await expect(main(page).getByRole('button')).toHaveCount(buttons.length);
+    for (const [index, name] of buttons.entries()) {
+      await expect(main(page).getByRole('button').nth(index)).toHaveAccessibleName(name);
+    }
     await expect(page.locator('[disabled]')).toHaveCount(0);
     // The back link is in the bar before <main>, which Skip to main content passes.
     await expect(pageBar(page).getByRole('link')).toHaveText('Users');
     await expect(pageBar(page).getByRole('link')).toHaveAttribute('href', '/manage/users');
+
+    // From the back link, Edit, then each button (users.md *Focus order*).
+    await pageBar(page).getByRole('link').focus();
+    for (const stop of [edit, ...buttons.map((name) => main(page).getByRole('button', { name }))]) {
+      await page.keyboard.press('Tab');
+      await expect(stop).toBeFocused();
+    }
 
     await expectAxeToPass(page);
   });
@@ -442,21 +462,18 @@ test("with no connection, a user's page shows its fallback <h1>, its failure and
   await expectAxeToPass(page);
 });
 
-test('an ID not on the list, "new" among them, shows Page not found with the nav and no back link', async ({
-  page,
-}) => {
+test('an ID not on the list shows Page not found with the nav and no back link', async ({ page }) => {
   await serveMe(page, manager);
   await serveUsers(page, people);
+  const path = '/manage/users/4f2c8e1a-6b3d-4a97-8e05-1d7b9c3f2a68';
 
-  for (const id of ['4f2c8e1a-6b3d-4a97-8e05-1d7b9c3f2a68', 'new']) {
-    await page.goto(`/manage/users/${id}`);
-    await expect(heading(page)).toHaveText('Page not found');
-    await expect(page).toHaveTitle(title('Page not found'));
-    await expect(page).toHaveURL(`/manage/users/${id}`);
-    await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
-    await expect(marked(page)).toHaveCount(0);
-    await expect(pageBar(page).getByRole('link')).toHaveCount(0);
-  }
+  await page.goto(path);
+  await expect(heading(page)).toHaveText('Page not found');
+  await expect(page).toHaveTitle(title('Page not found'));
+  await expect(page).toHaveURL(path);
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  await expect(marked(page)).toHaveCount(0);
+  await expect(pageBar(page).getByRole('link')).toHaveCount(0);
 });
 
 test("a worker at the Users list, Invite user and a user's page meets Page not found", async ({ page }) => {

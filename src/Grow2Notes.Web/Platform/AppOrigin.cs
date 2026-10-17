@@ -16,4 +16,11 @@ internal static class AppOrigin
     /// <exception cref="UriFormatException">The setting is not an absolute address.</exception>
     public static Uri? Find(IConfiguration configuration) =>
         configuration[Key] is { Length: > 0 } origin ? new Uri(origin, UriKind.Absolute) : null;
+
+    /// <summary>The origin that <paramref name="configuration"/> sets, which a setup link starts with.</summary>
+    /// <exception cref="InvalidOperationException">The setting is not set, so no setup link can be made.</exception>
+    /// <exception cref="UriFormatException">The setting is not an absolute address.</exception>
+    public static Uri Require(IConfiguration configuration) =>
+        Find(configuration) ?? throw new InvalidOperationException(
+            $"{Key} is not set, so no setup link can be made. Set it to the address the app is reached at.");
 }

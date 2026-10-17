@@ -10,10 +10,10 @@ namespace Grow2Notes.Web.Platform;
 /// <remarks>
 /// The validation filter answers <c>400</c> with an <see cref="HttpValidationProblemDetails"/>, which it writes
 /// through the problem details service, so the service's customisation is where the app can change it. The only other
-/// writer of that type is <see cref="Field"/>, for a field that an endpoint itself refuses. The filter keys each error
-/// by the C# path of the member that broke a rule, such as <c>Part.Value</c>, where the API's JSON is camelCase
-/// (design.md §6.1). The service writes only for a request whose <c>Accept</c> allows JSON, as the SPA's requests do;
-/// any other gets the filter's own <c>400</c>, unchanged.
+/// writers of that type are <see cref="Field"/> and <see cref="Fields"/>, for fields that an endpoint itself refuses.
+/// The filter keys each error by the C# path of the member that broke a rule, such as <c>Part.Value</c>, where the
+/// API's JSON is camelCase (design.md §6.1). The service writes only for a request whose <c>Accept</c> allows JSON, as
+/// the SPA's requests do; any other gets the filter's own <c>400</c>, unchanged.
 /// </remarks>
 internal static class ValidationProblems
 {
@@ -29,10 +29,15 @@ internal static class ValidationProblems
     /// code and type, and the field's camelCase name.
     /// </summary>
     public static ProblemHttpResult Field(string field, string error) =>
-        TypedResults.Problem(new HttpValidationProblemDetails(new Dictionary<string, string[]> { [field] = [error] })
-        {
-            Status = ErrorCode.ValidationFailed.Status,
-        });
+        Fields(new Dictionary<string, string[]> { [field] = [error] });
+
+    /// <summary>
+    /// Answers <c>422 validation.failed</c> with the errors of several fields at once, as <see cref="Field"/> answers
+    /// one, for a handler that checks a request's fields itself, such as Invite user's (T01). <paramref name="errors"/>
+    /// is keyed by each request member's C# name.
+    /// </summary>
+    public static ProblemHttpResult Fields(IReadOnlyDictionary<string, string[]> errors) =>
+        TypedResults.Problem(new HttpValidationProblemDetails(errors) { Status = ErrorCode.ValidationFailed.Status });
 
     /// <summary>
     /// For <see cref="ProblemDetailsOptions.CustomizeProblemDetails"/>. Leaves every other problem as it is.
