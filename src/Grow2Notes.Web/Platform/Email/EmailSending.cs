@@ -46,9 +46,16 @@ internal static class EmailSending
                 "from, the Email service domain's DoNotReply address.");
         }
 
+        // One try, which waits at most 5 seconds for its answer, so that a send fails well within the SPA's 10-second
+        // timeout, with nothing committed, instead of holding the request and its transaction open. The SDK's default
+        // is 3 retries, each after the Retry-After of a 429, which is how Communication Services refuses a send over
+        // its limits, and the screen would then say "no connection" for an invite that could still commit (T01's
+        // Notes). The person's next press is the retry.
+        var options = new EmailClientOptions { Retry = { MaxRetries = 0, NetworkTimeout = TimeSpan.FromSeconds(5) } };
         var client = new EmailClient(
             new Uri(endpoint),
-            new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId)));
+            new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(clientId)),
+            options);
         return services.AddSingleton<IEmailSender>(new CommunicationServicesEmailSender(client, senderAddress));
     }
 }

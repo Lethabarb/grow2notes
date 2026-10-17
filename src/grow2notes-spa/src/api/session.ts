@@ -68,6 +68,8 @@ type Clock = {
   phase: Phase;
   /** The send time of the newest request that the server accepted, or the start's time. */
   lastAccepted: number;
+  /** When the latest answer to a request that the server accepted came, or the start's time. */
+  lastAnswered: number;
   /** Whether a `401` has ended the session since. */
   ended: boolean;
   /** How many promises are holding the phase as it is. */
@@ -80,7 +82,10 @@ let clock: Clock | undefined;
 
 const phaseListeners = new Set<() => void>();
 
-/** For `api()` only: the server accepted a request sent at `sentAt`, a `Date.now()`, so the clock starts afresh. */
+/**
+ * For `api()` only, as an answer's head comes: the server accepted a request sent at `sentAt`, a `Date.now()`, so the
+ * clock starts afresh.
+ */
 export function requestAccepted(sentAt: number): void {
   if (clock === undefined) {
     return;
@@ -88,7 +93,26 @@ export function requestAccepted(sentAt: number): void {
 
   clock.ended = false;
   clock.lastAccepted = Math.max(clock.lastAccepted, sentAt);
+  clock.lastAnswered = Date.now();
   update(clock);
+}
+
+// More than the device's clock and the server's can drift apart over 30 minutes, which is well under a second.
+const driftAllowance = 5_000;
+
+/**
+ * How long until the server has surely ended the session for being idle, in milliseconds: none once a `401` has said
+ * that it has, or while the clock is stopped. The server starts its 30 minutes as it takes a request, which is after
+ * the send, from which the clock counts, and before the answer comes, so the session has surely ended 30 minutes after
+ * the latest accepted answer came, give or take the clocks' drift. The signed-out-in-place view asks for nothing
+ * before then, as a request with the session cookie would renew the session that the screen says has ended (A61).
+ */
+export function untilSessionSurelyEnded(): number {
+  if (clock === undefined || clock.ended) {
+    return 0;
+  }
+
+  return Math.max(0, clock.lastAnswered + endAfter + driftAllowance - Date.now());
 }
 
 /**
@@ -128,7 +152,15 @@ export function getPhase(): Phase {
  * (app-shell.md *Page visible again*): one listener sends the request, and the clock holds on that very promise.
  */
 export function startClock(checkSession: () => Promise<unknown>): () => void {
-  const started: Clock = { phase: 'active', lastAccepted: Date.now(), ended: false, holds: 0, timer: undefined };
+  const now = Date.now();
+  const started: Clock = {
+    phase: 'active',
+    lastAccepted: now,
+    lastAnswered: now,
+    ended: false,
+    holds: 0,
+    timer: undefined,
+  };
   clock = started;
   const onVisibilityChange = () => {
     if (document.visibilityState === 'visible') {

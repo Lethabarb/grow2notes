@@ -8,6 +8,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
+import { untilSessionSurelyEnded } from '../../api/session.ts';
 import { Button } from '../../components/Button.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
@@ -101,7 +102,8 @@ function isDismissal(error: unknown): boolean {
  * `inPlace` makes it view C (sign-in.md; app-shell.md component 7), which the shell shows in place of a signed-in
  * screen whose session has ended, with that screen hidden after it: "You’ve been signed out" and its sentence take A's
  * `<h1>`'s place, over A's hint and controls, and stay over B, whose label is then an `<h2>`. The fields have ids of
- * their own, apart from any that the hidden screen holds.
+ * their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs out, it asks for its
+ * passkey options only once the server has surely ended the session (A61).
  */
 export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   const ids = inPlace ? fieldIds.signedOut : fieldIds.signIn;
@@ -128,19 +130,32 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   const passwordOut = useRef<Promise<void>>(undefined);
   // False once the view has gone, after which nothing that ends, its prompt among them, says or fetches anything.
   const mounted = useRef(false);
+  // View C's wait before it asks for passkey options, which either press ends, as each then asks for what it needs.
+  const optionsWait = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     mounted.current = true;
-    if (supported) {
-      // A failure says nothing yet: a press fetches the options again, and says so if that fails too.
+    // A failure says nothing yet: a press fetches the options again, and says so if that fails too.
+    const prefetch = () => {
       options.prefetch().catch(() => {});
+    };
+    if (supported) {
+      // View C, shown as the session clock runs out, asks once the server has surely ended the session, as a request
+      // with its cookie before then would renew it under "You've been signed out"; after a 401 it asks at once (A61).
+      const wait = inPlace ? untilSessionSurelyEnded() : 0;
+      if (wait === 0) {
+        prefetch();
+      } else {
+        optionsWait.current = setTimeout(prefetch, wait);
+      }
     }
 
     return () => {
+      clearTimeout(optionsWait.current);
       mounted.current = false;
       cancelPasskey();
     };
-  }, [supported, options]);
+  }, [supported, options, inPlace]);
 
   /**
    * New passkey options, asked for once no password is out and only while A shows, or nothing once the view has gone
@@ -157,6 +172,8 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
 
   // Everything before its first await runs in the press itself.
   async function signIn() {
+    // Options that view C's wait then asked for would end the ceremony of the prompt that this press opens.
+    clearTimeout(optionsWait.current);
     const fresh = options.take();
     // With fresh options, the prompt opens straight from the press, with no await before it, as older iPhones refuse
     // a prompt that an awaited fetch has parted from its tap (sign-in.md *Interactions* step 2).
@@ -231,6 +248,9 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
     }
 
     setChecking(true);
+    // View C's wait ends here too, as no request for options may start while the password is out; a passkey press
+    // later asks for its own.
+    clearTimeout(optionsWait.current);
     passwordOut.current = sendPassword(sentEmail).finally(() => {
       passwordOut.current = undefined;
     });

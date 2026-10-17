@@ -13,6 +13,10 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
   An account invited from the Users screen gets its setup link by email instead, which an `example.org` address never
   receives, so it gets a new address at a mailbox kept only for testing; if the mailbox takes `+` tags, as Gmail and
   Outlook.com do, `name+20261015c@…` gives each account its own.
+- Test sends that email from an Azure-managed domain, which allows 5 emails a minute and 10 an hour for the whole
+  subscription, with no way to raise either. An invite or a resend over that says "Not sent: something went wrong. Try
+  again." and changes nothing: wait a minute, or until the hour is up, and press again. Steps 12 and 17 send five
+  between them.
 - Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
   Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
   your own account. Let each browser keep the name and email address it already offers on forms of your own, as

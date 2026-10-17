@@ -544,6 +544,50 @@ describe('the signed-out-in-place view', () => {
     expect(getPhase()).toBe('active');
   });
 
+  // The server's 30 minutes start as it takes a request, after the send from which the clock counts, so a request with
+  // the session cookie at 30:00 could renew the session under "You've been signed out" (A61). Here every answer comes
+  // at once, so the session has surely ended 5 seconds after the clock's 30:00.
+  it('asks for passkey options at 30:00 idle only once the server has surely ended the session', async () => {
+    withWebAuthn();
+    await renderApp('/');
+    const requests = fetchMock.mock.calls.length;
+
+    await wait(30 * 60_000);
+    expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
+    await wait(4_900);
+    expect(fetchMock.mock.calls.slice(requests)).toEqual([]);
+    await wait(200);
+
+    expect(sent('POST', optionsPath)).toBe(1);
+    expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
+  });
+
+  it('asks for passkey options at a press before then, and not again once the wait is over', async () => {
+    withWebAuthn();
+    await renderApp('/');
+    await wait(30 * 60_000);
+    // The prompt stays open, as while a person chooses their passkey, whose ceremony new options would end.
+    ceremony.mockReturnValue(new Promise<AuthenticationResponseJSON>(() => {}));
+
+    press(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+    await settle();
+    expect(sent('POST', optionsPath)).toBe(1);
+    expect(ceremony).toHaveBeenCalledOnce();
+    await wait(60_000);
+
+    expect(sent('POST', optionsPath)).toBe(1);
+  });
+
+  it('asks for passkey options at once over a 401, which says that the session has ended', async () => {
+    withWebAuthn();
+    await renderApp('/manage/users/new');
+
+    await endTheSession();
+
+    expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
+    expect(sent('POST', optionsPath)).toBe(1);
+  });
+
   it('stays closed for a 401 to a request sent before the newest sign-in, which lands after it', async () => {
     await renderApp(`/manage/users/${alex.id}`);
     serve('POST', setupLinkPath, problem(401));

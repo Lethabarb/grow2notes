@@ -1,6 +1,9 @@
+using System.Net;
+using System.Net.Http.Headers;
 using System.Reflection;
 using Azure;
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Identity;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform.Email;
@@ -12,8 +15,8 @@ namespace Grow2Notes.Tests.Platform.Email;
 
 /// <summary>
 /// Which email sender the app has (<see cref="EmailSending"/>), read from the app's own services. The tests host the
-/// app without a database, so they run without Docker, and send nothing: building Communication Services' client and
-/// its credential calls nothing.
+/// app without a database, so they run without Docker, and send nothing to Communication Services: building its client
+/// and its credential calls nothing, and the one request made goes to a stand-in for it.
 /// </summary>
 public sealed class EmailSendingTests
 {
@@ -57,6 +60,35 @@ public sealed class EmailSendingTests
         Assert.Equal($"ClientId {ClientId}", ManagedIdentities.IdentityOf(credential));
         Assert.Contains(new Uri(Endpoint), reachable.OfType<Uri>());
         Assert.Contains(SenderAddress, reachable.OfType<string>());
+    }
+
+    // Communication Services refuses a send over its limits with a 429 and a Retry-After, which the SDK's default
+    // retries would wait out 3 times, holding the request and its transaction open long past the SPA's 10-second
+    // timeout (T01's Notes). The client's own retry policy, in a pipeline to a stand-in for the service, sends once.
+    [Fact]
+    public async Task With_an_endpoint_the_client_tries_a_send_once_and_waits_5_seconds_at_most_for_its_answer()
+    {
+        await using var factory = new AppWithoutDatabase("Production");
+        await using var app = WithSettings(factory, Settings);
+        var sender = Assert.IsType<CommunicationServicesEmailSender>(app.Services.GetRequiredService<IEmailSender>());
+        var reachable = Reachable(sender);
+
+        var service = new ThrottlingService();
+        var pipeline = new HttpPipeline(
+            new HttpClientTransport(service), [Assert.Single(reachable.OfType<RetryPolicy>())]);
+        using var message = pipeline.CreateMessage();
+        message.Request.Uri.Reset(new Uri(Endpoint));
+        await pipeline.SendAsync(message, TestContext.Current.CancellationToken);
+
+        Assert.Equal((429, 1), (message.Response.Status, service.Requests));
+
+        // Azure.Core does not say publicly how long a client waits for an answer. Its internal ResponseBodyPolicy holds
+        // it, so this reads that; if an Azure.Core update moves it, the test fails rather than passing unchecked.
+        var responseBody = Assert.Single(
+            reachable, item => item.GetType().FullName == "Azure.Core.Pipeline.ResponseBodyPolicy");
+        var networkTimeout = responseBody.GetType()
+            .GetField("_networkTimeout", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(responseBody);
+        Assert.Equal(TimeSpan.FromSeconds(5), Assert.IsType<TimeSpan>(networkTimeout));
     }
 
     [Theory]
@@ -136,5 +168,21 @@ public sealed class EmailSendingTests
         }
 
         return reachable;
+    }
+
+    // Answers as Communication Services answers a send over its limits: 429, with when to try again, here a second, so
+    // that a client that retried would fail the test in moments rather than minutes.
+    private sealed class ThrottlingService : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests++;
+            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(1));
+            return Task.FromResult(response);
+        }
     }
 }

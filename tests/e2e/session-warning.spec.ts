@@ -106,7 +106,7 @@ function recordRequests(page: Page): () => Promise<string[]> {
   };
 }
 
-test('the warning opens at 28:00 over the page, counts down, closes on its ping, and at 30:00 sends nothing', async ({
+test('warns from 28:00 to its ping; at 30:00 view C shows, sending nothing, until a live session’s refresh', async ({
   page,
   invite,
   authenticator,
@@ -185,7 +185,7 @@ test('the warning opens at 28:00 over the page, counts down, closes on its ping,
 
   // Left alone, it closes at 30:00, as the session has ended, with no request sent at any mark, as one would extend the
   // session (session-timeout.md *The session clock*), and the signed-out view shows in place of Today, with focus on
-  // its <h1> (app-shell.md *Session*), asking for passkey options as it shows, as sign-in does, and for nothing else.
+  // its <h1> (app-shell.md *Session*).
   idle.restart();
   await idle.runTo('28:00');
   await expect(warning(page)).toBeVisible();
@@ -200,6 +200,14 @@ test('the warning opens at 28:00 over the page, counts down, closes on its ping,
   await expect(page).toHaveTitle('Grow2Notes – Sign in');
   await expect(page).toHaveURL('/');
   await expect(nav(page)).toHaveCount(0);
+  expect(await sentSince()).toEqual([]);
+
+  // It asks for passkey options, as sign-in does, but only once the app has surely ended the session, 30:05 after the
+  // ping's answer came by the page's clock, which is paused, so that the ping went and came at the same moment: a
+  // request with the session cookie before then could reach the app inside its 30 minutes and renew them (A61).
+  await idle.runTo('30:04');
+  expect(await sentSince()).toEqual([]);
+  await idle.runTo('30:05');
   expect(await sentSince()).toEqual(['POST /api/auth/passkey/options']);
 
   // The app's own clock has barely moved, so the session is alive, as when another tab kept it: the window's focus

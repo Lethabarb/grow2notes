@@ -121,7 +121,8 @@ nothing stored on the device):
 6. **Any non-`401` response at any time** resets the clock and closes the warning. The session really was extended. Focus goes back to where it was.
 7. **At 30:00 on a visible page, or on any `401` that ends the session** (not a failed sign-in's, an ended setup's or
    logout's), the clock goes to *expired*. It never sends a request to "check" at 30:00, because a request would
-   extend the session.
+   extend the session. Nor does the signed-out view that then shows: it asks for passkey options only once the server
+   has surely ended the session (sign-in.md *Interactions* 2, design.md A61).
 
 **Holds, and the clock's life.** `api()` holds the clock (`holdWhile`) while each call is out, as its answer may
 reset the clock or end it ("If a request is in flight, wait for it", app-shell.md *28:00 idle on a visible page*).

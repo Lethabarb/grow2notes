@@ -393,7 +393,9 @@ await page.clock.runFor('28:00'); // the warning opens
   back. As it comes back, the window's `focus` refreshes `/api/auth/me`, which closes the warning as any accepted
   request does, so a test of the keys holds that request with `holdNext` (above) until it has pressed them.
 - At 30:00 the signed-out-in-place view shows, and the app, whose session has not ended, answers the window's next
-  refresh of `/api/auth/me` with `200`, which brings the screen back, as when another tab kept the session alive.
+  refresh of `/api/auth/me` with `200`, which brings the screen back, as when another tab kept the session alive. The
+  view sends nothing at 30:00: it asks for passkey options once the session has surely ended by the page's clock, 30:05
+  after the last answer came (design.md A61), which, on the paused clock, is 30:05 after the request that it answered.
 
 ### Ending a session in place, and signing in again
 

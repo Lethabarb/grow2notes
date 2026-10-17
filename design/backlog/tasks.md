@@ -121,8 +121,9 @@ with their typing kept (checked with a half-filled Invite form), and a different
   runs the whole work again, the send included (§5.9), so a second email goes and the first one's link answers `410`.
   The sender returns once Communication Services has accepted the message (`WaitUntil.Started`) and never waits for
   delivery, which would hold the transaction and could outlast `api()`'s 10-second timeout, so the screen would say
-  "Not sent: no connection" for an invite that commits. A failed send answers `500` problem+json and is logged with
-  no address or link.
+  "Not sent: no connection" for an invite that commits. For the same reason the client tries once and waits at most 5
+  seconds for an answer, with no retry (the review of 14 October 2026, below). A failed send answers `500`
+  problem+json and is logged with no address or link.
 - `POST /api/admin/users` answers `201` with no body (§6.6), as the screen goes back to the list, not to the new user.
 - In T01, `POST /api/admin/users/{id}/setup-link` serves an Invited user only. Any other status gets
   `409 user.not_active`, mcp-server.md's code for a Deactivated user, which the shared handler gives both channels; T01
@@ -232,16 +233,45 @@ with their typing kept (checked with a half-filled Invite form), and a different
   screens it shows, and a `Me` for any other `userId`, from a sign-in in view C or from a refresh, calls
   `fullPageLoad()`, `disarmUnloadGuard()` not being on `main`. View C's `<h1>` has the id `signed-out-heading`
   (`PageHeading` takes an `id`); the shell focuses that `<h1>` once the warning has closed, as a page behind an open
-  modal cannot take focus. The code step's label is in an `<h2>` (`FieldGroup`'s `headingLevel`), which is both
-  sign-in.md's label styled as h2 and app-shell.md's headings as `<h2>`. View C sets the title "Grow2Notes – Sign in"
-  and, as it closes, gives the screen back its own, any "Error: " included, unless Back has moved the screen on
-  meanwhile. Autosave, which view C pauses, comes with T10. The app's own 30 idle minutes, with NVDA's reading of view
-  C, are by hand (ops/first-use-in-test.md step 11).
-- A departure from sign-in.md (step 7), kept on purpose: its components 6 and 10 give the email and code fields the
-  `id` and `name` `email` and `code` in view C as in view A, but view C's page also holds the signed-in screen hidden
-  under it, which may have a field with the same id, such as Invite user's `email`, and ids must be unique in a page.
-  So view C's fields take the `id` and `name` `signed-out-email`, `signed-out-password` and `signed-out-code`, with
-  the same `autoComplete` values as view A's; view A keeps `email`, `password` and `code`.
+  modal cannot take focus. The code step's label is in an `<h2>` (`FieldGroup`'s `headingLevel`), as app-shell.md
+  has the sign-in controls' headings as `<h2>`, where sign-in.md had a plain label styled as h2 (design.md A62). View
+  C sets the title "Grow2Notes – Sign in" and, as it closes, gives the screen back its own, any "Error: " included,
+  unless Back has moved the screen on meanwhile. Autosave, which view C pauses, comes with T10. The app's own 30 idle
+  minutes, with NVDA's reading of view C, are by hand (ops/first-use-in-test.md step 11).
+- A departure from sign-in.md (step 7), kept on purpose and recorded as design.md A62, which sign-in.md's components
+  6 and 10 and its view C now follow: they gave the email and code fields the `id` and `name` `email` and `code` in
+  view C as in view A, but view C's page also holds the signed-in screen hidden under it, which may have a field with
+  the same id, such as Invite user's `email`, and ids must be unique in a page. So view C's fields take the `id` and
+  `name` `signed-out-email`, `signed-out-password` and `signed-out-code`, with the same `autoComplete` values as view
+  A's; view A keeps `email`, `password` and `code`.
+- 14 October 2026, review: five findings were confirmed and are fixed here:
+  - A throttled setup-link email held an invite or a resend, and its transaction, open far past `api()`'s 10-second
+    timeout, as the `EmailClient` had the SDK's default retries, 3 of them, each after the Retry-After of the `429`
+    that Communication Services gives a send over its limits. Microsoft Learn's service limits page (updated 23
+    September 2026), <https://learn.microsoft.com/azure/communication-services/concepts/service-limits>, gives an
+    Azure-managed domain, as test's is, 5 emails a minute and 10 an hour per subscription, with no higher limits
+    available. The screen then said "Not sent: no connection" for an invite that could still commit.
+    The client now tries once and waits at most 5 seconds for an answer (`EmailClientOptions`), so a throttled or slow
+    send is `EmailNotSentException`, a `500` with nothing committed, and "Not sent: something went wrong. Try again.";
+    pressing again is the retry. `EmailSendingTests` puts the registered client's retry policy in a pipeline to a
+    stand-in that answers `429`, which gets one request, and reads its 5-second network timeout.
+    ops/first-use-in-test.md's *Before you start* gives the two limits.
+  - View C, shown by the session clock at 30:00, asked for passkey options as it showed, carrying the session cookie,
+    while the server's session could still have as long to run as the last accepted request took to reach it, so the
+    request could renew the session under "You've been signed out", and a refresh on the window's next focus would
+    bring the first person's screen back with no sign-in. It now asks once the server has surely ended the session,
+    30:05 after the latest accepted answer came (`untilSessionSurelyEnded()` in `src/api/session.ts`), and at once
+    after a `401`; a press ends the wait (design.md A61, sign-in.md *Interactions* 2, session-timeout.md step 7 and
+    app-shell.md's 30:00 row). `signedOutInPlace.test.tsx` shows nothing sent at 30:00 and the options 5 seconds later,
+    one request for a press before then, and the options at once over a `401`; `session.test.ts` shows the time; and
+    session-warning.spec.ts expects nothing at 30:00 and the options at 30:05.
+  - That test's name still said that at 30:00 the page sends nothing while it expected a request then; it is now
+    "warns from 28:00 to its ping; at 30:00 view C shows, sending nothing, until a live session’s refresh".
+  - View C's own field ids and its code label inside an `<h2>` departed from sign-in.md with no record: design.md A62
+    records them, sign-in.md's components 6 and 10 and its view C sketch follow, and the Notes above no longer say the
+    `<h2>` is sign-in.md's label styled as h2.
+  - The hand-offs to T04 and T02 were only in these Notes: T04's and T02's sections now say what they take over, and
+    design.md §6.6's setup-link row gives `409 user.not_active` with §6.9.
 
 ### Steps
 
@@ -422,6 +452,11 @@ found and `403`.
   the one `SaveStatus` that ships, which Details' Save uses too, is at `--font-size-small` with `tabular-nums`, as
   foundations.md, which owns sizes, has status lines and the save indicator, where status-messages.md's *States*
   table says body size (guide-prompts.md *Conflicts resolved* 17; S01.02.03's Note from T03).
+- If T01 is on `main` first, Invite user (`src/features/users/InviteUserPage.tsx`) still focuses the Users list's
+  `<h1>` itself after its replace to the list, drawn at once with `flushSync` and `focusPageHeading()`, and its back
+  link "Users" pushes the list, as the user's page's does. T02 removes that interim focus once its route-change rule
+  focuses the new screen's heading, so that one focus mechanism ships, and gives the back link T02's opened-from
+  behaviour (T01's Notes, step 5). If T02 merges first, T01 does this at rebase.
 
 ### Steps
 
@@ -735,6 +770,15 @@ protected. From the console the operator can reset the last manager's sign-in or
   *Conflicts resolved* 9). No S01.04.01 or S01.04.02 criterion waits on these.
 - Builds the session-revocation test helper that T24 and T32 reuse. D74 to D77 settle the dialogs and the edge cases.
 - The operator's break-glass run and the two-device sign-out are by-hand checks on ops/first-use-in-test.md.
+- Handed on by T01 (its Notes): `POST /api/admin/users/{id}/setup-link` serves an Invited user only, and refuses an
+  Active one, as a Deactivated one, with `409 user.not_active`. T04 makes the Active user's call the reset (§8.6),
+  leaving the code to Deactivated users, and with it updates design.md §6.9's `user.not_active` row, whose sentence
+  "Until Reset sign-in serves an Active user (S00.06.04), they get it too" goes, the comments on
+  `ErrorCode.UserNotActive` and on `UserSetupLink`, which say the reset comes with S00.06.04, and the user page's
+  handling of the code, which until then shows "Not sent: something went wrong. Try again.". T04 also adds
+  `allowedActions()`'s `onlyManager` argument, with `isOnlyActiveManager` (user-management.md), as `userRules.ts` has
+  no use for it before then, and makes the user page's Status row a focus target, for its own actions and for Resend
+  invite's `412` when the refetched user is no longer Invited, which until then focuses the `<h1>`.
 
 ### Steps
 
