@@ -305,6 +305,19 @@ export const strings = {
       'Someone else changed these details while you were editing. Check the details, then save again.',
   },
   /**
+   * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>`, Archive
+   * participant in it and Restore in the archived notice, each with its busy label; then, in the alert above either, a
+   * press refused as stale (`412`) that finds the participant still as they were.
+   */
+  participantActions: {
+    heading: 'Actions',
+    archive: 'Archive participant',
+    archiving: 'Archiving…',
+    restore: 'Restore',
+    restoring: 'Restoring…',
+    changedMeanwhile: 'Someone else changed this participant just now. Check the page, then try again.',
+  },
+  /**
    * The date of birth's three fields (text-and-date-inputs.md): the group's legend, which also starts its messages,
    * its hint and each part's label; each part as a message names it, as in "a day and month"; then the messages, in
    * the order the checks run.

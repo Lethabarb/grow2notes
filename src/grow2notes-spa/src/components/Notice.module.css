@@ -1,0 +1,64 @@
+/*
+ * The notice look (status-messages.md): a 6 px bar and a 1 px border in the action colour on its tint, the words in the
+ * body's colour, in the reading column. The bar is a border, so that forced colours keep it.
+ */
+.notice {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  max-inline-size: var(--measure);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-divider) solid var(--colour-action);
+  border-inline-start-width: 6px;
+  border-radius: var(--radius-s);
+  background: var(--colour-action-tint);
+  color: var(--colour-text);
+}
+
+/* Beside the first line of the words, whatever their size. */
+.icon {
+  flex: none;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  margin-block-start: calc((var(--line-height-body) * 1em - 1.25em) / 2);
+  color: var(--colour-action);
+}
+
+/* The words, then the action under them on a phone, full width, as Button is there. */
+.body {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.text {
+  margin: 0;
+}
+
+/*
+ * From 40rem, the action follows the words in a wrapping line, so that it sits after them when there is room and drops
+ * under them otherwise, at 200% text too, with no container query (participants.md *Layout - laptop*).
+ */
+@media (min-width: 40rem) {
+  .body {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .text {
+    flex: 1 1 16rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .notice {
+    border-color: CanvasText;
+  }
+
+  .icon {
+    color: CanvasText;
+  }
+}

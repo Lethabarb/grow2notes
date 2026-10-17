@@ -548,6 +548,20 @@ found and `403`.
   `200` saved it, never the list's after a `412`. The `412`'s words are participants.md's, without
   text-and-date-inputs.md's "below", as the alert is above Save. `EndpointCall` carries the app's services and the
   seeded organisations, with which the `PUT`'s matrix row adds a participant to A for each call (tests/README.md).
+- Also the simplest options where the design is silent (15 October 2026, step 6): archive and restore, as the `PUT`
+  does, find the participant first, so another organisation's is `404`, then check `If-Match`, and answer `204` with
+  no body, their routes taking a GUID. The page knows the participant's status as it knows their version, from the list
+  as it opens, then from its own read after each change, never from a refetch in between; so a Details save followed
+  by a read that finds them archived by someone else shows them archived, as participants.md's *Interactions* has the
+  next write do, the notice taking focus, as Save has gone. After a `204` the page shows what its read gives, or, when
+  that read does not load, the details that it knew, with no version, so that the next press reads the list first; a
+  `412` whose read finds the status unchanged changes the version alone, the fields and the `<h1>` staying, as on a
+  Details `412`. Restore fills the form afresh with the details as read. The notice is `Notice` in `src/components`,
+  its "i" an inline SVG, as the app has no icon set and no words in JSX, in the action colour on its tint, as setup's
+  notice is, there being no notice tokens; from 40rem its Restore, with the alert above it, is one item of the wrapping
+  line. The page renders its own back link once it shows the participant, so that the link follows their status, and
+  the Active view's while the list loads. Archive participant and Restore share one mutation, as they never show
+  together, and a press of Archive participant while a Details save is under way is not held back.
 - `SaveStatus` and reading a response's `Date` header for "Saved 4:12 pm" are shared with T03's Guide prompts:
   whichever of T02 and T03 merges second reuses the other's, so one version ships.
 - T01 (lane A) builds S00.04.08, signing in again in place with focus on the page `<h1>`, which touches the AppShell
@@ -557,7 +571,8 @@ found and `403`.
   after the `201` reaches it and that an archived participant's goals are read-only; Today with T08, which checks
   "gone from Today" and "back on Today" and adds Today's query to what these saves invalidate; the Past notes, Write
   past-day note and Export record actions with T09, T18 and T21, T18 checking the "Grow2Notes – Write past-day note"
-  title. Until T05, the next Tab after Save reaches Archive participant.
+  title. Until T05, the next Tab after Save reaches Archive participant. T05's, T08's and T18's Notes, and S01.02.02's
+  and S01.02.04's, say so too (15 October 2026).
 - By-hand checks for ops/first-use-in-test.md: the operator runs `infra/sql/check-database.sql` after this deploy, its
   D3 and D5 rows now naming the `Participant` deny; with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and
   Chrome, the readings in participants.md's *Accessibility checklist*, the `<h1>` heard on each screen change and the
@@ -666,7 +681,7 @@ found and `403`.
       changed these details…" above Save, with focus on Save, as "Not saved: …" does for no connection or a server
       error. Vitest: those, a refetch never overwriting typed values, one request after a lost response, an ID not in
       the list showing Page not found, and the name taking focus on arrival.
-- [ ] Archive and restore a participant (S01.02.04; design.md §3.7, §4.8 *States*; participants.md B3, B7 and
+- [x] Archive and restore a participant (S01.02.04; design.md §3.7, §4.8 *States*; participants.md B3, B7 and
       *Archive and Restore*): `POST /api/admin/participants/{id}/archive` and `/restore` with `If-Match`, setting
       `Status` and `ArchivedAtUtc` through `Archiving.Archive` and clearing both on restore, with
       `participant.archived` and `participant.restored` and `204`, a repeat saving nothing and writing no event; their
@@ -687,13 +702,24 @@ found and `403`.
       `serveParticipants` and `failParticipants` beside `e2e/users.ts`, described in tests/README.md, and
       `tests/e2e/participants.spec.ts`: signed in for real through the `invite` fixture and a passkey on the
       `authenticator` fixture, a manager at 375 px adds "O'Brien", corrects the date of birth, comes back to the row
-      by the back link, archives and restores, each on the app's own answers; with the lists answered in the browser,
-      axe on every state at phone and laptop width, no sideways scroll at 320 px with 200% text, targets of 44, 48 and
-      56 px, live regions in the DOM before their text, the focus ring in forced colours, a worker's Page not found on
-      the three routes, and no name, date of birth or search text in `location`, `document.title`, `history.state` or
-      the origin's storage after each flow. Docs: participants.md, search-filter.md, participant-list-rows.md and
-      sign-in.md component 15 to the code as built; the by-hand checks (Notes) on ops/first-use-in-test.md; and CI's
-      run on the pull request passing.
+      by the back link, archives and restores, each on the app's own answers; the keyboard-only check (README §9) at
+      375 px and laptop width, adding, correcting, archiving and restoring with no mouse and a visible focus ring at
+      each stop, in participants.md's *Keyboard* order for what this task builds: on the list the skip link and nav,
+      then Add participant, Find a participant, Clear when shown, Active, Archived and the rows; on Add participant
+      and an active participant's page Participants (back), Given name, Family name, Day, Month, Year and Save, then
+      Archive participant once saved; on an archived participant's page Participants (back), then Restore (Goals and
+      the other actions come with T05, T09, T18 and T21); with the lists answered in the browser, axe on every state
+      at phone and laptop width, no sideways scroll at 320 px with 200% text, targets of 44, 48 and 56 px, live
+      regions in the DOM before their text, the focus ring in forced colours, a worker's Page not found on the three
+      routes, and no name, date of birth or search text in `location`, `document.title`, `history.state` or the
+      origin's storage after each flow. Docs, each to the code as built: participants.md, its criterion for no
+      participants at all reworded to its *States* table ("No participants yet.", Add participant and the Active /
+      Archived links, no search box); status-messages.md, its "restored" banner marked not built unless the owner
+      approves it (ux/README.md open question 2), focus going to the `<h1>` after Restore, and the notice's Restore
+      following its words on a wrapping line from 40rem, with no container query; search-filter.md,
+      participant-list-rows.md and sign-in.md component 15; the by-hand checks (Notes) on ops/first-use-in-test.md;
+      `migrate.sql` from CI's artifact read in the pull request, expand-only, with the `Participant` `DENY DELETE`;
+      and CI's run on the pull request passing.
 - [ ] After the deploy to test, check with requests that change nothing: `/` serves this build's `index.html`, its
       hashed assets answering `200`; `GET /api/admin/participants`, with and without `includeArchived=true`, answers
       a `401` problem with `no-store` when no cookie is sent; then headless Chromium under Playwright, whose
@@ -1055,6 +1081,10 @@ moves, archives and restores them. Changes apply to notes started from then on.
 ### Notes
 
 - Builds the shared buttons-only list editor that T06 and T07 reuse for common items, and uses T03's `count()` helper.
+- From T02 (15 October 2026): three of the criteria that T02's stories absorb need Goals, so this task checks them:
+  after Add participant's `201`, the next Tab reaches the Goals section (S01.02.02); an archived participant's goals
+  show as numbered text with no buttons; and the goal controls are gone after Archive participant and back after
+  Restore (S01.02.04; participants.md *Archive and Restore* and *Interactions*).
 
 ### Steps
 
@@ -1178,6 +1208,10 @@ lets workers write only today's note, using the Melbourne date.
   which T03 left unticked naming T08: guide-prompts.md › Field's comparison of the two boxes' computed metrics at
   375 and 1280 px, and design.md §4.10's "straight away … including open drafts" and empty prompts showing no
   placeholder (S02.02.02's Notes).
+- From T02 (15 October 2026): Add participant's `POST`, the details `PUT`, and Archive participant's and Restore's
+  `POST`s refresh the participants list alone, as there is no Today query yet; this task adds Today's query to what
+  each invalidates (participants.md *Interactions*) and checks S01.02.04's "gone from Today" after Archive and "back
+  on Today" after Restore.
 
 ### Steps
 
@@ -1556,6 +1590,10 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 ### Notes
 
 - Runs after T16, because both change the read view and the version-saving code.
+- From T02 (15 October 2026): S01.02.04's checks that need Write past-day note are this task's, as S02.08.01 adds the
+  action: it shows in an active participant's Actions, is gone after Archive participant and back after Restore
+  (participants.md *Archive and Restore* and *Interactions*); and the page's title is "Grow2Notes – Write past-day
+  note" (participants.md *Access and privacy*).
 
 ### Steps
 

@@ -469,9 +469,8 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
   changes something sends the token that `FetchTokenAsync()` fetched with the same client, which keeps the cookie, in
   its `X-XSRF-TOKEN` header, as the SPA does (design.md §9.8), and sends any body as `application/json`, as
   `PostAsJsonAsync` and `JsonContent` do: the group answers `415` to a request with any other `Content-Type`, or with
-  a body and none. `PostWithTokenAsync` and `PutWithTokenAsync` send a change so, the second with a row's ETag, if
-  given, as `If-Match`. A token is issued to the user a request is signed in as, so fetch it after signing the client
-  in.
+  a body and none. `PostWithTokenAsync` and `PutWithTokenAsync` send a change so, each with a row's ETag, if given,
+  as `If-Match`. A token is issued to the user a request is signed in as, so fetch it after signing the client in.
   In `AppWithoutDatabase`, Data Protection, which protects the tokens, has no key ring until `KeepKeysInMemory()` gives
   it one. A test-only endpoint mapped in the group, as `TestOnlyApiEndpoint` maps one, gets the group's filter; one
   mapped outside it, as most tests map theirs, does not.
@@ -505,8 +504,9 @@ in `sqlServer.Seeded`: `Seeded.A` and `Seeded.B` each hold the `OrganisationId`,
   added itself, and one that invites through the API invites an address of its own; or it works in a migrated
   database of its own from `SqlServerFixture.CreateDatabaseAsync`. Likewise no test archives, restores or changes a
   seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
-  (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), which gives their ID and their ETag, the `If-Match` of a change
-  to them, as `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
+  (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
+  and their ETag, the `If-Match` of a change to them, as
+  `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
 - A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation
@@ -773,9 +773,9 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   commits, so a row whose calls change something builds each call's request after adding the record that call acts
   on, in organisation A, as the seeded-rows rule above says, with the app's services and the seeded organisations
   that `EndpointCall` carries: `POST /api/admin/users/{id}/setup-link`'s row, the first, invites a user into A
-  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`, and
+  through the invite core and sends their ETag, so A's manager gets `204` and B's manager `404`;
   `PUT /api/admin/participants/{id:guid}`'s adds a participant to A for each call with `AddParticipantAsync`
-  (above).
+  (above); and the archive's and restore's rows add an active and an archived one.
 - A row of an endpoint that lists an organisation's rows checks the answer too, so that the matrix shows that no
   caller's list holds another organisation's (§5.9 item 7). Its `Answer` is given the response to a call that got the
   row's status, when that is a success, with the caller and the seeded organisations, and lists how the answer differs

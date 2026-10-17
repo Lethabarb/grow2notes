@@ -153,6 +153,13 @@ internal static class EndpointMatrix
         // request first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
         new(Put,       "/api/admin/participants/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
             CorrectingAParticipantOfItsOwn),
+
+        // Archiving and restoring a participant (§6.6), in the same group, as the correction is: each call archives an
+        // active participant, or restores an archived one, of its own in A, so B's manager gets 404.
+        new(Post,      "/api/admin/participants/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingTheStatusOfAParticipantOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/participants/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingTheStatusOfAParticipantOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -257,6 +264,17 @@ internal static class EndpointMatrix
             Content = JsonContent.Create(
                 new { givenName = "Matrix", familyName = "Corrected", dateOfBirth = "1990-01-01" }),
         };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
+        return request;
+    }
+
+    // An archive or a restore, with no body, of a participant whom the request first adds to A, archived or not, sent
+    // with their ETag as If-Match, so that each call changes a participant of its own (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingTheStatusOfAParticipantOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A, archived);
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/{action}");
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(participant.ETag));
         return request;
     }

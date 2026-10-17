@@ -1,5 +1,9 @@
-/* Details in the reading column, a section's gap below the <h1> (participants.md *Layout - laptop*). */
-.details {
+/*
+ * Details in the reading column, a section's gap below the <h1>, or the archived notice under it, and Actions a
+ * section's gap below Details (participants.md *Layout - laptop*).
+ */
+.details,
+.actions {
   max-inline-size: var(--measure);
   margin-block-start: var(--section-gap);
 }

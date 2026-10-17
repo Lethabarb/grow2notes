@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,6 +30,8 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     {
         [AuditEventTypes.Participant.Created] = test => test.AddParticipantAsync(),
         [AuditEventTypes.Participant.Updated] = test => test.CorrectParticipantAsync(),
+        [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
+        [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
     };
 
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
@@ -115,6 +118,80 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             participant.Id,
             participant.Id,
             details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>participant.archived</c>: A's manager archives an active participant added for the row with
+    /// <c>POST /api/admin/participants/{id}/archive</c>, which records the participant as the entity and the
+    /// participant, and their status and the time they were archived at, before and after, the time as stored.
+    /// </summary>
+    private async Task<WrittenEvent> ArchiveParticipantAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        await PostAsync($"/api/admin/participants/{participant.Id}/archive", participant.ETag);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["status"] = "Active", ["archivedAtUtc"] = null },
+            ["new"] = new JsonObject
+            {
+                ["status"] = "Archived", ["archivedAtUtc"] = await StoredArchivedAtUtcAsync(participant.Id),
+            },
+        };
+        return new(
+            AuditEventTypes.Participant.Archived,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Participant,
+            participant.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>participant.restored</c>: A's manager restores an archived participant added for the row with
+    /// <c>POST /api/admin/participants/{id}/restore</c>, which records the participant as the entity and the
+    /// participant, and their status and the time they had been archived at, before and after, which is none.
+    /// </summary>
+    private async Task<WrittenEvent> RestoreParticipantAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a, archived: true);
+        await PostAsync($"/api/admin/participants/{participant.Id}/restore", participant.ETag);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["status"] = "Archived", ["archivedAtUtc"] = TestParticipants.ArchivedAtUtc },
+            ["new"] = new JsonObject { ["status"] = "Active", ["archivedAtUtc"] = null },
+        };
+        return new(
+            AuditEventTypes.Participant.Restored,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Participant,
+            participant.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    // An archive or a restore by A's manager, with the participant's ETag as If-Match and no body, which answers 204.
+    private async Task PostAsync(string path, string ifMatch)
+    {
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(path, await client.FetchTokenAsync(), ifMatch: ifMatch);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    // The time that the participant was archived at, as their row holds it, through the app's context under A's tenant.
+    private async Task<DateTime?> StoredArchivedAtUtcAsync(Guid participantId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.Participants.Where(p => p.Id == participantId)
+                .Select(p => p.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     // The ID of the last event written, by any test. The tests of the collection run one at a time, so the events after

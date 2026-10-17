@@ -35,6 +35,17 @@ export const msg = {
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
   /** A Save that failed, in the alert above it, such as "Not saved: no connection. Try again." */
   notSaved: (cause: Cause): string => msg.notDone('saved', cause),
+  /** An Archive participant that failed, in the alert above it (participants.md *States*). */
+  notArchived: (cause: Cause): string => msg.notDone('archived', cause),
+  /** A Restore that failed, in the alert above it, in the archived notice (participants.md *States*). */
+  notRestored: (cause: Cause): string => msg.notDone('restored', cause),
+  /**
+   * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
+   * design.md §3.7.
+   */
+  participantArchived: (name: string) =>
+    `${name} is archived, so this page is read-only. They are not on Today and no new notes can be written for them. `
+    + 'Their past notes are kept.',
   /**
    * A Send invite or a Resend invite that failed, above its button, and a refusal that names no field of Invite user's
    * (users.md *States*).
