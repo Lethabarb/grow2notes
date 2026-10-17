@@ -47,6 +47,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Participant.Archived] = test => test.ArchiveParticipantAsync(),
         [AuditEventTypes.Participant.Restored] = test => test.RestoreParticipantAsync(),
         [AuditEventTypes.Goal.Created] = test => test.AddGoalAsync(),
+        [AuditEventTypes.Goal.Updated] = test => test.RewordGoalAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -385,6 +386,39 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             await StoredGoalIdAsync(participant.Id),
             participant.Id,
             new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>goal.updated</c>: A's manager rewords a goal of a participant added for the row, typing it over two lines,
+    /// with <c>PUT /api/admin/goals/{goalId}</c> and the goal's ETag, which records the goal as the entity and its
+    /// participant as the participant, and the old and new text alone, the new as stored, on one line, not its place or
+    /// time archived, which a reword leaves as they were.
+    /// </summary>
+    private async Task<WrittenEvent> RewordGoalAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goal = await factory.Services.AddGoalAsync(a, participant.Id, new("Makes own breakfast", 3));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/goals/{goal.Id}",
+            await client.FetchTokenAsync(),
+            new { text = " Makes own\nlunch " },
+            goal.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["text"] = "Makes own breakfast" },
+            ["new"] = new JsonObject { ["text"] = "Makes own lunch" },
+        };
+        return new(
+            AuditEventTypes.Goal.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            participant.Id,
+            details.ToJsonString());
     }
 
     /// <summary>

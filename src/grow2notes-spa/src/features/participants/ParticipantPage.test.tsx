@@ -1801,9 +1801,9 @@ function goalsSection(): HTMLElement | null {
   return within(main()).queryByRole('region', { name: 'Goals' });
 }
 
-/** The texts of the active goals, numbered in the Goals section's `<ol>`, in order. */
-function activeGoals(): string[] {
-  return Array.from(goalsSection()!.querySelectorAll('ol > li'), (item) => item.textContent);
+/** The texts of the active goals, numbered in the Goals section's `<ol>`, in order, each its row's first paragraph. */
+function activeGoals(): (string | undefined)[] {
+  return Array.from(goalsSection()!.querySelectorAll('ol > li'), (item) => item.querySelector('p')?.textContent);
 }
 
 /** The texts of the archived goals, in the Goals section's `<details>`, in order. */
@@ -1843,6 +1843,30 @@ function goalAdds(): { path: string; token: string | null; body: unknown }[] {
       token: new Headers(init?.headers).get('X-XSRF-TOKEN'),
       body: JSON.parse(init?.body as string) as unknown,
     }));
+}
+
+/** The path that the goal whose ID is `goalId` is reworded at. */
+function goalUpdatePath(goalId: string): string {
+  return `/api/admin/goals/${goalId}`;
+}
+
+/** The bare `200` of a goal's reword, with the goal's new `ETag`, which the page does not read. */
+const goalReworded: Answer = () =>
+  Promise.resolve(new Response(null, { status: 200, headers: { ETag: '"AAAAAAAAD9F="' } }));
+
+/** The goals' rewords sent, each as its path, its `If-Match`, its token and the JSON of its body. */
+function goalRewords(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'PUT' && (path as string).startsWith('/api/admin/goals/'))
+    .map(([path, init]) => {
+      const headers = new Headers(init?.headers);
+      return {
+        path: path as string,
+        ifMatch: headers.get('If-Match'),
+        token: headers.get('X-XSRF-TOKEN'),
+        body: JSON.parse(init?.body as string) as unknown,
+      };
+    });
 }
 
 /** A goal as the list gives it once it is added, first in the list. */
@@ -1952,6 +1976,35 @@ describe("A participant's goals", () => {
     expect(newGoal()).toHaveFocus();
     await wait(16);
     expect(pageStatus()).toHaveTextContent('Goal added to the end of the list');
+  });
+
+  it('take one reworded on the page: sent with token and version, the list read again, focus on Edit', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast] = janesGoals;
+    serve('PUT', goalUpdatePath(breakfast.id), goalReworded);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json(janesGoals.map((goal) => (goal === breakfast ? { ...goal, text: 'Makes own lunch' } : goal))),
+    );
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` }));
+    type(within(goalsSection()!).getByRole('textbox', { name: 'Edit goal' }), ' Makes own\nlunch ');
+
+    await press(within(goalsSection()!).getByRole('button', { name: 'Save' }));
+
+    expect(goalRewords()).toEqual([
+      {
+        path: goalUpdatePath(breakfast.id),
+        ifMatch: `"${breakfast.rowVersion}"`,
+        token: 'token-1',
+        body: { text: 'Makes own lunch' },
+      },
+    ]);
+    expect(requests().slice(-2)).toEqual([`PUT ${goalUpdatePath(breakfast.id)}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual(['Makes own lunch', janesActiveGoals[1]]);
+    expect(within(goalsSection()!).getByRole('button', { name: 'Edit, Makes own lunch' })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal saved');
   });
 
   it('of a participant just added take one added on the page, reading their list only after it', async () => {

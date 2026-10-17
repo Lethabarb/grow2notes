@@ -4,14 +4,16 @@ using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 
 namespace Grow2Notes.Web.Features.Participants;
 
 /// <summary>
 /// The handler that changes a participant's goals (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants/{participantId}/goals</c>
-/// calls it with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each
-/// change is saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// and <c>PUT /api/admin/goals/{goalId}</c> call it with <see cref="Actor.InApp"/>, and Release 2's tools will call it
+/// with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
+/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class GoalChanges(
     Grow2NotesDbContext db,
@@ -69,6 +71,66 @@ internal sealed class GoalChanges(
     }
 
     /// <summary>
+    /// Rewords a goal of the tenant's organisation (S01.02.06): loads it through the tenant filter, so another
+    /// organisation's is not found; checks <paramref name="ifMatch"/> against its version; reads the text from
+    /// <paramref name="request"/> by the add's rules (<see cref="GoalText.TryRead"/>); then saves it with
+    /// <c>goal.updated</c>, whose <c>Details</c> hold the old and new <c>text</c>, and whose participant is the goal's;
+    /// or, when the text is already stored, saves nothing and writes no event, and answers as a save does (D84). An
+    /// archived goal is reworded too, as design.md §6.6 names no refusal, though the screen offers Edit on active goals
+    /// alone (T05's Notes).
+    /// </summary>
+    /// <param name="actor">Who rewords it.</param>
+    /// <param name="goalId">The goal.</param>
+    /// <param name="ifMatch">
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
+    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
+    /// </param>
+    /// <param name="request">The text as sent.</param>
+    /// <param name="cancellationToken">Cancels the reword.</param>
+    /// <returns>
+    /// The goal's <c>ETag</c> once the text is stored; or the code that <see cref="IfMatch.Check"/> gives, or
+    /// <see cref="ErrorCode.PreconditionFailed"/> when the goal changed after it was loaded, or the text's message,
+    /// with nothing written.
+    /// </returns>
+    public async Task<GoalChangeResult> UpdateAsync(
+        Actor actor, Guid goalId, StringValues ifMatch, GoalTextRequest request, CancellationToken cancellationToken)
+    {
+        var goal = await db.Goals.SingleOrDefaultAsync(g => g.Id == goalId, cancellationToken);
+        if (goal is null)
+        {
+            return GoalChangeResult.NotFound;
+        }
+
+        if (IfMatch.Check(ifMatch, RowVersionToken.Of(goal)) is { } refused)
+        {
+            return GoalChangeResult.Refused(refused);
+        }
+
+        if (!GoalText.TryRead(request, out var text, out var errors))
+        {
+            return GoalChangeResult.Invalid(errors);
+        }
+
+        var before = TextValues(goal);
+        goal.Text = text;
+        var saved = await changes.SaveAsync(
+            actor,
+            AuditEventTypes.Goal.Updated,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            goal.ParticipantId,
+            before,
+            TextValues(goal),
+            cancellationToken: cancellationToken);
+
+        // EF Core reads back the version that SQL Server gave the row as it saved it, so after a save this is the new
+        // ETag, and when nothing changed it is the one the If-Match matched.
+        return saved.Error is { } error
+            ? GoalChangeResult.Refused(error)
+            : GoalChangeResult.Reworded(RowVersionToken.ETag(goal));
+    }
+
+    /// <summary>
     /// A goal's values as an audit event records them, named and written as design.md §6.6's list gives them, never
     /// <c>id</c> or <c>rowVersion</c> (<see cref="ChangeDetails"/>): <c>archivedAtUtc</c> as stored, or JSON
     /// <c>null</c>.
@@ -79,4 +141,9 @@ internal sealed class GoalChanges(
         ["sortOrder"] = goal.SortOrder,
         ["archivedAtUtc"] = goal.ArchivedAtUtc,
     };
+
+    /// <summary>
+    /// The one value that a reword changes, as <c>goal.updated</c> records it, named as <see cref="Values"/> names it.
+    /// </summary>
+    private static JsonObject TextValues(Goal goal) => new() { ["text"] = goal.Text };
 }

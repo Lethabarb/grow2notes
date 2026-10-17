@@ -97,10 +97,12 @@ export const strings = {
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
   /**
-   * The button of a page or form that saves what it shows and stays, such as Guide prompts or a participant's Details
-   * (primary-actions.md).
+   * The button of a page or form that saves what it shows and stays, such as Guide prompts, a participant's Details or
+   * a list's edit form (primary-actions.md, list-editor.md).
    */
   save: 'Save',
+  /** Beside a form's Save, the button that closes the form and drops what was typed (list-editor.md). */
+  cancel: 'Cancel',
   /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
   saving: 'Saving…',
   /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
@@ -370,8 +372,9 @@ export const strings = {
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
    * (design.md §4.8): the help text above the list, unless it is read-only; the sentence in place of the list when no
    * row is active; and the summary of the archived rows' section. Then the add form: its field's label, its button,
-   * and, in the page's status region, what an add did; and a row's text as its messages name it, the one for no text
-   * and, with `msg.tooLong`, the one for too much (form-validation.md).
+   * and, in the page's status region, what an add did; then a row's edit form: its field's label, and what a Save did;
+   * and a row as `msg.rowChangedWhileEditing` names it, and its text as its messages name it, the one for no text and,
+   * with `msg.tooLong`, the one for too much (form-validation.md).
    */
   listEditor: {
     goal: {
@@ -383,9 +386,20 @@ export const strings = {
       newLabel: 'New goal',
       add: 'Add goal',
       added: 'Goal added to the end of the list',
+      editLabel: 'Edit goal',
+      saved: 'Goal saved',
+      row: 'goal',
       enter: 'Enter the goal',
       text: 'Goal',
     },
+  },
+  /**
+   * What every kind of list that `ListEditor` edits shares (list-editor.md *Exact copy*): each active row's Edit, and,
+   * above the list, focused, a write that found the list changed by someone else.
+   */
+  listRows: {
+    edit: 'Edit',
+    listChanged: 'Someone else changed this list just now. Check it, then try again.',
   },
   /**
    * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>`, Archive

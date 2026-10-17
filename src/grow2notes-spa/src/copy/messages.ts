@@ -42,6 +42,21 @@ export const msg = {
   /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),
   /**
+   * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
+   * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather
+   * than `aria-label`, which automatic translation misses, and after the label, so that the name starts with the words
+   * on screen (SC 2.5.3).
+   */
+  rowContext: (text: string) => `, ${text}`,
+  /**
+   * A list row's Save refused as stale (`412`) that finds the row still active once the list is read again
+   * (list-editor.md *Request errors*), in the edit form's alert, naming the row as its kind does and with its wording
+   * now, as stored.
+   */
+  rowChangedWhileEditing: (row: string, text: string) =>
+    `Someone else changed this ${row} while you were editing. It now says: ${text}. Save to replace it with your `
+    + 'wording, or Cancel to keep it.',
+  /**
    * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
    * design.md §3.7.
    */

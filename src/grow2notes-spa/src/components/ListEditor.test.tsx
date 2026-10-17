@@ -33,19 +33,27 @@ type Rendered = {
   queryFn: () => Promise<ListRow[]>;
   /** The adds sent, which nothing answers unless a test gives them an answer. */
   add: (text: string) => Promise<unknown>;
+  /** The rewords sent, each with its goal's ID and version, which nothing answers unless a test does. */
+  update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
 };
 
 /**
  * Renders the editor for goals in a page's status region, its list in the query already, as its page puts it there,
  * under a query client of its own, beside a button elsewhere on the page; gives the client, the query's function and
- * the adds' function.
+ * the writes' functions.
  */
 function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   const client = createQueryClient();
   client.setQueryData(queryKey, rows);
   const queryFn = vi.fn<() => Promise<ListRow[]>>();
   const add = vi.fn<(text: string) => Promise<unknown>>();
-  const api: ListApi = { query: queryOptions({ queryKey, queryFn }), scopeId: `goals:${participantId}`, add };
+  const update = vi.fn<(id: string, text: string, rowVersion: string) => Promise<unknown>>();
+  const api: ListApi = {
+    query: queryOptions({ queryKey, queryFn }),
+    scopeId: `goals:${participantId}`,
+    add,
+    update,
+  };
   render(
     <QueryClientProvider client={client}>
       <PageStatus>
@@ -54,7 +62,7 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
       </PageStatus>
     </QueryClientProvider>,
   );
-  return { client, queryFn, add };
+  return { client, queryFn, add, update };
 }
 
 /** The numbered list of active goals, or `null` while there is none. */
@@ -65,6 +73,11 @@ function activeList(): HTMLOListElement | null {
 /** Each active goal's list item. */
 function activeItems(): HTMLLIElement[] {
   return Array.from(activeList()?.children ?? [], (item) => item as HTMLLIElement);
+}
+
+/** Each active goal's text, as its row shows it, the first paragraph of its list item, out of edit mode. */
+function activeTexts(): (string | undefined)[] {
+  return activeItems().map((item) => item.querySelector('p')?.textContent);
 }
 
 /** The archived section, or `null` while it is left out. */
@@ -98,7 +111,7 @@ describe('ListEditor', () => {
   it('keeps the order the list gives, never sorting it', () => {
     renderEditor([{ ...sister, sortOrder: 1 }, { ...breakfast, sortOrder: 0 }, { ...bus, sortOrder: 2 }]);
 
-    expect(activeItems().map((item) => item.textContent)).toEqual([sister.text, breakfast.text, bus.text]);
+    expect(activeTexts()).toEqual([sister.text, breakfast.text, bus.text]);
   });
 
   it("wraps a goal's text anywhere, so that a long word cannot push the page sideways", () => {
@@ -130,7 +143,7 @@ describe('ListEditor', () => {
     renderEditor([breakfast, washing, shop, sister]);
 
     const details = archivedSection()!;
-    expect(activeItems().map((item) => item.textContent)).toEqual([breakfast.text, sister.text]);
+    expect(activeTexts()).toEqual([breakfast.text, sister.text]);
     expect(activeList()!.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(details.open).toBe(false);
     expect(details).not.toHaveAttribute('open');
@@ -159,7 +172,7 @@ describe('ListEditor', () => {
     renderEditor([breakfast, washing, sister, shop], true);
 
     expect(screen.queryByText(help)).toBeNull();
-    expect(activeItems().map((item) => item.textContent)).toEqual([breakfast.text, sister.text]);
+    expect(activeTexts()).toEqual([breakfast.text, sister.text]);
     expect(archivedTexts()).toEqual([shop.text, washing.text]);
     expect(screen.queryAllByRole('alert')).toEqual([]);
     expect(screen.getAllByRole('button')).toEqual([screen.getByRole('button', { name: 'Elsewhere' })]);
@@ -249,16 +262,29 @@ async function press(element: HTMLElement) {
 }
 
 /**
- * Has the adds and the list's reads answered by a server that holds the list: an add puts a goal at its end, and a
- * read gives what it holds.
+ * Has the writes and the list's reads answered by a server that holds the list, which it gives back, so that a test
+ * can change it as someone else would: an add puts a goal at its end; a reword sent with the goal's version stores the
+ * text with a new version, and one sent with another is refused `412`; and a read gives what it holds.
  */
-function serveList({ add, queryFn }: Rendered, rows: ListRow[]) {
+function serveList({ add, update, queryFn }: Rendered, rows: ListRow[]): ListRow[] {
   const list = [...rows];
+  let versions = 0;
   vi.mocked(add).mockImplementation((text) => {
     list.push(goal(`added-${list.length}`, text, list.length));
     return Promise.resolve(undefined);
   });
+  vi.mocked(update).mockImplementation((id, text, rowVersion) => {
+    const index = list.findIndex((row) => row.id === id);
+    if (list[index].rowVersion !== rowVersion) {
+      return Promise.reject(new ApiError(412, 'precondition.failed'));
+    }
+
+    versions += 1;
+    list[index] = { ...list[index], text, rowVersion: `AAAAAAAAD${versions}=` };
+    return Promise.resolve(undefined);
+  });
   vi.mocked(queryFn).mockImplementation(() => Promise.resolve([...list]));
+  return list;
 }
 
 /** A promise that the test settles when it chooses. */
@@ -433,7 +459,7 @@ describe('ListEditor, adding', () => {
 
     expect(rendered.add).toHaveBeenCalledExactlyOnceWith('Catches the bus to day program');
     expect(rendered.queryFn).toHaveBeenCalledOnce();
-    expect(activeItems().map((item) => item.textContent)).toEqual([breakfast.text, 'Catches the bus to day program']);
+    expect(activeTexts()).toEqual([breakfast.text, 'Catches the bus to day program']);
     expect(newGoal()).toHaveValue('');
     expect(newGoal()).toHaveFocus();
     expect(shownCount()?.textContent).toBe(hint);
@@ -473,7 +499,7 @@ describe('ListEditor, adding', () => {
 
       expect(newGoal()).toHaveFocus();
       expect(newGoal()).toHaveValue('');
-      expect(activeItems().map((item) => item.textContent)).toEqual(texts.slice(0, index + 1));
+      expect(activeTexts()).toEqual(texts.slice(0, index + 1));
     }
 
     expect(vi.mocked(rendered.add).mock.calls).toEqual(texts.map((text) => [text]));
@@ -533,7 +559,7 @@ describe('ListEditor, adding', () => {
     await wait(1);
 
     expect(button).not.toHaveAttribute('aria-disabled');
-    expect(activeItems().map((item) => item.textContent)).toEqual(['Makes own breakfast']);
+    expect(activeTexts()).toEqual(['Makes own breakfast']);
     expect(newGoal()).toHaveValue('');
   });
 
@@ -549,7 +575,7 @@ describe('ListEditor, adding', () => {
     answer.resolve(undefined);
     await wait(1);
 
-    expect(activeItems().map((item) => item.textContent)).toEqual(['Makes own breakfast']);
+    expect(activeTexts()).toEqual(['Makes own breakfast']);
     expect(newGoal()).toHaveValue('Phones her sister');
   });
 
@@ -645,6 +671,463 @@ describe('ListEditor, adding', () => {
     expect(write.options.scope).toEqual({ id: `goals:${participantId}` });
     expect(write.options.retry).toBe(0);
     expect(write.options.mutationKey).toBeUndefined();
+    expect(rendered.client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([queryKey]);
+  });
+});
+
+const editLabel = 'Edit goal';
+const saved = 'Goal saved';
+const listChanged = 'Someone else changed this list just now. Check it, then try again.';
+const changedWhileEditing =
+  'Someone else changed this goal while you were editing. It now says: Makes own toast. Save to replace it with your '
+  + 'wording, or Cancel to keep it.';
+
+/** The active goal's list item whose text, or whose edit form's box, is `text`. */
+function rowOf(text: string): HTMLLIElement {
+  return activeItems().find(
+    (item) => item.querySelector('p')?.textContent === text || item.querySelector('textarea')?.value === text,
+  )!;
+}
+
+/** The row's Edit, by its name, which ends with the row's text. */
+function editButton(text: string): HTMLElement {
+  return screen.getByRole('button', { name: `Edit, ${text}` });
+}
+
+/** The row's edit form's box, or `null` while the row is not in edit mode. */
+function editBox(item: HTMLElement): HTMLTextAreaElement | null {
+  return within(item).queryByRole('textbox', { name: editLabel });
+}
+
+/** The row's Save, by its name while it is not busy. */
+function saveButton(item: HTMLElement): HTMLElement {
+  return within(item).getByRole('button', { name: 'Save' });
+}
+
+function cancelButton(item: HTMLElement): HTMLElement {
+  return within(item).getByRole('button', { name: 'Cancel' });
+}
+
+/** The edit form's message on its box, without its hidden "Error: ", or `null` while it shows none. */
+function editMessage(item: HTMLElement): string | null {
+  const message = item.querySelector('form [id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+/** The list conflict above the list, or `null` while it is not shown. */
+function conflict(): HTMLElement | null {
+  return screen.queryByText(listChanged);
+}
+
+/** Opens the row's edit form with Edit, and gives its box. */
+async function openEdit(text: string): Promise<HTMLTextAreaElement> {
+  const item = rowOf(text);
+  await press(editButton(text));
+  return editBox(item)!;
+}
+
+/** Types `text` in the box, replacing what was there. */
+function retype(box: HTMLTextAreaElement, text: string) {
+  fireEvent.change(box, { target: { value: text } });
+}
+
+describe('ListEditor, rewording', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    document.title = 'Grow2Notes – Participant';
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives each active row Edit after its alert, a label-width secondary button, its text hidden after it", () => {
+    renderEditor([breakfast, bus, washing]);
+
+    for (const row of [breakfast, bus]) {
+      const button = editButton(row.text);
+      const item = rowOf(row.text);
+      expect(item).toContainElement(button);
+      expect(button.tagName).toBe('BUTTON');
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-label');
+      expect(button).not.toHaveAttribute('aria-expanded');
+      expect(button.className).toMatch(/secondary/);
+      expect(button.className).toMatch(/rowButton/);
+      expect(button.textContent).toBe(`Edit, ${row.text}`);
+      expect(within(button).getByText(`, ${row.text}`)).toHaveClass('visually-hidden');
+      expect(follows(within(item).getByRole('alert'), button)).toBe(true);
+    }
+    expect(within(archivedSection()!).queryByRole('button')).toBeNull();
+  });
+
+  it('turns the row into a form in place, still numbered: the box holds the text, focused, caret at its end', () => {
+    renderEditor([breakfast, bus]);
+
+    fireEvent.click(editButton(bus.text));
+
+    const item = activeItems()[1];
+    const box = editBox(item)!;
+    expect(activeItems()).toHaveLength(2);
+    expect(box.closest('form')).toHaveAttribute('novalidate');
+    expect(box.closest('li')).toBe(item);
+    expect(box.tagName).toBe('TEXTAREA');
+    expect(box).toHaveAttribute('rows', '3');
+    expect(box).not.toHaveAttribute('maxlength');
+    expect(box).not.toHaveAttribute('readonly');
+    expect(box).toHaveValue(bus.text);
+    expect(box).toHaveFocus();
+    expect([box.selectionStart, box.selectionEnd]).toEqual([bus.text.length, bus.text.length]);
+    expect(within(item).queryByRole('button', { name: /^Edit/ })).toBeNull();
+    expect(within(item).queryByText(bus.text, { selector: 'p' })).toBeNull();
+    expect(editButton(breakfast.text)).toBeInTheDocument();
+  });
+
+  it('describes the box as New goal is, and shows the count, then the empty alert, then Save and Cancel', async () => {
+    renderEditor([breakfast, bus]);
+
+    const box = await openEdit(bus.text);
+
+    const item = rowOf(bus.text);
+    expect(box).toHaveAccessibleDescription(`${hint} ${help}`);
+    const count = item.querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(count.textContent).toBe('You have 142 characters remaining');
+    const alert = within(item).getByRole('alert');
+    expect(alert).toBeEmptyDOMElement();
+    expect(follows(box, count)).toBe(true);
+    expect(follows(count, alert)).toBe(true);
+    const save = saveButton(item);
+    const cancel = cancelButton(item);
+    expect(follows(alert, save)).toBe(true);
+    expect(follows(save, cancel)).toBe(true);
+    expect(save).toHaveAttribute('type', 'submit');
+    expect(save.className).toMatch(/primary/);
+    expect(save.className).toMatch(/rowButton/);
+    expect(cancel).toHaveAttribute('type', 'button');
+    expect(cancel.className).toMatch(/secondary/);
+    expect(cancel.className).toMatch(/rowButton/);
+  });
+
+  it("on Cancel, drops what was typed, sends nothing, and puts focus on the row's Edit", async () => {
+    const { update } = renderEditor([breakfast, bus]);
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+
+    await press(cancelButton(rowOf('Makes own lunch')));
+
+    expect(update).not.toHaveBeenCalled();
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+    expect(editButton(breakfast.text)).toHaveFocus();
+    expect(await openEdit(breakfast.text)).toHaveValue(breakfast.text);
+  });
+
+  it('on Save of the text unchanged once cleaned, closes as Cancel does and sends nothing', async () => {
+    const { update } = renderEditor([breakfast, bus]);
+    retype(await openEdit(breakfast.text), '  Makes own\n  breakfast ');
+
+    await press(saveButton(rowOf('  Makes own\n  breakfast ')));
+    await wait(16);
+
+    expect(update).not.toHaveBeenCalled();
+    expect(editBox(rowOf(breakfast.text))).toBeNull();
+    expect(editButton(breakfast.text)).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it("sends the text on one line with the row's version, reads the list again, shows it, focusing Edit", async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+    retype(await openEdit(breakfast.text), ' Makes own\n  lunch ');
+
+    await press(saveButton(rowOf(' Makes own\n  lunch ')));
+
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
+    expect(editBox(rowOf('Makes own lunch'))).toBeNull();
+    expect(editButton('Makes own lunch')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+  });
+
+  it('shows Save busy, "Saving…" after 400 ms, the box read-only; a press while it is sends nothing more', async () => {
+    const rendered = renderEditor([breakfast]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.update).mockReturnValue(answer.promise);
+    vi.mocked(rendered.queryFn).mockResolvedValue([{ ...breakfast, text: 'Makes own lunch' }]);
+    const box = await openEdit(breakfast.text);
+    retype(box, 'Makes own lunch');
+    const save = saveButton(rowOf('Makes own lunch'));
+
+    await press(save);
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(box).toHaveAttribute('readonly');
+    await wait(398);
+    expect(save).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(save).toHaveAttribute('data-busy');
+    expect(within(save).getByText('Saving…')).toBeInTheDocument();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Saving…');
+    await press(save);
+    expect(rendered.update).toHaveBeenCalledOnce();
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(editButton('Makes own lunch')).toHaveFocus();
+  });
+
+  it.each([
+    ['only spaces and line breaks', ' \n\t \n ', enterTheGoal],
+    ['over 200 characters', 'a'.repeat(201), tooLong],
+    ['201 characters once its line break is a space', `${'a'.repeat(100)}\n${'b'.repeat(100)}`, tooLong],
+  ])('on Save with %s, shows its message above the box and focuses it, sending nothing', async (_, text, message) => {
+    const { update } = renderEditor([breakfast]);
+    const box = await openEdit(breakfast.text);
+    retype(box, text);
+    const item = rowOf(text);
+
+    await press(saveButton(item));
+
+    expect(update).not.toHaveBeenCalled();
+    expect(editMessage(item)).toBe(message);
+    expect(box).toHaveFocus();
+    expect(box).toHaveValue(text);
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveAccessibleDescription(`Error: ${message} ${hint} ${help}`);
+    expect(follows(within(item).getByText(message), box)).toBe(true);
+    expect(item.querySelector('[data-invalid]')).toContainElement(box);
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Participant');
+    expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+  });
+
+  it('once the message shows, checks the text at each input, and takes it away silently once it passes', async () => {
+    renderEditor([breakfast]);
+    const box = await openEdit(breakfast.text);
+    retype(box, '   ');
+    const item = rowOf('   ');
+    await press(saveButton(item));
+
+    retype(box, 'a'.repeat(201));
+    expect(editMessage(item)).toBe(tooLong);
+    retype(box, 'Makes own lunch');
+
+    expect(editMessage(item)).toBeNull();
+    expect(box).not.toHaveAttribute('aria-invalid');
+    expect(box).toHaveAccessibleDescription(`${hint} ${help}`);
+    expect(item.querySelector('[data-invalid]')).toBeNull();
+    expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it("shows the server's refusal of the text on the box, as Save's own check does, focusing it", async () => {
+    const rendered = renderEditor([breakfast]);
+    vi.mocked(rendered.update).mockRejectedValue(new ApiError(422, 'validation.failed', { text: [tooLong] }));
+    const box = await openEdit(breakfast.text);
+    retype(box, 'Makes own lunch');
+    const item = rowOf('Makes own lunch');
+
+    await press(saveButton(item));
+
+    expect(box).toHaveFocus();
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveAccessibleDescription(`Error: ${tooLong} ${hint} ${help}`);
+    expect(box).toHaveValue('Makes own lunch');
+    expect(box).not.toHaveAttribute('readonly');
+    expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+    expect(rendered.queryFn).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no connection, its answer lost', new ApiError(0), 'Not saved: no connection. Try again.'],
+    ['a server error', new ApiError(500), 'Not saved: something went wrong. Try again.'],
+  ])('on %s, sends the reword once, says so above Save, the text and focus kept', async (_, failure, words) => {
+    const rendered = renderEditor([breakfast]);
+    vi.mocked(rendered.update).mockRejectedValue(failure);
+    const box = await openEdit(breakfast.text);
+    retype(box, 'Makes own lunch');
+    const item = rowOf('Makes own lunch');
+    const save = saveButton(item);
+
+    await press(save);
+    await wait(60_000);
+
+    expect(rendered.update).toHaveBeenCalledOnce();
+    expect(rendered.queryFn).not.toHaveBeenCalled();
+    const alert = within(item).getByRole('alert');
+    expect(alert).toHaveTextContent(words);
+    expect(follows(alert, save)).toBe(true);
+    expect(save).toHaveFocus();
+    expect(box).toHaveValue('Makes own lunch');
+    expect(box).not.toHaveAttribute('readonly');
+    expect(conflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(saved);
+  });
+
+  it('shows nothing for a 401, which the session flow has, keeping the text', async () => {
+    const rendered = renderEditor([breakfast]);
+    vi.mocked(rendered.update).mockRejectedValue(new ApiError(401));
+    const box = await openEdit(breakfast.text);
+    retype(box, 'Makes own lunch');
+    const item = rowOf('Makes own lunch');
+
+    await press(saveButton(item));
+
+    expect(within(item).getByRole('alert')).toBeEmptyDOMElement();
+    expect(editMessage(item)).toBeNull();
+    expect(box).toHaveValue('Makes own lunch');
+  });
+
+  it('on a 412 finding the goal active, keeps the text, says what it says now, saves at the next Save', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    const server = serveList(rendered, [breakfast, bus]);
+    const box = await openEdit(breakfast.text);
+    retype(box, 'Makes own lunch');
+    const item = rowOf('Makes own lunch');
+    const save = saveButton(item);
+    // Another manager rewords it meanwhile.
+    server[0] = { ...breakfast, text: 'Makes own toast', rowVersion: 'AAAAAAAAC1E=' };
+
+    await press(save);
+
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(within(item).getByRole('alert')).toHaveTextContent(changedWhileEditing);
+    expect(box).toHaveValue('Makes own lunch');
+    expect(save).toHaveFocus();
+    expect(conflict()).toBeNull();
+
+    await press(save);
+
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=');
+    expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
+    expect(editButton('Makes own lunch')).toHaveFocus();
+  });
+
+  it('on a 412 finding the goal archived, shows the list conflict, focused, until a write succeeds', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    const server = serveList(rendered, [breakfast, bus]);
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+    // Another manager archives it meanwhile.
+    server[0] = { ...breakfast, archivedAtUtc: '2026-10-05T01:00:00Z', rowVersion: 'AAAAAAAAC1E=' };
+
+    await press(saveButton(rowOf('Makes own lunch')));
+
+    const shown = conflict()!;
+    expect(shown.tagName).toBe('P');
+    expect(shown).toHaveAttribute('tabindex', '-1');
+    expect(shown).toHaveFocus();
+    expect(follows(screen.getByText(help), shown)).toBe(true);
+    expect(follows(shown, activeList()!)).toBe(true);
+    expect(activeTexts()).toEqual([bus.text]);
+    expect(archivedTexts()).toEqual([breakfast.text]);
+    expect(screen.queryByRole('textbox', { name: editLabel })).toBeNull();
+
+    // A write that fails leaves it; the next that succeeds takes it away.
+    vi.mocked(rendered.add).mockRejectedValueOnce(new ApiError(0));
+    type('Phones her sister');
+    await press(addButton());
+    expect(conflict()).toBe(shown);
+    await press(addButton());
+    expect(conflict()).toBeNull();
+  });
+
+  it('keeps two rows in edit mode at once, each as typed, while the other rows move', async () => {
+    const { client } = renderEditor([breakfast, bus, sister]);
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+    retype(await openEdit(sister.text), 'Phones her brother');
+
+    // As a read of the list after someone else reordered it.
+    client.setQueryData(queryKey, [sister, bus, breakfast]);
+    await wait(1);
+
+    const [first, second, third] = activeItems();
+    expect(editBox(first)).toHaveValue('Phones her brother');
+    expect(second.querySelector('p')?.textContent).toBe(bus.text);
+    expect(editBox(third)).toHaveValue('Makes own lunch');
+  });
+
+  it("leaves focus in another row's box that the person went to while Save was out, else focuses Edit", async () => {
+    const rendered = renderEditor([breakfast, sister]);
+    serveList(rendered, [breakfast, sister]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.update).getMockImplementation()!;
+    vi.mocked(rendered.update).mockImplementationOnce(async (...sent) => {
+      await answer.promise;
+      return serve(...sent);
+    });
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+    const other = await openEdit(sister.text);
+    retype(other, 'Phones her brother');
+    await press(saveButton(rowOf('Makes own lunch')));
+
+    other.focus();
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(editBox(rowOf('Makes own lunch'))).toBeNull();
+    expect(other).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+
+    await press(saveButton(rowOf('Phones her brother')));
+
+    expect(editButton('Phones her brother')).toHaveFocus();
+  });
+
+  it('sends the version the list holds as the write runs, read again by the write before it', async () => {
+    const rendered = renderEditor([breakfast]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.add).mockReturnValue(answer.promise);
+    vi.mocked(rendered.update).mockResolvedValue(undefined);
+    vi.mocked(rendered.queryFn).mockResolvedValue([
+      { ...breakfast, rowVersion: 'AAAAAAAAC1E=' },
+      goal('6', 'Phones her sister', 1),
+    ]);
+    type('Phones her sister');
+    await press(addButton());
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+
+    await press(saveButton(rowOf('Makes own lunch')));
+    expect(rendered.update).not.toHaveBeenCalled();
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=');
+  });
+
+  it('sends nothing for a Save whose goal the write before it found archived, showing the list conflict', async () => {
+    const rendered = renderEditor([breakfast]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.add).mockReturnValue(answer.promise);
+    vi.mocked(rendered.queryFn).mockResolvedValue([
+      { ...breakfast, archivedAtUtc: '2026-10-05T01:00:00Z', rowVersion: 'AAAAAAAAC1E=' },
+      goal('6', 'Phones her sister', 1),
+    ]);
+    type('Phones her sister');
+    await press(addButton());
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+    await press(saveButton(rowOf('Makes own lunch')));
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(rendered.update).not.toHaveBeenCalled();
+    expect(conflict()).toHaveFocus();
+    expect(activeTexts()).toEqual(['Phones her sister']);
+  });
+
+  it("sends each reword in the list's one scope, with no retry", async () => {
+    const rendered = renderEditor([breakfast]);
+    serveList(rendered, [breakfast]);
+    retype(await openEdit(breakfast.text), 'Makes own lunch');
+
+    await press(saveButton(rowOf('Makes own lunch')));
+
+    const [write] = rendered.client.getMutationCache().getAll();
+    expect(write.options.scope).toEqual({ id: `goals:${participantId}` });
+    expect(write.options.retry).toBe(0);
     expect(rendered.client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([queryKey]);
   });
 });

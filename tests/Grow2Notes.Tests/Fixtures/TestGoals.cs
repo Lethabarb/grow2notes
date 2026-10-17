@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Platform.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Fixtures;
@@ -12,6 +13,12 @@ namespace Grow2Notes.Tests.Fixtures;
 internal sealed record TestGoal(
     string Text, int SortOrder, DateTime? CreatedAtUtc = null, Guid? Id = null, DateTime? ArchivedAtUtc = null);
 
+/// <summary>
+/// A goal that <see cref="TestGoals.AddGoalAsync"/> added: its ID, and its <c>ETag</c>, the <c>If-Match</c> that a
+/// change to it sends.
+/// </summary>
+internal sealed record AddedGoal(Guid Id, string ETag);
+
 internal static class TestGoals
 {
     /// <summary>When a goal that <see cref="AddGoalsAsync"/> adds was added, unless it says; made up (A35).</summary>
@@ -23,6 +30,23 @@ internal static class TestGoals
     /// gaps, ties and archived goals that no endpoint would leave; and gives their IDs in the order given.
     /// </summary>
     public static async Task<List<Guid>> AddGoalsAsync(
+        this IServiceProvider services, SeededOrganisation organisation, Guid participantId, params TestGoal[] goals) =>
+        [.. (await services.AddRowsAsync(organisation, participantId, goals)).Select(goal => goal.Id)];
+
+    /// <summary>
+    /// Adds one goal as <see cref="AddGoalsAsync"/> adds them, and gives its ID and its <c>ETag</c>, for a test that
+    /// changes it.
+    /// </summary>
+    public static async Task<AddedGoal> AddGoalAsync(
+        this IServiceProvider services, SeededOrganisation organisation, Guid participantId, TestGoal goal)
+    {
+        var row = Assert.Single(await services.AddRowsAsync(organisation, participantId, goal));
+
+        // EF Core reads back the version that SQL Server gave the row as it saved it.
+        return new(row.Id, RowVersionToken.ETag(row));
+    }
+
+    private static async Task<List<Goal>> AddRowsAsync(
         this IServiceProvider services, SeededOrganisation organisation, Guid participantId, params TestGoal[] goals)
     {
         await using var scope = services.CreateAsyncScope();
@@ -43,6 +67,6 @@ internal static class TestGoals
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 
-        return [.. rows.Select(goal => goal.Id)];
+        return rows;
     }
 }

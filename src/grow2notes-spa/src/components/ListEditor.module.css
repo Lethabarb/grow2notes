@@ -45,15 +45,44 @@
   min-inline-size: 0;
 }
 
+/* A row's buttons, or its edit form's Save and Cancel, wrapping onto the next line when they do not fit. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+/*
+ * Every row button, and the edit form's Save and Cancel, takes its label's width, at least 44 px wide and the shared
+ * 48 px high, on a phone and a laptop alike: neither the shared button's full width below 40rem nor its 8rem minimum
+ * from there (common-items.md *Conflicts resolved* 6). Two classes, so that it outranks the shared rule whichever
+ * stylesheet comes first.
+ */
+.actions .rowButton {
+  inline-size: auto;
+  min-inline-size: var(--target-min);
+}
+
+/*
+ * The list conflict above the list, with the 4 px bar of a field in error (list-editor.md *States*), in the reading
+ * column. The bar is a border, so that forced colours keep it.
+ */
+.conflict {
+  max-inline-size: var(--measure);
+  margin-block: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 4px solid var(--colour-error);
+}
+
 /*
  * The add form under the list, in the reading column (TextBox.module.css), as are the help text and the box, while
  * the list uses the wider page (participants.md *Layout - laptop*).
  */
-.textForm {
+.addForm {
   margin-block-start: var(--space-5);
 }
 
-/* The field, then the alert, which takes space only while it holds words, then the button. */
+/* The field, then the alert, which takes space only while it holds words, then the buttons. */
 .field {
   margin-block-end: var(--space-5);
 }
@@ -63,7 +92,7 @@
  * as field-sizing sizes the box by its CSS rather than by rows. Two classes, so that it outranks the shared rule
  * whichever stylesheet comes first.
  */
-.textForm .box {
+.field .box {
   min-block-size: calc(3em * var(--line-height-body) + 2 * var(--space-3) + 2 * var(--border-control));
 }
 

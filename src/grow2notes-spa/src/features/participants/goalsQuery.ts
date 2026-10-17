@@ -23,12 +23,20 @@ export function goalsQuery(participantId: string) {
 
 /**
  * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query; the one scope of
- * every write on them, `goals:<participantId>` (participants.md B6); and the add, whose `201` has no body.
+ * every write on them, `goals:<participantId>` (participants.md B6); the add, whose `201` has no body; and a goal's
+ * reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and whose `ETag` the editor does not read,
+ * as it reads each goal's next version from the list.
  */
 export function goalsApi(participantId: string): ListApi {
   return {
     query: goalsQuery(participantId),
     scopeId: `goals:${participantId}`,
     add: (text) => api<undefined>(goalsPath(participantId), { method: 'POST', body: { text } }),
+    update: (id, text, rowVersion) =>
+      api<undefined>(`/api/admin/goals/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: { text },
+        ifMatch: rowVersion,
+      }),
   };
 }

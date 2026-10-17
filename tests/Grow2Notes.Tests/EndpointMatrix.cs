@@ -178,6 +178,11 @@ internal static class EndpointMatrix
         // first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, Created, NotFound,
             AddingAGoalToAParticipantOfItsOwn),
+
+        // Rewording a goal (§6.6), in the same group. Each call rewords a goal of its own, which its request first adds
+        // to a participant whom it adds to A, so B's manager, to whom A's goals are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/goals/{goalId:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RewordingAGoalOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -321,6 +326,20 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { text = "Makes own breakfast" }),
         };
+    }
+
+    // A reword of a goal that the request first adds to a participant whom it adds to A, sent with the goal's ETag as
+    // If-Match, so that each call changes a goal of its own (tests/README.md).
+    private static async Task<HttpRequestMessage> RewordingAGoalOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goal = await call.Services.AddGoalAsync(call.Seeded.A, participant.Id, new("Makes own breakfast", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/goals/{goal.Id}")
+        {
+            Content = JsonContent.Create(new { text = "Makes own lunch" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
+        return request;
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

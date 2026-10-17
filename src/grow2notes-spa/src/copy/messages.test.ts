@@ -84,3 +84,13 @@ describe("an Add's failure (list-editor.md *Request errors*)", () => {
     expect(msg.notAdded('server')).toBe('Not added: something went wrong. Try again.');
   });
 });
+
+describe("a list row's Save refused as stale (list-editor.md *Request errors*)", () => {
+  const words =
+    'Someone else changed this goal while you were editing. It now says: Phones her sister. Save to replace it with '
+    + 'your wording, or Cancel to keep it.';
+
+  it('names the row by its kind, says its wording now, and says what Save and Cancel each do', () => {
+    expect(msg.rowChangedWhileEditing('goal', 'Phones her sister')).toBe(words);
+  });
+});

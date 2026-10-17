@@ -1526,6 +1526,13 @@ moves, archives and restores them. Changes apply to notes started from then on.
     `field-sizing: content` sizes the box by its CSS rather than `rows`. They are described by the error, the hidden
     hint, then the help text, the order common-items.md *Conflicts resolved* 12 chose, so that ListEditor has one
     order for goals and items; list-editor.md's expected Edit reading is brought into line in step 6.
+  - Cancel stays free while a Save is out or queued: it closes the form, but the Save already pressed still runs, so
+    the text cancelled can still be saved, and the list then shows what the server holds, as list-editor.md
+    *Queueing* names no way to call a queued write back.
+  - A queued Save whose goal is no longer active when its turn comes sends nothing and shows the list conflict, as a
+    Save whose `412` finds the goal archived does.
+  - A Save that succeeds focuses its row's Edit only while focus is still in its form or on `<body>`, as Add keeps
+    focus in New goal, so that it never pulls focus from another row's box (common-items.md *Queueing*).
   - ListEditor ships with its goal kind alone: the item kind's words, its group adapter and the Group radios come with
     T06 and T07, so that no part of it ships unused.
 - By-hand checks for ops/first-use-in-test.md, in a section of their own after the steps already there: design.md
@@ -1600,7 +1607,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       in a row with focus in the field after each; 250 characters pasted kept whole, the count saying 50 too many and
       Add showing the error; one `POST` after a lost answer; and after Add participant's `201` the next Tab from Save
       reaching New goal (S01.02.02's hand-off from T02).
-- [ ] Reword a goal in its row (S01.02.06; design.md §3.7's rewording bullet; participants.md *Goals*' "Save and Cancel
+- [x] Reword a goal in its row (S01.02.06; design.md §3.7's rewording bullet; participants.md *Goals*' "Save and Cancel
       return focus…" and "Typing past 200 characters…" for Save; list-editor.md *Behaviour*):
       `PUT /api/admin/goals/{goalId}` with `{text}`, loading the goal through the tenant filter, checking `If-Match`
       with `IfMatch.Check` against `RowVersionToken.Of(goal)` and answering its code's `Problem()`, cleaning and
