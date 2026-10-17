@@ -9,6 +9,7 @@ import { onSessionEnded } from '../api/session.ts';
 import { buttonClass } from '../components/buttonClass.ts';
 import { pageName } from '../copy/pageNames.ts';
 import { fullPageLoad } from './fullPageLoad.ts';
+import { rearmUnloadGuard, setLeaveGuard, unloadGuardArmed } from './leaveGuard.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
 // jsdom does not navigate, so the full reload is a stand-in that counts its calls.
@@ -52,6 +53,7 @@ function serveMe(me: () => Me) {
   fetchMock.mockImplementation(() => Promise.resolve(meAnswer(me())));
 }
 
+const mePath = '/api/auth/me';
 const logoutPath = '/api/auth/logout';
 const antiforgeryToken = 'made-up-token';
 
@@ -104,11 +106,49 @@ const noAnswer: Logout = (init) =>
     });
   });
 
+/** `logout`, with whether the unload guard was armed as each request that met it was sent. */
+function notingArmed(logout: Logout) {
+  const armedWhenSent: boolean[] = [];
+  const noting: Logout = (init) => {
+    armedWhenSent.push(unloadGuardArmed());
+    return logout(init);
+  };
+  return { logout: noting, armedWhenSent };
+}
+
 /** Each logout sent, as its method and the antiforgery token it carried. */
 function logoutsSent() {
   return fetchMock.mock.calls
     .filter(([path]) => path === logoutPath)
     .map(([, init]) => ({ method: init?.method, token: new Headers(init?.headers).get('X-XSRF-TOKEN') }));
+}
+
+/** The address of each request sent but `GET /api/auth/me`: the antiforgery token's and the logout's. */
+function requestsBesidesMe() {
+  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath);
+}
+
+/**
+ * A stand-in for a page's leave dialog, registered as the leave guard, as Guide prompts registers its own: each time
+ * it is asked, it waits for the test's answer.
+ */
+function standInGuard() {
+  const waiting: ((leave: boolean) => void)[] = [];
+  const ask = vi.fn(() => new Promise<boolean>((resolve) => waiting.push(resolve)));
+  setLeaveGuard(ask);
+
+  /** Answers the question asked first: `true` is Leave without saving, `false` Stay on this page. */
+  async function answer(leave: boolean) {
+    const resolve = waiting.shift();
+    if (resolve === undefined) {
+      throw new Error('The guard has not been asked.');
+    }
+
+    resolve(leave);
+    await settle();
+  }
+
+  return { ask, answer };
 }
 
 const removers: (() => void)[] = [];
@@ -179,6 +219,8 @@ afterEach(() => {
   for (const remove of removers.splice(0)) {
     remove();
   }
+  setLeaveGuard(null);
+  rearmUnloadGuard();
   fetchMock.mockReset();
   vi.mocked(fullPageLoad).mockReset();
   vi.restoreAllMocks();
@@ -441,6 +483,9 @@ describe('Sign out', () => {
     const busyLabel = within(signOut).getByText('Signing out…');
 
     fireEvent.click(signOut);
+    // With no page guarding, confirmLeave() answers at once, but through a promise, which this lets settle: only then
+    // does the button go busy.
+    await settle();
     await act(() => vi.advanceTimersByTimeAsync(399));
 
     expect(signOut).toHaveAccessibleName('Sign out');
@@ -500,26 +545,121 @@ describe('Sign out', () => {
     expect(headerSignedIn()).toBe(true);
   });
 
-  it('empties the status line when pressed again, before the request, and says the new failure', async () => {
-    const linesWhenSent: (string | null)[] = [];
-    /** `logout`, noting the status line's words when the request is sent. */
-    function noting(logout: Logout): Logout {
-      return (init) => {
-        linesWhenSent.push(within(accountPanel()).getByRole('status').textContent);
-        return logout(init);
-      };
-    }
-    serveSignOut(worker, noting(answer(503)), noting(offline));
+  it('empties the status line as it signs out again, and says the new failure into it', async () => {
+    serveSignOut(worker, answer(503), noAnswer);
     const { signOut, line } = await openPanel();
     fireEvent.click(signOut);
     await settle();
     expect(line.textContent).toBe(serverFailure);
 
     fireEvent.click(signOut);
-
-    expect(line).toBeEmptyDOMElement();
     await settle();
-    expect(linesWhenSent).toEqual(['', '']);
+
+    // The second logout is out, unanswered, with the line already empty.
+    expect(logoutsSent()).toHaveLength(2);
+    expect(line).toBeEmptyDOMElement();
+
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+
     expect(line.textContent).toBe(noConnection);
+  });
+
+  // The tests above run with no page guarding, as on every screen but Guide prompts with unsaved text; those below
+  // stand in for that page's leave dialog (app-shell.md *Press Sign out* and *Sign out fails*).
+  it('with no page guarding, sends the one logout at once, the unload guard disarmed before it', async () => {
+    const { logout, armedWhenSent } = notingArmed(answer(204));
+    serveSignOut(worker, logout);
+    const { signOut } = await openPanel();
+
+    fireEvent.click(signOut);
+    await settle();
+
+    expect(logoutsSent()).toEqual([{ method: 'POST', token: antiforgeryToken }]);
+    expect(armedWhenSent).toEqual([false]);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+  });
+
+  it("asks the page's guard before any request and before going busy, and on Stay sends nothing", async () => {
+    serveSignOut(manager);
+    const guard = standInGuard();
+    const { signOut, line } = await openPanel();
+
+    fireEvent.click(signOut);
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+
+    expect(guard.ask).toHaveBeenCalledOnce();
+    expect(requestsBesidesMe()).toEqual([]);
+    expect(signOut).not.toHaveAttribute('aria-disabled');
+    expect(signOut).toHaveAccessibleName('Sign out');
+
+    await guard.answer(false);
+    await act(() => vi.advanceTimersByTimeAsync(1_000));
+
+    expect(requestsBesidesMe()).toEqual([]);
+    expect(signOut).not.toHaveAttribute('aria-disabled');
+    expect(signOut).toHaveAccessibleName('Sign out');
+    expect(signOut).toHaveFocus();
+    expect(line).toBeEmptyDOMElement();
+    expect(unloadGuardArmed()).toBe(true);
+    expect(fullPageLoad).not.toHaveBeenCalled();
+    expect(headerSignedIn()).toBe(true);
+  });
+
+  it('leaves the panel as it was on Stay, the failure line from before kept', async () => {
+    serveSignOut(worker, answer(503));
+    const { signOut, line } = await openPanel();
+    fireEvent.click(signOut);
+    await settle();
+    expect(line.textContent).toBe(serverFailure);
+    const guard = standInGuard();
+
+    fireEvent.click(signOut);
+    await settle();
+    await guard.answer(false);
+
+    expect(guard.ask).toHaveBeenCalledOnce();
+    expect(logoutsSent()).toHaveLength(1);
+    expect(line.textContent).toBe(serverFailure);
+  });
+
+  it.each([204, 401])('on Leave, disarms the unload guard before the logout and reloads after a %i', async (status) => {
+    const { logout, armedWhenSent } = notingArmed(answer(status));
+    serveSignOut(manager, logout);
+    const guard = standInGuard();
+    const { signOut } = await openPanel();
+    fireEvent.click(signOut);
+    await settle();
+    expect(requestsBesidesMe()).toEqual([]);
+
+    await guard.answer(true);
+
+    expect(guard.ask).toHaveBeenCalledOnce();
+    expect(logoutsSent()).toEqual([{ method: 'POST', token: antiforgeryToken }]);
+    expect(armedWhenSent).toEqual([false]);
+    expect(unloadGuardArmed()).toBe(false);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it.each([
+    { failure: 'a network failure', logout: offline, sentence: noConnection },
+    { failure: 'a 503', logout: answer(503), sentence: serverFailure },
+  ])('on Leave and $failure, arms the unload guard again and says so', async ({ logout, sentence }) => {
+    const noted = notingArmed(logout);
+    serveSignOut(worker, noted.logout);
+    const guard = standInGuard();
+    const { signOut, line } = await openPanel();
+    fireEvent.click(signOut);
+    await settle();
+
+    await guard.answer(true);
+
+    expect(noted.armedWhenSent).toEqual([false]);
+    expect(unloadGuardArmed()).toBe(true);
+    expect(line.textContent).toBe(sentence);
+    expect(signOut).not.toHaveAttribute('aria-disabled');
+    expect(signOut).toHaveFocus();
+    expect(fullPageLoad).not.toHaveBeenCalled();
+    expect(headerSignedIn()).toBe(true);
   });
 });

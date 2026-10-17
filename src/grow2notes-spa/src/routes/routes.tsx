@@ -1,5 +1,6 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
+import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { UserPage } from '../features/users/UserPage.tsx';
 import { UsersPage } from '../features/users/UsersPage.tsx';
 import { AppShell } from './AppShell.tsx';
@@ -60,6 +61,11 @@ export const routes: AppRoute[] = [
             element: <ManagerOnly />,
             children: [
               { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
+              {
+                path: 'manage/guide-prompts',
+                element: <GuidePromptsPage />,
+                handle: { pageName: pageName.guidePrompts },
+              },
               { path: 'manage/users', element: <UsersPage />, handle: { pageName: pageName.users } },
               { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },
             ],

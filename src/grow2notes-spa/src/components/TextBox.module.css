@@ -1,0 +1,80 @@
+/*
+ * The large text box (guide-prompts.md 6b, guided-notes-textarea.md), one stylesheet for the Guided notes box and the
+ * Guide prompts editor, so that the prompts wrap in the editor where they will wrap in a worker's box. Its text is
+ * the page's own 18 px, and never less than 16 px, so that iOS does not zoom in on it. The focus ring, and Highlight
+ * for it under forced colours, are base.css's.
+ */
+
+/* The note form's column: 40rem on a laptop, and the whole width of a phone's narrower one. */
+.column {
+  max-inline-size: var(--measure);
+}
+
+/*
+ * The box grows with its text, and the page scrolls rather than the box. Where the browser has field-sizing, the box
+ * sizes itself; elsewhere, a hidden copy of the text after it, in the same grid cell, makes the cell as tall as the
+ * text needs, from the wrapper's data-value, which the box's component keeps in step with the text.
+ */
+.grow {
+  display: grid;
+}
+
+.grow > .box,
+.grow::after {
+  grid-area: 1 / 1;
+}
+
+/* The copy has the box's exact metrics, so that it wraps each line where the box does. */
+.box,
+.grow::after {
+  inline-size: 100%;
+  padding: var(--space-3);
+  border: var(--border-control) solid var(--colour-border-control);
+  font: inherit;
+  font-size: max(var(--font-size-body), 16px);
+  line-height: var(--line-height-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.grow::after {
+  content: attr(data-value) " ";
+  border-color: transparent;
+  visibility: hidden;
+}
+
+.box {
+  /* About 6 lines. */
+  min-block-size: 11em;
+  resize: none;
+  border-radius: var(--radius-s);
+  background: var(--colour-surface);
+  /* Typed text, never the placeholder's grey, which would read as empty or unavailable. */
+  color: var(--colour-text);
+}
+
+@supports (field-sizing: content) {
+  .box {
+    field-sizing: content;
+  }
+
+  .grow::after {
+    content: none;
+  }
+}
+
+/* Over the limit before a press has checked it: the colour alone, as the count under the box says it in words. */
+.box[data-over-limit] {
+  border-color: var(--colour-error);
+}
+
+/*
+ * In error after a press (form-validation.md *Anatomy*): 3 px, thicker than the box's own 2 px, so that the error shows
+ * as a shape under forced colours too. The padding gives back the extra pixel, so that no line of the text moves and
+ * the copy behind it still measures it.
+ */
+.box[aria-invalid="true"] {
+  border-width: 3px;
+  border-color: var(--colour-error);
+  padding: calc(var(--space-3) - 1px);
+}

@@ -5,7 +5,7 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out and the Users screens, with axe accessibility checks, run against the published app.
+  the idle sign-out, the Users screens and Guide prompts, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -109,13 +109,14 @@ npm test
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
-tests (`e2e/session-warning.spec.ts`) and the Users test that meets the app's own list (`e2e/users.spec.ts`) get their
-setup links from the published app's own `admin bootstrap` (the `invite` fixture, below), so the second terminal gives
-them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection string
-and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that needs a link
-fails and names it, and each that gets one adds a made-up organisation and manager to the database. After a failure,
-`npx playwright show-report` opens the HTML report, which holds a trace of each failed test. Remove the database with
-`docker rm -f grow2notes-e2e-sql` when done.
+tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`) and the Guide
+prompts test that saves to the app (`e2e/guide-prompts.spec.ts`) get their setup links from the published app's own
+`admin bootstrap` (the `invite` fixture, below), so the second terminal gives them what CI's end-to-end step gives them:
+the published app's folder, in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the
+address that the tests open. Without one of the three, each test that needs a link fails and names it, and each that
+gets one adds a made-up organisation and manager to the database. After a failure, `npx playwright show-report` opens
+the HTML report, which holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql`
+when done.
 
 ## Writing end-to-end tests
 
@@ -238,6 +239,45 @@ before each comma that only screen readers get, "alex.park@example.org , Invited
 setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made lists its
 first manager alone. `e2e/users.spec.ts` is the example of each, and `e2e/shell.spec.ts`'s walk, whose Users link opens
 the list, answers it too.
+
+### Answering `/api/admin/guide-prompts`
+
+Guide prompts loads the organisation's prompts from `GET /api/admin/guide-prompts`, which needs a manager's session too,
+so a test of it answers that in the browser in the same way. `e2e/guidePrompts.ts` has the design's sketch of the
+prompts, with a blank line inside them, as `savedPrompts`, and `promptsAnswer(text, version)`, the `GET`'s answer: the
+JSON `{text}` with a made-up row version in the `ETag`, in quotes, as the API writes it. Its two helpers route the
+page's `GET`s through `page.route`, as the Users helpers route theirs, and pass any other request on to the routes
+before them.
+
+- `servePrompts(page, text)` answers each `GET` with `text`.
+- `failPrompts(page)` aborts each, as `failUsers(page)` does.
+
+A test of the loading line holds the next `GET` with `holdNext` and answers it with `promptsAnswer`, as the Users test
+does. `e2e/guide-prompts.spec.ts` is the example, and `e2e/shell.spec.ts`'s walk, whose Guide prompts link opens the
+editor, answers it too.
+
+Save sends `PUT /api/admin/guide-prompts`, which a test meets in the browser too, so that no save reaches the app.
+`savedAnswer(version, date)` is its `200`: no body, a made-up row version in the `ETag` and the server's time in the
+`Date`, by default `savedAt`, 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm". `conflictAnswer` is
+its `412 precondition.failed`, as the API answers once another manager has saved.
+
+- `serveSaves(page, answer)` meets each `PUT` with what `answer` does to its route, such as
+  `route.fulfill(savedAnswer())` or `route.abort('internetdisconnected')`, and gives the list of the `PUT`s sent, each
+  as its `text` and `If-Match`, which grows as the page sends them. `sentSave(route)` reads one, as from a `PUT` that
+  `holdNext` held, which a test of the busy label or of typing during a save answers when it chooses.
+- `promptsStore(text)` keeps the prompts as the API does, for the pages of two managers to load and save through: each
+  `PUT` whose `If-Match` names the version it holds stores its text and moves the version on, and any other gets `412`.
+
+The one test that meets the app's own endpoint signs in for real, through the `invite` fixture and setup with a passkey
+on the `authenticator` fixture, as the Users test does, and saves to the organisation that `admin bootstrap` made.
+
+`e2e/guide-prompts.spec.ts` extends the fixtures' `test` with one more, `deviceWrites`, which runs in each of its tests
+without being named, as the screen's Definition of Done asks that nothing be kept on the device on any of its paths
+(guide-prompts.md *Storage and naming*). It spies on `Storage.prototype.setItem` and `indexedDB.open` in each page of
+the test's browser context as it loads, and fails the test, once it has ended, on any call; a test that names it reads
+the calls so far, as the file's own test of the spies does. A second test, marked `test.fail()` as the one in
+`e2e/fixtures.spec.ts` is, writes to `localStorage` without naming it, which shows that the fixture runs, and fails a
+test, by itself.
 
 ### Signing in with a passkey, end to end
 

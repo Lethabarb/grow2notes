@@ -82,6 +82,12 @@ export const strings = {
   checking: 'Checking…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
+  /** The button of a page that saves what it shows and stays, such as Guide prompts (primary-actions.md). */
+  save: 'Save',
+  /** Save's busy label (primary-actions.md), and the save status's hidden words while a save waits. */
+  saving: 'Saving…',
+  /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
+  saved: 'Saved',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
   /** A person's email address, as a field's label or a summary's term (sign-in.md components 6 and 13). */
@@ -179,6 +185,26 @@ export const strings = {
       finishSetup: 'Finish setup',
       /** Finish setup's busy label. */
       finishingSetup: 'Finishing setup…',
+    },
+  },
+  /**
+   * Manage > Guide prompts (guide-prompts.md), whose `<h1>` is its page name, which labels the field: the help text
+   * under it (design.md §4.10), the region's loading line and what did not load, as its failure sentence starts, then
+   * the alert above Save for a `412`, when another manager saved first; and the leave dialog (component 7).
+   */
+  guidePrompts: {
+    help: 'Prompts are a guide only. They disappear as soon as someone starts typing and are not saved into notes.',
+    loading: 'Loading guide prompts…',
+    thePrompts: 'The guide prompts',
+    conflict:
+      'Another manager saved the guide prompts while you were editing. Your text is still here. Select Save to '
+      + 'replace their version with yours.',
+    /** The leave dialog's title and body, then its safe button, on top, and the button that leaves. */
+    leave: {
+      title: 'Leave without saving?',
+      body: 'Your changes to the guide prompts are not saved.',
+      stay: 'Stay on this page',
+      leave: 'Leave without saving',
     },
   },
   /**

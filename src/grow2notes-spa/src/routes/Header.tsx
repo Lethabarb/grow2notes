@@ -10,6 +10,7 @@ import { strings } from '../copy/strings.ts';
 import { fullPageLoad } from './fullPageLoad.ts';
 import styles from './Header.module.css';
 import layout from './layout.module.css';
+import { confirmLeave, disarmUnloadGuard, rearmUnloadGuard } from './leaveGuard.ts';
 
 type NavItemKey = keyof typeof strings.navItem;
 
@@ -174,20 +175,29 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
  */
 function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; open: boolean; displayName: string }) {
   const [signingOut, setSigningOut] = useState(false);
-  // Emptied by each press, so that a failure that repeats is written into an empty line and announced again.
+  // Emptied as each sign-out starts, so that a failure that repeats is written into an empty line and announced again.
   const [failure, setFailure] = useState('');
 
-  // *Press Sign out* and *Sign out fails* (app-shell.md), but for the leave guard's steps, which S01.04.02 adds with
-  // Guide prompts, and the autosave flush, which S02.02.05 adds with the note form.
+  // *Press Sign out* and *Sign out fails* (app-shell.md), but for the autosave flush, which S02.02.05 adds with the
+  // note form.
   async function signOut() {
+    // First of all, so that a page's Stay sends nothing and leaves the panel as it was.
+    if (!(await confirmLeave())) {
+      return;
+    }
+
     setFailure('');
     setSigningOut(true);
+    // The person has chosen to leave, so the reload that follows the logout asks them nothing more.
+    disarmUnloadGuard();
     try {
       await api('/api/auth/logout', { method: 'POST' });
     } catch (error) {
       const cause = classify(error);
       // A 401 counts as done: there was no session left to end.
       if (cause !== 'signedOut') {
+        // The page is still there, with any text it has not saved, which a reload must warn about again.
+        rearmUnloadGuard();
         setFailure(msg.notSignedOut(cause));
         setSigningOut(false);
         return;

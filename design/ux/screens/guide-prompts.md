@@ -399,27 +399,27 @@ https://www.nngroup.com/articles/indicators-validations-notifications/.
 ## Accessibility checklist
 
 **Headings and page**
-- [ ] One `<h1>`, "Guide prompts", which also labels the field. The dialog's title is an `<h2>`.
-- [ ] Page title "Grow2Notes – Guide prompts" (SC 2.4.2); no personal data in the title or the URL.
-- [ ] `<html lang="en-AU">` (SC 3.1.1).
+- [x] One `<h1>`, "Guide prompts", which also labels the field. The dialog's title is an `<h2>`.
+- [x] Page title "Grow2Notes – Guide prompts" (SC 2.4.2); no personal data in the title or the URL.
+- [x] `<html lang="en-AU">` (SC 3.1.1).
 
 **Landmarks**
-- [ ] Skip link first; `<header>` (banner), `<nav aria-label="Main">`, one `<main id="main-content">`. No other
+- [x] Skip link first; `<header>` (banner), `<nav aria-label="Main">`, one `<main id="main-content">`. No other
   landmarks on this page.
 
 **Labels and descriptions**
-- [ ] The field is named "Guide prompts" by `<label for>` inside the h1. No `aria-label` (SC 2.5.3, 4.1.2).
-- [ ] `aria-describedby` = help + limit (+ error while showing) (SC 1.3.1, 3.3.2).
-- [ ] No `aria-required`: empty is valid here.
-- [ ] Repeated Save buttons: none. "Save" is the whole name.
+- [x] The field is named "Guide prompts" by `<label for>` inside the h1. No `aria-label` (SC 2.5.3, 4.1.2).
+- [x] `aria-describedby` = help + limit (+ error while showing) (SC 1.3.1, 3.3.2).
+- [x] No `aria-required`: empty is valid here.
+- [x] Repeated Save buttons: none. "Save" is the whole name.
 
 **Keyboard**
-- [ ] Every control reachable and operable by keyboard alone; DOM order = visual order (SC 2.1.1, 2.4.3).
-- [ ] Focus visible on every stop: 3 px near-black ring, 2 px offset (SC 2.4.7; also 2.4.13 AAA).
-- [ ] Nothing sticky, so focus is never hidden (SC 2.4.11).
-- [ ] Dialog: focus trapped by `showModal()`, Escape = Stay, focus returns to the trigger (SC 2.1.2, APG
+- [x] Every control reachable and operable by keyboard alone; DOM order = visual order (SC 2.1.1, 2.4.3).
+- [x] Focus visible on every stop: 3 px near-black ring, 2 px offset (SC 2.4.7; also 2.4.13 AAA).
+- [x] Nothing sticky, so focus is never hidden (SC 2.4.11).
+- [x] Dialog: focus trapped by `showModal()`, Escape = Stay, focus returns to the trigger (SC 2.1.2, APG
   https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/).
-- [ ] No keyboard shortcuts; Enter in the field inserts a line break.
+- [x] No keyboard shortcuts; Enter in the field inserts a line break.
 
 **Screen reader**
 - [ ] Arrival: heading announced once (route focus).
@@ -430,20 +430,20 @@ https://www.nngroup.com/articles/indicators-validations-notifications/.
 - [ ] The visible count is `aria-hidden`; only its polite twin speaks.
 
 **Visual**
-- [ ] All text ≥ 7:1 except the placeholder token, which is not used here (SC 1.4.3, with glare margin).
-- [ ] Box border, Save fill, focus ring ≥ 3:1 (SC 1.4.11).
-- [ ] Errors use words, a bar and a border, never colour alone (SC 1.4.1).
-- [ ] No fixed heights; reflows at 320 px; survives 200% text and SC 1.4.12 spacing (SC 1.4.4, 1.4.10, 1.4.12).
-- [ ] Targets: Save and Try again 48 px; the box far larger (SC 2.5.8; A32 44 px).
-- [ ] Forced colours: real borders on the box, the error bar and the buttons; `Highlight` focus; `GrayText` for the
+- [x] All text ≥ 7:1 except the placeholder token, which is not used here (SC 1.4.3, with glare margin).
+- [x] Box border, Save fill, focus ring ≥ 3:1 (SC 1.4.11).
+- [x] Errors use words, a bar and a border, never colour alone (SC 1.4.1).
+- [x] No fixed heights; reflows at 320 px; survives 200% text and SC 1.4.12 spacing (SC 1.4.4, 1.4.10, 1.4.12).
+- [x] Targets: Save and Try again 48 px; the box far larger (SC 2.5.8; A32 44 px).
+- [x] Forced colours: real borders on the box, the error bar and the buttons; `Highlight` focus; `GrayText` for the
   busy `aria-disabled` Save.
-- [ ] No motion of any kind (SC 2.3.3, 2.2.2).
+- [x] No motion of any kind (SC 2.3.3, 2.2.2).
 
 **Errors and data**
-- [ ] SC 3.3.1 and 3.3.3: the error names the field and the fix; the count says how much to cut.
-- [ ] SC 3.3.4: checked before saving, and reversible by editing and saving again; the audit log keeps old and new
+- [x] SC 3.3.1 and 3.3.3: the error names the field and the fix; the count says how much to cut.
+- [x] SC 3.3.4: checked before saving, and reversible by editing and saving again; the audit log keeps old and new
   values (§6.6). https://www.w3.org/WAI/WCAG22/Understanding/error-prevention-legal-financial-data.html
-- [ ] SC 3.2.2: nothing is sent while typing.
+- [x] SC 3.2.2: nothing is sent while typing.
 
 ---
 
@@ -553,6 +553,7 @@ https://www.nngroup.com/articles/indicators-validations-notifications/.
 | 14 | Token names: `--colour-input-border`, `--colour-input-bg` (`settings-textarea.md`), `--focus-ring`, `--action-*` (`primary-actions.md`) | **`foundations.md` names** via its alias table (`--colour-border-control`, `--colour-surface`, `--colour-focus`, `--colour-action`…) | One token set, so the Vitest contrast test protects every value. |
 | 15 | Breakpoint unit: `40em` (`primary-actions.md`) or `40rem` (`foundations.md`) | **`40rem`** | Identical inside media queries; `foundations.md`'s CI check greps for `40rem`. |
 | 16 | Page structure: `settings-textarea.md`'s sample puts the h1 and hint inside the data-dependent form, but its own States table says they render at once | **h1, help text and limit hint render at once, outside the form;** the form mounts with the data | Route focus needs a fixed `<h1>` at once (`empty-loading-error.md` rule 1). |
+| 17 | Save status size: "Saved 4:12 pm" "same size as body" (`status-messages.md` States table) or `--font-size-small` (6f above; `foundations.md`'s size for status lines and the save indicator) | **`--font-size-small`, `tabular-nums`**, in the one shared `SaveStatus`, which participant Details' Save uses too | `foundations.md` owns sizes (row 1), and one component ships with one size. Recorded 15 October 2026, in T03's review (tasks.md). |
 
 ---
 

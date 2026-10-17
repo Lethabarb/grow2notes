@@ -1,5 +1,6 @@
-// The date and time formats (microcopy.md §3). Each is put together from numbers and the fixed English names below,
-// so that no engine's own wording ("Sept", "AM", another comma or space) can reach the screen.
+// The date and time formats, and the counts of things (microcopy.md §3). Each date and time is put together from
+// numbers and the fixed English names below, so that no engine's own wording ("Sept", "AM", another comma or space) can
+// reach the screen.
 
 // Between a day and its month and between a time and am or pm, so that neither pair splits across two lines.
 const nbsp = '\u00A0';
@@ -87,4 +88,12 @@ export function stamp(utcIso: string, referenceDay: Ymd): string {
   const moment = inMelbourne(utcIso);
   const onReferenceDay = moment.y === referenceDay.y && moment.m === referenceDay.m && moment.d === referenceDay.d;
   return onReferenceDay ? timeOf(moment) : dateTimeOf(moment);
+}
+
+const numbers = new Intl.NumberFormat('en-AU');
+const plurals = new Intl.PluralRules('en-AU');
+
+/** A number and its noun, "1 character" or "1,000 characters": the number grouped, the noun singular or plural. */
+export function count(n: number, one: string, other: string): string {
+  return `${numbers.format(n)} ${plurals.select(n) === 'one' ? one : other}`;
 }

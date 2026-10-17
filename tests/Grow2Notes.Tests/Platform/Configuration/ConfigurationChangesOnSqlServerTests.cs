@@ -1,38 +1,35 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Grow2Notes.Tests.Platform.Configuration;
 
 /// <summary>
-/// The one save of a configuration change, end to end on SQL Server (design.md §6.6, §6.7, D84): test-only <c>GET</c>
-/// and <c>PUT</c> endpoints in the <c>/api/admin</c> group read and change the caller's organisation's guide prompts
-/// with the row's version token, <see cref="IfMatch.Check"/> and <see cref="ConfigurationChanges"/>, as S01.04.01's
-/// <c>/api/admin/guide-prompts</c> will. Each test adds an organisation of its own with two managers, so no seeded row
-/// changes and the organisation's audit events are the test's alone. <see cref="ConfigurationChangesTests"/> covers
-/// the save without a database.
+/// The one save of a configuration change, end to end on SQL Server (design.md §6.6, §6.7, D84), through
+/// <c>GET</c> and <c>PUT /api/admin/guide-prompts</c>, which read and change the caller's organisation's guide prompts
+/// with the row's version token, <see cref="IfMatch.Check"/> and <see cref="ConfigurationChanges"/>
+/// (<see cref="GuidePromptsHandler"/>); and those endpoints' own rules (S01.04.01): the limit of 1,000 characters
+/// (A6), an empty text, a body without one, and each organisation's prompts out of every other's reach (§5.9 item 7).
+/// Each test adds organisations of its own, each with two managers, so no seeded row changes and an organisation's
+/// audit events are the test's alone. <see cref="ConfigurationChangesTests"/> covers the save without a database, and
+/// the endpoint matrix who may call the endpoints.
 /// </summary>
 [Collection<SqlServerCollection>]
-public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
+public sealed class ConfigurationChangesOnSqlServerTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
 {
-    private const string Path = "/api/admin/test-only/guide-prompts";
+    private const string Path = "/api/admin/guide-prompts";
 
     private const string StoredText = "What did they enjoy today?\nWas anything hard?";
 
@@ -41,12 +38,6 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
     private const string SecondManagersText = "What went well today?";
 
     private static readonly DateTime AddedAtUtc = new(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc);
-
-    private readonly WebApplicationFactory<Program> app;
-
-    public ConfigurationChangesOnSqlServerTests(Grow2NotesFactory factory) =>
-        app = factory.WithWebHostBuilder(builder => builder.ConfigureServices(
-            services => services.AddSingleton<IStartupFilter>(new TestOnlyEndpoints())));
 
     [Fact]
     public async Task Both_managers_GETs_give_the_stored_text_with_the_same_ETag_the_row_s_version()
@@ -75,37 +66,119 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var stored = await StoredAsync(organisation.Id);
-        Assert.Equal(new GuidePromptsVersion(FirstManagersText, ETagOf(response)), stored);
+        Assert.Equal(new PromptsVersion(FirstManagersText, ETagOf(response)), stored);
         Assert.NotEqual(loaded.ETag, stored.ETag);
         Assert.Equal(
-            new StoredEvent(
-                organisation.Id, organisation.FirstManagerId, AuditEventTypes.GuidePrompts.Updated,
-                AuditEntityTypes.Organisation, organisation.Id, ParticipantId: null,
-                Details(StoredText, FirstManagersText)),
-            Assert.Single(await EventsAsync(organisation.Id)));
+            [Updated(organisation, organisation.FirstManagerId, StoredText, FirstManagersText)],
+            await EventsAsync(organisation.Id));
+    }
+
+    // A line break counts as one character, as the screen counts it, sent as LF (guide-prompts.md Limit and count).
+    [Fact]
+    public async Task A_PUT_of_1_000_characters_holding_10_line_breaks_is_stored_and_read_back_exactly()
+    {
+        var text = string.Join('\n', Enumerable.Range(1, 11).Select(line => $"Prompt {line:D2} ".PadRight(90, '.')));
+        Assert.Equal(Limits.GuidePrompts, text.Length);
+        Assert.Equal(10, text.Count(character => character == '\n'));
+        var organisation = await AddOrganisationAsync();
+        using var client = ClientFor(organisation.FirstManagerId);
+        var loaded = await GetAsync(client);
+
+        using var response = await PutAsync(client, text, loaded.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new PromptsVersion(text, ETagOf(response)), await GetAsync(client));
+        Assert.Equal(
+            [Updated(organisation, organisation.FirstManagerId, StoredText, text)],
+            await EventsAsync(organisation.Id));
     }
 
     [Fact]
-    public async Task The_second_manager_s_PUT_with_the_old_ETag_answers_412_and_changes_nothing_after_the_first_s()
+    public async Task A_PUT_of_1_001_characters_answers_422_on_text_and_changes_nothing()
     {
         var organisation = await AddOrganisationAsync();
-        using var first = ClientFor(organisation.FirstManagerId);
-        using var second = ClientFor(organisation.SecondManagerId);
-        var firstLoaded = await GetAsync(first);
-        var secondLoaded = await GetAsync(second);
-        using (var firstSaved = await PutAsync(first, FirstManagersText, firstLoaded.ETag))
+        using var client = ClientFor(organisation.FirstManagerId);
+        var loaded = await GetAsync(client);
+
+        using var response = await PutAsync(client, new string('a', Limits.GuidePrompts + 1), loaded.ETag);
+
+        await AssertRefusedOnTextAsync(response);
+        Assert.Equal(loaded, await StoredAsync(organisation.Id));
+        Assert.Empty(await EventsAsync(organisation.Id));
+    }
+
+    // Empty prompts leave the Guided notes box with no placeholder (design.md §4.10 States), and the screen sends a
+    // text of whitespace alone as "" (guide-prompts.md Save).
+    [Fact]
+    public async Task A_PUT_of_empty_text_answers_200_stores_it_and_writes_one_event_with_the_old_and_new_text()
+    {
+        var organisation = await AddOrganisationAsync();
+        using var client = ClientFor(organisation.FirstManagerId);
+        var loaded = await GetAsync(client);
+
+        using var response = await PutAsync(client, "", loaded.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new PromptsVersion("", ETagOf(response)), await StoredAsync(organisation.Id));
+        Assert.Equal(
+            [Updated(organisation, organisation.FirstManagerId, StoredText, "")],
+            await EventsAsync(organisation.Id));
+    }
+
+    // With the row's own ETag, so that only the body can be refused.
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"text":null}""")]
+    public async Task A_PUT_with_no_text_or_a_null_one_answers_422_on_text_and_changes_nothing(string body)
+    {
+        var organisation = await AddOrganisationAsync();
+        using var client = ClientFor(organisation.FirstManagerId);
+        var loaded = await GetAsync(client);
+
+        using var response = await PutAsync(
+            client, new StringContent(body, Encoding.UTF8, "application/json"), loaded.ETag);
+
+        await AssertRefusedOnTextAsync(response);
+        Assert.Equal(loaded, await StoredAsync(organisation.Id));
+        Assert.Empty(await EventsAsync(organisation.Id));
+    }
+
+    // The screen answers a 412 by loading the text and ETag afresh (guide-prompts.md Save), as A's second GET does.
+    [Fact]
+    public async Task A_loads_B_saves_A_s_PUT_answers_412_and_A_s_next_PUT_with_the_fresh_ETag_saves()
+    {
+        var organisation = await AddOrganisationAsync();
+        using var a = ClientFor(organisation.FirstManagerId);
+        using var b = ClientFor(organisation.SecondManagerId);
+        var loadedByA = await GetAsync(a);
+        var loadedByB = await GetAsync(b);
+        using (var savedByB = await PutAsync(b, SecondManagersText, loadedByB.ETag))
         {
-            Assert.Equal(HttpStatusCode.OK, firstSaved.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, savedByB.StatusCode);
         }
 
-        var afterFirst = await StoredAsync(organisation.Id);
+        var afterB = await StoredAsync(organisation.Id);
 
-        using var response = await PutAsync(second, SecondManagersText, secondLoaded.ETag);
+        using (var refused = await PutAsync(a, FirstManagersText, loadedByA.ETag))
+        {
+            await AssertProblemAsync(refused, ErrorCode.PreconditionFailed);
+            Assert.Null(refused.Headers.ETag);
+        }
 
-        await AssertProblemAsync(response, ErrorCode.PreconditionFailed);
-        Assert.Equal(FirstManagersText, afterFirst.Text);
-        Assert.Equal(afterFirst, await StoredAsync(organisation.Id));
-        Assert.Equal(organisation.FirstManagerId, Assert.Single(await EventsAsync(organisation.Id)).ActorUserId);
+        Assert.Equal(afterB, await StoredAsync(organisation.Id));
+        var reloadedByA = await GetAsync(a);
+        Assert.Equal(afterB, reloadedByA);
+
+        using var response = await PutAsync(a, FirstManagersText, reloadedByA.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new PromptsVersion(FirstManagersText, ETagOf(response)), await StoredAsync(organisation.Id));
+        Assert.Equal(
+            [
+                Updated(organisation, organisation.SecondManagerId, StoredText, SecondManagersText),
+                Updated(organisation, organisation.FirstManagerId, SecondManagersText, FirstManagersText),
+            ],
+            await EventsAsync(organisation.Id));
     }
 
     [Fact]
@@ -137,74 +210,69 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
         Assert.Empty(await EventsAsync(organisation.Id));
     }
 
-    // The race that If-Match cannot catch: the row changes between a PUT's check and its save.
+    // The tenant is the caller's own organisation, so a manager's GET reads, and their PUT changes, that one's row
+    // alone (design.md §5.9 item 7).
+    [Fact]
+    public async Task Each_organisation_s_manager_reads_and_changes_their_own_organisation_s_prompts_only()
+    {
+        var first = await AddOrganisationAsync();
+        var second = await AddOrganisationAsync(SecondManagersText);
+        using var managerOfFirst = ClientFor(first.FirstManagerId);
+        using var managerOfSecond = ClientFor(second.FirstManagerId);
+
+        var loadedByFirst = await GetAsync(managerOfFirst);
+        var loadedBySecond = await GetAsync(managerOfSecond);
+
+        Assert.Equal(new PromptsVersion(StoredText, (await StoredAsync(first.Id)).ETag), loadedByFirst);
+        Assert.Equal(new PromptsVersion(SecondManagersText, (await StoredAsync(second.Id)).ETag), loadedBySecond);
+
+        using var response = await PutAsync(managerOfFirst, FirstManagersText, loadedByFirst.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(FirstManagersText, (await StoredAsync(first.Id)).Text);
+        Assert.Equal(loadedBySecond, await StoredAsync(second.Id));
+        Assert.Single(await EventsAsync(first.Id));
+        Assert.Empty(await EventsAsync(second.Id));
+    }
+
+    // The race that If-Match cannot catch: the row changes between a PUT's check and its save. The first scope's
+    // context already holds the row as it was before the second scope's save, so the handler's load there gives that
+    // row, which EF Core does not overwrite with the stored one, and its check passes as if made before that save.
     [Fact]
     public async Task A_row_another_scope_changed_after_this_one_loaded_it_gives_PreconditionFailed_and_writes_nothing()
     {
         var organisation = await AddOrganisationAsync();
-        await using var first = app.Services.CreateAsyncScope();
-        await using var second = app.Services.CreateAsyncScope();
-        var loadedByFirst = await LoadAsync(first.ServiceProvider, organisation.Id);
-        var loadedBySecond = await LoadAsync(second.ServiceProvider, organisation.Id);
-        Assert.Same(
-            ConfigurationSaveResult.Saved,
-            await ChangeInScopeAsync(
-                second.ServiceProvider, organisation.SecondManagerId, loadedBySecond, SecondManagersText));
+        var loaded = await StoredAsync(organisation.Id);
+        await using var first = factory.Services.CreateAsyncScope();
+        await using var second = factory.Services.CreateAsyncScope();
+        await first.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Organisations
+            .SingleAsync(o => o.Id == organisation.Id, TestContext.Current.CancellationToken);
+        Assert.True((await SaveInScopeAsync(
+            second.ServiceProvider, organisation.Id, organisation.SecondManagerId, loaded.ETag, SecondManagersText))
+            .Succeeded);
 
-        var result = await ChangeInScopeAsync(
-            first.ServiceProvider, organisation.FirstManagerId, loadedByFirst, FirstManagersText);
+        var result = await SaveInScopeAsync(
+            first.ServiceProvider, organisation.Id, organisation.FirstManagerId, loaded.ETag, FirstManagersText);
 
-        Assert.Same(ConfigurationSaveResult.PreconditionFailed, result);
+        Assert.Same(ErrorCode.PreconditionFailed, result.Error);
         Assert.Equal(SecondManagersText, (await StoredAsync(organisation.Id)).Text);
         Assert.Equal(
-            new StoredEvent(
-                organisation.Id, organisation.SecondManagerId, AuditEventTypes.GuidePrompts.Updated,
-                AuditEntityTypes.Organisation, organisation.Id, ParticipantId: null,
-                Details(StoredText, SecondManagersText)),
-            Assert.Single(await EventsAsync(organisation.Id)));
+            [Updated(organisation, organisation.SecondManagerId, StoredText, SecondManagersText)],
+            await EventsAsync(organisation.Id));
     }
 
-    public ValueTask DisposeAsync() => app.DisposeAsync();
-
-    /// <summary>
-    /// The change a <c>PUT</c> makes, as S01.04.01's handler will make it: the organisation's guide prompts set to
-    /// <paramref name="text"/> on the row as the caller's scope loaded it, and saved by <paramref name="actor"/> with
-    /// its <c>guide_prompts.updated</c> event, whose <c>Details</c> give the old and new text as <c>text</c>, the name
-    /// that design.md §6.6 gives it.
-    /// </summary>
-    private static Task<ConfigurationSaveResult> ChangeTextAsync(
-        ConfigurationChanges changes,
-        Actor actor,
-        Organisation organisation,
-        string text,
-        CancellationToken cancellationToken)
+    // Through the scope's handler, in the organisation's tenant, as a request signed in as one of its managers has it.
+    private static async Task<GuidePromptsSaveResult> SaveInScopeAsync(
+        IServiceProvider scope, Guid organisationId, Guid managerId, string ifMatch, string text)
     {
-        var before = new JsonObject { ["text"] = organisation.GuidePrompts };
-        organisation.GuidePrompts = text;
-        return changes.SaveAsync(
-            actor, AuditEventTypes.GuidePrompts.Updated, AuditEntityTypes.Organisation, organisation.Id,
-            participantId: null, before, new JsonObject { ["text"] = organisation.GuidePrompts },
-            cancellationToken: cancellationToken);
-    }
-
-    // In the organisation's tenant, as a request signed in as one of its managers has it.
-    private static async Task<ConfigurationSaveResult> ChangeInScopeAsync(
-        IServiceProvider scope, Guid managerId, Organisation loaded, string text)
-    {
-        using (scope.GetRequiredService<ITenantContext>().Use(loaded.Id))
+        using (scope.GetRequiredService<ITenantContext>().Use(organisationId))
         {
-            return await ChangeTextAsync(
-                scope.GetRequiredService<ConfigurationChanges>(), new Actor(managerId, Channel.App), loaded, text,
-                TestContext.Current.CancellationToken);
+            return await scope.GetRequiredService<GuidePromptsHandler>().SaveAsync(
+                new Actor(managerId, Channel.App), ifMatch, text, TestContext.Current.CancellationToken);
         }
     }
 
-    // Tracked by the scope's context, as a handler loads the row it changes.
-    private static Task<Organisation> LoadAsync(IServiceProvider scope, Guid organisationId) =>
-        scope.GetRequiredService<Grow2NotesDbContext>().Organisations
-            .SingleAsync(o => o.Id == organisationId, TestContext.Current.CancellationToken);
-
-    private static async Task<GuidePromptsVersion> GetAsync(HttpClient client)
+    private static async Task<PromptsVersion> GetAsync(HttpClient client)
     {
         using var response = await client.GetAsync(Path, TestContext.Current.CancellationToken);
 
@@ -215,10 +283,13 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
         return new(text, ETagOf(response));
     }
 
-    // As the SPA saves: with a token fetched as the caller, the text as JSON, and, unless null, the ETag as If-Match.
-    private static async Task<HttpResponseMessage> PutAsync(HttpClient client, string text, string? ifMatch)
+    private static Task<HttpResponseMessage> PutAsync(HttpClient client, string text, string? ifMatch) =>
+        PutAsync(client, JsonContent.Create(new { text }), ifMatch);
+
+    // As the SPA saves: with a token fetched as the caller, the body as JSON, and, unless null, the ETag as If-Match.
+    private static async Task<HttpResponseMessage> PutAsync(HttpClient client, HttpContent body, string? ifMatch)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Put, Path) { Content = JsonContent.Create(new { text }) };
+        using var request = new HttpRequestMessage(HttpMethod.Put, Path) { Content = body };
         request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
         if (ifMatch is not null)
         {
@@ -242,28 +313,41 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
         Assert.Equal(code.Code, problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
     }
 
-    // As ChangeDetails writes a change of the text.
-    private static string Details(string oldText, string newText) =>
-        new JsonObject
-        {
-            ["old"] = new JsonObject { ["text"] = oldText },
-            ["new"] = new JsonObject { ["text"] = newText },
-        }.ToJsonString();
+    // The validation filter's answer, before the endpoint runs, naming the text alone.
+    private static async Task AssertRefusedOnTextAsync(HttpResponseMessage response)
+    {
+        var failed = ErrorCode.ValidationFailed;
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync((HttpStatusCode)failed.Status));
+        Assert.Equal(failed.Code, problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
+        Assert.Equal("text", Assert.Single(problem.RootElement.GetProperty("errors").EnumerateObject()).Name);
+    }
 
-    private HttpClient ClientFor(Guid managerId) => app.CreateHttpsClient().SignInAs(managerId);
+    // The event of a change of the text by the manager, with its Details as ChangeDetails writes them.
+    private static StoredEvent Updated(
+        AddedOrganisation organisation, Guid managerId, string oldText, string newText) =>
+        new(
+            organisation.Id, managerId, AuditEventTypes.GuidePrompts.Updated, AuditEntityTypes.Organisation,
+            organisation.Id, ParticipantId: null,
+            new JsonObject
+            {
+                ["old"] = new JsonObject { ["text"] = oldText },
+                ["new"] = new JsonObject { ["text"] = newText },
+            }.ToJsonString());
+
+    private HttpClient ClientFor(Guid managerId) => factory.CreateHttpsClient().SignInAs(managerId);
 
     // With guide prompts already stored, and two Active managers, as setup leaves them (design.md §8.1) apart from the
     // passkey or password, which the test-only sign-in does not need. An organisation is the tenant, not tenant-owned,
     // and AspNetUsers is not filtered, so this needs no tenant.
-    private async Task<AddedOrganisation> AddOrganisationAsync()
+    private async Task<AddedOrganisation> AddOrganisationAsync(string guidePrompts = StoredText)
     {
-        await using var scope = app.Services.CreateAsyncScope();
+        await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var organisation = new Organisation
         {
             Name = "Configuration changes test",
-            GuidePrompts = StoredText,
+            GuidePrompts = guidePrompts,
             CreatedAtUtc = AddedAtUtc,
         };
         db.Organisations.Add(organisation);
@@ -298,30 +382,32 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
     }
 
     // Read from a scope of its own, so no context's tracked row decides what is seen.
-    private async Task<GuidePromptsVersion> StoredAsync(Guid organisationId)
+    private async Task<PromptsVersion> StoredAsync(Guid organisationId)
     {
-        await using var scope = app.Services.CreateAsyncScope();
+        await using var scope = factory.Services.CreateAsyncScope();
         var organisation = await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Organisations
             .AsNoTracking()
             .SingleAsync(o => o.Id == organisationId, TestContext.Current.CancellationToken);
         return new(organisation.GuidePrompts, RowVersionToken.ETag(organisation));
     }
 
-    // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen.
+    // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen; in the order they
+    // were written, which the identity key keeps.
     private async Task<List<StoredEvent>> EventsAsync(Guid organisationId)
     {
-        await using var scope = app.Services.CreateAsyncScope();
+        await using var scope = factory.Services.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database.SqlQuery<StoredEvent>($"""
             SELECT [OrganisationId], [ActorUserId], [EventType], [EntityType], [EntityId], [ParticipantId], [Details]
             FROM [AuditEvent]
             WHERE [OrganisationId] = {organisationId}
+            ORDER BY [Id]
             """).ToListAsync(TestContext.Current.CancellationToken);
     }
 
     private sealed record AddedOrganisation(Guid Id, Guid FirstManagerId, Guid SecondManagerId);
 
     /// <summary>The guide prompts' text with the ETag of the row that holds it.</summary>
-    private sealed record GuidePromptsVersion(string Text, string ETag);
+    private sealed record PromptsVersion(string Text, string ETag);
 
     private sealed record StoredEvent(
         Guid OrganisationId,
@@ -331,75 +417,4 @@ public sealed class ConfigurationChangesOnSqlServerTests : IClassFixture<Grow2No
         Guid? EntityId,
         Guid? ParticipantId,
         string? Details);
-
-    /// <summary>The body of both endpoints, <c>{text}</c> (design.md §6.6).</summary>
-    private sealed record GuidePromptsBody(string Text);
-
-    /// <summary>
-    /// Maps a <c>GET</c> and a <c>PUT</c> of the caller's organisation's guide prompts at <see cref="Path"/>, in the
-    /// app's <c>/api/admin</c> group, as S01.04.01 will map <c>/api/admin/guide-prompts</c> (design.md §6.6): the
-    /// <c>GET</c> answers <c>{text}</c> with the row's <c>ETag</c>; the <c>PUT</c> of <c>{text}</c> checks its
-    /// <c>If-Match</c> against the row as loaded, saves the change with its event through
-    /// <see cref="ConfigurationChanges"/> and answers <c>200</c> with the row's <c>ETag</c> after the save, the same
-    /// one when nothing changed (D84), or the problem of the §6.9 code it was given. They are routed ahead of the app's
-    /// own routing, which then leaves the endpoint already chosen, so they run where the app's own endpoints do, after
-    /// the app's authorization.
-    /// </summary>
-    /// <remarks>The text's limit of 1,000 characters (A6) is S01.04.01's, with its own tests.</remarks>
-    private sealed class TestOnlyEndpoints : IStartupFilter
-    {
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-        {
-            app.UseRouting();
-            next(app);
-            app.UseEndpoints(endpoints =>
-            {
-                var admin = endpoints.MapApiGroup().MapAdminGroup();
-                admin.MapGet("/test-only/guide-prompts", ReadAsync);
-                admin.MapPut("/test-only/guide-prompts", WriteAsync);
-            });
-        };
-
-        private static async Task<Ok<GuidePromptsBody>> ReadAsync(
-            HttpResponse response, Grow2NotesDbContext db, ITenantContext tenant, CancellationToken cancellationToken)
-        {
-            var organisation = await LoadTenantAsync(db, tenant, cancellationToken);
-            response.Headers.ETag = RowVersionToken.ETag(organisation);
-            return TypedResults.Ok(new GuidePromptsBody(organisation.GuidePrompts));
-        }
-
-        private static async Task<Results<Ok, ProblemHttpResult>> WriteAsync(
-            GuidePromptsBody body,
-            HttpRequest request,
-            HttpResponse response,
-            ClaimsPrincipal user,
-            IOptions<IdentityOptions> identityOptions,
-            Grow2NotesDbContext db,
-            ITenantContext tenant,
-            ConfigurationChanges changes,
-            CancellationToken cancellationToken)
-        {
-            var organisation = await LoadTenantAsync(db, tenant, cancellationToken);
-            if (IfMatch.Check(request.Headers.IfMatch, RowVersionToken.Of(organisation)) is { } refused)
-            {
-                return refused.Problem();
-            }
-
-            var saved = await ChangeTextAsync(
-                changes, Actor.InApp(user, identityOptions.Value), organisation, body.Text, cancellationToken);
-            if (saved.Error is { } error)
-            {
-                return error.Problem();
-            }
-
-            // EF Core reads back the version that SQL Server gave the row as it saved it, so this is the new ETag.
-            response.Headers.ETag = RowVersionToken.ETag(organisation);
-            return TypedResults.Ok();
-        }
-
-        // The organisation is the tenant, so the caller can load no other, and there is no 404 to give.
-        private static Task<Organisation> LoadTenantAsync(
-            Grow2NotesDbContext db, ITenantContext tenant, CancellationToken cancellationToken) =>
-            db.Organisations.SingleAsync(o => o.Id == tenant.OrganisationId, cancellationToken);
-    }
 }

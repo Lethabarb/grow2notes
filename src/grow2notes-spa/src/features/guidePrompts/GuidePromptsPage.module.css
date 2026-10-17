@@ -1,0 +1,6 @@
+/* The limit hint, in the hint's look, which states the limit before anyone reaches it (guide-prompts.md 4). */
+.limit {
+  margin-block-end: var(--space-2);
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}

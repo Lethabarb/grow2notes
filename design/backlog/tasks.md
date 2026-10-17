@@ -91,6 +91,11 @@ with their typing kept (checked with a half-filled Invite form), and a different
 - Tests use a fake sender; CI never sends real email. A real email arriving in test, with its SPF, DKIM and DMARC
   headers, is a by-hand check on ops/first-use-in-test.md.
 - Whichever of T01 and T03 merges second adds `disarmUnloadGuard()` before the different-person reload.
+- From T03 (15 October 2026, its review): if T03 merges first, T01 also proves on Manage > Guide prompts, in
+  Playwright, guide-prompts.md › Leaving's last two bullets, which need its sign-in in place: after a `401` mid-edit
+  the same person signs in, and the text is still there and still not saved, with no `PUT` until Save is pressed
+  again; and a different person signs in, and the page reloads in full to Today, with no browser dialog and the text
+  gone (S00.04.08's Note from T03). S01.04.02 keeps them open until then.
 
 ### Steps
 
@@ -137,6 +142,13 @@ found and `403`.
   and the date-of-birth fields that Today reuses (T08), and the shared audit-events test that later tasks add rows to
   (T24 completes it).
 - A worker's `403` on each new endpoint is an endpoint-matrix row, not a test of its own.
+- From T03 (15 October 2026, its review): if T03 merges first, T02 also checks its route focus on Manage > Guide
+  prompts, in Vitest and in `guide-prompts.spec.ts`: focus on the `<h1>` after a client-side arrival there
+  (guide-prompts.md › Access and structure, the third bullet), and on Today's `<h1>` after Leave without saving
+  (› Leaving, the first bullet), which S01.04.01 and S01.04.02 keep open until then (S00.05.02's Note from T03). And
+  the one `SaveStatus` that ships, which Details' Save uses too, is at `--font-size-small` with `tabular-nums`, as
+  foundations.md, which owns sizes, has status lines and the save indicator, where status-messages.md's *States*
+  table says body size (guide-prompts.md *Conflicts resolved* 17; S01.02.03's Note from T03).
 
 ### Steps
 
@@ -148,7 +160,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T03
-status: new
+status: doing
 release: R1
 lane: C
 size: M
@@ -170,14 +182,241 @@ changes by a link, Back, reload or Sign out.
 
 - Builds once, for later tasks to reuse: the shared confirm-dialog shell, the text-box styles, the `count()` helper in
   `src/copy/format.ts` and the leave guard. T04 adds the red warning style to the dialog shell; T05 uses `count()`.
+- Also builds once the `SaveStatus` line and `apiWithHeaders()`, which gives an answer's `ETag` and `Date`, as T02's
+  participant Details Save needs both too (status-messages.md, D79): whichever of T02 and T03 merges second reuses the
+  first one's, so that one copy ships (S01.02.03's Notes), at the small size (the review Note below).
 - Whichever of T01 and T03 merges second adds `disarmUnloadGuard()` before the different-person reload.
 - guide-prompts.md's other open questions (the (M) string, the conflict message) are built as the spec words them unless
   the owner says otherwise.
 - Lane C is then free until T05 merges, as T08 waits for it.
+- Planned on 14 October 2026 from `origin/main` at `b618f57`. No owner question holds it. Where the design is silent,
+  the simplest option is taken:
+  - The `PUT` stores the text as sent and checks only its length: the screen trims it (guide-prompts.md *Save*), and
+    design.md §6.6 gives the server no trimming of its own.
+  - The request's `text` is `[Required(AllowEmptyStrings = true)]` and `[MaxLength(Limits.GuidePrompts)]`: `""` is
+    valid (design.md §4.10 *States*, guide-prompts.md *Save*), where the app's other requests' plain `[Required]`
+    refuses it, and a body with no `text` or a `null` one gets `422 validation.failed` on `text` from the validation
+    filter rather than reaching the non-null column.
+  - `apiWithHeaders()` beside `api()`, sharing its request, gives the answer's body with its `ETag`'s token, without
+    the quotes, and its `Date` as a UTC time, each `undefined` when the answer has none, as Guide prompts is the first
+    screen that reads them; the token goes back through `api()`'s existing `ifMatch`.
+  - The `ConfirmDialog` shell holds what the leave dialog uses. The first dialog that sends a request, T04's, adds
+    confirm-dialog.md's focus on the title, its alert line and its busy line along with the red style, so that no part
+    ships before a dialog uses it (T04's Notes).
+  - `ConfigurationChangesOnSqlServerTests` keeps its name when its tests move onto `/api/admin/guide-prompts`, as
+    F01.02's and F01.03's Notes and tests/README.md cite its race test.
+  - No migration: `Organisation.GuidePrompts` and the row's `RowVersion` are already in the schema.
+  - Save's `PUT` is a direct `apiWithHeaders()` call with the form's own busy state, as Sign out's and Finish setup's
+    are, not the TanStack mutation that primary-actions.md §8 suggests, whose `isPending` reaches the page a task
+    after the press, so that a second quick press could send a second `PUT`. Nothing sends it again by itself, which
+    is step 5's `retry: 0` (settings-textarea.md *Behaviour* 5). (Step 5, 14 October 2026.)
+  - After a `412`, Save stays busy until the refetch of the base text and `ETag` has answered, so that the next press
+    sends the new `ETag`; a refetch that fails leaves the base as it was, and that press meets the `412` again.
+    (Step 5, 14 October 2026.)
+  - The leave dialog answers the navigation that it holds, or Sign out, in its `close` event, which the browser fires a
+    task after Escape or Stay on this page has hidden it. A Back pressed within that one task is held, its address
+    put back and nothing lost, with no dialog; that is accepted rather than tracked apart from the event, and the
+    tests wait for the dialog to leave the page before they go on. (Step 6, 15 October 2026.)
+  - The storage spies run in every test of `guide-prompts.spec.ts`, as a fixture of that file, so that every path
+    the tests take is covered. The checklist items that axe does not check are shown beside its runs: its AAA
+    contrast rule for the 7:1 text, WCAG's text spacing on top of the 200% text at 320 px for SC 1.4.12, and no
+    animation or transition for no motion. The by-hand checks are steps 24 and 25 of ops/first-use-in-test.md, in a
+    section of their own after step 23, so that no step that a Note cites is renumbered; T26 orders them with the
+    rest. The checklist's five screen-reader items stay unticked until step 24 has been done. (Step 7, 15 October
+    2026.)
+- Hand-offs, so that every criterion has one owner. Each is also written, dated 14 October 2026, where the receiving
+  task reads it. Until that task proves it, the matching S01.04.01 or S01.04.02 criterion stays unticked with a dated
+  Note naming the task:
+  - design.md §4.10's lines about the Guided notes box (the prompts reaching open drafts straight away, the 4.5:1
+    placeholder, the kept label, no placeholder when empty) and *Field*'s second bullet, comparing the two boxes'
+    computed metrics, need the note form's Guided notes box, so T08 proves them (S02.02.02's Notes, T08's Notes).
+    coverage.md gives *Field* to F01.04, unlike *Effect on the note form*, which is F02.02's; T03 proves the editor's
+    own metrics.
+  - Focus on the `<h1>` after a client-side navigation (arriving here, and on Today after Leave without saving) is the
+    shell's route focus, which T02 builds for every screen (S00.05.02's Notes). If T02 is on `main` when this branch
+    rebases, T03's tests assert it here; otherwise T02 asserts it on Guide prompts.
+  - *Leaving*'s last two bullets (a `401` mid-edit, then the same or a different person signing in) need T01's sign-in
+    in place (S00.04.08's Notes). Whichever of T01 and T03 merges second proves both on Guide prompts in Playwright,
+    beside the `disarmUnloadGuard()` above.
+  - confirm-dialog.md's focus on the title, alert line, busy line and red style, and the 28-minute warning closing an
+    open dialog with a plain `close()`, are T04's (T04's Notes). No S01.04.01 or S01.04.02 criterion waits on them,
+    and the leave dialog already treats that `close()` as Stay.
+  - By-hand checks (screen readers, real phones) go on ops/first-use-in-test.md in step 7.
+- 15 October 2026, review: 7 findings were confirmed and are fixed here:
+  - `guide-prompts.spec.ts`'s test of two saves in a row checked the save status empty with the page's clock running,
+    so a runner that stalled for 400 ms would meet its hidden "Saving…" and fail; it now pauses the clock for that
+    check, as the test of the held save does.
+  - No test showed that a refetch that fails after a `412` still shows the conflict and leaves the base as it was
+    (step 5's Note above). A Vitest case now does, and fails, with an unhandled rejection, once that refetch's
+    `.catch` is removed.
+  - No test showed that the storage spies run in, and fail, a test that does not name them. A test marked
+    `test.fail()` now writes to `localStorage` without naming them, as `fixtures.spec.ts` does for the Content
+    Security Policy, so that a fixture no longer automatic, or no longer failing on a write, fails the run.
+  - `SaveStatus` is at `--font-size-small` with `tabular-nums`, as guide-prompts.md 6f has it and foundations.md,
+    which owns sizes, gives status lines and the save indicator, where status-messages.md's *States* table has "Saved
+    4:12 pm" at body size. The choice is now recorded, as guide-prompts.md *Conflicts resolved* 17, in S01.02.03's
+    Note from T03 and in T02's Notes, so that the one copy that ships keeps that size, whichever of T02 and T03 merges
+    second.
+  - S01.04.01 and S01.04.02 had no dated Notes for the criteria handed to T01, T02 and T08 and to the by-hand steps,
+    though F00.04, F00.05 and F02.02 said they had; each now has one.
+  - The hand-offs to T01 and T02 were only in story Notes, which a rebase does not bring to those lanes; T01's and
+    T02's Notes here now hold them, as T04's and T08's do.
+  - ops/first-use-in-test.md step 24 listened for the heading as the page arrives, which needs T02's route focus, with
+    no gate; that check now waits until T02 is in test.
+- 17 October 2026, review: 2 findings were confirmed and are fixed here:
+  - No test showed that Save empties the save status at the press (guide-prompts.md *Interactions and focus*, "Status
+    and alert cleared"), so a save that failed after one that worked could show "Saved" and its time beside the alert;
+    the tests of two saves in a row pass without it, as the status is empty while any save is out. A Vitest case now
+    saves, then meets no connection, and a `412`, and fails once that reset is removed; `guide-prompts.spec.ts`'s axe
+    run checks the status empty at the conflict that follows a save; and the two-saves tests' titles no longer claim
+    the reset.
+  - ops/first-use-in-test.md step 24 left out the load status, Try again's "Loading…" and failure, the hidden
+    "Saving…", the alerts for no connection and the conflict, Sign out's dialog and the heading after Leave without
+    saving, so it could not close the checklist's item on waiting and errors or *Accessibility runs*' screen-reader
+    bullet. It now causes each row of *Interactions and focus* that a person can: the conflict from a second tab, as
+    accounts A and B are in different organisations; no connection with the device offline; and, on the laptop alone,
+    whose developer tools can slow the connection, "Loading guide prompts…" and "Saving…", for which VoiceOver and
+    TalkBack hear the load-failed sentence and "Saved" in the same two regions. A server error shows in the same alert
+    as no connection, a `422` as the too-long error and a `401` is the shell's, so none needs a person. Step 24 is what
+    closes the checklist's five screen-reader items and that bullet.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Serve the guide prompts (S01.04.01's first criterion; guide-prompts.md *Access and structure*'s `403`, *Save*'s
+      two-managers and audit bullets and the server half of *Limit and count*; design.md §5.4, §6.6, D84): a handler
+      class in `Features/GuidePrompts` that takes the `Actor` (mcp-server.md §3.5), with `GET` and
+      `PUT /api/admin/guide-prompts` mapped in the `/api/admin` group from `Program.cs`. The `GET` gives `{text}` with
+      `RowVersionToken.ETag(organisation)`. The `PUT`'s request holds `text` as required but possibly empty, and at
+      most `Limits.GuidePrompts` long (Notes above), so that the validation filter answers `422 validation.failed` on
+      `text` before the handler runs; the handler checks `IfMatch.Check` and answers its code's `Problem()`, saves
+      through `ConfigurationChanges.SaveAsync` as `guide_prompts.updated` on `Organisation` with `text` old and new,
+      and answers `200` with the new `ETag`, the same one when nothing changed, or `412` when the save races. Delete
+      `ConfigurationChangesOnSqlServerTests`' test-only endpoints and move its tests onto the real path, the race test
+      through the handler. SQL Server tests add: 1,000 characters holding 10 line breaks save; 1,001 answer `422` with
+      `errors.text`, changing nothing and writing no event; a `PUT` of `""` answers `200`, stores `""` and writes one
+      event with the old and new text; a body with no `text`, and one with a `null` `text`, each answer `422` with
+      `errors.text`, changing nothing and writing no event; A loads, B saves, A's `PUT` gets `412`, A's next `PUT`
+      with the fresh `ETag` saves, and both events hold the old and new text; and, with a second organisation added
+      that holds other prompts, each organisation's manager's `GET` gives their own organisation's text and `ETag`,
+      and a `PUT` by one organisation's manager leaves the other organisation's row, `RowVersion` and audit events
+      unchanged (tests/README.md *Adding an admin endpoint*; design.md §5.9 item 7). Matrix rows for both: `401`
+      signed out, `403` for A's worker, and for both managers `200` from the `GET` and `428` from a `PUT` with a body
+      and no `If-Match`, which changes nothing; `AdminGuardTests` pass; and, if T02's audit-events test is on `main`,
+      its `guide_prompts.updated` row
+- [x] Build the shared pieces that later tasks reuse (Notes above): `count()` in `src/copy/format.ts` (microcopy.md
+      §3: `Intl.NumberFormat` and `Intl.PluralRules` in `en-AU`), with the character-count words in `messages.ts`
+      (microcopy.md §4: "You can enter up to 1,000 characters", "You have 100 characters remaining", "You have 1
+      character too many"); `TextBox.module.css` in `src/components` (guide-prompts.md 6b: 18 px text, line height
+      1.5, 0.75rem padding, 2 px border, `min-block-size: 11em`, the 40rem column, `field-sizing: content` with the
+      grid mirror as fallback, the error border and the forced-colours focus); `leaveGuard.ts` beside
+      `fullPageLoad.ts` (settings-textarea.md's contract: `setLeaveGuard`, `confirmLeave`, `disarmUnloadGuard`,
+      `rearmUnloadGuard`, `unloadGuardArmed`, in memory only); the `ConfirmDialog` shell (confirm-dialog.md):
+      a native `<dialog>` opened with `showModal()` on mount, `role="alertdialog"` and `aria-modal`, named by its
+      `<h2>` and described by its body, two stacked full-width buttons, primary and secondary in the order the dialog
+      gives, focus on the button the dialog names, Escape, Android back and any close but its confirming button's
+      meaning the safe choice, no light dismiss, and focus back on the trigger; `SaveStatus.tsx` in `src/components`
+      (status-messages.md `SaveStatus`, guide-prompts.md 6f, participants.md's Details Save): an always-rendered
+      `<p role="status">`, never `display: none`, in `--font-size-small`, `--colour-text-secondary` and
+      `tabular-nums`, that is empty, holds a visually hidden "Saving…" when its page asks for it, or reads "Saved"
+      followed by the time from `time()` in a `<time dateTime>`, or "Saved" alone when the answer had no `Date`; and
+      `apiWithHeaders()` in `src/api/api.ts` (Notes above). Vitest shows each: `count()`'s singular and grouping, and
+      the words at 900, 999, 1,000 and 1,001; `confirmLeave()` resolving `true` at once with no guard registered
+      (S01.04.02's own criterion: no other screen warns) and asking the one registered; the dialog's role, name,
+      description and initial focus, and its `cancel` event (Escape) and a plain `close()` as the safe choice (jsdom
+      has no backdrop or real `showModal()`, so step 6 checks those in Chromium); `SaveStatus`'s four states, the region
+      in the DOM while empty, and a time of 06:12 UTC on 1 October 2026 shown as "Saved 4:12 pm"; and
+      `apiWithHeaders()` giving the body, the `ETag`'s token without its quotes and the `Date` as UTC, `undefined` for
+      either header when it is missing, and failing as `api()` does
+- [x] Make Sign out ask the leave guard (app-shell.md *Account and Sign out*'s Guide prompts bullet, in the order of
+      *Press Sign out* and *Sign out fails*): in `AccountPanel`'s `signOut()`, `await confirmLeave()` before any
+      request and before the button goes busy, so that Stay sends nothing; `disarmUnloadGuard()` just before the logout
+      request; `rearmUnloadGuard()` after a failed logout; the comment over `signOut()` drops this part; and, if T01's
+      different-person reload is on `main` by then, `disarmUnloadGuard()` before its `fullPageLoad()`.
+      `Header.test.tsx` shows, with a stand-in guard: none registered, one logout as before; Stay, no request, Sign out
+      not busy and focused; Leave, the guard disarmed before the `POST`; a failed logout, the guard armed again and the
+      failure line shown; and the different-person reload disarming first, if it is built
+- [x] Show Manage > Guide prompts (guide-prompts.md *Access and structure*, *Loading* and *Field*; design.md §4.10's
+      *On screen*, *Help text* and no-prompt-text lines): `/manage/guide-prompts` under `ManagerOnly`, named
+      `pageName.guidePrompts`, in `src/features/guidePrompts`; the `<h1>` holding the field's `<label>`, the help text
+      and the limit hint, rendered at once; `LoadRegion` with "Loading guide prompts…" and "The guide prompts"; the
+      `['admin', 'guidePrompts']` query through `apiWithHeaders()`, giving the text and the `ETag`'s token, with
+      `gcTime: 0` and no refetch on focus; the form mounted only with the data, its uncontrolled textarea on
+      `TextBox.module.css`, the loaded text read once, described by the help and limit, with `spellCheck`,
+      `autoCapitalize="sentences"`, `autoComplete="off"` and `writingsuggestions="false"`, and no `placeholder`,
+      `maxlength`, `disabled`, `readonly` or autofocus; and `guidePrompts: 1_000` in `limits.ts`
+      (`SpaLimitsTests`). Vitest and Playwright, answering the API in the browser, show every bullet of the three
+      groups: the heading, help, hint, title and Manage's `aria-current="true"`; a worker's Page not found; the field
+      never focused by itself, and focus on the `<h1>` after a client-side arrival if T02 is on `main` (Notes above);
+      with the `GET` held 3 s, no field or Save before its answer, the status empty at 999 ms and "Loading guide
+      prompts…" at 1,000 ms; offline, the load-failed words, then "…still did not load…", then Try again's success
+      mounting the field with focus on the `<h1>`; a second visit sending a fresh `GET`; the saved text exact, line
+      breaks kept, in `#0b0c0c`; an empty value as an empty box; no request while typing, pasting and deleting; and, at
+      375 and 1280 px, the box's computed 18 px font, 27 px line height, 12 px padding and 2 px border, 40rem wide on
+      the laptop
+- [x] Count and save (guide-prompts.md *Limit and count* and *Save*; design.md §4.10's Save): the count of the trimmed
+      text, hidden below 900, `aria-hidden` beside a polite twin that speaks 1 s after typing stops, and red over 1,000
+      with the box's border but no `aria-invalid`; Save through `onSubmit` with no form action, sending the trimmed
+      text, or, over 1,000, showing "Guide prompts must be 1,000 characters or less" with the error bar,
+      `aria-invalid` and focus on the field, cleared once fixed; the `PUT` through `apiWithHeaders()` with `If-Match`
+      from the last `ETag`; the shared `Button` busy, "Saving…" after 400 ms, with `announceBusy={false}`; step 2's
+      `SaveStatus`, cleared on the press, holding its hidden "Saving…" from 400 ms, then "Saved 4:12 pm" from the
+      answer's `Date` ("Saved" without one), cleared on the next keystroke; `RequestAlert` with "Not saved: no
+      connection. Try again.", "Not saved: something went wrong. Try again." or the conflict message; `retry: 0`; a
+      `412` refetching the base text and `ETag` with the field untouched; a `422` shown as too long; a `401` left to the
+      session flow; and a `403` refreshing `/me`, so that the role guard shows Page not found. Vitest and Playwright
+      show every bullet of the two groups: the counts at 900, 999, 1,000 and 1,001; a 1,200-character paste kept
+      whole, the error, focus and nothing sent; 1,000 characters with 10 line breaks saved; the body trimmed at its
+      ends only, and `""` for whitespace; Save never `disabled`, and two quick presses sending one `PUT`; with the `PUT`
+      held 2 s, "Saving…" at 400 ms, the button's size unchanged and the field editable; a `Date` of 06:12 UTC on
+      1 October 2026 shown as "Saved 4:12 pm", focus on Save, cleared by a keystroke; two saves both announced; typing
+      during a slow save leaving the page dirty; one `PUT` per press on failure, the text unchanged; A loads, B saves,
+      A sees the conflict with the text unchanged and A's next Save succeeds; and one test signed in for real (a
+      bootstrapped manager with a passkey on the virtual authenticator, as `users.spec.ts` does) saving prompts with
+      line breaks and reading them back after a reload
+- [x] Warn before leaving unsaved (S01.04.02: design.md §4.10's warning, guide-prompts.md *Leaving*, app-shell.md's
+      Guide prompts bullet and its own criterion): dirty is the field's trimmed value, read from the DOM, against the
+      base text; `useBlocker` blocks only when the pathname changes while dirty; the leave dialog on the `ConfirmDialog`
+      shell says "Leave without saving?" and "Your changes to the guide prompts are not saved.", with "Stay on this
+      page" (primary, focused) and "Leave without saving" (secondary, not red), any close but Leave resetting the
+      blocker and Leave proceeding; a `beforeunload` listener only while dirty, which prevents the unload while
+      `unloadGuardArmed()`; and the page registers the same dialog with `setLeaveGuard` for Sign out, removing it on
+      unmount. Playwright shows every *Leaving* bullet: dirty and Today, the dialog with focus on Stay; Escape, the URL,
+      the text and focus on the Today link unchanged; Leave, on Today, with focus on its `<h1>` if T02 is on `main`
+      (Notes above); clean (typed, then deleted back) no dialog for a link, Back, reload or Sign out; arrived from
+      Manage, dirty, and the browser's Back, the dialog with focus on Stay; Escape, and Stay after a second Back, each
+      leaving the URL at `/manage/guide-prompts` and the text unchanged; and Leave after a third going to `/manage`
+      (blocking a POP is the risky path, react-router issue #11589, and Chromium can prove it; only the phone gestures
+      need a person); a click on the dialog's backdrop leaving it open and the URL unchanged; dirty and reload,
+      Chromium's dialog, and none after a Save; no `beforeunload` listener while clean (a spy on `addEventListener`);
+      dirty and Sign out, the dialog and no logout request; Stay, still none and focus on Sign out; Leave, the logout
+      and no browser dialog; a failed logout leaving the page guarded; a plain `close()` of the dialog as Stay; no
+      warning on Today, Manage or Users for a link, reload or Sign out; and, if T01 is on `main`, the two
+      sign-in-again bullets (Notes above)
+- [x] Meet the Definition of Done's rows for this screen (guide-prompts.md *Storage and naming* and *Accessibility
+      runs*; README §9): Playwright shows nothing written to `localStorage`, `sessionStorage` or IndexedDB on any of
+      the paths above (spies on `Storage.prototype.setItem` and `indexedDB.open`); axe passing in Default, Loading,
+      Load failed, Too long, Saved, Conflict and with the dialog open; at 320 px with text at 200%, which also stands
+      for 400% zoom at 1280 px, no sideways scroll and nothing clipped; with forced colours emulated, real borders on
+      the box, the error bar, the focus ring and both buttons; and a keyboard-only pass (README §9's accessibility row;
+      guide-prompts.md *Focus order* and *Accessibility checklist* › Keyboard), with Tab as `users.spec.ts` presses it:
+      from Manage, Tab reaches the field and then Save, with Try again after Manage only while the load has failed;
+      Enter in the field adds a line break and sends no `PUT`; in the leave dialog Tab moves from Stay on this page to
+      Leave without saving; and the 3 px focus ring with its 2 px offset shows on each stop. Then tick the items of
+      guide-prompts.md's *Accessibility checklist* that these runs prove; the screen-reader ones wait for the by-hand
+      step below. Every new string is in `src/copy` and the copy test passes; the diff holds no trace of the parent
+      company's name; and ops/first-use-in-test.md gains a Guide prompts step for the by-hand checks: NVDA with Chrome,
+      VoiceOver with iOS Safari and TalkBack with Chrome hearing *Interactions and focus* once each, and, on real
+      phones, the Android back gesture and iOS swipe-back while dirty, and whether `beforeunload` shows anything there
+      (S01.04.02's Note; guide-prompts.md *Open questions*)
+- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
+      the CI and Deploy runs passed every step, the deploy applied no migration and its smoke test passed; `/healthz`
+      and `/healthz/ready` answer `200`; a signed-out `GET /api/admin/guide-prompts` answers `401` problem+json with
+      `Cache-Control: no-store` and a `Date` header through App Service's front end, the header that "Saved 4:12 pm"
+      reads (guide-prompts.md *Open questions*); and headless Chromium at `/manage/guide-prompts`, signed out, shows
+      sign-in with no Content Security Policy error in its console. Record the run IDs in Notes, and that the criteria
+      are proven in CI. Then set T03's `status` here and S01.04.01's and S01.04.02's to `done` together, ticking their
+      criteria and leaving unticked, each with its dated Note, any criterion handed off to a task not yet merged (Notes
+      above)
 
 ---
 
@@ -215,6 +454,12 @@ protected. From the console the operator can reset the last manager's sign-in or
 
 - Reuses T01's setup-link step, email sender and If-Match for users, and T03's dialog shell, to which it adds the red
   warning style and the rule that the 28-minute warning closes an open dialog as Go back.
+- From T03 (14 October 2026, its plan): T03's `ConfirmDialog` shell holds only what its leave dialog uses, so T04, the
+  first dialog that sends a request, also adds to the shell, for every dialog after it, confirm-dialog.md's focus on
+  the title (the `<h2 tabindex="-1">` with no visible ring, for a dialog that names it as its first focus), the
+  always-rendered `<p role="alert">` error line, and the busy state with its always-rendered `<p role="status">` busy
+  line after 1 s, beside the red style. The leave dialog keeps its focus on "Stay on this page" (guide-prompts.md
+  *Conflicts resolved* 9). No S01.04.01 or S01.04.02 criterion waits on these.
 - Builds the session-revocation test helper that T24 and T32 reuse. D74 to D77 settle the dialogs and the edge cases.
 - The operator's break-glass run and the two-device sign-out are by-hand checks on ops/first-use-in-test.md.
 
@@ -370,6 +615,10 @@ lets workers write only today's note, using the Melbourne date.
   Reuses T02's Find-a-participant box and T03's leave guard and `count()`.
 - Starts lane C's note-form run: T08, T09, T10, T12, T13 and T14 run back to back, because the note form is one hot
   spot.
+- From T03 (14 October 2026, its plan): also proves the parts of S01.04.01 that need the note form's Guided notes box,
+  which T03 left unticked naming T08: guide-prompts.md › Field's comparison of the two boxes' computed metrics at
+  375 and 1280 px, and design.md §4.10's "straight away … including open drafts" and empty prompts showing no
+  placeholder (S02.02.02's Notes).
 
 ### Steps
 

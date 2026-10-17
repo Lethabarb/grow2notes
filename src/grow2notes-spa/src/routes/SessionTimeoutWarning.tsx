@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api, classify } from '../api/api.ts';
 import { getPhase, isWarning, subscribe, type WarningPhase } from '../api/session.ts';
 import { Button } from '../components/Button.tsx';
+import dialogStyles from '../components/dialog.module.css';
 import { useDelayed } from '../components/useDelayed.ts';
 import { strings } from '../copy/strings.ts';
 import styles from './SessionTimeoutWarning.module.css';
@@ -94,7 +95,7 @@ export function SessionTimeoutWarning({ signedIn }: SessionTimeoutWarningProps) 
   return (
     <dialog
       ref={dialogRef}
-      className={styles.dialog}
+      className={dialogStyles.dialog}
       aria-labelledby={headingId}
       // Escape and Android back are Stay signed in.
       onCancel={(event) => {

@@ -38,6 +38,8 @@ internal static class EndpointMatrix
 
     private static readonly IReadOnlyList<string> Post = ["POST"];
 
+    private static readonly IReadOnlyList<string> Put = ["PUT"];
+
     private static readonly HttpMethod[] CalledForAnyMethod =
         [HttpMethod.Get, HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete];
 
@@ -112,6 +114,12 @@ internal static class EndpointMatrix
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeededUsersOnly),
+
+        // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
+        // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
+        new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
+        new(Put,       "/api/admin/guide-prompts", Unauthorized, Forbidden, PreconditionRequired, PreconditionRequired,
+            WithJson("/api/admin/guide-prompts", new { text = "What did they enjoy today?" })),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
