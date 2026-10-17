@@ -107,6 +107,15 @@ export const strings = {
   saving: 'Saving…',
   /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
   saved: 'Saved',
+  /** The busy label of Archive participant and of a list row's Archive (participants.md, list-editor.md). */
+  archiving: 'Archiving…',
+  /**
+   * The button that brings back what is archived: a participant, in their archived notice, and an archived row of a
+   * list (participants.md B3, list-editor.md).
+   */
+  restore: 'Restore',
+  /** Restore's busy label. */
+  restoring: 'Restoring…',
   /** Between two ways of doing one thing, as a word that a screen reader reads (sign-in.md component 5). */
   or: 'or',
   /** The safe button of a dialog that confirms an action, under the one that confirms it (confirm-dialog.md). */
@@ -373,8 +382,9 @@ export const strings = {
    * (design.md §4.8): the help text above the list, unless it is read-only; the sentence in place of the list when no
    * row is active; and the summary of the archived rows' section. Then the add form: its field's label, its button,
    * and, in the page's status region, what an add did; then a row's edit form: its field's label, and what a Save did;
-   * and a row as `msg.rowChangedWhileEditing` names it, and its text as its messages name it, the one for no text and,
-   * with `msg.tooLong`, the one for too much (form-validation.md).
+   * then, in the page's status region too, what an Archive and a Restore did; and a row as `msg.rowChangedWhileEditing`
+   * names it, and its text as its messages name it, the one for no text and, with `msg.tooLong`, the one for too much
+   * (form-validation.md).
    */
   listEditor: {
     goal: {
@@ -388,6 +398,8 @@ export const strings = {
       added: 'Goal added to the end of the list',
       editLabel: 'Edit goal',
       saved: 'Goal saved',
+      archived: 'Goal archived',
+      restored: 'Goal restored to the end of the list',
       row: 'goal',
       enter: 'Enter the goal',
       text: 'Goal',
@@ -396,7 +408,8 @@ export const strings = {
   /**
    * What every kind of list that `ListEditor` edits shares (list-editor.md *Exact copy*): each active row's Move up and
    * Move down, with their busy label and, in the page's status region, what a press of one that is unavailable at the
-   * row's end says; its Edit; and, above the list, focused, a write that found the list changed by someone else.
+   * row's end says; its Edit and Archive, whose busy label is `archiving`, as an archived row's Restore is `restore`;
+   * and, above the list, focused, a write that found the list changed by someone else.
    */
   listRows: {
     moveUp: 'Move up',
@@ -405,19 +418,17 @@ export const strings = {
     atTop: 'Already at the top',
     atBottom: 'Already at the bottom',
     edit: 'Edit',
+    archive: 'Archive',
     listChanged: 'Someone else changed this list just now. Check it, then try again.',
   },
   /**
-   * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>`, Archive
-   * participant in it and Restore in the archived notice, each with its busy label; then, in the alert above either, a
-   * press refused as stale (`412`) that finds the participant still as they were.
+   * Archiving and restoring a participant (participants.md B3 and B7): the page's Actions section's `<h2>` and Archive
+   * participant in it, whose busy label is `archiving`, as the archived notice's Restore is `restore`; then, in the
+   * alert above either, a press refused as stale (`412`) that finds the participant still as they were.
    */
   participantActions: {
     heading: 'Actions',
     archive: 'Archive participant',
-    archiving: 'Archiving…',
-    restore: 'Restore',
-    restoring: 'Restoring…',
     changedMeanwhile: 'Someone else changed this participant just now. Check the page, then try again.',
   },
   /**

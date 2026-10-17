@@ -1806,9 +1806,12 @@ function activeGoals(): (string | undefined)[] {
   return Array.from(goalsSection()!.querySelectorAll('ol > li'), (item) => item.querySelector('p')?.textContent);
 }
 
-/** The texts of the archived goals, in the Goals section's `<details>`, in order. */
-function archivedGoals(): string[] {
-  return Array.from(goalsSection()!.querySelectorAll('details ul > li'), (item) => item.textContent);
+/** The texts of the archived goals, in the Goals section's `<details>`, in order, each its row's first paragraph. */
+function archivedGoals(): (string | undefined)[] {
+  return Array.from(
+    goalsSection()!.querySelectorAll('details ul > li'),
+    (item) => item.querySelector('p')?.textContent,
+  );
 }
 
 /** The Goals section's New goal field. */
@@ -1890,6 +1893,16 @@ function goalReorders(): { path: string; ifMatch: string | null; token: string |
         body: JSON.parse(init?.body as string) as unknown,
       };
     });
+}
+
+/** The path at which the goal whose ID is `goalId` is archived, or restored with `action` `'restore'`. */
+function goalStatusPath(goalId: string, action: 'archive' | 'restore'): string {
+  return `/api/admin/goals/${goalId}/${action}`;
+}
+
+/** The goals' archives and restores sent, each as its path, its `If-Match`, its token and its body. */
+function goalStatusChanges(): { path: string; ifMatch: string | null; token: string | null; body: unknown }[] {
+  return statusChanges().filter(({ path }) => path.startsWith('/api/admin/goals/'));
 }
 
 /** A goal as the list gives it once it is added, first in the list. */
@@ -2055,6 +2068,100 @@ describe("A participant's goals", () => {
     expect(within(goalsSection()!).getByRole('button', { name: `Move down, ${breakfast.text}` })).toHaveFocus();
     await wait(16);
     expect(pageStatus()).toHaveTextContent('Moved down to number 2 of 2');
+  });
+
+  it('take one archived on the page: sent with token and version, the list read again, Restore focused', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    const path = goalStatusPath(breakfast.id, 'archive');
+    serve('POST', path, noContent);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([{ ...breakfast, archivedAtUtc: '2026-10-01T06:12:00Z', rowVersion: 'AAAAAAAAD9E=' }, washing, bus, shop]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Archive, ${breakfast.text}` }));
+
+    expect(goalStatusChanges()).toEqual([
+      { path, ifMatch: `"${breakfast.rowVersion}"`, token: 'token-1', body: undefined },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${path}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([janesActiveGoals[1]]);
+    expect(goalsSection()!.querySelector('details')!.open).toBe(true);
+    expect(archivedGoals()).toEqual([breakfast.text, 'Walks to the shop', 'Uses the washing machine']);
+    expect(within(goalsSection()!).getByRole('button', { name: `Restore, ${breakfast.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal archived');
+  });
+
+  it('take one restored on the page: sent with token and version, the list read again, Archive focused', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast, washing, bus, shop] = janesGoals;
+    const path = goalStatusPath(washing.id, 'restore');
+    serve('POST', path, noContent);
+    serve(
+      'GET',
+      goalsPath(jane.id),
+      json([breakfast, bus, shop, { ...washing, sortOrder: 3, archivedAtUtc: null, rowVersion: 'AAAAAAAAD9E=' }]),
+    );
+
+    await press(within(goalsSection()!).getByRole('button', { name: `Restore, ${washing.text}` }));
+
+    expect(goalStatusChanges()).toEqual([
+      { path, ifMatch: `"${washing.rowVersion}"`, token: 'token-1', body: undefined },
+    ]);
+    expect(requests().slice(-2)).toEqual([`POST ${path}`, `GET ${goalsPath(jane.id)}`]);
+    expect(activeGoals()).toEqual([...janesActiveGoals, washing.text]);
+    expect(archivedGoals()).toEqual(['Walks to the shop']);
+    expect(within(goalsSection()!).getByRole('button', { name: `Archive, ${washing.text}` })).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Goal restored to the end of the list');
+  });
+
+  // participants.md *Interactions and focus*, "Archive while something is unsaved", and S01.02.04's hand-off.
+  it('lose their controls, and what was typed in them, to Archive participant, and get only them back', async () => {
+    await openJaneWithGoals(janesGoals);
+    const [breakfast] = janesGoals;
+    await press(within(goalsSection()!).getByRole('button', { name: `Edit, ${breakfast.text}` }));
+    type(within(goalsSection()!).getByRole('textbox', { name: 'Edit goal' }), 'Makes own lunch');
+    type(newGoal(), 'Phones her sister');
+    serve('POST', archivePath, noContent);
+    serve('GET', listPath, json([janeArchived, priya]));
+    const goalRequests = () => requests().filter((request) => request.includes('/goals'));
+    const goalRequestsBefore = goalRequests();
+
+    await press(archiveButton());
+
+    expect(notice()).toHaveFocus();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    expect(archivedGoals()).toEqual(['Walks to the shop', 'Uses the washing machine']);
+    expect(within(goalsSection()!).queryAllByRole('button')).toEqual([]);
+    expect(within(goalsSection()!).queryAllByRole('textbox')).toEqual([]);
+    expect(within(goalsSection()!).queryAllByRole('alert')).toEqual([]);
+    expect(within(goalsSection()!).queryByText(goalsHelp)).toBeNull();
+    expect(goalRewords()).toEqual([]);
+    expect(goalAdds()).toEqual([]);
+    serve('POST', restorePath, noContent);
+    serve('GET', listPath, json([janeRestored, priya]));
+
+    await press(restoreButton());
+
+    expect(pageHeading()).toHaveFocus();
+    expect(within(goalsSection()!).getByText(goalsHelp)).toBeInTheDocument();
+    expect(activeGoals()).toEqual(janesActiveGoals);
+    for (const text of janesActiveGoals) {
+      for (const label of ['Move up', 'Move down', 'Edit', 'Archive']) {
+        expect(within(goalsSection()!).getByRole('button', { name: `${label}, ${text}` })).toBeInTheDocument();
+      }
+    }
+    for (const text of ['Walks to the shop', 'Uses the washing machine']) {
+      expect(within(goalsSection()!).getByRole('button', { name: `Restore, ${text}` })).toBeInTheDocument();
+    }
+    expect(within(goalsSection()!).getAllByRole('button')).toHaveLength(11);
+    expect(within(goalsSection()!).queryByRole('textbox', { name: 'Edit goal' })).toBeNull();
+    expect(newGoal()).toHaveValue('');
+    expect(goalRequests()).toEqual(goalRequestsBefore);
   });
 
   it('of a participant just added take one added on the page, reading their list only after it', async () => {

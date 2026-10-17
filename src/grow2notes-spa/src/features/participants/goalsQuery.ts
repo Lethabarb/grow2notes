@@ -10,6 +10,11 @@ function goalsPath(participantId: string): string {
   return `/api/admin/participants/${encodeURIComponent(participantId)}/goals`;
 }
 
+/** The path of a goal, which a reword puts to, and under which it is archived and restored (design.md §6.6). */
+function goalPath(goalId: string): string {
+  return `/api/admin/goals/${encodeURIComponent(goalId)}`;
+}
+
 /**
  * The `['admin', 'goals', participantId]` query, a participant's page's second (participants.md B9): every goal of the
  * participant, archived ones too, in the API's order. Outside `['admin', 'participants']`, so that an invalidation of
@@ -28,8 +33,9 @@ export function goalsQuery(participantId: string) {
  * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query; the one scope of
  * every write on them, `goals:<participantId>` (participants.md B6); the add, whose `201` has no body; a goal's
  * reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and whose `ETag` the editor does not read,
- * as it reads each goal's next version from the list; and the reorder of the active goals, with no `If-Match`, as the
- * set of their IDs is its check (design.md §6.7), whose `204` has no body.
+ * as it reads each goal's next version from the list; the reorder of the active goals, with no `If-Match`, as the
+ * set of their IDs is its check (design.md §6.7), whose `204` has no body; and a goal's archive and restore, with no
+ * body and its `rowVersion` as `If-Match`, whose `204`s have none.
  */
 export function goalsApi(participantId: string): ListApi {
   return {
@@ -37,11 +43,9 @@ export function goalsApi(participantId: string): ListApi {
     scopeId: `goals:${participantId}`,
     add: (text) => api<undefined>(goalsPath(participantId), { method: 'POST', body: { text } }),
     update: (id, text, rowVersion) =>
-      api<undefined>(`/api/admin/goals/${encodeURIComponent(id)}`, {
-        method: 'PUT',
-        body: { text },
-        ifMatch: rowVersion,
-      }),
+      api<undefined>(goalPath(id), { method: 'PUT', body: { text }, ifMatch: rowVersion }),
     reorder: (goalIds) => api<undefined>(`${goalsPath(participantId)}/order`, { method: 'PUT', body: { goalIds } }),
+    archive: (id, rowVersion) => api<undefined>(`${goalPath(id)}/archive`, { method: 'POST', ifMatch: rowVersion }),
+    restore: (id, rowVersion) => api<undefined>(`${goalPath(id)}/restore`, { method: 'POST', ifMatch: rowVersion }),
   };
 }

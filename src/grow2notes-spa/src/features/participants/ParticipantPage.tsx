@@ -538,10 +538,10 @@ function Participant({ participant, onAdded }: ParticipantProps) {
               <RequestAlert>{statusFailure}</RequestAlert>
               <Button
                 busy={statusChange.isPending}
-                busyLabel={strings.participantActions.restoring}
+                busyLabel={strings.restoring}
                 onClick={() => changeStatusTo(known, 'Active')}
               >
-                {strings.participantActions.restore}
+                {strings.restore}
               </Button>
             </>
           }
@@ -611,7 +611,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
           <RequestAlert>{statusFailure}</RequestAlert>
           <Button
             busy={statusChange.isPending}
-            busyLabel={strings.participantActions.archiving}
+            busyLabel={strings.archiving}
             onClick={() => changeStatusTo(known, 'Archived')}
           >
             {strings.participantActions.archive}

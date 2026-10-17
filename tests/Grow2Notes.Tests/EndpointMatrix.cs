@@ -189,6 +189,14 @@ internal static class EndpointMatrix
         // found, gets 404 (§9.2).
         new(Put,       "/api/admin/participants/{participantId:guid}/goals/order", Unauthorized, Forbidden, NoContent,
             NotFound, ReorderingTheGoalsOfAParticipantOfItsOwn),
+
+        // Archiving and restoring a goal (§6.6), in the same group, as the reword is: each call archives an active
+        // goal, or restores an archived one, of its own, which its request first adds to a participant whom it adds to
+        // A, so B's manager gets 404.
+        new(Post,      "/api/admin/goals/{goalId:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAGoalOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/goals/{goalId:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAGoalOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -344,6 +352,22 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { text = "Makes own lunch" }),
         };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
+        return request;
+    }
+
+    // An archive or a restore, with no body, of a goal that the request first adds to a participant whom it adds to A,
+    // archived or not, sent with the goal's ETag as If-Match, so that each call changes a goal of its own
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingThePlaceOfAGoalOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        var goal = await call.Services.AddGoalAsync(
+            call.Seeded.A,
+            participant.Id,
+            new("Makes own breakfast", 0, ArchivedAtUtc: archived ? TestGoals.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/goals/{goal.Id}/{action}");
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(goal.ETag));
         return request;
     }

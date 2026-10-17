@@ -11,9 +11,10 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <summary>
 /// The handler that changes a participant's goals (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants/{participantId}/goals</c>,
-/// <c>PUT /api/admin/goals/{goalId}</c> and <c>PUT /api/admin/participants/{participantId}/goals/order</c> call it with
-/// <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved
-/// with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// <c>PUT /api/admin/goals/{goalId}</c>, <c>PUT /api/admin/participants/{participantId}/goals/order</c> and
+/// <c>POST /api/admin/goals/{goalId}/archive</c> and <c>/restore</c> call it with <see cref="Actor.InApp"/>, and
+/// Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
+/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class GoalChanges(
     Grow2NotesDbContext db,
@@ -92,43 +93,85 @@ internal sealed class GoalChanges(
     /// <see cref="ErrorCode.PreconditionFailed"/> when the goal changed after it was loaded, or the text's message,
     /// with nothing written.
     /// </returns>
-    public async Task<GoalChangeResult> UpdateAsync(
-        Actor actor, Guid goalId, StringValues ifMatch, GoalTextRequest request, CancellationToken cancellationToken)
-    {
-        var goal = await db.Goals.SingleOrDefaultAsync(g => g.Id == goalId, cancellationToken);
-        if (goal is null)
-        {
-            return GoalChangeResult.NotFound;
-        }
+    public Task<GoalChangeResult> UpdateAsync(
+        Actor actor, Guid goalId, StringValues ifMatch, GoalTextRequest request, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            goalId,
+            ifMatch,
+            async goal =>
+            {
+                if (!GoalText.TryRead(request, out var text, out var errors))
+                {
+                    return GoalChangeResult.Invalid(errors);
+                }
 
-        if (IfMatch.Check(ifMatch, RowVersionToken.Of(goal)) is { } refused)
-        {
-            return GoalChangeResult.Refused(refused);
-        }
+                var before = TextValues(goal);
+                goal.Text = text;
+                var saved = await changes.SaveAsync(
+                    actor,
+                    AuditEventTypes.Goal.Updated,
+                    AuditEntityTypes.Goal,
+                    goal.Id,
+                    goal.ParticipantId,
+                    before,
+                    TextValues(goal),
+                    cancellationToken: cancellationToken);
 
-        if (!GoalText.TryRead(request, out var text, out var errors))
-        {
-            return GoalChangeResult.Invalid(errors);
-        }
+                // EF Core reads back the version that SQL Server gave the row as it saved it, so after a save this is
+                // the new ETag, and when nothing changed it is the one the If-Match matched.
+                return saved.Error is { } error
+                    ? GoalChangeResult.Refused(error)
+                    : GoalChangeResult.Reworded(RowVersionToken.ETag(goal));
+            },
+            cancellationToken);
 
-        var before = TextValues(goal);
-        goal.Text = text;
-        var saved = await changes.SaveAsync(
-            actor,
-            AuditEventTypes.Goal.Updated,
-            AuditEntityTypes.Goal,
-            goal.Id,
-            goal.ParticipantId,
-            before,
-            TextValues(goal),
-            cancellationToken: cancellationToken);
+    /// <summary>
+    /// Archives a goal of the tenant's organisation (design.md §3.7, S01.02.08), once <paramref name="ifMatch"/> is its
+    /// version, as <see cref="UpdateAsync"/> checks it: sets <c>ArchivedAtUtc</c> through
+    /// <see cref="Archiving.Archive"/>, which leaves its <c>SortOrder</c>, and saves it with <c>goal.archived</c>. A
+    /// goal archived already keeps the time it was archived at, so nothing is saved and no event written, and the
+    /// answer is as a save's (D84).
+    /// </summary>
+    /// <returns>
+    /// <see cref="GoalChangeResult.Saved"/>, whether the goal changed or not; or the code that
+    /// <see cref="IfMatch.Check"/> gives, or <see cref="ErrorCode.PreconditionFailed"/> when the goal changed after it
+    /// was loaded, with nothing written.
+    /// </returns>
+    public Task<GoalChangeResult> ArchiveAsync(
+        Actor actor, Guid goalId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            goalId,
+            ifMatch,
+            goal =>
+            {
+                var before = PlaceValues(goal);
+                Archiving.Archive(goal, timeProvider);
+                return SavePlaceAsync(actor, AuditEventTypes.Goal.Archived, goal, before, cancellationToken);
+            },
+            cancellationToken);
 
-        // EF Core reads back the version that SQL Server gave the row as it saved it, so after a save this is the new
-        // ETag, and when nothing changed it is the one the If-Match matched.
-        return saved.Error is { } error
-            ? GoalChangeResult.Refused(error)
-            : GoalChangeResult.Reworded(RowVersionToken.ETag(goal));
-    }
+    /// <summary>
+    /// Restores a goal of the tenant's organisation (design.md §3.7, S01.02.08), once <paramref name="ifMatch"/> is its
+    /// version, as <see cref="UpdateAsync"/> checks it: puts it at the end of its participant's active goals through
+    /// <see cref="Archiving.Restore"/> (A2), and saves it with <c>goal.restored</c>. An active goal stays where it is,
+    /// so nothing is saved and no event written, and the answer is as a save's (D84).
+    /// </summary>
+    /// <returns>As <see cref="ArchiveAsync"/>'s.</returns>
+    public Task<GoalChangeResult> RestoreAsync(
+        Actor actor, Guid goalId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            goalId,
+            ifMatch,
+            async goal =>
+            {
+                var before = PlaceValues(goal);
+                var activeGoals = await db.Goals.AsNoTracking()
+                    .Where(g => g.ParticipantId == goal.ParticipantId && g.ArchivedAtUtc == null)
+                    .ToListAsync(cancellationToken);
+                Archiving.Restore(goal, activeGoals);
+                return await SavePlaceAsync(actor, AuditEventTypes.Goal.Restored, goal, before, cancellationToken);
+            },
+            cancellationToken);
 
     /// <summary>
     /// Puts the active goals of a participant of the tenant's organisation, found through the tenant filter, so that
@@ -182,6 +225,44 @@ internal sealed class GoalChanges(
     }
 
     /// <summary>
+    /// Loads the goal through the tenant filter, so that another organisation's is not found (design.md §9.2), and
+    /// checks <paramref name="ifMatch"/> against its version before <paramref name="change"/> changes and saves it.
+    /// </summary>
+    private async Task<GoalChangeResult> ChangeAsync(
+        Guid goalId,
+        StringValues ifMatch,
+        Func<Goal, Task<GoalChangeResult>> change,
+        CancellationToken cancellationToken)
+    {
+        var goal = await db.Goals.SingleOrDefaultAsync(g => g.Id == goalId, cancellationToken);
+        if (goal is null)
+        {
+            return GoalChangeResult.NotFound;
+        }
+
+        return IfMatch.Check(ifMatch, RowVersionToken.Of(goal)) is { } refused
+            ? GoalChangeResult.Refused(refused)
+            : await change(goal);
+    }
+
+    // An archive or a restore of a goal, with its event, whose participant is the goal's and whose Details hold its
+    // place before and after, the values that changed alone (S01.02.08's Notes); or nothing when neither changed.
+    private async Task<GoalChangeResult> SavePlaceAsync(
+        Actor actor, string eventType, Goal goal, JsonObject before, CancellationToken cancellationToken)
+    {
+        var saved = await changes.SaveAsync(
+            actor,
+            eventType,
+            AuditEntityTypes.Goal,
+            goal.Id,
+            goal.ParticipantId,
+            before,
+            PlaceValues(goal),
+            cancellationToken: cancellationToken);
+        return saved.Error is { } error ? GoalChangeResult.Refused(error) : GoalChangeResult.Saved;
+    }
+
+    /// <summary>
     /// A goal's values as an audit event records them, named and written as design.md §6.6's list gives them, never
     /// <c>id</c> or <c>rowVersion</c> (<see cref="ChangeDetails"/>): <c>archivedAtUtc</c> as stored, or JSON
     /// <c>null</c>.
@@ -197,4 +278,14 @@ internal sealed class GoalChanges(
     /// The one value that a reword changes, as <c>goal.updated</c> records it, named as <see cref="Values"/> names it.
     /// </summary>
     private static JsonObject TextValues(Goal goal) => new() { ["text"] = goal.Text };
+
+    /// <summary>
+    /// The goal's place in its participant's list, the values that archiving and restoring change, as their events
+    /// record them, named as <see cref="Values"/> names them.
+    /// </summary>
+    private static JsonObject PlaceValues(Goal goal) => new()
+    {
+        ["sortOrder"] = goal.SortOrder,
+        ["archivedAtUtc"] = goal.ArchivedAtUtc,
+    };
 }

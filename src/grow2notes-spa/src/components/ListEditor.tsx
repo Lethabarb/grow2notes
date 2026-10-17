@@ -12,7 +12,7 @@ import {
 import { flushSync } from 'react-dom';
 import { ApiError, classify } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
-import { strings } from '../copy/strings.ts';
+import { strings, type Cause } from '../copy/strings.ts';
 import { limits } from '../limits.ts';
 import { Button } from './Button.tsx';
 import { CharacterCount } from './CharacterCount.tsx';
@@ -56,6 +56,16 @@ export type ListApi = {
    * editor reads nothing of the answer, as it reads the new order, and each row's next version, from the list.
    */
   reorder: (ids: string[]) => Promise<unknown>;
+  /**
+   * Archives a row, with its `rowVersion` as `If-Match`, as the API's `POST …/archive` does, leaving its place in the
+   * order; the editor reads nothing of the answer.
+   */
+  archive: (id: string, rowVersion: string) => Promise<unknown>;
+  /**
+   * Restores a row to the end of the list, with its `rowVersion` as `If-Match`, as the API's `POST …/restore` does; the
+   * editor reads nothing of the answer.
+   */
+  restore: (id: string, rowVersion: string) => Promise<unknown>;
 };
 
 type ListEditorProps = {
@@ -67,8 +77,9 @@ type ListEditorProps = {
 
 /**
  * What the editor's rows and forms share with it: the list's kind and API; the id of its help text, which describes
- * each text field; the rows as last read, and the read that follows each write; focus that follows a change; and the
- * list conflict, which a write shows and the next write that succeeds takes away.
+ * each text field; the rows as last read, and the read that follows each write; focus that follows a change, and the
+ * archived section that an Archive opens; and the list conflict, which a write shows and the next write that succeeds
+ * takes away.
  */
 type ListContext = {
   kind: ListKind;
@@ -82,6 +93,11 @@ type ListContext = {
   focusTarget: (key: string) => (element: HTMLElement | null) => void;
   /** Focuses the element registered under `key` once the render that a change brings is in the DOM. */
   focusAfterRender: (key: string) => void;
+  /**
+   * Opens the archived section once the render that an Archive brings is in the DOM, as it may have only just
+   * appeared, then focuses the element registered under `key`, if one is given.
+   */
+  openArchivedAfterRender: (key: string | undefined) => void;
   /** Shows the list conflict above the list, and focuses it, as a write found the list changed by someone else. */
   changedMeanwhile: () => void;
   /** Takes the list conflict away, as a write on the list has succeeded. */
@@ -90,6 +106,9 @@ type ListContext = {
 
 // The list conflict's key among the elements that take focus after a change.
 const conflictKey = 'conflict';
+
+// The archived section's key among them, which an Archive opens before its row's Restore takes focus.
+const archivedKey = 'archived';
 
 /** Which way a row's move button moves it. */
 type Direction = 'up' | 'down';
@@ -137,6 +156,39 @@ class RowChanged extends Error {
 }
 
 /**
+ * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
+ * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), or an archive's or a restore's `412`.
+ * That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what the server
+ * now holds; any other failure fails as it is.
+ */
+async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
+  try {
+    await send();
+  } catch (failed) {
+    if (!(failed instanceof ApiError && failed.status === status)) {
+      throw failed;
+    }
+
+    await list.reread();
+    throw new ListChanged();
+  }
+}
+
+/**
+ * What a write that failed says in the alert of the row or the form that sent it (list-editor.md *Request errors*):
+ * `message` with the cause; or nothing for the list conflict, which shows above the list, or for a `401`, which the
+ * session flow has, as `api()` started it.
+ */
+function failureAlert(failed: unknown, message: (cause: Cause) => string): string | undefined {
+  if (failed instanceof ListChanged) {
+    return undefined;
+  }
+
+  const cause = classify(failed);
+  return cause === 'signedOut' ? undefined : message(cause);
+}
+
+/**
  * A row's text as Add and Save send it (list-editor.md *Implementation notes*): each line break, with the spaces
  * around it, as one space, and the ends trimmed, as the server cleans it too.
  */
@@ -162,6 +214,11 @@ function activeRow(rows: ListRow[], id: string): ListRow | undefined {
   return rows.find((row) => row.id === id && row.archivedAtUtc === null);
 }
 
+/** The archived row of ID `id` among `rows`, or `undefined` once it is active. */
+function archivedRow(rows: ListRow[], id: string): ListRow | undefined {
+  return rows.find((row) => row.id === id && row.archivedAtUtc !== null);
+}
+
 /**
  * Whether focus is still in `origin`, the form or the button that started a write, or nowhere: only then does the
  * write's end move it, as focus is never pulled away from where the person has gone while the write was out
@@ -177,9 +234,10 @@ function focusStayedIn(origin: HTMLElement | null): boolean {
  * found the list changed by someone else, the list conflict, focused, until the next write on the list succeeds; the
  * active rows as a numbered `<ol>`, in the API's order, which the editor never sorts again, as the API breaks ties in
  * `SortOrder` as the reorder reads them; or, with no active row, the kind's empty sentence; then the add form; then
- * the archived rows, newest archived first, as a `<ul>` in a `<details>`, closed as it loads and left to the person
- * from then on, which is left out while none is archived (decision 7). Read-only, each active row is its text alone,
- * and the help text and the add form are left out, as nothing can be changed.
+ * the archived rows, newest archived first, each with Restore, as a `<ul>` in a `<details>`, closed as it loads and
+ * left to the person from then on but for an Archive, which opens it, and left out while none is archived (decision
+ * 7). Read-only, each row is its text alone, and the help text and the add form are left out, as nothing can be
+ * changed.
  *
  * The page loads the list before rendering the editor, in its load region, or puts it in the query itself, as Add
  * participant does with a new participant's empty one, so the editor reads it from the query and never fetches it as
@@ -206,6 +264,7 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
     reread: () => queryClient.refetchQueries({ queryKey: api.query.queryKey, exact: true }),
     focusTarget: focus.target,
     focusAfterRender: focus.request,
+    openArchivedAfterRender: focus.openArchived,
     changedMeanwhile: () => {
       setChanged(true);
       focus.request(conflictKey);
@@ -250,14 +309,18 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
       )}
       {!readOnly && <AddForm list={list} />}
       {archived.length > 0 && (
-        <details className={styles.archived}>
+        <details ref={focus.target(archivedKey)} className={styles.archived}>
           <summary className={styles.summary}>{copy.archivedSummary}</summary>
           <ul className={styles.archivedList}>
-            {archived.map((row) => (
-              <li key={row.id} className={styles.row}>
-                <p className={styles.text}>{row.text}</p>
-              </li>
-            ))}
+            {archived.map((row) =>
+              readOnly ? (
+                <li key={row.id} className={styles.row}>
+                  <p className={styles.text}>{row.text}</p>
+                </li>
+              ) : (
+                <ArchivedRow key={row.id} row={row} list={list} />
+              ),
+            )}
           </ul>
         </details>
       )}
@@ -268,15 +331,26 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
 /**
  * Focus that follows the item (list-editor.md *Implementation notes*): each element that may take it registers under
  * a key, and a request focuses the one under its key in a layout effect, once the render that the change brings is in
- * the DOM and before it is painted, as React may have only just added the element, or moved it.
+ * the DOM and before it is painted, as React may have only just added the element, or moved it. `openArchived` opens
+ * the archived section first, registered under `archivedKey`, as an Archive does, as its row's Restore cannot take
+ * focus while the section is closed, and the section may have only just appeared; given no key, it moves no focus.
  */
 function useFocusAfterRender() {
   const elements = useRef(new Map<string, HTMLElement>());
   // A new object at each request, so that a second request for the same key focuses it again.
-  const [request, setRequest] = useState<{ key: string }>();
+  const [request, setRequest] = useState<{ key: string | undefined; openArchived: boolean }>();
 
   useLayoutEffect(() => {
-    if (request !== undefined) {
+    if (request === undefined) {
+      return;
+    }
+
+    const section = request.openArchived ? elements.current.get(archivedKey) : undefined;
+    if (section instanceof HTMLDetailsElement) {
+      section.open = true;
+    }
+
+    if (request.key !== undefined) {
       elements.current.get(request.key)?.focus();
     }
   }, [request]);
@@ -290,7 +364,10 @@ function useFocusAfterRender() {
       }
     },
     request: (key: string) => {
-      setRequest({ key });
+      setRequest({ key, openArchived: false });
+    },
+    openArchived: (key: string | undefined) => {
+      setRequest({ key, openArchived: true });
     },
   };
 }
@@ -390,19 +467,36 @@ type ActiveRowProps = {
 
 /**
  * An active row (list-editor.md *Anatomy*, *Behaviour*): its text, wrapping anywhere, then its alert slot, always
- * rendered, which a failed move writes to, then its buttons in two pairs, Move up and Move down, then Edit, each label
- * width, with the row's text after its label for screen readers alone; or, once Edit is pressed, the edit form in
- * their place, in the same numbered item, until Save or Cancel closes it and focus goes back to Edit, unless a Save
- * finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes to its box, with the
- * caret after the text, while the tap still runs, which is what lets a phone open its keyboard. Its typed text is the
- * row's own, so it stays as typed while other rows move.
+ * rendered, which a failed move or Archive writes to, then its buttons in two pairs, Move up and Move down, then Edit
+ * and Archive, each label width, with the row's text after its label for screen readers alone; or, once Edit is
+ * pressed, the edit form in their place, in the same numbered item, until Save or Cancel closes it and focus goes back
+ * to Edit, unless a Save finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes
+ * to its box, with the caret after the text, while the tap still runs, which is what lets a phone open its keyboard.
+ * Its typed text is the row's own, so it stays as typed while other rows move.
+ *
+ * Archive is busy at once, "Archiving…" after 400 ms, and waits its turn in the list's scope; when it runs, it sends
+ * the row's version as the list was last read. Once the list is read again, the row has left the active list, whose
+ * numbers close up, for the top of the archived section, which opens, and focus goes to the row's Restore there,
+ * unless the person has gone elsewhere meanwhile, and the page's status region says so. An Archive whose row has
+ * already left the list, or that the server refuses as stale, shows the list conflict over the list read again; any
+ * other failure says so in the row's alert, focus staying on Archive.
  */
 function ActiveRow({ row, list, first, last }: ActiveRowProps) {
+  const announce = useAnnounce();
   const [editing, setEditing] = useState(false);
-  // The alert's words while it holds a move's failure, which the row's next move, or Edit, clears.
+  // The alert's words while it holds a move's or an Archive's failure, which the row's next press, or Edit, clears.
   const [failure, setFailure] = useState<string>();
   const field = useRef<HTMLTextAreaElement>(null);
   const editKey = `${row.id}:edit`;
+  const archive = useListWrite(list, async () => {
+    // The version as the write runs, which the list read after the write before it may have changed.
+    const current = activeRow(list.latest(), row.id);
+    if (current === undefined) {
+      throw new ListChanged();
+    }
+
+    await sendUnlessListChanged(list, 412, () => list.api.archive(row.id, current.rowVersion));
+  });
 
   function edit() {
     flushSync(() => {
@@ -424,6 +518,21 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
     }
   }
 
+  function pressArchive(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    setFailure(undefined);
+    archive.mutate(undefined, {
+      onSuccess: () => {
+        list.openArchivedAfterRender(focusStayedIn(button) ? `${row.id}:restore` : undefined);
+        announce?.(strings.listEditor[list.kind].archived);
+      },
+      onError: (failed) => {
+        setFailure(failureAlert(failed, msg.notArchived));
+      },
+    });
+  }
+
   return (
     <li className={styles.row}>
       {editing ? (
@@ -441,6 +550,16 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
               <div className={styles.pair}>
                 <Button ref={list.focusTarget(editKey)} className={styles.rowButton} onClick={edit}>
                   {strings.listRows.edit}
+                  <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+                </Button>
+                <Button
+                  ref={list.focusTarget(`${row.id}:archive`)}
+                  className={styles.rowButton}
+                  busy={archive.isPending}
+                  busyLabel={strings.archiving}
+                  onClick={pressArchive}
+                >
+                  {strings.listRows.archive}
                   <span className="visually-hidden">{msg.rowContext(row.text)}</span>
                 </Button>
               </div>
@@ -492,18 +611,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
     }
 
     [ids[from], ids[to]] = [ids[to], ids[from]];
-    try {
-      await list.api.reorder(ids);
-    } catch (failed) {
-      // The reorder's one 422, config.order_mismatch: the list changed after it was read (design.md §6.7).
-      if (!(failed instanceof ApiError && failed.status === 422)) {
-        throw failed;
-      }
-
-      await list.reread();
-      throw new ListChanged();
-    }
-
+    await sendUnlessListChanged(list, 422, () => list.api.reorder(ids));
     return { position: to + 1, total: ids.length };
   });
 
@@ -529,11 +637,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
           return;
         }
 
-        // A list conflict shows above the list, and a 401 has the session flow, which `api()` started.
-        const cause = classify(failed);
-        if (!(failed instanceof ListChanged) && cause !== 'signedOut') {
-          onFailure(msg.notMoved(cause));
-        }
+        onFailure(failureAlert(failed, msg.notMoved));
       },
     });
   }
@@ -554,6 +658,71 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
       {words.label}
       <span className="visually-hidden">{msg.rowContext(row.text)}</span>
     </Button>
+  );
+}
+
+/**
+ * An archived row (list-editor.md *Anatomy*, *Behaviour*): its text, wrapping anywhere, then its alert slot, always
+ * rendered, then Restore, label width, with the row's text after its label for screen readers alone. Restore is busy at
+ * once, "Restoring…" after 400 ms, and waits its turn in the list's scope; when it runs, it sends the row's version as
+ * the list was last read. Once the list is read again, the row is at the end of the active list, where focus goes to
+ * its Archive, unless the person has gone elsewhere meanwhile, and the page's status region says so; the archived
+ * section goes once it is empty. A Restore whose row is no longer archived, or that the server refuses as stale, shows
+ * the list conflict over the list read again; any other failure says so in the row's alert, focus staying on Restore.
+ */
+function ArchivedRow({ row, list }: { row: ListRow; list: ListContext }) {
+  const announce = useAnnounce();
+  // The alert's words while it holds a Restore's failure, which the next press clears.
+  const [failure, setFailure] = useState<string>();
+  const restore = useListWrite(list, async () => {
+    // The version as the write runs, which the list read after the write before it may have changed.
+    const current = archivedRow(list.latest(), row.id);
+    if (current === undefined) {
+      throw new ListChanged();
+    }
+
+    await sendUnlessListChanged(list, 412, () => list.api.restore(row.id, current.rowVersion));
+  });
+
+  function press(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    setFailure(undefined);
+    restore.mutate(undefined, {
+      onSuccess: () => {
+        if (focusStayedIn(button)) {
+          list.focusAfterRender(`${row.id}:archive`);
+        }
+
+        announce?.(strings.listEditor[list.kind].restored);
+      },
+      onError: (failed) => {
+        setFailure(failureAlert(failed, msg.notRestored));
+      },
+    });
+  }
+
+  return (
+    <li className={styles.row}>
+      <div className={styles.rowInner}>
+        <p className={styles.text}>{row.text}</p>
+        <div className={styles.side}>
+          <RequestAlert>{failure}</RequestAlert>
+          <div className={styles.actions}>
+            <Button
+              ref={list.focusTarget(`${row.id}:restore`)}
+              className={styles.rowButton}
+              busy={restore.isPending}
+              busyLabel={strings.restoring}
+              onClick={press}
+            >
+              {strings.restore}
+              <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -632,14 +801,8 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
           return;
         }
 
-        // A list conflict shows above the list, and a 401 has the session flow, which `api()` started.
-        if (failed instanceof ListChanged || box.refusedByServer(failed)) {
-          return;
-        }
-
-        const cause = classify(failed);
-        if (cause !== 'signedOut') {
-          setFailure(msg.notSaved(cause));
+        if (!box.refusedByServer(failed)) {
+          setFailure(failureAlert(failed, msg.notSaved));
         }
       },
     });
@@ -722,14 +885,8 @@ function AddForm({ list }: { list: ListContext }) {
         announce?.(copy.added);
       },
       onError: (failed) => {
-        // A 401 has the session flow, which `api()` started, and shows nothing here.
-        if (box.refusedByServer(failed)) {
-          return;
-        }
-
-        const cause = classify(failed);
-        if (cause !== 'signedOut') {
-          setFailure(msg.notAdded(cause));
+        if (!box.refusedByServer(failed)) {
+          setFailure(failureAlert(failed, msg.notAdded));
         }
       },
     });

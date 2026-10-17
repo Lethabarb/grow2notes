@@ -35,9 +35,15 @@ export const msg = {
   notSignedOut: (cause: Cause): string => msg.notDone('signed out', cause),
   /** A Save that failed, in the alert above it, such as "Not saved: no connection. Try again." */
   notSaved: (cause: Cause): string => msg.notDone('saved', cause),
-  /** An Archive participant that failed, in the alert above it (participants.md *States*). */
+  /**
+   * An Archive participant or a list row's Archive that failed, in the alert above it (participants.md *States*,
+   * list-editor.md *Request errors*).
+   */
   notArchived: (cause: Cause): string => msg.notDone('archived', cause),
-  /** A Restore that failed, in the alert above it, in the archived notice (participants.md *States*). */
+  /**
+   * A Restore that failed, in the alert above it: in the archived notice, or in an archived row of a list
+   * (participants.md *States*, list-editor.md *Request errors*).
+   */
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
   /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),

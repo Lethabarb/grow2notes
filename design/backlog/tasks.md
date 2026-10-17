@@ -1547,6 +1547,11 @@ moves, archives and restores them. Changes apply to notes started from then on.
     "Already at the bottom", as a press of the unavailable button does, as a press never does nothing
     (primary-actions.md §5.1); one whose goal is no longer active sends nothing and shows the list conflict, as a queued
     Save does.
+  - An Archive that succeeds opens the archived section whether or not it moves focus, as list-editor.md *Behaviour*
+    gives the opening as part of its success, and focuses the goal's Restore only while focus is on Archive or on
+    `<body>`, as a move does; a Restore that succeeds focuses the goal's Archive on the same terms. A queued Archive
+    whose goal is no longer active, or a queued Restore whose goal is no longer archived, sends nothing and shows the
+    list conflict, as a queued Save does.
   - ListEditor ships with its goal kind alone: the item kind's words, its group adapter and the Group radios come with
     T06 and T07, so that no part of it ships unused.
 - By-hand checks for ops/first-use-in-test.md, in a section of their own after the steps already there: design.md
@@ -1678,7 +1683,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       unchanged; an unavailable press sending nothing and announcing once; two quick presses on different rows sending
       two `PUT`s one after the other, the second built from the first's re-read; and no `draggable`, no
       `display: none` on an end button and no `aria-label` on a row button.
-- [ ] Archive and restore goals (S01.02.08; design.md §3.7's Goal row and §4.8 item 2's archived section;
+- [x] Archive and restore goals (S01.02.08; design.md §3.7's Goal row and §4.8 item 2's archived section;
       participants.md *Goals*' "Archive opens Archived goals…"): `POST /api/admin/goals/{goalId}/archive` and
       `/restore` with `If-Match`, loading the goal through the tenant filter, archiving it with `Archiving.Archive`,
       which keeps its `SortOrder`, and restoring it with `Archiving.Restore` to `ListOrder.End` of the participant's

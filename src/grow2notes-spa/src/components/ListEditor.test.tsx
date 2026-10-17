@@ -37,6 +37,10 @@ type Rendered = {
   update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
   /** The reorders sent, each with the active goals' IDs in a new order, which nothing answers unless a test does. */
   reorder: (ids: string[]) => Promise<unknown>;
+  /** The archives sent, each with its goal's ID and version, which nothing answers unless a test does. */
+  archive: (id: string, rowVersion: string) => Promise<unknown>;
+  /** The restores sent, each with its goal's ID and version, which nothing answers unless a test does. */
+  restore: (id: string, rowVersion: string) => Promise<unknown>;
 };
 
 /**
@@ -51,12 +55,16 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   const add = vi.fn<(text: string) => Promise<unknown>>();
   const update = vi.fn<(id: string, text: string, rowVersion: string) => Promise<unknown>>();
   const reorder = vi.fn<(ids: string[]) => Promise<unknown>>();
+  const archive = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
+  const restore = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
   const api: ListApi = {
     query: queryOptions({ queryKey, queryFn }),
     scopeId: `goals:${participantId}`,
     add,
     update,
     reorder,
+    archive,
+    restore,
   };
   render(
     <QueryClientProvider client={client}>
@@ -66,7 +74,7 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
       </PageStatus>
     </QueryClientProvider>,
   );
-  return { client, queryFn, add, update, reorder };
+  return { client, queryFn, add, update, reorder, archive, restore };
 }
 
 /** The numbered list of active goals, or `null` while there is none. */
@@ -89,9 +97,14 @@ function archivedSection(): HTMLDetailsElement | null {
   return document.querySelector('details');
 }
 
-/** The archived goals' texts, in the order shown. */
-function archivedTexts(): string[] {
-  return Array.from(archivedSection()?.querySelectorAll('ul > li') ?? [], (item) => item.textContent);
+/** Each archived goal's list item, in the order shown. */
+function archivedItems(): HTMLLIElement[] {
+  return Array.from(archivedSection()?.querySelectorAll<HTMLLIElement>('ul > li') ?? []);
+}
+
+/** The archived goals' texts, in the order shown, each its list item's first paragraph. */
+function archivedTexts(): (string | undefined)[] {
+  return archivedItems().map((item) => item.querySelector('p')?.textContent);
 }
 
 describe('ListEditor', () => {
@@ -156,7 +169,6 @@ describe('ListEditor', () => {
     expect(summary.textContent).toBe('Archived goals');
     expect(summary.children).toHaveLength(0);
     expect(archivedTexts()).toEqual([shop.text, washing.text]);
-    expect(within(details).queryByRole('alert')).toBeNull();
   });
 
   // Uncontrolled, so that React never closes what the person opened.
@@ -269,10 +281,13 @@ async function press(element: HTMLElement) {
  * Has the writes and the list's reads answered by a server that holds the list, which it gives back, so that a test
  * can change it as someone else would: an add puts a goal at its end; a reword sent with the goal's version stores the
  * text with a new version, and one sent with another is refused `412`; a reorder of the active goals, each once, puts
- * them in that order, then the archived ones, each moved goal with a new version, and any other is refused `422`; and
- * a read gives what it holds.
+ * them in that order, then the archived ones, each moved goal with a new version, and any other is refused `422`; an
+ * archive sent with the goal's version gives it, in its place, the time it was archived at, a minute after the last
+ * one, from 6 October 2026, after the made-up goals', and a new version, and a restore sent with it puts it at the end
+ * of the list, one after the highest active `sortOrder`, active, with a new version, either refused `412` with another
+ * version; and a read gives what it holds.
  */
-function serveList({ add, update, reorder, queryFn }: Rendered, rows: ListRow[]): ListRow[] {
+function serveList({ add, update, reorder, archive, restore, queryFn }: Rendered, rows: ListRow[]): ListRow[] {
   const list = [...rows];
   let versions = 0;
   vi.mocked(add).mockImplementation((text) => {
@@ -307,6 +322,32 @@ function serveList({ add, update, reorder, queryFn }: Rendered, rows: ListRow[])
       return { ...row, sortOrder, rowVersion: `AAAAAAAAD${versions}=` };
     });
     list.splice(0, list.length, ...reordered, ...archived);
+    return Promise.resolve(undefined);
+  });
+  vi.mocked(archive).mockImplementation((id, rowVersion) => {
+    const index = list.findIndex((row) => row.id === id);
+    if (list[index].rowVersion !== rowVersion) {
+      return Promise.reject(new ApiError(412, 'precondition.failed'));
+    }
+
+    versions += 1;
+    list[index] = {
+      ...list[index],
+      archivedAtUtc: new Date(Date.UTC(2026, 9, 6) + versions * 60_000).toISOString(),
+      rowVersion: `AAAAAAAAD${versions}=`,
+    };
+    return Promise.resolve(undefined);
+  });
+  vi.mocked(restore).mockImplementation((id, rowVersion) => {
+    const index = list.findIndex((row) => row.id === id);
+    if (list[index].rowVersion !== rowVersion) {
+      return Promise.reject(new ApiError(412, 'precondition.failed'));
+    }
+
+    const end = Math.max(-1, ...list.flatMap((row) => (row.archivedAtUtc === null ? [row.sortOrder] : []))) + 1;
+    versions += 1;
+    const [restored] = list.splice(index, 1);
+    list.push({ ...restored, sortOrder: end, archivedAtUtc: null, rowVersion: `AAAAAAAAD${versions}=` });
     return Promise.resolve(undefined);
   });
   vi.mocked(queryFn).mockImplementation(() => Promise.resolve([...list]));
@@ -784,7 +825,7 @@ describe('ListEditor, rewording', () => {
       expect(within(button).getByText(`, ${row.text}`)).toHaveClass('visually-hidden');
       expect(follows(within(item).getByRole('alert'), button)).toBe(true);
     }
-    expect(within(archivedSection()!).queryByRole('button')).toBeNull();
+    expect(within(archivedSection()!).queryByRole('button', { name: /^Edit/ })).toBeNull();
   });
 
   it('turns the row into a form in place, still numbered: the box holds the text, focused, caret at its end', () => {
@@ -1168,6 +1209,11 @@ function rowAlert(text: string): HTMLElement {
   return within(rowOf(text)).getByRole('alert');
 }
 
+/** The row's Archive, by its name while it is not busy, which ends with the row's text. */
+function archiveButton(text: string): HTMLElement {
+  return screen.getByRole('button', { name: `Archive, ${text}` });
+}
+
 /** Records each text written into the page's status region from now on, leaving out its emptying. */
 function recordAnnouncements(): () => string[] {
   const region = pageStatus();
@@ -1189,7 +1235,7 @@ describe('ListEditor, moving', () => {
     vi.useRealTimers();
   });
 
-  it('gives each row Move up, Move down, then Edit, in two pairs after its alert, its text hidden after each', () => {
+  it('gives each row Move up and Move down, then Edit and Archive, after its alert, its text hidden after each', () => {
     renderEditor([breakfast, bus, sister]);
 
     for (const row of [breakfast, bus, sister]) {
@@ -1197,8 +1243,10 @@ describe('ListEditor, moving', () => {
       const up = moveButton('up', row.text);
       const down = moveButton('down', row.text);
       const edit = editButton(row.text);
-      expect(within(item).getAllByRole('button')).toEqual([up, down, edit]);
+      const archive = archiveButton(row.text);
+      expect(within(item).getAllByRole('button')).toEqual([up, down, edit, archive]);
       expect(up.parentElement).toBe(down.parentElement);
+      expect(edit.parentElement).toBe(archive.parentElement);
       expect(edit.parentElement).not.toBe(up.parentElement);
       expect(edit.parentElement?.parentElement).toBe(up.parentElement?.parentElement);
       expect(follows(within(item).getByRole('alert'), up)).toBe(true);
@@ -1501,13 +1549,18 @@ describe('ListEditor, moving', () => {
   });
 
   it('has no drag, hides no end button and gives no row button an aria-label', () => {
-    renderEditor([breakfast, bus, sister]);
+    renderEditor([breakfast, bus, washing, sister]);
 
     expect(document.querySelectorAll('[draggable]')).toHaveLength(0);
     for (const button of [moveButton('up', breakfast.text), moveButton('down', sister.text)]) {
       expect(getComputedStyle(button).display).not.toBe('none');
     }
-    for (const button of within(activeList()!).getAllByRole('button')) {
+    const rowButtons = [
+      ...within(activeList()!).getAllByRole('button'),
+      ...within(archivedSection()!).getAllByRole('button'),
+    ];
+    expect(rowButtons).toHaveLength(13);
+    for (const button of rowButtons) {
       expect(button).not.toHaveAttribute('aria-label');
     }
   });
@@ -1521,6 +1574,369 @@ describe('ListEditor, moving', () => {
     const [write] = rendered.client.getMutationCache().getAll();
     expect(write.options.scope).toEqual({ id: `goals:${participantId}` });
     expect(write.options.retry).toBe(0);
+    expect(rendered.client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([queryKey]);
+  });
+});
+
+const archived = 'Goal archived';
+const restored = 'Goal restored to the end of the list';
+
+/** The archived goal's Restore, by its name while it is not busy, which ends with the goal's text. */
+function restoreButton(text: string): HTMLElement {
+  return screen.getByRole('button', { name: `Restore, ${text}` });
+}
+
+/** The archived goal's list item whose text is `text`. */
+function archivedRowOf(text: string): HTMLLIElement {
+  return archivedItems().find((item) => item.querySelector('p')?.textContent === text)!;
+}
+
+describe('ListEditor, archiving and restoring', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("gives each active row Archive after Edit, a label-width secondary button, its text hidden after it", () => {
+    renderEditor([breakfast, bus]);
+
+    for (const row of [breakfast, bus]) {
+      const button = archiveButton(row.text);
+      expect(button.tagName).toBe('BUTTON');
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button.className).toMatch(/secondary/);
+      expect(button.className).toMatch(/rowButton/);
+      expect(button.parentElement?.parentElement?.className).toMatch(/actions/);
+      expect(button).toHaveAccessibleName(`Archive, ${row.text}`);
+      expect(within(button).getByText(`, ${row.text}`)).toHaveClass('visually-hidden');
+    }
+  });
+
+  it('gives each archived row its text, its empty alert, then Restore, label width, its text hidden after it', () => {
+    renderEditor([breakfast, washing, shop]);
+
+    for (const row of [shop, washing]) {
+      const item = archivedRowOf(row.text);
+      const button = restoreButton(row.text);
+      expect(within(item).getAllByRole('button')).toEqual([button]);
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-label');
+      expect(button.className).toMatch(/secondary/);
+      expect(button.className).toMatch(/rowButton/);
+      expect(button.parentElement?.className).toMatch(/actions/);
+      expect(button).toHaveAccessibleName(`Restore, ${row.text}`);
+      expect(within(button).getByText(`, ${row.text}`)).toHaveClass('visually-hidden');
+      const alert = within(item).getByRole('alert');
+      expect(alert).toBeEmptyDOMElement();
+      expect(follows(within(item).getByText(row.text), alert)).toBe(true);
+      expect(follows(alert, button)).toBe(true);
+    }
+  });
+
+  it('on Archive, sends its version, reads the list again, opens the section on it, focusing Restore', async () => {
+    const rendered = renderEditor([breakfast, bus, sister]);
+    serveList(rendered, [breakfast, bus, sister]);
+    expect(archivedSection()).toBeNull();
+
+    await press(archiveButton(bus.text));
+
+    expect(rendered.archive).toHaveBeenCalledExactlyOnceWith(bus.id, bus.rowVersion);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([breakfast.text, sister.text]);
+    expect(activeItems()).toHaveLength(2);
+    expect(archivedSection()!.open).toBe(true);
+    expect(archivedTexts()).toEqual([bus.text]);
+    expect(document.activeElement).toBe(restoreButton(bus.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(archived);
+  });
+
+  it('opens the closed archived section with the goal just archived first, the newest archived', async () => {
+    const rendered = renderEditor([breakfast, washing, sister, shop]);
+    serveList(rendered, [breakfast, washing, sister, shop]);
+    expect(archivedSection()!.open).toBe(false);
+
+    await press(archiveButton(sister.text));
+
+    expect(archivedSection()!.open).toBe(true);
+    expect(archivedTexts()).toEqual([sister.text, shop.text, washing.text]);
+    expect(activeTexts()).toEqual([breakfast.text]);
+    expect(restoreButton(sister.text)).toHaveFocus();
+  });
+
+  it('keeps the list as it is while the archive is out, busy at once and "Archiving…" after 400 ms', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.archive).getMockImplementation()!;
+    vi.mocked(rendered.archive).mockImplementationOnce(async (...sent) => {
+      await answer.promise;
+      return serve(...sent);
+    });
+    const button = archiveButton(breakfast.text);
+
+    await press(button);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Archiving…')).toBeInTheDocument();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Archiving…');
+    await press(button);
+    expect(rendered.archive).toHaveBeenCalledOnce();
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(activeTexts()).toEqual([bus.text]);
+    expect(archivedTexts()).toEqual([breakfast.text]);
+    expect(restoreButton(breakfast.text)).toHaveFocus();
+  });
+
+  it('leaves focus where the person has gone while the archive was out, opening the section all the same', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.archive).getMockImplementation()!;
+    vi.mocked(rendered.archive).mockImplementationOnce(async (...sent) => {
+      await answer.promise;
+      return serve(...sent);
+    });
+    await press(archiveButton(breakfast.text));
+
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+    elsewhere.focus();
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(archivedTexts()).toEqual([breakfast.text]);
+    expect(archivedSection()!.open).toBe(true);
+    expect(elsewhere).toHaveFocus();
+  });
+
+  it("on Restore, sends the goal's version, reads the list again, shows it last, focusing its Archive", async () => {
+    const rendered = renderEditor([breakfast, washing, sister, shop]);
+    serveList(rendered, [breakfast, washing, sister, shop]);
+    archivedSection()!.open = true;
+
+    await press(restoreButton(washing.text));
+
+    expect(rendered.restore).toHaveBeenCalledExactlyOnceWith(washing.id, washing.rowVersion);
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([breakfast.text, sister.text, washing.text]);
+    expect(archivedTexts()).toEqual([shop.text]);
+    expect(archivedSection()!.open).toBe(true);
+    expect(document.activeElement).toBe(archiveButton(washing.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(restored);
+  });
+
+  it('takes the archived section away once Restore has emptied it', async () => {
+    const rendered = renderEditor([breakfast, washing]);
+    serveList(rendered, [breakfast, washing]);
+
+    await press(restoreButton(washing.text));
+
+    expect(archivedSection()).toBeNull();
+    expect(activeTexts()).toEqual([breakfast.text, washing.text]);
+    expect(archiveButton(washing.text)).toHaveFocus();
+  });
+
+  it('shows Restore busy at once, "Restoring…" after 400 ms, and a press while it is sends nothing more', async () => {
+    const rendered = renderEditor([breakfast, washing]);
+    vi.mocked(rendered.restore).mockReturnValue(new Promise(() => {}));
+    const button = restoreButton(washing.text);
+
+    await press(button);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    await wait(399);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Restoring…')).toBeInTheDocument();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Restoring…');
+    await press(button);
+
+    expect(rendered.restore).toHaveBeenCalledOnce();
+    expect(archivedTexts()).toEqual([washing.text]);
+  });
+
+  it('archives and restores a goal again and again, focus following it each way', async () => {
+    const rendered = renderEditor([breakfast, bus]);
+    serveList(rendered, [breakfast, bus]);
+
+    await press(archiveButton(breakfast.text));
+    await press(restoreButton(breakfast.text));
+    await press(archiveButton(breakfast.text));
+
+    expect(vi.mocked(rendered.archive).mock.calls.map(([id]) => id)).toEqual([breakfast.id, breakfast.id]);
+    expect(rendered.restore).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([bus.text]);
+    expect(archivedSection()!.open).toBe(true);
+    expect(restoreButton(breakfast.text)).toHaveFocus();
+  });
+
+  it.each([
+    ['Archive', () => archiveButton(breakfast.text)],
+    ['Restore', () => restoreButton(washing.text)],
+  ])('on a 412 from %s, shows the list read again and the list conflict, focused, until a write succeeds', async (
+    _,
+    button,
+  ) => {
+    const rendered = renderEditor([breakfast, washing]);
+    const server = serveList(rendered, [breakfast, washing]);
+    // Another manager rewords both meanwhile.
+    server[0] = { ...breakfast, text: 'Makes own toast', rowVersion: 'AAAAAAAAC1E=' };
+    server[1] = { ...washing, text: 'Uses the dryer', rowVersion: 'AAAAAAAAC4E=' };
+
+    await press(button());
+
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(conflict()).toHaveFocus();
+    expect(follows(screen.getByText(help), conflict()!)).toBe(true);
+    expect(activeTexts()).toEqual(['Makes own toast']);
+    expect(archivedTexts()).toEqual(['Uses the dryer']);
+    expect(rowAlert('Makes own toast')).toBeEmptyDOMElement();
+    expect(within(archivedRowOf('Uses the dryer')).getByRole('alert')).toBeEmptyDOMElement();
+
+    await press(archiveButton('Makes own toast'));
+
+    expect(conflict()).toBeNull();
+    expect(archivedTexts()).toEqual(['Makes own toast', 'Uses the dryer']);
+  });
+
+  it.each([
+    ['no connection', new ApiError(0)],
+    ['something went wrong', new ApiError(500)],
+  ])('says "Not archived: %s" in the row\'s alert, keeping the goal and focus, emptied at the next press', async (
+    cause,
+    failure,
+  ) => {
+    const rendered = renderEditor([breakfast, bus]);
+    vi.mocked(rendered.archive).mockRejectedValueOnce(failure).mockReturnValueOnce(new Promise(() => {}));
+    const button = archiveButton(breakfast.text);
+
+    await press(button);
+
+    expect(rowAlert(breakfast.text)).toHaveTextContent(`Not archived: ${cause}. Try again.`);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(activeTexts()).toEqual([breakfast.text, bus.text]);
+    expect(archivedSection()).toBeNull();
+    expect(rendered.queryFn).not.toHaveBeenCalled();
+    expect(conflict()).toBeNull();
+
+    await press(button);
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['no connection', new ApiError(0)],
+    ['something went wrong', new ApiError(500)],
+  ])('says "Not restored: %s" in the archived row\'s alert, keeping it and focus, emptied at the next press', async (
+    cause,
+    failure,
+  ) => {
+    const rendered = renderEditor([breakfast, washing]);
+    vi.mocked(rendered.restore).mockRejectedValueOnce(failure).mockReturnValueOnce(new Promise(() => {}));
+    const button = restoreButton(washing.text);
+    const alert = within(archivedRowOf(washing.text)).getByRole('alert');
+
+    await press(button);
+
+    expect(alert).toHaveTextContent(`Not restored: ${cause}. Try again.`);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(activeTexts()).toEqual([breakfast.text]);
+    expect(archivedTexts()).toEqual([washing.text]);
+    expect(rendered.queryFn).not.toHaveBeenCalled();
+
+    await press(button);
+    expect(alert).toBeEmptyDOMElement();
+  });
+
+  it('shows nothing for a 401 on Archive or Restore, which the session flow has', async () => {
+    const rendered = renderEditor([breakfast, washing]);
+    vi.mocked(rendered.archive).mockRejectedValue(new ApiError(401));
+    vi.mocked(rendered.restore).mockRejectedValue(new ApiError(401));
+
+    await press(archiveButton(breakfast.text));
+    await press(restoreButton(washing.text));
+
+    expect(rowAlert(breakfast.text)).toBeEmptyDOMElement();
+    expect(within(archivedRowOf(washing.text)).getByRole('alert')).toBeEmptyDOMElement();
+    expect(conflict()).toBeNull();
+  });
+
+  it('sends the version the list holds as the write runs, read again by the write before it', async () => {
+    const rendered = renderEditor([breakfast, bus, washing]);
+    serveList(rendered, [breakfast, bus, washing]);
+    const answer = held<undefined>();
+    const serve = vi.mocked(rendered.reorder).getMockImplementation()!;
+    vi.mocked(rendered.reorder).mockImplementationOnce(async (ids) => {
+      await answer.promise;
+      return serve(ids);
+    });
+    await press(moveButton('down', breakfast.text));
+    await press(archiveButton(breakfast.text));
+    await press(restoreButton(washing.text));
+    expect(rendered.archive).not.toHaveBeenCalled();
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    // The reorder gave both moved goals a new version; the restore's goal kept its own.
+    expect(rendered.archive).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'AAAAAAAAD2=');
+    expect(rendered.restore).toHaveBeenCalledExactlyOnceWith(washing.id, washing.rowVersion);
+    expect(activeTexts()).toEqual([bus.text, washing.text]);
+    expect(archivedTexts()).toEqual([breakfast.text]);
+    expect(conflict()).toBeNull();
+  });
+
+  it.each([
+    ['an Archive whose goal the write before it found archived', () => archiveButton(breakfast.text), 'archive'],
+    ['a Restore whose goal the write before it found restored', () => restoreButton(washing.text), 'restore'],
+  ] as const)('sends nothing for %s, showing the list conflict', async (_, button, write) => {
+    const rendered = renderEditor([breakfast, washing]);
+    const answer = held<undefined>();
+    vi.mocked(rendered.add).mockReturnValue(answer.promise);
+    // Another manager archives the one and restores the other meanwhile.
+    vi.mocked(rendered.queryFn).mockResolvedValue([
+      { ...washing, sortOrder: 0, archivedAtUtc: null, rowVersion: 'AAAAAAAAC4E=' },
+      { ...breakfast, archivedAtUtc: '2026-10-06T00:00:00Z', rowVersion: 'AAAAAAAAC1E=' },
+      goal('6', 'Phones her sister', 1),
+    ]);
+    type('Phones her sister');
+    await press(addButton());
+    await press(button());
+
+    answer.resolve(undefined);
+    await wait(1);
+
+    expect(rendered[write]).not.toHaveBeenCalled();
+    expect(conflict()).toHaveFocus();
+    expect(activeTexts()).toEqual([washing.text, 'Phones her sister']);
+    expect(archivedTexts()).toEqual([breakfast.text]);
+  });
+
+  it("sends each archive and restore in the list's one scope, with no retry", async () => {
+    const rendered = renderEditor([breakfast, washing]);
+    serveList(rendered, [breakfast, washing]);
+
+    await press(archiveButton(breakfast.text));
+    await press(restoreButton(washing.text));
+
+    const writes = rendered.client.getMutationCache().getAll();
+    expect(writes).toHaveLength(2);
+    for (const write of writes) {
+      expect(write.options.scope).toEqual({ id: `goals:${participantId}` });
+      expect(write.options.retry).toBe(0);
+    }
     expect(rendered.client.getQueryCache().getAll().map((query) => query.queryKey)).toEqual([queryKey]);
   });
 });
