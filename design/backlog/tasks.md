@@ -1572,10 +1572,12 @@ moves, archives and restores them. Changes apply to notes started from then on.
   283 px of the 307 px left at 375 px, and the four buttons 494 px. A row button's name and its focus stop read "Move
   up , Makes own breakfast", with a space before the comma, as the absolutely positioned hidden text is a block to
   both, which screen readers do not voice, so the app keeps it. The by-hand checks are steps 38 to 41 of
-  ops/first-use-in-test.md, after T04's. `migrate.sql`, scripted locally as CI scripts it, gives `AddGoal` only
-  additions: `CREATE TABLE [Goal]` with its primary key, the `(OrganisationId, Id)` alternate key and the foreign key
-  to the participant's, its `CREATE INDEX` and `DENY DELETE ON [dbo].[Goal] TO [grow2notes_runtime]`; CI's run on the
-  pull request, and its artifact, are recorded here once it has passed.
+  ops/first-use-in-test.md, after T04's. CI's run 39073863161 on the pull request (#59) passed, with 1074 xUnit and
+  210 Playwright tests. `migrate.sql`, scripted locally from the commit that run tested with the command CI scripts
+  its artifact's copy with, gives `AddGoal` only additions: `CREATE TABLE [Goal]` with its primary key, the
+  `(OrganisationId, Id)` alternate key and the foreign key to the participant's, its `CREATE INDEX` and
+  `DENY DELETE ON [dbo].[Goal] TO [grow2notes_runtime]`. The artifact's own copy is not yet read in the pull request,
+  so step 6 stays unticked until it is.
 - 18 October 2026, review: 5 findings were confirmed and are fixed here:
   - The goal order tests caught a dropped `CreatedAtUtc` step in `GoalList.InListOrder`, which the list and the
     reorder share, only by chance: the goals whose order rests on that step had random IDs, which SQL Server's order
@@ -1597,6 +1599,9 @@ moves, archives and restores them. Changes apply to notes started from then on.
     the simplest, rather than design.md §13, and no A-number is added. Step 2, list-editor.md *Behaviour* and *Tests*,
     participants.md's Add goal row and *Focus after a goal write*, common-items.md's Add item row and `AddForm`'s
     comment now say so; `ListEditor.test.tsx`'s "keeps what was typed while the add was out" already proves it.
+- 18 October 2026: rebased onto `origin/main` at `1607cc6`, after T04 (#58) merged. The audit-events test,
+  `messages.test.ts` and ops/first-use-in-test.md hold both sides, T05's by-hand checks moving after T04's to steps 38
+  to 41; neither task added another migration, so `AddGoal` and the model snapshot stand.
 
 ### Steps
 
