@@ -240,8 +240,8 @@ with their typing kept (checked with a half-filled Invite form), and a different
 - A departure from sign-in.md (step 7), kept on purpose: its components 6 and 10 give the email and code fields the
   `id` and `name` `email` and `code` in view C as in view A, but view C's page also holds the signed-in screen hidden
   under it, which may have a field with the same id, such as Invite user's `email`, and ids must be unique in a page.
-  So view C's fields are `signed-out-email`, `signed-out-password` and `signed-out-code`, with the same `autoComplete`
-  values as view A's; view A keeps `email`, `password` and `code`.
+  So view C's fields take the `id` and `name` `signed-out-email`, `signed-out-password` and `signed-out-code`, with
+  the same `autoComplete` values as view A's; view A keeps `email`, `password` and `code`.
 
 ### Steps
 
