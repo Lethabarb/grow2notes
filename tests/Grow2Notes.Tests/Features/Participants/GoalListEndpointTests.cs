@@ -48,11 +48,14 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
     // SortOrder first, whatever the order they were added in; then, for two of one SortOrder, as two adds at once can
     // leave them, CreatedAtUtc; then Id, in SQL Server's order, which compares a uniqueidentifier by its last six bytes
     // first, so ...0001 comes before ...0002 there, where .NET's Guid order, and the order added, have them the other
-    // way round.
+    // way round. The earliest goal's ID comes after both of theirs there, so only the CreatedAtUtc step puts it first.
+    // Rows cannot tell the Id step from the order SQL Server keeps them in, which ties come back in anyway, so
+    // GoalListOrderTests checks the ORDER BY itself.
     [Fact]
     public async Task The_goals_are_in_SortOrder_then_CreatedAtUtc_then_Id_order()
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var earliest = Guid.Parse("5c8e2a1f-7b3d-4e9a-9c4b-ffffffffffff");
         var tiedSecond = Guid.Parse("1a2b3c4d-5e6f-4a7b-8c9d-a1b2c3000002");
         var tiedFirst = Guid.Parse("9f1c2b3a-4d5e-4f60-8a71-a1b2c3000001");
         var added = await AddGoalsAsync(
@@ -60,12 +63,12 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
             new("Walks to the shop", 2),
             new("Phones her sister", 1, AddedAtUtc.AddSeconds(1), tiedSecond),
             new("Catches the bus", 1, AddedAtUtc.AddSeconds(1), tiedFirst),
-            new("Makes own breakfast", 1, AddedAtUtc),
+            new("Makes own breakfast", 1, AddedAtUtc, earliest),
             new("Waters the garden", 0, AddedAtUtc.AddMinutes(5)));
 
         var goals = await ListAsync(Caller.ManagerOfA, PathOf(participant.Id));
 
-        Assert.Equal([added[4], added[3], tiedFirst, tiedSecond, added[0]], goals.Select(Id));
+        Assert.Equal([added[4], earliest, tiedFirst, tiedSecond, added[0]], goals.Select(Id));
     }
 
     [Theory]

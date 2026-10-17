@@ -649,7 +649,7 @@ Do not show design 3.7's "Rewording is for typos and clarifications…" on scree
 | **Goal: Edit** | — | Row becomes the edit form | The textarea, caret at the end, inside the tap | The label, value, help text and count are read |
 | **Goal: Save** | Save busy; textarea `readOnly` | Text trimmed, line breaks become spaces. Unchanged text closes like Cancel and sends nothing. Otherwise `PUT /api/admin/goals/{id}` with `If-Match`, then re-read. | The row's Edit | `Goal saved` |
 | **Goal: Cancel** | — | Row back to normal; typed text discarded | The row's Edit | — |
-| **Add goal** | Add busy | `POST …/goals` (adds at the end; `retry: 0`), re-read; field cleared | Stays in the New goal field, ready for the next goal | `Goal added to the end of the list` |
+| **Add goal** | Add busy | `POST …/goals` (adds at the end; `retry: 0`), re-read; field cleared if it still holds the text sent | Stays in the New goal field, ready for the next goal | `Goal added to the end of the list` |
 | **Goal: Archive** | Busy | `POST /api/admin/goals/{id}/archive` with `If-Match`, re-read; Archived goals appears if hidden, **opens**, lists it first | That goal's Restore | `Goal archived` |
 | **Goal: Restore** | Busy | `POST …/restore`, re-read; goal goes to the end of the active list (A2); empty Archived goals section disappears | That goal's Archive in the active list | `Goal restored to the end of the list` |
 | **Past notes / Write past-day note / Export record** | — | Ordinary navigation (push) | The next screen's `<h1>` | Via focus |
@@ -674,7 +674,8 @@ Notes on these interactions:
   or queued: it closes the form, the Save still runs, and the list then shows what the server holds. A queued write
   whose goal has meanwhile left its list sends nothing and shows the list conflict; a queued move whose goal has
   reached its end sends nothing and says "Already at the top" or "Already at the bottom", as the unavailable button
-  does.
+  does. New goal stays editable while an add is out, and a successful add empties it only while it still holds the
+  text sent, so the next goal typed meanwhile is kept.
 - **No confirmation dialog** for Archive participant, Restore, or any goal action (`confirm-dialog.md`).
 - **Nothing is optimistic.** Every result on screen is the server's answer (invariant I5).
 

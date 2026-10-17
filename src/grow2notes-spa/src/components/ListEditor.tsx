@@ -849,10 +849,10 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
  * The add form (list-editor.md *Behaviour*, participants.md B6): the row's text field, then the alert for a request
  * that failed, then Add, primary. Add checks the text alone, in form-validation.md's one-field pattern, and sends
  * nothing while it fails: the message above the field, and focus on it, with no error summary and no "Error: " in the
- * title. Sent, the row goes to the end of the list, which is read again before Add is free, then the field is emptied,
- * with focus kept in it for the next one, and the page's status region says so. A failure keeps the text and says so
- * in the alert, focus staying on Add, but for the server's refusal of the text, which shows on the field as Add's own
- * does.
+ * title. Sent, the row goes to the end of the list, which is read again before Add is free, then the field is emptied
+ * if it still holds the text sent, with focus kept in it for the next one, and the page's status region says so; text
+ * typed while the add was out stays. A failure keeps the text and says so in the alert, focus staying on Add, but for
+ * the server's refusal of the text, which shows on the field as Add's own does.
  */
 function AddForm({ list }: { list: ListContext }) {
   const copy = strings.listEditor[list.kind];

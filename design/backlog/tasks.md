@@ -1533,6 +1533,9 @@ moves, archives and restores them. Changes apply to notes started from then on.
     Save whose `412` finds the goal archived does.
   - A Save that succeeds focuses its row's Edit only while focus is still in its form or on `<body>`, as Add keeps
     focus in New goal, so that it never pulls focus from another row's box (common-items.md *Queueing*).
+  - New goal stays editable while an add is out, as list-editor.md *Behaviour* makes only Save's textarea `readOnly`,
+    and a successful Add empties it only while it still holds the text sent, so that a next goal typed meanwhile is
+    not lost, which emptying it every time, though simpler, would do (added at review, 18 October 2026).
   - A reorder whose body has no `goalIds`, or a `null` one, is `422 validation.failed` under `goalIds`, as guide
     prompts' body with no `text` is; IDs that are not the active goals, each once, are its `422 config.order_mismatch`.
   - A move focuses its button again once the list is read again only while focus is on that button or on `<body>`, as
@@ -1573,6 +1576,27 @@ moves, archives and restores them. Changes apply to notes started from then on.
   additions: `CREATE TABLE [Goal]` with its primary key, the `(OrganisationId, Id)` alternate key and the foreign key
   to the participant's, its `CREATE INDEX` and `DENY DELETE ON [dbo].[Goal] TO [grow2notes_runtime]`; CI's run on the
   pull request, and its artifact, are recorded here once it has passed.
+- 18 October 2026, review: 5 findings were confirmed and are fixed here:
+  - The goal order tests caught a dropped `CreatedAtUtc` step in `GoalList.InListOrder`, which the list and the
+    reorder share, only by chance: the goals whose order rests on that step had random IDs, which SQL Server's order
+    put the same way round as their `CreatedAtUtc` about half the time, so CI could pass with the step gone. Those
+    goals now have fixed IDs that SQL Server orders the other way round: the earliest of the list test's three goals
+    of one `SortOrder`, and the bus and sister goals of the two reorder tests that tie them. With the step removed,
+    all three tests fail on every run.
+  - No test caught the `Id` step being dropped, as SQL Server gives tied rows in `Id` order without it, `Id` being
+    the clustered key that every index on `Goal` carries. `GoalListOrderTests`, which needs no database, checks that
+    the list's SQL ends `ORDER BY [g].[SortOrder], [g].[CreatedAtUtc], [g].[Id]`, and fails once either step is
+    removed; the list test's comment now says that its rows cannot show the `Id` step.
+  - Two findings: step 6 was ticked although its last two parts, `migrate.sql` from CI's artifact read in the pull
+    request and CI's run on the pull request passing, have not happened, as the branch is not yet pushed. It is
+    unticked, as T02's matching step stayed until its run passed, and is ticked once that run and the `migrate.sql`
+    read are recorded in these Notes.
+  - Nothing recorded that a successful Add keeps text typed while the add was out, where list-editor.md and
+    participants.md said only that the field is cleared. The design was silent on that case, as Add, unlike Save,
+    leaves the field editable, so the choice joins the Notes' choices where the design is silent, with why it is not
+    the simplest, rather than design.md §13, and no A-number is added. Step 2, list-editor.md *Behaviour* and *Tests*,
+    participants.md's Add goal row and *Focus after a goal write*, common-items.md's Add item row and `AddForm`'s
+    comment now say so; `ListEditor.test.tsx`'s "keeps what was typed while the add was out" already proves it.
 
 ### Steps
 
@@ -1633,12 +1657,13 @@ moves, archives and restores them. Changes apply to notes started from then on.
       page title (participants.md *Acceptance criteria*: only while a Details error shows); once in error, the field
       is re-checked on each input, and the message and `aria-invalid` clear silently once it is valid; and a server
       `422` under `text` is shown at the field the same way. Add is busy with "Adding…" after 400 ms, then the field
-      is cleared with focus kept in it and "Goal added to the end of the list" in the page status region, or "Not
-      added: no connection. Try again." or "Not added: something went wrong. Try again." shows in its alert slot (the
-      existing `RequestAlert`, above Add), the text kept. Vitest: those, each validation rule among them; five adds
-      in a row with focus in the field after each; 250 characters pasted kept whole, the count saying 50 too many and
-      Add showing the error; one `POST` after a lost answer; and after Add participant's `201` the next Tab from Save
-      reaching New goal (S01.02.02's hand-off from T02).
+      is cleared while it still holds the text sent (Notes), with focus kept in it, and "Goal added to the end of the
+      list" in the page status region, or "Not added: no connection. Try again." or "Not added: something went wrong.
+      Try again." shows in its alert slot (the existing `RequestAlert`, above Add), the text kept. Vitest: those, each
+      validation rule among them; five adds in a row with focus in the field after each; text typed while an add is
+      out kept; 250 characters pasted kept whole, the count saying 50 too many and Add showing the error; one `POST`
+      after a lost answer; and after Add participant's `201` the next Tab from Save reaching New goal (S01.02.02's
+      hand-off from T02).
 - [x] Reword a goal in its row (S01.02.06; design.md §3.7's rewording bullet; participants.md *Goals*' "Save and Cancel
       return focus…" and "Typing past 200 characters…" for Save; list-editor.md *Behaviour*):
       `PUT /api/admin/goals/{goalId}` with `{text}`, loading the goal through the tenant filter, checking `If-Match`
@@ -1713,7 +1738,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       goal edit and in New goal dropped with them (participants.md *Interactions and focus*, "Archive while something
       is unsaved"), and only the controls back after Restore, with every row closed and New goal empty (S01.02.04's
       hand-off from T02).
-- [x] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
+- [ ] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
       answers the goals list and each goal write in the browser from a list in memory, described in tests/README.md
       beside `serveParticipants`; and in `participants.spec.ts`, signed in for real through the `invite` fixture and
       a passkey on the `authenticator` fixture, a manager at 375 px adds a participant, Tabs from Save to New goal,

@@ -290,7 +290,7 @@ icon-only.
 | **Edit** | — | The row becomes the edit form, prefilled with the current text | The textarea, with the caret at the end | — (the focused field's label and value are read) |
 | **Save** (edit) | Save busy, "Saving…" after 400 ms. The textarea is `readOnly`. | Trims the text and replaces line breaks with spaces. If the text (and, on 4.9, the group) is **unchanged**, it closes like Cancel and sends nothing (an unchanged save would only add an empty audit entry). Otherwise `PUT /api/admin/goals/{id}` (or the common item `PUT` with `{text, groupId}`) with `If-Match`, then re-read. The row goes back to normal with the new text; an item moved to another group leaves this list and appears at the end of that group's list (A42). | That row's **Edit** (in its new group's list after a move) | "Goal saved." / "Item saved." / "Item saved and moved to the end of [group name]" |
 | **Cancel** (edit) | — | The row goes back to normal, and the typed text is thrown away | That row's **Edit** | — |
-| **Add goal / Add item** | Add busy, "Adding…" after 400 ms | Validate first (see below). Then `POST`, which adds at the end, and re-read. The new row appears at the bottom of the list, directly above the field. The field is cleared. | Stays in the field, ready for the next one (needed for the M1 test: "five goals on a phone without help") | "Goal added to the end of the list." / "Item added to the end of the list." |
+| **Add goal / Add item** | Add busy, "Adding…" after 400 ms | Validate first (see below). Then `POST`, which adds at the end, and re-read. The new row appears at the bottom of the list, directly above the field. The field is cleared if it still holds the text sent; text typed while the add was out is kept. | Stays in the field, ready for the next one (needed for the M1 test: "five goals on a phone without help") | "Goal added to the end of the list." / "Item added to the end of the list." |
 | **Archive** | Archive busy, "Archiving…" after 400 ms | `POST …/archive` with `If-Match`, then re-read. The row leaves the active list and the numbers close up. The archived section appears if it was hidden, **opens**, and lists the item first (newest archived first). | That item's **Restore** | "Goal archived." / "Item archived." |
 | **Restore** | Restore busy, "Restoring…" after 400 ms | `POST …/restore` with `If-Match`, then re-read. The item goes to the **end** of the active list (A2). If the archived section is now empty, it disappears. | That item's **Archive** in the active list | "Goal restored to the end of the list." / "Item restored to the end of the list." |
 | **Open or close "Archived goals"** | — | Native `<details>` behaviour | Stays on the summary | Native "expanded" or "collapsed" |
@@ -479,7 +479,8 @@ Role, Value · 4.1.3 Status Messages (results that don't move focus go to the st
   - Vitest and Testing Library: after Move down on row 1, `document.activeElement` is the moved item's Move down.
   - Pressing an unavailable Move up sends nothing and announces once.
   - Archive opens `<details>` and focuses Restore. Restore focuses Archive on the last row.
-  - Add keeps focus in the field and clears it. Save and Cancel return focus to Edit.
+  - Add keeps focus in the field and clears it, but keeps text typed while the add was out. Save and Cancel return
+    focus to Edit.
   - A `412` keeps the typed text.
   - Playwright with axe on both screens. A manual pass with NVDA + Chrome and VoiceOver on iOS.
   - The M1 check that a manager sets up five goals on a phone without help.

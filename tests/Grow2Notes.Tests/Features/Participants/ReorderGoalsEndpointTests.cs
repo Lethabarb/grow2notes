@@ -38,15 +38,19 @@ public sealed class ReorderGoalsEndpointTests(Grow2NotesFactory factory, SqlServ
     {
         // With a gap and a tie, as archiving and two adds at once leave them, which the list reads in CreatedAtUtc
         // order, so that the old order the event records is the list's; and an archived goal, which keeps its place.
+        // The tied goals' IDs are the other way round in SQL Server's order, which compares a uniqueidentifier by its
+        // last six bytes first, so only the CreatedAtUtc step reads the bus first.
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var bus = Guid.Parse("2f6b9d1e-4a7c-4b3e-8d5f-ffffffffffff");
+        var sister = Guid.Parse("8b4d7f2a-1c6e-4d9b-a3f7-000000000001");
         var goals = await factory.Services.AddGoalsAsync(
             seeded.A,
             participant.Id,
             new("Makes own breakfast", 0),
             new("Uses the washing machine", 1, ArchivedAtUtc: ArchivedAtUtc),
-            new("Catches the bus to day program", 3),
-            new("Phones her sister", 3, CreatedAtUtc: TestGoals.AddedAtUtc.AddSeconds(1)));
-        var (breakfast, washing, bus, sister) = (goals[0], goals[1], goals[2], goals[3]);
+            new("Catches the bus to day program", 3, Id: bus),
+            new("Phones her sister", 3, TestGoals.AddedAtUtc.AddSeconds(1), sister));
+        var (breakfast, washing) = (goals[0], goals[1]);
         var washingBefore = await StoredGoalAsync(washing);
 
         using var response = await PutAsync(
@@ -67,17 +71,21 @@ public sealed class ReorderGoalsEndpointTests(Grow2NotesFactory factory, SqlServ
             $"Details: expected {details?.ToJsonString()}, written {written.Details}.");
     }
 
-    // D84: the list finds nothing to change, even with the gap and the tie, so the save writes no row and no event.
+    // D84: the list finds nothing to change, even with the gap and the tie, so the save writes no row and no event. The
+    // tied goals' IDs are the other way round in SQL Server's order, as in the test above, so only the CreatedAtUtc
+    // step reads the order sent as the one stored.
     [Fact]
     public async Task The_order_already_stored_answers_204_and_writes_nothing()
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var bus = Guid.Parse("6a1c4e8b-3d7f-4c2a-9b5e-ffffffffffff");
+        var sister = Guid.Parse("d3f5a7c9-2b4e-4f6a-8c1d-000000000001");
         var goals = await factory.Services.AddGoalsAsync(
             seeded.A,
             participant.Id,
             new("Makes own breakfast", 0),
-            new("Catches the bus to day program", 2),
-            new("Phones her sister", 2, CreatedAtUtc: TestGoals.AddedAtUtc.AddSeconds(1)));
+            new("Catches the bus to day program", 2, Id: bus),
+            new("Phones her sister", 2, TestGoals.AddedAtUtc.AddSeconds(1), sister));
         var before = await StoredGoalsAsync(participant.Id);
 
         using var response = await PutAsync(Caller.ManagerOfA, participant.Id, new { goalIds = goals });
