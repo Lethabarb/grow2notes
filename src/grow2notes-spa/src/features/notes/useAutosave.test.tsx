@@ -610,6 +610,49 @@ describe('flushNow() and checkSave()', () => {
   });
 });
 
+// What a leave asks before it goes (autosave-status.md *Behaviour* 7).
+describe('unsaved()', () => {
+  it('is false with nothing changed, then true from a change until a save carrying it is answered', async () => {
+    const save = held(saved());
+    answerSaves(save.answer);
+    const { autosave, type } = renderAutosave();
+    expect(autosave().unsaved()).toBe(false);
+
+    type('Jane');
+    expect(autosave().unsaved()).toBe(true);
+    await wait(2_000);
+    expect(sentSaves).toHaveLength(1);
+    expect(autosave().unsaved()).toBe(true);
+
+    save.release();
+    await wait(0);
+    expect(autosave().unsaved()).toBe(false);
+  });
+
+  it('is false after a dead end that a save met, though its change is never saved', async () => {
+    answerSaves(problem(422, 'note.participant_archived'));
+    const { autosave, type } = renderAutosave();
+    type('Jane');
+    await wait(2_000);
+    type('Jane made toast.');
+
+    expect(sentSaves).toHaveLength(1);
+    expect(autosave().unsaved()).toBe(false);
+  });
+
+  it('is false after a dead end that Submit met, with a change unsaved', async () => {
+    const { autosave, type } = renderAutosave();
+    type('Jane');
+    act(() => {
+      autosave().end({ code: 'note.version_conflict' });
+    });
+    await wait(30_000);
+
+    expect(sentSaves).toEqual([]);
+    expect(autosave().unsaved()).toBe(false);
+  });
+});
+
 describe('Taken over by another page', () => {
   /** A save refused as another page has saved the note since this page last did (design.md §5.6). */
   const takenOver = problem(409, 'draft.taken_over');
@@ -692,6 +735,27 @@ describe('Taken over by another page', () => {
     ]);
     expect(sentSaves[2].body.clientId).toBe(sentSaves[3].body.clientId);
     expect(said.slice(5)).toEqual(['saving', 'saved', 'saving', 'saved']);
+  });
+
+  it('is unsaved() while the banner waits, nothing changed since, until the save of keep() is answered', async () => {
+    answerSaves(saved(), takenOver, saved('2026-09-30T23:44:00Z'));
+    const { autosave, type } = renderAutosave(reopened);
+    type('Jane');
+    act(() => {
+      autosave().flush();
+    });
+    await wait(0);
+    void autosave().checkSave();
+    await wait(0);
+    expect(sentSaves).toHaveLength(2);
+    expect(autosave().unsaved()).toBe(true);
+
+    act(() => {
+      autosave().keep();
+    });
+    expect(autosave().unsaved()).toBe(true);
+    await wait(0);
+    expect(autosave().unsaved()).toBe(false);
   });
 
   it('sends on keep() with no change made since the takeover, as the server holds the other version', async () => {

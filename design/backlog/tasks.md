@@ -3596,6 +3596,22 @@ older page is told the note has moved on, and nothing is overwritten without ask
   - The form calls the existing `invalidateToday()` as it unmounts, whichever way it is left (note-form.md *Leaving
     the form*; autosave-status.md *Where it's used*, Today row), so that Today's row matches without leaning on
     `todayQuery`'s `staleTime: 0`; `['me', 'drafts']` comes with T12.
+  - The leave as built (step 4): `useSaveBeforeLeaving()` (src/features/notes) holds the form's `useBlocker`, which
+    blocks a navigation to another pathname while `useAutosave`'s `unsaved()` finds a change unsaved or the takeover
+    banner waiting, never after a dead end. A blocked one goes once every change is saved, one typed while the save was
+    out included, and otherwise stays, never acted on later. Staying says the takeover's sentence while its banner
+    shows, and otherwise "Not saved: no connection. Keep this page open; retrying.", the design's only words for it,
+    whose "no connection" and "retrying" are untrue after a `403` or `422`, as Sign out's are (step 6's app-shell.md
+    note names both); it says nothing more when the save that the leave sent has itself brought "Not saved: …" or the
+    banner, whose own region says it, so that it is said once. A dead end met by the leave's own save keeps the person
+    there too, as *Behaviour* 7's `reset()` on a failed save and note-form.md's dead-end rows ("Text stays on screen,
+    selectable and copyable") have it, said by the dead end's own assertive sentence alone, focus left where it is; with
+    nothing unsaved after it, the next press leaves, as "never blocked" after a dead end means a leave pressed once it
+    shows. Its `leaveFreely()` lets the form's own navigation go unasked: Submit calls it before Today after its `201`,
+    as a change typed after a browser closed the confirmation would otherwise hold it there, and T12's Discard and T14's
+    Save changes and Cancel call it (the hand-offs). `beforeunload` follows the indicator, listened for while it says
+    "Saving…", "Not saved: …" or "Not saved", a dead end's included, as autosave-status.md *Behaviour* 7 keeps the
+    browser's warning after one.
 - Hand-offs, which step 6 writes into the receiving tasks' Notes and, dated, into the stories' Notes: Load the other
   version replacing the picks, and the picks in every save that this task sends, with section 2 (T13; S02.02.06's
   second criterion); the takeover banner on a pending edit, as for a draft (T14; autosave-status.md *Per-screen
@@ -3688,7 +3704,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       ticks, text, flag and reason with focus on the `<h1>`, and its next save under a new `clientId` with `seq` 1;
       nothing on screen replaced by anything but Load (item 16); a check save meeting the takeover opening no
       confirmation; and Load's read failing, or answering `404`, as Notes say.
-- [ ] Leaving the form (S02.02.05's links to note-form.md items 34 and 35 and *Interactions* › *Leaving the form*;
+- [x] Leaving the form (S02.02.05's links to note-form.md items 34 and 35 and *Interactions* › *Leaving the form*;
       T08's hand-off of the leave guard, and T09's of the Past notes link; autosave-status.md *Behaviour* 7): the
       note form blocks an in-app navigation with React Router's `useBlocker`, as T03's `LeaveWarning` does, whether
       by the back link, the Past notes link, the nav or the browser's Back and Forward: with nothing unsaved it goes;

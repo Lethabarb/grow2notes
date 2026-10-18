@@ -10,6 +10,7 @@ import buttonStyles from '../../components/Button.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
+import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
@@ -509,6 +510,34 @@ function watchChanges(element: HTMLElement): () => number {
   });
   observer.observe(element, { attributes: true, characterData: true, childList: true, subtree: true });
   return () => changes + observer.takeRecords().length;
+}
+
+/** Every text written into the live region `region` from now on, in turn, each of which a screen reader says. */
+function watchWords(region: HTMLElement): () => string[] {
+  const words: string[] = [];
+  const take = (records: MutationRecord[]) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        words.push(node.textContent ?? '');
+      });
+    }
+  };
+  const observer = new MutationObserver(take);
+  observer.observe(region, { childList: true, subtree: true });
+  return () => {
+    take(observer.takeRecords());
+    return words;
+  };
+}
+
+/** A save refused as another page has saved the note since this page last did (design.md §5.6). */
+const takenOver = problem(409, { code: 'draft.taken_over' });
+
+/** Whether the page asks before it goes, as a reload or a closed tab would find. */
+function unloadAsks(): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
 }
 
 beforeEach(() => {
@@ -1188,9 +1217,6 @@ describe('A save that fails', () => {
 describe('Changed on another device or tab', () => {
   const sentence = 'This note was changed on another device or tab.';
 
-  /** A save refused as another page has saved the note since this page last did (design.md §5.6). */
-  const takenOver = problem(409, { code: 'draft.taken_over' });
-
   /** The text, ticks, flag and reason on screen as the note is taken over. */
   const onScreen = {
     narrative: 'Jane made toast. Then a walk.',
@@ -1254,13 +1280,6 @@ describe('Changed on another device or tab', () => {
   /** What the form shows: its text, its goals' ticks, its flag and its reason. */
   function shownContent() {
     return [guidedNotes().value, goalBoxes().map((box) => box.checked), flagBox().checked, reasonField().value];
-  }
-
-  /** Whether the page asks before it goes, as a reload or a closed tab would find. */
-  function unloadAsks(): boolean {
-    const event = new Event('beforeunload', { cancelable: true });
-    window.dispatchEvent(event);
-    return event.defaultPrevented;
   }
 
   /** The reads of the note form, `GET {base}/draft`, sent for `participant`. */
@@ -3292,6 +3311,319 @@ function meRequestsFrom(router: Router, answer: Answer = json(worker)): string[]
   });
   return sentFrom;
 }
+
+// Leaving the form within the app, and the browser's own warning (note-form.md *Leaving the form* and items 34 and
+// 35, autosave-status.md *Behaviour* 7).
+describe('Leaving the form', () => {
+  const takeoverSentence = 'This note was changed on another device or tab.';
+
+  /** How the person leaves the form within the app. */
+  type Way = 'the back link' | 'the Past notes link' | 'Back';
+  const ways: Way[] = ['the back link', 'the Past notes link', 'Back'];
+
+  // The dead ends that a save can meet (note-form.md *Conflicts and refusals*).
+  const deadEnds = [
+    { deadEnd: 'after midnight', refusal: problem(422, { code: 'note.past_date_manager_only' }) },
+    // 9:14 am on 1 October in Melbourne.
+    { deadEnd: "someone else's draft", refusal: startedBy('2026-09-30T23:14:00Z') },
+    { deadEnd: 'an archived participant', refusal: problem(422, { code: 'note.participant_archived' }) },
+    { deadEnd: 'a note submitted elsewhere', refusal: problem(409, { code: 'note.version_conflict' }) },
+  ];
+
+  /**
+   * Opens a new note for a participant of their own from Today, as a person does, whose saves `save` answers, with
+   * their Past notes, which have none, to go to.
+   */
+  async function openToLeave(save: Answer = saved('2026-09-30T23:42:00Z')) {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, save);
+    serve(`/api/participants/${participant.id}/notes`, json({ notes: [], hasMore: false }));
+    const { router, client } = await openFromToday([participant]);
+    return { participant, router, client };
+  }
+
+  /** Leaves the form `way`, as the person does, and lets what follows render. */
+  async function leave(way: Way, router: Router) {
+    switch (way) {
+      case 'the back link':
+        await press(within(pageBar()).getByRole('link', { name: 'Today' }));
+        break;
+      case 'the Past notes link':
+        await press(within(main()).getByRole('link', { name: 'Past notes' }));
+        break;
+      case 'Back':
+        await goBack(router);
+        break;
+    }
+  }
+
+  /** Where leaving `way` goes: Today, which opened the form, or the participant's Past notes. */
+  function destination(way: Way, participant: ParticipantHeader): string {
+    return way === 'the Past notes link' ? `/participants/${participant.id}/notes` : '/';
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    return within(pageBar()).queryByRole('region', { name: takeoverSentence });
+  }
+
+  afterEach(() => {
+    rearmUnloadGuard();
+  });
+
+  it.each(ways)('sends a change waiting on %s, "Saving…" until it is saved, then leaves', async (way) => {
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    const { participant, router } = await openToLeave(save.answer);
+    type('Jane made toast.');
+
+    await leave(way, router);
+
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(shownSaveStatus()).toBe('Saving…');
+
+    save.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe(destination(way, participant));
+    await wait(30_000);
+    expect(saves()).toHaveLength(1);
+  });
+
+  it('sends a change typed while the save out is answered too, before it leaves', async () => {
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    const { router } = await openToLeave(save.answer);
+    type('Jane made toast.');
+    await leave('the back link', router);
+    type('Jane made toast. Then a walk.');
+
+    save.release();
+    await settle();
+
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+      [1, 'Jane made toast.'],
+      [2, 'Jane made toast. Then a walk.'],
+    ]);
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it.each(ways)('stays on %s while "Not saved: …" shows, saying it once in the polite region', async (way) => {
+    const { participant, router } = await openToLeave(noConnection);
+    type('Jane made toast.');
+    await wait(3_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    const indicatorChanges = watchChanges(saveStatus());
+    const said = watchWords(pageStatus());
+
+    await leave(way, router);
+    await wait(16);
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(said()).toEqual([notSavedRetrying]);
+    expect(indicatorChanges()).toBe(0);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each(ways)('stays on %s while the takeover banner shows, saying its sentence once politely', async (way) => {
+    const { participant, router } = await openToLeave(
+      inTurn(saved('2026-09-30T23:43:00Z'), takenOver, saved('2026-09-30T23:44:00Z')),
+    );
+    await write('Jane made toast.');
+    await write('Jane made toast. Then a walk.');
+    expect(takeoverBanner()).not.toBeNull();
+    const alerts = watchChanges(assertive());
+    const said = watchWords(pageStatus());
+
+    await leave(way, router);
+    await wait(16);
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(said()).toEqual([takeoverSentence]);
+    expect(alerts()).toBe(0);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each(ways.flatMap((way) => [403, 422].map((status) => ({ way, status }))))(
+    'stays on $way when the save that it sends meets a $status, saying "Not saved: …" once politely',
+    async ({ way, status }) => {
+      const { participant, router } = await openToLeave(problem(status));
+      type('Jane made toast.');
+      const said = watchWords(pageStatus());
+
+      await leave(way, router);
+      await wait(16);
+
+      expect(saves()).toHaveLength(1);
+      expect(router.state.location.pathname).toBe(paths(participant).page);
+      expect(said()).toEqual([notSavedRetrying]);
+    },
+  );
+
+  it('stays when its save fails into "Not saved: …", said once by the top bar, going nowhere once saved', async () => {
+    const { participant, router } = await openToLeave(
+      inTurn(noConnection, noConnection, saved('2026-09-30T23:44:00Z')),
+    );
+    type('Jane made toast.');
+    const said = watchWords(pageStatus());
+
+    await leave('the back link', router);
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(1_000);
+    await wait(16);
+
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    // The top bar's live region has said it.
+    expect(said()).toEqual([]);
+
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+  });
+
+  it('stays when the save that it sends meets the takeover, which the banner says once', async () => {
+    const { participant, router } = await openToLeave(inTurn(saved('2026-09-30T23:43:00Z'), takenOver));
+    await write('Jane made toast.');
+    type('Jane made toast. Then a walk.');
+    const alerts = watchWords(assertive());
+    const said = watchWords(pageStatus());
+
+    await leave('the back link', router);
+    await wait(16);
+
+    expect(takeoverBanner()).not.toBeNull();
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(alerts()).toEqual([takeoverSentence]);
+    expect(said()).toEqual([]);
+  });
+
+  it.each(ways.flatMap((way) => deadEnds.map((end) => ({ way, ...end }))))(
+    'stays on $way when the save that it sends meets the dead end of $deadEnd, said once, then leaves on another',
+    async ({ way, refusal }) => {
+      const save = held(refusal);
+      const { participant, router } = await openToLeave(save.answer);
+      type('Jane made toast.');
+      const alerts = watchWords(assertive());
+      const said = watchWords(pageStatus());
+      await leave(way, router);
+      const focused = document.activeElement;
+
+      save.release();
+      await settle();
+      await wait(16);
+
+      expect(router.state.location.pathname).toBe(paths(participant).page);
+      expect(shownSaveStatus()).toBe('Not saved');
+      expect(alerts()).toHaveLength(1);
+      expect(within(pageBar()).getByRole('region', { name: alerts()[0] })).toBeInTheDocument();
+      expect(said()).toEqual([]);
+      expect(document.activeElement).toBe(focused);
+      expect(guidedNotes()).toHaveValue('Jane made toast.');
+
+      await leave(way, router);
+
+      expect(router.state.location.pathname).toBe(destination(way, participant));
+      expect(saves()).toHaveLength(1);
+    },
+  );
+
+  it.each(ways)('leaves on %s at once with nothing unsaved, sending nothing', async (way) => {
+    const { participant, router } = await openToLeave();
+    await write('Jane made toast.');
+
+    await leave(way, router);
+
+    expect(router.state.location.pathname).toBe(destination(way, participant));
+    expect(saves()).toHaveLength(1);
+  });
+
+  it.each(ways.flatMap((way) => deadEnds.map((end) => ({ way, ...end }))))(
+    'leaves on $way at once after the dead end of $deadEnd, with a change since, sending nothing more',
+    async ({ way, refusal }) => {
+      const { participant, router } = await openToLeave(refusal);
+      await write('Jane made toast.');
+      expect(shownSaveStatus()).toBe('Not saved');
+      type('Jane made toast. Then a walk.');
+
+      await leave(way, router);
+
+      expect(router.state.location.pathname).toBe(destination(way, participant));
+      expect(saves()).toHaveLength(1);
+    },
+  );
+
+  it('listens for beforeunload from the first unsaved change, through "Not saved: …", until saved', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const removed = vi.spyOn(window, 'removeEventListener');
+    const ofUnload = (spy: typeof added | typeof removed) =>
+      spy.mock.calls.filter(([event]) => event === 'beforeunload').length;
+    const listening = () => ofUnload(added) - ofUnload(removed);
+    await openToLeave(inTurn(noConnection, noConnection, saved('2026-09-30T23:44:00Z')));
+    expect(listening()).toBe(0);
+    expect(unloadAsks()).toBe(false);
+
+    type('Jane made toast.');
+    await settle();
+    expect(listening()).toBe(1);
+    expect(unloadAsks()).toBe(true);
+
+    await wait(3_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(listening()).toBe(1);
+
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(listening()).toBe(0);
+    expect(unloadAsks()).toBe(false);
+  });
+
+  it('asks nothing before the page goes once the shell has disarmed the warning, a change unsaved', async () => {
+    await openToLeave(noAnswer);
+    type('Jane made toast.');
+    await settle();
+    expect(unloadAsks()).toBe(true);
+
+    disarmUnloadGuard();
+
+    expect(unloadAsks()).toBe(false);
+  });
+
+  it("marks Today's lists stale as the form is left for Past notes", async () => {
+    const { participant, router, client } = await openToLeave();
+    const todayKey = ['today', '2026-10-01'];
+    // As fresh as a list fetched while the form was open.
+    client.setQueryData(todayKey, client.getQueryData(todayKey));
+    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(false);
+
+    await leave('the Past notes link', router);
+
+    expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
+    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(true);
+  });
+
+  it("lands on Today after Submit's 201, though a change was made while its request was out", async () => {
+    const post = held(versionSaved());
+    const { router } = await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    type('Jane made toast. Then a walk.');
+    const said = watchWords(pageStatus());
+
+    post.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(banner()).toHaveFocus();
+    expect(said()).toEqual([]);
+    expect(saves()).toHaveLength(2);
+  });
+});
 
 /** The read view's section under the `<h2>` named `name`. */
 function section(name: string): HTMLElement {

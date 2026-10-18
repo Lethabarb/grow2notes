@@ -150,6 +150,11 @@ export type Autosave = {
   /** A field lost focus: an unsaved change is sent at once, unless a retry, which will carry it, is due. */
   flush: () => void;
   /**
+   * Whether leaving the form now would lose what autosave may still save: a change not yet saved, or the takeover
+   * banner's answer; never after a dead end, after which nothing more is saved.
+   */
+  unsaved: () => boolean;
+  /**
    * An unsaved change sent now, the wait for a retry cut short, for a leave or a sign-out that needs it saved first
    * (T10's Notes): `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying the
    * newest change is answered, or as a dead end comes; `false` as "Not saved: no connection…" shows, while the retries
@@ -573,11 +578,11 @@ export function useAutosave({
   }
 
   function flushNow(): Promise<boolean> {
-    const state = progress.current;
-    if (state.stopped || (state.saved === state.made && !state.takenOver)) {
+    if (!unsaved()) {
       return Promise.resolve(true);
     }
 
+    const state = progress.current;
     if (!mayWait(state)) {
       return Promise.resolve(false);
     }
@@ -767,9 +772,15 @@ export function useAutosave({
     return 'shown';
   }
 
+  function unsaved(): boolean {
+    const state = progress.current;
+    return !state.stopped && (state.saved < state.made || state.takenOver);
+  }
+
   return {
     changed,
     flush,
+    unsaved,
     flushNow,
     checkSave,
     stop,

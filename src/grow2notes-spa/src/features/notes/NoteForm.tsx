@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
@@ -19,7 +19,7 @@ import { strings } from '../../copy/strings.ts';
 import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
 import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
-import { removeToday } from '../today/todayQuery.ts';
+import { invalidateToday, removeToday } from '../today/todayQuery.ts';
 import { FlagForManager, reasonId } from './FlagForManager.tsx';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
@@ -28,6 +28,7 @@ import { noteBase, type Draft } from './noteQueries.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 import { sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
+import { useSaveBeforeLeaving } from './useSaveBeforeLeaving.ts';
 
 /**
  * `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when; and the note's flag
@@ -38,6 +39,13 @@ export type VersionSaved = {
   createdAtUtc: string;
   flagStatus: 'None' | 'ToReview' | 'Reviewed';
 };
+
+/**
+ * What the save indicator says while the newest change is not saved, or the takeover banner waits: "Saving…", "Not
+ * saved: no connection…", and "Not saved", from the takeover or a dead end, after which it never will be; the browser
+ * asks before the page goes while it says one of them.
+ */
+const atRiskKinds = new Set<SaveIndicator['kind']>(['saving', 'failed', 'takenOver', 'notSaved']);
 
 /** The Submit confirmation while it is open, and how its request goes (note-form.md *Confirmation dialog*). */
 type Confirmation = {
@@ -104,11 +112,20 @@ type NoteFormProps = {
  *
  * While another page's save has taken the note over, the page's takeover banner asks what to do, and Submit note is
  * unavailable in the same way, described by the banner's sentence too, which a press says again; every tick and the
- * text stay as they are, to change, though nothing is sent; and the browser asks before the page goes (note-form.md
- * *Conflicts and refusals*). Keep the text on this screen gives focus back to what had it as the note was taken over,
- * or else the `<h1>`, and sends everything on screen. Load the other version shows it in place of the form's ticks,
- * text, flag and reason, with focus on the `<h1>`; or, if its read failed, says so in the page's polite region, the
- * banner kept (note-form.md *Changed on another device or tab*).
+ * text stay as they are, to change, though nothing is sent (note-form.md *Conflicts and refusals*). Keep the text on
+ * this screen gives focus back to what had it as the note was taken over, or else the `<h1>`, and sends everything on
+ * screen. Load the other version shows it in place of the form's ticks, text, flag and reason, with focus on the
+ * `<h1>`; or, if its read failed, says so in the page's polite region, the banner kept (note-form.md *Changed on
+ * another device or tab*).
+ *
+ * Leaving within the app, by the back link, Past notes, the nav, or Back or Forward, with a change unsaved, sends it
+ * now, and goes once it is saved, "Saving…" shown meanwhile; with "Not saved: no connection…" shown, the takeover
+ * banner showing, or a save that fails, it stays, with no dialog, and says why in the page's polite region, unless the
+ * top bar has just said it; and a save of its own that meets a dead end keeps the person there too, with the text to
+ * copy, said by the dead end's own sentence alone. A leave once a dead end shows, and after Submit's `201`, nothing
+ * stops (note-form.md *Leaving the form*). The browser asks before the page goes while the indicator says the change
+ * is not saved, a dead end's "Not saved" included, and the shell has not disarmed the warning (item 35). Today's lists
+ * are marked stale as the form goes, whichever way, so that Today's row shows how the note was left.
  */
 export function NoteForm({
   ref,
@@ -158,8 +175,11 @@ export function NoteForm({
   const confirmationOpen = useRef(false);
   // What had focus as the note was taken over, which Keep gives it back to.
   const focusedAtTakeover = useRef<HTMLElement>(null);
+  // What the save indicator says, as autosave says it, before the page renders it, which a leave that stays reads.
+  const lastSaid = useRef<SaveIndicator['kind']>(undefined);
   const hasPrompts = draft.guidePrompts !== '';
   const takenOver = indicator?.kind === 'takenOver';
+  const atRisk = indicator !== undefined && atRiskKinds.has(indicator.kind);
 
   function read(): DraftContent {
     return { narrative: box.current!.value, tickedGoalIds: [...ticked], isFlagged: flagged, flagReason: reason };
@@ -171,6 +191,7 @@ export function NoteForm({
     opened: draft,
     read,
     onIndicator: (said) => {
+      lastSaid.current = said.kind;
       if (said.kind === 'takenOver') {
         const focused = document.activeElement;
         focusedAtTakeover.current = focused instanceof HTMLElement && focused !== document.body ? focused : null;
@@ -183,7 +204,15 @@ export function NoteForm({
     onDeadEnd,
   });
 
-  useUnloadWarning(takenOver);
+  const leaveFreely = useSaveBeforeLeaving({ unsaved: autosave.unsaved, save: saveBeforeLeaving });
+  useUnloadWarning(atRisk);
+
+  useEffect(
+    () => () => {
+      void invalidateToday(queryClient);
+    },
+    [queryClient],
+  );
 
   const { mutate } = useMutation({
     mutationFn: ({ key, content }: Pick<Confirmation, 'key' | 'content'>) =>
@@ -249,6 +278,29 @@ export function NoteForm({
   }
 
   useImperativeHandle(ref, () => ({ keep, loadOther }));
+
+  // A leave with something unsaved: whether it is all saved now, a change typed while a save was out included. If not,
+  // the person stays, told why in the page's polite region, the takeover's sentence while its banner shows and
+  // otherwise the failed save's, unless the save itself has just brought "Not saved: …" or the banner, whose own region
+  // says it, so that it is said once. A dead end that the leave's save met keeps them there as well, with the text to
+  // copy (autosave-status.md *Behaviour* 7, note-form.md *Conflicts and refusals*), said by the form's assertive
+  // region alone; as nothing is unsaved after it, the next press leaves. Only a leave with something unsaved is
+  // blocked, so a dead end showing now came while this one waited.
+  async function saveBeforeLeaving(): Promise<boolean> {
+    const before = lastSaid.current;
+    while (autosave.unsaved()) {
+      if (!(await autosave.flushNow())) {
+        const now = lastSaid.current;
+        if (now === before || (now !== 'failed' && now !== 'takenOver')) {
+          announce?.(now === 'takenOver' ? apiErrorCopy['draft.taken_over'] : strings.note.notSavedRetrying);
+        }
+
+        return false;
+      }
+    }
+
+    return lastSaid.current !== 'notSaved';
+  }
 
   function toggle(goalId: string, isTicked: boolean) {
     setTicked((current) => {
@@ -340,8 +392,9 @@ export function NoteForm({
   // banner's sentence in the store, which Today reads; Today's list dropped, so that Today shows only the server's
   // rows; `me` asked for again when the note is in To review, so that the Flagged badge counts it (app-shell.md
   // *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to Today then shares; the
-  // confirmation closed; then Today, popped to when it is the entry before, so that Back never reopens the finished
-  // form, and else put in the form's place.
+  // confirmation closed; then Today, which the leave guard never stops, though a change was made after a browser
+  // closed the confirmation, as the note is submitted: popped to when it is the entry before, so that Back never
+  // reopens the finished form, and else put in the form's place.
   function submitted(saved: VersionSaved) {
     messageStore.set(msg.noteSubmitted(name));
     removeToday(queryClient);
@@ -352,6 +405,7 @@ export function NoteForm({
 
     confirmationOpen.current = false;
     setConfirmation(undefined);
+    leaveFreely();
     if (openerBefore(entryKey)?.path === '/') {
       void navigate(-1);
     } else {
