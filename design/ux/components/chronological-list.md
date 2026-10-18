@@ -264,6 +264,16 @@ One component handles all four. It has two switches: **paged** (with **Show olde
 
 Native HTML covers everything here, so **no React Aria is needed**. One generic component, `ChronoList`, renders the `<ol>`, the empty sentence, the button and the status line. Screens pass a row renderer and, for paged lists, the infinite-query result.
 
+**Built** (T09, for Past notes): `ChronoList` in `src/components/ChronoList.tsx`, in its paged mode alone, as T16 and
+T18 bring the whole lists: its rows are `LinkRow`s in a `LinkRowList` that takes `ordered`, an `<ol role="list">`,
+with `look: 'date'`, the link in base.css's colour, underline and hover, with no chevron; Show older is the shared
+`Button`, `aria-disabled` while its request is out, and its status line is in the page with the list. Focus goes to
+the first new row's link, or, when no row came and the button has gone, to the last row's; a `401` says nothing there,
+as the session flow has it. Past notes' query is `pastNotesQuery` (`src/features/notes`): `useInfiniteQuery` on
+`['pastNotes', participantId]`, `refetchOnWindowFocus: true`, `gcTime` 30 minutes and no `maxPages`, its header
+read under `['pastNotes', participantId, 'participant']` with the pages; a push or a replace drops both as the page
+mounts, and a pop keeps both.
+
 **Data: one infinite query per paged list, a plain query per whole list.**
 
 ```ts

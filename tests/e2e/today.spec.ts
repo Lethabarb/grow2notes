@@ -17,13 +17,13 @@ import { manager, serveMe, worker, type Me } from './me.ts';
 import { notesStore } from './notes.ts';
 import { jane, madeUpParticipant, participants, ravi } from './participants.ts';
 import { holdNext, recordRequests } from './requests.ts';
-import { failToday, serveToday, todayList } from './today.ts';
+import { failToday, serveToday, todayList, type TodayNote } from './today.ts';
 
-// Today in the published app (S02.01.01, S02.01.02), against today.md's criteria: its states, the device's own clock
-// and zone, Find a participant, reflow, targets, the focus ring and the keyboard alone. Each test answers
-// /api/auth/me and /api/today in the browser (me.ts, today.ts) with made-up people (A35), and the note that a row opens
-// from a store in memory (notes.ts), so that none of those requests reaches the app; note-form.spec.ts signs in for
-// real and meets the app's own Today.
+// Today in the published app (S02.01.01, S02.01.02, S02.01.03), against today.md's criteria: its states, each row's
+// note status, the device's own clock and zone, Find a participant, the banner after Submit, reflow, targets, the
+// focus ring and the keyboard alone. Each test answers /api/auth/me and /api/today in the browser (me.ts, today.ts)
+// with made-up people (A35), and the note that a row opens from a store in memory (notes.ts), so that none of those
+// requests reaches the app; note-form.spec.ts signs in for real and meets the app's own Today.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -48,6 +48,11 @@ const tryAgain = (page: Page) => main(page).getByRole('button', { name: 'Try aga
 const addParticipant = (page: Page) => main(page).getByRole('link', { name: 'Add participant', exact: true });
 // The note's back link, in the shell's bar between <header> and <main> (note-form.md component 1).
 const backLink = (page: Page) => page.locator('#page-bar').getByRole('link', { name: 'Today', exact: true });
+// A row's status line, which describes its link, and its Flagged tag (today.md component 8).
+const rowLine = (page: Page, name: string) => rowItems(page).filter({ hasText: name }).locator('p');
+const flagged = (page: Page) => main(page).getByText('Flagged', { exact: true });
+// The success banner after Submit, before the <h1>, which the shell focuses (today.md component 2).
+const banner = (page: Page) => main(page).locator('[data-route-focus]');
 
 /** The `<h1>`'s words on Thursday 1 October 2026, `me.ts`'s day. */
 const todayHeading = 'Today · Thursday 1 October';
@@ -435,3 +440,200 @@ for (const width of [375, 1280]) {
     await expectNothingKept(page, 'Jane', 'Citizen', 'Ravi', 'Silva', 'jane');
   });
 }
+
+// Made-up participants for the status forms (A35), beside Jane and Ravi: one named Alex, whose note nobody has started.
+const alexMorgan = madeUpParticipant('1d7e3a9c-5b28-4f61-a0d4-8c2e6f9b3a17', 'Alex', 'Morgan');
+const kim = madeUpParticipant('2e8f4b0d-6c39-4a72-b1e5-9d3f7a0c4b28', 'Kim', 'Nguyen');
+const mia = madeUpParticipant('3f9a5c1e-7d4a-4b83-82f6-0e4a8b1d5c39', 'Mia', 'Patel');
+const lee = madeUpParticipant('4a0b6d2f-8e5b-4c94-93a7-1f5b9c2e6d4a', 'Lee', 'Walker');
+
+// Times in Melbourne on Thursday 1 October 2026, before daylight saving starts: 9:14 am, 9:42 am, midday and 4:12 pm.
+const at914 = '2026-09-30T23:14:00Z';
+const at942 = '2026-09-30T23:42:00Z';
+const midday = '2026-10-01T02:00:00Z';
+const at412 = '2026-10-01T06:12:00Z';
+
+/** A note on Today, someone else's unless `isMine`, as `GET /api/today` gives it. */
+const todayNote = (note: Partial<TodayNote> & Pick<TodayNote, 'status'>): TodayNote => ({
+  authorDisplayName: 'Alex P.',
+  isMine: false,
+  startedAtUtc: at914,
+  isFlagged: false,
+  ...note,
+});
+
+test('each row reads one of the four status forms, Flagged on a flagged submitted note alone, passing axe', async ({
+  page,
+}) => {
+  const notes: Record<string, TodayNote> = {
+    [jane.id]: todayNote({ status: 'Draft', authorDisplayName: worker.displayName, isMine: true, savedAtUtc: at942 }),
+    [ravi.id]: todayNote({ status: 'Draft' }),
+    [kim.id]: todayNote({ status: 'Submitted', firstSubmittedAtUtc: at412, isFlagged: true }),
+    [mia.id]: todayNote({
+      status: 'Submitted',
+      authorDisplayName: worker.displayName,
+      isMine: true,
+      firstSubmittedAtUtc: at412,
+    }),
+    [lee.id]: todayNote({
+      status: 'Submitted',
+      authorDisplayName: worker.displayName,
+      isMine: true,
+      firstSubmittedAtUtc: midday,
+    }),
+  };
+  const listed = [jane, ravi, alexMorgan, kim, mia, lee];
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, listed, (id) => notes[id] ?? null);
+  await page.goto('/');
+  await expect(rows(page)).toHaveText([
+    'Jane Citizen',
+    'Ravi de Silva',
+    'Alex Morgan',
+    'Kim Nguyen',
+    'Mia Patel',
+    'Lee Walker',
+  ]);
+
+  // Each line as it shows, and as its row link's description, each dot read as a comma, which Chromium's reckoning of
+  // the description puts after a space between the spans; none for a row with no note.
+  const lines = {
+    'Jane Citizen': ['Draft · You · saved 9:42 am', /^Draft ?, You ?, saved 9:42\sam$/],
+    'Ravi de Silva': ['Draft · Alex P. · started 9:14 am', /^Draft ?, Alex P\. ?, started 9:14\sam$/],
+    'Kim Nguyen': ['Submitted · Alex P. · 4:12 pm Flagged', /^Submitted ?, Alex P\. ?, 4:12\spm ?, Flagged$/],
+    'Mia Patel': ['Submitted · You · 4:12 pm', /^Submitted ?, You ?, 4:12\spm$/],
+    'Lee Walker': ['Submitted · You · midday', /^Submitted ?, You ?, midday$/],
+  } as const;
+  for (const [name, [shown, described]] of Object.entries(lines)) {
+    await expect.poll(() => shownText(rowLine(page, name)), name).toBe(shown);
+    await expect(row(page, name)).toHaveAccessibleDescription(described);
+  }
+  await expect(rowLine(page, 'Alex Morgan')).toHaveCount(0);
+  await expect(flagged(page)).toHaveCount(1);
+  await expect(rowLine(page, 'Kim Nguyen').getByText('Flagged', { exact: true })).toBeVisible();
+
+  // The status word bold; each time in a <time>, with its non-breaking space, and 12:00 as "midday"; and the <h1>'s
+  // date with one between the day and the month.
+  await expect(rowLine(page, 'Jane Citizen').getByText('Draft', { exact: true })).toHaveCSS('font-weight', '700');
+  await expect(rowLine(page, 'Jane Citizen').locator('time')).toHaveAttribute('datetime', at942);
+  expect(await rowLine(page, 'Jane Citizen').locator('time').textContent()).toBe('9:42 am');
+  await expect(rowLine(page, 'Kim Nguyen').locator('time')).toHaveAttribute('datetime', at412);
+  expect(await rowLine(page, 'Lee Walker').locator('time').textContent()).toBe('midday');
+  expect(await heading(page).locator('time').textContent()).toBe('Thursday 1 October');
+  await expectAxeToPass(page);
+
+  // "Alex" matches the participant named Alex, never a row only because Alex P. wrote its note.
+  await findField(page).fill('Alex');
+  await expect(rows(page)).toHaveText(['Alex Morgan']);
+  await expectNothingKept(page, 'Alex', 'Jane', 'Kim', 'Mia', 'Lee', 'Ravi');
+});
+
+test('after Submit, the banner before the <h1> is focused, the row Submitted from the fresh list, then gone', async ({
+  page,
+}) => {
+  const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, store.todayNotes(worker));
+  await store.serve(page, worker);
+  await page.goto('/');
+  await row(page, 'Jane Citizen').click();
+  const notesBox = main(page).getByRole('textbox', { name: '3. Guided notes' });
+  await notesBox.pressSequentially('Went to the shops.');
+  await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
+  await main(page).getByRole('button', { name: 'Submit note', exact: true }).click();
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog.getByRole('heading', { level: 2 })).toBeFocused();
+
+  // Confirmed, with the next list held: Today, popped to, with the banner focused before the <h1> and no row until the
+  // server's list answers, so no row built from before ever says Draft.
+  const heldList = await holdNext(page, '**/api/today');
+  await dialog.getByRole('button', { name: 'Submit note for Jane Citizen' }).click();
+  const list = await heldList();
+  await expect(page).toHaveURL('/');
+  await expect(banner(page)).toBeFocused();
+  await expect(banner(page)).toHaveText('Note for Jane Citizen submitted');
+  await expect(banner(page)).not.toHaveAttribute('role');
+  await expect(banner(page)).not.toHaveAttribute('aria-live');
+  expect(
+    await banner(page).evaluate((element) => {
+      const h1 = document.querySelector('main h1');
+      return h1 !== null && (element.compareDocumentPosition(h1) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    }),
+    'the banner before the <h1>',
+  ).toBe(true);
+  await expect(rows(page)).toHaveCount(0);
+  await expectAxeToPass(page);
+  await list.fallback();
+  await expect.poll(() => shownText(rowLine(page, 'Jane Citizen'))).toBe('Submitted · You · 4:12 pm');
+  await expect(rowLine(page, 'Jane Citizen')).not.toContainText('Draft');
+  await expect(banner(page)).toBeFocused();
+  await expectAxeToPass(page);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', 'submitted');
+
+  // Gone after leaving Today, by the row, which opens the read view now, and coming back by its back link.
+  await row(page, 'Jane Citizen').click();
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await backLink(page).click();
+  await expect(row(page, 'Jane Citizen')).toBeFocused();
+  await expect(banner(page)).toHaveCount(0);
+
+  // Opened by its address rather than from Today, the form is put in Today's place: Back never reopens it.
+  await page.goto(`/participants/${ravi.id}/notes/${worker.today}`);
+  await notesBox.pressSequentially('Read the paper.');
+  await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
+  const entries = await page.evaluate(() => history.length);
+  await main(page).getByRole('button', { name: 'Submit note', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Submit note for Ravi de Silva' }).click();
+  await expect(page).toHaveURL('/');
+  await expect(banner(page)).toBeFocused();
+  await expect(banner(page)).toHaveText('Note for Ravi de Silva submitted');
+  expect(await page.evaluate(() => history.length)).toBe(entries);
+  await page.reload();
+  await expect(rows(page)).toHaveCount(2);
+  await expect(banner(page)).toHaveCount(0);
+  await expectNothingKept(page, 'Jane', 'Ravi', 'Read the paper', 'submitted');
+});
+
+test('at 320 px with text at 200%, the status lines wrap inside their rows and Flagged drops to its own line', async ({
+  page,
+}) => {
+  const longAuthor = 'W'.repeat(100);
+  const notes: Record<string, TodayNote> = {
+    [jane.id]: todayNote({
+      status: 'Submitted',
+      authorDisplayName: longAuthor,
+      firstSubmittedAtUtc: at412,
+      isFlagged: true,
+    }),
+    [ravi.id]: todayNote({ status: 'Submitted', isMine: true, firstSubmittedAtUtc: at412, isFlagged: true }),
+  };
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, (id) => notes[id] ?? null);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await setTextTo200Percent(page);
+  await expect(flagged(page)).toHaveCount(2);
+  expect(await scrollsSideways(page), 'status lines with an author of 100 letters and no space').toBe(false);
+  for (const name of ['Jane Citizen', 'Ravi de Silva']) {
+    const time = await boxOf(rowLine(page, name).locator('time'));
+    const tag = await boxOf(rowLine(page, name).getByText('Flagged', { exact: true }));
+    const line = await boxOf(rowLine(page, name));
+    expect(tag.y, `${name}'s tag under the time`).toBeGreaterThanOrEqual(time.y + time.height - 1);
+    expect(Math.round(tag.x), `${name}'s tag at the start of its line`).toBe(Math.round(line.x));
+    expect(line.x + line.width, `${name}'s line inside the page`).toBeLessThanOrEqual(320);
+  }
+});
+
+test('in forced colours, the Flagged tag keeps its border, in the text colour', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  const notes: Record<string, TodayNote> = {
+    [jane.id]: todayNote({ status: 'Submitted', firstSubmittedAtUtc: at412, isFlagged: true }),
+  };
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, (id) => notes[id] ?? null);
+  await page.goto('/');
+  const canvasText = await systemColour(page, 'CanvasText');
+  await expect(flagged(page)).toHaveCSS('border-top-style', 'solid');
+  await expect(flagged(page)).toHaveCSS('border-top-color', canvasText);
+  expect(parseFloat(await flagged(page).evaluate((tag) => getComputedStyle(tag).borderTopWidth))).toBeGreaterThan(0);
+});

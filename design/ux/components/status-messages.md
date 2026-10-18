@@ -191,6 +191,12 @@ Times use the shared Melbourne formatter (`Intl.DateTimeFormat('en-AU', { timeZo
 
 No React Aria is needed: a `div`, a `p`, a native `button` and one `role="status"` are enough. Do not use React Aria's `UNSTABLE_Toast`.
 
+**The success banner is built** (T09, for Submit's on Today) as a success tone of `Notice`, `tone="success"`, not a
+second component: a tick in place of the "i", its bar, border and tick in `--colour-success` on
+`--colour-success-tint`, its sentence bold, `tabindex="-1"` and `data-route-focus`, which the shell focuses on every
+arrival, a pop included, and no role or live region; it keeps `--space-4` before the `<h1>` as its own margin. Today
+reads it from `messageStore` once, as it mounts, and empties the store at once.
+
 **The notice is built** (T02, for the archived participant): `Notice` in `src/components/Notice.tsx`, the sketch's
 `Banner` with the notice tone alone. It takes the words, an optional `action` (the archived notice's Restore, with its
 always-rendered `role="alert"` above it, together one item of the line, so that the alert stays above the button) and

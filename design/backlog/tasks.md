@@ -3098,7 +3098,7 @@ past notes.
   `409 note.version_conflict` in place of the `500` that EF Core's `DbUpdateConcurrencyException` gives an autosave that
   read the author's working copy before a submit deleted it), T11, T12 (`['me', 'drafts']` removed after Submit, and a
   draft's `GET {base}`), T13 (the 375 px phone check again, F02.03's feature check), T14, T16, T18 and T21.
-- By-hand checks for ops/first-use-in-test.md, in a section of their own after T08's: the operator running
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T07's: the operator running
   `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming `DENY UPDATE` and `DELETE` on
   `NoteVersion` and `NoteVersionItem`, and B7 and B8 listing them and `AddNoteVersion`; on a phone at 375 px, a worker
   filling in and submitting a note (S02.03.01's manual check, §14 M2), which only a person can prove, so the criterion
@@ -3219,6 +3219,17 @@ past notes.
   tests already written stay true, `note-form.spec.ts`'s and `participants.spec.ts`'s Tab orders include Past notes,
   and `participants.spec.ts` finds it alone in an archived participant's Actions; step 8 adds Past notes' own
   end-to-end checks.
+- Where the design is silent (step 8), the simplest options: `tests/e2e/notes.ts` answers Submit with step 3's checks in
+  their order, `GET {base}` and the history as steps 6 and 7 give them, and Today's `note` through `todayNotes(me)`,
+  read as each list is answered; `loseNextSubmitAnswer()` keeps the version that the next Submit makes and aborts its
+  answer, for the retry with the same key; and `holdNext` takes a test of the URL, as a glob cannot tell Show older's
+  request from the first page's. Chromium's own reckoning of a description puts a space before each comma that `Pause`
+  reads for a dot, where Testing Library's puts none, so the end-to-end checks of a row's description allow one. axe's
+  target-size rule counts only the part of a target that the sticky top bar leaves uncovered, and the bar covers part of
+  the Past notes link at some scroll positions, as any sticky bar covers what passes under it, so the dead end's axe
+  check after a press of Submit note, which scrolls the page, starts from the top. The by-hand checks are steps 53 to 55
+  of ops/first-use-in-test.md, after T07's 50 to 52, which merged first, in merge order. Show older's screen-reader
+  reading waits there for a participant with more than 30 notes, as test has none yet.
 
 ### Steps
 
@@ -3377,7 +3388,7 @@ past notes.
       75th opened and Back showing all 90 at once with the scroll kept and focus on the 75th; Past notes from a note
       starting at the newest 30, at the top, with the `<h1>` focused; the read view the same from Today and from Past
       notes but for the back link; and an archived participant's Actions holding Past notes.
-- [ ] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
+- [x] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
       `tests/e2e/notes.ts` and `tests/e2e/today.ts` answer `GET {base}`, `POST {base}/versions`, the history, the flag
       and Today's `note` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and a
       new `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: the worker fills
@@ -3463,6 +3474,13 @@ older page is told the note has moved on, and nothing is overwritten without ask
   change or blur sends it. The note form registers no leave guard: this task registers T03's, which lets the person
   leave once a dead end has stopped autosave (`DeadEnd` in useAutosave.ts), as note-form.md item 18 never blocks
   leaving.
+- From T09 (19 October 2026): note-form.md item 25's press of Submit note during "Not saved", which opens nothing and
+  says the indicator's text in the page's polite region, waits for this task's "Not saved" (S02.03.01's dated Note); a
+  press during a dead end already does so. The leave guard covers the form's Past notes link, under its `<h1>`, as it
+  covers the back link. An autosave that read the author's working copy before a submit deleted it fails with EF Core's
+  `DbUpdateConcurrencyException`, a `500`: this task answers it `409 note.version_conflict`, as `PUT {base}/draft`
+  answers a submitted note on which the caller has no working copy. Submit's `checkSave()`, `stop()`, `resume()` and
+  `end()` are in `useAutosave` (autosave-status.md).
 
 ### Steps
 
@@ -3496,6 +3514,11 @@ the reason and when it was flagged. Only submitted flags count.
 
 - Starts the one flag-rules table test that T16 adds to. "Oldest first" means the flag time. The menu badge comes with
   T19.
+- From T09 (19 October 2026): Submit leaves `Note.FlagStatus` and `FlaggedVersionNumber` as they are: §5.8 step 5's flag
+  rules, the `201`'s `flagStatus` and the `refreshMe()` after it (note-form.md *After a successful submit* step 2) are
+  this task's (S03.01.01). The read view's back link takes its label from `useBackTo` (src/routes/routeChange.ts), with
+  Today as the default: this task adds "Flagged". `Tag` (src/components) has the Flagged kind, and a manager's Past
+  notes rows carry `flagStatus` already.
 
 ### Steps
 
@@ -3539,6 +3562,12 @@ manager can read it.
   then takes the drafts query beside `['today', me.today]`. A manager who opens another person's draft sees the
   worker's in-progress sentence (`Loaded` in NotePage.tsx) until this task gives managers the read-only draft with
   Discard draft (S02.04.03).
+- From T09 (19 October 2026): after Submit the form removes `['today']` alone; this task removes `['me', 'drafts']` too
+  (note-form.md *After a successful submit*). `GET {base}` answers `{status}` for a draft; this task adds the header's
+  `authorDisplayName` and `startedAtUtc`, and a manager's content in the `current` shape (design.md §6.3, S02.04.03).
+  `LiveNote` (Features/Notes) is the live-note query and its in-progress rule, which the draft, note, version and
+  history endpoints share. A draft submitted after midnight keeps its note date already (T09's test on a `TestClock`);
+  S02.03.03's `isPastDayNote` comes with T18.
 
 ### Steps
 
@@ -3594,6 +3623,13 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   and a restored one is offered again with its active items (S02.05.02's first specific criterion: only active groups
   with at least one active item are offered); existing notes keep their snapshot (A3, §5.7); and a group that changes
   before the first save is S02.05.04's. T07 proves the list and API parts.
+- From T09 (19 October 2026): F02.03's feature check repeats the 375 px phone check once F02.05 is done, with common
+  items and a group picked (ops/first-use-in-test.md step 54, S02.03.01's manual check). `NoteVersionItem.GroupPosition`
+  gets its foreign key to `NoteVersionGroup`, which this task adds (S02.05.01); until then no version row holds a common
+  item. `POST {base}/versions` gains `pickedGroupIds` and `tickedCommonItemIds`, which Submit's body, built by
+  `sentContent` (useAutosave.ts) as autosave's is, then sends, and `GET {base}` `current.commonItemGroups`;
+  `TickListRead` gains `headingLevel`, and the read view "2. Common items" between "1. Goals" and "3. Guided notes", as
+  the form does.
 
 ### Steps
 
@@ -3633,6 +3669,14 @@ and shown the newer version, so nothing is silently overwritten.
 - From T08 (18 October 2026): `GET` and `PUT {base}/draft` answer `404` for a submitted note on which the caller has no
   working copy; this task gives the working copy from the current version there, and adds `baseVersion` to the `PUT`'s
   body (design.md §6.3).
+- From T09 (19 October 2026): `GET {base}` gains `author.id`, `isEdited`, `lastEdit` and `current.versionNumber`, and
+  the history's rows `currentVersionNumber` and `isEdited` (design.md §6.3), with the read view's Edit, first in its
+  action row, and the Edited kind of `Tag`. `POST {base}/versions` holds `baseVersion` to 0 with `[Range(0, 0)]`: this
+  task takes a later one, and gives `409 note.version_conflict` the extensions that its notice reads. `PUT {base}/draft`
+  answers `409 note.version_conflict` for a submitted note on which the caller has no working copy, and `GET
+  {base}/draft` `404`: this task builds pending edits there, checking who may edit before the base, so that a worker who
+  is not the author gets `403 note.not_editable` at any base, 0 included, and decides what the form shows for that `403`
+  at a save.
 
 ### Steps
 
@@ -3712,6 +3756,9 @@ or changes its reason sends the note back to To review; removing the tick never 
 
 - Adds its rows to T11's flag-rules table test.
 - Runs before T18, because both change the read view and the version-saving code.
+- From T09 (19 October 2026): `GET {base}` gains a manager's `flagStatus` and `reviews`. A manager's Past notes rows
+  carry `flagStatus` already, which `PastNote` (pastNotesQuery.ts) leaves out until this task reads it for the To review
+  and Reviewed kinds of `Tag` (participant-notes.md item 10).
 
 ### Steps
 
@@ -3796,6 +3843,12 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 - From T08 (18 October 2026): a manager's first `PUT {base}/draft` for a day before today already creates the note,
   with them as its author (design.md §5.5 item 4), and the form shows no notice for it: §4.3 item 2's past-day banner
   is this task's, which S02.02.02 waits for (its dated Note).
+- From T09 (19 October 2026): participant-notes.md item 11's Write past-day note on a manager's Past notes, never for an
+  archived participant, waits for this task (S02.04.02's fourth criterion, its dated Note). `GET {base}` gains
+  `isPastDayNote` and `versionCount`, and the read view its past-day line, Version history between T14's Edit and Past
+  notes in its action row, and the Past-day note kind of `Tag`; the form's back link gains "Participant" through
+  `useBackTo`. The `201` of `POST {base}/versions` names no `Location`, as a version's own address, a manager's, comes
+  with this task.
 
 ### Steps
 
@@ -3837,6 +3890,8 @@ each screen change or window focus with no polling, and the badge and the (n) bo
 - A build check fails on any SMS or push package, or any email sender other than the setup link. The F03.03 end-to-end
   flow runs in CI.
 - Reuses T02's focus and scroll map.
+- From T09 (19 October 2026): the paged list with Show older is `ChronoList` (src/components), built in its paged mode
+  with its tests; the Reviewed list reuses it.
 
 ### Steps
 
@@ -3918,6 +3973,9 @@ choose, to answer an access or correction request. The form says what to fix and
 - A To date after today is accepted as sent (design.md A60, answering the plan's question 4).
 - From T08 (18 October 2026): `GET /api/participants/{participantId}` answers `{id, givenName, familyName, status}`;
   this task adds `firstNoteDate` (D80), the record export's default From date.
+- From T09 (19 October 2026): participant-notes.md item 11's Export record on a manager's Past notes, before Edit
+  participant (S02.04.02's fourth criterion), and an archived participant's Export record, after Past notes in its
+  Actions (S01.02.04), wait for this task, each with its dated Note.
 
 ### Steps
 
