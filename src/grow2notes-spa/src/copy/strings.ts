@@ -368,6 +368,18 @@ export const strings = {
    */
   today: { participantsHeading: 'Participants' },
   /**
+   * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
+   * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
+   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows.
+   */
+  note: {
+    loading: 'Loading note…',
+    theNote: 'The note',
+    goals: '1. Goals',
+    goalsHint: 'Ticked means reached.',
+    guidedNotes: '3. Guided notes',
+  },
+  /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
    * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above
    * Save, a save refused as stale (`412`), the typed details kept.

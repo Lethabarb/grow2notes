@@ -2,6 +2,7 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Features.Today;
 using Grow2Notes.Web.Features.Users;
@@ -200,6 +201,11 @@ builder.Services.AddPolicies();
 // Antiforgery, whose token the /api group's filter checks on every request that changes something (design.md §9.8).
 builder.Services.AddApiGroup();
 
+// A note's address names its date as yyyy-MM-dd (design.md §6.1), and an address with any other gets the unknown
+// path's 404.
+builder.Services.Configure<RouteOptions>(
+    options => options.SetParameterPolicy<IsoDateRouteConstraint>(IsoDateRouteConstraint.Name));
+
 // The tenant of each request or operator command: the signed-in user's organisation, or the one that sign-in, setup
 // and the commands set from what they have loaded (design.md §5.9). It reads the user from the request's HttpContext.
 builder.Services.AddHttpContextAccessor();
@@ -248,6 +254,9 @@ builder.Services.AddScoped<GoalList>();
 builder.Services.AddScoped<GoalChanges>();
 builder.Services.AddScoped<CommonItemGroupList>();
 builder.Services.AddScoped<CommonItemChanges>();
+
+// The note handler class, one per scope for the same reason.
+builder.Services.AddScoped<NoteDrafts>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, those of the
 // invite, the reset or the new security stamps it makes, and its audit events share the scope's context, and so the one
@@ -354,7 +363,9 @@ var api = app.MapApiGroup()
     .MapPasskeySignInEndpoint()
     .MapPasswordSignInEndpoint()
     .MapTotpSignInEndpoint()
-    .MapTodayEndpoint();
+    .MapTodayEndpoint()
+    .MapParticipantHeaderEndpoint()
+    .MapNoteDraftEndpoints();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()

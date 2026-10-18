@@ -13,6 +13,13 @@ internal sealed class ErrorCode
     /// <summary>The problem details extension member that holds the code (design.md §6.1).</summary>
     public const string Extension = "code";
 
+    /// <summary>
+    /// Another user started this participant's note for that day (§3.2), and only they can open or save its draft
+    /// (§6.3). It includes <c>{authorDisplayName, startedAtUtc}</c>.
+    /// </summary>
+    public static readonly ErrorCode InProgressByOther =
+        new(StatusCodes.Status409Conflict, "note.in_progress_by_other");
+
     /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 
@@ -68,6 +75,13 @@ internal sealed class ErrorCode
     public string Code { get; }
 
     /// <summary>Answers this code: problem details with its status, and the code in their <c>code</c> member.</summary>
-    public ProblemHttpResult Problem() =>
-        TypedResults.Problem(statusCode: Status, extensions: new Dictionary<string, object?> { [Extension] = Code });
+    public ProblemHttpResult Problem() => Problem(new Dictionary<string, object?>());
+
+    /// <summary>
+    /// Answers this code with the members that design.md §6.9 says it includes beside the code, such as
+    /// <see cref="InProgressByOther"/>'s author and start time, each named as the API's JSON names it.
+    /// </summary>
+    public ProblemHttpResult Problem(IReadOnlyDictionary<string, object?> includes) =>
+        TypedResults.Problem(
+            statusCode: Status, extensions: new Dictionary<string, object?>(includes) { [Extension] = Code });
 }

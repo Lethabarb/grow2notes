@@ -2,6 +2,7 @@ import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
+import { NotePage } from '../features/notes/NotePage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
@@ -89,6 +90,11 @@ export const routes: AppRoute[] = [
             index: true,
             element: <TodayPage />,
             handle: { pageName: pageName.today, returnFocus: {}, backKey: 'today' },
+          },
+          {
+            path: 'participants/:participantId/notes/:noteDate',
+            element: <NotePage />,
+            handle: { pageName: pageName.note },
           },
           // Every manager screen goes in here.
           {

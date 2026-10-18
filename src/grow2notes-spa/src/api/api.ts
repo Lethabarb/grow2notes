@@ -4,6 +4,12 @@ import { holdWhile, requestAccepted, sessionEnded, signedIn, signInCount } from 
 export type FieldErrors = Readonly<Record<string, readonly string[]>>;
 
 /**
+ * Another user's draft, as `409 note.in_progress_by_other` includes it (design.md §6.9): the author's display name,
+ * and when they started it, in UTC.
+ */
+export type StartedBy = { authorDisplayName: string; startedAtUtc: string };
+
+/**
  * A request that got no whole answer, with status `0`, or an answer that was not `2xx`, with its status and what its
  * problem details (design.md §6.1, §6.9) say.
  */
@@ -14,12 +20,15 @@ export class ApiError extends Error {
   readonly code: string | undefined;
   /** A `422`'s field errors, which a form shows on its fields (form-validation.md *Server responses*). */
   readonly errors: FieldErrors | undefined;
+  /** A `409 note.in_progress_by_other`'s author and start time, which the note form shows. */
+  readonly startedBy: StartedBy | undefined;
 
-  constructor(status: number, code?: string, errors?: FieldErrors) {
+  constructor(status: number, code?: string, errors?: FieldErrors, startedBy?: StartedBy) {
     super(code ?? `HTTP ${status}`);
     this.status = status;
     this.code = code;
     this.errors = errors;
+    this.startedBy = startedBy;
   }
 }
 
@@ -308,7 +317,8 @@ function endsSession(path: string): boolean {
   return !/^\/api\/auth\/(?:login|passkey|setup\/)/.test(path) && path !== '/api/auth/logout';
 }
 
-// The problem's code, when it is a string, and a 422's field errors; a body that is not JSON gives neither.
+// The problem's code, when it is a string, a 422's field errors, and what a 409 note.in_progress_by_other includes; a
+// body that is not JSON gives none of them.
 function failure(status: number, text: string): ApiError {
   let problem: unknown;
   try {
@@ -321,11 +331,19 @@ function failure(status: number, text: string): ApiError {
     return new ApiError(status);
   }
 
-  const { code, errors } = problem as { code?: unknown; errors?: unknown };
+  const { code, errors, authorDisplayName, startedAtUtc } = problem as {
+    code?: unknown;
+    errors?: unknown;
+    authorDisplayName?: unknown;
+    startedAtUtc?: unknown;
+  };
   return new ApiError(
     status,
     typeof code === 'string' ? code : undefined,
     status === 422 && isFieldErrors(errors) ? errors : undefined,
+    code === 'note.in_progress_by_other' && typeof authorDisplayName === 'string' && typeof startedAtUtc === 'string'
+      ? { authorDisplayName, startedAtUtc }
+      : undefined,
   );
 }
 

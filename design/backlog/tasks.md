@@ -2388,6 +2388,18 @@ lets workers write only today's note, using the Melbourne date.
   day's included, where the box leaves while that day's list loads, as the *Midnight rollover* state has it, and comes
   back holding the text over the new list; and `FindParticipant` takes a `className`, as `Button` does, for Today's
   `--space-4` between the field and the list.
+- Where the design is silent (step 4), the simplest options: the header's query is `['participant', participantId]`
+  and the form's `['noteDraft', participantId, noteDate]`, as note-identity-header.md sketches them, each with
+  `staleTime: Infinity` and `gcTime: 0`, so that each visit to the form fetches both afresh and nothing fetches either
+  again while it is open; the date in a note's address is checked by an `isodate` route constraint, so that a date that
+  does not exist, such as 2026-02-30, gets the unknown path's `404` too; the before-main bar slot lays out no box of
+  its own (`display: contents`, and still not shown while empty), so that the note's top bar, its one child, sticks
+  for the whole page, where the slot's own box would hold it to its height; `TickListField` takes a `className`, as
+  `FindParticipant` does, for the form's `--section-gap`; the fields are in no `<form>` until T09 adds Submit with the
+  form's `noValidate`; the in-progress sentence gives the start time through `stamp()` with the note date as its
+  reference day (microcopy.md §3), so that a draft started on its own date reads "at 9:14 am" and a manager's
+  past-day draft started later reads its date too; and `GET {base}/draft` answers `404` for a submitted note on which
+  the caller has no working copy, which T14 gives from the current version instead, as no note is submitted before T09.
 
 ### Steps
 
@@ -2451,7 +2463,7 @@ lets workers write only today's note, using the Melbourne date.
       that holds it; no request while typing; Clear emptying the field with focus kept in it; Enter and Escape
       changing nothing; no search box in each of the four states; and the text in no URL, `history.state`, title,
       query key or storage, and gone after leaving Today and coming back.
-- [ ] Open today's note (S02.02.02's criteria on `GET /api/participants/{participantId}` and `GET {base}/draft` and
+- [x] Open today's note (S02.02.02's criteria on `GET /api/participants/{participantId}` and `GET {base}/draft` and
       their matrix rows, its *Routes* and *Loading and load errors* criteria and identity items 1, 2, 3 and 6;
       S02.02.03's first and last criteria; S02.02.07's `GET {base}/draft` by anyone but the author; guide-prompts.md
       › *Effect on the note form*; T03's hand-offs (1) and (3) in S02.02.02's Notes; today.md's and app-shell.md's

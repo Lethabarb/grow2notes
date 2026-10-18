@@ -114,3 +114,9 @@ describe("a list row's Save refused as stale (list-editor.md *Request errors*)",
     );
   });
 });
+
+describe('the note form with no goals (design.md §4.3)', () => {
+  it("says so with the participant's given name, as design.md writes it", () => {
+    expect(msg.noGoalsSetUp('Jane')).toBe('No goals set up for Jane yet. A manager can add them.');
+  });
+});

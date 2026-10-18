@@ -29,6 +29,11 @@ export const msg = {
    * with the text as typed, its ends trimmed, in typographic quotes.
    */
   noParticipantMatches: (typed: string) => `No participant matches ‘${typed}’.`,
+  /**
+   * In place of Goals' tick boxes on a new note or a draft of a participant with no goals (design.md §4.3), with their
+   * given name, as design.md writes it.
+   */
+  noGoalsSetUp: (givenName: string) => `No goals set up for ${givenName} yet. A manager can add them.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */

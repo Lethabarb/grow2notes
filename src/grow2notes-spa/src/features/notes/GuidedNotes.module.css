@@ -1,0 +1,4 @@
+/* A section of the note form, after Goals (note-form.md *Layout - phone*). */
+.section {
+  margin-block-start: var(--section-gap);
+}

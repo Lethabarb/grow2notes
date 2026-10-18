@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -121,6 +122,18 @@ internal static class EndpointMatrix
         new(Get,       "/api/today",             Unauthorized, OK,     OK,         OK,
             Answer: HoldsTheCallersOwnSeeded(
                 "participant", organisation => [organisation.ParticipantId], listedIn: "participants")),
+
+        // A participant's header (§6.3), for every signed-in user, at A's seeded participant, whom B's manager does not
+        // find (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}", Unauthorized, OK, OK, NotFound,
+            call => Task.FromResult(
+                new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}"))),
+
+        // The note form (§6.3), for every signed-in user, at A's seeded participant's note for today, which no test
+        // starts (tests/README.md), so each of A's users gets the template and opening it writes nothing (§3.3). B's
+        // manager does not find the participant (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, OK, OK,
+            NotFound, TodaysNoteFormOfTheSeededParticipantOfA),
 
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
@@ -299,6 +312,15 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // A's seeded participant's note form for today in Melbourne, by the app's own clock.
+    private static Task<HttpRequestMessage> TodaysNoteFormOfTheSeededParticipantOfA(EndpointCall call)
+    {
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today()
+            .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return Task.FromResult(new HttpRequestMessage(
+            call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}/notes/{today}/draft"));
+    }
 
     // An invite of a worker with a made-up address (A35) that no other call or test uses.
     private static Task<HttpRequestMessage> AnInviteOfANewAddress(EndpointCall call) =>

@@ -1,0 +1,32 @@
+/*
+ * The save status at the end of the top bar (note-form.md component 1): small, in the secondary colour, its figures one
+ * width, and wrapping rather than cut short.
+ */
+.saveStatus {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* The name as stored, never upper-cased or cut short, wrapping however long, and never hyphenated (component 3). */
+.name {
+  display: block;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  text-wrap: balance;
+}
+
+/* The heading's last line, in body type and the text's own colour, as the date is part of the right-day check. */
+.date {
+  display: block;
+  margin-block-start: var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: 400;
+}
+
+/* Before each section of the form (note-form.md *Layout - phone*). */
+.section {
+  margin-block-start: var(--section-gap);
+}

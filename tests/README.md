@@ -672,10 +672,14 @@ acts in A and checks that nothing of B's reaches it.
   database of its own from `SqlServerFixture.CreateDatabaseAsync`, as a test that runs `admin signout-all` must,
   since it gives every user a new security stamp, the seeded users' too
   (`Grow2Notes.Tests/Platform/OperatorCommands/SignOutAllCommandTests.cs`). Likewise no test archives, restores or
-  changes a seeded participant: it adds one of its own, Jane Citizen, with `services.AddParticipantAsync(organisation)`
-  (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
-  and their ETag, the `If-Match` of a change to them, as
-  `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
+  changes a seeded participant, or starts a note for one, whose form the endpoint matrix opens: it adds one of its own,
+  Jane Citizen, with `services.AddParticipantAsync(organisation)` (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`),
+  active, or archived with `archived: true`, which gives their ID and their ETag, the `If-Match` of a change to them,
+  as `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does. A test that needs a draft of a
+  note adds it, as a first save leaves one, with `services.AddDraftAsync(organisation, new TestDraft(…))`
+  (`Grow2Notes.Tests/Fixtures/TestNotes.cs`), and one that needs another author or reader than the seeded users adds
+  an Active user with `services.AddUserAsync(organisation, role, displayName)`
+  (`Grow2Notes.Tests/Fixtures/TestUsers.cs`), as `Grow2Notes.Tests/Features/Notes/NoteDraftEndpointsTests.cs` does.
 - No test changes a seeded Every note group either, which the groups list's tests and its matrix row read as
   bootstrap leaves it (*The endpoint matrix*). A test adds groups and items of its own straight through the app's
   context, as no endpoint adds a group until T07, with `TestCommonItems`
