@@ -50,7 +50,7 @@ export const msg = {
    * (participants.md *States*, list-editor.md *Request errors*).
    */
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
-  /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
+  /** A list's Add goal or Add item, or Add group, that failed, in the alert above it (list-editor.md). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),
   /** A list row's Move up or Move down that failed, in the row's alert above its buttons (list-editor.md). */
   notMoved: (cause: Cause): string => msg.notDone('moved', cause),

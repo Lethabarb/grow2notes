@@ -13,3 +13,18 @@
   max-inline-size: var(--measure);
   color: var(--colour-text-secondary);
 }
+
+/* The New group form, a section's gap after the last group's section (common-items.md component 7). */
+.newGroup {
+  margin-block-start: var(--section-gap);
+}
+
+/*
+ * Add group takes its label's width, at least 44 px wide, on a phone and a laptop alike: neither the shared button's
+ * full width below 40rem nor its 8rem minimum from there (common-items.md *Conflicts resolved* 6 and 17). Two classes,
+ * so that it outranks the shared rule whichever stylesheet comes first.
+ */
+.newGroup .addGroup {
+  inline-size: auto;
+  min-inline-size: var(--target-min);
+}

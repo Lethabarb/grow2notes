@@ -82,6 +82,10 @@ const rowStops = (text: string) =>
   (['Move up', 'Move down', 'Edit', 'Archive'] as const).map((label) => rowName(label, text));
 /** An archived items summary's focus stop: its words, then " in [group name]", hidden but for screen readers. */
 const summaryStop = (group: string) => `Archived items in ${group}`;
+/** The New group form's focus stops, after the last group's section (common-items.md *Focus order*). */
+const newGroupStops = ['New group', 'Add group'];
+/** The same, the other way round, as Shift+Tab reaches them. */
+const newGroupStopsBack = [...newGroupStops].reverse();
 const newItem = (page: Page, group: string) =>
   section(page, group).getByRole('textbox', { name: `New item in ${group}`, exact: true });
 const addItem = (page: Page, group: string) =>
@@ -315,10 +319,11 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toBeFocused();
     await expect(section(page, 'Every note').getByText(emptyLine, { exact: true })).toBeVisible();
 
-    // Every note with no items: its add form alone, after the nav (common-items.md *Focus order*).
+    // Every note with no items: its add form alone, after the nav, then the New group form (common-items.md *Focus
+    // order*).
     const addForm = ['New item in Every note', 'Add item'];
-    await expectStops(page, 'Tab', [...addForm, 'outside the page']);
-    await expectStops(page, 'Shift+Tab', ['Add item', 'New item in Every note', 'Manage']);
+    await expectStops(page, 'Tab', [...addForm, ...newGroupStops, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [...newGroupStopsBack, 'Add item', 'New item in Every note', 'Manage']);
     await expectStops(page, 'Tab', ['New item in Every note']);
 
     // Three items, each typed into New item in Every note and added with Enter on Add item, which leaves focus in the
@@ -340,11 +345,16 @@ for (const width of [375, 1280]) {
     // Each item row's Move up, Move down, Edit and Archive, the end ones unavailable but there, then the add form.
     const rows = [...rowStops(first), ...rowStops(second), ...rowStops(third)];
     await expectStops(page, 'Shift+Tab', [...[...rows].reverse(), 'Manage']);
-    await expectStops(page, 'Tab', [...rows, ...addForm, 'outside the page']);
+    await expectStops(page, 'Tab', [...rows, ...addForm, ...newGroupStops, 'outside the page']);
 
     // The third's Edit: its row becomes the form, Edit item, Save and Cancel in its place, focus in the box with the
     // caret after the words, so that what is typed goes on the end.
-    await expectStops(page, 'Shift+Tab', ['Add item', 'New item in Every note', ...rowStops(third).slice(2).reverse()]);
+    await expectStops(page, 'Shift+Tab', [
+      ...newGroupStopsBack,
+      'Add item',
+      'New item in Every note',
+      ...rowStops(third).slice(2).reverse(),
+    ]);
     await page.keyboard.press('Enter');
     await expect(editItem(page)).toBeFocused();
     await expectStops(page, 'Tab', ['Save', 'Cancel', ...addForm]);
@@ -378,7 +388,7 @@ for (const width of [375, 1280]) {
     await expect(itemButton(page, 'Move down', first)).toBeFocused();
 
     // The third archived from its row: Archived items opens, with focus on its Restore, which comes after the summary,
-    // last on the page while the section is open.
+    // last in the group's section while the section is open, before the New group form.
     await expectStops(page, 'Tab', [...rowStops(first).slice(2), ...rowStops(thirdReworded)]);
     const archived = page.waitForResponse(isItemWrite('POST', `/common-items/${ids[2]}/archive`));
     await page.keyboard.press('Enter');
@@ -386,15 +396,20 @@ for (const width of [375, 1280]) {
     await expect(itemButton(page, 'Restore', thirdReworded)).toBeFocused();
     await expect(archivedSection(page, 'Every note')).toHaveAttribute('open', '');
     const stops = [...rowStops(second), ...rowStops(first), ...addForm, summaryStop('Every note')];
-    await expectStops(page, 'Tab', ['outside the page']);
-    await expectStops(page, 'Shift+Tab', [rowName('Restore', thirdReworded), ...[...stops].reverse(), 'Manage']);
+    await expectStops(page, 'Tab', [...newGroupStops, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [
+      ...newGroupStopsBack,
+      rowName('Restore', thirdReworded),
+      ...[...stops].reverse(),
+      'Manage',
+    ]);
 
     // Enter on the summary closes it, and Tab then passes Restore by; Enter opens it again.
     await expectStops(page, 'Tab', stops);
     await page.keyboard.press('Enter');
     await expect(archivedSection(page, 'Every note')).not.toHaveAttribute('open');
-    await expectStops(page, 'Tab', ['outside the page']);
-    await expectStops(page, 'Shift+Tab', [summaryStop('Every note')]);
+    await expectStops(page, 'Tab', [...newGroupStops, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [...newGroupStopsBack, summaryStop('Every note')]);
     await page.keyboard.press('Enter');
     await expectStops(page, 'Tab', [rowName('Restore', thirdReworded)]);
 
@@ -405,7 +420,7 @@ for (const width of [375, 1280]) {
     await expect(itemTexts(page, 'Every note')).toHaveText([second, first, thirdReworded]);
     await expect(itemButton(page, 'Archive', thirdReworded)).toBeFocused();
     await expect(archivedSection(page, 'Every note')).toHaveCount(0);
-    await expectStops(page, 'Tab', [...addForm, 'outside the page']);
+    await expectStops(page, 'Tab', [...addForm, ...newGroupStops, 'outside the page']);
     await expectNothingKept(page, first, second, third, thirdReworded);
   });
 }
@@ -451,7 +466,7 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(itemTexts(page, 'Every note')).toHaveText([medication.text, meal.text]);
   await expect(itemTexts(page, 'Community outing')).toHaveText([busOrTrain.text, paid.text, lunch.text]);
   await expect(section(page, 'Personal care').getByText(emptyLine, { exact: true })).toBeVisible();
-  await expect(main(page).getByRole('button', { name: / group$/ })).toHaveCount(0);
+  await expect(main(page).getByRole('button', { name: /, .+ group$/ })).toHaveCount(0);
   for (const end of [
     itemButton(page, 'Move up', medication.text),
     itemButton(page, 'Move down', meal.text),
@@ -709,7 +724,8 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
   expect(new Set([highlight, grayText, canvasText, canvas, ring.colour]).size).toBe(5);
   const forcedRing = { ...ring, colour: highlight };
 
-  // Each group's stops in turn (common-items.md *Focus order*): its item rows, its add form, then its Archived items.
+  // Each group's stops in turn (common-items.md *Focus order*): its item rows, its add form, then its Archived items;
+  // then the New group form.
   const outingRows = [...rowStops(busOrTrain.text), ...rowStops(paid.text), ...rowStops(lunch.text)];
   await expectStops(
     page,
@@ -719,7 +735,9 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
       ...rowStops(meal.text),
       ...['New item in Every note', 'Add item', summaryStop('Every note')],
       ...outingRows,
-      ...['New item in Community outing', 'Add item', 'New item in Personal care', 'Add item', 'outside the page'],
+      ...['New item in Community outing', 'Add item', 'New item in Personal care', 'Add item'],
+      ...newGroupStops,
+      'outside the page',
     ],
     forcedRing,
   );
@@ -742,6 +760,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
     page,
     'Shift+Tab',
     [
+      ...newGroupStopsBack,
       ...['Add item', 'New item in Personal care', 'Add item', 'New item in Community outing'],
       ...[...outingRows].reverse(),
       summaryStop('Every note'),

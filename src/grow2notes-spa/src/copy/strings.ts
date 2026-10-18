@@ -92,7 +92,7 @@ export const strings = {
   checking: 'Checking…',
   /** The busy label of Send invite and Resend invite (users.md component B item 8). */
   sending: 'Sending…',
-  /** The busy label of a list's Add goal (list-editor.md *Exact copy*). */
+  /** The busy label of a list's Add goal and of Common items' Add group (list-editor.md *Exact copy*). */
   adding: 'Adding…',
   /** The button of a step that leads to the next (sign-in.md component 8). */
   continue: 'Continue',
@@ -403,13 +403,20 @@ export const strings = {
   participantGoals: { heading: 'Goals' },
   /**
    * Manage > Common items (common-items.md), whose fixed `<h1>` is its page name: the region's loading line and what
-   * did not load, as its failure sentence starts; and the line under Every note's `<h2>` (component 5). Each group's
-   * list's own words are `listEditor.item`.
+   * did not load, as its failure sentence starts; and the line under Every note's `<h2>` (component 5). Then the New
+   * group form (component 7): its field's label, its button, whose busy label is `adding`, and, in the page's status
+   * region, what an add did; and a group's name as its messages name it, the one for no name and, with `msg.tooLong`,
+   * the one for too much (design.md §4.9 *States*). Each group's list's own words are `listEditor.item`.
    */
   commonItems: {
     loading: 'Loading common items…',
     items: 'Common items',
     everyNote: 'Always shown first, on every note.',
+    newGroup: 'New group',
+    addGroup: 'Add group',
+    groupAdded: 'Group added at the end of the list',
+    enterGroupName: 'Enter the group name',
+    groupName: 'Group name',
   },
   /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals

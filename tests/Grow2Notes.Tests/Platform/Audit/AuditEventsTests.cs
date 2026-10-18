@@ -24,7 +24,8 @@ namespace Grow2Notes.Tests.Platform.Audit;
 /// <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>, <c>EntityId</c>,
 /// <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its row here, and T24
 /// completes the table. Rows act in seeded organisation A and add rows of their own to it, changing no seeded row, but
-/// for a change to an organisation's own row, such as its guide prompts, which a row makes in an organisation that it
+/// for a change to an organisation's own row, such as its guide prompts, or one whose values depend on every row of
+/// the organisation's list, such as a new group's place among its groups, which a row makes in an organisation that it
 /// adds, and for a change to every organisation, which a row makes on a database of its own (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -58,6 +59,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItem.Reordered] = test => test.ReorderCommonItemsAsync(),
         [AuditEventTypes.CommonItem.Archived] = test => test.ArchiveCommonItemAsync(),
         [AuditEventTypes.CommonItem.Restored] = test => test.RestoreCommonItemAsync(),
+        [AuditEventTypes.CommonItemGroup.Created] = test => test.AddCommonItemGroupAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
@@ -699,6 +701,34 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
+    /// <c>common_item_group.created</c>: the manager of an organisation that the row adds, whose groups are Every note
+    /// alone, so that the new group's place is known, adds a group, typed over two lines, with
+    /// <c>POST /api/admin/common-item-groups</c>, which records the new group as the entity, with no participant, and
+    /// its values as <c>new</c> alone, named as design.md §6.6's list names them: its name as stored, on one line, its
+    /// place, the first after Every note, and no time archived.
+    /// </summary>
+    private async Task<WrittenEvent> AddCommonItemGroupAsync()
+    {
+        var (organisationId, managerId) = await AddOrganisationAsync();
+        await AddEveryNoteAsync(organisationId);
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        using var response = await client.PostWithTokenAsync(
+            "/api/admin/common-item-groups", await client.FetchTokenAsync(), new { name = " Community\nouting " });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var added = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        var values = new JsonObject { ["name"] = "Community outing", ["sortOrder"] = 0, ["archivedAtUtc"] = null };
+        return new(
+            AuditEventTypes.CommonItemGroup.Created,
+            organisationId,
+            managerId,
+            AuditEntityTypes.CommonItemGroup,
+            added.GetProperty("id").GetGuid(),
+            null,
+            new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
     /// <c>guide_prompts.updated</c>: the manager of an organisation that the row adds, so that no seeded row changes,
     /// loads its guide prompts with <c>GET /api/admin/guide-prompts</c> and saves new ones with <c>PUT</c> and the
     /// <c>ETag</c> loaded, which records the organisation as the entity, with no participant, and the text before and
@@ -863,6 +893,19 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         var created = await users.CreateAsync(manager);
         Assert.True(created.Succeeded, string.Join(" ", created.Errors.Select(error => error.Code)));
         return (organisation.Id, manager.Id);
+    }
+
+    // The Every note group of an organisation that a row adds, as admin bootstrap adds it (design.md §7.4), saved under
+    // the organisation's tenant, as a tenant-owned row is.
+    private async Task AddEveryNoteAsync(Guid organisationId)
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        db.CommonItemGroups.Add(CommonItemGroup.EveryNote(organisationId, TestCommonItems.AddedAtUtc));
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     // The user who has the address, as Identity stores them.

@@ -28,8 +28,8 @@ internal sealed record TestCommonItem(
 internal sealed record AddedCommonItem(Guid Id, string ETag);
 
 /// <summary>
-/// Groups and items that a test adds straight through the app's context, as no endpoint adds a group until T07, and
-/// so that a test can set up gaps, ties and archived rows that no endpoint would leave.
+/// Groups and items that a test adds straight through the app's context, writing no audit event, so that a test can
+/// set up gaps, ties and archived rows that no endpoint would leave.
 /// </summary>
 internal static class TestCommonItems
 {

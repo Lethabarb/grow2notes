@@ -231,6 +231,13 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
 
+        // Adding a common item group (§6.6), in the same group, as adding a participant is: the policy refuses A's
+        // worker before the handler runs, so the worker's call adds no group, and each manager's call adds a made-up
+        // group at the end of their own organisation's, which the seeded-rows rule allows (tests/README.md), and loads
+        // nothing of another's, so B's manager gets what A's does.
+        new(Post,      "/api/admin/common-item-groups", Unauthorized, Forbidden, Created, Created,
+            WithJson("/api/admin/common-item-groups", new { name = "Community outing" })),
+
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,

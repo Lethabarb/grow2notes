@@ -16,7 +16,8 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
-const listPath = '/api/admin/common-item-groups?includeArchived=true';
+const groupsPath = '/api/admin/common-item-groups';
+const listPath = `${groupsPath}?includeArchived=true`;
 
 // common-items.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts,
 // and a worker.
@@ -97,8 +98,29 @@ function problem(status: number, code?: string): Answer {
     Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/problem+json' } }));
 }
 
+/** A `422 validation.failed` naming each field in `errors` (design.md §6.1). */
+function refused(errors: Record<string, string[]>): Answer {
+  const body = JSON.stringify({
+    type: 'about:blank',
+    title: 'Problem',
+    status: 422,
+    code: 'validation.failed',
+    errors,
+  });
+  return () =>
+    Promise.resolve(new Response(body, { status: 422, headers: { 'Content-Type': 'application/problem+json' } }));
+}
+
 /** A `201` with no body, as an add answers (design.md §6.6). */
 const created: Answer = () => Promise.resolve(new Response(null, { status: 201 }));
+
+/** A `201` with a JSON body, as a group add answers with the new group's ID (design.md §6.6). */
+function createdWith(body: unknown): Answer {
+  return () =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), { status: 201, headers: { 'Content-Type': 'application/json' } }),
+    );
+}
 
 /** No connection, which `fetch` rejects at once. */
 const noConnection: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -686,12 +708,14 @@ function placePath(itemId: string, action: 'archive' | 'restore'): string {
 const placed: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
 
 /**
- * Has the groups list, each group's adds, reorders and each item's rewords, archives and restores answered by a server
- * that holds `list`, and gives what it holds, which a test may change as another manager would: an add puts an item,
- * with an ID and a version of its own, at the end of its group, one after the highest active `sortOrder` (A2), and
- * answers `201` with no body; a reword refuses an `If-Match` that is not the item's version (`412`), then an item of an
- * archived group (`409 config.group_archived`), or else gives the item its text and a new version, and answers `200`
- * with no body; a reorder refuses IDs that are not the group's active items, each once (`422
+ * Has the groups list, the group adds, each group's adds, reorders and each item's rewords, archives and restores
+ * answered by a server that holds `list`, and gives what it holds, which a test may change as another manager would: a
+ * group add puts a group, with no items and an ID and a version of its own, at the end of the active groups other than
+ * Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers `201` with its ID; an add
+ * puts an item, with an ID and a version of its own, at the end of its group, one after the highest active `sortOrder`
+ * (A2), and answers `201` with no body; a reword refuses an `If-Match` that is not the item's version (`412`), then an
+ * item of an archived group (`409 config.group_archived`), or else gives the item its text and a new version, and
+ * answers `200` with no body; a reorder refuses IDs that are not the group's active items, each once (`422
  * config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder`
  * changed, and answers `204` with no body; an archive or a restore refuses an `If-Match` that is not the item's version
  * (`412`), or else archives the item in its place, later than anything archived before it, or restores it to the end
@@ -750,8 +774,7 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       return reworded();
     });
   };
-  serve('GET', listPath, json(held));
-  for (const heldGroup of held) {
+  const serveGroup = (heldGroup: AdminCommonItemGroup) => {
     serve('PUT', orderPath(heldGroup.id), (init) => {
       const { commonItemIds } = JSON.parse(init?.body as string) as { commonItemIds: string[] };
       const active = heldGroup.items.filter((listed) => listed.archivedAtUtc === null);
@@ -784,6 +807,26 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       serveReword(heldGroup, id);
       servePlace(heldGroup, id);
     }
+  };
+  serve('GET', listPath, json(held));
+  serve('POST', groupsPath, (init) => {
+    const { name } = JSON.parse(init?.body as string) as { name: string };
+    const others = held.filter((listed) => !listed.isEveryNote);
+    const active = others.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
+    const added = group(
+      `5d7f9b1e-6a8c-4d93-8eb0-${String(held.length).padStart(12, '0')}`,
+      name,
+      Math.max(-1, ...active) + 1,
+      [],
+    );
+    // In the list's order: after every group of its SortOrder or less, as it was added last.
+    const after = held.findIndex((listed) => !listed.isEveryNote && listed.sortOrder > added.sortOrder);
+    held.splice(after === -1 ? held.length : after, 0, added);
+    serveGroup(added);
+    return createdWith({ id: added.id })();
+  });
+  for (const heldGroup of held) {
+    serveGroup(heldGroup);
   }
 
   return held;
@@ -1126,6 +1169,374 @@ describe('Common items, adding an item', () => {
     expect(newItem('Community outing')).toHaveValue('Visited the library');
     expect(addAlert('Community outing')).toBeEmptyDOMElement();
     expect(addsTo(outing.id)).toHaveLength(1);
+  });
+});
+
+const enterTheGroupName = 'Enter the group name';
+const groupNameTooLong = 'Group name must be 200 characters or less';
+const groupAdded = 'Group added at the end of the list';
+
+/**
+ * An answer that waits until the test gives it, and the way to give it: each request sent meanwhile, the one StrictMode
+ * sends again among them, then gets an answer of its own from `given`, whose body it can read.
+ */
+function answerLater(): { answer: Answer; give: (given: Answer) => void } {
+  const waiting: ((given: Answer) => void)[] = [];
+  return {
+    answer: (init) => new Promise<Answer>((resolve) => waiting.push(resolve)).then((given) => given(init)),
+    give: (given) => {
+      for (const resolve of waiting.splice(0)) {
+        resolve(given);
+      }
+    },
+  };
+}
+
+/** The bodies of the group adds sent, in the order sent. */
+function groupAdds(): unknown[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupsPath && init?.method === 'POST' ? [JSON.parse(init.body as string) as unknown] : [],
+  );
+}
+
+/** The New group field, by its label. */
+function newGroupField(): HTMLInputElement {
+  return within(main()).getByRole('textbox', { name: 'New group' });
+}
+
+/** The New group form. */
+function newGroupForm(): HTMLFormElement {
+  return newGroupField().closest('form')!;
+}
+
+/** Add group, by its name, which its busy label leaves as it is. */
+function addGroupButton(): HTMLElement {
+  return within(newGroupForm()).getByRole('button', { name: 'Add group' });
+}
+
+/** The alert above Add group. */
+function newGroupAlert(): HTMLElement {
+  return within(newGroupForm()).getByRole('alert');
+}
+
+/** The count under the New group field. */
+function newGroupCount(): HTMLElement | null {
+  return newGroupForm().querySelector('p[aria-hidden="true"]');
+}
+
+/** The message on the New group field, without its hidden "Error: ", or `null` while it shows none. */
+function newGroupMessage(): string | null {
+  const message = newGroupForm().querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+describe('Common items, adding a group', () => {
+  it('shows the New group form after the last section: its label, input, count, alert, then Add group', async () => {
+    await openPage();
+
+    const field = newGroupField();
+    expect(field.id).toBe('group-new-name');
+    expect(document.querySelector('label[for="group-new-name"]')?.textContent).toBe('New group');
+    expect(field.tagName).toBe('INPUT');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveValue('');
+    for (const attribute of ['maxlength', 'required', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    // The 48 px input, in the reading column.
+    expect(field).toHaveStyle({ minBlockSize: 'var(--target-button)' });
+    expect(newGroupForm()).toHaveStyle({ maxInlineSize: 'var(--measure)' });
+    // The hidden hint alone: never the help text, which would bury it, nor the count.
+    expect(field.getAttribute('aria-describedby')).toBe('group-new-name-hint');
+    expect(field).toHaveAccessibleDescription(hint);
+    expect(newGroupForm()).toHaveAttribute('novalidate');
+    expect(newGroupCount()?.textContent).toBe(hint);
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    const button = addGroupButton();
+    expect(button).toHaveAttribute('type', 'submit');
+    expect(button.className).toMatch(/secondary/);
+    expect(button.className).not.toMatch(/primary/);
+    // Label width, at least 44 px wide, on a phone and a laptop alike (common-items.md *Conflicts resolved* 17).
+    expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+    expect(follows(sections().at(-1)!, newGroupForm())).toBe(true);
+    expect(sections().every((section) => !section.contains(newGroupForm()))).toBe(true);
+    expect(follows(field, newGroupCount()!)).toBe(true);
+    expect(follows(newGroupCount()!, newGroupAlert())).toBe(true);
+    expect(follows(newGroupAlert(), button)).toBe(true);
+  });
+
+  it('shows no New group form, nor Add group, until the groups have come', async () => {
+    const list = answerLater();
+    serve('GET', listPath, list.answer);
+    renderApp('/manage/common-items');
+
+    await wait(5000);
+    expect(document.getElementById('group-new-name')).toBeNull();
+    expect(within(main()).queryByRole('button', { name: 'Add group' })).not.toBeInTheDocument();
+    list.give(json(groups));
+    await settle();
+
+    expect(newGroupField()).toBeInTheDocument();
+    expect(addGroupButton()).toBeInTheDocument();
+  });
+
+  it.each([
+    ['nothing typed', '', enterTheGroupName],
+    ['only spaces', ' \t  ', enterTheGroupName],
+    ['201 characters once its ends are trimmed', `  ${'a'.repeat(201)}  `, groupNameTooLong],
+  ])('on Add group with %s, shows its message, focusing the field, and sends nothing', async (_, name, message) => {
+    await openPage();
+    type(newGroupField(), name);
+
+    await press(addGroupButton());
+
+    expect(newGroupMessage()).toBe(message);
+    expect(newGroupField()).toHaveFocus();
+    expect(newGroupField()).toHaveAttribute('aria-invalid', 'true');
+    expect(newGroupField().getAttribute('aria-describedby')).toBe('group-new-name-error group-new-name-hint');
+    expect(newGroupField()).toHaveAccessibleDescription(`Error: ${message} ${hint}`);
+    expect(newGroupField()).toHaveValue(name);
+    expect(groupAdds()).toEqual([]);
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it('once the message shows, checks the name at each input, and takes it away silently once it passes', async () => {
+    await openPage();
+    await press(addGroupButton());
+
+    type(newGroupField(), 'a'.repeat(201));
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    type(newGroupField(), 'Respite');
+
+    expect(newGroupMessage()).toBeNull();
+    expect(newGroupField()).not.toHaveAttribute('aria-invalid');
+    expect(newGroupField()).toHaveAccessibleDescription(hint);
+    expect(newGroupForm().querySelector('[data-invalid]')).toBeNull();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it('keeps 210 characters typed whole, counting 10 too many, and refuses them on Add group', async () => {
+    await openPage();
+    const typed = 'x'.repeat(210);
+
+    type(newGroupField(), typed);
+    expect(newGroupField()).toHaveValue(typed);
+    expect(newGroupCount()?.textContent).toBe('You have 10 characters too many');
+    expect(newGroupMessage()).toBeNull();
+    await press(addGroupButton());
+
+    expect(newGroupField()).toHaveValue(typed);
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    expect(groupAdds()).toEqual([]);
+  });
+
+  it("adds the group last, empty, above New group, emptying the field, focusing its New item field", async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(newGroupField(), 'Respite');
+    const reads = listReads();
+
+    await press(addGroupButton());
+
+    expect(groupAdds()).toEqual([{ name: 'Respite' }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(sections().map((section) => within(section).getByRole('heading', { level: 2 }).textContent)).toEqual([
+      'Every note',
+      'Community outing',
+      'Personal care',
+      'Respite',
+    ]);
+    const added = sectionOf('Respite');
+    expect(within(added).getByText(emptyLine)).toBeInTheDocument();
+    expect(activeItems(added)).toEqual([]);
+    expect(follows(added, newGroupForm())).toBe(true);
+    expect(newGroupField()).toHaveValue('');
+    expect(newItem('Respite')).toHaveFocus();
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupAdded);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('adds each group after the last, with focus in its New item field after each', async () => {
+    await openPage([{ ...everyNote, items: [] }]);
+    serveGroups([{ ...everyNote, items: [] }]);
+
+    for (const name of ['Community outing', 'Personal care']) {
+      type(newGroupField(), name);
+      await press(addGroupButton());
+
+      expect(newItem(name)).toHaveFocus();
+      expect(sections().at(-1)).toBe(sectionOf(name));
+    }
+
+    expect(groupAdds()).toEqual([{ name: 'Community outing' }, { name: 'Personal care' }]);
+  });
+
+  // The input holds one line, as HTML's value sanitization for a text input strips line breaks, so the server's rule
+  // for them (AddCommonItemGroupEndpointTests) has nothing to meet from here.
+  it('sends the name with its ends trimmed, and 200 characters once so cleaned', async () => {
+    await openPage();
+    serveGroups(groups);
+
+    type(newGroupField(), '  Overnight respite\t');
+    await press(addGroupButton());
+    type(newGroupField(), `  ${'a'.repeat(200)}  `);
+    await press(addGroupButton());
+
+    expect(groupAdds()).toEqual([{ name: 'Overnight respite' }, { name: 'a'.repeat(200) }]);
+    expect(sectionOf('Overnight respite')).toBeInTheDocument();
+    expect(sectionOf('a'.repeat(200))).toBeInTheDocument();
+  });
+
+  it('keeps a name typed while the add was out, as it is not the name sent', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const add = answerLater();
+    serve('POST', groupsPath, add.answer);
+    type(newGroupField(), 'Respite');
+
+    await press(addGroupButton());
+    type(newGroupField(), 'School holidays');
+    held.push(group('6e8a0c2f-7b9d-4ea4-9fc1-000000000001', 'Respite', 2, []));
+    add.give(createdWith({ id: held.at(-1)!.id }));
+    await settle();
+    await settle();
+
+    expect(sectionOf('Respite')).toBeInTheDocument();
+    expect(newGroupField()).toHaveValue('School holidays');
+  });
+
+  it('shows Add group busy at once, "Adding…" after 400 ms, and a press while it is sends nothing more', async () => {
+    await openPage();
+    serve('POST', groupsPath, noAnswer);
+    type(newGroupField(), 'Respite');
+    const button = addGroupButton();
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Adding…')).toBeInTheDocument();
+    fireEvent.click(button);
+    await settle();
+
+    expect(groupAdds()).toHaveLength(1);
+    expect(newGroupField()).toHaveValue('Respite');
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not added: no connection. Try again.'],
+    ['a 503', problem(503), 'Not added: something went wrong. Try again.'],
+    ['a 422 that names no name', refused({ isEveryNote: ['Refused'] }), 'Not added: something went wrong. Try again.'],
+  ])('on %s, says so above Add group, keeping the name and focus on Add group, and reads nothing', async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage();
+    serve('POST', groupsPath, answer);
+    type(newGroupField(), 'Respite');
+    const button = addGroupButton();
+    const reads = listReads();
+
+    await press(button);
+
+    expect(newGroupAlert()).toHaveTextContent(words);
+    expect(button).toHaveFocus();
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupField()).not.toHaveAttribute('aria-invalid');
+    expect(groupAdds()).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(sections()).toHaveLength(3);
+    expect(pageStatus()).not.toHaveTextContent(groupAdded);
+  });
+
+  // The add has no idempotency key (design.md §6.6), so one sent again after a lost answer could add the group twice.
+  it('sends one add for an answer that never comes, saying "no connection" after 10 s, and never again', async () => {
+    await openPage();
+    serve('POST', groupsPath, noAnswer);
+    type(newGroupField(), 'Respite');
+
+    await press(addGroupButton());
+    await wait(10_000);
+    await settle();
+
+    expect(newGroupAlert()).toHaveTextContent('Not added: no connection. Try again.');
+    expect(addGroupButton()).toHaveFocus();
+    expect(newGroupField()).toHaveValue('Respite');
+    await wait(60_000);
+    expect(groupAdds()).toHaveLength(1);
+  });
+
+  it("on the server's 422 for the name, shows its message on the field, focused, keeping the name", async () => {
+    await openPage();
+    serve('POST', groupsPath, refused({ name: [groupNameTooLong] }));
+    type(newGroupField(), 'Respite');
+    const reads = listReads();
+
+    await press(addGroupButton());
+
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    expect(newGroupField()).toHaveFocus();
+    expect(newGroupField()).toHaveAttribute('aria-invalid', 'true');
+    expect(newGroupField()).toHaveAccessibleDescription(`Error: ${groupNameTooLong} ${hint}`);
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    expect(listReads()).toBe(reads);
+    expect(groupAdds()).toHaveLength(1);
+  });
+
+  it('hands a 401 to sign-in in place, keeping the name, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('POST', groupsPath, problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    type(newGroupField(), 'Respite');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const page = { field: newGroupField(), alert: newGroupAlert() };
+
+    await press(addGroupButton());
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(page.field).not.toBeVisible();
+    expect(page.field).toHaveValue('Respite');
+    expect(page.alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    expect(groupAdds()).toHaveLength(1);
   });
 });
 

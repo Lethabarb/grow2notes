@@ -1,15 +1,25 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type RefObject } from 'react';
+import { useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { useId, useRef, useState, type FormEvent, type MouseEvent, type Ref, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
-import { ApiError, classify } from '../api/api.ts';
+import { ApiError } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
-import { strings, type Cause } from '../copy/strings.ts';
+import { strings } from '../copy/strings.ts';
 import { limits } from '../limits.ts';
 import { Button } from './Button.tsx';
 import { CharacterCount } from './CharacterCount.tsx';
 import { FieldGroup } from './FieldGroup.tsx';
 import styles from './ListEditor.module.css';
 import { useListFrame } from './listFrameContext.ts';
+import {
+  cleanText,
+  failureAlert,
+  focusStayedIn,
+  ListChanged,
+  sendUnlessListChanged,
+  useFieldText,
+  useListWrite,
+  type ListWriter,
+} from './listWrite.ts';
 import { useAnnounce } from './pageStatusContext.ts';
 import { RequestAlert } from './RequestAlert.tsx';
 import textBox from './TextBox.module.css';
@@ -93,12 +103,12 @@ type ListEditorProps<TData> = {
 };
 
 /**
- * What the editor's rows and forms share with it: the list's kind, name and writes; the ids of its rows' edit fields
- * where its page names them, and the id of the page's help text, which describes each text field; the rows as last
- * read, and the read that follows each write; focus that follows a change, and the list's archived section that an
- * Archive opens; and the list conflict, which a write shows and the next write that succeeds takes away.
+ * What the editor's rows and forms share with it: what every write needs of the list (`ListWriter`), its scope, the
+ * read that follows each write and the list conflict; the list's kind, name and writes; the ids of its rows' edit
+ * fields where its page names them, and the id of the page's help text, which describes each text field; the rows as
+ * last read; and focus that follows a change, and the list's archived section that an Archive opens.
  */
-type ListContext = {
+type ListContext = ListWriter & {
   kind: ListKind;
   name: string | undefined;
   api: ListWrites;
@@ -106,8 +116,6 @@ type ListContext = {
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
-  /** Reads the list again, which a write waits for, so that the next write starts from what the server holds. */
-  reread: () => Promise<void>;
   /** Registers an element under `key`, such as a row's Edit under `<id>:edit`, for `focusAfterRender`. */
   focusTarget: (key: string) => (element: HTMLElement | null) => void;
   /** Focuses the element registered under `key` once the render that a change brings is in the DOM. */
@@ -117,10 +125,6 @@ type ListContext = {
    * appeared, then focuses the element registered under `key`, if one is given.
    */
   openArchivedAfterRender: (key: string | undefined) => void;
-  /** Shows the list conflict above the list, and focuses it, as a write found the list changed by someone else. */
-  changedMeanwhile: () => void;
-  /** Takes the list conflict away, as a write on the list has succeeded. */
-  written: () => void;
 };
 
 /** Which way a row's move button moves it. */
@@ -148,14 +152,6 @@ const arrowPaths = {
 } as const;
 
 /**
- * A write that found its row no longer active, as someone else archived it, once the list was read again; the list
- * conflict then shows, as the row has left the list with its form (list-editor.md *Request errors*).
- */
-class ListChanged extends Error {
-  override name = 'ListChanged';
-}
-
-/**
  * A move that waited its turn behind a write that took its row to the end it moves towards, so that it sends nothing
  * (list-editor.md *Queueing*).
  */
@@ -178,58 +174,19 @@ class RowChanged extends Error {
 }
 
 /**
- * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
- * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
- * an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md
- * *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what
- * the server now holds; any other failure fails as it is.
+ * The rule for a row's text, of the list's kind (form-validation.md): the message for the text as cleaned, none left
+ * or more than `limits.itemText` characters, counted in UTF-16 units, as the server counts them; or nothing once it
+ * passes.
  */
-async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
-  try {
-    await send();
-  } catch (failed) {
-    if (!(failed instanceof ApiError && failed.status === status)) {
-      throw failed;
+function textRule(kind: ListKind): (cleaned: string) => string | undefined {
+  const copy = strings.listEditor[kind];
+  return (cleaned) => {
+    if (cleaned === '') {
+      return copy.enter;
     }
 
-    await list.reread();
-    throw new ListChanged();
-  }
-}
-
-/**
- * What a write that failed says in the alert of the row or the form that sent it (list-editor.md *Request errors*):
- * `message` with the cause; or nothing for the list conflict, which shows above the list, or for a `401`, which the
- * session flow has, as `api()` started it.
- */
-function failureAlert(failed: unknown, message: (cause: Cause) => string): string | undefined {
-  if (failed instanceof ListChanged) {
-    return undefined;
-  }
-
-  const cause = classify(failed);
-  return cause === 'signedOut' ? undefined : message(cause);
-}
-
-/**
- * A row's text as Add and Save send it (list-editor.md *Implementation notes*): each line break, with the spaces
- * around it, as one space, and the ends trimmed, as the server cleans it too.
- */
-function cleanText(text: string): string {
-  return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
-}
-
-/**
- * The message for a row's cleaned text, or nothing (form-validation.md): none left, or more than `limits.itemText`
- * characters, counted in UTF-16 units, as the server counts them.
- */
-function textError(cleaned: string, kind: ListKind): string | undefined {
-  const copy = strings.listEditor[kind];
-  if (cleaned === '') {
-    return copy.enter;
-  }
-
-  return cleaned.length > limits.itemText ? msg.tooLong(copy.text, limits.itemText) : undefined;
+    return cleaned.length > limits.itemText ? msg.tooLong(copy.text, limits.itemText) : undefined;
+  };
 }
 
 /** The active row of ID `id` among `rows`, or `undefined` once it is archived. */
@@ -240,16 +197,6 @@ function activeRow(rows: ListRow[], id: string): ListRow | undefined {
 /** The archived row of ID `id` among `rows`, or `undefined` once it is active. */
 function archivedRow(rows: ListRow[], id: string): ListRow | undefined {
   return rows.find((row) => row.id === id && row.archivedAtUtc !== null);
-}
-
-/**
- * Whether focus is still in `origin`, the form or the button that started a write, or nowhere: only then does the
- * write's end move it, as focus is never pulled away from where the person has gone while the write was out
- * (common-items.md *Queueing*).
- */
-function focusStayedIn(origin: HTMLElement | null): boolean {
-  const focused = document.activeElement;
-  return focused === null || focused === document.body || origin?.contains(focused) === true;
 }
 
 /**
@@ -290,6 +237,7 @@ export function ListEditor<TData>({
     .map(({ row }) => row);
 
   const list: ListContext = {
+    scopeId: api.scopeId,
     kind,
     name,
     api,
@@ -354,90 +302,6 @@ export function ListEditor<TData>({
       )}
     </>
   );
-}
-
-/**
- * A write to the list (list-editor.md *Implementation notes*): in the list's one scope, so that it waits for the write
- * before it; sent once, never again by itself, as an add sent again after a lost answer would add the row twice; then
- * the list read again before the next write starts, as the screen shows a change only once the server has it, and
- * what `send` gave passed on. Once it succeeds, the list conflict goes; once it finds the list changed, the conflict
- * shows, though the form or the row that sent it may have gone.
- */
-function useListWrite<T, R>(list: ListContext, send: (variables: T) => Promise<R>) {
-  return useMutation({
-    mutationFn: async (variables: T) => {
-      const result = await send(variables);
-      await list.reread();
-      return result;
-    },
-    onSuccess: () => {
-      list.written();
-    },
-    onError: (failed) => {
-      if (failed instanceof ListChanged) {
-        list.changedMeanwhile();
-      }
-    },
-    scope: { id: list.api.scopeId },
-    retry: 0,
-  });
-}
-
-/**
- * A row's text as its form holds it (form-validation.md's one-field pattern): as typed, in this page's memory only
- * (D22); its inputs, after which the count's twin speaks; and its message, shown by a press that finds the text
- * refused, or by the server's refusal of it, each of which moves focus to the field, even with the same message, and,
- * once shown, checked again at each input, and taken away, silently, once the text passes.
- */
-function useItemText(kind: ListKind, initial: string, field: RefObject<HTMLTextAreaElement | null>) {
-  const [text, setText] = useState(initial);
-  const [inputs, setInputs] = useState(0);
-  const [error, setError] = useState<string>();
-  const [refusals, setRefusals] = useState(0);
-
-  // After the render that names the message in the field's description, so that a screen reader reads it with focus.
-  useEffect(() => {
-    if (refusals > 0) {
-      field.current?.focus();
-    }
-  }, [refusals, field]);
-
-  function refuse(message: string) {
-    setError(message);
-    setRefusals((presses) => presses + 1);
-  }
-
-  return {
-    text,
-    setText,
-    inputs,
-    error,
-    edit: (next: string) => {
-      setText(next);
-      setInputs((count) => count + 1);
-      setError((shown) => (shown === undefined ? undefined : textError(cleanText(next), kind)));
-    },
-    /** The text as its form sends it, or `undefined` once it is refused, with its message shown. */
-    checked: (): string | undefined => {
-      const cleaned = cleanText(text);
-      const refused = textError(cleaned, kind);
-      if (refused === undefined) {
-        return cleaned;
-      }
-
-      refuse(refused);
-      return undefined;
-    },
-    /** Whether `failed` is the server's refusal of the text, a `422` under `text`, which it shows on the field. */
-    refusedByServer: (failed: unknown): boolean => {
-      const refusal = failed instanceof ApiError && failed.status === 422 ? failed.errors?.text?.[0] : undefined;
-      if (refusal !== undefined) {
-        refuse(refusal);
-      }
-
-      return refusal !== undefined;
-    },
-  };
 }
 
 type ActiveRowProps = {
@@ -739,7 +603,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
   const ownId = useId();
   const fieldId = list.editFieldId?.(row.id) ?? ownId;
   const form = useRef<HTMLFormElement>(null);
-  const box = useItemText(list.kind, row.text, field);
+  const box = useFieldText(row.text, textRule(list.kind), 'text', field);
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
   const save = useListWrite(list, async (text: string) => {
@@ -839,15 +703,18 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
  * if it still holds the text sent, with focus kept in it for the next one, and the page's status region says so; text
  * typed while the add was out stays. A failure keeps the text and says so in the alert, focus staying on Add, but for
  * the server's refusal of the text, which shows on the field as Add's own does, and for an add refused as the list's
- * group was archived meanwhile, which shows the list conflict over the list read again.
+ * group was archived meanwhile, which shows the list conflict over the list read again. The field takes focus that
+ * follows a change by its id, as a new group's does after Add group (common-items.md *Group actions*).
  */
 function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undefined }) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
   const ownId = useId();
+  const id = fieldId ?? ownId;
+  const focusTarget = list.focusTarget(id);
   const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const box = useItemText(list.kind, '', field);
+  const box = useFieldText('', textRule(list.kind), 'text', field);
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
   const add = useListWrite(list, (text: string) => sendUnlessListChanged(list, 409, () => list.api.add(text)));
@@ -882,13 +749,16 @@ function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undef
   return (
     <form ref={form} noValidate className={`${textBox.column} ${styles.addForm}`} onSubmit={submit}>
       <ItemTextField
-        fieldId={fieldId ?? ownId}
+        fieldId={id}
         label={list.name === undefined ? copy.newLabel : `${copy.newLabel}${msg.inList(list.name)}`}
         helpId={list.helpId}
         text={box.text}
         error={box.error}
         inputs={box.inputs}
-        fieldRef={field}
+        fieldRef={(element) => {
+          field.current = element;
+          focusTarget(element);
+        }}
         onChange={box.edit}
       />
       <RequestAlert>{failure}</RequestAlert>
@@ -911,7 +781,7 @@ type ItemTextFieldProps = {
   inputs: number;
   /** While a Save of the text is out, so that what was sent is what shows (list-editor.md *Behaviour*). */
   readOnly?: boolean;
-  fieldRef: RefObject<HTMLTextAreaElement | null>;
+  fieldRef: Ref<HTMLTextAreaElement>;
   onChange: (text: string) => void;
 };
 

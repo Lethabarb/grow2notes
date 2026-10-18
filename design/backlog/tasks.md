@@ -2282,7 +2282,7 @@ group; Every note stays first and fixed.
 
 ### Steps
 
-- [ ] Add groups (S01.03.05's first and third criteria; S01.03.01's sixth through the API, which is §14 M1's "a second
+- [x] Add groups (S01.03.05's first and third criteria; S01.03.01's sixth through the API, which is §14 M1's "a second
       one cannot be created", its API part; design.md §4.9 item 5; common-items.md component 7, "Add group with a valid
       name…", *Content and copy*'s first bullet for New group and Add group, *Loading, empty, errors*' "no add form
       (item or group)…", and *Failures and conflicts*' network and `401` bullets for Add group), shared parts first:

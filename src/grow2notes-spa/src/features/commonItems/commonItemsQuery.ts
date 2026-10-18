@@ -19,8 +19,17 @@ export type AdminCommonItemGroup = {
   items: ListRow[];
 };
 
-// The path of the groups, which the list reads (design.md §6.6).
+/** The body of a group add's `201`: the new group's ID (design.md §6.6, T07's Notes). */
+type AddedCommonItemGroup = { id: string };
+
+// The path of the groups, which the list reads and a group add posts to (design.md §6.6).
 const groupsPath = '/api/admin/common-item-groups';
+
+/**
+ * The one TanStack mutation scope of every write on Common items, to a group or to an item of any group
+ * (common-items.md component 5), so that the writes run one at a time.
+ */
+export const commonItemsScope = 'common-items';
 
 /** The path of a group's items, which an add posts to, and under which their order is put (design.md §6.6). */
 function groupItemsPath(groupId: string): string {
@@ -56,7 +65,7 @@ export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]>
   return {
     query: commonItemGroupsQuery,
     rowsOf: (groups) => groups.find((group) => group.id === groupId)?.items ?? [],
-    scopeId: 'common-items',
+    scopeId: commonItemsScope,
     add: (text) => api<undefined>(groupItemsPath(groupId), { method: 'POST', body: { text } }),
     update: (id, text, rowVersion) =>
       api<undefined>(itemPath(id), { method: 'PUT', body: { text }, ifMatch: rowVersion }),
@@ -66,3 +75,12 @@ export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]>
     restore: (id, rowVersion) => api<undefined>(`${itemPath(id)}/restore`, { method: 'POST', ifMatch: rowVersion }),
   };
 }
+
+/**
+ * The writes to the groups themselves (design.md §6.6), each in `commonItemsScope` and followed by a read of the page's
+ * one query, as an item's are: the add of a group at the end, whose `201` gives the new group's ID, by which the screen
+ * then focuses its New item field.
+ */
+export const commonItemGroupsApi = {
+  add: (name: string) => api<AddedCommonItemGroup>(groupsPath, { method: 'POST', body: { name } }),
+};
