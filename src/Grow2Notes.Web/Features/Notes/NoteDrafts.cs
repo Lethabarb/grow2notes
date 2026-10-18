@@ -78,19 +78,25 @@ internal sealed class NoteDrafts(
     /// <paramref name="participantId"/>'s note for <paramref name="noteDate"/> (§5.6): with no live note, creates the
     /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
     /// <c>note.draft_started</c> (§5.5 item 2), if the note may be started; with the actor's own draft, replaces its
-    /// ticks, text and flag; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says
-    /// who started it and when; with a submitted note, on which the actor has no working copy until T14 gives pending
+    /// ticks, text and flag as §5.6 numbers a page's saves, the working copy keeping the page that saved last and that
+    /// page's last number: a save of that page's numbered after it, or the first save of another page, which takes the
+    /// working copy over; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says who
+    /// started it and when; with a submitted note, on which the actor has no working copy until T14 gives pending
     /// edits, saves nothing, as a draft's base, 0, is stale (§6.7), and so recreates no working copy. A save sent
-    /// again after its answer was lost finds the actor's own draft, and updates it, as does a first save that another
-    /// of the actor's own first saves beat (§5.5 item 3).
+    /// again after its answer was lost finds the actor's own draft, with its page and number, as does a first save
+    /// that another of the actor's own first saves beat (§5.5 item 3), and is decided as a later save, never as a
+    /// conflict.
     /// </summary>
     /// <returns>
-    /// The time saved; or who started another user's draft, also when that user's first save beat this one; or, for a
-    /// save that would create the note, the first of §5.5 item 4's rules that it breaks, in that item's order, then a
-    /// lists' version that is missing or no longer the template's (§5.7); or the refusal of a ticked ID that is not
+    /// The time saved; or, for a save of the page that saved last numbered at or below its last, which the working
+    /// copy holds already, the time of the save that it holds, changing nothing; or who started another user's draft,
+    /// also when that user's first save beat this one; or, for a save that would create the note, the first of §5.5
+    /// item 4's rules that it breaks, in that item's order, then a lists' version that is missing or no longer the
+    /// template's (§5.7); or <see cref="DraftSaveResult.VersionConflict"/> for a submitted note, also when a submit
+    /// deleted the working copy after this save found the draft; or <see cref="DraftSaveResult.TakenOver"/> for any
+    /// save but the first from a page other than the one that saved last; or the refusal of a ticked ID that is not
     /// one of the note's goals, the template's for a new note and the snapshot's for a draft, the ticks a set, so that
-    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.VersionConflict"/> for a submitted note; or
-    /// <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
+    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
     /// </returns>
     public async Task<DraftSaveResult> SaveAsync(
         Actor actor,
@@ -129,11 +135,12 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.StartedByOther(inProgress);
         }
 
-        // A draft's author has a working copy until its version is saved (§5.6), so with none the note is submitted,
-        // and a draft's base, 0, is stale (§6.7).
-        var draft = await db.NoteDrafts
-            .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == actor.UserId, cancellationToken);
-        return draft is null ? DraftSaveResult.VersionConflict : await UpdateAsync(draft, request, cancellationToken);
+        // Set by each attempt, as a transient failure runs the whole work again (§5.9). A commit whose answer was lost
+        // runs it again too, and the save's number then finds it held.
+        var result = DraftSaveResult.VersionConflict;
+        await db.InTransactionAsync(
+            async ct => result = await UpdateAsync(note.Id, actor, request, ct), cancellationToken);
+        return result;
     }
 
     // The note and the working copy go in one save, and the event in the audit writer's, so the transaction is what
@@ -205,10 +212,45 @@ internal sealed class NoteDrafts(
         return DraftSaveResult.Started(new(now));
     }
 
-    // The ticks are checked against the snapshot, which keeps the goals' wording as the draft started with it (A3).
+    // In the save's transaction. The working copy is read under an update lock, held until the transaction ends, so
+    // that two saves of it at once, such as a page-hidden save beside the save in flight, are decided one after the
+    // other, the second on what the first saved, and the higher number wins whichever comes first (autosave-status.md
+    // *Behaviour* 1). A submit that has deleted the working copy holds the read until it commits, so that a save the
+    // submit beat finds none, rather than updating a row deleted since: a plain read would not wait, as Azure SQL
+    // reads committed snapshots. The ticks are checked against the snapshot, which keeps the goals' wording as the
+    // draft started with it (A3).
     private async Task<DraftSaveResult> UpdateAsync(
-        NoteDraft draft, DraftSaveRequest request, CancellationToken cancellationToken)
+        Guid noteId, Actor actor, DraftSaveRequest request, CancellationToken cancellationToken)
     {
+        var draft = await db.NoteDrafts
+            .FromSql($"""
+                SELECT * FROM [NoteDraft] WITH (UPDLOCK)
+                WHERE [NoteId] = {noteId} AND [EditorUserId] = {actor.UserId}
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        // A draft's author has a working copy until its version is saved (§5.6), so with none the note is submitted,
+        // and a draft's base, 0, is stale (§6.7).
+        if (draft is null)
+        {
+            return DraftSaveResult.VersionConflict;
+        }
+
+        if (draft.LastClientId == request.ClientId)
+        {
+            // The page's save sent again after its answer was lost, or one that a later save of the page overtook.
+            if (request.Seq <= draft.LastSeq)
+            {
+                return DraftSaveResult.Unchanged(new(draft.UpdatedAtUtc));
+            }
+        }
+        else if (request.Seq != 1)
+        {
+            // Another page has saved since this one last did. Only a page that has not saved the note before, such as
+            // a second tab or another device, takes the working copy over.
+            return DraftSaveResult.TakenOver;
+        }
+
         var ticked = request.TickedGoalIds.ToHashSet();
         if (!ticked.IsSubsetOf(draft.Items.Where(IsGoal).Select(item => item.SourceId)))
         {

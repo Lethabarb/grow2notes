@@ -3525,7 +3525,8 @@ older page is told the note has moved on, and nothing is overwritten without ask
     flight, are decided one after the other and the higher `seq` wins whichever comes first (autosave-status.md
     *Behaviour* 1), with no change to the model and no migration; an autosave that a submit beat then finds no
     working copy and answers `409 note.version_conflict`, never T09's `500`. A takeover, like any later save, writes
-    no audit event (A28).
+    no audit event (A28). From a page other than the one that saved last, only `seq` 1 takes over, and any other
+    number, one below 1 included, which the app never sends, is the takeover's `409`.
   - Each attempt of a save is a new `seq`, as T08's identity gives it: a retry reads the form and takes the next
     number as it is sent, so that newer text never goes under a number that the server has applied. So a page's first
     save of a draft that another page saved last, lost before it reached the server and retried as `seq` 2, meets the
@@ -3586,7 +3587,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
 
 ### Steps
 
-- [ ] A page's saves on the server, as §5.6 numbers them (S02.02.04's first and second criteria; S02.02.06's first;
+- [x] A page's saves on the server, as §5.6 numbers them (S02.02.04's first and second criteria; S02.02.06's first;
       design.md §5.6 *Autosave is idempotent under retries*, §6.7's working-copy row and §6.9's `draft.taken_over`;
       §14 M2's "a save whose response is lost and is retried does not raise a conflict"; T09's hand-off of the
       `500`): `PUT {base}/draft` reads the caller's working copy under an update lock in the transaction that saves
