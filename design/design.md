@@ -826,7 +826,7 @@ The organisation-wide groups of common items, for example Community outing, In-h
 
 Constraints:
 - **Exactly one Every note group per organisation.** A unique index on `(OrganisationId)` filtered `WHERE [IsEveryNote] = 1` allows at most one. `admin bootstrap` creates it in the same transaction as the organisation, the migration that adds this table gives every organisation that already exists (such as those bootstrapped in test) its Every note group (D82), and rows are never deleted (5.8), so there is always exactly one. No endpoint creates a group with `IsEveryNote = 1`.
-- **Every note is fixed.** Check constraint `IsEveryNote = 0 OR ArchivedAtUtc IS NULL`, so it can never be archived. The rename and archive endpoints refuse it (`422 config.every_note_fixed`), and the reorder endpoint does not accept its ID (`422 config.order_mismatch`).
+- **Every note is fixed.** Check constraint `IsEveryNote = 0 OR ArchivedAtUtc IS NULL`, so it can never be archived. The rename, archive and restore endpoints refuse it (`422 config.every_note_fixed`), and the reorder endpoint does not accept its ID (`422 config.order_mismatch`).
 
 Index: `(OrganisationId, ArchivedAtUtc, SortOrder)`.
 
@@ -1301,12 +1301,12 @@ Every `PUT` (except the reorder endpoints, which check the set of IDs instead), 
 | POST | /api/admin/goals/{goalId}/archive · /restore | Archive or restore; a restored goal goes to the end. | → `204` |
 | PUT | /api/admin/participants/{participantId}/goals/order | Reorder the active goals; the ID set must equal the current active set. | `{goalIds: [...]}` → `204`; `422 config.order_mismatch`; `404` for a participant not in the organisation |
 | GET | /api/admin/common-item-groups?includeArchived= | The groups with their items: the Every note group first, then the other groups in order (D44, D45). Each group's and each item's `rowVersion` is its `RowVersion` as base64, for `If-Match`. | → `[{id, name, isEveryNote, sortOrder, archivedAtUtc, rowVersion, items: [{id, text, sortOrder, archivedAtUtc, rowVersion}]}]` |
-| POST | /api/admin/common-item-groups | Add a group at the end, with no items. | `{name}` → `201` |
-| PUT | /api/admin/common-item-groups/{groupId} | Rename a group; notes keep their snapshot. Refused for Every note. | `{name}` → `200`; `422 config.every_note_fixed` |
-| POST | /api/admin/common-item-groups/{groupId}/archive · /restore | Archive or restore a group; a restored group goes to the end. Refused for Every note. | → `204`; `422 config.every_note_fixed` |
+| POST | /api/admin/common-item-groups | Add a group at the end of the groups other than Every note, with no items. The new group's ID comes back in the body, with no `Location`, as for a participant (D79), so that the screen can focus the new group's New item field. | `{name}` → `201 {id}` |
+| PUT | /api/admin/common-item-groups/{groupId} | Rename a group; notes keep their snapshot. Refused for Every note. | `{name}` → `200`, with no body and no `ETag`; `422 config.every_note_fixed`; `404` for a group not in the organisation |
+| POST | /api/admin/common-item-groups/{groupId}/archive · /restore | Archive or restore a group; a restored group goes to the end. Refused for Every note. | → `204`; `422 config.every_note_fixed`; `404` for a group not in the organisation |
 | PUT | /api/admin/common-item-groups/order | Reorder the active groups other than Every note, which always stays first; the ID set must equal that set. | `{groupIds: [...]}` → `204`; `422 config.order_mismatch` |
 | POST | /api/admin/common-item-groups/{groupId}/items | Add a common item at the end of an active group. Refused if the group is archived. | `{text}` → `201`; `409 config.group_archived`; `404` for a group not in the organisation |
-| PUT | /api/admin/common-items/{id} | Reword a common item, or move it to another active group, where it goes to the end (A42). Refused if the item's own group or the chosen group is archived (restore the group first). | `{text, groupId}` → `200`; `409 config.group_archived`; `404` for an item not in the organisation |
+| PUT | /api/admin/common-items/{id} | Reword a common item, or move it to another active group, where it goes to the end (A42). A missing or `null` `groupId` keeps the item in its own group. Refused if the item's own group or the chosen group is archived (restore the group first). | `{text, groupId}` → `200`; `409 config.group_archived`; `404` for an item, or a chosen group, not in the organisation |
 | POST | /api/admin/common-items/{id}/archive · /restore | Archive or restore; a restored item goes to the end of its group. | → `204`; `404` for an item not in the organisation |
 | PUT | /api/admin/common-item-groups/{groupId}/items/order | Reorder the active items in one group. | `{commonItemIds: [...]}` → `204`; `422 config.order_mismatch`; `404` for a group not in the organisation |
 | GET · PUT | /api/admin/guide-prompts | The guide prompts for Guided notes. The `PUT`'s `200` carries the new `ETag`, so the next `If-Match` needs no refetch. A `PUT` of the text already stored changes nothing and writes no `guide_prompts.updated`, and answers `200` with the same `ETag` (D84). | `{text}` → `200` |
@@ -1350,7 +1350,7 @@ The SPA never polls in the background. `GET /api/auth/me` is called on page load
 | 422 | `note.past_date_manager_only` | A worker tries to start a note for a day other than today (D35). |
 | 422 | `note.participant_archived` | Starting a note for an archived participant. |
 | 422 | `config.order_mismatch` | A reorder list does not match the current active items. |
-| 422 | `config.every_note_fixed` | Renaming or archiving the Every note group (A43). |
+| 422 | `config.every_note_fixed` | Renaming, archiving or restoring the Every note group (A43). |
 | 422 | `validation.failed` | Field errors in `errors{}`. |
 | 428 | `precondition.required` | A required `If-Match` header is missing. |
 

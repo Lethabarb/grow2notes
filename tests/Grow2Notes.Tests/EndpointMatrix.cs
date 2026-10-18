@@ -231,6 +231,34 @@ internal static class EndpointMatrix
         new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
 
+        // Adding a common item group (§6.6), in the same group, as adding a participant is: the policy refuses A's
+        // worker before the handler runs, so the worker's call adds no group, and each manager's call adds a made-up
+        // group at the end of their own organisation's, which the seeded-rows rule allows (tests/README.md), and loads
+        // nothing of another's, so B's manager gets what A's does.
+        new(Post,      "/api/admin/common-item-groups", Unauthorized, Forbidden, Created, Created,
+            WithJson("/api/admin/common-item-groups", new { name = "Community outing" })),
+
+        // Renaming a common item group (§6.6), in the same group. Each call renames a group of its own, which its
+        // request first adds to A, never the seeded Every note, so B's manager, to whom A's groups are not found, gets
+        // 404 (§9.2).
+        new(Put,       "/api/admin/common-item-groups/{groupId:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RenamingAGroupOfItsOwn),
+
+        // Reordering the common item groups (§6.6), in the same group. Each call adds two groups of its own to A and
+        // sends them with A's other active groups but Every note, so A's manager's call moves them. The IDs are checked
+        // against the caller's own organisation's groups, so B's manager, whose groups those are not, gets
+        // 422 config.order_mismatch, and A's order stays as it was (§9.2).
+        new(Put,       "/api/admin/common-item-groups/order", Unauthorized, Forbidden, NoContent, UnprocessableEntity,
+            ReorderingTheGroupsWithTwoOfItsOwn),
+
+        // Archiving and restoring a common item group (§6.6), in the same group, as the rename is: each call archives
+        // an active group, or restores an archived one, of its own, which its request first adds to A, never the seeded
+        // Every note, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/archive", Unauthorized, Forbidden, NoContent,
+            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/restore", Unauthorized, Forbidden, NoContent,
+            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "restore", archived: true)),
+
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
@@ -476,6 +504,54 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
         };
+    }
+
+    // A rename of a group that the request first adds to A, sent with the group's ETag as If-Match, so that each call
+    // changes a group of its own, never the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> RenamingAGroupOfItsOwn(EndpointCall call)
+    {
+        var group = await call.Services.AddGroupAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{group.Id}")
+        {
+            Content = JsonContent.Create(new { name = "Outings" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(group.ETag));
+        return request;
+    }
+
+    // A reorder of A's active groups other than Every note, to which the request first adds two of its own, sending
+    // every one of them in the list's order but those two, which change places, so that each call moves groups of its
+    // own and leaves every other where it was (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheGroupsWithTwoOfItsOwn(EndpointCall call)
+    {
+        var organisationId = call.Seeded.A.OrganisationId;
+        var own = await call.Services.AddGroupsAsync(
+            organisationId,
+            new TestCommonItemGroup("Community outing", 0),
+            new TestCommonItemGroup("Personal care", 0));
+        var groupIds = await call.Services.ActiveGroupIdsAsync(organisationId);
+        var (first, second) = (groupIds.IndexOf(own[0]), groupIds.IndexOf(own[1]));
+        (groupIds[first], groupIds[second]) = (groupIds[second], groupIds[first]);
+        return new HttpRequestMessage(call.Method, "/api/admin/common-item-groups/order")
+        {
+            Content = JsonContent.Create(new { groupIds }),
+        };
+    }
+
+    // An archive or a restore, with no body, of a group that the request first adds to A, archived or not, sent with
+    // the group's ETag as If-Match, so that each call changes a group of its own, never the seeded Every note
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingTheStateOfAGroupOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var group = await call.Services.AddGroupAsync(
+            call.Seeded.A.OrganisationId,
+            new TestCommonItemGroup(
+                "Community outing", 0, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{group.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(group.ETag));
+        return request;
     }
 
     // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never

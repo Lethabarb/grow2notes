@@ -61,18 +61,37 @@ function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
   });
 }
 
+/** Expects focus on `stop`, as `focusStop` reads it, with `expected`'s ring showing, `step` naming how it got there. */
+async function expectReached(page: Page, stop: string, expected: Ring, step: string) {
+  const reached = await focusStop(page);
+  expect(reached.name, step).toBe(stop);
+  if (reached.ring !== undefined) {
+    expect(reached.ring, `the focus ring on ${stop}`).toEqual(expected);
+  }
+}
+
+/**
+ * Expects focus on `stop`, read as `expectStops` reads each, with `expected`'s ring showing: for an element that the
+ * page focused by script after a key, such as the list conflict, which no Tab reaches.
+ */
+export async function expectFocusAt(page: Page, stop: string, expected = ring) {
+  await expectReached(page, stop, expected, `focus on ${stop}`);
+}
+
 /**
  * Presses `key` once for each of `stops`, expecting focus to land on each in turn with `expected`'s ring showing
  * (backlog README §9's keyboard-only check). Past the page's last stop, Tab takes focus out of the page, to the
- * browser, and the next Shift+Tab brings it back to that stop.
+ * browser, and the next Shift+Tab brings it back to that stop. In a set of radios, one stop for Tab, an arrow key
+ * moves to the next radio or the one before, and chooses it.
  */
-export async function expectStops(page: Page, key: 'Tab' | 'Shift+Tab', stops: readonly string[], expected = ring) {
+export async function expectStops(
+  page: Page,
+  key: 'Tab' | 'Shift+Tab' | 'ArrowDown' | 'ArrowUp',
+  stops: readonly string[],
+  expected = ring,
+) {
   for (const [index, stop] of stops.entries()) {
     await page.keyboard.press(key);
-    const reached = await focusStop(page);
-    expect(reached.name, `${key} number ${index + 1}, to ${stop}`).toBe(stop);
-    if (reached.ring !== undefined) {
-      expect(reached.ring, `the focus ring on ${stop}`).toEqual(expected);
-    }
+    await expectReached(page, stop, expected, `${key} number ${index + 1}, to ${stop}`);
   }
 }

@@ -50,9 +50,12 @@ export const msg = {
    * (participants.md *States*, list-editor.md *Request errors*).
    */
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
-  /** A list's Add goal that failed, in the alert above it (list-editor.md *Request errors*). */
+  /** A list's Add goal or Add item, or Add group, that failed, in the alert above it (list-editor.md). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),
-  /** A list row's Move up or Move down that failed, in the row's alert above its buttons (list-editor.md). */
+  /**
+   * A list row's or a Common items group's Move up or Move down that failed, in the row's or the group's alert above
+   * its buttons (list-editor.md, common-items.md *Failures*).
+   */
   notMoved: (cause: Cause): string => msg.notDone('moved', cause),
   /**
    * A list row's move, in the page's status region once the list shows it (list-editor.md *Behaviour*): where the row
@@ -61,12 +64,29 @@ export const msg = {
   moved: (direction: 'up' | 'down', position: number, total: number) =>
     `Moved ${direction} to number ${position} of ${total}`,
   /**
+   * A group's move on Common items, in the page's status region once the sections show it (common-items.md *Group
+   * actions*): "Group moved up" or "Group moved down", one phrase with no full stop, as a row's is, naming no place.
+   */
+  groupMoved: (direction: 'up' | 'down') => `Group moved ${direction}`,
+  /**
+   * A common item's Save that moved it to another group, in the page's status region once the list shows it at the end
+   * of that group (common-items.md *Item actions*): "Item saved and moved to the end of Personal care", naming the
+   * group as its Group radio does, one phrase with no full stop, as "Item saved" is.
+   */
+  itemSavedAndMoved: (group: string) => `Item saved and moved to the end of ${group}`,
+  /**
    * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
    * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather
    * than `aria-label`, which automatic translation misses, and after the label, so that the name starts with the words
    * on screen (SC 2.5.3).
    */
   rowContext: (text: string) => `, ${text}`,
+  /**
+   * After the visible label of a group's button on Common items, for screen readers alone, as `rowContext` is after a
+   * row's, the group's name and "group", so that "Rename" is read as "Rename, Community outing group" (common-items.md
+   * component 5).
+   */
+  groupContext: (name: string) => `, ${name} group`,
   /**
    * After a list's words that would be the same in every group's list on Common items, its group's name, so that each
    * is told from the others': after "New item" in the add field's label, as in "New item in Every note", and, for

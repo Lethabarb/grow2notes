@@ -265,14 +265,20 @@ would take about 311 px, and the pair would split.
 .list     { margin: 0; padding-inline-start: 2.25rem; }
 .list > li::marker { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* CommonItemsPage.module.css, as T06 builds it: the sections a section's gap apart, a long group name wrapping, and
-   Every note's line in the secondary colour, in the reading column */
+/* CommonItemsPage.module.css, as built: the sections a section's gap apart, a long group name wrapping, and Every
+   note's line in the secondary colour, in the reading column */
 .group + .group { margin-block-start: var(--section-gap); }
 .heading   { overflow-wrap: anywhere; }
 .everyNote { max-inline-size: var(--measure); color: var(--colour-text-secondary); }
-/* T07, with the group buttons: the group heading row reuses the same wrapping technique */
-.groupHead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2) var(--space-4); }
-.groupHead > h2 { flex: 1 1 16rem; min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
+/* The group heading row reuses the same wrapping technique, its buttons in the item rows' .side, .actions and .pair,
+   with the gap that the <h2>'s own margin gives Every note's heading */
+.groupHead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2) var(--space-4);
+             margin-block-end: var(--space-3); }
+.groupHead > .heading { flex: 1 1 16rem; min-inline-size: 0; margin: 0; }
+.renameForm { margin-block-end: var(--space-5); }          /* under the heading row, in the reading column */
+.newGroup { margin-block-start: var(--section-gap); }
+.newGroup .addGroup { inline-size: auto; min-inline-size: var(--target-min); }   /* label width at both widths */
+.archivedGroups { margin-block-start: var(--section-gap); }
 ```
 
 [Standard/Convention] A flex item with a `flex-basis` wraps onto a new line "once there is not enough space to place
@@ -353,7 +359,11 @@ DOM order is reading order is visual order.
   role="alert">`, always rendered) and the four group buttons in two pairs: **Move up**, **Move down** (pair 1),
   **Rename**, **Archive** (pair 2) **(V labels; order: Conflicts resolved, 15)**. Secondary `<button type="button">`
   through the shared `ActionButton`, label width, with hidden context after each visible label:
-  `Rename<span class="visually-hidden">, Community outing group</span>`. Never `aria-label` (SC 2.5.3).
+  `Rename<span class="visually-hidden">, Community outing group</span>`. Never `aria-label` (SC 2.5.3). As built:
+  `GroupHead` in `features/commonItems/CommonItemsPage.tsx`, whose Move up and Move down are the item rows' own
+  `MovePair` from `ListEditor`, with its arrow, words, busy label and unavailable press, given the page's groups as the
+  list it moves in (the active groups but Every note, in the list's order), and whose Rename and Archive are the shared
+  `Button` with the item rows' `rowButton` class; the hidden words are `msg.groupContext(name)`.
 - **Unavailable group moves:** Move up on the first group after Every note and Move down on the last group (both,
   when there is one group besides Every note) use `aria-disabled="true"`, stay in place and focusable, with the
   dashed border. Pressing one announces "Already at the top" / "Already at the bottom". Nothing ever moves above
@@ -363,7 +373,11 @@ DOM order is reading order is visual order.
   id="group-{id}-name">` with the current name and the caret at the end, `autoComplete="off"`, no `maxLength`, the
   character count (200, A6), the form alert slot, then **Save** (primary, `type="submit"`) and **Cancel**
   (secondary). The items below stay as they are. group-picker.md has the whole heading row become the form; keeping
-  the heading is simpler and needs no change of the region's name [Opinion].
+  the heading is simpler and needs no change of the region's name [Opinion]. As built: `RenameForm`, opened inside the
+  press with `flushSync`; its field is `GroupNameField`, which New group's is too: the item fields' count and error
+  markup in the shared 48 px text input, described by the error, then the count hint, never the help text; and its
+  name is read by `useGroupName`, the shared `useFieldText` with the group name rule (1 to `limits.groupName`
+  characters, after `cleanText`) and the server's `422` read under `name`.
 - **Items:** the existing list editor (`kind: 'item'`, scoped to this group), unchanged: numbered `<ol>` that
   restarts at 1 in each group (so "number 2 of 5" stays true), row buttons **Move up, Move down, Edit, Archive**, the
   row alert slot, busy labels and hidden context `, [item text]` (list-editor; Conflicts resolved, 4 and 14). Items
@@ -392,6 +406,12 @@ DOM order is reading order is visual order.
   `<li>`: the text, the row alert slot, then **Restore** **(V)** with hidden `, [item text]`. No Edit, no moves.
 - Mutation scope `{ id: 'common-items' }` for **every** write on this screen, items and groups alike, so a group move
   and an item add never interleave. All writes run one at a time, and each one sends, then re-reads the one query.
+  As built, the item rows and the group parts share one copy of the write helpers, `components/listWrite.ts`: the
+  scoped write that sends, then reads the list again (`useListWrite`), the list-changed refusal (`ListChanged`,
+  `sendUnlessListChanged`), the failure alert (`failureAlert`), focus moved only if the manager stayed
+  (`focusStayedIn`), the text cleaning (`cleanText`) and the one-field text with its server `422` shown on the field
+  from the key it is given, `text` for an item or `name` for a group (`useFieldText`). The group writes are
+  `commonItemGroupsApi` in `commonItemsQuery.ts`.
 
 ### 6. Item edit form: list-editor edit mode, plus the Group radios
 - Inside the `<li>`: `<form noValidate>` with label **Edit item** (P), `<textarea rows={3}>` with the current text
@@ -403,9 +423,16 @@ DOM order is reading order is visual order.
   first), each in the shared ChoiceRow (56 px row, 40 px circle drawn with `appearance: none`, the checkbox-list
   technique), the group name as the label. The item's current group is selected: that is its current value, not a
   guessed pre-selection. **Rendered only when there are at least two active groups** (Conflicts resolved, 18).
-  Radios, not a `<select>`: GOV.UK, "some users find selects very difficult to use" [Convention].
+  Radios, not a `<select>`: GOV.UK, "some users find selects very difficult to use" [Convention]. As built:
+  `ListEditor`'s `GroupRadios`, from the `groups` that the page gives each group's list (its own group, the active
+  groups from the page's one query, and the radios' `name`), a `FieldGroup` fieldset with a `ChoiceRow` per group,
+  whose hint is optional, as these have none; each radio's id is `item-{id}-group-{groupId}`. A chosen group that is
+  no longer active once the list is read again, as after a `409` for a group archived meanwhile, leaves the radios,
+  which then have the item's own group chosen, so that none is ever left unchosen.
 - **Save:** validate the text as before. If neither the text nor the group changed, close as Cancel and send nothing.
   Otherwise one `PUT` with `{text, groupId}` and `If-Match`. A moved item goes to the **end** of its new group (A42).
+  As built, the screen always sends both, the item's own group for a reword in place; the announcement names the
+  group as its radio named it when Save was pressed.
 
 ### 7. New group form: form-validation one-field pattern
 - After the last group section, `--section-gap` below it. `<form noValidate>`, label **New group** **(V)**, `<input
@@ -413,7 +440,9 @@ DOM order is reading order is visual order.
   `--measure`. Character count (200, A6) as for items.
 - Form alert slot above the button. **Add group** **(V)**: **secondary**, label width (Conflicts resolved, 17). Busy
   label **Adding…** (P).
-- The new group is added at the end, empty (design.md 4.9).
+- The new group is added at the end, empty (design.md 4.9). As built: `NewGroupForm`, whose field is the rename's
+  `GroupNameField`; the add answers `201 {id}` with no `Location` (design.md §6.6), and the screen focuses the new
+  group's `item-new-{id}` field by that ID once the list is read again.
 
 ### 8. Archived groups
 - Rendered only when at least one group is archived, `--section-gap` below the New group form.
@@ -422,6 +451,9 @@ DOM order is reading order is visual order.
 - `<ul>` of archived groups, most recently archived first. Each `<li>`: the group name, the row alert slot, then
   **Restore** **(V)** with hidden `, [group name] group`. No items are listed and nothing else can be done to an
   archived group: Restore brings it back with its active items (A2).
+- As built: `ArchivedGroups` and `ArchivedGroupRow`, in the item summaries' and archived rows' classes. The
+  `<details>` is in the page's focus map, so a group's Archive opens it, through the frame, in the render that
+  brings the group there, just before focusing the group's Restore, as an item's Archive opens its group's section.
 
 ### 9. Page status region: [app-shell](app-shell.md) component 3, [primary-actions](../components/primary-actions.md)
 - This page's own visually hidden `<p role="status">` (`PageStatus`), rendered empty with the page from its first
@@ -496,13 +528,13 @@ below. When it arrives, focus does not move.
 | **Move up on the first group after Every note / Move down on the last group** | No request | Nothing changes | Stays | "Already at the top" · "Already at the bottom" (P, existing) |
 | **Archive** (group) | Busy at once; "Archiving…" after 400 ms | No dialog (reversible, as for items). `POST …/common-item-groups/{id}/archive` with `If-Match`, then re-read. The section leaves the page with its items; they stop showing on notes started from now on. **Archived groups** appears if needed, **opens**, and lists it first. | Its **Restore** in Archived groups | "Group archived" (P) |
 | **Restore** (group) | Busy at once; "Restoring…" after 400 ms | `POST …/common-item-groups/{id}/restore` with `If-Match`, then re-read. The section returns at the **end** of the groups with its active items (A2). If no archived group is left, Archived groups is removed. | That group's **Archive**, in the restored section | "Group restored to the end of the list" (P) |
-| **Add group** | Busy at once; "Adding…" after 400 ms | Validate (trimmed). `POST /api/admin/common-item-groups` `{name}`, then re-read. The new, empty section appears last, just above New group; the field is cleared. | The new group's **New item in [name]** field: the next useful step, because an empty group does not show on notes | "Group added at the end of the list" (P) |
+| **Add group** | Busy at once; "Adding…" after 400 ms | Validate (trimmed). `POST /api/admin/common-item-groups` `{name}`, which answers `201 {id}`, then re-read. The new, empty section appears last, just above New group; the field is cleared if it still holds the name sent. | The new group's **New item in [name]** field, found by the `id`: the next useful step, because an empty group does not show on notes | "Group added at the end of the list" (P) |
 | **Open / close an archived section** | — | Native `<details>` toggle | Stays on the summary | Native "expanded" / "collapsed" |
 | **Try again** (load failed) | `aria-disabled`; "Loading…" after 400 ms; the old error text clears | The page renders | The `<h1>` (the button has gone) | — |
 
-All paths are design.md §6.6's. The server refuses renaming, moving or archiving Every note (`422
-config.every_note_fixed`); the screen never offers those actions, so that response is handled as "something went
-wrong".
+All paths are design.md §6.6's. The server refuses renaming, archiving or restoring Every note (`422
+config.every_note_fixed`), and a reorder that names it (`422 config.order_mismatch`); the screen never offers those
+actions, so the first is handled as "something went wrong", and the second as any refused order is.
 
 **Validation** (Add item, item Save, Add group, rename Save; form-validation's one-field pattern). It runs only on
 press, on the trimmed text; whitespace only counts as empty. On failure, the message appears **above** the field with
@@ -584,27 +616,27 @@ Expected wording, not verified. It varies by screen reader.
       navigation reaches every group (71.6% of screen-reader users navigate long pages by headings first; WebAIM #10).
       The archived sections are `<summary>`s, not headings (headings inside `<summary>` are not reliably exposed;
       O'Hara 2022).
-- [ ] Each active group is a `<section aria-labelledby>` on its `<h2>` (which stays while renaming), so it is a named
+- [x] Each active group is a `<section aria-labelledby>` on its `<h2>` (which stays while renaming), so it is a named
       region. Landmarks otherwise come from the shell: banner, navigation, `<main
       id="main-content">`. Forms have no accessible name, so they do not create extra landmarks.
 
 **Labels and names**
-- [ ] **New item in [group name]**, **Edit item**, **Group name** and **New group** are visible `<label for>`s. Their
+- [x] **New item in [group name]**, **Edit item**, **Group name** and **New group** are visible `<label for>`s. Their
       limit is stated before typing (character count hint). Item fields: `aria-describedby` = error (when present),
       count hint, help text. Group name fields: error, count hint.
-- [ ] The Group radios are a `<fieldset>` with `<legend>Group</legend>`; each radio's name is the visible group name.
-- [ ] Every row button's accessible name starts with its visible word, followed by visually hidden ", [item text]";
+- [x] The Group radios are a `<fieldset>` with `<legend>Group</legend>`; each radio's name is the visible group name.
+- [x] Every row button's accessible name starts with its visible word, followed by visually hidden ", [item text]";
       every group button's by ", [group name] group"; each archived-items summary by " in [group name]". No
       `aria-label` anywhere on this screen (SC 2.5.3).
 - [x] Arrows are `aria-hidden` SVG. No button is icon-only.
 
 **Keyboard**
-- [ ] Every action works with Tab plus Enter or Space (arrows inside the radio set). Nothing needs dragging (SC
+- [x] Every action works with Tab plus Enter or Space (arrows inside the radio set). Nothing needs dragging (SC
       2.5.7) or a shortcut (SC 2.1.4).
-- [ ] Focus is never dropped on `<body>` after any move (item or group), Edit, Rename, Save, Cancel, Add, Archive,
+- [x] Focus is never dropped on `<body>` after any move (item or group), Edit, Rename, Save, Cancel, Add, Archive,
       Restore or Try again (SC 2.4.3).
 - [x] Unavailable and busy buttons use `aria-disabled`, never `disabled`, so they stay focusable.
-- [ ] The focus ring (3 px near-black, 2 px offset, `:focus-visible`, `Highlight` in forced colours) is on every
+- [x] The focus ring (3 px near-black, 2 px offset, `:focus-visible`, `Highlight` in forced colours) is on every
       stop, including summaries, radios and the script-focused conflict message (SC 2.4.7, 1.4.11). Nothing is
       sticky, so the focused item is never covered (SC 2.4.11).
 
@@ -618,11 +650,11 @@ Expected wording, not verified. It varies by screen reader.
       matches what is heard ("list, 5 items").
 
 **Visual**
-- [ ] Text at 7:1 or better (help text and the Every note line 9.0:1, unavailable labels 8.1:1). Button borders,
+- [x] Text at 7:1 or better (help text and the Every note line 9.0:1, unavailable labels 8.1:1). Button borders,
       radio circles and focus at least 3:1.
-- [ ] Unavailable is shown with a dashed border as well as grey. Errors are shown with words, a bar and a border.
+- [x] Unavailable is shown with a dashed border as well as grey. Errors are shown with words, a bar and a border.
       The selected radio is a drawn dot, not colour alone (SC 1.4.1).
-- [ ] Targets: buttons and the group name input 48 px tall (`--target-button`), at least 44 px wide; radio rows 56
+- [x] Targets: buttons and the group name input 48 px tall (`--target-button`), at least 44 px wide; radio rows 56
       px; summaries at least 44 px. At least 8 px between separate targets (A32; SC 2.5.8, also 2.5.5).
 - [x] Works at 320 px, 200% text and 400% zoom with no sideways scroll; long words and long group names wrap (SC
       1.4.4, 1.4.10, 1.4.12).
@@ -716,8 +748,8 @@ Messages.
       its Restore and announces "Group archived". No confirmation dialog appears. Restoring returns the section at the
       end of the groups with its active items, focuses its Archive and announces "Group restored to the end of the
       list".
-- [ ] Every note can never be renamed, moved or archived: no button exists, and the API refuses it (`422
-      config.every_note_fixed`).
+- [ ] Every note can never be renamed, moved or archived: no button exists, and the API refuses a rename, an archive
+      or a restore (`422 config.every_note_fixed`) and an order that names it (`422 config.order_mismatch`).
 - [ ] Each archived `<details>` keeps any open or closed state the manager sets between actions (uncontrolled).
 
 **Failures and conflicts**

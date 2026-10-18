@@ -41,10 +41,11 @@ export function madeUpRow(id: string, text: string, sortOrder: number, archivedA
 export const problem = (status: number, code: string) => ({ status, json: { status, code } });
 
 /**
- * The answer to a change to `row` whose `If-Match` is not the row's version (design.md §6.7): `428` without one and
- * `412 precondition.failed` with another; or `undefined` when it is the row's, so that the change goes ahead.
+ * The answer to a change to `row`, a list's row or a common item group, whose `If-Match` is not the row's version
+ * (design.md §6.7): `428` without one and `412 precondition.failed` with another; or `undefined` when it is the row's,
+ * so that the change goes ahead.
  */
-export function refusedPrecondition(request: Request, row: ListedRow) {
+export function refusedPrecondition(request: Request, row: Pick<ListedRow, 'rowVersion'>) {
   const ifMatch = request.headers()['if-match'];
   if (ifMatch === undefined) {
     return problem(428, 'precondition.required');
@@ -55,10 +56,10 @@ export function refusedPrecondition(request: Request, row: ListedRow) {
 
 /**
  * One ordered list's rows held in the browser as the API keeps them (design.md §5.4, §6.7): copies of rows given,
- * listed by `SortOrder`; a row added, or restored, at one more than the highest active `SortOrder` (A2); an archive
- * that keeps the row's place; and a reorder of the active rows, each once. A row whose words, place or archive change
- * takes a new version, as its `RowVersion` would, so that the page meets what the API would say to its next write;
- * and a change that leaves a row as it was saves nothing (D84).
+ * listed by `SortOrder`; a row added, restored or moved in from another list at one more than the highest active
+ * `SortOrder` (A2, A42); an archive that keeps the row's place; and a reorder of the active rows, each once. A row
+ * whose words, place or archive change takes a new version, as its `RowVersion` would, so that the page meets what
+ * the API would say to its next write; and a change that leaves a row as it was saves nothing (D84).
  */
 export class HeldRows {
   readonly #rows: ListedRow[];
@@ -87,6 +88,16 @@ export class HeldRows {
     if (text !== row.text) {
       this.#change(row, { text });
     }
+  }
+
+  /** Takes the row out of the list, as a move to another list does. */
+  remove(row: ListedRow): void {
+    this.#rows.splice(this.#rows.indexOf(row), 1);
+  }
+
+  /** Puts a row that a move took out of another list at the end of this one, keeping its words and archived state. */
+  moveIn(row: ListedRow): void {
+    this.#rows.push({ ...row, sortOrder: this.#end(), rowVersion: newVersion() });
   }
 
   /** Archives the row, which keeps its `SortOrder`, as of now. */

@@ -9,5 +9,6 @@ export const limits = {
   displayName: 100,
   participantName: 100,
   itemText: 200,
+  groupName: 200,
   guidedNotes: 20_000,
 } as const;

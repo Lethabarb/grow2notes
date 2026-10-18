@@ -1,0 +1,12 @@
+/* The field, then the alert, which takes space only while it holds words, then the button, as an item field has. */
+.field {
+  margin-block-end: var(--space-5);
+}
+
+/*
+ * Over the limit before a press has checked it: the colour alone, as the count under the input says it in words, as
+ * an item field's box has it (TextBox.module.css).
+ */
+.input[data-over-limit] {
+  border-color: var(--colour-error);
+}

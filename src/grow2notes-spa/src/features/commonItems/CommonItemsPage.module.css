@@ -8,8 +8,52 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * A group's heading row (common-items.md *Layout - laptop*), the item rows' wrapping flex line: the <h2> on the left,
+ * and beside it, while the name keeps 16rem, the alert slot and the group buttons; under it otherwise, with no
+ * breakpoint or container query of its own. The row keeps the gap that the <h2>'s own margin gives Every note's.
+ */
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+  margin-block-end: var(--space-3);
+}
+
+.groupHead > .heading {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+/* The rename form under the heading row, in the reading column, the add form's gap above the items below it. */
+.renameForm {
+  margin-block-end: var(--space-5);
+}
+
 /* Every note's line, in the secondary colour (common-items.md component 5), in the reading column. */
 .everyNote {
   max-inline-size: var(--measure);
   color: var(--colour-text-secondary);
+}
+
+/* The New group form, a section's gap after the last group's section (common-items.md component 7). */
+.newGroup {
+  margin-block-start: var(--section-gap);
+}
+
+/*
+ * Add group takes its label's width, at least 44 px wide, on a phone and a laptop alike: neither the shared button's
+ * full width below 40rem nor its 8rem minimum from there (common-items.md *Conflicts resolved* 6 and 17). Two classes,
+ * so that it outranks the shared rule whichever stylesheet comes first.
+ */
+.newGroup .addGroup {
+  inline-size: auto;
+  min-inline-size: var(--target-min);
+}
+
+/* Archived groups, a section's gap after the New group form (common-items.md component 8). */
+.archivedGroups {
+  margin-block-start: var(--section-gap);
 }

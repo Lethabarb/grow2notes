@@ -42,6 +42,21 @@ describe('ChoiceRow', () => {
     expect(pdf).not.toHaveAttribute('disabled');
   });
 
+  it('with no hint, is named by its label and described by nothing, with no hint under it', () => {
+    render(
+      <fieldset>
+        <legend>Group</legend>
+        <ChoiceRow id="group-every-note" name="group" label="Every note" checked onChange={() => {}} />
+      </fieldset>,
+    );
+
+    const radio = screen.getByRole('radio', { name: 'Every note' });
+    expect(radio).not.toHaveAttribute('aria-describedby');
+    expect(radio).toHaveAccessibleDescription('');
+    expect(document.getElementById('group-every-note-hint')).toBeNull();
+    expect(radio.closest('fieldset')?.querySelectorAll('p')).toHaveLength(0);
+  });
+
   it('is chosen by a tap anywhere on its row, its text included', () => {
     render(<Choices />);
 

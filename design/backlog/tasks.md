@@ -2166,7 +2166,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
 
 ```yaml
 id: T07
-status: new
+status: doing
 release: R1
 lane: B
 size: M
@@ -2213,10 +2213,264 @@ group; Every note stays first and fixed.
   focused list conflict, which no run checks yet; and the radio and group name parts of the contrast, colour and
   target items, the contrast item's 7:1 text included, which axe's AA rules do not check. This task ticks each once
   its runs prove the whole item, and the *Screen reader* ones once the by-hand pass has heard them.
+- Planned on 18 October 2026 from `origin/main` at `9c64b27`, with T06 (#60) merged. No owner question holds it: D82
+  confirmed A41 to A46, the 200-character group name, the group buttons' order and the Group radios rule, and D67 the
+  screen's (P) strings. T06's tables hold groups already, so this task adds no migration. Where the design is silent,
+  the simplest option is taken:
+  - The group endpoints' handler class is `CommonItemGroupChanges` in `Features/CommonItems`, taking an `Actor` and
+    saving through `ConfigurationChanges.SaveAsync`; the move stays in `CommonItemChanges.UpdateAsync`, beside the
+    reword.
+  - The group add answers `201 {id}`, with no `Location`, as Add participant does (D79), because the screen moves
+    focus to the new group's New item field, which it finds by that ID once the list is read again; the goal and item
+    adds need no ID (T05's and T06's Notes). design.md §6.6's row is amended to say so. The rename answers `200` with
+    no body and no `ETag`, as the item `PUT` does; the archive, the restore and the reorder answer `204`.
+  - A group name is read by T06's one cleaning rule (each line break, with the spaces around it, as one space, the
+    ends trimmed, then 1 to `Limits.GroupName` characters), refused under `name` as "Enter the group name" or "Group
+    name must be 200 characters or less" (design.md §4.9 *States*); a body with no `name`, or a `null` one, is refused
+    as an empty one. Nothing checks for two groups of one name (common-items.md *Validation*). The add reads no
+    `isEveryNote`, so a body that sends one still makes an ordinary group, and the organisation keeps one Every note.
+  - The rename finds the group through the tenant filter (`404`), checks `If-Match` (`428`, `412`), refuses Every note
+    (`422 config.every_note_fixed`), then reads the name; the archive and the restore make the same first three
+    checks. Restoring Every note is refused too, though it is never archived, as S01.03.07's criterion and design.md
+    §6.6's row name both; §6.9's `config.every_note_fixed` and §5.3 *CommonItemGroup*'s Constraints, which name
+    renaming and archiving alone, are brought into line (step 6). Renaming an archived group is not refused, as
+    design.md §6.6 names no refusal, though the screen offers Rename on active groups alone, as T06's Notes say for
+    rewording an archived item.
+  - The reorder takes `{groupIds}`; a body with none, or a `null` one, is `422 validation.failed` under `groupIds`, as
+    the items' reorder is; IDs that are not the active groups other than Every note, each once, Every note's ID
+    included, are `422 config.order_mismatch`, and so is the save's `PreconditionFailed` (S01.03.06's Note).
+  - Event `Details`: `common_item_group.created` holds the group's `name`, `sortOrder` and `archivedAtUtc` as `new`;
+    `common_item_group.updated` the old and new `name`; `common_item_group.archived` the old and new `archivedAtUtc`,
+    as archiving keeps `SortOrder`; `common_item_group.restored` `archivedAtUtc`, and `sortOrder` unless the group's
+    old `SortOrder` was already the end; and `common_item_group.reordered` the old and new `order`, with no
+    `EntityId`. None names a participant. The audit-events test names `common_item.updated`'s two triggers "by
+    Reword" and "by Move", so that its rows cover all 20 configuration events with old and new values.
+  - The move: `groupId` on the item `PUT` is optional, a missing or `null` one keeping the item in its group, so that
+    T06's `{text}` callers and tests stand; the screen always sends both. The `PUT` finds the item (`404`), checks
+    `If-Match` (`428`, `412`), refuses an item whose own group is archived (`409`), finds the chosen group through the
+    tenant filter (`404` for one not in the organisation, as the add's group is), refuses an archived one
+    (`409 config.group_archived`), then reads the text. A moved item goes to `ListOrder.End` of the chosen group's
+    active items and keeps its archived state, as design.md §6.6 refuses no move of an archived item, though the screen
+    moves active items alone. Every note can be chosen. As for the add, the chosen group is read just before the save
+    and carries no token that the save checks, so a group archived in that instant is not caught (T06's Notes).
+  - On the SPA, the write helpers that `ListEditor` keeps to itself (the scoped write that sends, then reads the list
+    again; the list-changed refusal; the failure alert; focus moved only if the person stayed; the text cleaning; the
+    server's `422` shown as the field error, read today from `errors.text` alone and then from the key it is given,
+    `text` for an item or `name` for a group, as common-items.md *Validation* says) move to one module that the item
+    rows and the group parts share, so that there is one copy. The group parts live in `features/commonItems`, use the
+    page's `ListFrame` for focus after a change and for the list conflict, and write in the one scope `common-items`;
+    a group's Move buttons share the item rows' arrow, words and unavailable press.
+  - The Group radios read the active groups from the page's one query and send the chosen group's ID; `ChoiceRow`'s
+    hint becomes optional, as the radios have none. The New group and Group name inputs use the item fields' count and
+    error markup, described by the error, then the count hint, never the help text (common-items.md component 2).
+  - A list conflict on Rename leaves the rename form open with the typed name, the next Save sending the group's new
+    version (common-items.md *Failures*), unless the group has left the page.
+  - Playwright covers the keyboard-only, forced-colours and contrast checks for the group parts, as T06's run did for
+    the item parts; the archived sections' no-motion item stays T26's (T06's Notes).
+- Parts of the absorbed criteria that another task proves (18 October 2026, the plan's review): the note side of
+  design.md §3.7's Common item group row (an archived group is no longer offered on notes started from now on, so none
+  of its items show there, and existing notes keep their snapshot) and of §5.3 *CommonItem*'s paragraph on archiving a
+  group (a restored group's active items show on new notes again) needs the note form, so it is T13's: S02.05.02's
+  first specific criterion (only active groups with at least one active item are offered), and the snapshot rule (A3,
+  §5.7) with S02.05.04 for groups that change before the first save. T06's Notes passed that paragraph's archived
+  group to this task, which proves its list and API parts (step 4). The hand-off is written, dated, in T13's Notes.
+- By-hand checks, written on ops/first-use-in-test.md as steps 50 to 52, in a section of their own after T08's: on the
+  iPhone and the Android phone, the keyboard opening at once on Rename; on the laptop, focus after a whole section
+  moves, and each group heading with its four buttons on one line at the usual window size (common-items.md open
+  question 7); and with NVDA and Chrome, and VoiceOver and iOS Safari, the group parts of the manual pass. The *Screen
+  reader* items of common-items.md's checklist that name a group part wait for them.
+- From step 5 (18 October 2026), where the design is silent: a group chosen in an item's Group radios that is no
+  longer active once the list is read again, as after a `409` for a group archived meanwhile, leaves the radios, which
+  then have the item's own group chosen, so that the set never shows none chosen; and "Item saved and moved to the end
+  of [group name]" names the group as its radio named it when Save was pressed.
+- From step 6 (18 October 2026), where the design is silent: `serveCommonItems` holds the groups other than Every
+  note in a `HeldRows`, each as a row whose text is the group's name, so that the groups are added, renamed, archived,
+  restored and reordered by the rules the items are; the keyboard-only check of the group parts answers the list in
+  the browser, so that it can meet the list conflict that another manager's change gives, while T06's keyboard checks
+  still meet the app's own answers; and the text's 7:1 is checked by axe's AAA contrast rule, with each group's name,
+  which that rule holds to 4.5:1 as large text, measured on its own (`contrastOf`). Of common-items.md's
+  *Accessibility checklist*, the *Screen reader* items wait for ops/first-use-in-test.md step 52, and the no-motion
+  item stays T26's. CI's run 39124689045 on the pull request (#62), which alone runs the SQL Server tests, passed,
+  with 1436 xUnit and 252 Playwright tests, so step 6 is ticked.
+- 18 October 2026, review: 3 findings were confirmed and are fixed here, two of them the same clash with T08 (#61),
+  which merged after this branch was cut from `9c64b27`. None changes the design, so no A-number is added:
+  - T07's by-hand steps took the numbers 46 to 48, which T08's section on `main` already has, as steps 46 to 49, and
+    the Notes above, step 6 and the last step's own text named them. A rebase that kept both sections would have left
+    two of each, with T07's references pointing at T08's database, Today and screen-reader checks. T07's steps are now
+    50 to 52, which the rebase onto T08's merge put after T08's section, which stays first, in merge order. Step 52 now
+    names the steps it follows without their numbers, as T08's section does, and the Notes above and step 6 name steps
+    50 to 52 and step 52. The rebase kept both `groupName: 200` and T08's `guidedNotes: 20_000` in `limits.ts`.
+  - tests/README.md's seeded-rows rule still said that tests add groups through the context as no endpoint adds a
+    group until T07, which this task's add made false. It now gives the reason `TestCommonItems` gives, that it writes
+    no audit event and keeps every value given, and says that a test that adds a group through
+    `POST /api/admin/common-item-groups` and finds where it lands works in an organisation of its own, as
+    `AddCommonItemGroupEndpointTests` does, and that one adding a group to A that way reads that group's events alone.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Add groups (S01.03.05's first and third criteria; S01.03.01's sixth through the API, which is §14 M1's "a second
+      one cannot be created", its API part; design.md §4.9 item 5; common-items.md component 7, "Add group with a valid
+      name…", *Content and copy*'s first bullet for New group and Add group, *Loading, empty, errors*' "no add form
+      (item or group)…", and *Failures and conflicts*' network and `401` bullets for Add group), shared parts first:
+      the name rule (Notes), with `limits.groupName` in `limits.ts` and its `SpaLimitsTests` row; the handler class
+      `CommonItemGroupChanges`, which steps 2 to 4 use too; and the SPA's shared list-write module (Notes). Then
+      `POST /api/admin/common-item-groups` with `{name}`, the group put at `ListOrder.End` of the active groups other
+      than Every note and saved with `common_item_group.created`, and `201 {id}`; its matrix row (`201` for each
+      manager, in their own organisation, as Add participant's) and audit-events row. Integration tests on SQL Server:
+      200 characters saved and 201 refused; whitespace alone, no `name` and a `null` one refused; line breaks saved as
+      single spaces; a group added after archived ones at one more than the highest active `SortOrder` of the groups
+      other than Every note, and an organisation's first, at 0, still listed after Every note; `isEveryNote: true` in
+      the body giving an ordinary group; and the `id` returned the new group's. On the SPA: the New group form after
+      the last group section, inside the load region: the label "New group";
+      `<input type="text" id="group-new-name">`, 48 px tall, no `maxLength`, capped at 40rem; the `CharacterCount`; the
+      form's alert slot; and "Add group", secondary, label width, busy with "Adding…" after 400 ms. The one-field
+      check on press; then the new, empty section last, just above New group, the field cleared while it still holds
+      the name sent, focus in the new group's "New item in [name]" field and "Group added at the end of the list"; a
+      `422 validation.failed` with `errors.name` shown as the check's error is, the name kept; or "Not added: …" in its
+      alert slot, the name kept and focus on Add group; and a `401` handing over to sign-in in place, the name kept.
+      Vitest: each message, with `aria-invalid`, focus on the field and nothing sent, cleared silently once fixed; a
+      server `422` with `errors.name` showing its message as the field error, with `aria-invalid` and focus on the
+      field; no New group form before the data; the new section last with focus in its field after the re-read; 210
+      characters kept whole; one `POST` after a lost answer; the item rows' tests passing on the shared module; and the
+      new strings in `copy.test.ts`.
+- [x] Rename groups, and each group's heading row (S01.03.05's second criterion; §14 M1's Every note line, its API part
+      for a rename; design.md §4.9 items 2 and 3 and *States*; common-items.md component 5's heading row and Rename
+      form, "Rename shows the Group name field…", *Content and copy*'s second and third bullets for the group buttons,
+      and *Failures and conflicts*' group parts for Rename): `ErrorCode.EveryNoteFixed` for
+      `422 config.every_note_fixed`; `PUT /api/admin/common-item-groups/{groupId}` with `{name}`, checking in the order
+      Notes give, then saving `common_item_group.updated` with the old and new `name`, and `200`; its matrix row (a
+      group of its own added to A, `404` for B's manager) and audit-events row. Integration tests: `428` with no
+      `If-Match`; a stale one `412` with nothing written; a group changed after the handler loaded it `412`; the stored
+      name `200` with no event (D84); the add's `422`s; Every note `422 config.every_note_fixed`, still named "Every
+      note", with no event; and another organisation's group `404`. On the SPA: each group but Every note gets its
+      heading row, the `<h2>`, then the group's alert slot and Move up, Move down, Rename and Archive in two pairs,
+      label width, each with the hidden ", [name] group" (steps 3 and 4 give Move and Archive their writes); Rename
+      turning the buttons into a `<form noValidate>` under the `<h2>`, which stays, with the label "Group name",
+      `<input type="text" id="group-{id}-name">` holding the current name, opened with `flushSync` and focused with the
+      caret at the end, the count, the alert slot, Save, primary, and Cancel; Save checked as Add group is, busy with
+      "Saving…" and the input `readOnly`, closing as Cancel does when the cleaned name is unchanged, else the `PUT` with
+      the group's version read as it runs, then "Group renamed" and focus on Rename, the heading and the New item label
+      following the new name; Cancel dropping the typed name, focus on Rename; a `412` reading the list again and
+      focusing the list conflict, the form still open with the typed name (Notes); a `422 validation.failed` with
+      `errors.name` shown as the field error, as for Add group; a `422 config.every_note_fixed` or a `428` as "Not
+      saved: something went wrong. Try again."; and "Not saved: …" in the form's alert slot. Vitest: Every note with no
+      group button in the DOM; another group's four buttons in that order with their names; the group's section still
+      found by role `region` and the group's name while Rename is open; those flows; a server `422` with `errors.name`
+      on Save showing its message as the field error, with `aria-invalid` and focus on the field; the next Save after a
+      `412` sending the new version; and a `401` on Save keeping the name.
+- [x] Reorder groups (S01.03.06; §14 M1's Every note line, its API part for a move; common-items.md *Reordering*' group
+      bullets, "Move down on row 1 (item or group)…", "End buttons…", "Moving a group sends every active group ID
+      except Every note…", "Two quick presses on different rows or groups…" and "The screen never shows a new
+      order…", and *Failures and conflicts*' group-order part): `PUT /api/admin/common-item-groups/order` with
+      `{groupIds}`, reading the active groups other than Every note with the list's SQL and giving them to
+      `ListOrder.Reorder`, whose `OrderMismatch`, like the save's `PreconditionFailed`, answers
+      `422 config.order_mismatch`; otherwise `common_item_group.reordered` with the old and new order and no
+      `EntityId`, and `204`, the order already stored saving nothing; its matrix row (two groups of its own added to A
+      and sent with A's other active groups, `422` for B's manager with A's order as it was) and audit-events row.
+      Integration tests on SQL Server: the groups rewritten as 0 to n-1 with their event, Every note's `SortOrder` as
+      it was; Every note's ID added, a missing ID, an extra one (a group of organisation B), an archived one and a
+      repeated one, each `422` with every `SortOrder` as it was and no event; no `groupIds` `422 validation.failed`;
+      and two scopes, as the items' race test has them, where a group changed after the other read the list gives that
+      reorder `422`, writing no order or event. On the SPA: each group's Move up and Move down, busy at once and showing
+      "Moving…" after 400 ms, sending every active group ID but Every note's, the group swapped, built from the list as
+      the write runs; the sections unchanged until the re-read; focus back on the same button of the moved group once
+      the sections have moved; "Group moved up" or "Group moved down"; Move up on the first group after Every note and
+      Move down on the last `aria-disabled`, dashed and in place, a press sending nothing and saying "Already at the
+      top" or "Already at the bottom"; a `422` showing the list conflict; and "Not moved: …" in the group's alert slot.
+      Vitest: Move down on the first group sending one `PUT` with no Every note ID, then `document.activeElement` that
+      group's Move down; with the `PUT` held, the order on screen unchanged and the pressed button reading "Moving…"
+      after 400 ms; an end press sending nothing and announcing once; and a group move and an item move pressed at once
+      sending two `PUT`s one after the other, the second built from the first's re-read.
+- [x] Archive and restore groups (S01.03.07; design.md §3.7's Common item group row, its list and API part, §4.9 item
+      6, and §5.3 *CommonItem*'s paragraph on archiving a group, its list part, the note side of both being T13's
+      (Notes); §14 M1's Every note line, its API part for an archive; common-items.md component 8, "Archiving a
+      group…", "Every note can never be renamed, moved or archived…", "Each archived `<details>` keeps…" for Archived
+      groups, *Content and copy*'s first and third bullets for Archived groups, and *Failures and conflicts*' group
+      Archive and Restore part):
+      `POST /api/admin/common-item-groups/{groupId}/archive` and `/restore` with `If-Match`, checking in the order Notes
+      give, archiving with `Archiving.Archive`, which keeps the group's `SortOrder` and its items as they are, and
+      restoring with `Archiving.Restore` to `ListOrder.End` of the active groups other than Every note, each saving
+      `common_item_group.archived` or `common_item_group.restored` with the values that changed (Notes), and `204`, a
+      repeat saving nothing (D84); their matrix rows (an active and an archived group added to A for each call) and
+      audit-events rows. Integration tests: `428`, `412` and another organisation's group `404`; Every note `422` for
+      each, still active, with no event; archiving a group leaving each of its items' `ArchivedAtUtc` and `RowVersion`
+      as they were; a restored group at one more than the highest active `SortOrder` of the groups other than Every
+      note, listed last without `includeArchived` with its active items and not its archived ones; after an archive
+      through the endpoint, an item add to the group and a reword of its item each `409 config.group_archived`, writing
+      nothing; and a repeat with no event. On the SPA: a group's Archive, with no dialog, busy with "Archiving…", then
+      its section gone, Archived groups appearing after New group if it was absent and opening with the group first,
+      focus on its Restore and "Group archived"; Archived groups, rendered only while a group is archived, an
+      uncontrolled `<details>` closed on load, with the summary "Archived groups" and a `<ul>` newest archived first,
+      each `<li>` the group's name, its alert slot and Restore with the hidden ", [name] group"; Restore, busy with
+      "Restoring…", then the section last among the groups with its active items, focus on its Archive and "Group
+      restored to the end of the list", Archived groups gone once empty; a `412` showing the list conflict; and "Not
+      archived: …" or "Not restored: …" in the group's or the row's alert slot. Vitest: those; and an Archived groups
+      section that the manager closed staying closed, and one opened staying open, after another write.
+- [x] Move an item to another group (S01.03.08; design.md §4.9 *Moving an item*, A42; common-items.md component 6,
+      "Edit opens the row form…", its Group radios part, "Choosing another group and pressing Save…", and *Failures and
+      conflicts*' "A `412` on an item Save keeps the typed text and chosen group…" and the `409` for a chosen group
+      archived meanwhile): `groupId` on `PUT /api/admin/common-items/{id}`, checked in the order Notes give, the item
+      moved to `ListOrder.End` of the chosen group's active items, and `common_item.updated` holding `groupId` and
+      `sortOrder` old and new, and `text` too when it changed; its audit-events rows, `common_item.updated` by Reword
+      and by Move (Notes). Integration tests on SQL Server: a moved item at one more than the highest active
+      `SortOrder` of the chosen group, with its old group's items as they were; the text and the group changed in one
+      `PUT`; no `groupId`, a `null` one and the item's own group each a reword in place; an archived chosen group `409`
+      with nothing written; an item whose own group is archived, sent with an active `groupId`,
+      `409 config.group_archived` with nothing written; a chosen group of another organisation, and an unknown one,
+      `404` with the item as it was; the item's own group and its stored text `200` with no event (D84); and a move
+      into Every note. On the SPA: the edit form's Group radios, after the count, only while two or more groups are
+      active: a `<fieldset>` with `<legend>Group</legend>` and a `ChoiceRow` per active group in the list's order, named
+      `item-{id}-group`, each labelled with its group's name, the item's group checked; Save closing as Cancel does when
+      the text and the group are unchanged, else one `PUT` with `{text, groupId}` and the item's version read as it
+      runs; after the re-read, a moved item last in its new group with focus on its Edit there and "Item saved and
+      moved to the end of [group name]", or, unmoved, "Item saved"; a `412` keeping the typed text and the chosen group
+      with the edit conflict; and a `409` showing the list conflict. Vitest: no radios with Every note alone; the radios
+      in order with the item's group checked; an arrow key choosing the next; an unchanged Save sending nothing; a move
+      sending `{text, groupId}` with `If-Match`, then focus on the item's Edit in its new section and the announcement;
+      the `412` and the `409`; and the goals' edit form as it was.
+- [x] Prove the group flows end to end and bring the documents into line (common-items.md *Layout*, the group part of
+      each bullet, and *Accessibility runs*' axe, keyboard-only and forced-colours runs): `serveCommonItems` answering
+      every group write and the item move from its list in memory, as tests/README.md then says; and in
+      `common-items.spec.ts`, signed in for real as T06's test is, a manager at 375 px adds the groups "Community
+      outing" and "Personal care", with focus in each new group's New item field, renames one, adds items to it, moves
+      an item into it through Edit's Group radios, moves a group down, and archives and restores it, on the app's own
+      answers. The keyboard-only check at 375 px and 1280 px through common-items.md's *Focus order* for the group
+      parts: each group's Move up, Move down, Rename and Archive, or Group name, Save and Cancel while renaming; the
+      Group radios as one stop, with arrows between them; New group, Add group, the Archived groups summary and each
+      Restore while it is open; with the focus ring at each stop, the radios and the focused list conflict included.
+      With the list answered in the browser: axe at both widths in T06's states and in renaming a group, archived
+      groups open and editing an item with the Group radios; at 375 px each group's Move up and Move down on one line
+      and Rename and Archive on the next, Add group label width, every group button at least 44 × 48 px, the New group
+      and Group name inputs 48 px tall, the Archived groups summary at least 44 px tall and each radio row at least 56
+      px tall; at both widths at least 8 px between group buttons and between radio rows; at 1280 px each group heading
+      and its four buttons on one line, stacked with no overlap or clipping at 200% text; the New group and Group name
+      inputs no wider than 40rem; no sideways scroll at 320 px
+      with 200% text and a long group name; the help text, Every note's line, the group names, the radio labels and the
+      unavailable labels at 7:1 or better against their background, and button borders, radio circles and the ring at
+      3:1; the radio dots, the group buttons' dashed unavailable borders and the ring in forced colours; live regions
+      in the DOM before their text; and no group or item text in `location`, `document.title`, `history.state` or the
+      origin's storage after each flow. Then tick the items of common-items.md's *Accessibility checklist* that these
+      runs and Vitest prove whole, as T06's Notes hand them on; the *Screen reader* ones wait for
+      ops/first-use-in-test.md step 52. Docs, each to the code as built: common-items.md, list-editor.md and
+      group-picker.md's *Manager side*; design.md §6.6's group rows and the item `PUT` (Notes), and §6.9's
+      `config.every_note_fixed` and §5.3 *CommonItemGroup*'s Constraints, which name renaming and archiving alone, to
+      the restore refusal as well (Notes); ops/first-use-in-test.md's steps 50 to 52; and CI's run on the pull request
+      passing.
+- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
+      passed every step, the deploy's migration step finding nothing new to apply, and its smoke test passed; `/`
+      serves this build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with
+      and without `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless
+      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the groups list
+      and every group and item write with made-up data (A35), so that test receives only `GET`s: at 375 px and 1280 px
+      `/manage/common-items` shows Every note with no group buttons, then a made-up group with Move up, Move down,
+      Rename and Archive; Add group puts focus in the new group's New item field; Rename's Save puts focus on Rename;
+      Move down on the first group keeps focus on that group's Move down; Edit on an item shows the Group radios, and
+      a move puts focus on its Edit in its new group; and Archive opens Archived groups with focus on Restore; the
+      console reports no CSP violation or script error, and the origin's storage is empty; Application Insights shows
+      no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T07's `status`
+      here and its stories' to `done` together, ticking their criteria, with a dated Note in S01.03.07 naming T13 for
+      the note side (Notes), and close S01.03.01's Content and copy criterion, which T06 left open for this task's
+      parts, with a dated Note there.
 
 ---
 
@@ -2928,6 +3182,12 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   and their groups in `listsVersion` (ListsVersion.cs hashes the active goals' IDs and wording in the list's order); the
   snapshot's groups and items in `NoteDraft.Groups` and `Items`, whose JSON has §5.3's names already, `section` 2 for a
   common item; `headingLevel` and `hintId` on `TickListField`; and the lists-changed reload's picks by group ID.
+- From T07 (18 October 2026, its plan's review): the note side of design.md §3.7's Common item group row and of §5.3
+  *CommonItem*'s paragraph on archiving a group, which S01.03.07 cites, is this task's, as T07 has no note form to
+  prove it on: an archived group is no longer offered on notes started from now on, so none of its items show there,
+  and a restored one is offered again with its active items (S02.05.02's first specific criterion: only active groups
+  with at least one active item are offered); existing notes keep their snapshot (A3, §5.7); and a group that changes
+  before the first save is S02.05.04's. T07 proves the list and API parts.
 
 ### Steps
 

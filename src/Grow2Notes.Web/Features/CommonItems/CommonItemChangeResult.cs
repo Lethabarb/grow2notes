@@ -3,10 +3,12 @@ using Grow2Notes.Web.Platform;
 namespace Grow2Notes.Web.Features.CommonItems;
 
 /// <summary>
-/// What <see cref="CommonItemChanges"/> did with a change to a group's common items: found no such group or item in the
-/// tenant's organisation, another organisation's included (design.md §9.2); refused the change with a design.md §6.9
-/// code, <c>If-Match</c>'s, the group's, the reorder's or the save's (<see cref="Error"/>); refused the text, with its
-/// message (<see cref="Errors"/>); or took the change, and saved it with its audit event when a value changed.
+/// What <see cref="CommonItemChanges"/> did with a change to a group's common items, or
+/// <see cref="CommonItemGroupChanges"/> with a change to a group: found no such group or item in the tenant's
+/// organisation, another organisation's included (design.md §9.2); refused the change with a design.md §6.9 code,
+/// <c>If-Match</c>'s, the group's, the reorder's or the save's (<see cref="Error"/>); refused the text or the name,
+/// with its message (<see cref="Errors"/>); or took the change, and saved it with its audit event when a value
+/// changed.
 /// </summary>
 internal sealed record CommonItemChangeResult
 {

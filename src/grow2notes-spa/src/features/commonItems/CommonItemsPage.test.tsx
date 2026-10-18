@@ -16,7 +16,8 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
-const listPath = '/api/admin/common-item-groups?includeArchived=true';
+const groupsPath = '/api/admin/common-item-groups';
+const listPath = `${groupsPath}?includeArchived=true`;
 
 // common-items.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts,
 // and a worker.
@@ -60,7 +61,7 @@ function group(
 
 // common-items.md's sketch (*Layout - phone*): Every note with two items and two archived ones, archived in this order
 // and so shown the other way round; Community outing with three; Personal care with none; and an archived group,
-// which the page leaves out, with an item of its own.
+// which the page lists in Archived groups alone, with an item of its own.
 const medication = item('1a4c7e90-2b5d-4f81-9c36-8e0a2d4f6b17', 'Medication prompted', 0);
 const meal = item('2b5d8fa1-3c6e-4a92-8d47-9f1b3e5a7c28', 'Meal prepared', 1);
 const laundry = item('3c6e9ab2-4d7f-4ba3-9e58-0a2c4f6b8d39', 'Laundry done', 2, '2026-09-21T05:12:00Z');
@@ -97,8 +98,29 @@ function problem(status: number, code?: string): Answer {
     Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/problem+json' } }));
 }
 
+/** A `422 validation.failed` naming each field in `errors` (design.md §6.1). */
+function refused(errors: Record<string, string[]>): Answer {
+  const body = JSON.stringify({
+    type: 'about:blank',
+    title: 'Problem',
+    status: 422,
+    code: 'validation.failed',
+    errors,
+  });
+  return () =>
+    Promise.resolve(new Response(body, { status: 422, headers: { 'Content-Type': 'application/problem+json' } }));
+}
+
 /** A `201` with no body, as an add answers (design.md §6.6). */
 const created: Answer = () => Promise.resolve(new Response(null, { status: 201 }));
+
+/** A `201` with a JSON body, as a group add answers with the new group's ID (design.md §6.6). */
+function createdWith(body: unknown): Answer {
+  return () =>
+    Promise.resolve(
+      new Response(JSON.stringify(body), { status: 201, headers: { 'Content-Type': 'application/json' } }),
+    );
+}
 
 /** No connection, which `fetch` rejects at once. */
 const noConnection: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -334,16 +356,19 @@ describe('Common items', () => {
       const heading = within(section).getByRole('heading', { level: 2 });
       expect(heading.id).toBe(`group-${id}-heading`);
       expect(section).toHaveAttribute('aria-labelledby', heading.id);
-      expect(section.firstElementChild).toBe(heading);
+      // First in the section, on its own or first in its heading row.
+      expect(heading.previousElementSibling).toBeNull();
+      expect(section.firstElementChild?.contains(heading)).toBe(true);
       expect(heading).toHaveStyle({ overflowWrap: 'anywhere' });
     }
   });
 
-  it('leaves out an archived group, with its items', async () => {
+  it('gives an archived group no section and none of its items, only its name in Archived groups', async () => {
     await openPage();
 
-    expect(within(main()).queryByText(respite.name)).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('region', { name: respite.name })).not.toBeInTheDocument();
     expect(within(main()).queryByText(packed.text)).not.toBeInTheDocument();
+    expect(within(main()).getAllByText(respite.name)).toEqual([archivedGroupRow(respite.name).querySelector('p')]);
   });
 
   it('gives Every note its line under its <h2> and no group buttons, not even unavailable ones', async () => {
@@ -353,7 +378,7 @@ describe('Common items', () => {
     const everyNoteParagraph = within(section).getByText(everyNoteLine);
     expect(everyNoteParagraph.tagName).toBe('P');
     expect(within(section).getByRole('heading', { level: 2 }).nextElementSibling).toBe(everyNoteParagraph);
-    expect(within(main()).queryByRole('button', { name: /^Rename/ })).not.toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: /^Rename/ })).not.toBeInTheDocument();
     expect(within(main()).queryAllByRole('button', { name: /, Every note group$/ })).toEqual([]);
     // Each button in the section is an item row's, its add form's or an archived item's.
     const rowButtons = [...activeItems(section), ...archivedItems(section)].flatMap((row) =>
@@ -366,6 +391,49 @@ describe('Common items', () => {
     ]);
     // Only Every note's.
     expect(within(main()).getAllByText(everyNoteLine)).toHaveLength(1);
+  });
+
+  it('gives each other group its <h2>, alert, Move up, Move down, Rename and Archive, each named by it', async () => {
+    await openPage();
+
+    for (const { name } of [outing, care]) {
+      const section = sectionOf(name);
+      const heading = within(section).getByRole('heading', { level: 2 });
+      const head = heading.parentElement!;
+      expect(head.parentElement).toBe(section);
+      expect(head.firstElementChild).toBe(heading);
+      expect(head).toHaveStyle({ display: 'flex', flexWrap: 'wrap' });
+      expect(within(section).queryByText(everyNoteLine)).toBeNull();
+      expectButtons(head, [
+        `Move up, ${name} group`,
+        `Move down, ${name} group`,
+        `Rename, ${name} group`,
+        `Archive, ${name} group`,
+      ]);
+      const buttons = within(head).getAllByRole('button');
+      // In two pairs, Move up and Move down, then Rename and Archive.
+      expect(buttons[0].parentElement).toBe(buttons[1].parentElement);
+      expect(buttons[2].parentElement).toBe(buttons[3].parentElement);
+      expect(buttons[1].parentElement).not.toBe(buttons[2].parentElement);
+      for (const button of buttons) {
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button).not.toHaveAttribute('aria-label');
+        expect(button.className).toMatch(/secondary/);
+        // Label width, at least 44 px wide, as an item row's buttons are (common-items.md *Conflicts resolved* 6).
+        expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+        const context = within(button).getByText(`, ${name} group`);
+        expect(context).toHaveClass('visually-hidden');
+      }
+
+      const alert = within(head).getByRole('alert');
+      expect(alert).toBeEmptyDOMElement();
+      expect(follows(heading, alert)).toBe(true);
+      expect(follows(alert, buttons[0])).toBe(true);
+      // Then the group's items, or its empty line.
+      const items = section.querySelector('ol') ?? within(section).getByText(emptyLine);
+      expect(follows(head, items)).toBe(true);
+      expect(head.contains(items)).toBe(false);
+    }
   });
 
   it("lists each group's active items in a numbered list of its own, from 1, each row's text in full", async () => {
@@ -666,8 +734,16 @@ function itemPath(itemId: string): string {
   return `/api/admin/common-items/${itemId}`;
 }
 
-/** A `200` with no body and no `ETag`, as a reword answers (design.md §6.6). */
+/** A `200` with no body and no `ETag`, as a reword and a group's rename answer (design.md §6.6). */
 const reworded: Answer = () => Promise.resolve(new Response(null, { status: 200 }));
+
+/** The path that the group of `groupId` is renamed at (design.md §6.6). */
+function groupPath(groupId: string): string {
+  return `${groupsPath}/${groupId}`;
+}
+
+/** The path that the order of the groups is put to (design.md §6.6). */
+const groupOrderPath = `${groupsPath}/order`;
 
 /** The path that the order of the items of the group of `groupId` is put to (design.md §6.6). */
 function orderPath(groupId: string): string {
@@ -685,18 +761,36 @@ function placePath(itemId: string, action: 'archive' | 'restore'): string {
 /** A `204` with no body, as an archive and a restore answer (design.md §6.6). */
 const placed: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
 
+/** The path that the group of `groupId` is archived or restored at (design.md §6.6). */
+function groupPlacePath(groupId: string, action: 'archive' | 'restore'): string {
+  return `${groupPath(groupId)}/${action}`;
+}
+
 /**
- * Has the groups list, each group's adds, reorders and each item's rewords, archives and restores answered by a server
- * that holds `list`, and gives what it holds, which a test may change as another manager would: an add puts an item,
- * with an ID and a version of its own, at the end of its group, one after the highest active `sortOrder` (A2), and
- * answers `201` with no body; a reword refuses an `If-Match` that is not the item's version (`412`), then an item of an
- * archived group (`409 config.group_archived`), or else gives the item its text and a new version, and answers `200`
- * with no body; a reorder refuses IDs that are not the group's active items, each once (`422
- * config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder`
- * changed, and answers `204` with no body; an archive or a restore refuses an `If-Match` that is not the item's version
- * (`412`), or else archives the item in its place, later than anything archived before it, or restores it to the end
- * of its group, one after the highest active `sortOrder` (A2), each with a new version, and answers `204` with no
- * body; and a read gives what it holds.
+ * Has the groups list, the group adds and reorders, each group's renames, archives, restores, adds and reorders, and
+ * each item's rewords, archives and restores answered by a server that holds `list`, and gives what it holds, which a
+ * test may change as another manager would: a group add puts a group, with no items and an ID and a version of its own,
+ * at the end of the active groups other than Every note, one after the highest active `sortOrder` (A2), in the list's
+ * order, and answers `201` with its ID; a group reorder refuses IDs that are not the active groups other than Every
+ * note, each once (`422 config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each
+ * group whose `sortOrder` changed, puts the list in its order, Every note first, and answers `204` with no body; a
+ * rename refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
+ * config.every_note_fixed`), or else gives the group its name and a new version, and answers `200` with no body; a
+ * group archive or restore refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
+ * config.every_note_fixed`), or else archives the group in its place, with its items as they were, later than anything
+ * archived before it, or restores it, with its items, to the end of the active groups other than Every note, one after
+ * the highest active `sortOrder` (A2), in the list's order, each with a new version, and answers `204` with no body;
+ * an add puts an item, with an ID and a version of its own, at the end of its group, one after the highest active
+ * `sortOrder` (A2), and answers `201` with no body; a reword refuses an `If-Match` that is not the item's version
+ * (`412`), then an item of an archived group (`409 config.group_archived`), then a `groupId` of no group it holds
+ * (`404`) or of an archived one (`409 config.group_archived`), or else gives the item its text and a new version, in
+ * its place when the `groupId` is its own group's, or else at the end of that group, one after its highest active
+ * `sortOrder` (A42), and answers `200` with no body; a reorder refuses IDs that are not the group's active items, each
+ * once (`422 config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each item whose
+ * `sortOrder` changed, and answers `204` with no body; an archive or a restore refuses an `If-Match` that is not the
+ * item's version (`412`), or else archives the item in its place, later than anything archived before it, or restores
+ * it to the end of its group, one after the highest active `sortOrder` (A2), each with a new version, and answers `204`
+ * with no body; and a read gives what it holds. Each item write finds the item in whichever group holds it then.
  */
 function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGroup[] {
   const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
@@ -705,10 +799,16 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     versions += 1;
     return `AAAAAAAAE${String(versions).padStart(3, '0')}=`;
   };
+  // One after the highest active sortOrder of a group's items (A2, A42).
+  const endOf = (items: ListRow[]) =>
+    Math.max(-1, ...items.flatMap((row) => (row.archivedAtUtc === null ? [row.sortOrder] : []))) + 1;
+  // The group that holds the item of `itemId` now, which a move changes.
+  const holderOf = (itemId: string) => held.find((listed) => listed.items.some(({ id }) => id === itemId))!;
   let archives = 0;
-  const servePlace = (heldGroup: AdminCommonItemGroup, itemId: string) => {
+  const servePlace = (itemId: string) => {
     for (const action of ['archive', 'restore'] as const) {
       serve('POST', placePath(itemId, action), (init) => {
+        const heldGroup = holderOf(itemId);
         const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
         const listed = heldGroup.items[at];
         if (new Headers(init?.headers).get('If-Match') !== `"${listed.rowVersion}"`) {
@@ -720,11 +820,10 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
           const archivedAtUtc = `2026-10-01T06:${String(archives).padStart(2, '0')}:00Z`;
           heldGroup.items[at] = { ...listed, archivedAtUtc, rowVersion: nextVersion() };
         } else if (action === 'restore' && listed.archivedAtUtc !== null) {
-          const active = heldGroup.items.flatMap((row) => (row.archivedAtUtc === null ? [row.sortOrder] : []));
           heldGroup.items.splice(at, 1);
           heldGroup.items.push({
             ...listed,
-            sortOrder: Math.max(-1, ...active) + 1,
+            sortOrder: endOf(heldGroup.items),
             archivedAtUtc: null,
             rowVersion: nextVersion(),
           });
@@ -734,24 +833,89 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       });
     }
   };
-  const serveReword = (heldGroup: AdminCommonItemGroup, itemId: string) => {
+  const serveReword = (itemId: string) => {
     serve('PUT', itemPath(itemId), (init) => {
-      const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
-      if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.items[at].rowVersion}"`) {
+      const from = holderOf(itemId);
+      const at = from.items.findIndex((listed) => listed.id === itemId);
+      const listed = from.items[at];
+      if (new Headers(init?.headers).get('If-Match') !== `"${listed.rowVersion}"`) {
         return problem(412)();
       }
 
-      if (heldGroup.archivedAtUtc !== null) {
+      if (from.archivedAtUtc !== null) {
         return problem(409, 'config.group_archived')();
       }
 
-      const { text } = JSON.parse(init?.body as string) as { text: string };
-      heldGroup.items[at] = { ...heldGroup.items[at], text, rowVersion: nextVersion() };
+      const { text, groupId } = JSON.parse(init?.body as string) as { text: string; groupId: string };
+      const to = held.find((heldGroup) => heldGroup.id === groupId);
+      if (to === undefined) {
+        return problem(404)();
+      }
+
+      if (to.archivedAtUtc !== null) {
+        return problem(409, 'config.group_archived')();
+      }
+
+      if (to === from) {
+        from.items[at] = { ...listed, text, rowVersion: nextVersion() };
+      } else {
+        from.items.splice(at, 1);
+        to.items.push({ ...listed, text, sortOrder: endOf(to.items), rowVersion: nextVersion() });
+      }
+
       return reworded();
     });
   };
-  serve('GET', listPath, json(held));
-  for (const heldGroup of held) {
+  // One after the highest active sortOrder of the groups other than Every note (A2).
+  const endOfGroups = () => {
+    const active = held.filter((listed) => !listed.isEveryNote && listed.archivedAtUtc === null);
+    return Math.max(-1, ...active.map((listed) => listed.sortOrder)) + 1;
+  };
+  // In the list's order: after every group but Every note of its SortOrder or less, as it was added or restored last.
+  const putInListOrder = (heldGroup: AdminCommonItemGroup) => {
+    const after = held.findIndex((listed) => !listed.isEveryNote && listed.sortOrder > heldGroup.sortOrder);
+    held.splice(after === -1 ? held.length : after, 0, heldGroup);
+  };
+  const serveGroup = (heldGroup: AdminCommonItemGroup) => {
+    serve('PUT', groupPath(heldGroup.id), (init) => {
+      if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.rowVersion}"`) {
+        return problem(412)();
+      }
+
+      if (heldGroup.isEveryNote) {
+        return problem(422, 'config.every_note_fixed')();
+      }
+
+      const { name } = JSON.parse(init?.body as string) as { name: string };
+      heldGroup.name = name;
+      heldGroup.rowVersion = nextVersion();
+      return reworded();
+    });
+    for (const action of ['archive', 'restore'] as const) {
+      serve('POST', groupPlacePath(heldGroup.id, action), (init) => {
+        if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.rowVersion}"`) {
+          return problem(412)();
+        }
+
+        if (heldGroup.isEveryNote) {
+          return problem(422, 'config.every_note_fixed')();
+        }
+
+        if (action === 'archive' && heldGroup.archivedAtUtc === null) {
+          archives += 1;
+          heldGroup.archivedAtUtc = `2026-10-01T06:${String(archives).padStart(2, '0')}:00Z`;
+          heldGroup.rowVersion = nextVersion();
+        } else if (action === 'restore' && heldGroup.archivedAtUtc !== null) {
+          heldGroup.sortOrder = endOfGroups();
+          heldGroup.archivedAtUtc = null;
+          heldGroup.rowVersion = nextVersion();
+          held.splice(held.indexOf(heldGroup), 1);
+          putInListOrder(heldGroup);
+        }
+
+        return placed();
+      });
+    }
     serve('PUT', orderPath(heldGroup.id), (init) => {
       const { commonItemIds } = JSON.parse(init?.body as string) as { commonItemIds: string[] };
       const active = heldGroup.items.filter((listed) => listed.archivedAtUtc === null);
@@ -773,17 +937,49 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     });
     serve('POST', itemsPath(heldGroup.id), (init) => {
       const { text } = JSON.parse(init?.body as string) as { text: string };
-      const active = heldGroup.items.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
       const id = `9e8d7c6b-5a49-4382-a1b0-${String(heldGroup.items.length).padStart(12, '0')}`;
-      heldGroup.items.push(item(id, text, Math.max(-1, ...active) + 1));
-      serveReword(heldGroup, id);
-      servePlace(heldGroup, id);
+      heldGroup.items.push(item(id, text, endOf(heldGroup.items)));
+      serveReword(id);
+      servePlace(id);
       return created();
     });
     for (const { id } of heldGroup.items) {
-      serveReword(heldGroup, id);
-      servePlace(heldGroup, id);
+      serveReword(id);
+      servePlace(id);
     }
+  };
+  serve('GET', listPath, json(held));
+  serve('POST', groupsPath, (init) => {
+    const { name } = JSON.parse(init?.body as string) as { name: string };
+    const added = group(`5d7f9b1e-6a8c-4d93-8eb0-${String(held.length).padStart(12, '0')}`, name, endOfGroups(), []);
+    putInListOrder(added);
+    serveGroup(added);
+    return createdWith({ id: added.id })();
+  });
+  serve('PUT', groupOrderPath, (init) => {
+    const { groupIds } = JSON.parse(init?.body as string) as { groupIds: string[] };
+    const active = held.filter((listed) => !listed.isEveryNote && listed.archivedAtUtc === null);
+    if (
+      new Set(groupIds).size !== groupIds.length
+      || groupIds.length !== active.length
+      || !active.every(({ id }) => groupIds.includes(id))
+    ) {
+      return problem(422, 'config.order_mismatch')();
+    }
+
+    groupIds.forEach((id, sortOrder) => {
+      const listed = active.find((heldGroup) => heldGroup.id === id)!;
+      if (listed.sortOrder !== sortOrder) {
+        listed.sortOrder = sortOrder;
+        listed.rowVersion = nextVersion();
+      }
+    });
+    // In the list's order: Every note first, then the others by SortOrder, the archived ones keeping theirs.
+    held.sort((a, b) => Number(b.isEveryNote) - Number(a.isEveryNote) || a.sortOrder - b.sortOrder);
+    return reordered();
+  });
+  for (const heldGroup of held) {
+    serveGroup(heldGroup);
   }
 
   return held;
@@ -1129,6 +1325,762 @@ describe('Common items, adding an item', () => {
   });
 });
 
+const enterTheGroupName = 'Enter the group name';
+const groupNameTooLong = 'Group name must be 200 characters or less';
+const groupAdded = 'Group added at the end of the list';
+
+/**
+ * An answer that waits until the test gives it, and the way to give it: each request sent meanwhile, the one StrictMode
+ * sends again among them, then gets an answer of its own from `given`, whose body it can read.
+ */
+function answerLater(): { answer: Answer; give: (given: Answer) => void } {
+  const waiting: ((given: Answer) => void)[] = [];
+  return {
+    answer: (init) => new Promise<Answer>((resolve) => waiting.push(resolve)).then((given) => given(init)),
+    give: (given) => {
+      for (const resolve of waiting.splice(0)) {
+        resolve(given);
+      }
+    },
+  };
+}
+
+/** The bodies of the group adds sent, in the order sent. */
+function groupAdds(): unknown[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupsPath && init?.method === 'POST' ? [JSON.parse(init.body as string) as unknown] : [],
+  );
+}
+
+/** The New group field, by its label. */
+function newGroupField(): HTMLInputElement {
+  return within(main()).getByRole('textbox', { name: 'New group' });
+}
+
+/** The New group form. */
+function newGroupForm(): HTMLFormElement {
+  return newGroupField().closest('form')!;
+}
+
+/** Add group, by its name, which its busy label leaves as it is. */
+function addGroupButton(): HTMLElement {
+  return within(newGroupForm()).getByRole('button', { name: 'Add group' });
+}
+
+/** The alert above Add group. */
+function newGroupAlert(): HTMLElement {
+  return within(newGroupForm()).getByRole('alert');
+}
+
+/** The count under the New group field. */
+function newGroupCount(): HTMLElement | null {
+  return newGroupForm().querySelector('p[aria-hidden="true"]');
+}
+
+/** The message on the New group field, without its hidden "Error: ", or `null` while it shows none. */
+function newGroupMessage(): string | null {
+  const message = newGroupForm().querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+describe('Common items, adding a group', () => {
+  it('shows the New group form after the last section: its label, input, count, alert, then Add group', async () => {
+    await openPage();
+
+    const field = newGroupField();
+    expect(field.id).toBe('group-new-name');
+    expect(document.querySelector('label[for="group-new-name"]')?.textContent).toBe('New group');
+    expect(field.tagName).toBe('INPUT');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    expect(field).toHaveValue('');
+    for (const attribute of ['maxlength', 'required', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    // The 48 px input, in the reading column.
+    expect(field).toHaveStyle({ minBlockSize: 'var(--target-button)' });
+    expect(newGroupForm()).toHaveStyle({ maxInlineSize: 'var(--measure)' });
+    // The hidden hint alone: never the help text, which would bury it, nor the count.
+    expect(field.getAttribute('aria-describedby')).toBe('group-new-name-hint');
+    expect(field).toHaveAccessibleDescription(hint);
+    expect(newGroupForm()).toHaveAttribute('novalidate');
+    expect(newGroupCount()?.textContent).toBe(hint);
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    const button = addGroupButton();
+    expect(button).toHaveAttribute('type', 'submit');
+    expect(button.className).toMatch(/secondary/);
+    expect(button.className).not.toMatch(/primary/);
+    // Label width, at least 44 px wide, on a phone and a laptop alike (common-items.md *Conflicts resolved* 17).
+    expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+    expect(follows(sections().at(-1)!, newGroupForm())).toBe(true);
+    expect(sections().every((section) => !section.contains(newGroupForm()))).toBe(true);
+    expect(follows(field, newGroupCount()!)).toBe(true);
+    expect(follows(newGroupCount()!, newGroupAlert())).toBe(true);
+    expect(follows(newGroupAlert(), button)).toBe(true);
+  });
+
+  it('shows no New group form, nor Add group, until the groups have come', async () => {
+    const list = answerLater();
+    serve('GET', listPath, list.answer);
+    renderApp('/manage/common-items');
+
+    await wait(5000);
+    expect(document.getElementById('group-new-name')).toBeNull();
+    expect(within(main()).queryByRole('button', { name: 'Add group' })).not.toBeInTheDocument();
+    list.give(json(groups));
+    await settle();
+
+    expect(newGroupField()).toBeInTheDocument();
+    expect(addGroupButton()).toBeInTheDocument();
+  });
+
+  it.each([
+    ['nothing typed', '', enterTheGroupName],
+    ['only spaces', ' \t  ', enterTheGroupName],
+    ['201 characters once its ends are trimmed', `  ${'a'.repeat(201)}  `, groupNameTooLong],
+  ])('on Add group with %s, shows its message, focusing the field, and sends nothing', async (_, name, message) => {
+    await openPage();
+    type(newGroupField(), name);
+
+    await press(addGroupButton());
+
+    expect(newGroupMessage()).toBe(message);
+    expect(newGroupField()).toHaveFocus();
+    expect(newGroupField()).toHaveAttribute('aria-invalid', 'true');
+    expect(newGroupField().getAttribute('aria-describedby')).toBe('group-new-name-error group-new-name-hint');
+    expect(newGroupField()).toHaveAccessibleDescription(`Error: ${message} ${hint}`);
+    expect(newGroupField()).toHaveValue(name);
+    expect(groupAdds()).toEqual([]);
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it('once the message shows, checks the name at each input, and takes it away silently once it passes', async () => {
+    await openPage();
+    await press(addGroupButton());
+
+    type(newGroupField(), 'a'.repeat(201));
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    type(newGroupField(), 'Respite');
+
+    expect(newGroupMessage()).toBeNull();
+    expect(newGroupField()).not.toHaveAttribute('aria-invalid');
+    expect(newGroupField()).toHaveAccessibleDescription(hint);
+    expect(newGroupForm().querySelector('[data-invalid]')).toBeNull();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it('keeps 210 characters typed whole, counting 10 too many, and refuses them on Add group', async () => {
+    await openPage();
+    const typed = 'x'.repeat(210);
+
+    type(newGroupField(), typed);
+    expect(newGroupField()).toHaveValue(typed);
+    expect(newGroupCount()?.textContent).toBe('You have 10 characters too many');
+    expect(newGroupMessage()).toBeNull();
+    await press(addGroupButton());
+
+    expect(newGroupField()).toHaveValue(typed);
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    expect(groupAdds()).toEqual([]);
+  });
+
+  it("adds the group last, empty, above New group, emptying the field, focusing its New item field", async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(newGroupField(), 'Respite');
+    const reads = listReads();
+
+    await press(addGroupButton());
+
+    expect(groupAdds()).toEqual([{ name: 'Respite' }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(sections().map((section) => within(section).getByRole('heading', { level: 2 }).textContent)).toEqual([
+      'Every note',
+      'Community outing',
+      'Personal care',
+      'Respite',
+    ]);
+    const added = sectionOf('Respite');
+    expect(within(added).getByText(emptyLine)).toBeInTheDocument();
+    expect(activeItems(added)).toEqual([]);
+    expect(follows(added, newGroupForm())).toBe(true);
+    expect(newGroupField()).toHaveValue('');
+    expect(newItem('Respite')).toHaveFocus();
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupAdded);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('adds each group after the last, with focus in its New item field after each', async () => {
+    await openPage([{ ...everyNote, items: [] }]);
+    serveGroups([{ ...everyNote, items: [] }]);
+
+    for (const name of ['Community outing', 'Personal care']) {
+      type(newGroupField(), name);
+      await press(addGroupButton());
+
+      expect(newItem(name)).toHaveFocus();
+      expect(sections().at(-1)).toBe(sectionOf(name));
+    }
+
+    expect(groupAdds()).toEqual([{ name: 'Community outing' }, { name: 'Personal care' }]);
+  });
+
+  // The input holds one line, as HTML's value sanitization for a text input strips line breaks, so the server's rule
+  // for them (AddCommonItemGroupEndpointTests) has nothing to meet from here.
+  it('sends the name with its ends trimmed, and 200 characters once so cleaned', async () => {
+    await openPage();
+    serveGroups(groups);
+
+    type(newGroupField(), '  Overnight respite\t');
+    await press(addGroupButton());
+    type(newGroupField(), `  ${'a'.repeat(200)}  `);
+    await press(addGroupButton());
+
+    expect(groupAdds()).toEqual([{ name: 'Overnight respite' }, { name: 'a'.repeat(200) }]);
+    expect(sectionOf('Overnight respite')).toBeInTheDocument();
+    expect(sectionOf('a'.repeat(200))).toBeInTheDocument();
+  });
+
+  it('keeps a name typed while the add was out, as it is not the name sent', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const add = answerLater();
+    serve('POST', groupsPath, add.answer);
+    type(newGroupField(), 'Respite');
+
+    await press(addGroupButton());
+    type(newGroupField(), 'School holidays');
+    held.push(group('6e8a0c2f-7b9d-4ea4-9fc1-000000000001', 'Respite', 2, []));
+    add.give(createdWith({ id: held.at(-1)!.id }));
+    await settle();
+    await settle();
+
+    expect(sectionOf('Respite')).toBeInTheDocument();
+    expect(newGroupField()).toHaveValue('School holidays');
+  });
+
+  it('shows Add group busy at once, "Adding…" after 400 ms, and a press while it is sends nothing more', async () => {
+    await openPage();
+    serve('POST', groupsPath, noAnswer);
+    type(newGroupField(), 'Respite');
+    const button = addGroupButton();
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Adding…')).toBeInTheDocument();
+    fireEvent.click(button);
+    await settle();
+
+    expect(groupAdds()).toHaveLength(1);
+    expect(newGroupField()).toHaveValue('Respite');
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not added: no connection. Try again.'],
+    ['a 503', problem(503), 'Not added: something went wrong. Try again.'],
+    ['a 422 that names no name', refused({ isEveryNote: ['Refused'] }), 'Not added: something went wrong. Try again.'],
+  ])('on %s, says so above Add group, keeping the name and focus on Add group, and reads nothing', async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage();
+    serve('POST', groupsPath, answer);
+    type(newGroupField(), 'Respite');
+    const button = addGroupButton();
+    const reads = listReads();
+
+    await press(button);
+
+    expect(newGroupAlert()).toHaveTextContent(words);
+    expect(button).toHaveFocus();
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupField()).not.toHaveAttribute('aria-invalid');
+    expect(groupAdds()).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(sections()).toHaveLength(3);
+    expect(pageStatus()).not.toHaveTextContent(groupAdded);
+  });
+
+  // The add has no idempotency key (design.md §6.6), so one sent again after a lost answer could add the group twice.
+  it('sends one add for an answer that never comes, saying "no connection" after 10 s, and never again', async () => {
+    await openPage();
+    serve('POST', groupsPath, noAnswer);
+    type(newGroupField(), 'Respite');
+
+    await press(addGroupButton());
+    await wait(10_000);
+    await settle();
+
+    expect(newGroupAlert()).toHaveTextContent('Not added: no connection. Try again.');
+    expect(addGroupButton()).toHaveFocus();
+    expect(newGroupField()).toHaveValue('Respite');
+    await wait(60_000);
+    expect(groupAdds()).toHaveLength(1);
+  });
+
+  it("on the server's 422 for the name, shows its message on the field, focused, keeping the name", async () => {
+    await openPage();
+    serve('POST', groupsPath, refused({ name: [groupNameTooLong] }));
+    type(newGroupField(), 'Respite');
+    const reads = listReads();
+
+    await press(addGroupButton());
+
+    expect(newGroupMessage()).toBe(groupNameTooLong);
+    expect(newGroupField()).toHaveFocus();
+    expect(newGroupField()).toHaveAttribute('aria-invalid', 'true');
+    expect(newGroupField()).toHaveAccessibleDescription(`Error: ${groupNameTooLong} ${hint}`);
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    expect(listReads()).toBe(reads);
+    expect(groupAdds()).toHaveLength(1);
+  });
+
+  it('hands a 401 to sign-in in place, keeping the name, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('POST', groupsPath, problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    type(newGroupField(), 'Respite');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const page = { field: newGroupField(), alert: newGroupAlert() };
+
+    await press(addGroupButton());
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(page.field).not.toBeVisible();
+    expect(page.field).toHaveValue('Respite');
+    expect(page.alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(newGroupField()).toHaveValue('Respite');
+    expect(newGroupAlert()).toBeEmptyDOMElement();
+    expect(groupAdds()).toHaveLength(1);
+  });
+});
+
+const groupRenamed = 'Group renamed';
+const notSavedWentWrong = 'Not saved: something went wrong. Try again.';
+
+/** The renames sent to the group of `groupId`, each as its `If-Match` and the JSON of its body, in the order sent. */
+function renamesOf(groupId: string): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupPath(groupId) && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The group button labelled `label` of the group named `name`, by its name, which ends with ", [name] group". */
+function groupButton(name: string, label: 'Move up' | 'Move down' | 'Rename' | 'Archive'): HTMLElement {
+  return within(sectionOf(name)).getByRole('button', { name: `${label}, ${name} group` });
+}
+
+/** The group's Group name field, by the id that the page gives it, or `null` while the group is not being renamed. */
+function renameField(groupId: string): HTMLInputElement | null {
+  return document.getElementById(`group-${groupId}-name`) as HTMLInputElement | null;
+}
+
+/** The group's rename form. */
+function renameForm(groupId: string): HTMLFormElement {
+  return renameField(groupId)!.closest('form')!;
+}
+
+/** The rename's Save, by its name, which its busy label leaves as it is. */
+function renameSave(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('button', { name: 'Save' });
+}
+
+function renameCancel(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('button', { name: 'Cancel' });
+}
+
+/** The alert above the rename's Save. */
+function renameAlert(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('alert');
+}
+
+/** The message on the group's Group name field, without its hidden "Error: ", or `null` while it shows none. */
+function renameMessage(groupId: string): string | null {
+  const message = renameForm(groupId).querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+/** Focuses the Rename of `renamed` and presses it, and gives the field that takes the group buttons' place. */
+function openRename(renamed: AdminCommonItemGroup): HTMLInputElement {
+  const button = groupButton(renamed.name, 'Rename');
+  button.focus();
+  fireEvent.click(button);
+  return renameField(renamed.id)!;
+}
+
+/** The headings of the sections, in page order. */
+function headings(): (string | null)[] {
+  return sections().map((section) => within(section).getByRole('heading', { level: 2 }).textContent);
+}
+
+describe('Common items, renaming a group', () => {
+  it("puts the form under the group's <h2> in its buttons' place: Group name, the name, caret at the end", async () => {
+    await openPage();
+    const section = sectionOf('Community outing');
+    const heading = within(section).getByRole('heading', { level: 2 });
+
+    const field = openRename(outing);
+
+    // The <h2> stays, so the region keeps its name, and its items stay below.
+    expect(sectionOf('Community outing')).toBe(section);
+    expect(within(section).getByRole('heading', { level: 2 })).toBe(heading);
+    expect(within(heading.parentElement!).queryAllByRole('button')).toEqual([]);
+    expect(within(heading.parentElement!).queryByRole('alert')).toBeNull();
+    expect(follows(heading, renameForm(outing.id))).toBe(true);
+    expect(follows(renameForm(outing.id), section.querySelector('ol')!)).toBe(true);
+    expect(activeItems(section).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(renameForm(outing.id)).toHaveAttribute('novalidate');
+    expect(document.querySelector(`label[for="group-${outing.id}-name"]`)?.textContent).toBe('Group name');
+    expect(field).toHaveAccessibleName('Group name');
+    expect(field.tagName).toBe('INPUT');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    for (const attribute of ['maxlength', 'required', 'readonly', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    expect(field).toHaveValue(outing.name);
+    expect(field).toHaveFocus();
+    expect([field.selectionStart, field.selectionEnd]).toEqual([outing.name.length, outing.name.length]);
+    // The 48 px input, in the reading column, described by the hidden hint alone, never the help text.
+    expect(field).toHaveStyle({ minBlockSize: 'var(--target-button)' });
+    expect(renameForm(outing.id)).toHaveStyle({ maxInlineSize: 'var(--measure)' });
+    expect(field.getAttribute('aria-describedby')).toBe(`group-${outing.id}-name-hint`);
+    expect(field).toHaveAccessibleDescription(hint);
+    // The other group keeps its buttons.
+    expect(groupButton('Personal care', 'Rename')).toBeInTheDocument();
+  });
+
+  it('shows the count, then the empty alert, then Save, primary, and Cancel, both label width', async () => {
+    await openPage();
+
+    const field = openRename(outing);
+
+    const count = renameForm(outing.id).querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(count.textContent).toBe(`You have ${200 - outing.name.length} characters remaining`);
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    const save = renameSave(outing.id);
+    const cancel = renameCancel(outing.id);
+    expect(follows(field, count)).toBe(true);
+    expect(follows(count, renameAlert(outing.id))).toBe(true);
+    expect(follows(renameAlert(outing.id), save)).toBe(true);
+    expect(follows(save, cancel)).toBe(true);
+    expect(save).toHaveAttribute('type', 'submit');
+    expect(save.className).toMatch(/primary/);
+    expect(cancel).toHaveAttribute('type', 'button');
+    expect(cancel.className).toMatch(/secondary/);
+    for (const button of [save, cancel]) {
+      expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+    }
+  });
+
+  it("on Cancel, drops the typed name, sends nothing, and puts focus on the group's Rename", async () => {
+    await openPage();
+    type(openRename(outing), 'Outings');
+
+    await press(renameCancel(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameField(outing.id)).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
+    expect(openRename(outing)).toHaveValue(outing.name);
+  });
+
+  it('on Save of the name unchanged once its ends are trimmed, closes as Cancel does and sends nothing', async () => {
+    await openPage();
+    type(openRename(outing), '  Community outing\t');
+
+    await press(renameSave(outing.id));
+    await wait(16);
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameField(outing.id)).toBeNull();
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['nothing typed', '', enterTheGroupName],
+    ['only spaces', ' \t  ', enterTheGroupName],
+    ['201 characters once its ends are trimmed', `  ${'a'.repeat(201)}  `, groupNameTooLong],
+  ])('on Save with %s, shows its message above the field, focused, and sends nothing', async (_, name, message) => {
+    await openPage();
+    const field = openRename(outing);
+    type(field, name);
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameMessage(outing.id)).toBe(message);
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue(name);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')).toBe(`group-${outing.id}-name-error group-${outing.id}-name-hint`);
+    expect(field).toHaveAccessibleDescription(`Error: ${message} ${hint}`);
+    expect(follows(within(renameForm(outing.id)).getByText(message), field)).toBe(true);
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it('once the message shows, checks the name at each input, and takes it away silently once it passes', async () => {
+    await openPage();
+    const field = openRename(outing);
+    type(field, '');
+    await press(renameSave(outing.id));
+
+    type(field, 'a'.repeat(201));
+    expect(renameMessage(outing.id)).toBe(groupNameTooLong);
+    type(field, 'Outings');
+
+    expect(renameMessage(outing.id)).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field).toHaveAccessibleDescription(hint);
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it("sends the name with the group's version, reads the list again, shows it, focusing Rename", async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(openRename(outing), '  Outings and trips ');
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: { name: 'Outings and trips' } }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(renameField(outing.id)).toBeNull();
+    // The heading, the region's name, the group buttons' names and the New item label follow the new name.
+    expect(headings()).toEqual(['Every note', 'Outings and trips', 'Personal care']);
+    expect(activeItems(sectionOf('Outings and trips')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(newItem('Outings and trips')).toBeInTheDocument();
+    expect(groupButton('Outings and trips', 'Rename')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRenamed);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('shows Save busy, "Saving…" after 400 ms, the field read-only; a press while it is sends no more', async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), noAnswer);
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const save = renameSave(outing.id);
+
+    save.focus();
+    fireEvent.click(save);
+    await settle();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(field).toHaveAttribute('readonly');
+    await wait(398);
+    expect(save).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(save).toHaveAttribute('data-busy');
+    expect(within(save).getByText('Saving…')).toBeInTheDocument();
+    fireEvent.click(save);
+    await settle();
+
+    expect(renamesOf(outing.id)).toHaveLength(1);
+    expect(field).toHaveValue('Outings');
+  });
+
+  // Every note's refusal and a missing If-Match are the screen's own bugs, as it never offers the one or sends the
+  // other (common-items.md *Failures*), so each says something went wrong.
+  it.each([
+    ['no connection', noConnection, 'Not saved: no connection. Try again.'],
+    ['a 503', problem(503), notSavedWentWrong],
+    ['a 422 config.every_note_fixed', problem(422, 'config.every_note_fixed'), notSavedWentWrong],
+    ['a 428', problem(428, 'precondition.required'), notSavedWentWrong],
+    ['a 422 that names no name', refused({ text: ['Refused'] }), notSavedWentWrong],
+  ])('on %s, says so above Save, keeping the name and focus on Save, and reads nothing', async (_, answer, words) => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), answer);
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const save = renameSave(outing.id);
+    const reads = listReads();
+
+    await press(save);
+
+    expect(renameAlert(outing.id)).toHaveTextContent(words);
+    expect(save).toHaveFocus();
+    expect(field).toHaveValue('Outings');
+    expect(field).not.toHaveAttribute('readonly');
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(renamesOf(outing.id)).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(groupRenamed);
+  });
+
+  it("on the server's 422 for the name, shows its message on the field, focused, keeping the name", async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), refused({ name: [groupNameTooLong] }));
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renameMessage(outing.id)).toBe(groupNameTooLong);
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(`Error: ${groupNameTooLong} ${hint}`);
+    expect(field).toHaveValue('Outings');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    expect(listReads()).toBe(reads);
+    expect(renamesOf(outing.id)).toHaveLength(1);
+  });
+
+  it('on a 412, focuses the list conflict over the re-read list, the form as typed, the next Save new', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openRename(outing);
+    type(field, 'Outings and trips');
+    // Another manager renames it meanwhile.
+    held[1].name = 'Day trips';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: { name: 'Outings and trips' } }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Day trips', 'Personal care']);
+    expect(renameField(outing.id)).toBe(field);
+    expect(field).toHaveValue('Outings and trips');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id).map(({ ifMatch }) => ifMatch)).toEqual([`"${outing.rowVersion}"`, '"AAAAAAAAE999="']);
+    expect(renameField(outing.id)).toBeNull();
+    expect(listConflict()).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Outings and trips', 'Personal care']);
+    expect(groupButton('Outings and trips', 'Rename')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRenamed);
+  });
+
+  it('on a 412 finding the group archived, focuses the list conflict, the section gone with its form', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openRename(outing), 'Outings');
+    // Another manager archives it meanwhile.
+    held[1].archivedAtUtc = '2026-10-01T06:00:00Z';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+
+    await press(renameSave(outing.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(renameField(outing.id)).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(renamesOf(outing.id)).toHaveLength(1);
+  });
+
+  it("keeps a group's typed name through a write in another group", async () => {
+    await openPage();
+    serveGroups(groups);
+    type(openRename(outing), 'Outings');
+    type(openRename(care), 'Personal care and hygiene');
+
+    await press(renameSave(care.id));
+
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care and hygiene']);
+    expect(renameField(outing.id)).toHaveValue('Outings');
+    expect(groupButton('Personal care and hygiene', 'Rename')).toHaveFocus();
+    expect(renamesOf(outing.id)).toEqual([]);
+  });
+
+  it('hands a 401 on Save to sign-in in place, keeping the name, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    const field = openRename(outing);
+    type(field, 'Outings');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const alert = renameAlert(outing.id);
+
+    await press(renameSave(outing.id));
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(field).not.toBeVisible();
+    expect(field).toHaveValue('Outings');
+    expect(alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(renameField(outing.id)).toHaveValue('Outings');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    expect(renamesOf(outing.id)).toHaveLength(1);
+  });
+});
+
 const saved = 'Item saved';
 
 /** The rewords sent to the item of `itemId`, each as its `If-Match` and the JSON of its body, in the order sent. */
@@ -1296,7 +2248,9 @@ describe('Common items, rewording an item', () => {
 
     await press(saveButton(paid.id));
 
-    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+    ]);
     expect(listReads()).toBe(reads + 1);
     expect(editField(paid.id)).toBeNull();
     expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
@@ -1378,7 +2332,9 @@ describe('Common items, rewording an item', () => {
 
     await press(save);
 
-    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+    ]);
     expect(editAlert(paid.id)).toHaveTextContent(
       'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
         + 'replace it with your wording, or Cancel to keep it.',
@@ -1465,8 +2421,12 @@ describe('Common items, rewording an item', () => {
       'Bought lunch at the café',
     ]);
     expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(['Medication given', meal.text]);
-    expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([{ text: 'Medication given' }]);
-    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([{ text: 'Bought lunch at the café' }]);
+    expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([
+      { text: 'Medication given', groupId: everyNote.id },
+    ]);
+    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
+      { text: 'Bought lunch at the café', groupId: outing.id },
+    ]);
   });
 
   it('hands a 401 on Save to sign-in in place, keeping the text, and reads the list again once signed in', async () => {
@@ -1503,6 +2463,298 @@ describe('Common items, rewording an item', () => {
     expect(editField(paid.id)).toHaveValue('Paid at the machine');
     expect(editAlert(paid.id)).toBeEmptyDOMElement();
     expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+});
+
+/** What the page's status region says once a Save has moved an item to the group named `name`. */
+function savedAndMoved(name: string): string {
+  return `Item saved and moved to the end of ${name}`;
+}
+
+/** The item's Group radios, the set named "Group" in its edit form, or `null` while the form has none. */
+function groupSet(itemId: string): HTMLFieldSetElement | null {
+  return within(editForm(itemId)).queryByRole<HTMLFieldSetElement>('group', { name: 'Group' });
+}
+
+/** The item's Group radio of the group named `name`. */
+function groupRadio(itemId: string, name: string): HTMLInputElement {
+  return within(groupSet(itemId)!).getByRole<HTMLInputElement>('radio', { name });
+}
+
+/** The names of the item's Group radios, in the order shown. */
+function groupNames(itemId: string): (string | null)[] {
+  return within(groupSet(itemId)!)
+    .getAllByRole('radio')
+    .map((radio) => radio.closest('label')!.textContent);
+}
+
+/** Chooses the group named `name` in the item's Group radios, as a tap on its row does. */
+function chooseGroup(itemId: string, name: string) {
+  fireEvent.click(groupRadio(itemId, name));
+}
+
+/**
+ * Presses the down arrow on `radio` as a browser does, which jsdom does not: focus moves to the next radio of its set,
+ * those of its `name` in its form, in document order, which the browser chooses with a click.
+ */
+function pressArrowDown(radio: HTMLInputElement) {
+  fireEvent.keyDown(radio, { key: 'ArrowDown' });
+  const set = Array.from(radio.form!.elements).filter(
+    (control): control is HTMLInputElement =>
+      control instanceof HTMLInputElement && control.type === 'radio' && control.name === radio.name,
+  );
+  const next = set[(set.indexOf(radio) + 1) % set.length];
+  next.focus();
+  fireEvent.click(next);
+}
+
+describe('Common items, moving an item to another group', () => {
+  it('gives the edit form no Group radios while Every note is the only active group; Save sends its ID', async () => {
+    const alone = [everyNote, respite];
+    await openPage(alone);
+    serveGroups(alone);
+    const field = openEdit('Every note', meal);
+
+    expect(groupSet(meal.id)).toBeNull();
+    expect(within(editForm(meal.id)).queryAllByRole('radio')).toEqual([]);
+    expect(editForm(meal.id).querySelector('fieldset')).toBeNull();
+
+    type(field, 'Meal cooked');
+    await press(saveButton(meal.id));
+
+    expect(rewordsOf(meal.id)).toEqual([
+      { ifMatch: `"${meal.rowVersion}"`, body: { text: 'Meal cooked', groupId: everyNote.id } },
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, 'Meal cooked']);
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+  });
+
+  it("puts the Group radios after the count: each active group in the list's order, its own checked", async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+
+    const set = groupSet(paid.id)!;
+    expect(set.tagName).toBe('FIELDSET');
+    expect(set.querySelector('legend')?.textContent).toBe('Group');
+    const radios = within(set).getAllByRole<HTMLInputElement>('radio');
+    expect(groupNames(paid.id)).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(radios.map(({ id, name, type: kind }) => [id, name, kind])).toEqual(
+      [everyNote, outing, care].map(({ id }) => [`item-${paid.id}-group-${id}`, `item-${paid.id}-group`, 'radio']),
+    );
+    expect(radios.filter(({ checked }) => checked)).toEqual([groupRadio(paid.id, 'Community outing')]);
+    for (const radio of radios) {
+      // Named by its group alone, with no hint to describe it.
+      expect(radio).not.toHaveAttribute('aria-describedby');
+      expect(radio).toHaveAccessibleDescription('');
+      expect(radio).not.toBeDisabled();
+      expect(radio.form).toBe(editForm(paid.id));
+    }
+
+    const count = editForm(paid.id).querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(follows(editField(paid.id)!, count)).toBe(true);
+    expect(follows(count, set)).toBe(true);
+    expect(follows(set, editAlert(paid.id))).toBe(true);
+    expect(follows(editAlert(paid.id), saveButton(paid.id))).toBe(true);
+
+    openEdit('Every note', meal);
+    expect(groupNames(meal.id)).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupRadio(meal.id, 'Every note')).toBeChecked();
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
+  });
+
+  it('chooses the next group with the down arrow, the radios one set, and sends nothing until Save', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    const own = groupRadio(paid.id, 'Community outing');
+    own.focus();
+
+    pressArrowDown(own);
+
+    expect(groupRadio(paid.id, 'Personal care')).toBeChecked();
+    expect(groupRadio(paid.id, 'Personal care')).toHaveFocus();
+    expect(own).not.toBeChecked();
+    expect(rewordsOf(paid.id)).toEqual([]);
+  });
+
+  it('on Save of the text unchanged, its own group chosen again, closes as Cancel does, sending nothing', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    chooseGroup(paid.id, 'Community outing');
+
+    await press(saveButton(paid.id));
+    await wait(16);
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editField(paid.id)).toBeNull();
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it('on Cancel, drops the group chosen, sending nothing, and opens again with its own group chosen', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+
+    await press(cancelButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    openEdit('Community outing', paid);
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
+  });
+
+  it('moves it with one PUT of the text and group, last in that group, focus on its Edit, saying so', async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: paid.text, groupId: care.id } },
+    ]);
+    expect(listReads()).toBe(reads + 1);
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(within(sectionOf('Personal care')).queryByText(emptyLine)).toBeNull();
+    expect(editButton('Personal care', paid.text)).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Personal care'));
+    // Nothing the manager typed or chose is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it("moves it with its new text after the chosen group's last active item, its archived ones after", async () => {
+    await openPage();
+    serveGroups(groups);
+    type(openEdit('Community outing', lunch), ' Bought lunch\n at the café ');
+    chooseGroup(lunch.id, 'Every note');
+
+    await press(saveButton(lunch.id));
+
+    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
+      { text: 'Bought lunch at the café', groupId: everyNote.id },
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([
+      medication.text,
+      meal.text,
+      'Bought lunch at the café',
+    ]);
+    expect(archivedItems(sectionOf('Every note')).map(textOf)).toEqual([bed.text, laundry.text]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text]);
+    expect(editButton('Every note', 'Bought lunch at the café')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Every note'));
+  });
+
+  it('keeps the item in its group while the move is out, Save busy and the field read-only', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('PUT', itemPath(paid.id));
+    const field = openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    const save = saveButton(paid.id);
+
+    save.focus();
+    fireEvent.click(save);
+    await settle();
+    await wait(400);
+
+    expect(save).toHaveAttribute('data-busy');
+    expect(field).toHaveAttribute('readonly');
+    expect(activeItems(sectionOf('Community outing'))).toHaveLength(3);
+    expect(within(sectionOf('Personal care')).getByText(emptyLine)).toBeInTheDocument();
+
+    release();
+    await settle();
+    await settle();
+
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(editButton('Personal care', paid.text)).toHaveFocus();
+  });
+
+  it('on a 412, keeps the text and group chosen, says what it says now, and moves it at the next Save', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    chooseGroup(paid.id, 'Personal care');
+    const save = saveButton(paid.id);
+    // Another manager rewords it meanwhile.
+    held[1].items[1] = { ...paid, text: 'Paid for a ticket online', rowVersion: 'AAAAAAAAE999=' };
+
+    await press(save);
+
+    expect(editAlert(paid.id)).toHaveTextContent(
+      'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
+        + 'replace it with your wording, or Cancel to keep it.',
+    );
+    expect(field).toHaveValue('Paid at the machine');
+    expect(groupRadio(paid.id, 'Personal care')).toBeChecked();
+    expect(save).toHaveFocus();
+    expect(listConflict()).toBeNull();
+
+    await press(save);
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
+      { ifMatch: '"AAAAAAAAE999="', body: { text: 'Paid at the machine', groupId: care.id } },
+    ]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual(['Paid at the machine']);
+    expect(editButton('Personal care', 'Paid at the machine')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Personal care'));
+  });
+
+  it('on a 412 finding the item moved meanwhile, shows the list conflict, the row gone with its form', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openEdit('Community outing', paid), 'Paid at the machine');
+    // Another manager moves it to Personal care meanwhile.
+    held[1].items.splice(1, 1);
+    held[2].items.push({ ...paid, sortOrder: 0, rowVersion: 'AAAAAAAAE999=' });
+
+    await press(saveButton(paid.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+
+  it('on a 409 for the group chosen archived meanwhile, focuses the list conflict, keeping the text', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    chooseGroup(paid.id, 'Personal care');
+    // Another manager archives Personal care meanwhile.
+    held[2].archivedAtUtc = '2026-10-01T06:00:00Z';
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
+    ]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(sections()).toEqual([sectionOf('Every note'), sectionOf('Community outing')]);
+    expect(field).toHaveValue('Paid at the machine');
+    expect(editAlert(paid.id)).toBeEmptyDOMElement();
+    // The group archived has left the radios, which have the item's own group chosen again.
+    expect(groupNames(paid.id)).toEqual(['Every note', 'Community outing']);
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
   });
 });
 
@@ -1774,6 +3026,273 @@ describe('Common items, moving an item', () => {
     expect(listReads()).toBe(reads);
     expect(listConflict()).toBeNull();
     expect(rowAlert('Every note', medication.text)).toBeEmptyDOMElement();
+  });
+});
+
+/** The group reorders sent, each as its `If-Match` and the JSON of its body, in the order sent. */
+function groupReorders(): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupOrderPath && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The path of each order sent, of the groups or of any group's items, in the order sent. */
+function orderPaths(): string[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    typeof path === 'string' && path.endsWith('/order') && init?.method === 'PUT' ? [path] : [],
+  );
+}
+
+/** The alert in the heading row of the group named `name`, above its buttons. */
+function groupAlert(name: string): HTMLElement {
+  const heading = within(sectionOf(name)).getByRole('heading', { level: 2 });
+  return within(heading.parentElement!).getByRole('alert');
+}
+
+// A third group to move, after the archived one, so that a move sends every active group but Every note, the archived
+// one left out, and Personal care sits between the ends.
+const shopping = group('4c6e8a0d-5f7b-4c93-8eb0-3a4b5c6d7e8f', 'Shopping', 3, []);
+const threeGroups = [everyNote, outing, care, respite, shopping];
+
+describe('Common items, moving a group', () => {
+  it("on Move down on the first group, sends each group's ID but Every note's, swapped, focus on it", async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const reads = listReads();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    // The active groups but Every note, which always stays first, and not the archived one; with no If-Match, as the
+    // set of IDs is the check (design.md §6.7); and nothing of any group's items.
+    expect(groupReorders()).toEqual([{ ifMatch: null, body: { groupIds: [care.id, outing.id, shopping.id] } }]);
+    expect(orderPaths()).toEqual([groupOrderPath]);
+    expect(listReads()).toBe(reads + 1);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    // Its whole section moved in the DOM, which a focused button does not survive by itself (common-items.md *Group
+    // actions*).
+    expect(document.activeElement).toBe(groupButton('Community outing', 'Move down'));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Group moved down');
+  });
+
+  it('says "Group moved up" and "Group moved down", focus on the pressed button of the moved group', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const announced = recordAnnouncements();
+
+    await press(groupButton('Shopping', 'Move up'));
+    await wait(16);
+    expect(document.activeElement).toBe(groupButton('Shopping', 'Move up'));
+    await press(groupButton('Community outing', 'Move down'));
+    await wait(16);
+
+    expect(announced()).toEqual(['Group moved up', 'Group moved down']);
+    expect(groupReorders().map(({ body }) => body)).toEqual([
+      { groupIds: [outing.id, shopping.id, care.id] },
+      { groupIds: [shopping.id, outing.id, care.id] },
+    ]);
+    expect(headings()).toEqual(['Every note', 'Shopping', 'Community outing', 'Personal care']);
+    expect(document.activeElement).toBe(groupButton('Community outing', 'Move down'));
+  });
+
+  it('keeps the sections in order while the PUT is out, busy at once and "Moving…" after 400 ms', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const release = hold('PUT', groupOrderPath);
+    const down = groupButton('Community outing', 'Move down');
+
+    down.focus();
+    fireEvent.click(down);
+    await settle();
+    expect(groupReorders()).toHaveLength(1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+    expect(down).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(down).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(down).toHaveAttribute('data-busy');
+    expect(within(down).getByText('Moving…')).toBeInTheDocument();
+    await press(down);
+    expect(groupReorders()).toHaveLength(1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(down).toHaveFocus();
+  });
+
+  it('makes Move up on the first group after Every note and Move down on the last unavailable in place', async () => {
+    await openPage(threeGroups);
+    const announced = recordAnnouncements();
+    const top = groupButton('Community outing', 'Move up');
+    const bottom = groupButton('Shopping', 'Move down');
+
+    for (const end of [top, bottom]) {
+      expect(end).toHaveAttribute('aria-disabled', 'true');
+      expect(end).toHaveAttribute('data-unavailable');
+      expect(end).toBeEnabled();
+      expect(getComputedStyle(end).display).not.toBe('none');
+    }
+
+    for (const free of [
+      groupButton('Community outing', 'Move down'),
+      groupButton('Personal care', 'Move up'),
+      groupButton('Personal care', 'Move down'),
+      groupButton('Shopping', 'Move up'),
+    ]) {
+      expect(free).not.toHaveAttribute('aria-disabled');
+    }
+
+    await press(top);
+    await wait(16);
+    expect(announced()).toEqual(['Already at the top']);
+    expect(top).toHaveFocus();
+    await press(bottom);
+    await wait(16);
+
+    expect(announced()).toEqual(['Already at the top', 'Already at the bottom']);
+    expect(bottom).toHaveFocus();
+    expect(orderPaths()).toEqual([]);
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('makes both moves of the one group besides Every note unavailable', async () => {
+    await openPage([everyNote, outing, respite]);
+
+    expect(groupButton('Community outing', 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Community outing', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it("gives a group's Move up and Move down the item rows' arrows, before their words", async () => {
+    await openPage(threeGroups);
+
+    for (const [direction, label] of [
+      ['up', 'Move up'],
+      ['down', 'Move down'],
+    ] as const) {
+      const button = groupButton('Personal care', label);
+      const arrow = button.querySelector('svg');
+      expect(arrow).toHaveAttribute('aria-hidden', 'true');
+      const rowArrow = moveButton('Community outing', direction, paid.text).querySelector('svg');
+      expect(arrow?.outerHTML).toBe(rowArrow?.outerHTML);
+      // First, then the words, in the button's label.
+      expect(within(button).getByText(label).firstChild).toBe(arrow);
+    }
+  });
+
+  it('sends nothing for a queued move whose group the move before it took to the top, and says so', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const release = hold('PUT', groupOrderPath);
+
+    await press(groupButton('Community outing', 'Move down'));
+    await press(groupButton('Personal care', 'Move up'));
+    release();
+    await settle();
+    await settle();
+    await settle();
+    await wait(16);
+
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id, shopping.id] }]);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(groupButton('Personal care', 'Move up')).toHaveFocus();
+    expect(pageStatus()).toHaveTextContent('Already at the top');
+  });
+
+  it("runs an item move and a group move pressed at once in turn, the group's from the item's re-read", async () => {
+    await openPage(threeGroups);
+    const held = serveGroups(threeGroups);
+    const release = hold('PUT', orderPath(outing.id));
+    const reads = listReads();
+
+    await press(moveButton('Community outing', 'up', lunch.text));
+    await press(groupButton('Community outing', 'Move down'));
+    expect(orderPaths()).toEqual([orderPath(outing.id)]);
+    // Another manager archives Shopping meanwhile, which the item move's re-read brings.
+    held[4].archivedAtUtc = '2026-10-01T06:00:00Z';
+    release();
+    await settle();
+    await settle();
+    await settle();
+
+    expect(orderPaths()).toEqual([orderPath(outing.id), groupOrderPath]);
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [busOrTrain.id, lunch.id, paid.id] },
+    ]);
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id] }]);
+    expect(listReads()).toBe(reads + 2);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text, paid.text]);
+    expect(groupButton('Community outing', 'Move down')).toHaveFocus();
+  });
+
+  it('on a 422, reads the list again and focuses the list conflict, until a write succeeds', async () => {
+    await openPage(threeGroups);
+    const held = serveGroups(threeGroups);
+    // Another manager archives Shopping meanwhile.
+    held[4].archivedAtUtc = '2026-10-01T06:00:00Z';
+    held[4].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id, shopping.id] }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupAlert('Community outing')).toBeEmptyDOMElement();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(listConflict()).toBeNull();
+    expect(groupReorders().map(({ body }) => body)).toEqual([
+      { groupIds: [care.id, outing.id, shopping.id] },
+      { groupIds: [care.id, outing.id] },
+    ]);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not moved: no connection. Try again.'],
+    ['a 503', problem(503), 'Not moved: something went wrong. Try again.'],
+  ])("on %s, says so in the group's alert, keeping the order and focus, reading nothing", async (_, answer, words) => {
+    await openPage(threeGroups);
+    serve('PUT', groupOrderPath, answer);
+    const down = groupButton('Community outing', 'Move down');
+    const reads = listReads();
+
+    await press(down);
+
+    expect(groupAlert('Community outing')).toHaveTextContent(words);
+    expect(down).toHaveFocus();
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+    expect(groupReorders()).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(groupAlert('Personal care')).toBeEmptyDOMElement();
+  });
+
+  it("empties the group's alert as Rename opens, so that it comes back empty", async () => {
+    await openPage(threeGroups);
+    serve('PUT', groupOrderPath, noConnection);
+    await press(groupButton('Community outing', 'Move down'));
+    expect(groupAlert('Community outing')).toHaveTextContent('Not moved: no connection. Try again.');
+
+    openRename(outing);
+    fireEvent.click(renameCancel(outing.id));
+    await settle();
+
+    expect(groupAlert('Community outing')).toBeEmptyDOMElement();
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
   });
 });
 
@@ -2099,5 +3618,426 @@ describe('Common items, archiving and restoring an item', () => {
     expect(archivedSection(sectionOf('Community outing'))!.open).toBe(false);
     expect(archivedSection(sectionOf('Every note'))!.open).toBe(false);
     expect(archivedSection(sectionOf('Personal care'))!.open).toBe(true);
+  });
+});
+
+const groupArchived = 'Group archived';
+const groupRestored = 'Group restored to the end of the list';
+
+/** The archives or restores sent for the group of `groupId`, each as its `If-Match` and its body, in the order sent. */
+function groupPlacesOf(groupId: string, action: 'archive' | 'restore'): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupPlacePath(groupId, action) && init?.method === 'POST'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: init.body }]
+      : [],
+  );
+}
+
+/** The path of each archive and restore sent, of any group, in the order sent. */
+function groupPlacePaths(): string[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    typeof path === 'string'
+    && /^\/api\/admin\/common-item-groups\/[^/]+\/(?:archive|restore)$/.test(path)
+    && init?.method === 'POST'
+      ? [path]
+      : [],
+  );
+}
+
+/** Archived groups, the one `<details>` in no group's section, or `null` while it is left out. */
+function archivedGroups(): HTMLDetailsElement | null {
+  const found = Array.from(main().querySelectorAll('details')).filter((details) => details.closest('section') === null);
+  expect(found.length).toBeLessThanOrEqual(1);
+  return found[0] ?? null;
+}
+
+/** The rows of Archived groups, in the order shown, or none while it is left out. */
+function archivedGroupRows(): HTMLLIElement[] {
+  return Array.from(archivedGroups()?.querySelectorAll<HTMLLIElement>('ul > li') ?? []);
+}
+
+/** The row of the archived group named `name` in Archived groups. */
+function archivedGroupRow(name: string): HTMLLIElement {
+  const row = archivedGroupRows().find((listed) => textOf(listed) === name);
+  expect(row).toBeDefined();
+  return row!;
+}
+
+/** The archived group's Restore, by its name, which ends with ", [name] group". */
+function groupRestoreButton(name: string): HTMLElement {
+  return within(archivedGroupRow(name)).getByRole('button', { name: `Restore, ${name} group` });
+}
+
+/** Opens Archived groups, as the manager does with its summary. */
+function openArchivedGroups() {
+  archivedGroups()!.open = true;
+}
+
+// A second archived group, archived after Overnight respite and so listed before it, with an active item and an
+// archived one, so that a Restore brings back the one and leaves the other in its own Archived items.
+const swimmingKit = item('4bb8c67d-e19f-4f3a-8b2c-0d1e2f3a4b5c', 'Packed swimming kit', 0);
+const towel = item('5cc9d78e-f2a0-4a4b-9c3d-1e2f3a4b5c6d', 'Brought a towel', 1, '2026-09-18T05:12:00Z');
+const swimming = group(
+  '6dd0e89f-a3b1-4b5c-8d4e-2f3a4b5c6d7e',
+  'Swimming',
+  3,
+  [swimmingKit, towel],
+  '2026-09-20T05:12:00Z',
+);
+const twoArchived = [everyNote, outing, care, respite, swimming];
+
+describe('Common items, archiving and restoring a group', () => {
+  it('shows Archived groups after the New group form, closed on load, its groups newest archived first', async () => {
+    await openPage(twoArchived);
+
+    const details = archivedGroups()!;
+    expect(details.open).toBe(false);
+    expect(details).not.toHaveAttribute('open');
+    expect(details.previousElementSibling).toBe(newGroupForm());
+    const summary = details.firstElementChild!;
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(summary.textContent).toBe('Archived groups');
+    expect(details.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
+    expect(details.querySelector('ul')?.previousElementSibling).toBe(summary);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    for (const row of archivedGroupRows()) {
+      const name = textOf(row)!;
+      expectButtons(row, [`Restore, ${name} group`]);
+      const button = within(row).getByRole('button');
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-label');
+      expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+      expect(within(button).getByText(`, ${name} group`)).toHaveClass('visually-hidden');
+      const alert = within(row).getByRole('alert');
+      expect(alert).toBeEmptyDOMElement();
+      expect(follows(row.querySelector('p')!, alert)).toBe(true);
+      expect(follows(alert, button)).toBe(true);
+    }
+
+    // Name and Restore alone: none of an archived group's items is listed.
+    for (const text of [packed.text, swimmingKit.text, towel.text]) {
+      expect(within(main()).queryByText(text)).not.toBeInTheDocument();
+    }
+  });
+
+  it('leaves Archived groups out while no group is archived', async () => {
+    await openPage([everyNote, outing, care]);
+
+    expect(archivedGroups()).toBeNull();
+    expect(within(main()).queryByText('Archived groups')).not.toBeInTheDocument();
+  });
+
+  it("on Archive, asks nothing and sends the group's version, then Archived groups opens with it first", async () => {
+    await openPage();
+    serveGroups(groups);
+    const reads = listReads();
+    expect(archivedGroups()!.open).toBe(false);
+
+    await press(groupButton('Community outing', 'Archive'));
+
+    expect(groupPlacesOf(outing.id, 'archive')).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: undefined }]);
+    expect(groupPlacePaths()).toEqual([groupPlacePath(outing.id, 'archive')]);
+    expect(listReads()).toBe(reads + 1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // The section has gone, with its items.
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(within(main()).queryByText(busOrTrain.text)).not.toBeInTheDocument();
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+    expect(document.activeElement).toBe(groupRestoreButton(outing.name));
+    // The one group left besides Every note, whose moves are both unavailable now.
+    expect(groupButton('Personal care', 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Personal care', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupArchived);
+  });
+
+  it('puts Archived groups after New group once the first group is archived, open, focus on its Restore', async () => {
+    const list = [everyNote, outing, care];
+    await openPage(list);
+    serveGroups(list);
+    expect(archivedGroups()).toBeNull();
+
+    await press(groupButton('Personal care', 'Archive'));
+
+    const details = archivedGroups()!;
+    expect(details.open).toBe(true);
+    expect(details.previousElementSibling).toBe(newGroupForm());
+    expect(archivedGroupRows().map(textOf)).toEqual([care.name]);
+    expect(groupRestoreButton(care.name)).toHaveFocus();
+    expect(headings()).toEqual(['Every note', 'Community outing']);
+  });
+
+  it('keeps the section while the archive is out, busy at once, "Archiving…" after 400 ms, sent once', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('POST', groupPlacePath(outing.id, 'archive'));
+    const button = groupButton('Community outing', 'Archive');
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Archiving…')).toBeInTheDocument();
+    await press(button);
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(groupRestoreButton(outing.name)).toHaveFocus();
+  });
+
+  it('opens Archived groups but leaves focus where the manager went while the archive was out', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('POST', groupPlacePath(outing.id, 'archive'));
+    await press(groupButton('Community outing', 'Archive'));
+    newGroupField().focus();
+
+    release();
+    await settle();
+    await settle();
+
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+    expect(newGroupField()).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupArchived);
+  });
+
+  it("on Restore, sends the group's version, then it is last among the groups, with its active items", async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+    openArchivedGroups();
+    const reads = listReads();
+
+    await press(groupRestoreButton(swimming.name));
+
+    expect(groupPlacesOf(swimming.id, 'restore')).toEqual([{ ifMatch: `"${swimming.rowVersion}"`, body: undefined }]);
+    expect(groupPlacePaths()).toEqual([groupPlacePath(swimming.id, 'restore')]);
+    expect(listReads()).toBe(reads + 1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Swimming']);
+    const section = sectionOf('Swimming');
+    expect(activeItems(section).map(textOf)).toEqual([swimmingKit.text]);
+    expect(archivedItems(section).map(textOf)).toEqual([towel.text]);
+    expect(archivedSection(section)!.open).toBe(false);
+    expect(document.activeElement).toBe(groupButton('Swimming', 'Archive'));
+    // Last of the groups, so its Move down is unavailable, and Personal care's is not any more.
+    expect(groupButton('Swimming', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Personal care', 'Move down')).not.toHaveAttribute('aria-disabled');
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([respite.name]);
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRestored);
+  });
+
+  it('takes Archived groups away once Restore empties it', async () => {
+    await openPage();
+    serveGroups(groups);
+    openArchivedGroups();
+
+    await press(groupRestoreButton(respite.name));
+
+    expect(archivedGroups()).toBeNull();
+    expect(within(main()).queryByText('Archived groups')).not.toBeInTheDocument();
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Overnight respite']);
+    expect(activeItems(sectionOf('Overnight respite')).map(textOf)).toEqual([packed.text]);
+    expect(groupButton('Overnight respite', 'Archive')).toHaveFocus();
+  });
+
+  it('keeps the group archived while the restore is out, busy at once, "Restoring…" after 400 ms', async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+    openArchivedGroups();
+    const release = hold('POST', groupPlacePath(respite.id, 'restore'));
+    const button = groupRestoreButton(respite.name);
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Restoring…')).toBeInTheDocument();
+    await press(button);
+    expect(groupPlacesOf(respite.id, 'restore')).toHaveLength(1);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Overnight respite']);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name]);
+    expect(groupButton('Overnight respite', 'Archive')).toHaveFocus();
+  });
+
+  it.each([
+    ['Archive', groupPlacePath(outing.id, 'archive'), () => groupButton('Community outing', 'Archive')],
+    ['Restore', groupPlacePath(respite.id, 'restore'), () => groupRestoreButton('Overnight respite')],
+  ])('on a 412 from %s, reads the list again and focuses the list conflict, until a write succeeds', async (
+    _,
+    path,
+    button,
+  ) => {
+    await openPage();
+    const held = serveGroups(groups);
+    openArchivedGroups();
+    // Another manager renames both meanwhile.
+    held[1].name = 'Day trips';
+    held[1].rowVersion = 'AAAAAAAAE998=';
+    held[3].name = 'Respite weekends';
+    held[3].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(button());
+
+    expect(groupPlacePaths()).toEqual([path]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Day trips', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual(['Respite weekends']);
+    expect(groupAlert('Day trips')).toBeEmptyDOMElement();
+    expect(within(archivedGroupRow('Respite weekends')).getByRole('alert')).toBeEmptyDOMElement();
+    await wait(16);
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(groupButton('Day trips', 'Archive'));
+
+    expect(listConflict()).toBeNull();
+    expect(archivedGroupRows().map(textOf)).toEqual(['Day trips', 'Respite weekends']);
+  });
+
+  it('sends nothing for an Archive whose group was archived elsewhere before its turn: the conflict', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const release = hold('POST', itemsPath(everyNote.id));
+    type(newItem('Every note'), 'Teeth brushed');
+    await press(addItemButton('Every note'));
+    await press(groupButton('Community outing', 'Archive'));
+    // Another manager archives it meanwhile, which the add's re-read brings.
+    held[1].archivedAtUtc = '2026-10-01T06:30:00Z';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+
+    release();
+    await settle();
+    await settle();
+    await settle();
+
+    expect(groupPlacePaths()).toEqual([]);
+    expect(listConflict()).toHaveFocus();
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not archived: no connection. Try again.'],
+    ['a 503', problem(503), 'Not archived: something went wrong. Try again.'],
+    ['a 428', problem(428, 'precondition.required'), 'Not archived: something went wrong. Try again.'],
+    [
+      'a 422 config.every_note_fixed',
+      problem(422, 'config.every_note_fixed'),
+      'Not archived: something went wrong. Try again.',
+    ],
+  ])("on %s, says so in the group's alert, keeping the section and focus on Archive, and reads nothing", async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage();
+    serve('POST', groupPlacePath(outing.id, 'archive'), answer);
+    const button = groupButton('Community outing', 'Archive');
+    const reads = listReads();
+
+    await press(button);
+
+    expect(groupAlert('Community outing')).toHaveTextContent(words);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([respite.name]);
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(groupAlert('Personal care')).toBeEmptyDOMElement();
+    expect(pageStatus()).not.toHaveTextContent(groupArchived);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not restored: no connection. Try again.'],
+    ['a 503', problem(503), 'Not restored: something went wrong. Try again.'],
+  ])("on %s, says so in the archived group's alert, keeping it and focus on Restore, and reads nothing", async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage(twoArchived);
+    serve('POST', groupPlacePath(respite.id, 'restore'), answer);
+    openArchivedGroups();
+    const button = groupRestoreButton(respite.name);
+    const reads = listReads();
+
+    await press(button);
+
+    expect(within(archivedGroupRow(respite.name)).getByRole('alert')).toHaveTextContent(words);
+    expect(within(archivedGroupRow(swimming.name)).getByRole('alert')).toBeEmptyDOMElement();
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    expect(groupPlacesOf(respite.id, 'restore')).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(groupRestored);
+  });
+
+  // Uncontrolled, so that what the manager opened or closed stays so, whatever write comes next, but for a group's
+  // Archive, which opens it with the group first.
+  it('keeps a closed Archived groups closed, and an opened one open, after another write', async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+
+    type(newItem('Every note'), 'Teeth brushed');
+    await press(addItemButton('Every note'));
+
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, meal.text, 'Teeth brushed']);
+    expect(archivedGroups()!.open).toBe(false);
+
+    openArchivedGroups();
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+    expect(archivedGroups()!.open).toBe(true);
+
+    await press(groupRestoreButton(respite.name));
+
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name]);
+    expect(archivedGroups()!.open).toBe(true);
+
+    archivedGroups()!.open = false;
+    await press(archiveButton('Community outing', paid.text));
+
+    expect(archivedSection(sectionOf('Community outing'))!.open).toBe(true);
+    expect(archivedGroups()!.open).toBe(false);
+
+    await press(groupButton('Personal care', 'Archive'));
+
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([care.name, swimming.name]);
+    expect(groupRestoreButton(care.name)).toHaveFocus();
   });
 });

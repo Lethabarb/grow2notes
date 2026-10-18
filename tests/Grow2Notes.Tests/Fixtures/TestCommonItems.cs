@@ -1,6 +1,8 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Fixtures;
@@ -28,8 +30,15 @@ internal sealed record TestCommonItem(
 internal sealed record AddedCommonItem(Guid Id, string ETag);
 
 /// <summary>
-/// Groups and items that a test adds straight through the app's context, as no endpoint adds a group until T07, and
-/// so that a test can set up gaps, ties and archived rows that no endpoint would leave.
+/// A group that <see cref="TestCommonItems.AddGroupAsync"/> added: its ID, and its <c>ETag</c>, the <c>If-Match</c>
+/// that a change to it sends.
+/// </summary>
+internal sealed record AddedGroup(Guid Id, string ETag);
+
+/// <summary>
+/// Groups and items that a test adds straight through the app's context, writing no audit event, so that a test can
+/// set up gaps, ties and archived rows that no endpoint would leave; and the order of an organisation's groups, which a
+/// test that reorders them all among other tests' groups reads.
 /// </summary>
 internal static class TestCommonItems
 {
@@ -41,19 +50,38 @@ internal static class TestCommonItems
     /// its tenant, as the app adds them, with each group's values as given; and gives their IDs in the order given.
     /// </summary>
     public static async Task<List<Guid>> AddGroupsAsync(
-        this IServiceProvider services, Guid organisationId, params TestCommonItemGroup[] groups)
+        this IServiceProvider services, Guid organisationId, params TestCommonItemGroup[] groups) =>
+        [.. (await services.AddGroupRowsAsync(organisationId, groups)).Select(group => group.Id)];
+
+    /// <summary>
+    /// Adds one group as <see cref="AddGroupsAsync"/> adds them, and gives its ID and its <c>ETag</c>, for a test that
+    /// changes it.
+    /// </summary>
+    public static async Task<AddedGroup> AddGroupAsync(
+        this IServiceProvider services, Guid organisationId, TestCommonItemGroup group)
     {
-        var rows = groups.Select(group => new CommonItemGroup
+        var row = Assert.Single(await services.AddGroupRowsAsync(organisationId, group));
+
+        // EF Core reads back the version that SQL Server gave the row as it saved it.
+        return new(row.Id, RowVersionToken.ETag(row));
+    }
+
+    /// <summary>
+    /// The IDs of the active groups other than Every note of the organisation of ID <paramref name="organisationId"/>,
+    /// in the list's order, as a reorder of every group sends them, read through the app's context under its tenant.
+    /// </summary>
+    public static async Task<List<Guid>> ActiveGroupIdsAsync(this IServiceProvider services, Guid organisationId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
         {
-            Id = group.Id ?? Guid.NewGuid(),
-            OrganisationId = organisationId,
-            Name = group.Name,
-            SortOrder = group.SortOrder,
-            ArchivedAtUtc = group.ArchivedAtUtc,
-            CreatedAtUtc = group.CreatedAtUtc ?? AddedAtUtc,
-        }).ToList();
-        await services.SaveAsync(organisationId, db => db.CommonItemGroups.AddRange(rows));
-        return [.. rows.Select(group => group.Id)];
+            return await CommonItemGroupList.InListOrder(
+                    db.CommonItemGroups.AsNoTracking()
+                        .Where(group => !group.IsEveryNote && group.ArchivedAtUtc == null))
+                .Select(group => group.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>
@@ -76,6 +104,22 @@ internal static class TestCommonItems
 
         // EF Core reads back the version that SQL Server gave the row as it saved it.
         return new(row.Id, RowVersionToken.ETag(row));
+    }
+
+    private static async Task<List<CommonItemGroup>> AddGroupRowsAsync(
+        this IServiceProvider services, Guid organisationId, params TestCommonItemGroup[] groups)
+    {
+        var rows = groups.Select(group => new CommonItemGroup
+        {
+            Id = group.Id ?? Guid.NewGuid(),
+            OrganisationId = organisationId,
+            Name = group.Name,
+            SortOrder = group.SortOrder,
+            ArchivedAtUtc = group.ArchivedAtUtc,
+            CreatedAtUtc = group.CreatedAtUtc ?? AddedAtUtc,
+        }).ToList();
+        await services.SaveAsync(organisationId, db => db.CommonItemGroups.AddRange(rows));
+        return rows;
     }
 
     private static async Task<List<CommonItem>> AddItemRowsAsync(

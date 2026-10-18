@@ -19,12 +19,27 @@ export type AdminCommonItemGroup = {
   items: ListRow[];
 };
 
-// The path of the groups, which the list reads (design.md §6.6).
+/** The body of a group add's `201`: the new group's ID (design.md §6.6, T07's Notes). */
+type AddedCommonItemGroup = { id: string };
+
+// The path of the groups, which the list reads, a group add posts to, and under which their order is put (design.md
+// §6.6).
 const groupsPath = '/api/admin/common-item-groups';
+
+/**
+ * The one TanStack mutation scope of every write on Common items, to a group or to an item of any group
+ * (common-items.md component 5), so that the writes run one at a time.
+ */
+export const commonItemsScope = 'common-items';
+
+/** The path of a group, which a rename puts to, and under which it is archived and restored (design.md §6.6). */
+function groupPath(groupId: string): string {
+  return `${groupsPath}/${encodeURIComponent(groupId)}`;
+}
 
 /** The path of a group's items, which an add posts to, and under which their order is put (design.md §6.6). */
 function groupItemsPath(groupId: string): string {
-  return `${groupsPath}/${encodeURIComponent(groupId)}/items`;
+  return `${groupPath(groupId)}/items`;
 }
 
 /** The path of an item, which a reword puts to, and under which it is archived and restored (design.md §6.6). */
@@ -48,21 +63,41 @@ export const commonItemGroupsQuery = queryOptions({
  * `ListEditor`'s way to a group's items (list-editor.md *Implementation notes*): the page's one query, from which it
  * picks the group's items; the one scope of every write on the page, `common-items` (common-items.md component 5);
  * the add to the end of the group, whose `201` has no body; an item's reword, with its `rowVersion` as `If-Match`,
- * whose `200` has none either; the reorder of the group's active items, with no `If-Match`, as the set of their IDs is
- * its check (design.md §6.7), whose `204` has no body; and an item's archive and restore, with no body and its
- * `rowVersion` as `If-Match`, whose `204`s have none.
+ * which always sends the group to put it in, this one unless the Group radios chose another, whose `200` has no body
+ * either (common-items.md component 6); the reorder of the group's active items, with no `If-Match`, as the set of
+ * their IDs is its check (design.md §6.7), whose `204` has no body; and an item's archive and restore, with no body
+ * and its `rowVersion` as `If-Match`, whose `204`s have none.
  */
 export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]> {
   return {
     query: commonItemGroupsQuery,
     rowsOf: (groups) => groups.find((group) => group.id === groupId)?.items ?? [],
-    scopeId: 'common-items',
+    scopeId: commonItemsScope,
     add: (text) => api<undefined>(groupItemsPath(groupId), { method: 'POST', body: { text } }),
-    update: (id, text, rowVersion) =>
-      api<undefined>(itemPath(id), { method: 'PUT', body: { text }, ifMatch: rowVersion }),
+    update: (id, text, rowVersion, to = groupId) =>
+      api<undefined>(itemPath(id), { method: 'PUT', body: { text, groupId: to }, ifMatch: rowVersion }),
     reorder: (commonItemIds) =>
       api<undefined>(`${groupItemsPath(groupId)}/order`, { method: 'PUT', body: { commonItemIds } }),
     archive: (id, rowVersion) => api<undefined>(`${itemPath(id)}/archive`, { method: 'POST', ifMatch: rowVersion }),
     restore: (id, rowVersion) => api<undefined>(`${itemPath(id)}/restore`, { method: 'POST', ifMatch: rowVersion }),
   };
 }
+
+/**
+ * The writes to the groups themselves (design.md §6.6), each in `commonItemsScope` and followed by a read of the page's
+ * one query, as an item's are: the add of a group at the end, whose `201` gives the new group's ID, by which the screen
+ * then focuses its New item field; a group's rename, with its `rowVersion` as `If-Match`, whose `200` has no body, as
+ * the screen reads the group's next version from the list; the reorder of the active groups other than Every note,
+ * with no `If-Match`, as the set of their IDs is its check (design.md §6.7), whose `204` has no body; and a group's
+ * archive and restore, with no body and its `rowVersion` as `If-Match`, whose `204`s have none.
+ */
+export const commonItemGroupsApi = {
+  add: (name: string) => api<AddedCommonItemGroup>(groupsPath, { method: 'POST', body: { name } }),
+  rename: (groupId: string, name: string, rowVersion: string) =>
+    api<undefined>(groupPath(groupId), { method: 'PUT', body: { name }, ifMatch: rowVersion }),
+  reorder: (groupIds: string[]) => api<undefined>(`${groupsPath}/order`, { method: 'PUT', body: { groupIds } }),
+  archive: (groupId: string, rowVersion: string) =>
+    api<undefined>(`${groupPath(groupId)}/archive`, { method: 'POST', ifMatch: rowVersion }),
+  restore: (groupId: string, rowVersion: string) =>
+    api<undefined>(`${groupPath(groupId)}/restore`, { method: 'POST', ifMatch: rowVersion }),
+};

@@ -24,7 +24,8 @@ namespace Grow2Notes.Tests.Platform.Audit;
 /// <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>, <c>EntityId</c>,
 /// <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its row here, and T24
 /// completes the table. Rows act in seeded organisation A and add rows of their own to it, changing no seeded row, but
-/// for a change to an organisation's own row, such as its guide prompts, which a row makes in an organisation that it
+/// for a change to an organisation's own row, such as its guide prompts, or one whose values depend on every row of
+/// the organisation's list, such as a new group's place among its groups, which a row makes in an organisation that it
 /// adds, and for a change to every organisation, which a row makes on a database of its own (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -54,10 +55,16 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Goal.Archived] = test => test.ArchiveGoalAsync(),
         [AuditEventTypes.Goal.Restored] = test => test.RestoreGoalAsync(),
         [AuditEventTypes.CommonItem.Created] = test => test.AddCommonItemAsync(),
-        [AuditEventTypes.CommonItem.Updated] = test => test.RewordCommonItemAsync(),
+        [$"{AuditEventTypes.CommonItem.Updated} by Reword"] = test => test.RewordCommonItemAsync(),
+        [$"{AuditEventTypes.CommonItem.Updated} by Move"] = test => test.MoveCommonItemAsync(),
         [AuditEventTypes.CommonItem.Reordered] = test => test.ReorderCommonItemsAsync(),
         [AuditEventTypes.CommonItem.Archived] = test => test.ArchiveCommonItemAsync(),
         [AuditEventTypes.CommonItem.Restored] = test => test.RestoreCommonItemAsync(),
+        [AuditEventTypes.CommonItemGroup.Created] = test => test.AddCommonItemGroupAsync(),
+        [AuditEventTypes.CommonItemGroup.Updated] = test => test.RenameCommonItemGroupAsync(),
+        [AuditEventTypes.CommonItemGroup.Reordered] = test => test.ReorderCommonItemGroupsAsync(),
+        [AuditEventTypes.CommonItemGroup.Archived] = test => test.ArchiveCommonItemGroupAsync(),
+        [AuditEventTypes.CommonItemGroup.Restored] = test => test.RestoreCommonItemGroupAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
@@ -562,10 +569,10 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
-    /// <c>common_item.updated</c>: A's manager rewords an item of a group added for the row, typing the new text over
-    /// two lines, with <c>PUT /api/admin/common-items/{id}</c> and the item's <c>ETag</c>, which records the item as
-    /// the entity, with no participant, and the old and new text, as stored, alone: the reword keeps the item in its
-    /// group, so no other value changes.
+    /// <c>common_item.updated</c>, by Reword: A's manager rewords an item of a group added for the row, typing the new
+    /// text over two lines, with <c>PUT /api/admin/common-items/{id}</c> and the item's <c>ETag</c>, sending the item's
+    /// own group as the screen does, which records the item as the entity, with no participant, and the old and new
+    /// text, as stored, alone: the reword keeps the item in its place in its group, so no other value changes.
     /// </summary>
     private async Task<WrittenEvent> RewordCommonItemAsync()
     {
@@ -577,7 +584,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         using var response = await client.PutWithTokenAsync(
             $"/api/admin/common-items/{item.Id}",
             await client.FetchTokenAsync(),
-            new { text = " Travelled by\ntram " },
+            new { text = " Travelled by\ntram ", groupId },
             item.ETag);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -585,6 +592,49 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             ["old"] = new JsonObject { ["text"] = "Travelled by bus or train" },
             ["new"] = new JsonObject { ["text"] = "Travelled by tram" },
+        };
+        return new(
+            AuditEventTypes.CommonItem.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.CommonItem,
+            item.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item.updated</c>, by Move: A's manager moves an item of a group added for the row to another group
+    /// added for it, which holds an active item and an archived one after it, with
+    /// <c>PUT /api/admin/common-items/{id}</c> and the item's <c>ETag</c>, sending the text as it was, which records
+    /// the item as the entity, with no participant, and its old and new group and place alone: the item goes after the
+    /// chosen group's highest active item (A42), whatever its archived one holds, and its text is unchanged
+    /// (S01.03.08's Note).
+    /// </summary>
+    private async Task<WrittenEvent> MoveCommonItemAsync()
+    {
+        var groups = await factory.Services.AddGroupsAsync(
+            a.OrganisationId, new("Community outing", 0), new("Personal care", 1));
+        var (groupId, chosenId) = (groups[0], groups[1]);
+        var item = await factory.Services.AddItemAsync(
+            a.OrganisationId, groupId, new TestCommonItem("Travelled by bus or train", 3));
+        await factory.Services.AddItemsAsync(
+            a.OrganisationId,
+            chosenId,
+            new("Showered", 1),
+            new("Packed an overnight bag", 5, ArchivedAtUtc: TestCommonItems.AddedAtUtc));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/common-items/{item.Id}",
+            await client.FetchTokenAsync(),
+            new { text = "Travelled by bus or train", groupId = chosenId },
+            item.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["groupId"] = groupId, ["sortOrder"] = 3 },
+            ["new"] = new JsonObject { ["groupId"] = chosenId, ["sortOrder"] = 2 },
         };
         return new(
             AuditEventTypes.CommonItem.Updated,
@@ -694,6 +744,169 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             a.ManagerId,
             AuditEntityTypes.CommonItem,
             item.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.created</c>: the manager of an organisation that the row adds, whose groups are Every note
+    /// alone, so that the new group's place is known, adds a group, typed over two lines, with
+    /// <c>POST /api/admin/common-item-groups</c>, which records the new group as the entity, with no participant, and
+    /// its values as <c>new</c> alone, named as design.md §6.6's list names them: its name as stored, on one line, its
+    /// place, the first after Every note, and no time archived.
+    /// </summary>
+    private async Task<WrittenEvent> AddCommonItemGroupAsync()
+    {
+        var (organisationId, managerId) = await AddOrganisationAsync();
+        await AddEveryNoteAsync(organisationId);
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        using var response = await client.PostWithTokenAsync(
+            "/api/admin/common-item-groups", await client.FetchTokenAsync(), new { name = " Community\nouting " });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var added = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+
+        var values = new JsonObject { ["name"] = "Community outing", ["sortOrder"] = 0, ["archivedAtUtc"] = null };
+        return new(
+            AuditEventTypes.CommonItemGroup.Created,
+            organisationId,
+            managerId,
+            AuditEntityTypes.CommonItemGroup,
+            added.GetProperty("id").GetGuid(),
+            null,
+            new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.updated</c>: A's manager renames a group added for the row, typing the new name over two
+    /// lines, with <c>PUT /api/admin/common-item-groups/{groupId}</c> and the group's <c>ETag</c>, which records the
+    /// group as the entity, with no participant, and the old and new name, as stored, alone: a rename changes no other
+    /// value.
+    /// </summary>
+    private async Task<WrittenEvent> RenameCommonItemGroupAsync()
+    {
+        var group = await factory.Services.AddGroupAsync(
+            a.OrganisationId, new TestCommonItemGroup("Community outing", 3));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/common-item-groups/{group.Id}",
+            await client.FetchTokenAsync(),
+            new { name = " Outings and\ntrips " },
+            group.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["name"] = "Community outing" },
+            ["new"] = new JsonObject { ["name"] = "Outings and trips" },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.CommonItemGroup,
+            group.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.reordered</c>: the manager of an organisation that the row adds, so that its groups are
+    /// known, whose groups are Every note and two active groups with an archived one between them, moves the second
+    /// active group to the top with <c>PUT /api/admin/common-item-groups/order</c>, which records no group as the
+    /// entity, as it is about the list, and no participant, and the active groups' IDs in their old and new order,
+    /// Every note and the archived group left out of both.
+    /// </summary>
+    private async Task<WrittenEvent> ReorderCommonItemGroupsAsync()
+    {
+        var (organisationId, managerId) = await AddOrganisationAsync();
+        await AddEveryNoteAsync(organisationId);
+        var groups = await factory.Services.AddGroupsAsync(
+            organisationId,
+            new TestCommonItemGroup("Community outing", 0),
+            new TestCommonItemGroup("Overnight respite", 1, ArchivedAtUtc: TestCommonItems.AddedAtUtc),
+            new TestCommonItemGroup("Personal care", 2));
+        var (outing, care) = (groups[0], groups[2]);
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        using var response = await client.PutWithTokenAsync(
+            "/api/admin/common-item-groups/order",
+            await client.FetchTokenAsync(),
+            new { groupIds = new[] { care, outing } },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["order"] = new JsonArray(outing.ToString(), care.ToString()) },
+            ["new"] = new JsonObject { ["order"] = new JsonArray(care.ToString(), outing.ToString()) },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Reordered,
+            organisationId,
+            managerId,
+            AuditEntityTypes.CommonItemGroup,
+            null,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.archived</c>: A's manager archives an active group added for the row with
+    /// <c>POST /api/admin/common-item-groups/{groupId}/archive</c> and the group's <c>ETag</c>, which records the group
+    /// as the entity, with no participant, and the time it was archived at, before and after, the time as stored; not
+    /// its <c>sortOrder</c>, which archiving leaves as it was.
+    /// </summary>
+    private async Task<WrittenEvent> ArchiveCommonItemGroupAsync()
+    {
+        var group = await factory.Services.AddGroupAsync(
+            a.OrganisationId, new TestCommonItemGroup("Community outing", 3));
+        await PostAsync($"/api/admin/common-item-groups/{group.Id}/archive", group.ETag);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["archivedAtUtc"] = null },
+            ["new"] = new JsonObject { ["archivedAtUtc"] = await StoredGroupArchivedAtUtcAsync(group.Id) },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Archived,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.CommonItemGroup,
+            group.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.restored</c>: the manager of an organisation that the row adds, so that its groups are
+    /// known, whose groups are Every note, an active group and an archived one, restores the archived one with
+    /// <c>POST /api/admin/common-item-groups/{groupId}/restore</c> and its <c>ETag</c>, which records the group as the
+    /// entity, with no participant, and its place before and after: from where it was archived to one after the
+    /// highest active <c>sortOrder</c> of the groups other than Every note, and from the time it was archived at to
+    /// none.
+    /// </summary>
+    private async Task<WrittenEvent> RestoreCommonItemGroupAsync()
+    {
+        var (organisationId, managerId) = await AddOrganisationAsync();
+        await AddEveryNoteAsync(organisationId);
+        await factory.Services.AddGroupsAsync(organisationId, new TestCommonItemGroup("Personal care", 2));
+        var group = await factory.Services.AddGroupAsync(
+            organisationId, new TestCommonItemGroup("Community outing", 0, ArchivedAtUtc: TestCommonItems.AddedAtUtc));
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        using var response = await client.PostWithTokenAsync(
+            $"/api/admin/common-item-groups/{group.Id}/restore", await client.FetchTokenAsync(), ifMatch: group.ETag);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["sortOrder"] = 0, ["archivedAtUtc"] = TestCommonItems.AddedAtUtc },
+            ["new"] = new JsonObject { ["sortOrder"] = 3, ["archivedAtUtc"] = null },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Restored,
+            organisationId,
+            managerId,
+            AuditEntityTypes.CommonItemGroup,
+            group.Id,
             null,
             details.ToJsonString());
     }
@@ -865,6 +1078,19 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         return (organisation.Id, manager.Id);
     }
 
+    // The Every note group of an organisation that a row adds, as admin bootstrap adds it (design.md §7.4), saved under
+    // the organisation's tenant, as a tenant-owned row is.
+    private async Task AddEveryNoteAsync(Guid organisationId)
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        db.CommonItemGroups.Add(CommonItemGroup.EveryNote(organisationId, TestCommonItems.AddedAtUtc));
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
     // The user who has the address, as Identity stores them.
     private async Task<ApplicationUser> StoredUserAsync(string email)
     {
@@ -950,6 +1176,19 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             return await db.CommonItems.Where(item => item.Id == itemId)
                 .Select(item => item.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The time that the group was archived at, as its row holds it, through the app's context under A's tenant.
+    private async Task<DateTime?> StoredGroupArchivedAtUtcAsync(Guid groupId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.CommonItemGroups.Where(group => group.Id == groupId)
+                .Select(group => group.ArchivedAtUtc)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
     }

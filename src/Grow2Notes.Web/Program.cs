@@ -254,6 +254,7 @@ builder.Services.AddScoped<GoalList>();
 builder.Services.AddScoped<GoalChanges>();
 builder.Services.AddScoped<CommonItemGroupList>();
 builder.Services.AddScoped<CommonItemChanges>();
+builder.Services.AddScoped<CommonItemGroupChanges>();
 
 // The note handler class, one per scope for the same reason.
 builder.Services.AddScoped<NoteDrafts>();
@@ -384,6 +385,10 @@ api.MapAdminGroup()
     .MapReorderGoalsEndpoint()
     .MapArchiveGoalEndpoints()
     .MapCommonItemGroupListEndpoint()
+    .MapAddCommonItemGroupEndpoint()
+    .MapRenameCommonItemGroupEndpoint()
+    .MapReorderCommonItemGroupsEndpoint()
+    .MapArchiveCommonItemGroupEndpoints()
     .MapAddCommonItemEndpoint()
     .MapUpdateCommonItemEndpoint()
     .MapReorderCommonItemsEndpoint()

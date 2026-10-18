@@ -480,6 +480,7 @@ scope. Nothing is dragged, deleted or confirmed.
 | ▸ Archived items                      |  per group, only when it has archived items
 |                                       |  --section-gap
 | Community outing                      |  <h2>
+|   (group alert slot: empty)           |  role=alert, always rendered
 | [↑ Move up ] [↓ Move down ]           |  group actions: 4 secondary buttons, in the
 | [ Rename ] [ Archive ]                |  item rows' order; hidden context
 |                                       |  ", Community outing group"
@@ -507,14 +508,14 @@ item rows (`common-items.md` CSS), with no new breakpoint.
 | Action | What happens | Focus afterwards | Announced (polite, page status) |
 |---|---|---|---|
 | **Rename** (group) | The group buttons give way to a one-field form under the heading; the `<h2>` stays above it, so the region keeps its name and the manager sees what is being renamed. Label **Group name** (V), `<input type="text">` with the current name, character count, **Save** (primary), **Cancel**. Every note has no Rename. | The input, caret at the end | — |
-| **Save** (rename) | Validate; unchanged text closes as Cancel. Then `PUT …/groups/{id}` with `If-Match`, re-read. | That group's **Rename** | **Group renamed** (P) |
-| **Move up / Move down** (group) | Swap with the neighbouring group; Every note never moves and nothing moves above it. `PUT …/groups/order`, re-read. | The same button of the moved group | **Group moved up** / **Group moved down** (P) |
+| **Save** (rename) | Validate; unchanged text closes as Cancel. Then `PUT /api/admin/common-item-groups/{id}` `{name}` with `If-Match`, re-read. A `412` re-reads and shows the list conflict, the form still open with the typed name, and the next Save sends the group's new version. | That group's **Rename** | **Group renamed** (P) |
+| **Move up / Move down** (group) | Swap with the neighbouring group; Every note never moves and nothing moves above it. `PUT /api/admin/common-item-groups/order` with every active group ID but Every note's, re-read. | The same button of the moved group | **Group moved up** / **Group moved down** (P) |
 | **Move up on the first group after Every note / Move down on the last** | `aria-disabled`, no request | Stays | **Already at the top** / **Already at the bottom** (existing) |
 | **Archive** (group) | No dialog (reversible, as for items). The section leaves the page with its items, which stop showing on notes started from now on. **Archived groups** appears if needed, opens, and lists it first. | Its **Restore** | **Group archived** (P) |
 | **Restore** (group) | Back at the **end** of the groups, with its active items (A2 rule). | Its **Archive** | **Group restored to the end of the list** (P) |
-| **Add group** | Validate; `POST …/groups`, re-read. The new, empty section appears last, above the New group field; the field is cleared. | The new group's **New item in [name]** field: the next useful step, because an empty group does not show on notes | **Group added at the end of the list** (P) |
+| **Add group** | Validate; `POST /api/admin/common-item-groups` `{name}`, which answers `201 {id}`, re-read. The new, empty section appears last, above the New group field; the field is cleared if it still holds the name sent. | The new group's **New item in [name]** field, found by the `id`: the next useful step, because an empty group does not show on notes | **Group added at the end of the list** (P) |
 | **Add item** (in a group) | The existing list-editor Add, scoped to that group: the item goes to the end of that group. | Stays in that field | **Item added to the end of the list** (existing) |
-| **Edit item → change group** | The item's edit form gains a radio group, legend **Group** (V), listing every active group in order with the current one ticked (the drawn radio from checkbox-list). Save with text and group unchanged closes as Cancel. Otherwise one `PUT …/common-items/{id}` with `{text, groupId}` and `If-Match`; a moved item goes to the **end** of its new group. | That item's **Edit**, now in its new section | **Item saved** (existing), or **Item saved and moved to the end of Personal care** (P) |
+| **Edit item → change group** | The item's edit form gains a radio group, legend **Group** (V), listing every active group in order with the current one ticked (the drawn radio from checkbox-list), while two or more groups are active. Save with text and group unchanged closes as Cancel. Otherwise one `PUT /api/admin/common-items/{id}` with `{text, groupId}` and `If-Match`; a moved item goes to the **end** of its new group. | That item's **Edit**, now in its new section | **Item saved** (existing), or **Item saved and moved to the end of Personal care** (P) |
 
 - **Radios, not a select, for the group.** GOV.UK: "The select component should only be used as a last resort…
   research shows that some users find selects very difficult to use"; radios keep every group visible.
@@ -525,9 +526,11 @@ item rows (`common-items.md` CSS), with no new breakpoint.
 - **Validation** (rename, add group): one-field pattern, on press only: **Enter the group name** (V) and **Group name
   must be 200 characters or less** (V), above the field, focus to the field, no summary.
 - **Request failures:** the row or form alert slot: **Not saved: …**, **Not moved: …**, **Not archived: …**, **Not
-  restored: …**, **Not added: …**, with cause "no connection" or "something went wrong" (microcopy §4). Conflicts
-  (`412`, `422 config.order_mismatch`, `409 config.group_archived`): re-read, then the existing list-conflict message
-  above the groups takes focus.
+  restored: …**, **Not added: …**, with cause "no connection" or "something went wrong" (microcopy §4): a group's
+  move or Archive in the alert slot of its heading row, a rename's Save in the rename form's, Add group in the New
+  group form's, and a Restore in its archived group's row. Conflicts (`412`, `422 config.order_mismatch`,
+  `409 config.group_archived`): re-read, then the existing list-conflict message above the groups takes focus. A
+  `422 config.every_note_fixed` or a `428`, which the screen never causes, says "something went wrong".
 - **Busy labels** after 400 ms: Saving…, Moving…, Archiving…, Restoring…, Adding… (existing pattern).
 - **No writes are retried automatically** (no idempotency key on the add endpoints, as today).
 
@@ -556,9 +559,16 @@ item rows (`common-items.md` CSS), with no new breakpoint.
   benefits from a region per group here, and there are few of them **[Opinion]**. The item `<ol>` restarts per group,
   so "number 2 of 5" stays true. Focus never drops to `<body>` (the list-editor rule). The `<details>` summaries are
   plain text with hidden context.
-- **API (closed, design.md §6.6):** group endpoints (list with items, archived included; add; rename; order; archive;
-  restore), `groupId` on the item `PUT`, item order per group, `rowVersion` per group and per item for `If-Match`, and
-  `409 config.group_archived` for an add into, or a move into, a group archived meanwhile.
+- **API (closed, design.md §6.6):** group endpoints (list with items, archived included; add, which answers
+  `201 {id}`; rename, archive and restore, each refusing Every note with `422 config.every_note_fixed`; and order,
+  which refuses a list that names Every note with `422 config.order_mismatch`), `groupId` on the item `PUT`, item
+  order per group, `rowVersion` per group and per item for `If-Match`, and `409 config.group_archived` for an add into,
+  or a move into, a group archived meanwhile.
+- **As built** (common-items.md components 5 to 8): each group's heading row, rename form, New group form and
+  Archived groups are in `features/commonItems/CommonItemsPage.tsx`, the two name fields one `GroupNameField`; the
+  group buttons reuse the item rows' `MovePair` and button class, and every group write the rows' write helpers
+  (`listWrite.ts`), in the page's one scope `common-items`, with the page's `ListFrame` for focus after a change and
+  for the list conflict.
 
 ---
 

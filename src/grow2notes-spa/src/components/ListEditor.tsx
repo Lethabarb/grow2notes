@@ -1,15 +1,26 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type RefObject } from 'react';
+import { useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import { useId, useRef, useState, type FormEvent, type MouseEvent, type Ref, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
-import { ApiError, classify } from '../api/api.ts';
+import { ApiError } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
-import { strings, type Cause } from '../copy/strings.ts';
+import { strings } from '../copy/strings.ts';
 import { limits } from '../limits.ts';
 import { Button } from './Button.tsx';
 import { CharacterCount } from './CharacterCount.tsx';
+import { ChoiceRow } from './ChoiceRow.tsx';
 import { FieldGroup } from './FieldGroup.tsx';
 import styles from './ListEditor.module.css';
 import { useListFrame } from './listFrameContext.ts';
+import {
+  cleanText,
+  failureAlert,
+  focusStayedIn,
+  ListChanged,
+  sendUnlessListChanged,
+  useFieldText,
+  useListWrite,
+  type ListWriter,
+} from './listWrite.ts';
 import { useAnnounce } from './pageStatusContext.ts';
 import { RequestAlert } from './RequestAlert.tsx';
 import textBox from './TextBox.module.css';
@@ -38,10 +49,11 @@ type ListWrites = {
   /** Adds a row of `text` at the end of the list, as the API's `POST` does; the editor reads nothing of the answer. */
   add: (text: string) => Promise<unknown>;
   /**
-   * Rewords a row, with its `rowVersion` as `If-Match`, as the API's `PUT` does; the editor reads nothing of the
-   * answer, as it reads the row's next version from the list.
+   * Rewords a row, with its `rowVersion` as `If-Match`, as the API's `PUT` does, and, on Common items, puts it in the
+   * group of `groupId`, its own unless the Group radios chose another (`RowGroups`); the editor reads nothing of the
+   * answer, as it reads the row's next version, and its group, from the list.
    */
-  update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
+  update: (id: string, text: string, rowVersion: string, groupId?: string) => Promise<unknown>;
   /**
    * Puts the list's active rows in the order of `ids`, each active row's ID once, as the API's `PUT …/order` does; the
    * editor reads nothing of the answer, as it reads the new order, and each row's next version, from the list.
@@ -69,6 +81,21 @@ export type ListApi<TData> = ListWrites & {
   rowsOf: (data: TData) => ListRow[];
 };
 
+/** A group that a row of Common items can be moved to, as the Group radios name it (common-items.md component 6). */
+type GroupChoice = { id: string; name: string };
+
+/**
+ * How the rows of a group's list on Common items move to another group (common-items.md component 6), which no other
+ * list does: the list's own group, which each of its rows is in; the active groups, in the list's order, Every note
+ * first, as the page's one query holds them, which a row's edit form offers as its Group radios while there are two or
+ * more; and the `name` of a row's radios, given the row's ID, `item-{id}-group`.
+ */
+type RowGroups = {
+  own: string;
+  active: GroupChoice[];
+  fieldName: (rowId: string) => string;
+};
+
 type ListEditorProps<TData> = {
   kind: ListKind;
   api: ListApi<TData>;
@@ -88,45 +115,55 @@ type ListEditorProps<TData> = {
    * (common-items.md component 6); otherwise one of React's own.
    */
   editFieldId?: (rowId: string) => string;
+  /** On Common items alone, the groups that a row can be moved to from its edit form. */
+  groups?: RowGroups;
   /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
 
 /**
- * What the editor's rows and forms share with it: the list's kind, name and writes; the ids of its rows' edit fields
- * where its page names them, and the id of the page's help text, which describes each text field; the rows as last
- * read, and the read that follows each write; focus that follows a change, and the list's archived section that an
- * Archive opens; and the list conflict, which a write shows and the next write that succeeds takes away.
+ * What a move needs of the list that it moves a row or a group in (list-editor.md *Behaviour*, common-items.md *Group
+ * actions*): what every write needs of the list (`ListWriter`), its scope, the read that follows each write and the
+ * list conflict; focus that follows a change; the order as last read, which a move reads as it runs; and the write of a
+ * new order.
  */
-type ListContext = {
-  kind: ListKind;
-  name: string | undefined;
-  api: ListWrites;
-  editFieldId: ((rowId: string) => string) | undefined;
-  helpId: string;
-  /** The rows as the list was last read, which a write reads as it runs. */
-  latest: () => ListRow[];
-  /** Reads the list again, which a write waits for, so that the next write starts from what the server holds. */
-  reread: () => Promise<void>;
+export type MoveList = ListWriter & {
   /** Registers an element under `key`, such as a row's Edit under `<id>:edit`, for `focusAfterRender`. */
   focusTarget: (key: string) => (element: HTMLElement | null) => void;
   /** Focuses the element registered under `key` once the render that a change brings is in the DOM. */
   focusAfterRender: (key: string) => void;
+  /** The IDs of the list's active rows, or of its groups but Every note, in their order as last read. */
+  order: () => string[];
+  /** Puts the rows or the groups in the order of `ids`, each of `order`'s IDs once, as the API's `PUT …/order` does. */
+  reorder: (ids: string[]) => Promise<unknown>;
+};
+
+/**
+ * What the editor's rows and forms share with it: what a move needs of the list (`MoveList`), most of which every other
+ * write needs too; the list's kind, name and writes; the ids of its rows' edit fields where its page names them, the
+ * groups that a row can be moved to, on Common items, and the id of the page's help text, which describes each text
+ * field; the rows as last read; and the list's archived section that an Archive opens.
+ */
+type ListContext = MoveList & {
+  kind: ListKind;
+  name: string | undefined;
+  api: ListWrites;
+  editFieldId: ((rowId: string) => string) | undefined;
+  groups: RowGroups | undefined;
+  helpId: string;
+  /** The rows as the list was last read, which a write reads as it runs. */
+  latest: () => ListRow[];
   /**
    * Opens the archived section once the render that an Archive brings is in the DOM, as it may have only just
    * appeared, then focuses the element registered under `key`, if one is given.
    */
   openArchivedAfterRender: (key: string | undefined) => void;
-  /** Shows the list conflict above the list, and focuses it, as a write found the list changed by someone else. */
-  changedMeanwhile: () => void;
-  /** Takes the list conflict away, as a write on the list has succeeded. */
-  written: () => void;
 };
 
-/** Which way a row's move button moves it. */
+/** Which way a move button moves its row or its group. */
 type Direction = 'up' | 'down';
 
-/** Each move button's words: its label, and what a press says where the row is already at the button's end. */
+/** Each move button's words: its label, and what a press says where its row or group is already at that end. */
 const moveWords = {
   up: { label: strings.listRows.moveUp, atEnd: strings.listRows.atTop },
   down: { label: strings.listRows.moveDown, atEnd: strings.listRows.atBottom },
@@ -146,14 +183,6 @@ const arrowPaths = {
   up: 'M10 2.5 3.5 9h4.25v8.5h4.5V9h4.25z',
   down: 'M10 17.5 16.5 11h-4.25V2.5h-4.5V11H3.5z',
 } as const;
-
-/**
- * A write that found its row no longer active, as someone else archived it, once the list was read again; the list
- * conflict then shows, as the row has left the list with its form (list-editor.md *Request errors*).
- */
-class ListChanged extends Error {
-  override name = 'ListChanged';
-}
 
 /**
  * A move that waited its turn behind a write that took its row to the end it moves towards, so that it sends nothing
@@ -178,58 +207,19 @@ class RowChanged extends Error {
 }
 
 /**
- * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
- * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
- * an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md
- * *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what
- * the server now holds; any other failure fails as it is.
+ * The rule for a row's text, of the list's kind (form-validation.md): the message for the text as cleaned, none left
+ * or more than `limits.itemText` characters, counted in UTF-16 units, as the server counts them; or nothing once it
+ * passes.
  */
-async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
-  try {
-    await send();
-  } catch (failed) {
-    if (!(failed instanceof ApiError && failed.status === status)) {
-      throw failed;
+function textRule(kind: ListKind): (cleaned: string) => string | undefined {
+  const copy = strings.listEditor[kind];
+  return (cleaned) => {
+    if (cleaned === '') {
+      return copy.enter;
     }
 
-    await list.reread();
-    throw new ListChanged();
-  }
-}
-
-/**
- * What a write that failed says in the alert of the row or the form that sent it (list-editor.md *Request errors*):
- * `message` with the cause; or nothing for the list conflict, which shows above the list, or for a `401`, which the
- * session flow has, as `api()` started it.
- */
-function failureAlert(failed: unknown, message: (cause: Cause) => string): string | undefined {
-  if (failed instanceof ListChanged) {
-    return undefined;
-  }
-
-  const cause = classify(failed);
-  return cause === 'signedOut' ? undefined : message(cause);
-}
-
-/**
- * A row's text as Add and Save send it (list-editor.md *Implementation notes*): each line break, with the spaces
- * around it, as one space, and the ends trimmed, as the server cleans it too.
- */
-function cleanText(text: string): string {
-  return text.replace(/\s*[\r\n]+\s*/g, ' ').trim();
-}
-
-/**
- * The message for a row's cleaned text, or nothing (form-validation.md): none left, or more than `limits.itemText`
- * characters, counted in UTF-16 units, as the server counts them.
- */
-function textError(cleaned: string, kind: ListKind): string | undefined {
-  const copy = strings.listEditor[kind];
-  if (cleaned === '') {
-    return copy.enter;
-  }
-
-  return cleaned.length > limits.itemText ? msg.tooLong(copy.text, limits.itemText) : undefined;
+    return cleaned.length > limits.itemText ? msg.tooLong(copy.text, limits.itemText) : undefined;
+  };
 }
 
 /** The active row of ID `id` among `rows`, or `undefined` once it is archived. */
@@ -240,16 +230,6 @@ function activeRow(rows: ListRow[], id: string): ListRow | undefined {
 /** The archived row of ID `id` among `rows`, or `undefined` once it is active. */
 function archivedRow(rows: ListRow[], id: string): ListRow | undefined {
   return rows.find((row) => row.id === id && row.archivedAtUtc !== null);
-}
-
-/**
- * Whether focus is still in `origin`, the form or the button that started a write, or nowhere: only then does the
- * write's end move it, as focus is never pulled away from where the person has gone while the write was out
- * (common-items.md *Queueing*).
- */
-function focusStayedIn(origin: HTMLElement | null): boolean {
-  const focused = document.activeElement;
-  return focused === null || focused === document.body || origin?.contains(focused) === true;
 }
 
 /**
@@ -271,6 +251,7 @@ export function ListEditor<TData>({
   name,
   addFieldId,
   editFieldId,
+  groups,
   readOnly = false,
 }: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
@@ -289,16 +270,22 @@ export function ListEditor<TData>({
     .sort((a, b) => b.archivedAt - a.archivedAt)
     .map(({ row }) => row);
 
+  const latest = () => {
+    const data = queryClient.getQueryData<TData>(api.query.queryKey);
+    return data === undefined ? [] : api.rowsOf(data);
+  };
+
   const list: ListContext = {
+    scopeId: api.scopeId,
     kind,
     name,
     api,
     editFieldId,
+    groups,
     helpId: frame.helpId,
-    latest: () => {
-      const data = queryClient.getQueryData<TData>(api.query.queryKey);
-      return data === undefined ? [] : api.rowsOf(data);
-    },
+    latest,
+    order: () => latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : [])),
+    reorder: api.reorder,
     reread: () => queryClient.refetchQueries({ queryKey: api.query.queryKey, exact: true }),
     focusTarget: frame.focusTarget,
     focusAfterRender: frame.focusAfterRender,
@@ -354,90 +341,6 @@ export function ListEditor<TData>({
       )}
     </>
   );
-}
-
-/**
- * A write to the list (list-editor.md *Implementation notes*): in the list's one scope, so that it waits for the write
- * before it; sent once, never again by itself, as an add sent again after a lost answer would add the row twice; then
- * the list read again before the next write starts, as the screen shows a change only once the server has it, and
- * what `send` gave passed on. Once it succeeds, the list conflict goes; once it finds the list changed, the conflict
- * shows, though the form or the row that sent it may have gone.
- */
-function useListWrite<T, R>(list: ListContext, send: (variables: T) => Promise<R>) {
-  return useMutation({
-    mutationFn: async (variables: T) => {
-      const result = await send(variables);
-      await list.reread();
-      return result;
-    },
-    onSuccess: () => {
-      list.written();
-    },
-    onError: (failed) => {
-      if (failed instanceof ListChanged) {
-        list.changedMeanwhile();
-      }
-    },
-    scope: { id: list.api.scopeId },
-    retry: 0,
-  });
-}
-
-/**
- * A row's text as its form holds it (form-validation.md's one-field pattern): as typed, in this page's memory only
- * (D22); its inputs, after which the count's twin speaks; and its message, shown by a press that finds the text
- * refused, or by the server's refusal of it, each of which moves focus to the field, even with the same message, and,
- * once shown, checked again at each input, and taken away, silently, once the text passes.
- */
-function useItemText(kind: ListKind, initial: string, field: RefObject<HTMLTextAreaElement | null>) {
-  const [text, setText] = useState(initial);
-  const [inputs, setInputs] = useState(0);
-  const [error, setError] = useState<string>();
-  const [refusals, setRefusals] = useState(0);
-
-  // After the render that names the message in the field's description, so that a screen reader reads it with focus.
-  useEffect(() => {
-    if (refusals > 0) {
-      field.current?.focus();
-    }
-  }, [refusals, field]);
-
-  function refuse(message: string) {
-    setError(message);
-    setRefusals((presses) => presses + 1);
-  }
-
-  return {
-    text,
-    setText,
-    inputs,
-    error,
-    edit: (next: string) => {
-      setText(next);
-      setInputs((count) => count + 1);
-      setError((shown) => (shown === undefined ? undefined : textError(cleanText(next), kind)));
-    },
-    /** The text as its form sends it, or `undefined` once it is refused, with its message shown. */
-    checked: (): string | undefined => {
-      const cleaned = cleanText(text);
-      const refused = textError(cleaned, kind);
-      if (refused === undefined) {
-        return cleaned;
-      }
-
-      refuse(refused);
-      return undefined;
-    },
-    /** Whether `failed` is the server's refusal of the text, a `422` under `text`, which it shows on the field. */
-    refusedByServer: (failed: unknown): boolean => {
-      const refusal = failed instanceof ApiError && failed.status === 422 ? failed.errors?.text?.[0] : undefined;
-      if (refusal !== undefined) {
-        refuse(refusal);
-      }
-
-      return refusal !== undefined;
-    },
-  };
 }
 
 type ActiveRowProps = {
@@ -527,10 +430,15 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
           <div className={styles.side}>
             <RequestAlert>{failure}</RequestAlert>
             <div className={styles.actions}>
-              <div className={styles.pair}>
-                <MoveButton row={row} list={list} direction="up" atEnd={first} onFailure={setFailure} />
-                <MoveButton row={row} list={list} direction="down" atEnd={last} onFailure={setFailure} />
-              </div>
+              <MovePair
+                list={list}
+                id={row.id}
+                first={first}
+                last={last}
+                context={msg.rowContext(row.text)}
+                moved={msg.moved}
+                onFailure={setFailure}
+              />
               <div className={styles.pair}>
                 <Button ref={list.focusTarget(editKey)} className={styles.rowButton} onClick={edit}>
                   {strings.listRows.edit}
@@ -555,36 +463,65 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
   );
 }
 
+type MovePairProps = Omit<MoveButtonProps, 'direction' | 'atEnd'> & {
+  /** Whether the row or the group is the first in its order, where Move up is unavailable. */
+  first: boolean;
+  /** Whether the row or the group is the last in its order, where Move down is unavailable. */
+  last: boolean;
+};
+
+/**
+ * A row's or a group's first pair of buttons (list-editor.md *Anatomy*, common-items.md component 5), Move up, then
+ * Move down, which share a line.
+ */
+export function MovePair({ first, last, ...move }: MovePairProps) {
+  return (
+    <div className={styles.pair}>
+      <MoveButton {...move} direction="up" atEnd={first} />
+      <MoveButton {...move} direction="down" atEnd={last} />
+    </div>
+  );
+}
+
 type MoveButtonProps = {
-  row: ListRow;
-  list: ListContext;
+  list: MoveList;
+  /** The ID of the row or the group that the button moves. */
+  id: string;
   direction: Direction;
-  /** Whether the row is already at the end that the button moves it towards, where the button is unavailable. */
+  /** Whether the row or the group is already at the end that the button moves it towards, where it is unavailable. */
   atEnd: boolean;
-  /** Shows a move's failure in the row's alert, or, given `undefined`, empties it. */
+  /** After the label, for screen readers alone: the row's text, or the group's name, with `msg`'s comma before it. */
+  context: string;
+  /**
+   * What the page's status region says once the list shows the move, given the way it went and the place it went to,
+   * counted from 1 among the `total` in the order.
+   */
+  moved: (direction: Direction, position: number, total: number) => string;
+  /** Shows a move's failure in the row's or the group's alert, or, given `undefined`, empties it. */
   onFailure: (message: string | undefined) => void;
 };
 
 /**
- * A row's Move up or Move down (list-editor.md *Behaviour*), in words after a decorative arrow, with the row's text
- * after them for screen readers alone. At the row's end it stays in place, unavailable (`aria-disabled`, dashed), and a
- * press sends nothing and says why in the page's status region. Otherwise a press is busy at once, "Moving…" after
- * 400 ms, and waits its turn in the list's scope; when it runs, it swaps the row with its neighbour in the order of the
- * list as last read, and sends that whole order, the list showing the new order only once it has been read again.
- * Then focus goes back to the button, unless the person has gone elsewhere meanwhile, and the page's status region
- * says where the row went. A move whose row an earlier one has taken to the end sends nothing, and says so as an
- * unavailable press does; one whose row has left the list, or that the server refuses `422` as the list has changed,
- * shows the list conflict over the list read again; and any other failure says so in the row's alert, focus staying on
- * the button.
+ * A row's or a group's Move up or Move down (list-editor.md *Behaviour*, common-items.md *Group actions*), in words
+ * after a decorative arrow, with the row's text or the group's name after them for screen readers alone. At the end of
+ * the order it stays in place, unavailable (`aria-disabled`, dashed), and a press sends nothing and says why in the
+ * page's status region. Otherwise a press is busy at once, "Moving…" after 400 ms, and waits its turn in the list's
+ * scope; when it runs, it swaps the row or the group with its neighbour in the order as last read, and sends that whole
+ * order, the page showing the new order only once it has been read again. Then focus goes back to the button, which
+ * may have moved with its row or its whole section, unless the person has gone elsewhere meanwhile, and the page's
+ * status region says where it went. A move that an earlier one has taken to the end sends nothing, and says so as an
+ * unavailable press does; one whose row or group has left the order, or that the server refuses `422` as the order has
+ * changed, shows the list conflict over the list read again; and any other failure says so in the alert, focus staying
+ * on the button.
  */
-function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps) {
+function MoveButton({ list, id, direction, atEnd, context, moved, onFailure }: MoveButtonProps) {
   const announce = useAnnounce();
   const words = moveWords[direction];
-  const key = `${row.id}:${direction}`;
+  const key = `${id}:${direction}`;
   const move = useListWrite(list, async () => {
     // The order as the write runs, which the list read after the write before it may have changed.
-    const ids = list.latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : []));
-    const from = ids.indexOf(row.id);
+    const ids = list.order();
+    const from = ids.indexOf(id);
     if (from === -1) {
       throw new ListChanged();
     }
@@ -595,7 +532,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
     }
 
     [ids[from], ids[to]] = [ids[to], ids[from]];
-    await sendUnlessListChanged(list, 422, () => list.api.reorder(ids));
+    await sendUnlessListChanged(list, 422, () => list.reorder(ids));
     return { position: to + 1, total: ids.length };
   });
 
@@ -609,7 +546,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
           list.focusAfterRender(key);
         }
 
-        announce?.(msg.moved(direction, position, total));
+        announce?.(moved(direction, position, total));
       },
       onError: (failed) => {
         if (failed instanceof AlreadyAtEnd) {
@@ -640,7 +577,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
         <path d={arrowPaths[direction]} fill="currentColor" />
       </svg>
       {words.label}
-      <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+      <span className="visually-hidden">{context}</span>
     </Button>
   );
 }
@@ -720,18 +657,22 @@ type EditFormProps = {
 };
 
 /**
- * A row's edit form (list-editor.md *Behaviour*, participants.md B6): the row's text field, filled with its text, then
- * the alert for a request that failed, then Save, primary, and Cancel, which drops what was typed, both label width.
- * Save checks the text as Add does, sending nothing while it fails; then, when the text as Save would send it is the
- * row's own, it closes the form as Cancel does and sends nothing, as there is nothing to save. Otherwise it sends the
- * text with the row's version as the write runs, the box read-only while it is out, and once the list is read again,
- * closes the form, focus going to Edit unless the person has gone elsewhere meanwhile, and the page's status region
- * says so. A failure keeps the text, focus staying on Save: the server's refusal of the text shows on the field as
- * Save's own does; a Save refused as stale whose row is still active says what the row now says, and the next Save
- * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows,
- * as it does for a Save refused as the row's group was archived meanwhile (common-items.md *Failures*); and anything
- * else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write once
- * started runs to its end and the list then shows what the server holds.
+ * A row's edit form (list-editor.md *Behaviour*, participants.md B6, common-items.md component 6): the row's text
+ * field, filled with its text, then, on Common items while two or more groups are active, the Group radios, the row's
+ * own group chosen, then the alert for a request that failed, then Save, primary, and Cancel, which drops what was
+ * typed and chosen, both label width. Save checks the text as Add does, sending nothing while it fails; then, when the
+ * text as Save would send it is the row's own, and its group too, it closes the form as Cancel does and sends nothing,
+ * as there is nothing to save. Otherwise it sends the text, and the group chosen, with the row's version as the write
+ * runs, the box read-only while it is out, and once the list is read again, closes the form, focus going to Edit,
+ * which a row moved to another group has at the end of that group's list, unless the person has gone elsewhere
+ * meanwhile, and the page's status region says so, naming the group that a moved row went to. A failure keeps the text
+ * and the group chosen, focus staying on Save: the server's refusal of the text shows on the field as Save's own does;
+ * a Save refused as stale whose row is still in the list says what the row now says, and the next Save sends its new
+ * version; a row archived or moved meanwhile leaves the list, and its form with it, and the list conflict shows, as it
+ * does for a Save refused as the row's group, or the group chosen, was archived meanwhile (common-items.md
+ * *Failures*), a group chosen that is no longer active leaving the radios, which then have the row's own chosen; and
+ * anything else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write
+ * once started runs to its end and the list then shows what the server holds.
  */
 function EditForm({ row, list, field, onClose }: EditFormProps) {
   const copy = strings.listEditor[list.kind];
@@ -739,10 +680,14 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
   const ownId = useId();
   const fieldId = list.editFieldId?.(row.id) ?? ownId;
   const form = useRef<HTMLFormElement>(null);
-  const box = useItemText(list.kind, row.text, field);
+  const box = useFieldText(row.text, textRule(list.kind), 'text', field);
+  // The group chosen in the Group radios, the row's own until another is chosen, on Common items alone.
+  const [groupId, setGroupId] = useState(list.groups?.own);
+  // The group chosen while it is still active, or else the row's own, as a group archived meanwhile leaves the radios.
+  const chosen = list.groups?.active.some(({ id }) => id === groupId) ? groupId : list.groups?.own;
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
-  const save = useListWrite(list, async (text: string) => {
+  const save = useListWrite(list, async ({ text, to }: { text: string; to: string | undefined }) => {
     // The version as the write runs, which the list read after the write before it may have changed.
     const current = activeRow(list.latest(), row.id);
     if (current === undefined) {
@@ -750,7 +695,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     }
 
     try {
-      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion));
+      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion, to));
     } catch (failed) {
       if (!(failed instanceof ApiError && failed.status === 412)) {
         throw failed;
@@ -771,27 +716,32 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
       return;
     }
 
-    if (sent === row.text) {
+    if (sent === row.text && chosen === list.groups?.own) {
       onClose(true);
       return;
     }
 
-    save.mutate(sent, {
-      onSuccess: () => {
-        onClose(focusStayedIn(form.current));
-        announce?.(copy.saved);
-      },
-      onError: (failed) => {
-        if (failed instanceof RowChanged) {
-          setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
-          return;
-        }
+    // The group as its radio names it as Save is pressed, or nothing while the row stays in its own.
+    const movedTo = chosen === list.groups?.own ? undefined : list.groups?.active.find(({ id }) => id === chosen);
+    save.mutate(
+      { text: sent, to: chosen },
+      {
+        onSuccess: () => {
+          onClose(focusStayedIn(form.current));
+          announce?.(movedTo === undefined ? copy.saved : msg.itemSavedAndMoved(movedTo.name));
+        },
+        onError: (failed) => {
+          if (failed instanceof RowChanged) {
+            setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
+            return;
+          }
 
-        if (!box.refusedByServer(failed)) {
-          setFailure(failureAlert(failed, msg.notSaved));
-        }
+          if (!box.refusedByServer(failed)) {
+            setFailure(failureAlert(failed, msg.notSaved));
+          }
+        },
       },
-    });
+    );
   }
 
   return (
@@ -807,6 +757,14 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
         fieldRef={field}
         onChange={box.edit}
       />
+      {list.groups !== undefined && list.groups.active.length >= 2 && (
+        <GroupRadios
+          name={list.groups.fieldName(row.id)}
+          groups={list.groups.active}
+          chosen={chosen}
+          onChoose={setGroupId}
+        />
+      )}
       <RequestAlert>{failure}</RequestAlert>
       <div className={styles.actions}>
         <Button
@@ -831,6 +789,40 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
   );
 }
 
+type GroupRadiosProps = {
+  /** The `name` of every radio in the set, `item-{id}-group`, which each radio's id starts with. */
+  name: string;
+  groups: GroupChoice[];
+  /** The ID of the group chosen, whose radio is checked. */
+  chosen: string | undefined;
+  onChoose: (groupId: string) => void;
+};
+
+/**
+ * An item's Group radios (common-items.md component 6): a `<fieldset>` whose legend is "Group", then a `ChoiceRow` for
+ * each active group, in the list's order, Every note first, named by the group's name alone, the group chosen checked.
+ * One Tab stop, in which the arrow keys move and choose, as the browser's own radios do; choosing sends nothing until
+ * Save (SC 3.2.2). Radios, not a `<select>`, which some find very hard to use (GOV.UK).
+ */
+function GroupRadios({ name, groups, chosen, onChoose }: GroupRadiosProps) {
+  return (
+    <div className={styles.field}>
+      <FieldGroup fieldId={name} label={strings.commonItems.group} group>
+        {groups.map((group) => (
+          <ChoiceRow
+            key={group.id}
+            id={`${name}-${group.id}`}
+            name={name}
+            label={group.name}
+            checked={group.id === chosen}
+            onChange={() => onChoose(group.id)}
+          />
+        ))}
+      </FieldGroup>
+    </div>
+  );
+}
+
 /**
  * The add form (list-editor.md *Behaviour*, participants.md B6): the row's text field, then the alert for a request
  * that failed, then Add, primary. Add checks the text alone, in form-validation.md's one-field pattern, and sends
@@ -839,15 +831,18 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
  * if it still holds the text sent, with focus kept in it for the next one, and the page's status region says so; text
  * typed while the add was out stays. A failure keeps the text and says so in the alert, focus staying on Add, but for
  * the server's refusal of the text, which shows on the field as Add's own does, and for an add refused as the list's
- * group was archived meanwhile, which shows the list conflict over the list read again.
+ * group was archived meanwhile, which shows the list conflict over the list read again. The field takes focus that
+ * follows a change by its id, as a new group's does after Add group (common-items.md *Group actions*).
  */
 function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undefined }) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
   const ownId = useId();
+  const id = fieldId ?? ownId;
+  const focusTarget = list.focusTarget(id);
   const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
-  const box = useItemText(list.kind, '', field);
+  const box = useFieldText('', textRule(list.kind), 'text', field);
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
   const add = useListWrite(list, (text: string) => sendUnlessListChanged(list, 409, () => list.api.add(text)));
@@ -882,13 +877,16 @@ function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undef
   return (
     <form ref={form} noValidate className={`${textBox.column} ${styles.addForm}`} onSubmit={submit}>
       <ItemTextField
-        fieldId={fieldId ?? ownId}
+        fieldId={id}
         label={list.name === undefined ? copy.newLabel : `${copy.newLabel}${msg.inList(list.name)}`}
         helpId={list.helpId}
         text={box.text}
         error={box.error}
         inputs={box.inputs}
-        fieldRef={field}
+        fieldRef={(element) => {
+          field.current = element;
+          focusTarget(element);
+        }}
         onChange={box.edit}
       />
       <RequestAlert>{failure}</RequestAlert>
@@ -911,7 +909,7 @@ type ItemTextFieldProps = {
   inputs: number;
   /** While a Save of the text is out, so that what was sent is what shows (list-editor.md *Behaviour*). */
   readOnly?: boolean;
-  fieldRef: RefObject<HTMLTextAreaElement | null>;
+  fieldRef: Ref<HTMLTextAreaElement>;
   onChange: (text: string) => void;
 };
 
