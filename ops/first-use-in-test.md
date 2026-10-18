@@ -468,3 +468,34 @@ nine in all. Every word typed into a note is made up (A35).
     Guided notes and look for the guide prompts showing while the box has focus, and the top bar, with Today and the
     save status, staying in view above the keyboard; then dictate a sentence with the keyboard's microphone and look
     for it in the box and the status ending in "Saved" and the time. (A31; note-form.md open question 11.)
+
+### Common item groups, once T07 is in test
+
+These steps hold T07's by-hand checks ([tasks.md](../design/backlog/tasks.md), T07's Notes). They need account A and
+the kit of steps 26 to 28. Every group and item typed is made up (A35), such as `Community outing`.
+
+46. On the iPhone, as account A, open Common items, add a group if there is none besides Every note, and press Rename
+    on it. Look for the keyboard opening at once, with the cursor after the group's name; then press Cancel. Do the
+    same on the Android phone. (common-items.md *Add, edit, rename, move*, "Rename shows the Group name field…"; open
+    question 7.)
+47. As account A on the laptop, in Chrome at its usual window size and text size, open Common items with two groups
+    besides Every note, each with an item. Look for each group's heading with its four buttons on one line. Press Move
+    down on the first of the two, then press Edit on one of its items, choose the other group and press Save. Look for
+    the two sections swapping, with focus still on that group's Move down, then the item last in the other group,
+    scrolled into view, with focus on its Edit. (common-items.md *Layout*, its laptop bullet; open question 7.)
+48. With NVDA and Chrome on the laptop, and VoiceOver and Safari on the iPhone, as account A, open Common items and
+    Archive any group there besides Every note (those of steps 46 and 47, and of the other pass), so that each pass
+    starts with Every note alone and no group name repeats. Then add the groups `Community outing` and
+    `Personal care`, rename one and rename it back, press Move up on the first of them, then Move down on it, Edit an
+    item of Every note and move it into Personal care, Archive Community outing and Restore it, and open and close
+    Archived groups. Look for each reading in common-items.md's *What a screen-reader user hears* and *Accessibility
+    checklist*, *Screen reader*, for the groups, heard once each: "Community outing, heading level 2", and the group as
+    a region, when moving by heading and by region; after Add group, focus in "New item in Community outing", then
+    "Group added at the end of the list"; "Move up, Community outing group, button"; "dimmed" or "unavailable" on the
+    first group's Move up, and "Already at the top" when it is pressed; on Rename, "Group name", the name, then "You
+    can enter up to 200 characters"; after Save, focus on Rename, then "Group renamed"; "Group moved down" after Move
+    down; on the Group radios, "Group", then "Every note, radio button, checked, 1 of 3"; after Save with another
+    group, focus on the item's Edit, then "Item saved and moved to the end of Personal care"; "Group archived", with
+    focus on Restore and the group's name; "Group restored to the end of the list", with focus on Archive; and
+    "Archived groups" with "collapsed" or "expanded". (common-items.md *Accessibility runs*, the manual pass, its
+    group parts.)
