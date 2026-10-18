@@ -22,7 +22,8 @@ export type AdminCommonItemGroup = {
 /** The body of a group add's `201`: the new group's ID (design.md §6.6, T07's Notes). */
 type AddedCommonItemGroup = { id: string };
 
-// The path of the groups, which the list reads and a group add posts to (design.md §6.6).
+// The path of the groups, which the list reads, a group add posts to, and under which their order is put (design.md
+// §6.6).
 const groupsPath = '/api/admin/common-item-groups';
 
 /**
@@ -84,11 +85,13 @@ export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]>
 /**
  * The writes to the groups themselves (design.md §6.6), each in `commonItemsScope` and followed by a read of the page's
  * one query, as an item's are: the add of a group at the end, whose `201` gives the new group's ID, by which the screen
- * then focuses its New item field; and a group's rename, with its `rowVersion` as `If-Match`, whose `200` has no body,
- * as the screen reads the group's next version from the list.
+ * then focuses its New item field; a group's rename, with its `rowVersion` as `If-Match`, whose `200` has no body, as
+ * the screen reads the group's next version from the list; and the reorder of the active groups other than Every
+ * note, with no `If-Match`, as the set of their IDs is its check (design.md §6.7), whose `204` has no body.
  */
 export const commonItemGroupsApi = {
   add: (name: string) => api<AddedCommonItemGroup>(groupsPath, { method: 'POST', body: { name } }),
   rename: (groupId: string, name: string, rowVersion: string) =>
     api<undefined>(groupPath(groupId), { method: 'PUT', body: { name }, ifMatch: rowVersion }),
+  reorder: (groupIds: string[]) => api<undefined>(`${groupsPath}/order`, { method: 'PUT', body: { groupIds } }),
 };

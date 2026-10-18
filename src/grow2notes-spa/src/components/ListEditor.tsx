@@ -103,12 +103,29 @@ type ListEditorProps<TData> = {
 };
 
 /**
- * What the editor's rows and forms share with it: what every write needs of the list (`ListWriter`), its scope, the
- * read that follows each write and the list conflict; the list's kind, name and writes; the ids of its rows' edit
- * fields where its page names them, and the id of the page's help text, which describes each text field; the rows as
- * last read; and focus that follows a change, and the list's archived section that an Archive opens.
+ * What a move needs of the list that it moves a row or a group in (list-editor.md *Behaviour*, common-items.md *Group
+ * actions*): what every write needs of the list (`ListWriter`), its scope, the read that follows each write and the
+ * list conflict; focus that follows a change; the order as last read, which a move reads as it runs; and the write of a
+ * new order.
  */
-type ListContext = ListWriter & {
+export type MoveList = ListWriter & {
+  /** Registers an element under `key`, such as a row's Edit under `<id>:edit`, for `focusAfterRender`. */
+  focusTarget: (key: string) => (element: HTMLElement | null) => void;
+  /** Focuses the element registered under `key` once the render that a change brings is in the DOM. */
+  focusAfterRender: (key: string) => void;
+  /** The IDs of the list's active rows, or of its groups but Every note, in their order as last read. */
+  order: () => string[];
+  /** Puts the rows or the groups in the order of `ids`, each of `order`'s IDs once, as the API's `PUT …/order` does. */
+  reorder: (ids: string[]) => Promise<unknown>;
+};
+
+/**
+ * What the editor's rows and forms share with it: what a move needs of the list (`MoveList`), most of which every other
+ * write needs too; the list's kind, name and writes; the ids of its rows' edit fields where its page names them, and
+ * the id of the page's help text, which describes each text field; the rows as last read; and the list's archived
+ * section that an Archive opens.
+ */
+type ListContext = MoveList & {
   kind: ListKind;
   name: string | undefined;
   api: ListWrites;
@@ -116,10 +133,6 @@ type ListContext = ListWriter & {
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
-  /** Registers an element under `key`, such as a row's Edit under `<id>:edit`, for `focusAfterRender`. */
-  focusTarget: (key: string) => (element: HTMLElement | null) => void;
-  /** Focuses the element registered under `key` once the render that a change brings is in the DOM. */
-  focusAfterRender: (key: string) => void;
   /**
    * Opens the archived section once the render that an Archive brings is in the DOM, as it may have only just
    * appeared, then focuses the element registered under `key`, if one is given.
@@ -127,10 +140,10 @@ type ListContext = ListWriter & {
   openArchivedAfterRender: (key: string | undefined) => void;
 };
 
-/** Which way a row's move button moves it. */
+/** Which way a move button moves its row or its group. */
 type Direction = 'up' | 'down';
 
-/** Each move button's words: its label, and what a press says where the row is already at the button's end. */
+/** Each move button's words: its label, and what a press says where its row or group is already at that end. */
 const moveWords = {
   up: { label: strings.listRows.moveUp, atEnd: strings.listRows.atTop },
   down: { label: strings.listRows.moveDown, atEnd: strings.listRows.atBottom },
@@ -236,6 +249,11 @@ export function ListEditor<TData>({
     .sort((a, b) => b.archivedAt - a.archivedAt)
     .map(({ row }) => row);
 
+  const latest = () => {
+    const data = queryClient.getQueryData<TData>(api.query.queryKey);
+    return data === undefined ? [] : api.rowsOf(data);
+  };
+
   const list: ListContext = {
     scopeId: api.scopeId,
     kind,
@@ -243,10 +261,9 @@ export function ListEditor<TData>({
     api,
     editFieldId,
     helpId: frame.helpId,
-    latest: () => {
-      const data = queryClient.getQueryData<TData>(api.query.queryKey);
-      return data === undefined ? [] : api.rowsOf(data);
-    },
+    latest,
+    order: () => latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : [])),
+    reorder: api.reorder,
     reread: () => queryClient.refetchQueries({ queryKey: api.query.queryKey, exact: true }),
     focusTarget: frame.focusTarget,
     focusAfterRender: frame.focusAfterRender,
@@ -391,10 +408,15 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
           <div className={styles.side}>
             <RequestAlert>{failure}</RequestAlert>
             <div className={styles.actions}>
-              <div className={styles.pair}>
-                <MoveButton row={row} list={list} direction="up" atEnd={first} onFailure={setFailure} />
-                <MoveButton row={row} list={list} direction="down" atEnd={last} onFailure={setFailure} />
-              </div>
+              <MovePair
+                list={list}
+                id={row.id}
+                first={first}
+                last={last}
+                context={msg.rowContext(row.text)}
+                moved={msg.moved}
+                onFailure={setFailure}
+              />
               <div className={styles.pair}>
                 <Button ref={list.focusTarget(editKey)} className={styles.rowButton} onClick={edit}>
                   {strings.listRows.edit}
@@ -419,36 +441,65 @@ function ActiveRow({ row, list, first, last }: ActiveRowProps) {
   );
 }
 
+type MovePairProps = Omit<MoveButtonProps, 'direction' | 'atEnd'> & {
+  /** Whether the row or the group is the first in its order, where Move up is unavailable. */
+  first: boolean;
+  /** Whether the row or the group is the last in its order, where Move down is unavailable. */
+  last: boolean;
+};
+
+/**
+ * A row's or a group's first pair of buttons (list-editor.md *Anatomy*, common-items.md component 5), Move up, then
+ * Move down, which share a line.
+ */
+export function MovePair({ first, last, ...move }: MovePairProps) {
+  return (
+    <div className={styles.pair}>
+      <MoveButton {...move} direction="up" atEnd={first} />
+      <MoveButton {...move} direction="down" atEnd={last} />
+    </div>
+  );
+}
+
 type MoveButtonProps = {
-  row: ListRow;
-  list: ListContext;
+  list: MoveList;
+  /** The ID of the row or the group that the button moves. */
+  id: string;
   direction: Direction;
-  /** Whether the row is already at the end that the button moves it towards, where the button is unavailable. */
+  /** Whether the row or the group is already at the end that the button moves it towards, where it is unavailable. */
   atEnd: boolean;
-  /** Shows a move's failure in the row's alert, or, given `undefined`, empties it. */
+  /** After the label, for screen readers alone: the row's text, or the group's name, with `msg`'s comma before it. */
+  context: string;
+  /**
+   * What the page's status region says once the list shows the move, given the way it went and the place it went to,
+   * counted from 1 among the `total` in the order.
+   */
+  moved: (direction: Direction, position: number, total: number) => string;
+  /** Shows a move's failure in the row's or the group's alert, or, given `undefined`, empties it. */
   onFailure: (message: string | undefined) => void;
 };
 
 /**
- * A row's Move up or Move down (list-editor.md *Behaviour*), in words after a decorative arrow, with the row's text
- * after them for screen readers alone. At the row's end it stays in place, unavailable (`aria-disabled`, dashed), and a
- * press sends nothing and says why in the page's status region. Otherwise a press is busy at once, "Moving…" after
- * 400 ms, and waits its turn in the list's scope; when it runs, it swaps the row with its neighbour in the order of the
- * list as last read, and sends that whole order, the list showing the new order only once it has been read again.
- * Then focus goes back to the button, unless the person has gone elsewhere meanwhile, and the page's status region
- * says where the row went. A move whose row an earlier one has taken to the end sends nothing, and says so as an
- * unavailable press does; one whose row has left the list, or that the server refuses `422` as the list has changed,
- * shows the list conflict over the list read again; and any other failure says so in the row's alert, focus staying on
- * the button.
+ * A row's or a group's Move up or Move down (list-editor.md *Behaviour*, common-items.md *Group actions*), in words
+ * after a decorative arrow, with the row's text or the group's name after them for screen readers alone. At the end of
+ * the order it stays in place, unavailable (`aria-disabled`, dashed), and a press sends nothing and says why in the
+ * page's status region. Otherwise a press is busy at once, "Moving…" after 400 ms, and waits its turn in the list's
+ * scope; when it runs, it swaps the row or the group with its neighbour in the order as last read, and sends that whole
+ * order, the page showing the new order only once it has been read again. Then focus goes back to the button, which
+ * may have moved with its row or its whole section, unless the person has gone elsewhere meanwhile, and the page's
+ * status region says where it went. A move that an earlier one has taken to the end sends nothing, and says so as an
+ * unavailable press does; one whose row or group has left the order, or that the server refuses `422` as the order has
+ * changed, shows the list conflict over the list read again; and any other failure says so in the alert, focus staying
+ * on the button.
  */
-function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps) {
+function MoveButton({ list, id, direction, atEnd, context, moved, onFailure }: MoveButtonProps) {
   const announce = useAnnounce();
   const words = moveWords[direction];
-  const key = `${row.id}:${direction}`;
+  const key = `${id}:${direction}`;
   const move = useListWrite(list, async () => {
     // The order as the write runs, which the list read after the write before it may have changed.
-    const ids = list.latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : []));
-    const from = ids.indexOf(row.id);
+    const ids = list.order();
+    const from = ids.indexOf(id);
     if (from === -1) {
       throw new ListChanged();
     }
@@ -459,7 +510,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
     }
 
     [ids[from], ids[to]] = [ids[to], ids[from]];
-    await sendUnlessListChanged(list, 422, () => list.api.reorder(ids));
+    await sendUnlessListChanged(list, 422, () => list.reorder(ids));
     return { position: to + 1, total: ids.length };
   });
 
@@ -473,7 +524,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
           list.focusAfterRender(key);
         }
 
-        announce?.(msg.moved(direction, position, total));
+        announce?.(moved(direction, position, total));
       },
       onError: (failed) => {
         if (failed instanceof AlreadyAtEnd) {
@@ -504,7 +555,7 @@ function MoveButton({ row, list, direction, atEnd, onFailure }: MoveButtonProps)
         <path d={arrowPaths[direction]} fill="currentColor" />
       </svg>
       {words.label}
-      <span className="visually-hidden">{msg.rowContext(row.text)}</span>
+      <span className="visually-hidden">{context}</span>
     </Button>
   );
 }

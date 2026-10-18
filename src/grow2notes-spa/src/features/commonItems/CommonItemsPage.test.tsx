@@ -741,6 +741,9 @@ function groupPath(groupId: string): string {
   return `${groupsPath}/${groupId}`;
 }
 
+/** The path that the order of the groups is put to (design.md §6.6). */
+const groupOrderPath = `${groupsPath}/order`;
+
 /** The path that the order of the items of the group of `groupId` is put to (design.md §6.6). */
 function orderPath(groupId: string): string {
   return `${itemsPath(groupId)}/order`;
@@ -758,21 +761,23 @@ function placePath(itemId: string, action: 'archive' | 'restore'): string {
 const placed: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
 
 /**
- * Has the groups list, the group adds, each group's renames, adds and reorders, and each item's rewords, archives and
- * restores answered by a server that holds `list`, and gives what it holds, which a test may change as another manager
- * would: a group add puts a group, with no items and an ID and a version of its own, at the end of the active groups
- * other than Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers `201` with its
- * ID; a rename refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
- * config.every_note_fixed`), or else gives the group its name and a new version, and answers `200` with no body; an add
- * puts an item, with an ID and a version of its own, at the end of its group, one after the highest active `sortOrder`
- * (A2), and answers `201` with no body; a reword refuses an `If-Match` that is not the item's version (`412`), then an
- * item of an archived group (`409 config.group_archived`), or else gives the item its text and a new version, and
- * answers `200` with no body; a reorder refuses IDs that are not the group's active items, each once (`422
- * config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder`
- * changed, and answers `204` with no body; an archive or a restore refuses an `If-Match` that is not the item's version
- * (`412`), or else archives the item in its place, later than anything archived before it, or restores it to the end
- * of its group, one after the highest active `sortOrder` (A2), each with a new version, and answers `204` with no
- * body; and a read gives what it holds.
+ * Has the groups list, the group adds and reorders, each group's renames, adds and reorders, and each item's rewords,
+ * archives and restores answered by a server that holds `list`, and gives what it holds, which a test may change as
+ * another manager would: a group add puts a group, with no items and an ID and a version of its own, at the end of the
+ * active groups other than Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers
+ * `201` with its ID; a group reorder refuses IDs that are not the active groups other than Every note, each once (`422
+ * config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each group whose `sortOrder`
+ * changed, puts the list in its order, Every note first, and answers `204` with no body; a rename refuses an `If-Match`
+ * that is not the group's version (`412`), then Every note (`422 config.every_note_fixed`), or else gives the group its
+ * name and a new version, and answers `200` with no body; an add puts an item, with an ID and a version of its own, at
+ * the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a reword refuses
+ * an `If-Match` that is not the item's version (`412`), then an item of an archived group (`409
+ * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; a reorder
+ * refuses IDs that are not the group's active items, each once (`422 config.order_mismatch`), or else gives them
+ * `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder` changed, and answers `204` with no body; an
+ * archive or a restore refuses an `If-Match` that is not the item's version (`412`), or else archives the item in its
+ * place, later than anything archived before it, or restores it to the end of its group, one after the highest active
+ * `sortOrder` (A2), each with a new version, and answers `204` with no body; and a read gives what it holds.
  */
 function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGroup[] {
   const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
@@ -890,6 +895,28 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     held.splice(after === -1 ? held.length : after, 0, added);
     serveGroup(added);
     return createdWith({ id: added.id })();
+  });
+  serve('PUT', groupOrderPath, (init) => {
+    const { groupIds } = JSON.parse(init?.body as string) as { groupIds: string[] };
+    const active = held.filter((listed) => !listed.isEveryNote && listed.archivedAtUtc === null);
+    if (
+      new Set(groupIds).size !== groupIds.length
+      || groupIds.length !== active.length
+      || !active.every(({ id }) => groupIds.includes(id))
+    ) {
+      return problem(422, 'config.order_mismatch')();
+    }
+
+    groupIds.forEach((id, sortOrder) => {
+      const listed = active.find((heldGroup) => heldGroup.id === id)!;
+      if (listed.sortOrder !== sortOrder) {
+        listed.sortOrder = sortOrder;
+        listed.rowVersion = nextVersion();
+      }
+    });
+    // In the list's order: Every note first, then the others by SortOrder, the archived ones keeping theirs.
+    held.sort((a, b) => Number(b.isEveryNote) - Number(a.isEveryNote) || a.sortOrder - b.sortOrder);
+    return reordered();
   });
   for (const heldGroup of held) {
     serveGroup(heldGroup);
@@ -2639,6 +2666,273 @@ describe('Common items, moving an item', () => {
     expect(listReads()).toBe(reads);
     expect(listConflict()).toBeNull();
     expect(rowAlert('Every note', medication.text)).toBeEmptyDOMElement();
+  });
+});
+
+/** The group reorders sent, each as its `If-Match` and the JSON of its body, in the order sent. */
+function groupReorders(): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupOrderPath && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The path of each order sent, of the groups or of any group's items, in the order sent. */
+function orderPaths(): string[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    typeof path === 'string' && path.endsWith('/order') && init?.method === 'PUT' ? [path] : [],
+  );
+}
+
+/** The alert in the heading row of the group named `name`, above its buttons. */
+function groupAlert(name: string): HTMLElement {
+  const heading = within(sectionOf(name)).getByRole('heading', { level: 2 });
+  return within(heading.parentElement!).getByRole('alert');
+}
+
+// A third group to move, after the archived one, so that a move sends every active group but Every note, the archived
+// one left out, and Personal care sits between the ends.
+const shopping = group('4c6e8a0d-5f7b-4c93-8eb0-3a4b5c6d7e8f', 'Shopping', 3, []);
+const threeGroups = [everyNote, outing, care, respite, shopping];
+
+describe('Common items, moving a group', () => {
+  it("on Move down on the first group, sends each group's ID but Every note's, swapped, focus on it", async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const reads = listReads();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    // The active groups but Every note, which always stays first, and not the archived one; with no If-Match, as the
+    // set of IDs is the check (design.md §6.7); and nothing of any group's items.
+    expect(groupReorders()).toEqual([{ ifMatch: null, body: { groupIds: [care.id, outing.id, shopping.id] } }]);
+    expect(orderPaths()).toEqual([groupOrderPath]);
+    expect(listReads()).toBe(reads + 1);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    // Its whole section moved in the DOM, which a focused button does not survive by itself (common-items.md *Group
+    // actions*).
+    expect(document.activeElement).toBe(groupButton('Community outing', 'Move down'));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Group moved down');
+  });
+
+  it('says "Group moved up" and "Group moved down", focus on the pressed button of the moved group', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const announced = recordAnnouncements();
+
+    await press(groupButton('Shopping', 'Move up'));
+    await wait(16);
+    expect(document.activeElement).toBe(groupButton('Shopping', 'Move up'));
+    await press(groupButton('Community outing', 'Move down'));
+    await wait(16);
+
+    expect(announced()).toEqual(['Group moved up', 'Group moved down']);
+    expect(groupReorders().map(({ body }) => body)).toEqual([
+      { groupIds: [outing.id, shopping.id, care.id] },
+      { groupIds: [shopping.id, outing.id, care.id] },
+    ]);
+    expect(headings()).toEqual(['Every note', 'Shopping', 'Community outing', 'Personal care']);
+    expect(document.activeElement).toBe(groupButton('Community outing', 'Move down'));
+  });
+
+  it('keeps the sections in order while the PUT is out, busy at once and "Moving…" after 400 ms', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const release = hold('PUT', groupOrderPath);
+    const down = groupButton('Community outing', 'Move down');
+
+    down.focus();
+    fireEvent.click(down);
+    await settle();
+    expect(groupReorders()).toHaveLength(1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+    expect(down).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(down).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(down).toHaveAttribute('data-busy');
+    expect(within(down).getByText('Moving…')).toBeInTheDocument();
+    await press(down);
+    expect(groupReorders()).toHaveLength(1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(down).toHaveFocus();
+  });
+
+  it('makes Move up on the first group after Every note and Move down on the last unavailable in place', async () => {
+    await openPage(threeGroups);
+    const announced = recordAnnouncements();
+    const top = groupButton('Community outing', 'Move up');
+    const bottom = groupButton('Shopping', 'Move down');
+
+    for (const end of [top, bottom]) {
+      expect(end).toHaveAttribute('aria-disabled', 'true');
+      expect(end).toHaveAttribute('data-unavailable');
+      expect(end).toBeEnabled();
+      expect(getComputedStyle(end).display).not.toBe('none');
+    }
+
+    for (const free of [
+      groupButton('Community outing', 'Move down'),
+      groupButton('Personal care', 'Move up'),
+      groupButton('Personal care', 'Move down'),
+      groupButton('Shopping', 'Move up'),
+    ]) {
+      expect(free).not.toHaveAttribute('aria-disabled');
+    }
+
+    await press(top);
+    await wait(16);
+    expect(announced()).toEqual(['Already at the top']);
+    expect(top).toHaveFocus();
+    await press(bottom);
+    await wait(16);
+
+    expect(announced()).toEqual(['Already at the top', 'Already at the bottom']);
+    expect(bottom).toHaveFocus();
+    expect(orderPaths()).toEqual([]);
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it('makes both moves of the one group besides Every note unavailable', async () => {
+    await openPage([everyNote, outing, respite]);
+
+    expect(groupButton('Community outing', 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Community outing', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it("gives a group's Move up and Move down the item rows' arrows, before their words", async () => {
+    await openPage(threeGroups);
+
+    for (const [direction, label] of [
+      ['up', 'Move up'],
+      ['down', 'Move down'],
+    ] as const) {
+      const button = groupButton('Personal care', label);
+      const arrow = button.querySelector('svg');
+      expect(arrow).toHaveAttribute('aria-hidden', 'true');
+      const rowArrow = moveButton('Community outing', direction, paid.text).querySelector('svg');
+      expect(arrow?.outerHTML).toBe(rowArrow?.outerHTML);
+      // First, then the words, in the button's label.
+      expect(within(button).getByText(label).firstChild).toBe(arrow);
+    }
+  });
+
+  it('sends nothing for a queued move whose group the move before it took to the top, and says so', async () => {
+    await openPage(threeGroups);
+    serveGroups(threeGroups);
+    const release = hold('PUT', groupOrderPath);
+
+    await press(groupButton('Community outing', 'Move down'));
+    await press(groupButton('Personal care', 'Move up'));
+    release();
+    await settle();
+    await settle();
+    await settle();
+    await wait(16);
+
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id, shopping.id] }]);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing', 'Shopping']);
+    expect(groupButton('Personal care', 'Move up')).toHaveFocus();
+    expect(pageStatus()).toHaveTextContent('Already at the top');
+  });
+
+  it("runs an item move and a group move pressed at once in turn, the group's from the item's re-read", async () => {
+    await openPage(threeGroups);
+    const held = serveGroups(threeGroups);
+    const release = hold('PUT', orderPath(outing.id));
+    const reads = listReads();
+
+    await press(moveButton('Community outing', 'up', lunch.text));
+    await press(groupButton('Community outing', 'Move down'));
+    expect(orderPaths()).toEqual([orderPath(outing.id)]);
+    // Another manager archives Shopping meanwhile, which the item move's re-read brings.
+    held[4].archivedAtUtc = '2026-10-01T06:00:00Z';
+    release();
+    await settle();
+    await settle();
+    await settle();
+
+    expect(orderPaths()).toEqual([orderPath(outing.id), groupOrderPath]);
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [busOrTrain.id, lunch.id, paid.id] },
+    ]);
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id] }]);
+    expect(listReads()).toBe(reads + 2);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text, paid.text]);
+    expect(groupButton('Community outing', 'Move down')).toHaveFocus();
+  });
+
+  it('on a 422, reads the list again and focuses the list conflict, until a write succeeds', async () => {
+    await openPage(threeGroups);
+    const held = serveGroups(threeGroups);
+    // Another manager archives Shopping meanwhile.
+    held[4].archivedAtUtc = '2026-10-01T06:00:00Z';
+    held[4].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(groupReorders().map(({ body }) => body)).toEqual([{ groupIds: [care.id, outing.id, shopping.id] }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupAlert('Community outing')).toBeEmptyDOMElement();
+
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(listConflict()).toBeNull();
+    expect(groupReorders().map(({ body }) => body)).toEqual([
+      { groupIds: [care.id, outing.id, shopping.id] },
+      { groupIds: [care.id, outing.id] },
+    ]);
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not moved: no connection. Try again.'],
+    ['a 503', problem(503), 'Not moved: something went wrong. Try again.'],
+  ])("on %s, says so in the group's alert, keeping the order and focus, reading nothing", async (_, answer, words) => {
+    await openPage(threeGroups);
+    serve('PUT', groupOrderPath, answer);
+    const down = groupButton('Community outing', 'Move down');
+    const reads = listReads();
+
+    await press(down);
+
+    expect(groupAlert('Community outing')).toHaveTextContent(words);
+    expect(down).toHaveFocus();
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Shopping']);
+    expect(groupReorders()).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(groupAlert('Personal care')).toBeEmptyDOMElement();
+  });
+
+  it("empties the group's alert as Rename opens, so that it comes back empty", async () => {
+    await openPage(threeGroups);
+    serve('PUT', groupOrderPath, noConnection);
+    await press(groupButton('Community outing', 'Move down'));
+    expect(groupAlert('Community outing')).toHaveTextContent('Not moved: no connection. Try again.');
+
+    openRename(outing);
+    fireEvent.click(renameCancel(outing.id));
+    await settle();
+
+    expect(groupAlert('Community outing')).toBeEmptyDOMElement();
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
   });
 });
 

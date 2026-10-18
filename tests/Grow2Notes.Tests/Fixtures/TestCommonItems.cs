@@ -1,6 +1,8 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Fixtures;
@@ -35,7 +37,8 @@ internal sealed record AddedGroup(Guid Id, string ETag);
 
 /// <summary>
 /// Groups and items that a test adds straight through the app's context, writing no audit event, so that a test can
-/// set up gaps, ties and archived rows that no endpoint would leave.
+/// set up gaps, ties and archived rows that no endpoint would leave; and the order of an organisation's groups, which a
+/// test that reorders them all among other tests' groups reads.
 /// </summary>
 internal static class TestCommonItems
 {
@@ -61,6 +64,24 @@ internal static class TestCommonItems
 
         // EF Core reads back the version that SQL Server gave the row as it saved it.
         return new(row.Id, RowVersionToken.ETag(row));
+    }
+
+    /// <summary>
+    /// The IDs of the active groups other than Every note of the organisation of ID <paramref name="organisationId"/>,
+    /// in the list's order, as a reorder of every group sends them, read through the app's context under its tenant.
+    /// </summary>
+    public static async Task<List<Guid>> ActiveGroupIdsAsync(this IServiceProvider services, Guid organisationId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            return await CommonItemGroupList.InListOrder(
+                    db.CommonItemGroups.AsNoTracking()
+                        .Where(group => !group.IsEveryNote && group.ArchivedAtUtc == null))
+                .Select(group => group.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>

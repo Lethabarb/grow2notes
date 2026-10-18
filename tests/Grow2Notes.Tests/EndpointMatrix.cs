@@ -244,6 +244,13 @@ internal static class EndpointMatrix
         new(Put,       "/api/admin/common-item-groups/{groupId:guid}", Unauthorized, Forbidden, OK, NotFound,
             RenamingAGroupOfItsOwn),
 
+        // Reordering the common item groups (§6.6), in the same group. Each call adds two groups of its own to A and
+        // sends them with A's other active groups but Every note, so A's manager's call moves them. The IDs are checked
+        // against the caller's own organisation's groups, so B's manager, whose groups those are not, gets
+        // 422 config.order_mismatch, and A's order stays as it was (§9.2).
+        new(Put,       "/api/admin/common-item-groups/order", Unauthorized, Forbidden, NoContent, UnprocessableEntity,
+            ReorderingTheGroupsWithTwoOfItsOwn),
+
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
@@ -503,6 +510,25 @@ internal static class EndpointMatrix
         };
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(group.ETag));
         return request;
+    }
+
+    // A reorder of A's active groups other than Every note, to which the request first adds two of its own, sending
+    // every one of them in the list's order but those two, which change places, so that each call moves groups of its
+    // own and leaves every other where it was (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheGroupsWithTwoOfItsOwn(EndpointCall call)
+    {
+        var organisationId = call.Seeded.A.OrganisationId;
+        var own = await call.Services.AddGroupsAsync(
+            organisationId,
+            new TestCommonItemGroup("Community outing", 0),
+            new TestCommonItemGroup("Personal care", 0));
+        var groupIds = await call.Services.ActiveGroupIdsAsync(organisationId);
+        var (first, second) = (groupIds.IndexOf(own[0]), groupIds.IndexOf(own[1]));
+        (groupIds[first], groupIds[second]) = (groupIds[second], groupIds[first]);
+        return new HttpRequestMessage(call.Method, "/api/admin/common-item-groups/order")
+        {
+            Content = JsonContent.Create(new { groupIds }),
+        };
     }
 
     // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never

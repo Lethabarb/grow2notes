@@ -2332,7 +2332,7 @@ group; Every note stays first and fixed.
       found by role `region` and the group's name while Rename is open; those flows; a server `422` with `errors.name`
       on Save showing its message as the field error, with `aria-invalid` and focus on the field; the next Save after a
       `412` sending the new version; and a `401` on Save keeping the name.
-- [ ] Reorder groups (S01.03.06; §14 M1's Every note line, its API part for a move; common-items.md *Reordering*' group
+- [x] Reorder groups (S01.03.06; §14 M1's Every note line, its API part for a move; common-items.md *Reordering*' group
       bullets, "Move down on row 1 (item or group)…", "End buttons…", "Moving a group sends every active group ID
       except Every note…", "Two quick presses on different rows or groups…" and "The screen never shows a new
       order…", and *Failures and conflicts*' group-order part): `PUT /api/admin/common-item-groups/order` with

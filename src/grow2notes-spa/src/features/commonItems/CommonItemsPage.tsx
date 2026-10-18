@@ -2,10 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState, type FormEvent, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '../../components/Button.tsx';
-import { ListEditor } from '../../components/ListEditor.tsx';
+import { ListEditor, MovePair, type MoveList } from '../../components/ListEditor.tsx';
 import rows from '../../components/ListEditor.module.css';
 import { ListConflict, ListFrame } from '../../components/ListFrame.tsx';
-import { useListFrame, type ListFrameValue } from '../../components/listFrameContext.ts';
+import { useListFrame } from '../../components/listFrameContext.ts';
 import {
   cleanText,
   failureAlert,
@@ -13,7 +13,6 @@ import {
   ListChanged,
   sendUnlessListChanged,
   useListWrite,
-  type ListWriter,
 } from '../../components/listWrite.ts';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
@@ -42,19 +41,26 @@ const itemsHelpId = 'items-help';
 const newGroupFieldId = 'group-new-name';
 
 /**
- * What every write to a group needs: what every write on the page does (`ListWriter`), in the page's one scope, with
- * the read of its one query again and the page's list conflict; the groups as last read, which a write reads as it
- * runs; and the frame's focus that follows a change.
+ * What every write to a group needs: what a move does (`MoveList`), in the page's one scope, with the read of its one
+ * query again, the page's list conflict, the frame's focus that follows a change, and the order of the groups that
+ * move; and the groups as last read, which a write reads as it runs.
  */
-type GroupWriter = ListWriter &
-  Pick<ListFrameValue, 'focusTarget' | 'focusAfterRender'> & {
-    /** The groups as the page's one query last read them. */
-    latest: () => AdminCommonItemGroup[];
-  };
+type GroupWriter = MoveList & {
+  /** The groups as the page's one query last read them. */
+  latest: () => AdminCommonItemGroup[];
+};
 
 /** The active group of ID `id` among `groups`, or `undefined` once it is archived or gone. */
 function activeGroup(groups: AdminCommonItemGroup[], id: string): AdminCommonItemGroup | undefined {
   return groups.find((group) => group.id === id && group.archivedAtUtc === null);
+}
+
+/**
+ * The groups that a manager moves among `groups`, the active ones but Every note, in the list's order, which always has
+ * Every note first, so that no move can put a group above it (A43).
+ */
+function movableGroups(groups: AdminCommonItemGroup[]): AdminCommonItemGroup[] {
+  return groups.filter((group) => !group.isEveryNote && group.archivedAtUtc === null);
 }
 
 /**
@@ -92,6 +98,8 @@ function Groups() {
   const queryClient = useQueryClient();
   // Already read by the page, which renders this only once it has the groups.
   const groups = useQuery({ ...commonItemGroupsQuery, refetchOnMount: false }).data!;
+  const movable = movableGroups(groups);
+  const latest = () => queryClient.getQueryData(commonItemGroupsQuery.queryKey) ?? [];
   const writer: GroupWriter = {
     scopeId: commonItemsScope,
     reread: () => queryClient.refetchQueries({ queryKey: commonItemGroupsQuery.queryKey, exact: true }),
@@ -99,21 +107,39 @@ function Groups() {
     written: frame.written,
     focusTarget: frame.focusTarget,
     focusAfterRender: frame.focusAfterRender,
-    latest: () => queryClient.getQueryData(commonItemGroupsQuery.queryKey) ?? [],
+    order: () => movableGroups(latest()).map((group) => group.id),
+    reorder: commonItemGroupsApi.reorder,
+    latest,
   };
 
   return (
     <>
       <ListConflict />
-      {groups.flatMap((group) =>
-        group.archivedAtUtc === null ? [<GroupSection key={group.id} group={group} writer={writer} />] : [],
-      )}
+      {groups
+        .filter((group) => group.archivedAtUtc === null)
+        .map((group) => (
+          <GroupSection
+            key={group.id}
+            group={group}
+            writer={writer}
+            first={group === movable[0]}
+            last={group === movable.at(-1)}
+          />
+        ))}
       <NewGroupForm writer={writer} />
     </>
   );
 }
 
 type GroupProps = { group: AdminCommonItemGroup; writer: GroupWriter };
+
+/** Where a group is among the groups that move, which makes its Move up or Move down unavailable at either end. */
+type GroupEnds = {
+  /** Whether the group is the first after Every note. */
+  first: boolean;
+  /** Whether the group is the last. */
+  last: boolean;
+};
 
 /**
  * An active group's section (common-items.md component 5), a region named by its `<h2>`, the group's name as stored,
@@ -123,7 +149,7 @@ type GroupProps = { group: AdminCommonItemGroup; writer: GroupWriter };
  * each item's edit field `item-{id}-text` (component 6), and its add form, whose field is `item-new-{groupId}`, which
  * adds to the end of this group alone.
  */
-function GroupSection({ group, writer }: GroupProps) {
+function GroupSection({ group, writer, first, last }: GroupProps & GroupEnds) {
   const headingId = `group-${group.id}-heading`;
 
   return (
@@ -136,7 +162,7 @@ function GroupSection({ group, writer }: GroupProps) {
           <p className={styles.everyNote}>{strings.commonItems.everyNote}</p>
         </>
       ) : (
-        <GroupHead group={group} writer={writer} headingId={headingId} />
+        <GroupHead group={group} writer={writer} first={first} last={last} headingId={headingId} />
       )}
       <ListEditor
         kind="item"
@@ -151,23 +177,30 @@ function GroupSection({ group, writer }: GroupProps) {
 
 /**
  * The heading row of a group other than Every note (common-items.md component 5), a wrapping flex line as an item row
- * is: its `<h2>`, then the group's alert slot, always rendered, and its buttons in two pairs, Move up and Move down,
- * then Rename and Archive, each label width, with ", [name] group" after its label for screen readers alone; beside
- * the heading while the row has room, under it otherwise. Rename puts the rename form in the buttons' place, under the
- * `<h2>`, which stays, so that the region keeps its name and the manager sees what is being renamed, until Save or
- * Cancel closes it and focus goes back to Rename, unless a Save finds it gone elsewhere as it ends. The form is
- * rendered inside the press, so that focus goes to its field, with the caret after the name, while the tap still runs,
- * which is what lets a phone open its keyboard. Its typed name is the group's own, so it stays as typed while other
- * groups change.
+ * is: its `<h2>`, then the group's alert slot, always rendered, which a failed move writes to, and its buttons in two
+ * pairs, Move up and Move down, then Rename and Archive, each label width, with ", [name] group" after its label for
+ * screen readers alone; beside the heading while the row has room, under it otherwise. Move up and Move down are the
+ * item rows' own, moving the group among the groups but Every note, which stays first, so Move up on the first group
+ * after it and Move down on the last are unavailable; a move sends every one of those groups' IDs, and the sections
+ * take their new order only once the list is read again, focus following the button as its whole section moves.
+ * Rename puts the rename form in the buttons' place, under the `<h2>`, which stays, so that the region keeps its name
+ * and the manager sees what is being renamed, until Save or Cancel closes it and focus goes back to Rename, unless a
+ * Save finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes to its field,
+ * with the caret after the name, while the tap still runs, which is what lets a phone open its keyboard. Its typed
+ * name is the group's own, so it stays as typed while other groups change.
  */
-function GroupHead({ group, writer, headingId }: GroupProps & { headingId: string }) {
+function GroupHead({ group, writer, first, last, headingId }: GroupProps & GroupEnds & { headingId: string }) {
   const [renaming, setRenaming] = useState(false);
+  // The alert's words while it holds a move's failure, which the group's next press, or Rename, clears.
+  const [failure, setFailure] = useState<string>();
   const field = useRef<HTMLInputElement>(null);
   const renameKey = `${group.id}:rename`;
   const context = msg.groupContext(group.name);
 
   function rename() {
     flushSync(() => {
+      // The form takes the alert's place, which comes back as it closes, so it must come back empty, not stale.
+      setFailure(undefined);
       setRenaming(true);
     });
     const input = field.current;
@@ -192,18 +225,17 @@ function GroupHead({ group, writer, headingId }: GroupProps & { headingId: strin
         </h2>
         {!renaming && (
           <div className={rows.side}>
-            <RequestAlert />
+            <RequestAlert>{failure}</RequestAlert>
             <div className={rows.actions}>
-              <div className={rows.pair}>
-                <Button className={rows.rowButton}>
-                  {strings.listRows.moveUp}
-                  <span className="visually-hidden">{context}</span>
-                </Button>
-                <Button className={rows.rowButton}>
-                  {strings.listRows.moveDown}
-                  <span className="visually-hidden">{context}</span>
-                </Button>
-              </div>
+              <MovePair
+                list={writer}
+                id={group.id}
+                first={first}
+                last={last}
+                context={context}
+                moved={msg.groupMoved}
+                onFailure={setFailure}
+              />
               <div className={rows.pair}>
                 <Button ref={writer.focusTarget(renameKey)} className={rows.rowButton} onClick={rename}>
                   {strings.commonItems.rename}

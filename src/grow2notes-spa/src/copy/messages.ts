@@ -52,7 +52,10 @@ export const msg = {
   notRestored: (cause: Cause): string => msg.notDone('restored', cause),
   /** A list's Add goal or Add item, or Add group, that failed, in the alert above it (list-editor.md). */
   notAdded: (cause: Cause): string => msg.notDone('added', cause),
-  /** A list row's Move up or Move down that failed, in the row's alert above its buttons (list-editor.md). */
+  /**
+   * A list row's or a Common items group's Move up or Move down that failed, in the row's or the group's alert above
+   * its buttons (list-editor.md, common-items.md *Failures*).
+   */
   notMoved: (cause: Cause): string => msg.notDone('moved', cause),
   /**
    * A list row's move, in the page's status region once the list shows it (list-editor.md *Behaviour*): where the row
@@ -60,6 +63,11 @@ export const msg = {
    */
   moved: (direction: 'up' | 'down', position: number, total: number) =>
     `Moved ${direction} to number ${position} of ${total}`,
+  /**
+   * A group's move on Common items, in the page's status region once the sections show it (common-items.md *Group
+   * actions*): "Group moved up" or "Group moved down", one phrase with no full stop, as a row's is, naming no place.
+   */
+  groupMoved: (direction: 'up' | 'down') => `Group moved ${direction}`,
   /**
    * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
    * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather

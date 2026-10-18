@@ -61,6 +61,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItem.Restored] = test => test.RestoreCommonItemAsync(),
         [AuditEventTypes.CommonItemGroup.Created] = test => test.AddCommonItemGroupAsync(),
         [AuditEventTypes.CommonItemGroup.Updated] = test => test.RenameCommonItemGroupAsync(),
+        [AuditEventTypes.CommonItemGroup.Reordered] = test => test.ReorderCommonItemGroupsAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
@@ -758,6 +759,46 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             a.ManagerId,
             AuditEntityTypes.CommonItemGroup,
             group.Id,
+            null,
+            details.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.reordered</c>: the manager of an organisation that the row adds, so that its groups are
+    /// known, whose groups are Every note and two active groups with an archived one between them, moves the second
+    /// active group to the top with <c>PUT /api/admin/common-item-groups/order</c>, which records no group as the
+    /// entity, as it is about the list, and no participant, and the active groups' IDs in their old and new order,
+    /// Every note and the archived group left out of both.
+    /// </summary>
+    private async Task<WrittenEvent> ReorderCommonItemGroupsAsync()
+    {
+        var (organisationId, managerId) = await AddOrganisationAsync();
+        await AddEveryNoteAsync(organisationId);
+        var groups = await factory.Services.AddGroupsAsync(
+            organisationId,
+            new TestCommonItemGroup("Community outing", 0),
+            new TestCommonItemGroup("Overnight respite", 1, ArchivedAtUtc: TestCommonItems.AddedAtUtc),
+            new TestCommonItemGroup("Personal care", 2));
+        var (outing, care) = (groups[0], groups[2]);
+        using var client = factory.CreateHttpsClient().SignInAs(managerId);
+        using var response = await client.PutWithTokenAsync(
+            "/api/admin/common-item-groups/order",
+            await client.FetchTokenAsync(),
+            new { groupIds = new[] { care, outing } },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["order"] = new JsonArray(outing.ToString(), care.ToString()) },
+            ["new"] = new JsonObject { ["order"] = new JsonArray(care.ToString(), outing.ToString()) },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Reordered,
+            organisationId,
+            managerId,
+            AuditEntityTypes.CommonItemGroup,
+            null,
             null,
             details.ToJsonString());
     }

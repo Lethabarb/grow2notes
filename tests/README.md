@@ -745,7 +745,11 @@ acts in A and checks that nothing of B's reaches it.
   `CreatedAtUtc` and ID when the test needs them, such as fixed IDs that SQL Server orders the other way round from
   their times, and its archive time, if any, and gives their IDs in the order given; and
   `services.AddItemAsync(organisationId, groupId, item)` adds one and gives its ID and its ETag, the `If-Match` of a
-  change to it, as `Grow2Notes.Tests/Features/CommonItems/UpdateCommonItemEndpointTests.cs` does.
+  change to it, as `Grow2Notes.Tests/Features/CommonItems/UpdateCommonItemEndpointTests.cs` does. A reorder of the
+  groups sends every active group of the organisation but Every note, so a test that reorders them works in an
+  organisation of its own, as `Grow2Notes.Tests/Features/CommonItems/ReorderCommonItemGroupsEndpointTests.cs` does, or,
+  among other tests' groups in A, as the matrix row does, reads their order with
+  `services.ActiveGroupIdsAsync(organisationId)`.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
 - A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation
