@@ -3037,7 +3037,7 @@ past notes.
     `400`, which the screen never meets, as it always sends one. Then, in one transaction (§5.9): the participant,
     else `404`; the live note, else `404`; for a draft whose author is someone else, `409 note.in_progress_by_other`
     with its extensions, as the draft's endpoints answer anyone but its author; the key, which on a version of this
-    note is the retry's `200` with that version, and on another note's `422` under `Idempotency-Key`; for a submitted
+    note is the retry's `200` with that version, and on another note's `422` under `idempotencyKey`; for a submitted
     note, `409 note.version_conflict`, with no extensions until T14's notice reads them; a flagged body with a blank
     reason, `422` under `flagReason`; and each ticked ID in the working copy's snapshot, else `422` under
     `tickedGoalIds`, the ticks a set. A conditional update that changes no row looks for the key again, so that a
@@ -3094,9 +3094,10 @@ past notes.
   until that task proves it: note-form.md item 25's press during "Not saved" (T10); and participant-notes.md item 11's
   Write past-day note (T18) and Export record (T21), as S02.04.02's fourth criterion says, with S01.02.04's archived
   Export record (T21). Step 8 writes each into the receiving task's Notes and, dated, into the story's Notes, with the
-  fields and rules above that later tasks fill: T10 (the leave guard over the form's Past notes link), T11, T12
-  (`['me', 'drafts']` removed after Submit, and a draft's `GET {base}`), T13 (the 375 px phone check again, F02.03's
-  feature check), T14, T16, T18 and T21.
+  fields and rules above that later tasks fill: T10 (the leave guard over the form's Past notes link, and
+  `409 note.version_conflict` in place of the `500` that EF Core's `DbUpdateConcurrencyException` gives an autosave that
+  read the author's working copy before a submit deleted it), T11, T12 (`['me', 'drafts']` removed after Submit, and a
+  draft's `GET {base}`), T13 (the 375 px phone check again, F02.03's feature check), T14, T16, T18 and T21.
 - By-hand checks for ops/first-use-in-test.md, in a section of their own after T08's: the operator running
   `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming `DENY UPDATE` and `DELETE` on
   `NoteVersion` and `NoteVersionItem`, and B7 and B8 listing them and `AddNoteVersion`; on a phone at 375 px, a worker
@@ -3124,6 +3125,18 @@ past notes.
   row is `TickList.module.css`'s `.row`, its dividers included. So that the end-to-end tests already written stay
   true, `tests/e2e/notes.ts` keeps and gives the flag (tests/README.md), and `note-form.spec.ts`'s save bodies, labels
   and Tab order include it; step 8 adds the flag's own end-to-end checks.
+- Where the design is silent (step 3), the simplest options: the `422` for a key that a version of another note has
+  names it `idempotencyKey`, the camelCase name of the parameter that binds the header, as `ValidationProblems` names
+  every field by its C# name; `baseVersion` is held to 0 by `[Range(0, 0)]` until T14. A draft's author with no working
+  copy at Submit is answered as a conditional update that changes no row, as only a submit saved meanwhile deletes it,
+  and an autosave of a submitted note, by any caller, gets `409 note.version_conflict` until T14 adds pending edits and
+  its `403`. The server's own messages are never shown, as the form words its errors itself (step 4).
+  `POST {base}/versions`' matrix row submits a draft of A's worker's, so A's manager's column is `409`, as
+  `EndpointCall` carries no caller and only the author submits. Built once and reused: `LiveNote` (`Features/Notes`),
+  the live-note query and its in-progress rule, which `NoteDrafts` and `NoteVersions` share and steps 5 to 7 reuse, and
+  `StoredTime.UtcNow` (`Platform`), the clock's time cut to the millisecond, which `Archiving` takes too. The test of
+  two submits with one key holds the header's `ExecuteUpdate` with a command interceptor, as no `SaveChanges` sends it,
+  before which the transaction has only read.
 
 ### Steps
 
@@ -3159,7 +3172,7 @@ past notes.
       characters too many"; a tick, a reason and an untick each a change that saves; 210 characters kept on screen and
       200 sent; unticked sending `isFlagged: false, flagReason: null`; re-ticking bringing the reason back; and a draft
       loaded flagged showing the block from its first render, with no count announced.
-- [ ] Submit on the server (S02.03.01's second to sixth criteria; S02.03.02's second; design.md §5.8 steps 1 to 8,
+- [x] Submit on the server (S02.03.01's second to sixth criteria; S02.03.02's second; design.md §5.8 steps 1 to 8,
       §6.3 `POST {base}/versions`, §6.7; T08's hand-offs of §5.6's working copy deleted and §14 M2's reworded goal in
       the submitted version): `POST {base}/versions` with `Idempotency-Key`, its handler `NoteVersions` in
       `Features/Notes`, taking the `Actor` as `NoteDrafts` does, in one `InTransactionAsync`, with the checks and
@@ -3302,7 +3315,7 @@ past notes.
       message in `location`, `document.title`, `history.state`, `localStorage`, `sessionStorage`, IndexedDB or Cache
       Storage after each flow. Every new string is in `src/copy` and the copy test passes, and the diff holds no trace
       of the parent company's name (D72). Docs: design.md §6.3 keeps its full shapes and gains only the new facts (the
-      draft `PUT`'s and the `POST`'s `409`s, the `POST`'s `422` under `Idempotency-Key` for a key used on another
+      draft `PUT`'s and the `POST`'s `409`s, the `POST`'s `422` under `idempotencyKey` for a key used on another
       note, and the framework's `400` for a missing key); participant-notes.md's *Note not found* and *Load failed*
       rows each an "As built (T09)" note that they are not built, a note that is gone opening the form, or A65's Page
       not found, and a failed load showing note-form.md's "The note did not load: …" (Notes); note-form.md (with

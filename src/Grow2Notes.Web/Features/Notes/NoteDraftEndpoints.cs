@@ -14,7 +14,8 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <see cref="DraftSaveRequest"/>, and answers <c>{savedAtUtc}</c>: <c>201</c> when it created the note, at its first
 /// save, and <c>200</c> after; or, for a first save that may not start the note,
 /// <c>422 note.future_date</c>, <c>422 note.past_date_manager_only</c>, <c>422 note.participant_archived</c> or
-/// <c>409 note.lists_changed</c>; or <c>422 validation.failed</c> for a field it refuses. Both answer
+/// <c>409 note.lists_changed</c>; or <c>409 note.version_conflict</c> for a submitted note, on which the caller has no
+/// working copy (§6.7); or <c>422 validation.failed</c> for a field it refuses. Both answer
 /// <c>409 note.in_progress_by_other</c>, with the author's name and start time, for another user's draft, and
 /// <c>404</c> for a participant not in the organisation.
 /// </summary>

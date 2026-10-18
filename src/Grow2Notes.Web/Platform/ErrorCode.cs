@@ -26,6 +26,13 @@ internal sealed class ErrorCode
     /// </summary>
     public static readonly ErrorCode ListsChanged = new(StatusCodes.Status409Conflict, "note.lists_changed");
 
+    /// <summary>
+    /// The base version that a save of the note's content works on is no longer the note's current one (§6.7): a submit
+    /// of a note that is already submitted, or an autosave of a draft, whose base is 0, where the caller has no working
+    /// copy of the note, which is submitted. It creates and changes nothing.
+    /// </summary>
+    public static readonly ErrorCode VersionConflict = new(StatusCodes.Status409Conflict, "note.version_conflict");
+
     /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 

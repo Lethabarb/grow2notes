@@ -142,6 +142,13 @@ internal static class EndpointMatrix
         new(Put,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, Created,
             Created, NotFound, StartingTodaysNoteOfAParticipantOfItsOwn),
 
+        // Submit (§6.3), for every signed-in user. Each call submits a draft that A's worker started for today, of a
+        // participant whom its request first adds to A, as a call commits (tests/README.md), with a key of its own, so
+        // A's worker, its author, gets 201, and A's manager 409 note.in_progress_by_other, as only the author creates
+        // version 1 (§5.8 step 2). B's manager does not find the participant (§9.2).
+        new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
+            Created, Conflict, NotFound, SubmittingADraftOfTheWorkerOfA),
+
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
@@ -369,6 +376,34 @@ internal static class EndpointMatrix
                 tickedGoalIds = Array.Empty<Guid>(),
             }),
         };
+    }
+
+    // Submit of today's note of a participant whom the request first adds to A, a draft of A's worker's, as its first
+    // save leaves it, with no goals, as the screen sends it: on base 0, with its text, and with a key of its own. The
+    // draft's start time is made up (A35).
+    private static async Task<HttpRequestMessage> SubmittingADraftOfTheWorkerOfA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today();
+        await call.Services.AddDraftAsync(
+            a, new(participant.Id, today, a.WorkerId, new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc)));
+        var request = new HttpRequestMessage(
+            call.Method,
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/versions"))
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            }),
+        };
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        return request;
     }
 
     // The draft's path of the participant's note for today in Melbourne, by the app's own clock.

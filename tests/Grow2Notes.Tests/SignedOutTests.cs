@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Features.Notes;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -13,8 +14,8 @@ namespace Grow2Notes.Tests;
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
 /// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header and note form,
-/// a note's save, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation
-/// and reactivation show; so the others show that the page, its files and the health endpoints are
+/// a note's save and submit, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link,
+/// deactivation and reactivation show; so the others show that the page, its files and the health endpoints are
 /// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
 /// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
@@ -169,6 +170,32 @@ public sealed class SignedOutTests : IAsyncDisposable
                 tickedGoalIds = Array.Empty<Guid>(),
             },
             TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
+    // As a note's save, with Submit's body and key: the fallback policy refuses it first, so the endpoint, which would
+    // need the database that is not here, submits nothing.
+    [Fact]
+    public async Task A_submit_of_a_note_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{Participant}/notes/2026-10-01/versions")
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            }),
+        };
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());

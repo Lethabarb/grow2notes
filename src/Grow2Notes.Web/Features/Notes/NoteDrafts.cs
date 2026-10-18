@@ -26,8 +26,12 @@ internal sealed class NoteDrafts(
     IAuditWriter audit,
     TimeProvider timeProvider)
 {
-    // The screen sends only the IDs of the goals it shows, so this answers only a request made some other way.
-    private static readonly IReadOnlyDictionary<string, string[]> TickedOutsideTheGoals =
+    /// <summary>
+    /// The refusal of a ticked ID that is not one of the note's goals, under the body's <c>tickedGoalIds</c>, which
+    /// <see cref="NoteVersions"/> answers too. The screen sends only the IDs of the goals it shows, so this answers
+    /// only a request made some other way.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string[]> TickedOutsideTheGoals =
         new Dictionary<string, string[]>
         {
             [nameof(DraftSaveRequest.TickedGoalIds)] = ["Each ticked goal must be one of the note's goals."],
@@ -48,7 +52,7 @@ internal sealed class NoteDrafts(
             return DraftRead.NotFound;
         }
 
-        var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
+        var note = await LiveNote.FindAsync(db, participantId, noteDate, cancellationToken);
         if (note is null)
         {
             return await MayOpenANewNoteAsync(actor, noteDate, cancellationToken)
@@ -75,15 +79,18 @@ internal sealed class NoteDrafts(
     /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
     /// <c>note.draft_started</c> (§5.5 item 2), if the note may be started; with the actor's own draft, replaces its
     /// ticks, text and flag; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says
-    /// who started it and when. A save sent again after its answer was lost finds the actor's own draft, and updates
-    /// it, as does a first save that another of the actor's own first saves beat (§5.5 item 3).
+    /// who started it and when; with a submitted note, on which the actor has no working copy until T14 gives pending
+    /// edits, saves nothing, as a draft's base, 0, is stale (§6.7), and so recreates no working copy. A save sent
+    /// again after its answer was lost finds the actor's own draft, and updates it, as does a first save that another
+    /// of the actor's own first saves beat (§5.5 item 3).
     /// </summary>
     /// <returns>
     /// The time saved; or who started another user's draft, also when that user's first save beat this one; or, for a
     /// save that would create the note, the first of §5.5 item 4's rules that it breaks, in that item's order, then a
     /// lists' version that is missing or no longer the template's (§5.7); or the refusal of a ticked ID that is not
     /// one of the note's goals, the template's for a new note and the snapshot's for a draft, the ticks a set, so that
-    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
+    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.VersionConflict"/> for a submitted note; or
+    /// <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
     /// </returns>
     public async Task<DraftSaveResult> SaveAsync(
         Actor actor,
@@ -97,7 +104,7 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.NotFound;
         }
 
-        var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
+        var note = await LiveNote.FindAsync(db, participantId, noteDate, cancellationToken);
         if (note is null)
         {
             try
@@ -109,7 +116,7 @@ internal sealed class NoteDrafts(
                 // The one-live-note index refused the note (§5.5 item 3): another first save for the participant and
                 // day committed after this one found no live note. The rolled-back rows are still tracked as added.
                 db.ChangeTracker.Clear();
-                note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
+                note = await LiveNote.FindAsync(db, participantId, noteDate, cancellationToken);
                 if (note is null)
                 {
                     throw;
@@ -122,9 +129,11 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.StartedByOther(inProgress);
         }
 
+        // A draft's author has a working copy until its version is saved (§5.6), so with none the note is submitted,
+        // and a draft's base, 0, is stale (§6.7).
         var draft = await db.NoteDrafts
             .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == actor.UserId, cancellationToken);
-        return draft is null ? DraftSaveResult.NotFound : await UpdateAsync(draft, request, cancellationToken);
+        return draft is null ? DraftSaveResult.VersionConflict : await UpdateAsync(draft, request, cancellationToken);
     }
 
     // The note and the working copy go in one save, and the event in the audit writer's, so the transaction is what
@@ -154,7 +163,7 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.Invalid(TickedOutsideTheGoals);
         }
 
-        var now = Now();
+        var now = StoredTime.UtcNow(timeProvider);
         var organisationId = tenant.OrganisationId;
         await db.InTransactionAsync(async ct =>
         {
@@ -206,7 +215,7 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.Invalid(TickedOutsideTheGoals);
         }
 
-        var now = Now();
+        var now = StoredTime.UtcNow(timeProvider);
         draft.Items =
         [
             .. draft.Items.Select(item =>
@@ -266,17 +275,6 @@ internal sealed class NoteDrafts(
             .Select(participant => (ParticipantStatus?)participant.Status)
             .SingleOrDefaultAsync(cancellationToken);
 
-    // Written as the one-live-note index's filter, [Status] IN (0, 1), so that SQL Server reads it there.
-    private Task<LiveNote?> LiveNoteAsync(Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
-        (
-            from n in db.Notes.AsNoTracking()
-            where n.ParticipantId == participantId
-                && n.NoteDate == noteDate
-                && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted)
-            join author in db.Users on n.AuthorUserId equals author.Id
-            select new LiveNote(n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName))
-        .SingleOrDefaultAsync(cancellationToken);
-
     // The template of a new note: the participant's goals as a new draft's snapshot will hold them (§5.7), unticked,
     // with the lists' version.
     private async Task<DraftForm> TemplateAsync(Guid participantId, CancellationToken cancellationToken)
@@ -324,24 +322,4 @@ internal sealed class NoteDrafts(
             .Where(organisation => organisation.Id == tenant.OrganisationId)
             .Select(organisation => organisation.GuidePrompts)
             .SingleAsync(cancellationToken);
-
-    // To the millisecond, as the datetime2(3) columns keep it, so that the savedAtUtc answered is the time stored, not
-    // one that SQL Server rounds.
-    private DateTime Now()
-    {
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMillisecond));
-    }
-
-    /// <summary>The live note of a participant and day, with its author's display name.</summary>
-    private sealed record LiveNote(
-        Guid Id, NoteStatus Status, Guid AuthorUserId, DateTime CreatedAtUtc, string AuthorDisplayName)
-    {
-        /// <summary>
-        /// Who started the note and when, when it is a draft that another user than <paramref name="actor"/> started,
-        /// which only its author may open or save (§6.3); otherwise <see langword="null"/>.
-        /// </summary>
-        public DraftInProgress? StartedByOtherThan(Actor actor) =>
-            Status == NoteStatus.Draft && AuthorUserId != actor.UserId ? new(AuthorDisplayName, CreatedAtUtc) : null;
-    }
 }
