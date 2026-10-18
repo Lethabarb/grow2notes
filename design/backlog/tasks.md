@@ -3637,7 +3637,7 @@ the reason and when it was flagged. Only submitted flags count.
       after the answer, `refreshMe(queryClient)` when its `flagStatus` is `ToReview` (Notes). Vitest: a flagged submit's
       `201` followed by one `GET /api/auth/me`; a retry's `200` the same; and an unflagged submit sending none from the
       form.
-- [ ] The To review list's API (S03.03.01's four specific criteria; S03.01.01's second criterion, end to end; design.md
+- [x] The To review list's API (S03.03.01's four specific criteria; S03.01.01's second criterion, end to end; design.md
       §4.6 item 2, §6.1 *Lists*, §6.4's `GET /api/reviews?status=toReview` row; F03.03's matrix row for it):
       `GET /api/reviews?status=toReview` in `Features/Reviews`, with the `Manager` policy (Notes), writing nothing,
       answering the organisation's Submitted notes with `FlagStatus = ToReview` as §6.4's array `[{participantId,

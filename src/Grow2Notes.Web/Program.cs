@@ -4,6 +4,7 @@ using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Participants;
+using Grow2Notes.Web.Features.Reviews;
 using Grow2Notes.Web.Features.Today;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
@@ -349,8 +350,9 @@ app.MapStaticAssets().AllowAnonymous();
 
 app.MapHealthEndpoints();
 
-// Every API endpoint is mapped in the /api group (ApiGroup), and every manager-only one in the /api/admin group inside
-// it, whose policy covers them all.
+// Every API endpoint is mapped in the /api group (ApiGroup), and every one that manages users or configuration in the
+// /api/admin group inside it, whose policy covers them all. A manager-only endpoint that design.md §6 puts outside
+// /api/admin, such as the To review list (§6.4), has the Manager policy of its own.
 var api = app.MapApiGroup()
     .MapAntiforgeryEndpoint()
     .MapMeEndpoint()
@@ -370,7 +372,8 @@ var api = app.MapApiGroup()
     .MapNoteEndpoint()
     .MapNoteHistoryEndpoint()
     .MapNoteDraftEndpoints()
-    .MapNoteVersionEndpoints();
+    .MapNoteVersionEndpoints()
+    .MapReviewListEndpoint();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()

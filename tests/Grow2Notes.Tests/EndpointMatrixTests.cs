@@ -127,6 +127,35 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
             differences);
     }
 
+    // As above, for the To review list, whose request names the note that its call flagged in A: a list without it
+    // for A's manager, and one with it for B's.
+    [Fact]
+    public async Task A_To_review_list_that_lacks_the_note_flagged_in_A_or_holds_it_for_B_s_manager_fails_the_run()
+    {
+        var check = Assert.Single(EndpointMatrix.Rows, row => EndpointMatrix.NameOf(row) == "GET /api/reviews").Answer;
+        Assert.NotNull(check);
+        var flagged = Guid.NewGuid();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/reviews?status=toReview");
+        request.Options.Set(EndpointMatrix.FlaggedInA, flagged);
+        using var lacking = new HttpResponseMessage
+        {
+            RequestMessage = request,
+            Content = JsonContent.Create(new[] { new { participantId = Guid.NewGuid() } }),
+        };
+        using var holding = new HttpResponseMessage
+        {
+            RequestMessage = request,
+            Content = JsonContent.Create(new[] { new { participantId = flagged } }),
+        };
+
+        Assert.Equal(
+            [$"lacks the caller's own organisation's flagged note of {flagged}"],
+            await check(lacking, Caller.ManagerOfA, sqlServer.Seeded));
+        Assert.Equal(
+            [$"holds the other organisation's flagged note of {flagged}"],
+            await check(holding, Caller.ManagerOfB, sqlServer.Seeded));
+    }
+
     [Theory]
     [MemberData(nameof(Callers))]
     public async Task Every_endpoint_answers_the_caller_with_the_status_in_its_row(Caller caller)

@@ -1129,7 +1129,10 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
   whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
   organisation's seeded users and neither of the other's, and `GET /api/admin/participants`' row their own
-  organisation's seeded participant and not the other's.
+  organisation's seeded participant and not the other's. A list that no seeded row is on looks for the row its own
+  call adds: `GET /api/reviews`' builder flags a note in A for each call and names its participant in the request's
+  `EndpointMatrix.FlaggedInA` option, which the check reads from the response's `RequestMessage`, so that A's
+  manager's To review list holds that note and B's manager's does not.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,
