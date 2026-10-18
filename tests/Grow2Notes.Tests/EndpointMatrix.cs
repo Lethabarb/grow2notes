@@ -219,6 +219,14 @@ internal static class EndpointMatrix
         // (§9.2).
         new(Put,       "/api/admin/common-item-groups/{groupId:guid}/items/order", Unauthorized, Forbidden, NoContent,
             NotFound, ReorderingTheItemsOfAGroupOfItsOwn),
+
+        // Archiving and restoring a common item (§6.6), in the same group, as the reword is: each call archives an
+        // active item, or restores an archived one, of its own, which its request first adds to a group that it adds
+        // to A, so B's manager gets 404.
+        new(Post,      "/api/admin/common-items/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAnItemOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/common-items/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAnItemOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -457,6 +465,24 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { commonItemIds = new[] { items[2], items[0] } }),
         };
+    }
+
+    // An archive or a restore, with no body, of an item that the request first adds to a group that it adds to A,
+    // archived or not, sent with the item's ETag as If-Match, so that each call changes an item of its own, never one
+    // of the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingThePlaceOfAnItemOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await call.Services.AddItemAsync(
+            call.Seeded.A.OrganisationId,
+            groupId,
+            new TestCommonItem(
+                "Travelled by bus or train", 0, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-items/{item.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(item.ETag));
+        return request;
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

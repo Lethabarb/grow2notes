@@ -2023,7 +2023,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       after Move down on row 1, `document.activeElement` that item's Move down; with the `PUT` held, the order on
       screen unchanged; an end press sending nothing and announcing once; and two quick presses on rows of two groups
       sending two `PUT`s one after the other, the second built from the first's re-read.
-- [ ] Archive and restore items (S01.03.04; design.md §3.7's Common item row; common-items.md *Archive and restore*'
+- [x] Archive and restore items (S01.03.04; design.md §3.7's Common item row; common-items.md *Archive and restore*'
       "Archiving an item…" and "Each archived `<details>` keeps…", and *Failures and conflicts*' item Archive and
       Restore part): `POST /api/admin/common-items/{id}/archive` and `/restore` with `If-Match`, loading the item
       through the tenant filter, archiving it with `Archiving.Archive`, which keeps its `SortOrder`, and restoring it

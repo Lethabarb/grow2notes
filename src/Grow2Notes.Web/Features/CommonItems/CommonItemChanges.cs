@@ -11,9 +11,10 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <summary>
 /// The handler that changes a group's common items (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>,
-/// <c>PUT /api/admin/common-items/{id}</c> and <c>PUT /api/admin/common-item-groups/{groupId}/items/order</c> call it
-/// with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is
-/// saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// <c>PUT /api/admin/common-items/{id}</c>, <c>PUT /api/admin/common-item-groups/{groupId}/items/order</c> and
+/// <c>POST /api/admin/common-items/{id}/archive</c> and <c>/restore</c> call it with <see cref="Actor.InApp"/>, and
+/// Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
+/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemChanges(
     Grow2NotesDbContext db,
@@ -115,48 +116,34 @@ internal sealed class CommonItemChanges(
     /// archived; the text's message; and <see cref="ErrorCode.PreconditionFailed"/>, when the item changed after it
     /// was loaded.
     /// </returns>
-    public async Task<CommonItemChangeResult> UpdateAsync(
+    public Task<CommonItemChangeResult> UpdateAsync(
         Actor actor,
         Guid itemId,
         StringValues ifMatch,
         CommonItemTextRequest request,
-        CancellationToken cancellationToken)
-    {
-        var item = await db.CommonItems.SingleOrDefaultAsync(i => i.Id == itemId, cancellationToken);
-        if (item is null)
-        {
-            return CommonItemChangeResult.NotFound;
-        }
+        CancellationToken cancellationToken) =>
+        ChangeAsync(
+            itemId,
+            ifMatch,
+            async item =>
+            {
+                if (await db.CommonItemGroups.AnyAsync(
+                        group => group.Id == item.GroupId && group.ArchivedAtUtc != null, cancellationToken))
+                {
+                    return CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
+                }
 
-        if (IfMatch.Check(ifMatch, RowVersionToken.Of(item)) is { } refused)
-        {
-            return CommonItemChangeResult.Refused(refused);
-        }
+                if (!ItemText.CommonItem.TryRead(request.Text, out var text, out var errors))
+                {
+                    return CommonItemChangeResult.Invalid(errors);
+                }
 
-        if (await db.CommonItemGroups.AnyAsync(
-                group => group.Id == item.GroupId && group.ArchivedAtUtc != null, cancellationToken))
-        {
-            return CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
-        }
-
-        if (!ItemText.CommonItem.TryRead(request.Text, out var text, out var errors))
-        {
-            return CommonItemChangeResult.Invalid(errors);
-        }
-
-        var before = TextValues(item);
-        item.Text = text;
-        var saved = await changes.SaveAsync(
-            actor,
-            AuditEventTypes.CommonItem.Updated,
-            AuditEntityTypes.CommonItem,
-            item.Id,
-            participantId: null,
-            before,
-            TextValues(item),
-            cancellationToken: cancellationToken);
-        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
-    }
+                var before = TextValues(item);
+                item.Text = text;
+                return await SaveAsync(
+                    actor, AuditEventTypes.CommonItem.Updated, item, before, TextValues(item), cancellationToken);
+            },
+            cancellationToken);
 
     /// <summary>
     /// Puts the active items of a group of the tenant's organisation, found through the tenant filter, so that another
@@ -216,6 +203,104 @@ internal sealed class CommonItemChanges(
     }
 
     /// <summary>
+    /// Archives a common item of the tenant's organisation (design.md §3.7, S01.03.04), once <paramref name="ifMatch"/>
+    /// is its version, as <see cref="UpdateAsync"/> checks it: sets <c>ArchivedAtUtc</c> through
+    /// <see cref="Archiving.Archive"/>, which leaves its <c>SortOrder</c>, and saves it with
+    /// <c>common_item.archived</c>, which names no participant. An item archived already keeps the time it was archived
+    /// at, so nothing is saved and no event written, and the answer is as a save's (D84). An archived group's item is
+    /// archived as an active group's is, as design.md §6.6 gives the archive no <c>config.group_archived</c> (T06's
+    /// Notes).
+    /// </summary>
+    /// <returns>
+    /// <see cref="CommonItemChangeResult.Saved"/>, whether the item changed or not; or, with nothing written,
+    /// <see cref="CommonItemChangeResult.NotFound"/>, for an item not in the organisation, the code that
+    /// <see cref="IfMatch.Check"/> gives, or <see cref="ErrorCode.PreconditionFailed"/> when the item changed after it
+    /// was loaded.
+    /// </returns>
+    public Task<CommonItemChangeResult> ArchiveAsync(
+        Actor actor, Guid itemId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            itemId,
+            ifMatch,
+            item =>
+            {
+                var before = PlaceValues(item);
+                Archiving.Archive(item, timeProvider);
+                return SaveAsync(
+                    actor, AuditEventTypes.CommonItem.Archived, item, before, PlaceValues(item), cancellationToken);
+            },
+            cancellationToken);
+
+    /// <summary>
+    /// Restores a common item of the tenant's organisation (design.md §3.7, S01.03.04), once <paramref name="ifMatch"/>
+    /// is its version, as <see cref="UpdateAsync"/> checks it: puts it at the end of its own group's active items
+    /// through <see cref="Archiving.Restore"/> (A2), whatever other groups hold, and saves it with
+    /// <c>common_item.restored</c>, which names no participant. An active item stays where it is, so nothing is saved
+    /// and no event written, and the answer is as a save's (D84). An archived group's item is restored as an active
+    /// group's is, as design.md §6.6 gives the restore no <c>config.group_archived</c> (T06's Notes).
+    /// </summary>
+    /// <returns>As <see cref="ArchiveAsync"/>'s.</returns>
+    public Task<CommonItemChangeResult> RestoreAsync(
+        Actor actor, Guid itemId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            itemId,
+            ifMatch,
+            async item =>
+            {
+                var before = PlaceValues(item);
+                var activeItems = await db.CommonItems.AsNoTracking()
+                    .Where(i => i.GroupId == item.GroupId && i.ArchivedAtUtc == null)
+                    .ToListAsync(cancellationToken);
+                Archiving.Restore(item, activeItems);
+                return await SaveAsync(
+                    actor, AuditEventTypes.CommonItem.Restored, item, before, PlaceValues(item), cancellationToken);
+            },
+            cancellationToken);
+
+    /// <summary>
+    /// Loads the item through the tenant filter, so that another organisation's is not found (design.md §9.2), and
+    /// checks <paramref name="ifMatch"/> against its version before <paramref name="change"/> changes and saves it.
+    /// </summary>
+    private async Task<CommonItemChangeResult> ChangeAsync(
+        Guid itemId,
+        StringValues ifMatch,
+        Func<CommonItem, Task<CommonItemChangeResult>> change,
+        CancellationToken cancellationToken)
+    {
+        var item = await db.CommonItems.SingleOrDefaultAsync(i => i.Id == itemId, cancellationToken);
+        if (item is null)
+        {
+            return CommonItemChangeResult.NotFound;
+        }
+
+        return IfMatch.Check(ifMatch, RowVersionToken.Of(item)) is { } refused
+            ? CommonItemChangeResult.Refused(refused)
+            : await change(item);
+    }
+
+    // A change to a loaded item, with its event, whose entity is the item, which names no participant, and whose
+    // Details hold the values given before and after, those that changed alone; or nothing when none changed.
+    private async Task<CommonItemChangeResult> SaveAsync(
+        Actor actor,
+        string eventType,
+        CommonItem item,
+        JsonObject before,
+        JsonObject after,
+        CancellationToken cancellationToken)
+    {
+        var saved = await changes.SaveAsync(
+            actor,
+            eventType,
+            AuditEntityTypes.CommonItem,
+            item.Id,
+            participantId: null,
+            before,
+            after,
+            cancellationToken: cancellationToken);
+        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
+    }
+
+    /// <summary>
     /// An item's values as an audit event records them, named and written as design.md §6.6's list gives them, never
     /// <c>id</c> or <c>rowVersion</c> (<see cref="ChangeDetails"/>): its <c>groupId</c>, named as S01.03.08's Note
     /// names it, so that the event says which group; and <c>archivedAtUtc</c> as stored, or JSON <c>null</c>.
@@ -233,4 +318,14 @@ internal sealed class CommonItemChanges(
     /// names it.
     /// </summary>
     private static JsonObject TextValues(CommonItem item) => new() { ["text"] = item.Text };
+
+    /// <summary>
+    /// The item's place in its group, the values that archiving and restoring change, as their events record them,
+    /// named as <see cref="Values"/> names them.
+    /// </summary>
+    private static JsonObject PlaceValues(CommonItem item) => new()
+    {
+        ["sortOrder"] = item.SortOrder,
+        ["archivedAtUtc"] = item.ArchivedAtUtc,
+    };
 }
