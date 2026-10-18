@@ -2290,8 +2290,8 @@ group; Every note stays first and fixed.
   still meet the app's own answers; and the text's 7:1 is checked by axe's AAA contrast rule, with each group's name,
   which that rule holds to 4.5:1 as large text, measured on its own (`contrastOf`). Of common-items.md's
   *Accessibility checklist*, the *Screen reader* items wait for ops/first-use-in-test.md step 52, and the no-motion
-  item stays T26's. Step 6 stays unticked until CI's run on the pull request, which alone runs the SQL Server tests,
-  has passed and its run ID is recorded here, as T05's matching step did.
+  item stays T26's. CI's run 39124689045 on the pull request (#62), which alone runs the SQL Server tests, passed,
+  with 1436 xUnit and 252 Playwright tests, so step 6 is ticked.
 - 18 October 2026, review: 3 findings were confirmed and are fixed here, two of them the same clash with T08 (#61),
   which merged after this branch was cut from `9c64b27`. None changes the design, so no A-number is added:
   - T07's by-hand steps took the numbers 46 to 48, which T08's section on `main` already has, as steps 46 to 49, and
@@ -2428,7 +2428,7 @@ group; Every note stays first and fixed.
       in order with the item's group checked; an arrow key choosing the next; an unchanged Save sending nothing; a move
       sending `{text, groupId}` with `If-Match`, then focus on the item's Edit in its new section and the announcement;
       the `412` and the `409`; and the goals' edit form as it was.
-- [ ] Prove the group flows end to end and bring the documents into line (common-items.md *Layout*, the group part of
+- [x] Prove the group flows end to end and bring the documents into line (common-items.md *Layout*, the group part of
       each bullet, and *Accessibility runs*' axe, keyboard-only and forced-colours runs): `serveCommonItems` answering
       every group write and the item move from its list in memory, as tests/README.md then says; and in
       `common-items.spec.ts`, signed in for real as T06's test is, a manager at 375 px adds the groups "Community
