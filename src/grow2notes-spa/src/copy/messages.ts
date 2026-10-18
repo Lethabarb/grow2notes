@@ -68,6 +68,12 @@ export const msg = {
    */
   rowContext: (text: string) => `, ${text}`,
   /**
+   * After the visible label of a group's button on Common items, for screen readers alone, as `rowContext` is after a
+   * row's, the group's name and "group", so that "Rename" is read as "Rename, Community outing group" (common-items.md
+   * component 5).
+   */
+  groupContext: (name: string) => `, ${name} group`,
+  /**
    * After a list's words that would be the same in every group's list on Common items, its group's name, so that each
    * is told from the others': after "New item" in the add field's label, as in "New item in Every note", and, for
    * screen readers alone, after "Archived items" in the archived section's summary (common-items.md component 5).

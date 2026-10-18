@@ -60,6 +60,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItem.Archived] = test => test.ArchiveCommonItemAsync(),
         [AuditEventTypes.CommonItem.Restored] = test => test.RestoreCommonItemAsync(),
         [AuditEventTypes.CommonItemGroup.Created] = test => test.AddCommonItemGroupAsync(),
+        [AuditEventTypes.CommonItemGroup.Updated] = test => test.RenameCommonItemGroupAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
@@ -726,6 +727,39 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             added.GetProperty("id").GetGuid(),
             null,
             new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item_group.updated</c>: A's manager renames a group added for the row, typing the new name over two
+    /// lines, with <c>PUT /api/admin/common-item-groups/{groupId}</c> and the group's <c>ETag</c>, which records the
+    /// group as the entity, with no participant, and the old and new name, as stored, alone: a rename changes no other
+    /// value.
+    /// </summary>
+    private async Task<WrittenEvent> RenameCommonItemGroupAsync()
+    {
+        var group = await factory.Services.AddGroupAsync(
+            a.OrganisationId, new TestCommonItemGroup("Community outing", 3));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/common-item-groups/{group.Id}",
+            await client.FetchTokenAsync(),
+            new { name = " Outings and\ntrips " },
+            group.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["name"] = "Community outing" },
+            ["new"] = new JsonObject { ["name"] = "Outings and trips" },
+        };
+        return new(
+            AuditEventTypes.CommonItemGroup.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.CommonItemGroup,
+            group.Id,
+            null,
+            details.ToJsonString());
     }
 
     /// <summary>

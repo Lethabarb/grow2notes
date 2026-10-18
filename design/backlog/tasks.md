@@ -2307,7 +2307,7 @@ group; Every note stays first and fixed.
       field; no New group form before the data; the new section last with focus in its field after the re-read; 210
       characters kept whole; one `POST` after a lost answer; the item rows' tests passing on the shared module; and the
       new strings in `copy.test.ts`.
-- [ ] Rename groups, and each group's heading row (S01.03.05's second criterion; §14 M1's Every note line, its API part
+- [x] Rename groups, and each group's heading row (S01.03.05's second criterion; §14 M1's Every note line, its API part
       for a rename; design.md §4.9 items 2 and 3 and *States*; common-items.md component 5's heading row and Rename
       form, "Rename shows the Group name field…", *Content and copy*'s second and third bullets for the group buttons,
       and *Failures and conflicts*' group parts for Rename): `ErrorCode.EveryNoteFixed` for

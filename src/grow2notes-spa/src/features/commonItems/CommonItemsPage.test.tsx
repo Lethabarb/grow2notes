@@ -356,7 +356,9 @@ describe('Common items', () => {
       const heading = within(section).getByRole('heading', { level: 2 });
       expect(heading.id).toBe(`group-${id}-heading`);
       expect(section).toHaveAttribute('aria-labelledby', heading.id);
-      expect(section.firstElementChild).toBe(heading);
+      // First in the section, on its own or first in its heading row.
+      expect(heading.previousElementSibling).toBeNull();
+      expect(section.firstElementChild?.contains(heading)).toBe(true);
       expect(heading).toHaveStyle({ overflowWrap: 'anywhere' });
     }
   });
@@ -375,7 +377,7 @@ describe('Common items', () => {
     const everyNoteParagraph = within(section).getByText(everyNoteLine);
     expect(everyNoteParagraph.tagName).toBe('P');
     expect(within(section).getByRole('heading', { level: 2 }).nextElementSibling).toBe(everyNoteParagraph);
-    expect(within(main()).queryByRole('button', { name: /^Rename/ })).not.toBeInTheDocument();
+    expect(within(section).queryByRole('button', { name: /^Rename/ })).not.toBeInTheDocument();
     expect(within(main()).queryAllByRole('button', { name: /, Every note group$/ })).toEqual([]);
     // Each button in the section is an item row's, its add form's or an archived item's.
     const rowButtons = [...activeItems(section), ...archivedItems(section)].flatMap((row) =>
@@ -388,6 +390,49 @@ describe('Common items', () => {
     ]);
     // Only Every note's.
     expect(within(main()).getAllByText(everyNoteLine)).toHaveLength(1);
+  });
+
+  it('gives each other group its <h2>, alert, Move up, Move down, Rename and Archive, each named by it', async () => {
+    await openPage();
+
+    for (const { name } of [outing, care]) {
+      const section = sectionOf(name);
+      const heading = within(section).getByRole('heading', { level: 2 });
+      const head = heading.parentElement!;
+      expect(head.parentElement).toBe(section);
+      expect(head.firstElementChild).toBe(heading);
+      expect(head).toHaveStyle({ display: 'flex', flexWrap: 'wrap' });
+      expect(within(section).queryByText(everyNoteLine)).toBeNull();
+      expectButtons(head, [
+        `Move up, ${name} group`,
+        `Move down, ${name} group`,
+        `Rename, ${name} group`,
+        `Archive, ${name} group`,
+      ]);
+      const buttons = within(head).getAllByRole('button');
+      // In two pairs, Move up and Move down, then Rename and Archive.
+      expect(buttons[0].parentElement).toBe(buttons[1].parentElement);
+      expect(buttons[2].parentElement).toBe(buttons[3].parentElement);
+      expect(buttons[1].parentElement).not.toBe(buttons[2].parentElement);
+      for (const button of buttons) {
+        expect(button).toHaveAttribute('type', 'button');
+        expect(button).not.toHaveAttribute('aria-label');
+        expect(button.className).toMatch(/secondary/);
+        // Label width, at least 44 px wide, as an item row's buttons are (common-items.md *Conflicts resolved* 6).
+        expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+        const context = within(button).getByText(`, ${name} group`);
+        expect(context).toHaveClass('visually-hidden');
+      }
+
+      const alert = within(head).getByRole('alert');
+      expect(alert).toBeEmptyDOMElement();
+      expect(follows(heading, alert)).toBe(true);
+      expect(follows(alert, buttons[0])).toBe(true);
+      // Then the group's items, or its empty line.
+      const items = section.querySelector('ol') ?? within(section).getByText(emptyLine);
+      expect(follows(head, items)).toBe(true);
+      expect(head.contains(items)).toBe(false);
+    }
   });
 
   it("lists each group's active items in a numbered list of its own, from 1, each row's text in full", async () => {
@@ -688,8 +733,13 @@ function itemPath(itemId: string): string {
   return `/api/admin/common-items/${itemId}`;
 }
 
-/** A `200` with no body and no `ETag`, as a reword answers (design.md §6.6). */
+/** A `200` with no body and no `ETag`, as a reword and a group's rename answer (design.md §6.6). */
 const reworded: Answer = () => Promise.resolve(new Response(null, { status: 200 }));
+
+/** The path that the group of `groupId` is renamed at (design.md §6.6). */
+function groupPath(groupId: string): string {
+  return `${groupsPath}/${groupId}`;
+}
 
 /** The path that the order of the items of the group of `groupId` is put to (design.md §6.6). */
 function orderPath(groupId: string): string {
@@ -708,10 +758,12 @@ function placePath(itemId: string, action: 'archive' | 'restore'): string {
 const placed: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
 
 /**
- * Has the groups list, the group adds, each group's adds, reorders and each item's rewords, archives and restores
- * answered by a server that holds `list`, and gives what it holds, which a test may change as another manager would: a
- * group add puts a group, with no items and an ID and a version of its own, at the end of the active groups other than
- * Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers `201` with its ID; an add
+ * Has the groups list, the group adds, each group's renames, adds and reorders, and each item's rewords, archives and
+ * restores answered by a server that holds `list`, and gives what it holds, which a test may change as another manager
+ * would: a group add puts a group, with no items and an ID and a version of its own, at the end of the active groups
+ * other than Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers `201` with its
+ * ID; a rename refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
+ * config.every_note_fixed`), or else gives the group its name and a new version, and answers `200` with no body; an add
  * puts an item, with an ID and a version of its own, at the end of its group, one after the highest active `sortOrder`
  * (A2), and answers `201` with no body; a reword refuses an `If-Match` that is not the item's version (`412`), then an
  * item of an archived group (`409 config.group_archived`), or else gives the item its text and a new version, and
@@ -775,6 +827,20 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     });
   };
   const serveGroup = (heldGroup: AdminCommonItemGroup) => {
+    serve('PUT', groupPath(heldGroup.id), (init) => {
+      if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.rowVersion}"`) {
+        return problem(412)();
+      }
+
+      if (heldGroup.isEveryNote) {
+        return problem(422, 'config.every_note_fixed')();
+      }
+
+      const { name } = JSON.parse(init?.body as string) as { name: string };
+      heldGroup.name = name;
+      heldGroup.rowVersion = nextVersion();
+      return reworded();
+    });
     serve('PUT', orderPath(heldGroup.id), (init) => {
       const { commonItemIds } = JSON.parse(init?.body as string) as { commonItemIds: string[] };
       const active = heldGroup.items.filter((listed) => listed.archivedAtUtc === null);
@@ -1537,6 +1603,394 @@ describe('Common items, adding a group', () => {
     expect(newGroupField()).toHaveValue('Respite');
     expect(newGroupAlert()).toBeEmptyDOMElement();
     expect(groupAdds()).toHaveLength(1);
+  });
+});
+
+const groupRenamed = 'Group renamed';
+const notSavedWentWrong = 'Not saved: something went wrong. Try again.';
+
+/** The renames sent to the group of `groupId`, each as its `If-Match` and the JSON of its body, in the order sent. */
+function renamesOf(groupId: string): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupPath(groupId) && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The group button labelled `label` of the group named `name`, by its name, which ends with ", [name] group". */
+function groupButton(name: string, label: 'Move up' | 'Move down' | 'Rename' | 'Archive'): HTMLElement {
+  return within(sectionOf(name)).getByRole('button', { name: `${label}, ${name} group` });
+}
+
+/** The group's Group name field, by the id that the page gives it, or `null` while the group is not being renamed. */
+function renameField(groupId: string): HTMLInputElement | null {
+  return document.getElementById(`group-${groupId}-name`) as HTMLInputElement | null;
+}
+
+/** The group's rename form. */
+function renameForm(groupId: string): HTMLFormElement {
+  return renameField(groupId)!.closest('form')!;
+}
+
+/** The rename's Save, by its name, which its busy label leaves as it is. */
+function renameSave(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('button', { name: 'Save' });
+}
+
+function renameCancel(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('button', { name: 'Cancel' });
+}
+
+/** The alert above the rename's Save. */
+function renameAlert(groupId: string): HTMLElement {
+  return within(renameForm(groupId)).getByRole('alert');
+}
+
+/** The message on the group's Group name field, without its hidden "Error: ", or `null` while it shows none. */
+function renameMessage(groupId: string): string | null {
+  const message = renameForm(groupId).querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+/** Focuses the Rename of `renamed` and presses it, and gives the field that takes the group buttons' place. */
+function openRename(renamed: AdminCommonItemGroup): HTMLInputElement {
+  const button = groupButton(renamed.name, 'Rename');
+  button.focus();
+  fireEvent.click(button);
+  return renameField(renamed.id)!;
+}
+
+/** The headings of the sections, in page order. */
+function headings(): (string | null)[] {
+  return sections().map((section) => within(section).getByRole('heading', { level: 2 }).textContent);
+}
+
+describe('Common items, renaming a group', () => {
+  it("puts the form under the group's <h2> in its buttons' place: Group name, the name, caret at the end", async () => {
+    await openPage();
+    const section = sectionOf('Community outing');
+    const heading = within(section).getByRole('heading', { level: 2 });
+
+    const field = openRename(outing);
+
+    // The <h2> stays, so the region keeps its name, and its items stay below.
+    expect(sectionOf('Community outing')).toBe(section);
+    expect(within(section).getByRole('heading', { level: 2 })).toBe(heading);
+    expect(within(heading.parentElement!).queryAllByRole('button')).toEqual([]);
+    expect(within(heading.parentElement!).queryByRole('alert')).toBeNull();
+    expect(follows(heading, renameForm(outing.id))).toBe(true);
+    expect(follows(renameForm(outing.id), section.querySelector('ol')!)).toBe(true);
+    expect(activeItems(section).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(renameForm(outing.id)).toHaveAttribute('novalidate');
+    expect(document.querySelector(`label[for="group-${outing.id}-name"]`)?.textContent).toBe('Group name');
+    expect(field).toHaveAccessibleName('Group name');
+    expect(field.tagName).toBe('INPUT');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('autocomplete', 'off');
+    for (const attribute of ['maxlength', 'required', 'readonly', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    expect(field).toHaveValue(outing.name);
+    expect(field).toHaveFocus();
+    expect([field.selectionStart, field.selectionEnd]).toEqual([outing.name.length, outing.name.length]);
+    // The 48 px input, in the reading column, described by the hidden hint alone, never the help text.
+    expect(field).toHaveStyle({ minBlockSize: 'var(--target-button)' });
+    expect(renameForm(outing.id)).toHaveStyle({ maxInlineSize: 'var(--measure)' });
+    expect(field.getAttribute('aria-describedby')).toBe(`group-${outing.id}-name-hint`);
+    expect(field).toHaveAccessibleDescription(hint);
+    // The other group keeps its buttons.
+    expect(groupButton('Personal care', 'Rename')).toBeInTheDocument();
+  });
+
+  it('shows the count, then the empty alert, then Save, primary, and Cancel, both label width', async () => {
+    await openPage();
+
+    const field = openRename(outing);
+
+    const count = renameForm(outing.id).querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(count.textContent).toBe(`You have ${200 - outing.name.length} characters remaining`);
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    const save = renameSave(outing.id);
+    const cancel = renameCancel(outing.id);
+    expect(follows(field, count)).toBe(true);
+    expect(follows(count, renameAlert(outing.id))).toBe(true);
+    expect(follows(renameAlert(outing.id), save)).toBe(true);
+    expect(follows(save, cancel)).toBe(true);
+    expect(save).toHaveAttribute('type', 'submit');
+    expect(save.className).toMatch(/primary/);
+    expect(cancel).toHaveAttribute('type', 'button');
+    expect(cancel.className).toMatch(/secondary/);
+    for (const button of [save, cancel]) {
+      expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+    }
+  });
+
+  it("on Cancel, drops the typed name, sends nothing, and puts focus on the group's Rename", async () => {
+    await openPage();
+    type(openRename(outing), 'Outings');
+
+    await press(renameCancel(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameField(outing.id)).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
+    expect(openRename(outing)).toHaveValue(outing.name);
+  });
+
+  it('on Save of the name unchanged once its ends are trimmed, closes as Cancel does and sends nothing', async () => {
+    await openPage();
+    type(openRename(outing), '  Community outing\t');
+
+    await press(renameSave(outing.id));
+    await wait(16);
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameField(outing.id)).toBeNull();
+    expect(groupButton('Community outing', 'Rename')).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['nothing typed', '', enterTheGroupName],
+    ['only spaces', ' \t  ', enterTheGroupName],
+    ['201 characters once its ends are trimmed', `  ${'a'.repeat(201)}  `, groupNameTooLong],
+  ])('on Save with %s, shows its message above the field, focused, and sends nothing', async (_, name, message) => {
+    await openPage();
+    const field = openRename(outing);
+    type(field, name);
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([]);
+    expect(renameMessage(outing.id)).toBe(message);
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue(name);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')).toBe(`group-${outing.id}-name-error group-${outing.id}-name-hint`);
+    expect(field).toHaveAccessibleDescription(`Error: ${message} ${hint}`);
+    expect(follows(within(renameForm(outing.id)).getByText(message), field)).toBe(true);
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it('once the message shows, checks the name at each input, and takes it away silently once it passes', async () => {
+    await openPage();
+    const field = openRename(outing);
+    type(field, '');
+    await press(renameSave(outing.id));
+
+    type(field, 'a'.repeat(201));
+    expect(renameMessage(outing.id)).toBe(groupNameTooLong);
+    type(field, 'Outings');
+
+    expect(renameMessage(outing.id)).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field).toHaveAccessibleDescription(hint);
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it("sends the name with the group's version, reads the list again, shows it, focusing Rename", async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(openRename(outing), '  Outings and trips ');
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: { name: 'Outings and trips' } }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(renameField(outing.id)).toBeNull();
+    // The heading, the region's name, the group buttons' names and the New item label follow the new name.
+    expect(headings()).toEqual(['Every note', 'Outings and trips', 'Personal care']);
+    expect(activeItems(sectionOf('Outings and trips')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(newItem('Outings and trips')).toBeInTheDocument();
+    expect(groupButton('Outings and trips', 'Rename')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRenamed);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('shows Save busy, "Saving…" after 400 ms, the field read-only; a press while it is sends no more', async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), noAnswer);
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const save = renameSave(outing.id);
+
+    save.focus();
+    fireEvent.click(save);
+    await settle();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(field).toHaveAttribute('readonly');
+    await wait(398);
+    expect(save).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(save).toHaveAttribute('data-busy');
+    expect(within(save).getByText('Saving…')).toBeInTheDocument();
+    fireEvent.click(save);
+    await settle();
+
+    expect(renamesOf(outing.id)).toHaveLength(1);
+    expect(field).toHaveValue('Outings');
+  });
+
+  // Every note's refusal and a missing If-Match are the screen's own bugs, as it never offers the one or sends the
+  // other (common-items.md *Failures*), so each says something went wrong.
+  it.each([
+    ['no connection', noConnection, 'Not saved: no connection. Try again.'],
+    ['a 503', problem(503), notSavedWentWrong],
+    ['a 422 config.every_note_fixed', problem(422, 'config.every_note_fixed'), notSavedWentWrong],
+    ['a 428', problem(428, 'precondition.required'), notSavedWentWrong],
+    ['a 422 that names no name', refused({ text: ['Refused'] }), notSavedWentWrong],
+  ])('on %s, says so above Save, keeping the name and focus on Save, and reads nothing', async (_, answer, words) => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), answer);
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const save = renameSave(outing.id);
+    const reads = listReads();
+
+    await press(save);
+
+    expect(renameAlert(outing.id)).toHaveTextContent(words);
+    expect(save).toHaveFocus();
+    expect(field).toHaveValue('Outings');
+    expect(field).not.toHaveAttribute('readonly');
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(renamesOf(outing.id)).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(groupRenamed);
+  });
+
+  it("on the server's 422 for the name, shows its message on the field, focused, keeping the name", async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), refused({ name: [groupNameTooLong] }));
+    const field = openRename(outing);
+    type(field, 'Outings');
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renameMessage(outing.id)).toBe(groupNameTooLong);
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field).toHaveAccessibleDescription(`Error: ${groupNameTooLong} ${hint}`);
+    expect(field).toHaveValue('Outings');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    expect(listReads()).toBe(reads);
+    expect(renamesOf(outing.id)).toHaveLength(1);
+  });
+
+  it('on a 412, focuses the list conflict over the re-read list, the form as typed, the next Save new', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openRename(outing);
+    type(field, 'Outings and trips');
+    // Another manager renames it meanwhile.
+    held[1].name = 'Day trips';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id)).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: { name: 'Outings and trips' } }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Day trips', 'Personal care']);
+    expect(renameField(outing.id)).toBe(field);
+    expect(field).toHaveValue('Outings and trips');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+
+    await press(renameSave(outing.id));
+
+    expect(renamesOf(outing.id).map(({ ifMatch }) => ifMatch)).toEqual([`"${outing.rowVersion}"`, '"AAAAAAAAE999="']);
+    expect(renameField(outing.id)).toBeNull();
+    expect(listConflict()).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Outings and trips', 'Personal care']);
+    expect(groupButton('Outings and trips', 'Rename')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRenamed);
+  });
+
+  it('on a 412 finding the group archived, focuses the list conflict, the section gone with its form', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openRename(outing), 'Outings');
+    // Another manager archives it meanwhile.
+    held[1].archivedAtUtc = '2026-10-01T06:00:00Z';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+
+    await press(renameSave(outing.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(renameField(outing.id)).toBeNull();
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(renamesOf(outing.id)).toHaveLength(1);
+  });
+
+  it("keeps a group's typed name through a write in another group", async () => {
+    await openPage();
+    serveGroups(groups);
+    type(openRename(outing), 'Outings');
+    type(openRename(care), 'Personal care and hygiene');
+
+    await press(renameSave(care.id));
+
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care and hygiene']);
+    expect(renameField(outing.id)).toHaveValue('Outings');
+    expect(groupButton('Personal care and hygiene', 'Rename')).toHaveFocus();
+    expect(renamesOf(outing.id)).toEqual([]);
+  });
+
+  it('hands a 401 on Save to sign-in in place, keeping the name, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('PUT', groupPath(outing.id), problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    const field = openRename(outing);
+    type(field, 'Outings');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const alert = renameAlert(outing.id);
+
+    await press(renameSave(outing.id));
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(field).not.toBeVisible();
+    expect(field).toHaveValue('Outings');
+    expect(alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(renameField(outing.id)).toHaveValue('Outings');
+    expect(renameAlert(outing.id)).toBeEmptyDOMElement();
+    expect(renamesOf(outing.id)).toHaveLength(1);
   });
 });
 

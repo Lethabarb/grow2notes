@@ -31,9 +31,14 @@ const groupsPath = '/api/admin/common-item-groups';
  */
 export const commonItemsScope = 'common-items';
 
+/** The path of a group, which a rename puts to (design.md §6.6). */
+function groupPath(groupId: string): string {
+  return `${groupsPath}/${encodeURIComponent(groupId)}`;
+}
+
 /** The path of a group's items, which an add posts to, and under which their order is put (design.md §6.6). */
 function groupItemsPath(groupId: string): string {
-  return `${groupsPath}/${encodeURIComponent(groupId)}/items`;
+  return `${groupPath(groupId)}/items`;
 }
 
 /** The path of an item, which a reword puts to, and under which it is archived and restored (design.md §6.6). */
@@ -79,8 +84,11 @@ export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]>
 /**
  * The writes to the groups themselves (design.md §6.6), each in `commonItemsScope` and followed by a read of the page's
  * one query, as an item's are: the add of a group at the end, whose `201` gives the new group's ID, by which the screen
- * then focuses its New item field.
+ * then focuses its New item field; and a group's rename, with its `rowVersion` as `If-Match`, whose `200` has no body,
+ * as the screen reads the group's next version from the list.
  */
 export const commonItemGroupsApi = {
   add: (name: string) => api<AddedCommonItemGroup>(groupsPath, { method: 'POST', body: { name } }),
+  rename: (groupId: string, name: string, rowVersion: string) =>
+    api<undefined>(groupPath(groupId), { method: 'PUT', body: { name }, ifMatch: rowVersion }),
 };

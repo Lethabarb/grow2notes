@@ -1,10 +1,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type RefObject } from 'react';
+import { flushSync } from 'react-dom';
 import { Button } from '../../components/Button.tsx';
 import { ListEditor } from '../../components/ListEditor.tsx';
+import rows from '../../components/ListEditor.module.css';
 import { ListConflict, ListFrame } from '../../components/ListFrame.tsx';
 import { useListFrame, type ListFrameValue } from '../../components/listFrameContext.ts';
-import { cleanText, failureAlert, focusStayedIn, useListWrite, type ListWriter } from '../../components/listWrite.ts';
+import {
+  cleanText,
+  failureAlert,
+  focusStayedIn,
+  ListChanged,
+  sendUnlessListChanged,
+  useListWrite,
+  type ListWriter,
+} from '../../components/listWrite.ts';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
@@ -33,9 +43,19 @@ const newGroupFieldId = 'group-new-name';
 
 /**
  * What every write to a group needs: what every write on the page does (`ListWriter`), in the page's one scope, with
- * the read of its one query again and the page's list conflict; and the frame's focus that follows a change.
+ * the read of its one query again and the page's list conflict; the groups as last read, which a write reads as it
+ * runs; and the frame's focus that follows a change.
  */
-type GroupWriter = ListWriter & Pick<ListFrameValue, 'focusAfterRender'>;
+type GroupWriter = ListWriter &
+  Pick<ListFrameValue, 'focusTarget' | 'focusAfterRender'> & {
+    /** The groups as the page's one query last read them. */
+    latest: () => AdminCommonItemGroup[];
+  };
+
+/** The active group of ID `id` among `groups`, or `undefined` once it is archived or gone. */
+function activeGroup(groups: AdminCommonItemGroup[], id: string): AdminCommonItemGroup | undefined {
+  return groups.find((group) => group.id === id && group.archivedAtUtc === null);
+}
 
 /**
  * Manage > Common items at `/manage/common-items` (common-items.md), on the wider page: its `<h1>` and the help text at
@@ -63,8 +83,9 @@ export function CommonItemsPage() {
  * in the list's order, Every note first, then the New group form. No add form shows before the groups have loaded, as
  * one could add to a list the manager cannot see. It reads the groups from the page's one query, as the frame renders
  * it again with each request for focus, reading the query as the write that asked left it, so that a group just added
- * has its section, and its New item field, by the time the frame focuses that field. Every write to a group is in the
- * page's one scope, and reads the one query again, as every item write does (common-items.md component 5).
+ * has its section, and its New item field, by the time the frame focuses that field, and a group just renamed its
+ * Rename. Every write to a group is in the page's one scope, and reads the one query again, as every item write does
+ * (common-items.md component 5).
  */
 function Groups() {
   const frame = useListFrame();
@@ -76,34 +97,47 @@ function Groups() {
     reread: () => queryClient.refetchQueries({ queryKey: commonItemGroupsQuery.queryKey, exact: true }),
     changedMeanwhile: frame.changedMeanwhile,
     written: frame.written,
+    focusTarget: frame.focusTarget,
     focusAfterRender: frame.focusAfterRender,
+    latest: () => queryClient.getQueryData(commonItemGroupsQuery.queryKey) ?? [],
   };
 
   return (
     <>
       <ListConflict />
-      {groups.flatMap((group) => (group.archivedAtUtc === null ? [<GroupSection key={group.id} group={group} />] : []))}
+      {groups.flatMap((group) =>
+        group.archivedAtUtc === null ? [<GroupSection key={group.id} group={group} writer={writer} />] : [],
+      )}
       <NewGroupForm writer={writer} />
     </>
   );
 }
 
+type GroupProps = { group: AdminCommonItemGroup; writer: GroupWriter };
+
 /**
  * An active group's section (common-items.md component 5), a region named by its `<h2>`, the group's name as stored,
  * which wraps anywhere and is never cut short: Every note's with the line that says why it has no group buttons, as
- * it can never be renamed, moved or archived (A43); then the group's items, in a list of their own whose words say
- * " in [group name]" where the page's lists would otherwise read alike, each item's edit field `item-{id}-text`
- * (component 6), and its add form, whose field is `item-new-{groupId}`, which adds to the end of this group alone.
+ * it can never be renamed, moved or archived (A43), and every other group's in its heading row; then the group's
+ * items, in a list of their own whose words say " in [group name]" where the page's lists would otherwise read alike,
+ * each item's edit field `item-{id}-text` (component 6), and its add form, whose field is `item-new-{groupId}`, which
+ * adds to the end of this group alone.
  */
-function GroupSection({ group }: { group: AdminCommonItemGroup }) {
+function GroupSection({ group, writer }: GroupProps) {
   const headingId = `group-${group.id}-heading`;
 
   return (
     <section aria-labelledby={headingId} className={styles.group}>
-      <h2 id={headingId} className={styles.heading}>
-        {group.name}
-      </h2>
-      {group.isEveryNote && <p className={styles.everyNote}>{strings.commonItems.everyNote}</p>}
+      {group.isEveryNote ? (
+        <>
+          <h2 id={headingId} className={styles.heading}>
+            {group.name}
+          </h2>
+          <p className={styles.everyNote}>{strings.commonItems.everyNote}</p>
+        </>
+      ) : (
+        <GroupHead group={group} writer={writer} headingId={headingId} />
+      )}
       <ListEditor
         kind="item"
         api={commonItemsApi(group.id)}
@@ -112,6 +146,182 @@ function GroupSection({ group }: { group: AdminCommonItemGroup }) {
         editFieldId={itemFieldId}
       />
     </section>
+  );
+}
+
+/**
+ * The heading row of a group other than Every note (common-items.md component 5), a wrapping flex line as an item row
+ * is: its `<h2>`, then the group's alert slot, always rendered, and its buttons in two pairs, Move up and Move down,
+ * then Rename and Archive, each label width, with ", [name] group" after its label for screen readers alone; beside
+ * the heading while the row has room, under it otherwise. Rename puts the rename form in the buttons' place, under the
+ * `<h2>`, which stays, so that the region keeps its name and the manager sees what is being renamed, until Save or
+ * Cancel closes it and focus goes back to Rename, unless a Save finds it gone elsewhere as it ends. The form is
+ * rendered inside the press, so that focus goes to its field, with the caret after the name, while the tap still runs,
+ * which is what lets a phone open its keyboard. Its typed name is the group's own, so it stays as typed while other
+ * groups change.
+ */
+function GroupHead({ group, writer, headingId }: GroupProps & { headingId: string }) {
+  const [renaming, setRenaming] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  const renameKey = `${group.id}:rename`;
+  const context = msg.groupContext(group.name);
+
+  function rename() {
+    flushSync(() => {
+      setRenaming(true);
+    });
+    const input = field.current;
+    if (input !== null) {
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  }
+
+  function close(focusRename: boolean) {
+    setRenaming(false);
+    if (focusRename) {
+      writer.focusAfterRender(renameKey);
+    }
+  }
+
+  return (
+    <>
+      <div className={styles.groupHead}>
+        <h2 id={headingId} className={styles.heading}>
+          {group.name}
+        </h2>
+        {!renaming && (
+          <div className={rows.side}>
+            <RequestAlert />
+            <div className={rows.actions}>
+              <div className={rows.pair}>
+                <Button className={rows.rowButton}>
+                  {strings.listRows.moveUp}
+                  <span className="visually-hidden">{context}</span>
+                </Button>
+                <Button className={rows.rowButton}>
+                  {strings.listRows.moveDown}
+                  <span className="visually-hidden">{context}</span>
+                </Button>
+              </div>
+              <div className={rows.pair}>
+                <Button ref={writer.focusTarget(renameKey)} className={rows.rowButton} onClick={rename}>
+                  {strings.commonItems.rename}
+                  <span className="visually-hidden">{context}</span>
+                </Button>
+                <Button className={rows.rowButton}>
+                  {strings.listRows.archive}
+                  <span className="visually-hidden">{context}</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      {renaming && <RenameForm group={group} writer={writer} field={field} onClose={close} />}
+    </>
+  );
+}
+
+type RenameFormProps = GroupProps & {
+  /** The Group name field, which the heading row focuses as it opens the form. */
+  field: RefObject<HTMLInputElement | null>;
+  /** Closes the form, focusing the group's Rename when `focusRename`. */
+  onClose: (focusRename: boolean) => void;
+};
+
+/**
+ * A group's rename form (common-items.md component 5), in the reading column: the Group name field, `group-{id}-name`,
+ * filled with the group's name, then the alert for a request that failed, then Save, primary, and Cancel, which drops
+ * what was typed, both label width. Save checks the name as Add group does, sending nothing while it fails; then, when
+ * the name as Save would send it is the group's own, it closes the form as Cancel does and sends nothing. Otherwise it
+ * sends the name with the group's version as the write runs, the field read-only while it is out, and once the list is
+ * read again, closes the form, the heading and the group's New item label now saying the new name, focus going to
+ * Rename unless the person has gone elsewhere meanwhile, and the page's status region says so. A failure keeps the
+ * name, focus staying on Save: the server's refusal of the name shows on the field as Save's own does; a Save refused
+ * as stale, or whose group has left the active list, shows the list conflict over the list read again, the form still
+ * open with the typed name, and the next Save sends the group's new version, unless the group has left the page, and
+ * its form with it (common-items.md *Failures*); a `401` hands over to sign-in in place, as `api()` started it; and
+ * anything else says so in the alert, Every note's refusal and a missing `If-Match` among them, as the screen never
+ * sends either. Cancel stays free while a Save is out or queued, closing the form, as a write once started runs to its
+ * end and the list then shows what the server holds.
+ */
+function RenameForm({ group, writer, field, onClose }: RenameFormProps) {
+  const announce = useAnnounce();
+  const form = useRef<HTMLFormElement>(null);
+  const name = useGroupName(group.name, field);
+  // The alert's words while it holds a request's failure, which the next press clears.
+  const [failure, setFailure] = useState<string>();
+  const save = useListWrite(writer, async (sent: string) => {
+    // The version as the write runs, which the list read after the write before it may have changed.
+    const current = activeGroup(writer.latest(), group.id);
+    if (current === undefined) {
+      throw new ListChanged();
+    }
+
+    await sendUnlessListChanged(writer, 412, () => commonItemGroupsApi.rename(group.id, sent, current.rowVersion));
+  });
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    setFailure(undefined);
+    const sent = name.checked();
+    if (sent === undefined) {
+      return;
+    }
+
+    if (sent === group.name) {
+      onClose(true);
+      return;
+    }
+
+    save.mutate(sent, {
+      onSuccess: () => {
+        onClose(focusStayedIn(form.current));
+        announce?.(strings.commonItems.groupRenamed);
+      },
+      onError: (failed) => {
+        if (!name.refusedByServer(failed)) {
+          setFailure(failureAlert(failed, msg.notSaved));
+        }
+      },
+    });
+  }
+
+  return (
+    <form ref={form} noValidate className={`${textBox.column} ${styles.renameForm}`} onSubmit={submit}>
+      <GroupNameField
+        fieldId={`group-${group.id}-name`}
+        label={strings.commonItems.groupName}
+        name={name.text}
+        error={name.error}
+        inputs={name.inputs}
+        readOnly={save.isPending}
+        fieldRef={field}
+        onChange={name.edit}
+      />
+      <RequestAlert>{failure}</RequestAlert>
+      <div className={rows.actions}>
+        <Button
+          type="submit"
+          variant="primary"
+          className={rows.rowButton}
+          busy={save.isPending}
+          busyLabel={strings.saving}
+        >
+          {strings.save}
+        </Button>
+        <Button
+          className={rows.rowButton}
+          onClick={() => {
+            onClose(true);
+          }}
+        >
+          {strings.cancel}
+        </Button>
+      </div>
+    </form>
   );
 }
 

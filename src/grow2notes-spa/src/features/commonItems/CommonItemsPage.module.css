@@ -8,6 +8,30 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * A group's heading row (common-items.md *Layout - laptop*), the item rows' wrapping flex line: the <h2> on the left,
+ * and beside it, while the name keeps 16rem, the alert slot and the group buttons; under it otherwise, with no
+ * breakpoint or container query of its own. The row keeps the gap that the <h2>'s own margin gives Every note's.
+ */
+.groupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2) var(--space-4);
+  margin-block-end: var(--space-3);
+}
+
+.groupHead > .heading {
+  flex: 1 1 16rem;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+/* The rename form under the heading row, in the reading column, the add form's gap above the items below it. */
+.renameForm {
+  margin-block-end: var(--space-5);
+}
+
 /* Every note's line, in the secondary colour (common-items.md component 5), in the reading column. */
 .everyNote {
   max-inline-size: var(--measure);

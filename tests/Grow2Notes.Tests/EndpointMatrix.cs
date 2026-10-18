@@ -238,6 +238,12 @@ internal static class EndpointMatrix
         new(Post,      "/api/admin/common-item-groups", Unauthorized, Forbidden, Created, Created,
             WithJson("/api/admin/common-item-groups", new { name = "Community outing" })),
 
+        // Renaming a common item group (§6.6), in the same group. Each call renames a group of its own, which its
+        // request first adds to A, never the seeded Every note, so B's manager, to whom A's groups are not found, gets
+        // 404 (§9.2).
+        new(Put,       "/api/admin/common-item-groups/{groupId:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RenamingAGroupOfItsOwn),
+
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
@@ -483,6 +489,20 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
         };
+    }
+
+    // A rename of a group that the request first adds to A, sent with the group's ETag as If-Match, so that each call
+    // changes a group of its own, never the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> RenamingAGroupOfItsOwn(EndpointCall call)
+    {
+        var group = await call.Services.AddGroupAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{group.Id}")
+        {
+            Content = JsonContent.Create(new { name = "Outings" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(group.ETag));
+        return request;
     }
 
     // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never

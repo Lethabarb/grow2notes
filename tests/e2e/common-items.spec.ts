@@ -80,6 +80,12 @@ const itemButton = (page: Page, label: RowButton, text: string) =>
 /** An active item row's four focus stops, in order (common-items.md *Focus order*). */
 const rowStops = (text: string) =>
   (['Move up', 'Move down', 'Edit', 'Archive'] as const).map((label) => rowName(label, text));
+/**
+ * A group's four focus stops, in order, each its label, then ", [group name] group", hidden but for screen readers, as
+ * a row's are (common-items.md *Focus order*); Every note has none.
+ */
+const groupStops = (group: string) =>
+  ['Move up', 'Move down', 'Rename', 'Archive'].map((label) => `${label} , ${group} group`);
 /** An archived items summary's focus stop: its words, then " in [group name]", hidden but for screen readers. */
 const summaryStop = (group: string) => `Archived items in ${group}`;
 /** The New group form's focus stops, after the last group's section (common-items.md *Focus order*). */
@@ -466,7 +472,7 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(itemTexts(page, 'Every note')).toHaveText([medication.text, meal.text]);
   await expect(itemTexts(page, 'Community outing')).toHaveText([busOrTrain.text, paid.text, lunch.text]);
   await expect(section(page, 'Personal care').getByText(emptyLine, { exact: true })).toBeVisible();
-  await expect(main(page).getByRole('button', { name: /, .+ group$/ })).toHaveCount(0);
+  await expect(section(page, 'Every note').getByRole('button', { name: / group$/ })).toHaveCount(0);
   for (const end of [
     itemButton(page, 'Move up', medication.text),
     itemButton(page, 'Move down', meal.text),
@@ -724,8 +730,8 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
   expect(new Set([highlight, grayText, canvasText, canvas, ring.colour]).size).toBe(5);
   const forcedRing = { ...ring, colour: highlight };
 
-  // Each group's stops in turn (common-items.md *Focus order*): its item rows, its add form, then its Archived items;
-  // then the New group form.
+  // Each group's stops in turn (common-items.md *Focus order*): its group buttons but on Every note, its item rows, its
+  // add form, then its Archived items; then the New group form.
   const outingRows = [...rowStops(busOrTrain.text), ...rowStops(paid.text), ...rowStops(lunch.text)];
   await expectStops(
     page,
@@ -734,8 +740,11 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
       ...rowStops(medication.text),
       ...rowStops(meal.text),
       ...['New item in Every note', 'Add item', summaryStop('Every note')],
+      ...groupStops('Community outing'),
       ...outingRows,
-      ...['New item in Community outing', 'Add item', 'New item in Personal care', 'Add item'],
+      ...['New item in Community outing', 'Add item'],
+      ...groupStops('Personal care'),
+      ...['New item in Personal care', 'Add item'],
       ...newGroupStops,
       'outside the page',
     ],
@@ -761,8 +770,11 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
     'Shift+Tab',
     [
       ...newGroupStopsBack,
-      ...['Add item', 'New item in Personal care', 'Add item', 'New item in Community outing'],
+      ...['Add item', 'New item in Personal care'],
+      ...groupStops('Personal care').reverse(),
+      ...['Add item', 'New item in Community outing'],
       ...[...outingRows].reverse(),
+      ...groupStops('Community outing').reverse(),
       summaryStop('Every note'),
     ],
     forcedRing,

@@ -406,7 +406,9 @@ export const strings = {
    * did not load, as its failure sentence starts; and the line under Every note's `<h2>` (component 5). Then the New
    * group form (component 7): its field's label, its button, whose busy label is `adding`, and, in the page's status
    * region, what an add did; and a group's name as its messages name it, the one for no name and, with `msg.tooLong`,
-   * the one for too much (design.md §4.9 *States*). Each group's list's own words are `listEditor.item`.
+   * the one for too much (design.md §4.9 *States*), which is the rename form's label too. Then each other group's
+   * Rename, beside the Move up, Move down and Archive of `listRows`, and, in the page's status region, what a rename's
+   * Save did (component 5). Each group's list's own words are `listEditor.item`.
    */
   commonItems: {
     loading: 'Loading common items…',
@@ -417,6 +419,8 @@ export const strings = {
     groupAdded: 'Group added at the end of the list',
     enterGroupName: 'Enter the group name',
     groupName: 'Group name',
+    rename: 'Rename',
+    groupRenamed: 'Group renamed',
   },
   /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
@@ -468,7 +472,8 @@ export const strings = {
    * What every kind of list that `ListEditor` edits shares (list-editor.md *Exact copy*): each active row's Move up and
    * Move down, with their busy label and, in the page's status region, what a press of one that is unavailable at the
    * row's end says; its Edit and Archive, whose busy label is `archiving`, as an archived row's Restore is `restore`;
-   * and, above the list, focused, a write that found the list changed by someone else.
+   * and, above the list, focused, a write that found the list changed by someone else. Common items' group buttons
+   * share the move and archive words (common-items.md component 5).
    */
   listRows: {
     moveUp: 'Move up',

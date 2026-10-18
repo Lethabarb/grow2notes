@@ -28,10 +28,10 @@ export class ListChanged extends Error {
 
 /**
  * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
- * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
- * an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md
- * *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what
- * the server now holds; any other failure fails as it is.
+ * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's, a restore's or a group
+ * rename's `412`, or an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile
+ * (common-items.md *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list
+ * conflict shows over what the server now holds; any other failure fails as it is.
  */
 export async function sendUnlessListChanged(
   list: ListWriter,
