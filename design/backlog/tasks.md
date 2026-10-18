@@ -2297,10 +2297,9 @@ group; Every note stays first and fixed.
   - T07's by-hand steps took the numbers 46 to 48, which T08's section on `main` already has, as steps 46 to 49, and
     the Notes above, step 6 and the last step's own text named them. A rebase that kept both sections would have left
     two of each, with T07's references pointing at T08's database, Today and screen-reader checks. T07's steps are now
-    50 to 52, so that on the rebase they follow T08's section, which stays first, in merge order; until then the file
-    goes from step 45 to step 50. Step 52 now names the steps it follows without their numbers, as T08's section does,
-    and the Notes above and step 6 name steps 50 to 52 and step 52. The rebase keeps both `groupName: 200` and T08's
-    `guidedNotes: 20_000` in `limits.ts`.
+    50 to 52, which the rebase onto T08's merge put after T08's section, which stays first, in merge order. Step 52 now
+    names the steps it follows without their numbers, as T08's section does, and the Notes above and step 6 name steps
+    50 to 52 and step 52. The rebase kept both `groupName: 200` and T08's `guidedNotes: 20_000` in `limits.ts`.
   - tests/README.md's seeded-rows rule still said that tests add groups through the context as no endpoint adds a
     group until T07, which this task's add made false. It now gives the reason `TestCommonItems` gives, that it writes
     no audit event and keeps every value given, and says that a test that adds a group through
