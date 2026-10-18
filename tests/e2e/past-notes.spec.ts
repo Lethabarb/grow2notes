@@ -69,6 +69,29 @@ const pinned = (page: Page) =>
       .map((element) => element.localName),
   );
 
+/**
+ * Fires what the browser fires as a person comes back to the tab: the window's `focus`, and `visibilitychange`, which
+ * bubbles from the document to the window, where TanStack Query listens for it, as a browser's own does.
+ */
+const comeBack = (page: Page) =>
+  page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange', { bubbles: true }));
+  });
+
+/** Waits two of the page's frames, by which time a scroll's events and intersection observers have run. */
+const twoFrames = (page: Page) =>
+  page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        });
+      }),
+  );
+
 /** The names of the rows' links as Tab reaches them: each date, as it shows. */
 const rowNames = (page: Page) =>
   rows(page).evaluateAll((links) => links.map((link) => (link as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
@@ -206,16 +229,19 @@ test('the read view loading, flagged, with no goals, submitted later, failed and
   await expect(page).toHaveTitle(title('Note'));
   await expectAxeToPass(page);
 
-  // The text is not fetched again as the window comes back.
+  // The text is not fetched again as the window comes back, though the same events make Past notes, which opts in to
+  // refetchOnWindowFocus, fetch its rows again, so they do reach TanStack Query.
   const sent = recordRequests(page);
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('focus'));
-    document.dispatchEvent(new Event('visibilitychange'));
-  });
+  await comeBack(page);
   expect((await sent()).filter((request) => request.includes('/notes'))).toEqual([]);
+  await pastNotesLink(page).click();
+  await expect(rows(page)).toHaveCount(3);
+  const sentOnPastNotes = recordRequests(page);
+  await comeBack(page);
+  expect(await sentOnPastNotes()).toContain(`GET /api/participants/${jane.id}/notes`);
 
   // Ravi's, unflagged, with no goals, submitted at midday.
-  await backLink(page, 'Today').click();
+  await nav(page).getByRole('link', { name: 'Today', exact: true }).click();
   await row(page, 'Ravi de Silva').click();
   await expect(heading(page)).toHaveText('Ravi de Silva Thursday 1 October 2026');
   await expect.poll(() => shownText(byline(page))).toBe(`Written by ${priya} · Submitted midday`);
@@ -397,18 +423,25 @@ test('90 rows loaded, the 75th opened, Back shows all 90 with the scroll and foc
   await pastNotesLink(page).click();
   await expect(heading(page)).toBeFocused();
   await expect(rows(page)).toHaveCount(30);
+
+  // Scrolling to the end, with older notes still to show, asks for nothing: only Show older loads them.
+  const sent = recordRequests(page);
+  const scrolledTo = await page.evaluate(() => {
+    window.scrollTo(0, document.documentElement.scrollHeight);
+    return window.scrollY;
+  });
+  expect(scrolledTo).toBeGreaterThan(0);
+  await twoFrames(page);
+  expect(await sent()).toEqual([]);
+  await expect(rows(page)).toHaveCount(30);
+  await expect(showOlder(page)).toBeInViewport({ ratio: 1 });
+
   for (const loaded of [60, 90]) {
     await showOlder(page).click();
     await expect(rows(page)).toHaveCount(loaded);
     await expect(rows(page).nth(loaded - 30)).toBeFocused();
   }
   await expect(showOlder(page)).toHaveCount(0);
-
-  // Scrolling to the end and back asks for nothing.
-  const sent = recordRequests(page);
-  await page.mouse.wheel(0, 20_000);
-  await page.mouse.wheel(0, -20_000);
-  expect(await sent()).toEqual([]);
 
   // The 75th opened, then the back link, and browser Back: every row at once, the scroll where it was, and focus on
   // the 75th.

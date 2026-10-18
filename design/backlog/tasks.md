@@ -3230,6 +3230,32 @@ past notes.
   check after a press of Submit note, which scrolls the page, starts from the top. The by-hand checks are steps 53 to 55
   of ops/first-use-in-test.md, after T07's 50 to 52, which merged first, in merge order. Show older's screen-reader
   reading waits there for a participant with more than 30 notes, as test has none yet.
+- 19 October 2026, review: 4 findings were confirmed and are fixed here. None changes the design, so no A-number is
+  added:
+  - The read view's end-to-end check that its text is not fetched again as the window comes back could not fail: it
+    fired `visibilitychange` on the document without `bubbles`, so the event never reached the window, where
+    TanStack Query 5 listens for it, and TanStack no longer listens for the window's `focus`. A `noteQuery` that
+    refetched on focus, with a `staleTime` of 0 and `refetchOnWindowFocus: 'always'`, would still have passed it
+    (note-read-view.md *Behaviour* 2). `past-notes.spec.ts`'s `comeBack` now fires a `visibilitychange` that
+    bubbles, as a browser's own does, and the same events on Past notes, which opts in to `refetchOnWindowFocus`,
+    must fetch its rows again, so the check fails if they stop reaching TanStack Query; tests/README.md says so for
+    later tests. Against a build whose `noteQuery` refetches on focus, it now fails on every run, where the old check
+    passed.
+  - The end-to-end check that scrolling Past notes to the end asks for nothing ran only once all 90 rows had loaded,
+    with no older page left to ask for, and wheeled down and back without waiting for the scroll, so a next page
+    loaded on scroll, by an `IntersectionObserver` that the Vitest check cannot run in jsdom, would still have passed
+    it (participant-notes.md item 3). It now runs after the first 30 rows, with Show older still there: the page is
+    scrolled to its end, and two frames later no request has been sent, 30 rows show and Show older is wholly in
+    view. Against a build whose list loads the next page as its end comes into view, it now fails on every run, where
+    the old check passed.
+  - Step 8 was ticked although its last two parts, `migrate.sql` from CI's artifact read in the pull request and CI's
+    run on the pull request passing, have not happened, as the branch is not yet pushed. It is unticked, as T02's
+    and T05's matching steps stayed until their runs passed, and is ticked once that run and the `migrate.sql` read
+    are recorded in these Notes.
+  - S02.04.01's Notes still said that "There is no note for this day." and the read view's load-failure lines ship as
+    written (D67), where this task builds neither (the shared address's Note above). The story gains a dated T09 Note
+    saying so, pointing at participant-notes.md's *Note not found* and *Load failed* rows, and that the read view's
+    axe checks cover the states that are built.
 
 ### Steps
 
@@ -3388,7 +3414,7 @@ past notes.
       75th opened and Back showing all 90 at once with the scroll kept and focus on the 75th; Past notes from a note
       starting at the newest 30, at the top, with the `<h1>` focused; the read view the same from Today and from Past
       notes but for the back link; and an archived participant's Actions holding Past notes.
-- [x] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
+- [ ] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
       `tests/e2e/notes.ts` and `tests/e2e/today.ts` answer `GET {base}`, `POST {base}/versions`, the history, the flag
       and Today's `note` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and a
       new `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: the worker fills

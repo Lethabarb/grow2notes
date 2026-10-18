@@ -601,7 +601,10 @@ that show, without the visually hidden ones, and the forced-colours ring and the
 there too. A row's description is checked with `toHaveAccessibleDescription`, whose reckoning in Chromium puts a space
 before each comma that a hidden `Pause` reads for a dot, so its patterns allow one. Today's Waiting state holds the
 page's timers of 1 s with an init script rather than on Playwright's clock, as axe settles each rule on a timer and
-never finishes under a paused clock; the after-midnight refusal runs on `page.clock`.
+never finishes under a paused clock; the after-midnight refusal runs on `page.clock`. A check of what a screen does as a
+person comes back to the tab fires the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does,
+since TanStack Query listens for it on the window, not the document, and shows on a screen that opts in to
+`refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`).
 
 ### Signing in with a passkey, end to end
 
