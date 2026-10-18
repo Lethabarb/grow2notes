@@ -206,6 +206,11 @@ For the read view (4.4), a manager reading someone else's draft (4.2), one versi
   borders on `::before`, which forced colours and printing keep; and each row is the item's `<label>`, at least
   `--target-row` tall and the column wide, so a tap anywhere on it, its far end included, toggles the box. T13 adds
   `headingLevel` and `hintId` with the common items, and T09's flag row and T13's group rows reuse `.box` and `.row`.
+- **Built** (T09, for the read view): `TickListRead` in `src/components/TickListRead.tsx`, on
+  `TickList.module.css`'s heading, an `<h2>` until T13 gives it `headingLevel`: each item a 1.5rem box drawn as an
+  inline SVG, in the text's colour, with the tick inside when ticked, then the wording, and "ticked" or "not ticked"
+  after a `Pause`, for screen readers alone; no row dividers, hover or pointer, as nothing in it is a control. The note
+  form's Flag for manager row is `.row` and `.box`, its dividers included.
 
 ```tsx
 // TickListField.tsx

@@ -1,0 +1,22 @@
+/*
+ * A tag (status-tags.md *Anatomy* 2, today.md component 8): the size and font of the line it sits in, regular weight,
+ * padded in em so that it grows with the text, and inline-block, so that it drops whole to the next line when it does
+ * not fit. Its 1 px border is a real one, which forced colours draw in the text colour once the fill has gone, so the
+ * tag keeps its shape there with no rule of its own.
+ */
+.tag {
+  display: inline-block;
+  max-inline-size: 100%;
+  padding: 0.125em 0.5em;
+  border: var(--border-divider) solid transparent;
+  border-radius: var(--radius-s);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+/* Anything about a flag (status-tags.md *Colour tokens*): 8.1:1 text on the strong amber tint, with an amber edge. */
+.attention {
+  border-color: var(--colour-attention-edge);
+  background: var(--colour-attention-tint-strong);
+  color: var(--colour-attention-text);
+}

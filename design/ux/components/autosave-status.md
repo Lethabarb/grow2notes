@@ -318,6 +318,13 @@ Formatting:
   "Saving…" shown, until the next change or blur sends it: the retries, "Not saved: no connection…", the page-hidden
   save, the pause while signing in again, `flushNow()` and the rules for leaving are T10's, and `checkSave()` and
   `stop()` come with Submit (T09).
+- **Built** (T09, for Submit): `checkSave()` sends one `PUT` after any save out has settled, and gives the content
+  that it saved when that save carried the newest change, else nothing, so a change made while it was out opens no
+  confirmation; `stop()` pauses autosave, its timers cleared, once any save out has settled, as Submit's request goes;
+  `resume()` lets it go on, sending at once a change made meanwhile; and `end()` stops it at a dead end that Submit
+  met. The flag and its reason are part of each save, `flagReason` `null` while unticked or blank and cut to 200
+  characters without splitting a surrogate pair. `409 note.version_conflict`, a note submitted elsewhere, is a fourth
+  dead end, whose sentence is "This note was changed on another device or tab."
 - **Shared fetch wrapper:** reuse the app's `api()` wrapper. It adds `X-XSRF-TOKEN` (§9.8) and records accepted requests for the session clock (`session-timeout.md`).
 - **Router:** `useBlocker` needs a data router (`createBrowserRouter`). Confirm the app uses one.
 - **Tests:**

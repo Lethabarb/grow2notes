@@ -351,6 +351,11 @@ add these dialogs to the axe checks. In particular, check that VoiceOver reads t
 
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
+- **Built** (T09, dialog 1, the Submit confirmation): `ConfirmDialog` gains `titleName`, the name line after the
+  title's words, at the `<h1>`'s size, bold, `translate="no"`, and wrapping anywhere, so that a long unbroken name is
+  never cut short; the heading names the dialog with both, "Submit today's note for Jane Citizen". The Submit
+  confirmation opens on its title, makes one `Idempotency-Key` per opening for its retries, and keeps the content that
+  the check save sent for its flag line and its request.
 - **Native `<dialog>` only.** No React Aria: native covers focus, inertness, Escape, Back and the top layer, and
   React Aria's `Modal` would replace them with script. No portal: the top layer already escapes every stacking context.
 - **Mount on open, unmount on close.** The parent renders `{open && <ConfirmDialog …/>}`. A layout effect calls

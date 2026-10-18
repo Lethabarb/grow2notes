@@ -1,0 +1,31 @@
+/*
+ * The byline and the flag's line under the <h1> (participant-notes.md component 4), in the daily report's order: small,
+ * in the secondary colour, each a line of its own.
+ */
+.lines {
+  margin-block-start: var(--space-4);
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}
+
+.line {
+  margin: 0 0 var(--space-1);
+}
+
+/*
+ * What the writer typed, the flag's reason and the Guided notes text (components 4 and 7), in the text's own colour
+ * and exactly as written: every space and line break kept, and a long unbroken string wrapped rather than make the page
+ * scroll sideways at 320 px, never cut short or collapsed.
+ */
+.written {
+  color: var(--colour-text);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+/* Each section after a 1 px rule, halfway through the gap between sections (participant-notes.md *Layout - phone*). */
+.section {
+  margin-block-start: calc(var(--section-gap) / 2);
+  padding-block-start: calc(var(--section-gap) / 2);
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+}

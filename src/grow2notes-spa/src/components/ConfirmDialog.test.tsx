@@ -420,3 +420,52 @@ describe('closeOpenDialogs', () => {
     expect(onClose.mock.calls).toEqual([[false]]);
   });
 });
+
+// note-form.md's Submit confirmation (component 14), whose title is its words and then the participant's name.
+describe('ConfirmDialog with a name line', () => {
+  const lead = 'Submit today’s note for';
+
+  /** Renders the Submit confirmation for `name`, opened on its title. */
+  function renderSubmit(name: string) {
+    render(
+      <StrictMode>
+        <ConfirmDialog
+          title={lead}
+          titleName={name}
+          primary={`Submit note for ${name}`}
+          secondary={goBack}
+          confirmButton="primary"
+          initialFocus="title"
+          onConfirm={vi.fn()}
+          onClose={vi.fn()}
+        >
+          <p>Thursday 1 October 2026</p>
+          <p>Flagged for manager: No</p>
+        </ConfirmDialog>
+      </StrictMode>,
+    );
+  }
+
+  it('names the dialog with its words and the name, the name on a line of its own, never translated', () => {
+    renderSubmit('Jane Citizen');
+
+    expect(dialog()).toHaveAccessibleName('Submit today’s note for Jane Citizen');
+    expect(heading()).toHaveFocus();
+    const name = within(heading()).getByText('Jane Citizen');
+    expect(name.tagName).toBe('SPAN');
+    expect(name).toHaveAttribute('translate', 'no');
+    expect(name).toHaveStyle({ display: 'block', fontSize: 'var(--font-size-h1)', fontWeight: '700' });
+    expect(dialog()).toHaveAccessibleDescription('Thursday 1 October 2026 Flagged for manager: No');
+  });
+
+  it('wraps an unbroken name of 100 characters anywhere, never upper-casing it or cutting it short', () => {
+    const long = 'X'.repeat(100);
+    renderSubmit(long);
+
+    const name = within(heading()).getByText(long);
+    expect(name).toHaveStyle({ overflowWrap: 'anywhere' });
+    for (const cut of [{ textTransform: 'uppercase' }, { textOverflow: 'ellipsis' }, { whiteSpace: 'nowrap' }]) {
+      expect(name).not.toHaveStyle(cut);
+    }
+  });
+});

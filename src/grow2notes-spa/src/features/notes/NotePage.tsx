@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useState } from 'react';
 import { useParams } from 'react-router';
 import type { StartedBy } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
@@ -11,18 +10,24 @@ import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import textBox from '../../components/TextBox.module.css';
-import { TickListField } from '../../components/TickListField.tsx';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly } from '../../copy/format.ts';
-import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
+import { useBackTo } from '../../routes/routeChange.ts';
 import { fullName } from '../participants/participantsQuery.ts';
-import { GuidedNotes } from './GuidedNotes.tsx';
-import { draftQuery, participantQuery, type Draft, type DraftAnswer, type ParticipantHeader } from './noteQueries.ts';
+import {
+  draftQuery,
+  noteQuery,
+  participantQuery,
+  type DraftAnswer,
+  type ParticipantHeader,
+} from './noteQueries.ts';
+import { NoteForm } from './NoteForm.tsx';
 import styles from './NotePage.module.css';
+import { ReadView } from './ReadView.tsx';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
-import { useAutosave, type DeadEnd } from './useAutosave.ts';
+import type { DeadEnd } from './useAutosave.ts';
 
 /**
  * A participant's note for a day at `/participants/{participantId}/notes/{noteDate}` (note-form.md *Routes*), keyed by
@@ -36,60 +41,77 @@ export function NotePage() {
 type NoteProps = { participantId: string; noteDate: string };
 
 /**
- * The note screen (note-form.md), in the form's 40rem column: its top bar at once, with the back link to Today and
- * the save status, there and empty from the first render; then the region that loads the participant and the note
- * together, which shows nothing of either until both have loaded, as an empty box or unticked rows could be tapped
- * before the name above them is known, then "Loading note…" after 1 s; or, when either did not load, the fallback
- * `<h1>` "Note" with the failure sentence and Try again; or Page not found in place of the whole screen for a `404`,
- * such as another organisation's participant or a date after today. Nothing is sent but those two requests until the
- * first change: opening, scrolling, focusing or tapping into the form saves nothing (design.md §3.3). A dead end shows
- * its sentence in the top bar's second row, and says it once through the form's assertive region (note-form.md
- * component 16), there and empty from the first render, as a screen reader may not announce words written into one
- * added with them; its polite twin is the page's `PageStatus`.
+ * The note's page at the shared note address (note-form.md *Routes*), in the form's 40rem column, which decides what it
+ * shows from fresh data on every visit. Its top bar shows at once, with the back link to Past notes when the list
+ * opened it, else to Today, static, as nothing on the read view is sticky (participant-notes.md *Conflicts resolved*
+ * 1). Under it, one region loads the participant and the note, `GET {base}`, together, then, for a note that is not
+ * submitted, the form's own read. It shows nothing until all it needs have loaded, as an empty box or unticked rows
+ * could be tapped, or read as nothing ticked, before the name above them is known, and "Loading note…" after 1 s; or,
+ * when a read failed, the fallback `<h1>` "Note" with the failure sentence and Try again; or Page not found in place of
+ * the whole screen for a `404`, such as another organisation's participant or a date after today. Then it shows the
+ * read view for a submitted note, and otherwise what the form's read gives. Nothing is sent but those reads until the
+ * form's first change: opening, scrolling, focusing or tapping into the form saves nothing (design.md §3.3).
+ *
+ * The form, once open, makes the top bar sticky, with the save status at its end, and stays open whatever the note is
+ * fetched as later, as after signing in again in place, so that nothing on screen is replaced (note-form.md
+ * *Autosave*). A dead end shows its sentence in the top bar's second row, and says it once through the form's assertive
+ * region (note-form.md component 16), there and empty from the first render, as a screen reader may not announce words
+ * written into one added with them; its polite twin is the page's `PageStatus`.
  */
 function Note({ participantId, noteDate }: NoteProps) {
   const participant = useQuery(participantQuery(participantId));
-  const draft = useQuery(draftQuery(participantId, noteDate));
+  const note = useQuery(noteQuery(participantId, noteDate));
   // None until the form mounts and gives the words it opens with.
   const [indicator, setIndicator] = useState<SaveIndicator>();
   // The sentence of the dead end that stopped autosave, if one has.
   const [deadEnd, setDeadEnd] = useState<string>();
+  const formOpen = indicator !== undefined;
+  const submitted = !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
+  const formNeeded = note.data !== undefined && submitted === undefined;
+  const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
+  const back = useBackTo({ pastNotes: pageName.pastNotes });
 
   return (
     <PageStatus>
-      <PageBar sticky>
-        <BackLink to="/">{pageName.today}</BackLink>
+      <PageBar sticky={formOpen}>
+        <BackLink to={back.to}>{back.label}</BackLink>
         {/* A new element as the form mounts, holding its first words, such as "Draft · saved 9:42 am", which a screen
             reader takes as the page's own rather than announcing a change (autosave-status.md *Behaviour* 8). */}
-        <p
-          key={indicator === undefined ? 'page' : 'form'}
-          id="save-status"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-          className={styles.saveStatus}
-        >
-          {indicator !== undefined && <SaveIndicatorText indicator={indicator} />}
-        </p>
+        {formOpen && (
+          <p id="save-status" role="status" aria-live="polite" aria-atomic="true" className={styles.saveStatus}>
+            <SaveIndicatorText indicator={indicator} />
+          </p>
+        )}
         {deadEnd !== undefined && <DeadEndBanner sentence={deadEnd} />}
       </PageBar>
       <div className={textBox.column}>
         <LoadRegion
-          queries={[participant, draft]}
+          queries={formNeeded ? [participant, note, draft] : [participant, note]}
           loading={strings.note.loading}
           what={strings.note.theNote}
           fallbackHeading={pageName.note}
         >
-          {/* Called only once both queries have data. */}
-          {() => (
-            <Loaded
-              participant={participant.data!}
-              answer={draft.data!}
-              noteDate={noteDate}
-              onIndicator={setIndicator}
-              onDeadEnd={setDeadEnd}
-            />
-          )}
+          {/* Called only once every query given has data. */}
+          {() =>
+            submitted === undefined ? (
+              <Loaded
+                participant={participant.data!}
+                answer={draft.data!}
+                noteDate={noteDate}
+                indicator={indicator}
+                deadEnd={deadEnd}
+                onIndicator={setIndicator}
+                onDeadEnd={setDeadEnd}
+              />
+            ) : (
+              <ReadView
+                heading={<NoteHeading name={fullName(participant.data!)} noteDate={noteDate} />}
+                participantId={participantId}
+                note={submitted}
+                noteDate={noteDate}
+              />
+            )
+          }
         </LoadRegion>
       </div>
       <div role="alert" className="visually-hidden">
@@ -119,24 +141,45 @@ function DeadEndBanner({ sentence }: { sentence: string }) {
   );
 }
 
+/**
+ * The note's identity `<h1>` (note-identity-header.md), on the form and the read view alike, which takes the focus
+ * left pending for it on arrival: the name as stored, never translated, then the note date, so that a screen reader
+ * reads the person and the day together, as "Jane Citizen Thursday 1 October 2026".
+ */
+function NoteHeading({ name, noteDate }: { name: string; noteDate: string }) {
+  return (
+    <PageHeading>
+      <span className={styles.name} translate="no">
+        {name}
+      </span>{' '}
+      <time className={styles.date} dateTime={noteDate}>
+        {dateLong(parseDateOnly(noteDate))}
+      </time>
+    </PageHeading>
+  );
+}
+
 type LoadedProps = {
   participant: ParticipantHeader;
   answer: DraftAnswer;
   noteDate: string;
+  /** What the save indicator says, none until the form first says it. */
+  indicator: SaveIndicator | undefined;
+  /** The sentence of the dead end that stopped autosave, if one has. */
+  deadEnd: string | undefined;
   onIndicator: (indicator: SaveIndicator) => void;
   /** The sentence of a dead end that stopped autosave. */
   onDeadEnd: (sentence: string) => void;
 };
 
 /**
- * The note once loaded: the identity `<h1>` (note-identity-header.md), which takes the focus left pending for it on
- * arrival, the name as stored, never translated, then the note date, so that a screen reader reads the person and the
- * day together; then the form, or, for another user's draft, who started it and when, in a notice, and no form
- * (note-form.md *Loading and load errors*), worded for today's note, or for an earlier day's, as the first save's
- * dead end words it too. It keeps the note as it first loaded, so that nothing fetched later, as after signing in again
- * in place, replaces what is on screen (note-form.md *Autosave*).
+ * A note that is not submitted, once loaded: the form, which puts its error summary above the `<h1>`, or, for another
+ * user's draft, the `<h1>` and who started it and when, in a notice, and no form (note-form.md *Loading and load
+ * errors*), worded for today's note, or for an earlier day's, as the first save's dead end words it too. It keeps the
+ * note as it first loaded, so that nothing fetched later, as after signing in again in place, replaces what is on
+ * screen (note-form.md *Autosave*).
  */
-function Loaded({ participant, answer, noteDate, onIndicator, onDeadEnd }: LoadedProps) {
+function Loaded({ participant, answer, noteDate, indicator, deadEnd, onIndicator, onDeadEnd }: LoadedProps) {
   const me = useMe();
   const [opened] = useState(answer);
   const name = fullName(participant);
@@ -151,132 +194,40 @@ function Loaded({ participant, answer, noteDate, onIndicator, onDeadEnd }: Loade
     });
   }
 
-  function deadEndSentence(deadEnd: DeadEnd): string {
-    switch (deadEnd.code) {
+  function deadEndSentence(stopped: DeadEnd): string {
+    switch (stopped.code) {
       case 'note.past_date_manager_only':
         return apiErrorCopy['note.past_date_manager_only'];
       case 'note.participant_archived':
         return apiErrorCopy['note.participant_archived'](name);
+      case 'note.version_conflict':
+        return apiErrorCopy['note.version_conflict'];
       case 'note.in_progress_by_other':
-        return startedBySentence(deadEnd.startedBy);
+        return startedBySentence(stopped.startedBy);
     }
   }
 
-  return (
+  const heading = <NoteHeading name={name} noteDate={noteDate} />;
+
+  return 'startedBy' in opened ? (
     <>
-      <PageHeading>
-        <span className={styles.name} translate="no">
-          {name}
-        </span>{' '}
-        <time className={styles.date} dateTime={noteDate}>
-          {dateLong(date)}
-        </time>
-      </PageHeading>
-      {'startedBy' in opened ? (
-        <Notice>{startedBySentence(opened.startedBy)}</Notice>
-      ) : (
-        <NoteForm
-          participantId={participant.id}
-          noteDate={noteDate}
-          givenName={participant.givenName}
-          draft={opened.draft}
-          onIndicator={onIndicator}
-          onDeadEnd={(deadEnd) => {
-            onDeadEnd(deadEndSentence(deadEnd));
-          }}
-        />
-      )}
+      {heading}
+      <Notice>{startedBySentence(opened.startedBy)}</Notice>
     </>
-  );
-}
-
-type NoteFormProps = {
-  participantId: string;
-  noteDate: string;
-  givenName: string;
-  draft: Draft;
-  onIndicator: (indicator: SaveIndicator) => void;
-  onDeadEnd: (deadEnd: DeadEnd) => void;
-};
-
-/**
- * The note form (note-form.md components 7, 8 and 10): the lists-changed notice's live region, there and empty from
- * the first render, as a screen reader may not announce words written into one added with them; then Goals, its
- * goals and ticks in this page's state, from the draft's; then Guided notes. Until T13 adds "2. Common items", the
- * sections go from 1 to 3, keeping design.md's numbers. Each tick and each input is a change that autosave saves, and
- * a field that loses focus sends one at once (design.md §3.4). After a dead end, every tick and the text stay as they
- * are, to change and copy, though nothing more is saved (note-form.md *Conflicts and refusals*).
- */
-function NoteForm({ participantId, noteDate, givenName, draft, onIndicator, onDeadEnd }: NoteFormProps) {
-  const box = useRef<HTMLTextAreaElement>(null);
-  const notice = useRef<HTMLDivElement>(null);
-  const [goals, setGoals] = useState(draft.goals);
-  const [ticked, setTicked] = useState(
-    () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
-  );
-  const [listsChanged, setListsChanged] = useState(false);
-  const autosave = useAutosave({
-    participantId,
-    noteDate,
-    opened: draft,
-    read: () => ({ narrative: box.current!.value, tickedGoalIds: [...ticked] }),
-    onIndicator,
-    onListsChanged: showListsAsNow,
-    onDeadEnd,
-  });
-
-  // The goals as the form now has them, after a first save found the lists changed (design.md §5.7): the ticks of the
-  // goals still listed kept, by ID, the text as it is, and the notice above Goals until the person leaves. Committed at
-  // once, so that the save sent next reads the ticks shown, and focus, if the box that had it has gone, goes to the
-  // notice; otherwise it stays where it is.
-  function showListsAsNow(reloaded: Draft) {
-    const focused = document.activeElement;
-    flushSync(() => {
-      setGoals(reloaded.goals);
-      setTicked((current) => new Set(reloaded.goals.filter((goal) => current.has(goal.id)).map((goal) => goal.id)));
-      setListsChanged(true);
-    });
-    if (focused?.isConnected === false) {
-      notice.current?.focus();
-    }
-  }
-
-  function toggle(goalId: string, isTicked: boolean) {
-    setTicked((current) => {
-      const next = new Set(current);
-      if (isTicked) {
-        next.add(goalId);
-      } else {
-        next.delete(goalId);
-      }
-
-      return next;
-    });
-    autosave.changed();
-  }
-
-  return (
-    // React's onBlur bubbles, as focusout does, so it hears every field of the form.
-    <div onBlur={autosave.flush}>
-      <div ref={notice} role="status" tabIndex={-1} className={styles.listsChanged}>
-        {listsChanged && <Notice>{apiErrorCopy['note.lists_changed']}</Notice>}
-      </div>
-      <TickListField
-        idPrefix="goal"
-        className={styles.section}
-        heading={strings.note.goals}
-        hint={strings.note.goalsHint}
-        emptyText={msg.noGoalsSetUp(givenName)}
-        items={goals}
-        ticked={ticked}
-        onToggle={toggle}
-      />
-      <GuidedNotes
-        boxRef={box}
-        initialText={draft.narrative}
-        prompts={draft.guidePrompts}
-        onChange={autosave.changed}
-      />
-    </div>
+  ) : (
+    <NoteForm
+      participantId={participant.id}
+      noteDate={noteDate}
+      name={name}
+      givenName={participant.givenName}
+      draft={opened.draft}
+      heading={heading}
+      indicator={indicator}
+      deadEnd={deadEnd}
+      onIndicator={onIndicator}
+      onDeadEnd={(stopped) => {
+        onDeadEnd(deadEndSentence(stopped));
+      }}
+    />
   );
 }

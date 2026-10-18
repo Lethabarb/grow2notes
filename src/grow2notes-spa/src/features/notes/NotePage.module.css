@@ -31,6 +31,11 @@
   margin-block-start: var(--section-gap);
 }
 
+/* Submit note, with the alert above it, inline after the flag's block, never sticky (component 12). */
+.actions {
+  margin-block-start: var(--section-gap);
+}
+
 /* The lists-changed notice's region above Goals (component 7): no space while empty, a section's gap once filled. */
 .listsChanged:not(:empty) {
   margin-block-start: var(--section-gap);

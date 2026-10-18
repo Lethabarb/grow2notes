@@ -208,6 +208,9 @@ Each entry names the component spec, then the settings for this screen only. Sha
      `translate="no"`, never upper-cased or truncated. No date line on this screen.
    - Sizes from `foundations.md`: caption 18 px regular `--colour-text-secondary`; name `--font-size-h1` (28/32 px) 700.
    - Rendered only when both the participant and the first page of notes have loaded (no placeholder or cached name).
+   - As built (T09): the caption is a line of its own in body type and `--colour-text-secondary`, and the name is read
+     under `['pastNotes', participantId, 'participant']`, kept 30 minutes with the pages, so that Back shows the `<h1>`
+     and every row at once.
 
 4. **Manager actions** → [`primary-actions.md`](../components/primary-actions.md)
    - Managers only; hidden (not disabled) for workers. Order: **Write past-day note** (V), **Export record** (V),
@@ -216,6 +219,7 @@ Each entry names the component spec, then the settings for this screen only. Sha
      archived (3.7: no new notes, including past-day notes). **Export record** goes to the export page
      (`export-form.md`). **Edit participant** goes to participant detail (4.8).
    - They render with the identity block, even when the list is empty (`empty-loading-error.md`).
+   - As built (T09): **Edit participant** alone, under the `<h1>`; T18 adds Write past-day note and T21 Export record.
 
 5. **Chronological list, paged** → [`chronological-list.md`](../components/chronological-list.md)
    - Mode: **paged**, 30 per page, newest first by note date, `useInfiniteQuery` on
@@ -236,6 +240,10 @@ Each entry names the component spec, then the settings for this screen only. Sha
      explicitly** (the app default is off; app-shell.md lists this query among the opt-ins), so every loaded page
      refetches in order, silently, when the window regains focus. Retry: one silent retry on network errors,
      timeouts and `5xx` only (Conflicts resolved, 12).
+   - As built (T09): `ChronoList` (`src/components`) in its paged mode, its rows `LinkRow`s with `look: 'date'` (the
+     link in base.css's colour, underline and hover, with no chevron) in a `LinkRowList` that is an `<ol>`. A push or
+     a replace drops the cached pages and header as the page mounts, before either query reads the cache, and a pop
+     keeps both. The pages refetch on TanStack's own focus event, `visibilitychange`, with no window `focus` listener.
 
 6. **Meta line and tags (per row)** → [`status-tags.md`](../components/status-tags.md)
    - `MetaLine` parts: status word, then `authorDisplayName`: **Submitted · Alex P.** / **Draft · Alex P.** (V).
@@ -284,6 +292,9 @@ Each entry names the component spec, then the settings for this screen only. Sha
      reason and comment in `--colour-text` with `white-space: pre-wrap; overflow-wrap: break-word`.
    - Times use `microcopy.md`'s `stamp` with the **note date** as the reference day: time alone on the note date,
      otherwise "Fri 2 Oct 2026, 8:05 am". Exact strings are in States.
+   - As built (T09): the byline is one line, its two parts joined by `Sep`; the flag line is `Tag`, a pause and
+     "Reason: …", which keeps the writer's spaces and line breaks. Each section after the action row follows a 1 px
+     rule in `--colour-divider`, halfway through `--section-gap`.
 
 5. **Action row** → [`primary-actions.md`](../components/primary-actions.md)
    - **Edit** (V): `<Link>` styled as a secondary button; only when the note is Submitted and the viewer is the
@@ -293,6 +304,8 @@ Each entry names the component spec, then the settings for this screen only. Sha
    - **Version history** (V): plain text link, managers, every submitted note (even version 1).
    - **Past notes** (V): plain text link to the list (a new visit, top of the list).
    - Hidden, never disabled, when not allowed. Each target at least 44 px tall.
+   - As built (T09): **Past notes** alone, after the status lines and before the first rule, on a 44 px line of its own,
+     the same link as the note form's under its `<h1>`; T14 adds Edit and T18 Version history.
 
 6. **Goals and Common items** → [`checkbox-list.md`](../components/checkbox-list.md) (`TickListRead`) and
    [`group-picker.md`](../components/group-picker.md) (Per-screen notes)
@@ -415,9 +428,9 @@ space between day and month; times use a non-breaking space before am/pm; exactl
 | **Someone else's draft, worker** (4.2, 4.4) | `<h1>` name and date, one sentence, the **Past notes** link. No sections, no tags. | Alex P. started today’s note for Jane Citizen at 9:14 am. Only Alex P. can finish it. (V, with the staff-name rule: N) · earlier-day draft: Alex P. started the note for Jane Citizen at 9:14 am. Only Alex P. can finish it. (P) |
 | **Someone else's draft, manager** (4.2, 4.4, A9) | The same sentence, then **Discard draft**, **Past notes**, then Goals, Common items and Guided notes from the draft, then a read-only tick row for the flag (and its reason if ticked). Never the Flagged tag on a draft (3.6). | Discard draft (V) · Flag for manager, ticked / not ticked (V words) · Reason: … · empty text: Nothing written yet. (P) |
 | **Discard dialog** (manager) | `confirm-dialog.md` dialog 2, manager variant. | Title: Discard the draft note for Jane Citizen? (V) · Body: Alex P. started it at 9:14 am. (P) · Nobody will be able to open this draft again. (P) · Confirm (warning): Discard draft for Jane Citizen (P, `microcopy.md`) · Go back · Busy: Discarding… (P) · Failed: Not discarded: no connection. Try again. (P, `microcopy.md` pattern) · `409`: This draft has already been submitted or discarded. (P) |
-| **Note not found** (participant loaded, note `404`: for example a draft discarded since the list loaded, and the viewer cannot start a note for that date) | `<h1>` name and date, one sentence, a **Past notes** link. | There is no note for this day. (P, `note-read-view.md`) |
+| **Note not found** (participant loaded, note `404`: for example a draft discarded since the list loaded, and the viewer cannot start a note for that date) | `<h1>` name and date, one sentence, a **Past notes** link. As built (T09), not built: the shared address decides from fresh data (note-form.md *Routes*), so a note that is gone opens the note form, as for a day with no note, or A65's Page not found where the form may not open, and the sentence is not added. | There is no note for this day. (P, `note-read-view.md`) |
 | **Participant not found** (`404`) | Whole-page "Page not found" (as for the list). | As above |
-| **Load failed** | Fallback `<h1>` "Note", message in the page status region, **Try again** outside it. | This note did not load: no connection. Try again. · This note did not load: something went wrong. Try again. (P) · then: This note still did not load: … (P) |
+| **Load failed** | Fallback `<h1>` "Note", message in the page status region, **Try again** outside it. As built (T09), not built as worded: until the note's status is known the page cannot tell the read view from the form, so a failed load shows note-form.md's **The note did not load: …** and its "still" form, and these sentences are not added. | This note did not load: no connection. Try again. · This note did not load: something went wrong. Try again. (P) · then: This note still did not load: … (P) |
 | **Signed out** (`401`) | Sign-in in place; back to the same note afterwards. | Owned by `session-timeout.md` |
 | **Forced colours / 200% / 320 px** | Tags keep their border (`status-tags.md`); tick icons follow the text colour; rules are borders; everything wraps, including long unbroken strings. | – |
 

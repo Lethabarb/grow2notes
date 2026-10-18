@@ -23,11 +23,12 @@ import { signInThroughSetup } from './setupSignIn.ts';
 import { serveToday } from './today.ts';
 import { inviteThroughThePage } from './users.ts';
 
-// A participant's note in the published app (S02.02.02, S02.02.03, S02.02.07), against note-form.md's criteria for
-// identity, loading, autosave, conflicts and refusals, and layout and accessibility, as far as T08 builds the form.
-// The first two tests sign in for real and meet the app's own Today, participant, note and guide prompts; the others
-// answer /api/auth/me, /api/today, the participant's header and the note's working copy in the browser, with made-up
-// people and goals (me.ts, today.ts, notes.ts), so that none of those requests reaches the app.
+// A participant's note in the published app (S02.02.02, S02.02.03, S02.02.07, S02.03.01, S02.03.02), against
+// note-form.md's criteria for identity, loading, autosave, conflicts and refusals, validation and Submit, and layout
+// and accessibility, as far as T08 and T09 build the form. The tests that sign in for real meet the app's own Today,
+// participant, note, guide prompts and Submit; the others answer /api/auth/me, /api/today, the participant's header,
+// the note, its working copy and Submit in the browser, with made-up people and goals (me.ts, today.ts, notes.ts), so
+// that none of those requests reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -45,8 +46,9 @@ const topBar = (page: Page) => page.locator('#page-bar > div');
 const backLink = (page: Page) => page.locator('#page-bar').getByRole('link', { name: 'Today', exact: true });
 const saveStatus = (page: Page) => page.locator('#save-status');
 const deadEnd = (page: Page) => page.locator('#page-bar').getByRole('region');
-// The form's assertive region, after the page's content, which says a dead end's sentence once.
-const alert = (page: Page) => page.getByRole('alert');
+// The form's assertive region, after the page's content, which says a dead end's sentence once: visually hidden, where
+// the alert above Submit note shows its words.
+const alert = (page: Page) => main(page).locator('div.visually-hidden[role="alert"]');
 const goals = (page: Page) => main(page).getByRole('group', { name: '1. Goals' });
 const goalBox = (page: Page, text: string) => main(page).getByRole('checkbox', { name: text, exact: true });
 const goalRow = (page: Page, text: string) => main(page).locator('label').filter({ hasText: text });
@@ -57,6 +59,47 @@ const listsNotice = (page: Page) => main(page).locator('div[role="status"][tabin
 // The region's line, beside the page's visually hidden status region and the lists-changed notice's.
 const loadLine = (page: Page) => main(page).locator('p[role="status"]:not(.visually-hidden)');
 const tryAgain = (page: Page) => main(page).getByRole('button', { name: 'Try again' });
+// The page's polite region, visually hidden, which says a dead end's sentence again at a press of Submit note.
+const pageStatus = (page: Page) => main(page).locator('p.visually-hidden[role="status"]');
+
+// Flag for manager, Submit note and the Submit confirmation (note-form.md components 11, 12 and 14).
+const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past notes', exact: true });
+const flagBox = (page: Page) => main(page).getByRole('checkbox', { name: 'Flag for manager', exact: true });
+const flagRow = (page: Page) => main(page).locator('label[for="flag-for-manager"]');
+const reasonBox = (page: Page) => main(page).getByRole('textbox', { name: 'Reason', exact: true });
+const reasonCount = (page: Page) => main(page).locator('#flag-reason-group p[aria-hidden="true"]');
+const submitNote = (page: Page) => main(page).getByRole('button', { name: 'Submit note', exact: true });
+const summary = (page: Page) =>
+  main(page).locator('div[tabindex="-1"]').filter({ has: page.getByRole('heading', { name: 'There is a problem' }) });
+const notesError = (page: Page) => main(page).locator('#guided-notes-error');
+const reasonError = (page: Page) => main(page).locator('#flag-reason-error');
+const confirmation = (page: Page) => page.getByRole('alertdialog');
+const confirmationTitle = (page: Page) => confirmation(page).getByRole('heading', { level: 2 });
+const confirmButton = (page: Page, name = 'Jane Citizen') =>
+  confirmation(page).getByRole('button', { name: `Submit note for ${name}`, exact: true });
+const goBack = (page: Page) => confirmation(page).getByRole('button', { name: 'Go back', exact: true });
+const confirmationAlert = (page: Page) => confirmation(page).getByRole('alert');
+const confirmationStatus = (page: Page) => confirmation(page).getByRole('status');
+// Today's success banner after Submit, before its <h1> (today.md component 2).
+const banner = (page: Page) => main(page).locator('[data-route-focus]');
+// A row's status line on Today, which describes its link (today.md component 8).
+const rowLine = (page: Page, name: string) =>
+  main(page).getByRole('listitem').filter({ has: page.locator('a[data-return-key]', { hasText: name }) }).locator('p');
+// The read view (participant-notes.md *Read view*): the byline, the flag line, the goals and the Guided notes text.
+const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
+const flagLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Flagged/ });
+const readGoals = (page: Page) => main(page).locator('ul[role="list"] > li');
+const readText = (page: Page) =>
+  main(page).getByRole('heading', { name: '3. Guided notes', exact: true }).locator('xpath=following-sibling::div[1]');
+const notFound = 'Page not found';
+
+// What a failed Submit says, and the note submitted elsewhere (note-form.md *Confirmation dialog*).
+const notSubmittedOffline = 'Not submitted: no connection. Your draft is saved. Try again.';
+const notSubmittedServer = 'Not submitted: something went wrong. Your draft is saved. Try again.';
+const changedElsewhere = 'This note was changed on another device or tab.';
+
+/** Any time of day as the app writes it, with its non-breaking space, or "midday" or "midnight" (microcopy.md §3). */
+const anyTime = '(\\d{1,2}:\\d{2}\\s[ap]m|midday|midnight)';
 
 /** "Saved 4:12 pm", or the like, at whatever time the app saved, with its non-breaking space (microcopy.md §3). */
 const savedAnyTime = /^Saved (\d{1,2}:\d{2}\s[ap]m|midday|midnight)$/;
@@ -87,6 +130,15 @@ const isDraftRead = (response: Response) =>
 
 /** A pattern for the next request for a note's working copy, its read or its save, for `holdNext`. */
 const draftRequests = '**/api/participants/*/notes/*/draft';
+
+/** Whether the response answers a Submit, `POST {base}/versions`. */
+const isSubmit = (response: Response) =>
+  response.request().method() === 'POST' && /^\/api\/participants\/[^/]+\/notes\/[^/]+\/versions$/.test(
+    new URL(response.url()).pathname,
+  );
+
+/** A pattern for the next Submit, for `holdNext`. */
+const submitRequests = '**/api/participants/*/notes/*/versions';
 
 /**
  * Opens Today as `me` with Jane Citizen and Ravi de Silva, and then Jane's note from her row, answering both from
@@ -253,6 +305,8 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
     listsVersion: expect.any(String),
     narrative: '',
     tickedGoalIds: [template.goals[0].id],
+    isFlagged: false,
+    flagReason: null,
   });
   await expect(saveStatus(page)).toHaveText(savedAnyTime);
 
@@ -348,7 +402,7 @@ test('signed in for real, an invited worker meets the in-progress sentence, anot
   ).toBeVisible();
   await expect(main(phone).getByRole('checkbox')).toHaveCount(0);
   await expect(main(phone).getByRole('textbox')).toHaveCount(0);
-  await expect(saveStatus(phone)).toBeEmpty();
+  await expect(saveStatus(phone)).toHaveCount(0);
   await expectNothingKept(phone, janeCitizen.givenName, janeCitizen.familyName, sentence);
 
   // The other organisation's manager, signed in on the first browser, meets Page not found at the same address.
@@ -408,14 +462,15 @@ test('loading, a load that failed, Page not found and someone else’s draft, ea
   await serveToday(page, manager.today, participants);
   await store.serve(page, manager);
 
-  // Loading: the top bar and its back link at once, then "Loading note…", with no <h1>, tick box or text box.
+  // Loading: the top bar and its back link at once, then "Loading note…", with no <h1>, tick box or text box, and
+  // no save status until the form shows.
   const heldDraft = await holdNext(page, draftRequests);
   await page.goto('/');
   await row(page, 'Jane Citizen').click();
   const draft = await heldDraft();
   await expect(loadLine(page)).toHaveText('Loading note…');
   await expect(backLink(page)).toHaveAttribute('href', '/');
-  await expect(saveStatus(page)).toBeEmpty();
+  await expect(saveStatus(page)).toHaveCount(0);
   await expect(heading(page)).toHaveCount(0);
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
@@ -458,7 +513,7 @@ test('loading, a load that failed, Page not found and someone else’s draft, ea
   await expect(main(page).getByText(alexOnToday, { exact: true })).toBeVisible();
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
-  await expect(saveStatus(page)).toBeEmpty();
+  await expect(saveStatus(page)).toHaveCount(0);
   await expectAxeToPass(page);
 
   // And for an earlier day, "started the note for".
@@ -484,7 +539,13 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   for (const text of [breakfast.text, bus.text]) {
     await expect(goalBox(page, text)).not.toBeChecked();
   }
-  await expect(main(page).locator('label')).toHaveText([breakfast.text, bus.text, '3. Guided notes']);
+  await expect(main(page).locator('label')).toHaveText([
+    breakfast.text,
+    bus.text,
+    '3. Guided notes',
+    'Flag for manager',
+    'Reason',
+  ]);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
   await expect(box(page)).toHaveAttribute('placeholder', savedPrompts);
   await expect(box(page)).toHaveAttribute('aria-required', 'true');
@@ -508,7 +569,15 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await save.fallback();
   await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
   expect(store.saves).toEqual([
-    { clientId: expect.any(String), seq: 1, listsVersion: expect.any(String), narrative: '', tickedGoalIds: [bus.id] },
+    {
+      clientId: expect.any(String),
+      seq: 1,
+      listsVersion: expect.any(String),
+      narrative: '',
+      tickedGoalIds: [bus.id],
+      isFlagged: false,
+      flagReason: null,
+    },
   ]);
   await box(page).pressSequentially('Caught the bus.');
   await expect(saveStatus(page)).toHaveText('Saving…');
@@ -566,7 +635,13 @@ test('lists changed before the first save: the text and a listed tick kept, the 
     expect(save.tickedGoalIds).not.toContain(breakfast.id);
   }
   expect(store.draft(jane.id, worker.today)).toMatchObject({ ticked: [bus.id], narrative: 'Caught the bus.' });
-  await expect(main(page).locator('label')).toHaveText([bus.text, sister.text, '3. Guided notes']);
+  await expect(main(page).locator('label')).toHaveText([
+    bus.text,
+    sister.text,
+    '3. Guided notes',
+    'Flag for manager',
+    'Reason',
+  ]);
   await expect(goalBox(page, bus.text)).toBeChecked();
   await expect(goalBox(page, sister.text)).not.toBeChecked();
   await expect(box(page)).toHaveValue('Caught the bus.');
@@ -883,7 +958,7 @@ test('in forced colours, the ring is Highlight at each stop of the form, and the
   expect(highlight).not.toBe(ring.colour);
   const forcedRing = { ...ring, colour: highlight };
   await expectStops(page, 'Shift+Tab', ['Today'], forcedRing);
-  await expectStops(page, 'Tab', [breakfast.text, bus.text, '3. Guided notes'], forcedRing);
+  await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes'], forcedRing);
 
   store.archive(jane.id);
   await page.keyboard.type('Went for a walk.');
@@ -910,17 +985,28 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
 
-    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then each goal's box and Guided
-    // notes, the indicator and the <h1> being no stops.
-    await expectStops(page, 'Tab', [breakfast.text, bus.text, '3. Guided notes', 'outside the page']);
+    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then Past notes, each goal's
+    // box, Guided notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason no stops.
+    await expectStops(page, 'Tab', [
+      'Past notes',
+      breakfast.text,
+      bus.text,
+      '3. Guided notes',
+      'Flag for manager',
+      'Submit note',
+      'outside the page',
+    ]);
     await expectStops(page, 'Shift+Tab', [
+      'Submit note',
+      'Flag for manager',
       '3. Guided notes',
       bus.text,
       breakfast.text,
+      'Past notes',
       'Today',
       ...[...shell].reverse(),
     ]);
-    await expectStops(page, 'Tab', [...shell.slice(1), 'Today', breakfast.text]);
+    await expectStops(page, 'Tab', [...shell.slice(1), 'Today', 'Past notes', breakfast.text]);
 
     // Space ticks the box with focus; typing in the box, then Tab out of it, saves at once.
     await page.keyboard.press('Space');
@@ -930,7 +1016,7 @@ for (const width of [375, 1280]) {
     await page.keyboard.type('Made toast.');
     await page.keyboard.press('Enter');
     await page.keyboard.type('Phoned her sister.');
-    await expectStops(page, 'Tab', ['outside the page']);
+    await expectStops(page, 'Tab', ['Flag for manager', 'Submit note', 'outside the page']);
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
     expect(store.draft(jane.id, worker.today)).toMatchObject({
       ticked: [breakfast.id],
@@ -938,9 +1024,460 @@ for (const width of [375, 1280]) {
     });
 
     // The back link, by Shift+Tab, returns to Jane's row.
-    await expectStops(page, 'Shift+Tab', ['3. Guided notes', bus.text, breakfast.text, 'Today']);
+    await expectStops(page, 'Shift+Tab', [
+      'Submit note',
+      'Flag for manager',
+      '3. Guided notes',
+      bus.text,
+      breakfast.text,
+      'Past notes',
+      'Today',
+    ]);
     await page.keyboard.press('Enter');
     await expect(row(page, 'Jane Citizen')).toBeFocused();
     await expectNothingKept(page, 'Jane', 'Citizen', 'Made toast', 'Phoned');
+  });
+}
+
+const flagReason = 'Mentioned a sore knee after the walk.';
+
+test('signed in for real at 375 px, a worker flags and submits a note: Today, the read view, Past notes', async ({
+  page,
+  invite,
+  authenticator,
+  resetSignIn,
+  secondDevice,
+  secondInvite,
+}) => {
+  test.slow();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  const id = await addJaneWithTwoGoals(page);
+
+  // The manager invites a worker, who sets up on a phone of their own from the link that admin reset-signin gives.
+  await nav(page).getByRole('link', { name: 'Manage', exact: true }).click();
+  await main(page).getByRole('link', { name: 'Users', exact: true }).click();
+  await expect(heading(page)).toHaveText('Users');
+  const riley = { displayName: 'Riley Sample', email: `riley.sample.${randomUUID()}@example.org` };
+  await inviteThroughThePage(page, riley, 'Worker');
+  const phone = secondDevice.page;
+  await phone.setViewportSize({ width: 375, height: 812 });
+  await phone.goto(await resetSignIn(riley.email));
+  await main(phone).getByRole('button', { name: 'Use a passkey (recommended)' }).click();
+  await expect(rows(phone)).toHaveText([janeCitizen.name]);
+
+  // The worker fills in Jane's note: a goal ticked, a sentence, and the flag with its reason, each saved.
+  const opened = phone.waitForResponse(isDraftRead);
+  await row(phone, janeCitizen.name).click();
+  const template = (await (await opened).json()) as { goals: { id: string; text: string }[] };
+  await expect(heading(phone)).toBeFocused();
+  const address = new URL(phone.url()).pathname;
+  const noteDate = address.slice(-10);
+  await goalRow(phone, breakfast.text).locator('span').click();
+  await box(phone).pressSequentially(sentence);
+  await flagRow(phone).locator('span').click();
+  await expect(flagBox(phone)).toBeChecked();
+  await reasonBox(phone).fill(flagReason);
+  await expect(saveStatus(phone)).toHaveText(savedAnyTime);
+
+  // Submit note: the check save, then the confirmation with the name, the date and the flag, focused on its title.
+  const checked = phone.waitForResponse(isDraftSave);
+  await submitNote(phone).click();
+  expect((await checked).status()).toBe(200);
+  await expect(confirmationTitle(phone)).toBeFocused();
+  await expect(confirmationTitle(phone)).toHaveText(`Submit today’s note for ${janeCitizen.name}`);
+  await expect(confirmation(phone).locator('time')).toHaveAttribute('datetime', noteDate);
+  await expect(confirmation(phone).locator('time')).toHaveText(/^\w+day \d{1,2}\s\w+ \d{4}$/);
+  await expect(confirmation(phone).getByText('Flagged for manager: Yes', { exact: true })).toBeVisible();
+  await expect(goBack(phone)).toBeVisible();
+
+  // Confirmed: version 1 from the app, with the tick, the text and the flag, and one key.
+  const posted = phone.waitForResponse(isSubmit);
+  await confirmButton(phone).click();
+  const answer = await posted;
+  expect(answer.status()).toBe(201);
+  expect(answer.request().postDataJSON()).toEqual({
+    baseVersion: 0,
+    narrative: sentence,
+    tickedGoalIds: [template.goals[0].id],
+    isFlagged: true,
+    flagReason,
+  });
+  expect(answer.request().headers()['idempotency-key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-/);
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String) });
+
+  // Today, with the banner focused and Jane's row Submitted by "You", flagged.
+  await expect(phone).toHaveURL('/');
+  await expect(banner(phone)).toBeFocused();
+  await expect(banner(phone)).toHaveText(`Note for ${janeCitizen.name} submitted`);
+  await expect.poll(() => shownText(rowLine(phone, janeCitizen.name))).toMatch(
+    new RegExp(`^Submitted · You · ${anyTime} Flagged$`),
+  );
+
+  /** Expects the read view of the note that Riley submitted, as anyone in the organisation sees it. */
+  async function expectRileysNote(on: Page) {
+    await expect(heading(on)).toBeFocused();
+    await expect(heading(on)).toHaveText(new RegExp(`^${janeCitizen.name}\\s\\w+day \\d{1,2}\\s\\w+ \\d{4}$`));
+    await expect.poll(() => shownText(byline(on))).toMatch(
+      new RegExp(`^Written by Riley Sample · Submitted ${anyTime}$`),
+    );
+    await expect.poll(() => shownText(flagLine(on))).toBe(`Flagged Reason: ${flagReason}`);
+    await expect(readGoals(on)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
+    await expect(readText(on)).toHaveText(sentence);
+    await expect(main(on).getByRole('checkbox')).toHaveCount(0);
+    await expect(main(on).getByRole('textbox')).toHaveCount(0);
+    await expect(saveStatus(on)).toHaveCount(0);
+  }
+
+  // Her row opens the read view, from the app's GET {base}; its Past notes lists the note, and its back link returns.
+  const read = phone.waitForResponse((response) => new URL(response.url()).pathname === `/api${address}`);
+  await row(phone, janeCitizen.name).click();
+  expect((await read).status()).toBe(200);
+  await expect(phone).toHaveURL(address);
+  await expectRileysNote(phone);
+  await pastNotesLink(phone).click();
+  await expect(phone).toHaveURL(`/participants/${id}/notes`);
+  await expect(heading(phone)).toBeFocused();
+  await expect(heading(phone)).toHaveText(`Past notes ${janeCitizen.name}`);
+  await expect(rows(phone)).toHaveCount(1);
+  await expect(rows(phone).locator('time')).toHaveAttribute('datetime', noteDate);
+  await expect.poll(() => shownText(main(phone).getByRole('listitem').locator('p'))).toBe(
+    'Submitted · Riley Sample Flagged',
+  );
+  await phone.locator('#page-bar').getByRole('link', { name: 'Note', exact: true }).click();
+  await expect(phone).toHaveURL(address);
+  await expectRileysNote(phone);
+  await expectNothingKept(phone, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason, 'submitted');
+
+  // The manager's Today shows the note as Riley's, flagged, and opens the same read view.
+  await nav(page).getByRole('link', { name: 'Today', exact: true }).click();
+  await expect.poll(() => shownText(rowLine(page, janeCitizen.name))).toMatch(
+    new RegExp(`^Submitted · Riley Sample · ${anyTime} Flagged$`),
+  );
+  await row(page, janeCitizen.name).click();
+  await expectRileysNote(page);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason);
+
+  // The other organisation's manager meets Page not found at the note and at its Past notes.
+  await page.getByRole('button', { name: 'Account' }).click();
+  await page.locator('#account-panel').getByRole('button').click();
+  await expect(main(page).getByRole('heading', { level: 1 })).toHaveText('Sign in');
+  await signInThroughSetup(page, secondInvite, authenticator);
+  for (const elsewhere of [address, `/participants/${id}/notes`]) {
+    const refused = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === `/api/participants/${id}`,
+    );
+    await page.goto(elsewhere);
+    expect((await refused).status()).toBe(404);
+    await expect(heading(page)).toHaveText(notFound);
+    await expect(main(page).getByText(janeCitizen.name)).toHaveCount(0);
+    await expect(main(page).getByText(sentence)).toHaveCount(0);
+  }
+});
+
+test('a lost answer to Submit, tried again in the confirmation with the same key, makes one version', async ({
+  page,
+}) => {
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  await submitNote(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+
+  // The version is made, but its answer is lost on the way: the failure sentence, with focus kept on the button.
+  store.loseNextSubmitAnswer();
+  await confirmButton(page).click();
+  await expect(confirmationAlert(page)).toHaveText(notSubmittedOffline);
+  await expect(confirmButton(page)).toBeFocused();
+  expect(store.submitted(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops.' });
+
+  // Pressed again: the same key, answered 200 with the version already made, and Today.
+  const retried = page.waitForResponse(isSubmit);
+  await confirmButton(page).click();
+  const answer = await retried;
+  expect(answer.status()).toBe(200);
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00.000Z' });
+  await expect(banner(page)).toBeFocused();
+  await expect(banner(page)).toHaveText('Note for Jane Citizen submitted');
+  const [first, second] = store.submits;
+  expect(store.submits).toHaveLength(2);
+  expect(first.idempotencyKey).toEqual(expect.any(String));
+  expect(second).toEqual(first);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', 'submitted');
+});
+
+test('Submit: the flag ticked, errors, each state of the confirmation and the conflict, each passing axe', async ({
+  page,
+}) => {
+  test.slow();
+  const store = twoGoals();
+  await openJanesNote(page, store);
+
+  // The flag ticked: Reason shows, with focus kept on the box and its count, and the tick saved.
+  await flagBox(page).check();
+  await expect(flagBox(page)).toBeFocused();
+  await expect(flagBox(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(reasonBox(page)).toBeVisible();
+  await expect(reasonCount(page)).toHaveText('You can enter up to 200 characters');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  expect(store.saves.at(-1)).toMatchObject({ isFlagged: true, flagReason: null });
+  await expectAxeToPass(page);
+
+  // Field errors: Guided notes empty and no reason, each inline above its field and in the summary, which is focused,
+  // with "Error: " in the title, and nothing opened or sent.
+  await submitNote(page).click();
+  await expect(summary(page)).toBeFocused();
+  await expect(summary(page).getByRole('link')).toHaveText([
+    'Write your notes in the Guided notes box. The grey text is only a guide.',
+    'Enter a reason for the flag',
+  ]);
+  await expect(page).toHaveTitle(`Error: ${title('Note')}`);
+  await expect(notesError(page)).toHaveText(
+    'Error: Write your notes in the Guided notes box. The grey text is only a guide.',
+  );
+  await expect(reasonError(page)).toHaveText('Error: Enter a reason for the flag');
+  await expect(box(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(reasonBox(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(confirmation(page)).toHaveCount(0);
+  await expectAxeToPass(page);
+
+  // Each goes with the keystroke that fixes it, and the summary and the title's "Error: " with the last.
+  await box(page).pressSequentially('W');
+  await expect(notesError(page)).toHaveCount(0);
+  await expect(summary(page).getByRole('link')).toHaveText(['Enter a reason for the flag']);
+  await reasonBox(page).pressSequentially('S');
+  await expect(summary(page)).toHaveCount(0);
+  await expect(page).toHaveTitle(title('Note'));
+  await reasonBox(page).pressSequentially('eemed tired.');
+  await box(page).pressSequentially('ent for a walk.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  // Open: the title focused, naming the dialog with the name; the date and the flag line its description.
+  await submitNote(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+  await expect(confirmation(page)).toHaveAccessibleName('Submit today’s note for Jane Citizen');
+  await expect(confirmation(page)).toHaveAccessibleDescription(/^Thursday 1\sOctober 2026 ?Flagged for manager: Yes$/);
+  await expect(confirmButton(page)).toBeVisible();
+  await expect(confirmationAlert(page)).toBeEmpty();
+  await expect(confirmationStatus(page)).toBeEmpty();
+  await expectAxeToPass(page);
+
+  // Busy: both buttons aria-disabled, their labels kept, and "Submitting…" after 1 s.
+  const held = await holdNext(page, submitRequests);
+  await confirmButton(page).click();
+  const post = await held();
+  await expect(confirmationStatus(page)).toHaveText('Submitting…');
+  await expect(confirmButton(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(goBack(page)).toHaveAttribute('aria-disabled', 'true');
+  await expectAxeToPass(page);
+
+  // Failed, with no connection and then from the server: the dialog kept open, with focus on the confirm button.
+  await post.abort('internetdisconnected');
+  await expect(confirmationAlert(page)).toHaveText(notSubmittedOffline);
+  await expect(confirmButton(page)).toBeFocused();
+  await expect(confirmationStatus(page)).toBeEmpty();
+  await expectAxeToPass(page);
+  const failed = await holdNext(page, submitRequests);
+  await confirmButton(page).click();
+  await (await failed()).fulfill({ status: 503 });
+  await expect(confirmationAlert(page)).toHaveText(notSubmittedServer);
+  await expect(confirmButton(page)).toBeFocused();
+  await expectAxeToPass(page);
+
+  // A 422 for a text that the form's checks pass, U+0085 alone: the dialog closed, and the summary's one unlinked
+  // item, focused.
+  await goBack(page).click();
+  await expect(confirmation(page)).toHaveCount(0);
+  await expect(submitNote(page)).toBeFocused();
+  await box(page).fill('\u0085');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  await submitNote(page).click();
+  await confirmButton(page).click();
+  await expect(confirmation(page)).toHaveCount(0);
+  await expect(summary(page)).toBeFocused();
+  await expect(summary(page).getByRole('listitem')).toHaveText([notSubmittedServer]);
+  await expect(summary(page).getByRole('link')).toHaveCount(0);
+  await expectAxeToPass(page);
+
+  // No longer possible: the note submitted in another tab meanwhile, the confirm button gone and focus on Go back.
+  await box(page).fill('Went for a walk.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  await submitNote(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+  store.submitElsewhere(jane.id, worker.today);
+  await confirmButton(page).click();
+  await expect(confirmationAlert(page)).toHaveText(changedElsewhere);
+  await expect(confirmButton(page)).toHaveCount(0);
+  await expect(goBack(page)).toBeFocused();
+  await expectAxeToPass(page);
+
+  // Go back: the form a dead end, its text kept, Submit note unavailable, and a press opening nothing.
+  await goBack(page).click();
+  await expect(confirmation(page)).toHaveCount(0);
+  await expect(deadEnd(page)).toHaveText(changedElsewhere);
+  await expect(alert(page)).toHaveText(changedElsewhere);
+  await expect(saveStatus(page)).toHaveText('Not saved');
+  await expect(box(page)).toHaveValue('Went for a walk.');
+  await expect(submitNote(page)).toHaveAttribute('aria-disabled', 'true');
+  await expectAxeToPass(page);
+  const sent = store.submits.length;
+  await submitNote(page).click({ force: true });
+  await expect(pageStatus(page)).toHaveText(changedElsewhere);
+  await expect(confirmation(page)).toHaveCount(0);
+  expect(store.submits).toHaveLength(sent);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went for a walk', 'Seemed tired', changedElsewhere);
+});
+
+test('a note submitted in another tab: the next save is a dead end, the text kept, Submit opens nothing', async ({
+  page,
+}) => {
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  await box(page).pressSequentially('Went');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  store.submitElsewhere(jane.id, worker.today);
+  await box(page).pressSequentially(' for a walk.');
+  await expect(deadEnd(page)).toBeVisible();
+  await expect(submitNote(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(submitNote(page)).toHaveAccessibleDescription(`Not saved ${changedElsewhere}`);
+  await submitNote(page).click({ force: true });
+  await expect(pageStatus(page)).toHaveText(changedElsewhere);
+  await expect(confirmation(page)).toHaveCount(0);
+  expect(store.submits).toEqual([]);
+  // Back at the top, as the press scrolled Submit note into view: axe's target-size rule counts only the part of a
+  // target that the sticky top bar leaves uncovered, and the bar covers part of the Past notes link at some scroll
+  // positions, as any sticky bar covers what passes under it.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expectDeadEnd(page, store, changedElsewhere, 'Went for a walk.');
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went for a walk', changedElsewhere);
+});
+
+test('at 320 px with text at 200%, the flag, errors and confirmation never scroll sideways', async ({
+  page,
+}) => {
+  const long = madeUpParticipant('8f4b0d3a-7c16-4e59-b3a8-1d6f2b9e5c74', 'A'.repeat(50), 'B'.repeat(50));
+  const longName = `${'A'.repeat(50)} ${'B'.repeat(50)}`;
+  const store = notesStore({ today: worker.today, participants: [long], prompts: savedPrompts });
+  await serveMe(page, worker);
+  await store.serve(page, worker);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto(noteAddress(long.id, worker.today));
+  await setTextTo200Percent(page);
+  await expect(heading(page)).toContainText('A'.repeat(50));
+
+  // The flag ticked, with a reason of 210 characters, and its count.
+  await flagBox(page).check();
+  await reasonBox(page).fill('Wolfeschlegelsteinhausenbergerdorff'.repeat(6));
+  await expect(reasonCount(page)).toHaveText('You have 10 characters too many');
+  expect(await scrollsSideways(page), 'the flag ticked, the reason too long').toBe(false);
+
+  // Both fields' errors and the summary.
+  await submitNote(page).click();
+  await expect(summary(page)).toBeFocused();
+  expect(await scrollsSideways(page), 'the errors').toBe(false);
+
+  // The confirmation, its title and its confirm button each holding the name whole, inside the dialog.
+  await reasonBox(page).fill('Seemed tired.');
+  await box(page).pressSequentially('Went for a walk.');
+  await submitNote(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+  await expect(confirmationTitle(page)).toHaveText(`Submit today’s note for ${longName}`);
+  expect(await scrollsSideways(page), 'the confirmation').toBe(false);
+  for (const part of [confirmation(page), confirmationTitle(page), confirmButton(page, longName)]) {
+    expect(await part.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const { x, width } = await boxOf(part);
+    expect(x + width).toBeLessThanOrEqual(320);
+  }
+});
+
+test('targets: a 56 px flag row, a 48 px Submit note, a 44 px Past notes link and 48 px dialog buttons', async ({
+  page,
+}) => {
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await openJanesNote(page, twoGoals());
+    await expectAtLeast(pastNotesLink(page), 44, 44);
+    await expectAtLeast(flagRow(page), 44, 56);
+    expect(Math.round((await boxOf(flagRow(page))).width)).toBe(Math.round((await boxOf(box(page))).width));
+    await expectAtLeast(flagBox(page), 40, 40);
+    await expectAtLeast(submitNote(page), 44, 48);
+    await box(page).pressSequentially('Went for a walk.');
+    await submitNote(page).click();
+    await expectAtLeast(confirmation(page).getByRole('button'), 44, 48);
+  }
+});
+
+test('in forced colours, the ring is Highlight on the flag, Reason, Submit note and the dialog’s buttons', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await openJanesNote(page, twoGoals());
+  const forcedRing = { ...ring, colour: await systemColour(page, 'Highlight') };
+  await box(page).pressSequentially('Went for a walk.');
+  await expectStops(page, 'Tab', ['Flag for manager'], forcedRing);
+  await page.keyboard.press('Space');
+  await expectStops(page, 'Tab', ['Reason'], forcedRing);
+  await page.keyboard.type('Seemed tired.');
+  await expectStops(page, 'Tab', ['Submit note'], forcedRing);
+  await page.keyboard.press('Enter');
+  await expect(confirmationTitle(page)).toBeFocused();
+  await expectStops(page, 'Tab', ['Submit note for Jane Citizen', 'Go back'], forcedRing);
+});
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: the flag, Reason, Submit note, its confirmation, then Today's banner`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const store = twoGoals();
+    await serveMe(page, worker);
+    await serveToday(page, worker.today, participants, store.todayNotes(worker));
+    await store.serve(page, worker);
+    await page.goto('/');
+    await expect(rows(page)).toHaveCount(2);
+    const shell = ['Skip to main content', 'Grow2Notes', 'Today', 'Account'];
+    await expectStops(page, 'Tab', [...shell, 'Find a participant', 'Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(heading(page)).toBeFocused();
+
+    // note-form.md *Focus order (Tab)*: Flag for manager after Guided notes, then Reason only while it is ticked, then
+    // Submit note; Space ticks the flag, with focus kept on it.
+    await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+    await page.keyboard.type('Made toast.');
+    await expectStops(page, 'Tab', ['Flag for manager']);
+    await page.keyboard.press('Space');
+    await expect(flagBox(page)).toBeChecked();
+    await expect(flagBox(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Reason']);
+    await page.keyboard.type('Seemed tired.');
+    await expectStops(page, 'Tab', ['Submit note', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Submit note', 'Reason', 'Flag for manager', '3. Guided notes']);
+    await expectStops(page, 'Tab', ['Flag for manager', 'Reason', 'Submit note']);
+
+    // Enter on Submit note: the confirmation, focused on its title, then its two buttons; Escape closes it, with focus
+    // back on Submit note and nothing sent.
+    await page.keyboard.press('Enter');
+    await expect(confirmationTitle(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Submit note for Jane Citizen', 'Go back']);
+    await page.keyboard.press('Escape');
+    await expect(confirmation(page)).toHaveCount(0);
+    await expect(submitNote(page)).toBeFocused();
+    expect(store.submits).toEqual([]);
+
+    // Enter again, then Enter on the confirm button: Today, the banner focused, and the rows after it.
+    await page.keyboard.press('Enter');
+    await expect(confirmationTitle(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Submit note for Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(banner(page)).toBeFocused();
+    await expect.poll(() => shownText(rowLine(page, 'Jane Citizen'))).toBe('Submitted · You · 4:12 pm Flagged');
+    await expectStops(page, 'Tab', ['Find a participant', 'Jane Citizen', 'Ravi de Silva', 'outside the page']);
+    expect(store.submitted(jane.id, worker.today)).toMatchObject({
+      narrative: 'Made toast.',
+      isFlagged: true,
+      flagReason: 'Seemed tired.',
+    });
+    await expectNothingKept(page, 'Jane', 'Citizen', 'Made toast', 'Seemed tired', 'submitted');
   });
 }

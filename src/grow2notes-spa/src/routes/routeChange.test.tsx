@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { api, ApiError } from '../api/api.ts';
 import { meQuery, useMe, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
+import { BackLink } from '../components/BackLink.tsx';
 import { LinkRow } from '../components/LinkRow.tsx';
 import { LinkRowList } from '../components/LinkRowList.tsx';
 import { LoadRegion } from '../components/LoadRegion.tsx';
@@ -16,7 +17,7 @@ import { PageHeading } from '../components/PageHeading.tsx';
 import { pageName } from '../copy/pageNames.ts';
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { messageStore } from './messageStore.ts';
-import { useReturnFocusReady } from './routeChange.ts';
+import { useBackTo, useReturnFocusReady } from './routeChange.ts';
 import { routes, type AppRoute, type RouteHandle } from './routes.tsx';
 
 // The browser's passkey prompt, which jsdom has not got; the rest of SimpleWebAuthn is its own.
@@ -184,6 +185,24 @@ function MadeUpNote() {
   );
 }
 
+// The back link of each render of the made-up screen with several openers, as its label and its address, so that a
+// render with the wrong one, the first included, shows.
+const backLinksRendered: string[] = [];
+
+/** A screen with several openers, as a note is, whose back link names the made-up list when the list opened it. */
+function MadeUpOpened() {
+  const { id } = useParams();
+  const back = useBackTo({ participants: pageName.participants });
+  backLinksRendered.push(`${back.label} ${back.to}`);
+
+  return (
+    <>
+      <BackLink to={back.to}>{back.label}</BackLink>
+      <PageHeading>{`Opened ${id}`}</PageHeading>
+    </>
+  );
+}
+
 /** Flagged notes, with its `?view=` switch. */
 function MadeUpFlagged() {
   const [search] = useSearchParams();
@@ -267,6 +286,7 @@ const madeUp: AppRoute[] = [
     handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
   },
   { path: 'made-up/notes/:id', element: <MadeUpNote />, handle: { pageName: pageName.note } },
+  { path: 'made-up/opened/:id', element: <MadeUpOpened />, handle: { pageName: pageName.note } },
   { path: 'made-up/flagged', element: <MadeUpFlagged />, handle: { pageName: pageName.flaggedNotes } },
   { path: 'made-up/participants/:id', element: <MadeUpParticipant />, handle: { pageName: pageName.participant } },
   { path: 'made-up/report', element: <MadeUpReport />, handle: reportHandle },
@@ -460,6 +480,7 @@ afterEach(() => {
   answers.clear();
   fetchMock.mockReset();
   messageStore.clear();
+  backLinksRendered.length = 0;
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -1134,5 +1155,54 @@ describe('memory only', () => {
     unmount();
     render(<PageHeading>Today</PageHeading>);
     expect(screen.getByRole('heading', { level: 1 })).toHaveFocus();
+  });
+});
+
+// app-shell.md component 3a: a screen with several openers takes its back link's label and address from where it was
+// opened, from its first render, as the label must never change under a reader.
+describe('the back link of a screen with several openers', () => {
+  it('names the screen that opened it, from its first render, and goes back to it', async () => {
+    serve(listPath, json(['1', '2']));
+    const router = renderApp('/made-up/list');
+    await settle();
+
+    await act(() => router.navigate('/made-up/opened/1'));
+    await settle();
+
+    expect(backLinksRendered.length).toBeGreaterThan(0);
+    expect(new Set(backLinksRendered)).toEqual(new Set(['Participants /made-up/list']));
+    await press(within(main()).getByRole('link', { name: 'Participants' }));
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/made-up/list');
+  });
+
+  it('keeps it across a replace, from the first render of the screen that replaces it', async () => {
+    serve(listPath, json(['1', '2']));
+    const router = renderApp('/made-up/list');
+    await settle();
+    await act(() => router.navigate('/made-up/opened/1'));
+    await settle();
+    backLinksRendered.length = 0;
+
+    await act(() => router.navigate('/made-up/opened/2', { replace: true }));
+    await settle();
+
+    expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName('Opened 2');
+    expect(new Set(backLinksRendered)).toEqual(new Set(['Participants /made-up/list']));
+  });
+
+  it('goes to Today when nothing in the app opened it, as after a reload, or an opener with no label', async () => {
+    serve(listPath, json(['1', '2']));
+    const router = renderApp('/made-up/opened/1');
+    await settle();
+    expect(new Set(backLinksRendered)).toEqual(new Set(['Today /']));
+
+    await act(() => router.navigate('/made-up/flagged-list'));
+    await settle();
+    backLinksRendered.length = 0;
+    await act(() => router.navigate('/made-up/opened/2'));
+    await settle();
+
+    expect(new Set(backLinksRendered)).toEqual(new Set(['Today /']));
   });
 });

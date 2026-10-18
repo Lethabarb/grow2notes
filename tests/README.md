@@ -116,8 +116,8 @@ app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in agai
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
 Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
 app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
-(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`) and the two
-note form tests that meet the app's own Today and notes (`e2e/note-form.spec.ts`) get their setup links from the
+(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`) and the three
+note form tests that meet the app's own Today, notes and Submit (`e2e/note-form.spec.ts`) get their setup links from the
 published app's own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn`
 fixtures, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder,
 in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
@@ -510,57 +510,101 @@ the page could keep them: on a page that `page.goto` loaded, the history entry h
 ### Answering Today and a participant's note
 
 Today reads its list with `GET /api/today`, and a participant's note reads their header with
-`GET /api/participants/{participantId}` and the form with `GET {base}/draft`, whose autosave is `PUT {base}/draft`
-(design.md §6.3). Each needs a session, so a test of Today or the note form with a made-up person answers them in the
-browser, as it answers `/api/admin/participants`.
+`GET /api/participants/{participantId}`, the note with `GET {base}`, which says which screen to show, and the form with
+`GET {base}/draft`, whose autosave is `PUT {base}/draft` and whose Submit is `POST {base}/versions`; Past notes reads
+the header and `GET /api/participants/{participantId}/notes?before=` (design.md §6.3). Each needs a session, so a test
+of Today, the note form, the read view or Past notes with a made-up person answers them in the browser, as it answers
+`/api/admin/participants`.
 
 `e2e/today.ts`, beside `e2e/participants.ts`, has two helpers, each routing the page's `GET /api/today` through
 `page.route` and overriding `serveMe`'s empty list, as Playwright tries the latest route first, so call them after
 `serveMe`:
 
-- `serveToday(page, date, participants)` answers each with `todayList(date, participants)`: the date, and the active
-  ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, in the order given.
+- `serveToday(page, date, participants, noteOf)` answers each with `todayList(date, participants, noteOf)`: the date,
+  and the active ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, in the order
+  given, each with the note that `noteOf` gives for their ID, by default none, worked out afresh for each request. A
+  store's `todayNotes(me)` (below) gives each participant's note today as `me` sees it, so that Today shows what the
+  store holds as it asks; a test of the status lines alone gives notes of its own, in `TodayNote`'s shape.
 - `failToday(page, failure)` aborts each, for `'no connection'`, or answers it with a status, such as `503`. The failure
   shows about 1 s after the request, after the query client's silent retry.
 
 `e2e/notes.ts` keeps participants' notes in memory as the API keeps them:
 `notesStore({ today, participants, goals, prompts })` takes the server's date in Melbourne, the made-up participants,
 each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the organisation's guide prompts. Its
-`serve(page, me)` answers the page's requests for a header and a note as `me`'s, through `page.route`: the header, or
-`404` for a participant that it does not hold; the form, a template with the goals unticked and the lists' version, the
-caller's own draft, `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404`
-for a date after today and, to a worker, for one before yesterday (design.md A65); and each save, which updates the
-caller's own draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
-`422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
-`409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
-listed. Each save answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
-4:12 pm", and `serve(page, me, { latencyMs })` holds each answer that long, as on a slow network. The store's `saves`
-lists the body of every save sent, `draft(participantId, noteDate)` gives a working copy, and four more do what
-someone else does while the form is open: `setToday(date)`, midnight in Melbourne;
-`setGoals(participantId, goals)`, a manager's change to the list; `archive(participantId)`; and
-`startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as `alexStarted`, Alex P.'s at 9:14 am.
-`failNoteReads(page)` aborts each read of a header or a form, as `failParticipants` does, until the store serves the
-page again.
+`serve(page, me)` answers the page's requests for a header, a history and a note as `me`'s, through `page.route`:
+
+- the header, or `404` for a participant that it does not hold;
+- the history, up to 30 live notes dated before `before`, by default tomorrow, newest first, with `hasMore`, each as
+  `{noteDate, status, authorDisplayName, isFlagged}` and, on a manager's rows alone, `flagStatus`; or `404`, as for
+  the header, and the framework's `400` for a `before` that is not a date;
+- the note, `GET {base}`: a submitted note's current version, `{status: 'Submitted', author: {displayName},
+  firstSubmittedAtUtc, current: {narrative, isFlagged, flagReason, goals: [{text, isTicked}]}}`, `{status: 'Draft'}`
+  for a draft, or else `404`;
+- the form, a template with the goals unticked, no flag and the lists' version, the caller's own draft with its flag,
+  `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404` for a submitted
+  note, for a date after today and, to a worker, for one before yesterday (design.md A65);
+- each save, which keeps the flag, and the reason only while flagged, as the API does, and updates the caller's own
+  draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
+  `422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
+  `409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
+  listed; and `409 note.version_conflict` once the note is submitted;
+- and each Submit, with the checks of T09's Notes in their order: the framework's `400` for an `Idempotency-Key` that
+  is missing or not a GUID; `422 validation.failed` under `baseVersion` for any but 0, under `narrative` for a blank
+  text, U+0085 alone included, as .NET counts it, or one over 20,000 characters, and under `flagReason` for a reason
+  over 200; `404` for no participant or no live note; `409 note.in_progress_by_other` for another user's draft; the
+  retry's `200` with the version for a key that this note's version has, and `422` under `idempotencyKey` for one that
+  another note's has; `409 note.version_conflict` for a submitted note; `422` under `flagReason` for a flagged body with
+  a blank reason, and under `tickedGoalIds` for a goal not in the draft's snapshot; and otherwise version 1, its goals
+  from the snapshot with the ticks sent, the draft gone, and `201 {versionNumber, createdAtUtc}`.
+
+Each save and Submit answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
+4:12 pm", and which a Submit makes the note's first submitted time; `serve(page, me, { latencyMs })` holds each answer
+that long, as on a slow network. The store's `saves` lists the body of every save sent, and `submits` the key and body
+of every Submit; `draft(participantId, noteDate)` gives a working copy, `submitted(participantId, noteDate)` a submitted
+note, and `todayNotes(me)` each participant's note today, for `serveToday`.
+`addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
+user ID, flagged when given a reason, and with any `flagStatus` set by hand, as later tasks will set it;
+`daysAfter(date, days)` gives the dates of a run of them. Six more do what someone else does while a page is open:
+`setToday(date)`, midnight in Melbourne; `setGoals(participantId, goals)`, a manager's change to the list;
+`archive(participantId)`; `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as
+`alexStarted`, Alex P.'s at 9:14 am; `submitElsewhere(participantId, noteDate)`, the draft submitted by its author in
+another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts its answer, as
+a phone that loses its signal while the answer is on its way. `failNoteReads(page)` aborts each read of a header, a
+history, a note or a form, as `failParticipants` does, until the store serves the page again, and
+`failNoteReads(page, { olderOnly: true })` only each page of a history after the first, which Show older asks for.
 
 ```ts
 await serveMe(page, worker);
-await serveToday(page, worker.today, participants);
-await notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } }).serve(page, worker);
+const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+await serveToday(page, worker.today, participants, store.todayNotes(worker));
+await store.serve(page, worker);
 await page.goto('/');
 ```
 
-The two tests that meet the app's own answers sign in for real through the `invite` fixture: a manager adds a
+A test of a page that waits on one of those requests holds it with `holdNext`, which also takes a test of the URL, for
+a request that a glob cannot tell apart by its query: `e2e/past-notes.spec.ts` holds Show older's next page, with
+`before`, and not the first page's request, which has none.
+
+The three tests that meet the app's own answers sign in for real through the `invite` fixture: a manager adds a
 participant with two goals from Today's empty state, finds them, starts their note and reopens the draft, then saves new
-guide prompts, which the emptied draft shows, and then `""`, which leaves its box with no placeholder; and a worker whom
+guide prompts, which the emptied draft shows, and then `""`, which leaves its box with no placeholder; a worker whom
 the manager invites, set up on `secondDevice` from the link that `resetSignIn` gives, meets the in-progress sentence at
-that note, while the other organisation's manager, `secondInvite`, meets Page not found there. `e2e/today.spec.ts` and
-`e2e/note-form.spec.ts` are the examples. They watch the live regions as `e2e/participants.spec.ts` does, but for the
-save indicator, which a reopened draft's form puts in anew with its first words (autosave-status.md *Behaviour* 8).
-Their checks of 200% text, sideways scroll and target sizes use `setTextTo200Percent`, `scrollsSideways` and
-`expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words that show, without the visually hidden ones, and
-the forced-colours ring uses `systemColour` from there too. Today's Waiting state holds the page's timers of 1 s
-with an init script rather than on Playwright's clock, as axe settles each rule on a timer and never finishes under a
-paused clock; the after-midnight refusal runs on `page.clock`.
+that note, while the other organisation's manager, `secondInvite`, meets Page not found there; and such a worker, at a
+phone's width, fills in a note, ticks a goal, flags it with a reason and submits it through the confirmation, then
+finds it Submitted and Flagged on Today, in the read view and in Past notes, as the manager does too, while the other
+organisation's manager meets Page not found at the note and at its Past notes (design.md §14 M2 *Done when*).
+`e2e/today.spec.ts`, `e2e/note-form.spec.ts` and `e2e/past-notes.spec.ts` are the examples. They watch the live regions
+as `e2e/participants.spec.ts` does, but for the save indicator, which a reopened draft's form puts in anew with its
+first words (autosave-status.md *Behaviour* 8). Their checks of 200% text, sideways scroll and target sizes use
+`setTextTo200Percent`, `scrollsSideways` and `expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words
+that show, without the visually hidden ones, and the forced-colours ring and the tags' borders use `systemColour` from
+there too. A row's description is checked with `toHaveAccessibleDescription`, whose reckoning in Chromium puts a space
+before each comma that a hidden `Pause` reads for a dot, so its patterns allow one. Today's Waiting state holds the
+page's timers of 1 s with an init script rather than on Playwright's clock, as axe settles each rule on a timer and
+never finishes under a paused clock; the after-midnight refusal runs on `page.clock`. A check of what a screen does as a
+person comes back to the tab fires the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does,
+since TanStack Query listens for it on the window, not the document, and shows on a screen that opts in to
+`refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`).
 
 ### Signing in with a passkey, end to end
 

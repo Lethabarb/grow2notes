@@ -1,10 +1,14 @@
 import type { Page, Route } from '@playwright/test';
 
 /**
- * Holds the page's next request for `pattern` until the test answers it or lets it go on to the app. Gives a function
+ * Holds the page's next request for `pattern`, a glob or, for an address that a glob cannot tell apart by its query, a
+ * test of the URL, as `page.route` takes them, until the test answers it or lets it go on to the app. Gives a function
  * that waits for the request and gives its route.
  */
-export async function holdNext(page: Page, pattern: string): Promise<() => Promise<Route>> {
+export async function holdNext(
+  page: Page,
+  pattern: string | ((url: URL) => boolean),
+): Promise<() => Promise<Route>> {
   let hold: (route: Route) => void = () => undefined;
   const held = new Promise<Route>((resolve) => {
     hold = resolve;

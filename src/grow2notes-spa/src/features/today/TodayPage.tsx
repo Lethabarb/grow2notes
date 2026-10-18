@@ -7,6 +7,7 @@ import { LinkRow } from '../../components/LinkRow.tsx';
 import { LinkRowList } from '../../components/LinkRowList.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { matchesName } from '../../components/matchesName.ts';
+import { Notice } from '../../components/Notice.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { dateToday, parseDateOnly } from '../../copy/format.ts';
@@ -14,21 +15,31 @@ import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
+import { messageStore } from '../../routes/messageStore.ts';
 import { useReturnFocusReady } from '../../routes/routeChange.ts';
 import { fullName } from '../participants/participantsQuery.ts';
+import { NoteStatus } from './NoteStatus.tsx';
 import { refetchToday, todayQuery, type TodayList } from './todayQuery.ts';
 import styles from './TodayPage.module.css';
 
 /**
- * Today at `/` (today.md), everyone's home screen: its `<h1>` at once, "Today · Thursday 1 October", from the server's
- * date in Melbourne, never the device's clock (A33); then the region that loads the day's list. Each row is a return
- * point, which the shell focuses on a pop back to Today once the list, or the failure to load it, is in the page.
+ * Today at `/` (today.md), everyone's home screen: after Submit, the success banner, "Note for Jane Citizen
+ * submitted", which the shell focuses as Today arrives, in place of the `<h1>` or a row (component 2); its `<h1>` at
+ * once, "Today · Thursday 1 October", from the server's date in Melbourne, never the device's clock (A33); then the
+ * region that loads the day's list. Each row is a return point, which the shell focuses on a pop back to Today once
+ * the list, or the failure to load it, is in the page.
  */
 export function TodayPage() {
   const me = useMe();
   const queryClient = useQueryClient();
   const today = useQuery(todayQuery(me.today));
   useReturnFocusReady(!today.isPending);
+  // Submit's sentence, read from the store once, as Today mounts, and kept while Today shows, through every refresh of
+  // its list; the store is emptied at once, so that leaving Today and coming back, or a reload, shows it no more.
+  const [submitted] = useState(() => messageStore.peek());
+  useEffect(() => {
+    messageStore.clear();
+  }, []);
   // What is typed in Find a participant, here in memory alone, never in the address, the title, a query key or storage
   // (today.md component 7): it stays through a refresh of the list, a new day's included, and goes as the person
   // leaves Today.
@@ -59,6 +70,7 @@ export function TodayPage() {
 
   return (
     <PageStatus>
+      {submitted !== undefined && <Notice tone="success">{submitted}</Notice>}
       <PageHeading>
         {pageName.today}
         <Sep />
@@ -85,9 +97,10 @@ type ParticipantsProps = {
 /**
  * The day's participants (today.md components 6 to 9), under the visually hidden `<h2>`: Find a participant, then a
  * row for each person whose name matches what is typed, in the API's order, never sorted again, whose link names them
- * alone and opens their note for the list's date, with no router state, or, when nobody matches, the no-match sentence
- * in place of the rows; or, with no participants at all, no search box, "No participants yet." and, for a manager
- * alone, Add participant. T09 gives each row its status line.
+ * alone and opens their note for the list's date, with no router state, whatever its status line says, as the note's
+ * page decides what to show from what the server says then; the line, which describes the link, only where the person
+ * has a note; or, when nobody matches, the no-match sentence in place of the rows; or, with no participants at all, no
+ * search box, "No participants yet." and, for a manager alone, Add participant.
  */
 function Participants({ list, isManager, typed, onType }: ParticipantsProps) {
   const shown = list.participants.filter((participant) => matchesName(participant, typed));
@@ -120,6 +133,7 @@ function Participants({ list, isManager, typed, onType }: ParticipantsProps) {
                   to={`/participants/${participant.id}/notes/${list.date}`}
                   name={fullName(participant)}
                   returnKey={participant.id}
+                  detail={participant.note === null ? undefined : [<NoteStatus note={participant.note} />]}
                 />
               ))}
             </LinkRowList>

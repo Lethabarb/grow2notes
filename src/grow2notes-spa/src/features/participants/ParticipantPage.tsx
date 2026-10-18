@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useId, useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { api, ApiError, apiWithHeaders, classify, type FieldErrors, type WithHeaders } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
+import { buttonClass } from '../../components/buttonClass.ts';
 import { DateOfBirthField } from '../../components/DateOfBirthField.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
@@ -309,19 +310,19 @@ type ParticipantProps =
 /**
  * Add participant or a participant's page (participants.md B1 to B7): the back link, the error summary after a failed
  * Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any
- * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed
- * and the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Archive
- * participant alone until the screens that its links open are built. Nothing is checked before Save, which checks
- * every field in page order and sends nothing while one fails; once a field shows a message, each edit checks it again.
- * A `201` shows "Saved 4:12 pm" from its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's
- * goals query, as they have none, rather than fetching it, and replaces the address with the participant's, in the
- * screen. A save of a participant who exists is a `PUT` with their version as `If-Match`, whose `200` shows "Saved
- * 4:12 pm" and the saved name as the `<h1>`, and whose `412` says that someone else changed the details, the fields
- * kept as typed. Focus stays on Save.
+ * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and
+ * the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Past notes, a
+ * link styled as a secondary button, then, after a rule, Archive participant; T18 adds Write past-day note and T21
+ * Export record after Past notes. Nothing is checked before Save, which checks every field in page order and sends
+ * nothing while one fails; once a field shows a message, each edit checks it again. A `201` shows "Saved 4:12 pm" from
+ * its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's goals query, as they have none,
+ * rather than fetching it, and replaces the address with the participant's, in the screen. A save of a participant who
+ * exists is a `PUT` with their version as `If-Match`, whose `200` shows "Saved 4:12 pm" and the saved name as the
+ * `<h1>`, and whose `412` says that someone else changed the details, the fields kept as typed. Focus stays on Save.
  *
  * An archived participant's page is read-only (participants.md B3, *Archive and Restore*): the archived notice under
- * the `<h1>`, with Restore, then Details as a summary list, their goals as text alone, and no Actions until the
- * screens of the links that an archived participant keeps are built. Archive participant, with no dialog, turns the
+ * the `<h1>`, with Restore, then Details as a summary list, their goals as text alone, and Actions with Past notes
+ * alone, as an archived participant's notes are kept (design.md §3.7). Archive participant, with no dialog, turns the
  * page read-only, dropping what was typed (participants.md open question 3), and focuses the notice, as its button has
  * gone; Restore turns it back into the form, filled in afresh, and focuses the `<h1>`. A press refused as stale reads
  * the list again: when that finds the status changed already, by someone else, the page simply shows it, as that
@@ -619,17 +620,24 @@ function Participant({ participant, onAdded }: ParticipantProps) {
           </ListFrame>
         </section>
       )}
-      {known !== undefined && !archived && (
+      {known !== undefined && (
         <section aria-labelledby={actionsHeadingId} className={styles.actions}>
           <h2 id={actionsHeadingId}>{strings.participantActions.heading}</h2>
-          <RequestAlert>{statusFailure}</RequestAlert>
-          <Button
-            busy={statusChange.isPending}
-            busyLabel={strings.archiving}
-            onClick={() => changeStatusTo(known, 'Archived')}
-          >
-            {strings.participantActions.archive}
-          </Button>
+          <Link to={`/participants/${known.id}/notes`} className={buttonClass()}>
+            {pageName.pastNotes}
+          </Link>
+          {!archived && (
+            <div className={styles.archive}>
+              <RequestAlert>{statusFailure}</RequestAlert>
+              <Button
+                busy={statusChange.isPending}
+                busyLabel={strings.archiving}
+                onClick={() => changeStatusTo(known, 'Archived')}
+              >
+                {strings.participantActions.archive}
+              </Button>
+            </div>
+          )}
         </section>
       )}
     </>

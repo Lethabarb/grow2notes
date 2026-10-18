@@ -181,7 +181,7 @@ test('signed in for real, Manage then Users lists the new manager alone, Active 
   ]);
   await expectLists(page, [[invite.displayName]]);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveCount(0);
-  expect(await shownLines(rowOf(page, invite.displayName))).toEqual([invite.email, 'Active · Manager']);
+  expect(await shownLines(rowOf(page, invite.displayName))).toEqual([invite.email, 'Active · Manager']);
 
   await main(page).getByRole('link', { name: invite.displayName, exact: true }).click();
   await expect(heading(page)).toHaveText(invite.displayName);
@@ -216,7 +216,7 @@ test('the current users show by name, then the Deactivated under their <h2>, eac
     const link = rowOf(page, displayName).getByRole('link');
     await expect(link).toHaveAccessibleName(displayName);
     await expect(link).toHaveAccessibleDescription(`${email} , ${status} , ${role}`);
-    expect(await shownLines(rowOf(page, displayName))).toEqual([email, `${status} · ${role}`]);
+    expect(await shownLines(rowOf(page, displayName))).toEqual([email, `${status} · ${role}`]);
   }
 
   await expectAxeToPass(page);

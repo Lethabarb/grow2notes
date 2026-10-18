@@ -8,6 +8,7 @@ using System.Text.Json;
 using Azure.Monitor.OpenTelemetry.Exporter;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -27,8 +28,9 @@ namespace Grow2Notes.Tests.Platform;
 /// that SQL Server puts in its error text, appears in no log, no telemetry and no response. Since S01.02.02 it is also
 /// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event, and
 /// since T05 the text of a goal that the app's own endpoint adds to them, saved with its own, and since T08 the Guided
-/// notes of their note's first save, which starts the note with its own. The app runs with telemetry on, as in Azure,
-/// and everything it writes or sends goes to a sink here.
+/// notes of their note's first save, which starts the note with its own, and since T09 the reason it flags the note
+/// with, and the Guided notes and reason it submits the note with, which writes its own. The app runs with telemetry
+/// on, as in Azure, and everything it writes or sends goes to a sink here.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -38,10 +40,12 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     private const string TruncationPath = "/api/test-only/truncation";
     private const string DuplicateEmailPath = "/api/test-only/duplicate-email";
 
-    // The app's own endpoints that add a participant, and a goal to one, and save their note, as each is routed.
+    // The app's own endpoints that add a participant, and a goal to one, and save and submit their note, as each is
+    // routed.
     private const string ParticipantsPath = "/api/admin/participants";
     private const string GoalsRoute = "/api/admin/participants/{participantId:guid}/goals";
     private const string DraftRoute = "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft";
+    private const string VersionsRoute = "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions";
 
     private static readonly DateTime TimeUtc = new(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
 
@@ -62,7 +66,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         HttpResponseMessage[] failures = [truncation, duplicate];
 
         // As a manager adds one, over HTTPS with a token, as the /api group needs, then a goal of theirs, then opens
-        // their note for today and starts it, as the form's first save does, with the template's lists' version.
+        // their note for today and starts it, flagged with a reason, as the form's first save does, with the template's
+        // lists' version, then submits it, as Submit does, with a key.
         using var manager = app.CreateHttpsClient().SignInAs(sqlServer.Seeded.A.ManagerId);
         using var added = await manager.PostWithTokenAsync(
             ParticipantsPath,
@@ -90,23 +95,44 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
                 listsVersion = form.GetProperty("listsVersion").GetString(),
                 narrative = Canary,
                 tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = true,
+                flagReason = Canary,
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, noteStarted.StatusCode);
+        var versionsPath = string.Create(
+            CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{today:yyyy-MM-dd}/versions");
+        using var submit = new HttpRequestMessage(HttpMethod.Post, versionsPath)
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative = Canary,
+                tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = true,
+                flagReason = Canary,
+            }),
+        };
+        submit.Headers.Add(AntiforgeryTokens.Header, await manager.FetchTokenAsync());
+        submit.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        using var noteSubmitted = await manager.SendAsync(submit, cancellationToken);
+        Assert.Equal(HttpStatusCode.Created, noteSubmitted.StatusCode);
 
         // The app answered each failing request with a 500 problem, whose body the check below looks in too, as it does
-        // in the added participant's and goal's, and the started note's.
+        // in the added participant's and goal's, and the started and submitted note's.
         var bodies = (await Task.WhenAll(
                 failures.Select(r => r.ReadProblemAsync(HttpStatusCode.InternalServerError))))
             .Append(addedBody)
             .Append(await goalAdded.Content.ReadAsStringAsync(cancellationToken))
-            .Append(await noteStarted.Content.ReadAsStringAsync(cancellationToken));
-        HttpResponseMessage[] responses = [.. failures, added, goalAdded, noteStarted];
+            .Append(await noteStarted.Content.ReadAsStringAsync(cancellationToken))
+            .Append(await noteSubmitted.Content.ReadAsStringAsync(cancellationToken));
+        HttpResponseMessage[] responses = [.. failures, added, goalAdded, noteStarted, noteSubmitted];
         (string Method, string Path, string Route)[] saves =
         [
             ("POST", ParticipantsPath, ParticipantsPath),
             ("POST", goalsPath, GoalsRoute),
             ("PUT", draftPath, DraftRoute),
+            ("POST", versionsPath, VersionsRoute),
         ];
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
@@ -155,7 +181,7 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         });
 
         // And the requests that added the participant, whose body held the names, the goal, whose body held its text,
-        // and the note, whose body held its Guided notes.
+        // and the note's save and submit, whose bodies held its Guided notes and its flag's reason.
         foreach (var (method, path, route) in saves)
         {
             var add = sinks.Spans.Spans.Single(span => IsRequestTo(span, method, path));

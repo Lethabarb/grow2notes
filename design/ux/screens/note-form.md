@@ -83,6 +83,11 @@ participants.md link to it. URLs hold IDs and dates only, and no route pushes ro
   with `404` (design.md §6.3): no note can exist after today, and Page not found's words are the app's own. So does a
   day before yesterday with no note started, for a worker (design.md A65), who may not start it and whose refusal
   would name yesterday.
+- **As built (T09):** the shared URL loads the participant's header and `GET {base}` together, under
+  `['notes', participantId, noteDate]`, then shows the read view for a submitted note, and otherwise reads the form
+  with `GET {base}/draft`. Until the note's status is known the page cannot tell which screen it is, so a failed load
+  shows this form's "The note did not load: …", and the top bar is static until the form, with its save status, makes
+  it sticky. Once the form has opened it stays open, whatever the note is fetched as later.
 - **Groups add nothing to the URLs** (D44–D47). Picks live in form state and on the server only: never in the URL,
   router state or device storage (D22). They change the payloads, not the routes or caches:
   - `GET {base}/draft` returns the whole snapshot as `commonItemGroups: [{id, name, isEveryNote, isPicked, items}]`
@@ -543,6 +548,9 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
   it is **unavailable**: `aria-disabled="true"` (never `disabled`), dashed border, label still ≥ 4.5:1,
   `aria-describedby="save-status"` (plus the blocking banner's sentence id while one shows). The handler guards every
   press, including Enter's implicit submission.
+- As built (T09): Submit note has no busy label of its own while the check save is out, as "Saving…" in the indicator
+  says why it is busy, and it stays busy while Submit's request is out, though a browser has closed the confirmation
+  meanwhile; the alert above it shows Submit's failure only then (confirm-dialog.md *Behaviour* 7).
 - **Edit mode:** **Save changes** (V, primary) then **Cancel** (V, secondary) in the same place; no More actions.
 - Busy state: `aria-disabled` from the press, repeat presses ignored, busy label in the same grid cell after
   **400 ms** (the app-wide page-button rule, primary-actions.md) so the button never changes size. The label is also
@@ -569,6 +577,9 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
   truncated), then **Go back** (V, secondary).
 - `<p role="alert">` (empty) above the buttons for errors; `<p role="status">` (empty) below them for the busy line.
 - Width `min(100vw - 2rem, 28rem)`, `max-height: calc(100dvh - 2rem)`, scrolls inside itself at 200% text.
+- As built (T09): T03's `ConfirmDialog` with `titleName`, the name line, which wraps anywhere, so a long unbroken
+  name is never cut short in the title or the confirm button. Its flag line and its request take the content that the
+  check save sent, checked again, and the page is inert while it is open.
 
 ### 15. Discard confirmation: [confirm-dialog.md](../components/confirm-dialog.md)
 
@@ -662,6 +673,7 @@ The middle dot in "Draft · saved" is `<span aria-hidden="true"> · </span>` plu
 | **After midnight** (first save, worker, `422 note.past_date_manager_only`) | **Not saved** | (V) **It's now after midnight, so this note can't be started for yesterday. Ask a manager to record it.** | Unavailable | As above. |
 | **Participant archived** (first save, `422 note.participant_archived`) | **Not saved** | (P) **Jane Citizen is archived, so this note cannot be started. Ask a manager.** | Unavailable | As above. |
 | **Lists changed before the first save** (`409 note.lists_changed`, including a group change) | **Saving…** then **Saved …** (the form re-saves with the new `listsVersion`, its picks and its surviving ticks) | Lists-changed notice above Goals (V) **The goal or common-item list was just changed. Please check your ticks.** Picks re-applied by group ID, ticks by item ID (see Common items and groups). | As for Saving / Saved | Polite through the notice's own `role="status"`. Focus stays, unless the focused tick box was removed: then focus moves to the notice (`tabindex="-1"`). |
+| **Submitted elsewhere** (a save or, once the confirmation has closed, Submit: `409 note.version_conflict`; as built, T09) | **Not saved** | (V) **This note was changed on another device or tab.**, the confirmation's *No longer possible* sentence | Unavailable | As for started by someone else: assertive, once; the text kept, editable and copyable, and leaving not blocked. |
 | **Version conflict** (edit mode, Save changes, `409 note.version_conflict`) | **Not saved** until Start again succeeds | Version-conflict notice in page flow (component 6) | Save changes unavailable until Start again succeeds | Focus moves to the notice (the person's own press caused it). |
 
 ### Validation (only after Submit or Save changes is pressed)
@@ -704,8 +716,8 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 | **Open** | Title, date, flag line, two buttons | Title `<h2>` |
 | **Busy** (POST sent) | Both buttons `aria-disabled`, labels unchanged; after 1 s the status line **Submitting…** (P); Escape and Back blocked where the browser allows | Unchanged |
 | **Failed, can retry** (network, timeout, 5xx) | Alert region: **Not submitted: no connection. Your draft is saved. Try again.** or **Not submitted: something went wrong. Your draft is saved. Try again.** (P, canonical `microcopy.md` §9) | Stays on the confirm button |
-| **No longer possible** (`409 note.version_conflict`: submitted from another device or tab) | Alert region (V reused): **This note was changed on another device or tab.** Confirm button removed. | **Go back** |
-| **Field errors** (`422`) | Dialog closes; the form shows the inline errors and summary | Summary |
+| **No longer possible** (`409 note.version_conflict`: submitted from another device or tab) | Alert region (V reused): **This note was changed on another device or tab.** Confirm button removed. As built (T09), Go back then leaves the form a dead end with the same sentence (*Conflicts and refusals*). | **Go back** |
+| **Field errors** (`422`) | Dialog closes; the form shows the inline errors and summary. As built (T09), always the summary's one unlinked item, **Not submitted: something went wrong. Your draft is saved. Try again.**, with no field message: the confirmation sends only content that the form's checks have passed, so the server refuses only what they do not explain, such as a text of U+0085 alone, which .NET counts as blank and `trim()` keeps | Summary |
 | **Session ended** (`401`) | Dialog closes first, then sign-in in place | Sign-in heading |
 
 ### Discard dialog
@@ -804,9 +816,11 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 
 ### Pressing Submit note (or Save changes)
 
-1. **Checks first** (client, on trimmed values): Guided notes not blank and ≤ 20,000; if flagged, Reason not blank and
-   ≤ 200. On failure: render inline errors and the summary in one update, prefix the title with "Error: ", move focus
-   to the summary (on **every** failed press), open nothing, send nothing.
+1. **Checks first** (client, blank on trimmed values, length on the whole text): Guided notes not blank and ≤ 20,000;
+   if flagged, Reason not blank and ≤ 200. Length counts the whole text, as the counts under the fields count it, so a
+   text that passes is sent whole and the server counts the same characters (T09). On failure: render inline errors
+   and the summary in one update, prefix the title with "Error: ", move focus to the summary (on **every** failed
+   press), open nothing, send nothing.
 2. **If the indicator shows Not saved or a blocking banner shows:** do nothing more; write the indicator or banner text
    into the form's announcer (polite) so the press is not silent.
 3. **Otherwise** (Empty with valid content cannot happen; Loaded, Saving or Saved): the button goes busy and a **check
@@ -844,6 +858,9 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 3. Today renders the success banner before its `<h1>` with `data-route-focus`; the shell focuses it on every arrival,
    including this pop (app-shell.md route-change rule); it has no live role (focus does the announcing)
    (`status-messages.md`).
+
+As built (T09): step 2 removes `['today']` alone, as Today has no drafts section until T12, which removes
+`['me', 'drafts']` too, and the `201` has no `flagStatus` until T11, which adds it and the `refreshMe()` after it.
 
 ### Edit mode: Save changes and Cancel
 

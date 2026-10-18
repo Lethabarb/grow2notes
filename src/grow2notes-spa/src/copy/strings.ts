@@ -371,12 +371,32 @@ export const strings = {
    */
   today: { participantsHeading: 'Participants' },
   /**
+   * A note's status, by its name in the API (status-tags.md *The mapping*): plain words, never a tag, first on a note's
+   * status line, as on Today's rows (today.md component 8) and in the save indicator of a draft reopened.
+   */
+  noteStatus: { Draft: 'Draft', Submitted: 'Submitted' },
+  /**
+   * A note's status line after its status word (design.md §4.2 item 4): the signed-in user, in place of their name
+   * (microcopy.md §3, *Names*), as in "Draft · You · saved 9:42 am"; and the word before a draft's time, the time of
+   * its author's last save, as the save indicator of a draft reopened has it too, "Draft · saved 9:42 am", or, on
+   * anyone else's draft, of its start, as in "Draft · Alex P. · started 9:14 am".
+   */
+  statusLine: { you: 'You', saved: 'saved', started: 'started' },
+  /** Each kind of `Tag`, by its kind (status-tags.md *The mapping*). */
+  tag: { flagged: 'Flagged' },
+  /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
-   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; and
-   * the save indicator on a draft reopened, until its first change, "Draft · saved 9:42 am" (design.md §4.3): its first
-   * word, then the word before the time; and the indicator while a dead end in the top bar says why the note cannot be
-   * saved (autosave-status.md *Exact copy*).
+   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; the
+   * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
+   * the save indicator while a dead end in the top bar says why the note cannot be saved (autosave-status.md *Exact
+   * copy*). Then Submit note (component 12) and Submit's checks (*Validation*),
+   * inline and in the error summary: Guided notes left blank, with the second sentence only while guide prompts are
+   * set, as they are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with
+   * `reason`; and Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead,
+   * for a note dated `me.today` and for any other, before the name on its own line; its flag line, from the values
+   * that Submit sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not
+   * submitted: no connection. Your draft is saved. Try again." (microcopy.md §9).
    */
   note: {
     loading: 'Loading note…',
@@ -384,10 +404,43 @@ export const strings = {
     goals: '1. Goals',
     goalsHint: 'Ticked means reached.',
     guidedNotes: '3. Guided notes',
-    draft: 'Draft',
-    draftSaved: 'saved',
+    flagForManager: 'Flag for manager',
+    reason: 'Reason',
     notSaved: 'Not saved',
+    submit: 'Submit note',
+    writeYourNotes: 'Write your notes in the Guided notes box',
+    writeYourNotesNotTheGuide: 'Write your notes in the Guided notes box. The grey text is only a guide.',
+    guidedNotesName: 'Guided notes',
+    enterAReason: 'Enter a reason for the flag',
+    submitTodaysNoteFor: 'Submit today’s note for',
+    submitTheNoteFor: 'Submit the note for',
+    flaggedYes: 'Flagged for manager: Yes',
+    flaggedNo: 'Flagged for manager: No',
+    submitting: 'Submitting…',
+    draftIsSaved: 'Your draft is saved.',
   },
+  /**
+   * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
+   * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals", the words for a version with no
+   * goals, each as the daily report has them (design.md §11.3).
+   */
+  readView: { submitted: 'Submitted', noGoals: 'No goals set' },
+  /**
+   * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the
+   * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).
+   */
+  pastNotes: { loading: 'Loading notes…', editParticipant: 'Edit participant' },
+  /**
+   * A paged list's Show older (chronological-list.md *Exact copy*), one set for every paged list of notes: the button;
+   * the status line once it has taken 1 s; and what did not load, as its failure sentence starts, "Older notes did not
+   * load: no connection. Try again.".
+   */
+  showOlder: { button: 'Show older', loading: 'Loading older notes…', olderNotes: 'Older notes' },
+  /**
+   * A read-only tick list's state after each item's wording, for screen readers alone (checkbox-list.md
+   * `TickListRead`), after a pause, as in "Makes own breakfast, ticked".
+   */
+  tickState: { ticked: 'ticked', notTicked: 'not ticked' },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
    * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above

@@ -334,6 +334,30 @@ describe('api', () => {
     });
   });
 
+  describe('Idempotency-Key', () => {
+    it('sends the key as it is given, with the change and its antiforgery token', async () => {
+      const key = '7c1e4b2a-9d36-4f58-a0e7-3b5c8d2f6a14';
+      serve(json(201, { versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00Z' }));
+
+      await api('/api/participants/3e8b/notes/2026-10-01/versions', {
+        method: 'POST',
+        body: { narrative: 'Jane made toast.' },
+        idempotencyKey: key,
+      });
+
+      expect(sentRequest().headers.get('Idempotency-Key')).toBe(key);
+      expect(sentRequest().headers.get('X-XSRF-TOKEN')).toBe('token-1');
+    });
+
+    it('sends none when none is given', async () => {
+      serve(new Response(null, { status: 200 }));
+
+      await api('/api/admin/goals/4b2e', { method: 'PUT', body: { text: 'Cook a meal' } });
+
+      expect(sentRequest().headers.has('Idempotency-Key')).toBe(false);
+    });
+  });
+
   describe('the session-ended event', () => {
     it('is raised once by a 401 from /api/auth/me, before the ApiError is thrown', async () => {
       const order: string[] = [];

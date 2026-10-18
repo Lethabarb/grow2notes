@@ -1,0 +1,31 @@
+/* Flag for manager's block, a section of the note form after Guided notes (note-form.md *Layout - phone*). */
+.flag {
+  margin-block-start: var(--section-gap);
+}
+
+/*
+ * The Reason block (note-form.md component 11): a 4 px bar centred under the tick row's 2.5rem box, in the dividers'
+ * colour, as GOV.UK's reveal has it, and the field lined up with the row's text, which starts after the box and the
+ * row's gap. It sets no display, so that the hidden attribute hides it.
+ */
+.reveal {
+  margin-block-start: var(--space-3);
+  margin-inline-start: calc(2.5rem / 2 - 2px);
+  padding-inline-start: calc(2.5rem / 2 + var(--space-3) - 2px);
+  border-inline-start: 4px solid var(--colour-divider);
+}
+
+/* After a press of Submit that found the reason blank or too long, the bar in the error colour (component 11). */
+.reveal[data-invalid] {
+  border-inline-start-color: var(--colour-error);
+}
+
+/*
+ * Four rows tall, as rows={4} sets it, and resized by its corner, where the shared text box grows with its text and
+ * never shrinks below six lines. Two classes, so that it outranks the shared rule whichever stylesheet comes first.
+ */
+.reveal .field {
+  min-block-size: 0;
+  resize: vertical;
+  field-sizing: fixed;
+}

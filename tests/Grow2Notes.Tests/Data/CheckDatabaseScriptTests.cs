@@ -162,7 +162,7 @@ public sealed partial class CheckDatabaseScriptTests
 
     [GeneratedRegex(
         @"p\.permission_name = N'DELETE'\s+AND p\.major_id IN \((?<deletes>.*?)\)\)\s+"
-        + @"OR \(p\.permission_name = N'UPDATE'\s+AND p\.major_id = (?<updates>OBJECT_ID\([^)]*\))\)",
+        + @"OR \(p\.permission_name = N'UPDATE'\s+AND p\.major_id IN \((?<updates>.*?)\)\)\)\s+THEN",
         RegexOptions.Singleline)]
     private static partial Regex D3Expected();
 

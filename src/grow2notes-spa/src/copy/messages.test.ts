@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { msg } from './messages.ts';
+import { strings } from './strings.ts';
 
 describe('the character count words (microcopy.md §4)', () => {
   it('give the limit hint, with the limit grouped', () => {
@@ -21,6 +22,53 @@ describe('the character count words (microcopy.md §4)', () => {
   it("give a field's too-long message, naming it and its limit, grouped", () => {
     expect(msg.tooLong('Guide prompts', 1_000)).toBe('Guide prompts must be 1,000 characters or less');
     expect(msg.tooLong('Reason', 200)).toBe('Reason must be 200 characters or less');
+  });
+});
+
+// note-form.md *Confirmation dialog* and design.md §4.3, word for word.
+describe("Submit's words", () => {
+  it("name the participant in full on the confirming button and in Today's banner", () => {
+    expect(msg.submitNoteFor('Jane Citizen')).toBe('Submit note for Jane Citizen');
+    expect(msg.noteSubmitted('Jane Citizen')).toBe('Note for Jane Citizen submitted');
+  });
+
+  it('say that it was not submitted, and why, and that the draft is saved', () => {
+    expect(msg.notSubmitted('offline')).toBe('Not submitted: no connection. Your draft is saved. Try again.');
+    expect(msg.notSubmitted('server')).toBe('Not submitted: something went wrong. Your draft is saved. Try again.');
+  });
+
+  it("give Guided notes' too-long message, its limit grouped", () => {
+    expect(msg.tooLong('Guided notes', 20_000)).toBe('Guided notes must be 20,000 characters or less');
+  });
+});
+
+// participant-notes.md *Read view* › Status lines, word for word.
+describe("the read view's lines", () => {
+  it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {
+    expect(msg.writtenBy('Priya Nair')).toBe('Written by Priya Nair');
+    expect(msg.flagReason('Mentioned pain in his left knee after the walk.')).toBe(
+      'Reason: Mentioned pain in his left knee after the walk.',
+    );
+  });
+});
+
+// participant-notes.md *History list* states, word for word.
+describe('Past notes', () => {
+  it('say that there are no notes yet for the participant, named in full', () => {
+    expect(msg.noNotesYet('Jane Citizen')).toBe('No notes yet for Jane Citizen.');
+  });
+
+  it('say that the list or Show older did not load, and why, with "still" after a second failure', () => {
+    expect(msg.loadFailed('Past notes', 'offline', false)).toBe('Past notes did not load: no connection. Try again.');
+    expect(msg.loadFailed('Past notes', 'server', true)).toBe(
+      'Past notes still did not load: something went wrong. Try again.',
+    );
+    expect(msg.loadFailed(strings.showOlder.olderNotes, 'offline', false)).toBe(
+      'Older notes did not load: no connection. Try again.',
+    );
+    expect(msg.loadFailed(strings.showOlder.olderNotes, 'offline', true)).toBe(
+      'Older notes still did not load: no connection. Try again.',
+    );
   });
 });
 

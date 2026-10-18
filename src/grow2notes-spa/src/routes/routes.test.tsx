@@ -74,7 +74,7 @@ const commonItemGroups: AdminCommonItemGroup[] = [
 const screenAnswers: Readonly<Record<string, unknown>> = {
   '/api/today': {
     date: '2026-10-01',
-    participants: participants.map(({ id, givenName, familyName }) => ({ id, givenName, familyName })),
+    participants: participants.map(({ id, givenName, familyName }) => ({ id, givenName, familyName, note: null })),
   },
   '/api/admin/users': users,
   '/api/admin/participants?includeArchived=true': participants,

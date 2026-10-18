@@ -499,3 +499,42 @@ the kit of steps 26 to 28. Every group and item typed is made up (A35), such as 
     focus on Restore and the group's name; "Group restored to the end of the list", with focus on Archive; and
     "Archived groups" with "collapsed" or "expanded". (common-items.md *Accessibility runs*, the manual pass, its
     group parts.)
+
+### Submit, the read view and Past notes, once T09 is in test
+
+These steps hold T09's by-hand checks ([tasks.md](../design/backlog/tasks.md), T09's Notes). They need account A,
+account B, the passkey worker of step 18, the kit of steps 26 to 28, and made-up participants with two goals each,
+such as `Jane Citizen` with `Makes own breakfast` and `Phones her sister`, whose notes for today nobody has started:
+one for step 54 and two for each screen reader in step 55, seven in all. Every word typed into a note is made up
+(A35).
+
+53. The database, as in step 26: run `infra/sql/check-database.sql` for test after T09's deploy. Look for PASS on
+    every row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteVersion` and
+    `dbo.NoteVersionItem` for `grow2notes_runtime`, and B7 and B8, which list the `NoteVersion` and `NoteVersionItem`
+    tables and the `AddNoteVersion` migration. (S02.03.01's first criterion, in test.)
+54. On the iPhone in Safari, at its usual text size and held upright, sign in as the passkey worker and choose Today.
+    Open a participant's note, tick a goal, type a sentence or two into Guided notes, tick Flag for manager and type a
+    reason, and look for "Saving…" then "Saved" and the time. Press Submit note. Look for the confirmation with "Submit
+    today's note for", the participant's full name on a line of its own, today's date and "Flagged for manager: Yes",
+    with nothing cut short; press "Submit note for" and the name. Look for Today with "Note for" the name and
+    "submitted" at the top, and the participant's row reading "Submitted · You ·" and the time, then Flagged. Open the
+    row and look for the note as written, its goal ticked and the flag line with the reason; then press Past notes and
+    look for the note's date, "Submitted", the worker's name and Flagged. (S02.03.01's manual check, design.md §14 M2
+    *Done when*: a worker fills in and submits a note on a phone 375 px wide; note-form.md item 38.)
+55. On the laptop as account A with NVDA and Chrome, then on the iPhone as the passkey worker with VoiceOver and
+    Safari, then on the Android phone as account B with TalkBack and Chrome, each with two participants of its own:
+    open the first participant's note, type a sentence and tick Flag for manager. Look for "checked, expanded", then
+    Reason as the next stop, and its count, "You can enter up to 200 characters", after a pause. Leave Reason empty and
+    press Submit note: look for "There is a problem" and "Enter a reason for the flag" read as the summary takes focus.
+    Type a reason and press Submit note again. On the laptop, first set the Network panel's throttling to 3G, so that
+    the request is slow. Look for the confirmation read as "Submit today's note for", the name, "alert dialog", today's
+    date and "Flagged for manager: Yes", then its heading; press "Submit note for" and the name, and, on the laptop,
+    look for "Submitting…" read after a moment (then set the throttling back to No throttling). Look for "Note for",
+    the name and "submitted" read once on Today, and the row's status, "Submitted, You", the time and "Flagged", read
+    after its name as its description. Open the row and look for the `<h1>`, the name and the date, read as the page
+    opens, and each goal read with "ticked" or "not ticked". Press Past notes and look for its rows read as the date,
+    then the status, the author and Flagged. Then submit the second participant's note unflagged and look for "Flagged
+    for manager: No" in the confirmation and no Flagged on its row. Show older shows only once a participant has more
+    than 30 notes: when one does, press it and look for focus on the first new row, read as its date. (note-form.md's
+    *Announcements* for the flag, the summary and the confirmation; today.md's and participant-notes.md's manual
+    passes, for what T09 builds.)

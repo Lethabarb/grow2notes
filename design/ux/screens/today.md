@@ -173,6 +173,9 @@ listed here.
   reload never replays it. It stays while the user is on Today (across refetches and window focus) and is gone when
   they leave.
 - Shown only after the server returned `201` (or `200` on an idempotent retry): never optimistic (invariant I5).
+- As built (T09): T02's `Notice` in its success tone (status-messages.md), a tick in place of its "i", which keeps
+  `--space-4` before the `<h1>` as its own margin. Submit drops Today's query, so the row shows Submitted
+  only from the server's fresh list.
 
 ### 3. Page heading
 
@@ -293,6 +296,10 @@ listed here.
   instant. Author: `authorDisplayName` exactly as stored (never shortened or re-derived).
 - Separators: `<span aria-hidden="true"> · </span>` + visually hidden ", "; each part `white-space: nowrap` so lines
   break only at separators; non-breaking space before each dot so no line starts with "·".
+- As built (T09): the line is `NoteStatus` (`src/features/today`) through the shared `MetaLine` (status-tags.md),
+  and the tag is the shared `Tag`. Each part, with the dot after it, is an inline-block, kept on one line where it
+  fits and wrapping inside itself only when longer than the line, as a display name of up to 100 characters must not
+  make the page scroll sideways at 320 px and 200% text; so the Flagged tag drops to a line of its own there.
 - Typography: name `--font-size-body` (18 px), weight 700, `--colour-text`, no underline at rest,
   `overflow-wrap: anywhere`, `hyphens: manual`, never truncated. Status line `--font-size-small` (16 px),
   `--colour-text-secondary` (9.0:1), with the status word ("Draft" or "Submitted") in `--colour-text`, weight 700.
@@ -517,7 +524,8 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
 - [ ] DOM order: (banner) → `<h1>` → status/Try again → drafts section → hidden "Participants" → search → list or
   empty/no-match text. As built (T08), the shared `LoadRegion` renders its status line, and Try again after a failure,
   after its content, so once the region is ready the line, empty from then on, follows the list: nothing shown, read or
-  reached by Tab is out of order. The banner comes with Submit (T09) and the drafts section with S02.01.04 (T12).
+  reached by Tab is out of order. The banner, built with Submit (T09), comes first, before the `<h1>`; the drafts
+  section comes with S02.01.04 (T12).
 - [ ] Rows follow the server order (family, then given); filtering and refetching never reorder them.
 - [ ] Drafts section lists only drafts/pending edits not on today's list, sorted family, given, then note date oldest
   first; hidden entirely when there are none.

@@ -17,10 +17,7 @@ internal static class Archiving
             return;
         }
 
-        // To the millisecond, as the datetime2(3) column keeps it, so the archivedAtUtc that the audit event records is
-        // the value stored, not one SQL Server rounds.
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        row.ArchivedAtUtc = now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMillisecond));
+        row.ArchivedAtUtc = StoredTime.UtcNow(timeProvider);
     }
 
     /// <summary>

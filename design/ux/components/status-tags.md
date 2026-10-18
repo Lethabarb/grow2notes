@@ -196,6 +196,14 @@ Both tones are tints, so solids and tints are never mixed. There is no dark-them
 
 Native HTML covers all of this, so no React Aria is needed. Put the words, tones and order in **one module**. Screens pass a *kind*, never free text or a colour, so the mapping cannot drift between screens.
 
+**Built** (T09): `Tag` in `src/components/Tag.tsx`, its words from `strings.tag` and its tone from its own map, with
+the Flagged kind alone (T14 adds Edited, T16 To review and Reviewed, and T18 Past-day note); its corners are
+`--radius-s`, as today.md component 8 has them, over the 2 px below, and it has no forced-colours rule, as the
+browser draws its border in the text colour there. The meta line is `MetaLine` in `src/components/MetaLine.tsx`,
+through which Today's status line and Past notes' rows render: the status word bold, each part, with the dot after it,
+an inline-block that wraps inside itself only when it is longer than the line, joined to the next by `Sep`, then each
+tag after a `Pause`, so that a row's description reads "Submitted, Alex P., Flagged".
+
 ```ts
 // src/components/status/statusWords.ts — the only place these words and tones live
 export const NOTE_STATUS = { Draft: 'Draft', Submitted: 'Submitted' } as const;

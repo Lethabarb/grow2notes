@@ -67,6 +67,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItemGroup.Restored] = test => test.RestoreCommonItemGroupAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
+        [AuditEventTypes.Note.Submitted] = test => test.SubmitNoteAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
@@ -986,6 +987,53 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             await StoredNoteIdAsync(participant.Id),
             participant.Id,
             null);
+    }
+
+    /// <summary>
+    /// <c>note.submitted</c>: A's worker submits their draft of today's note of a participant added for the row, which
+    /// the row adds as a first save leaves it, with a goal ticked and flagged with a reason, with
+    /// <c>POST {base}/versions</c>, which records the note as the entity and its participant as the participant, and
+    /// the version number alone in <c>Details</c>, so no note text, reason or goal wording (design.md §5.3, §9.5).
+    /// </summary>
+    private async Task<WrittenEvent> SubmitNoteAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goal = await factory.Services.AddGoalAsync(a, participant.Id, new("Makes own breakfast", 0));
+        var today = factory.Services.GetRequiredService<MelbourneClock>().Today();
+        var noteId = await factory.Services.AddDraftAsync(a, new(
+            participant.Id,
+            today,
+            a.WorkerId,
+            new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc),
+            [new(NoteSection.Goal, goal.Id, null, "Makes own breakfast", false)]));
+        using var client = factory.CreateHttpsClient().SignInAs(a.WorkerId);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/versions"))
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative = "Jane made toast.",
+                tickedGoalIds = new[] { goal.Id },
+                isFlagged = true,
+                flagReason = "Jane seemed unwell.",
+            }),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return new(
+            AuditEventTypes.Note.Submitted,
+            a.OrganisationId,
+            a.WorkerId,
+            AuditEntityTypes.Note,
+            noteId,
+            participant.Id,
+            new JsonObject { ["versionNumber"] = 1 }.ToJsonString());
     }
 
     /// <summary>

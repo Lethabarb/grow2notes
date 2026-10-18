@@ -9,6 +9,7 @@ import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import type { ListRow } from '../../components/ListEditor.tsx';
 import { routes } from '../../routes/routes.tsx';
+import styles from './ParticipantPage.module.css';
 import type { AdminParticipant } from './participantsQuery.ts';
 
 type Router = ReturnType<typeof createMemoryRouter>;
@@ -1273,6 +1274,19 @@ function archiveButton(): HTMLElement {
   return within(main()).getByRole('button', { name: 'Archive participant' });
 }
 
+/** Past notes, the first of the links in Actions. */
+function pastNotesLink(): HTMLElement {
+  return within(actionsSection()!).getByRole('link', { name: 'Past notes' });
+}
+
+/** Expects Actions to hold Past notes alone, as an archived participant's page has it, with no Archive participant. */
+function expectPastNotesAlone() {
+  const actions = actionsSection()!;
+  expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink()]);
+  expect(within(actions).queryAllByRole('button')).toEqual([]);
+  expect(within(actions).queryByRole('alert')).toBeNull();
+}
+
 /** The alert above Archive participant, in Actions. */
 function archiveAlert(): HTMLElement {
   return within(actionsSection()!).getByRole('alert');
@@ -1329,7 +1343,8 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  it('is in Actions under Details, alone, its empty alert above it, and the next Tab stop after Add goal', async () => {
+  // participants.md B7: the links to other screens first, Past notes alone until T18 and T21 add theirs, then a rule.
+  it('is in Actions under Details, after Past notes and a rule, its empty alert above it, in Tab order', async () => {
     await openJane();
 
     const actions = actionsSection()!;
@@ -1337,16 +1352,20 @@ describe('Archive participant', () => {
     expect(within(actions).getByRole('heading', { level: 2 })).toHaveAccessibleName('Actions');
     expect(follows(detailsSection(), actions)).toBe(true);
     expect(within(actions).getAllByRole('button')).toEqual([button]);
-    expect(within(actions).queryAllByRole('link')).toEqual([]);
+    expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink()]);
     expect(button).toHaveAttribute('type', 'button');
     expect(archiveAlert()).toBeEmptyDOMElement();
+    expect(follows(pastNotesLink(), archiveAlert())).toBe(true);
     expect(follows(archiveAlert(), button)).toBe(true);
-    expect(nextTabStop(addGoalButton())).toBe(button);
+    expect(archiveAlert().parentElement).toBe(button.parentElement);
+    expect(archiveAlert().parentElement).toHaveClass(styles.archive);
+    expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
+    expect(nextTabStop(pastNotesLink())).toBe(button);
     expect(notice()).toBeNull();
     expect(backLink()).toHaveAttribute('href', '/manage/participants');
   });
 
-  it('comes with the participant on Add participant, the next Tab stop after Add goal once the 201 is in', async () => {
+  it('comes with the participant on Add participant, after Past notes, once the 201 is in', async () => {
     await openAdd();
     expect(actionsSection()).toBeNull();
     serve('POST', participantsPath, added);
@@ -1354,7 +1373,8 @@ describe('Archive participant', () => {
 
     await save();
 
-    expect(nextTabStop(addGoalButton())).toBe(archiveButton());
+    expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
+    expect(nextTabStop(pastNotesLink())).toBe(archiveButton());
   });
 
   it(
@@ -1390,7 +1410,7 @@ describe('Archive participant', () => {
       expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
       expect(within(main()).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
       expect(within(main()).queryByRole('button', { name: 'Archive participant' })).not.toBeInTheDocument();
-      expect(actionsSection()).toBeNull();
+      expectPastNotesAlone();
       expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
       expect(document.title).toBe('Grow2Notes – Participant');
       expect(router.state.location.pathname).toBe(`/manage/participants/${jane.id}`);
@@ -1468,7 +1488,7 @@ describe('Archive participant', () => {
     expect(requests().slice(-2)).toEqual([`POST ${archivePath}`, `GET ${listPath}`]);
     expect(notice()).toHaveFocus();
     expect(restoreAlert()).toBeEmptyDOMElement();
-    expect(actionsSection()).toBeNull();
+    expectPastNotesAlone();
     expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
   });
 
@@ -1579,11 +1599,30 @@ describe("An archived participant's page", () => {
       ['Date of birth', `7${nbsp}March 1987`],
     ]);
     expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
-    // No Actions until later tasks add the links that an archived participant keeps.
-    expect(actionsSection()).toBeNull();
-    expect(within(main()).queryByRole('heading', { name: 'Actions' })).not.toBeInTheDocument();
+    // Actions keeps the links that an archived participant keeps: Past notes, as T21 adds Export record.
+    expect(within(actionsSection()!).getByRole('heading', { level: 2 })).toHaveAccessibleName('Actions');
+    expectPastNotesAlone();
+    expect(nextTabStop(restoreButton())).toBe(pastNotesLink());
     expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
     expect(document.title).toBe('Grow2Notes – Participant');
+  });
+
+  // S01.02.04's archived Past notes action (participants.md *States*): it opens their Past notes, whose notes are kept.
+  it("holds Past notes in Actions, which opens the participant's Past notes, back to the participant", async () => {
+    const router = await openArchivedJane();
+    const { id, givenName, familyName } = janeArchived;
+    serve('GET', `/api/participants/${id}`, json({ id, givenName, familyName, status: 'Archived' }));
+    serve('GET', `/api/participants/${id}/notes`, json({ notes: [], hasMore: false }));
+
+    await press(pastNotesLink());
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${id}/notes`);
+    expect(pageHeading()).toHaveAccessibleName('Past notes Jane Citizen');
+    expect(pageHeading()).toHaveFocus();
+    const back = within(document.getElementById('page-bar')!).getByRole('link');
+    expect(back).toHaveAccessibleName('Participant');
+    expect(back).toHaveAttribute('href', `/manage/participants/${id}`);
   });
 
   it('restores with the version that it loaded, then is the form again, focusing the <h1>, no banner', async () => {

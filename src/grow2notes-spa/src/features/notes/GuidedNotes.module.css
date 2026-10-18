@@ -2,3 +2,12 @@
 .section {
   margin-block-start: var(--section-gap);
 }
+
+/*
+ * After a press of Submit that found the box blank or too long (form-validation.md *Anatomy*): a 4 px bar down the
+ * section, a real border, so that forced colours keep it where they take the box's red.
+ */
+.section[data-invalid] {
+  border-inline-start: 4px solid var(--colour-error);
+  padding-inline-start: var(--space-3);
+}

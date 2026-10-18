@@ -1,0 +1,11 @@
+/* A line of its own under the note's heading (note-form.md *Layout - phone*). */
+.line {
+  margin: var(--space-4) 0 0;
+}
+
+/* base.css's link, on a hit area at least 44 px tall (A32). */
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+}

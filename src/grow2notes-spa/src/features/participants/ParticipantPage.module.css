@@ -8,6 +8,13 @@
   margin-block-start: var(--section-gap);
 }
 
+/* Archive participant after a 1 px rule, apart from the links to other screens above it (participants.md B7). */
+.archive {
+  margin-block-start: var(--space-5);
+  padding-block-start: var(--space-5);
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+}
+
 /* On the wider page, where the goals' rows have room; the list keeps its help text in the reading column itself. */
 .goals {
   margin-block-start: var(--section-gap);

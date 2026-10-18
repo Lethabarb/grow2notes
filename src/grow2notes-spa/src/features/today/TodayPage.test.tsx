@@ -6,9 +6,12 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import metaLine from '../../components/MetaLine.module.css';
+import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
+import type { Draft, NoteAnswer, ParticipantHeader, SubmittedNote } from '../notes/noteQueries.ts';
 import type { AdminParticipant } from '../participants/participantsQuery.ts';
-import { todayQuery, type TodayList, type TodayParticipant } from './todayQuery.ts';
+import { todayQuery, type TodayList, type TodayNote, type TodayParticipant } from './todayQuery.ts';
 
 // A memory router and a browser router alike.
 type Router = ReturnType<typeof createMemoryRouter>;
@@ -35,10 +38,37 @@ const worker: Me = {
   today: '2026-10-01',
 };
 
-/** A made-up participant on the Today list. */
-function madeUp(id: string, givenName: string, familyName: string): TodayParticipant {
-  return { id, givenName, familyName };
+/** A made-up participant on the Today list, with no note unless given one. */
+function madeUp(id: string, givenName: string, familyName: string, note: TodayNote | null = null): TodayParticipant {
+  return { id, givenName, familyName, note };
 }
+
+// Today's notes as the rows give them, each made up (A35): Alex P., another worker, started a draft at 9:14 am in
+// Melbourne and submitted a note at 4:12 pm; the signed-in user last saved their own draft at 9:42 am.
+const alexsDraft: TodayNote = {
+  status: 'Draft',
+  authorDisplayName: 'Alex P.',
+  isMine: false,
+  startedAtUtc: '2026-09-30T23:14:00Z',
+  isFlagged: false,
+};
+const myDraft: TodayNote = {
+  status: 'Draft',
+  authorDisplayName: 'Alex Pham',
+  isMine: true,
+  startedAtUtc: '2026-09-30T23:05:00Z',
+  savedAtUtc: '2026-09-30T23:42:00Z',
+  isFlagged: false,
+};
+const alexsSubmitted: TodayNote = {
+  status: 'Submitted',
+  authorDisplayName: 'Alex P.',
+  isMine: false,
+  startedAtUtc: '2026-09-30T23:14:00Z',
+  firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
+  isFlagged: false,
+};
+const mySubmitted: TodayNote = { ...alexsSubmitted, authorDisplayName: 'Alex Pham', isMine: true };
 
 const zara = madeUp('1f7c3a9e-5d21-4b48-8e6f-0a2c4d7b9e13', 'Zara', 'Ali');
 const jane = madeUp('3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95', 'Jane', 'Citizen');
@@ -78,7 +108,8 @@ function listOf(participants: readonly TodayParticipant[], date = '2026-10-01'):
 
 /** Jane as the admin list gives her, active or archived, with the version that the row then has. */
 function janeInTheAdminList(status: AdminParticipant['status'], rowVersion: string): AdminParticipant {
-  return { ...jane, dateOfBirth: '1987-03-07', status, rowVersion };
+  const { id, givenName, familyName } = jane;
+  return { id, givenName, familyName, dateOfBirth: '1987-03-07', status, rowVersion };
 }
 
 /** How the server meets a request: an answer, or a failure as `fetch` has one. */
@@ -95,12 +126,45 @@ function bodiless(status: number): Answer {
   return () => Promise.resolve(new Response(null, { status }));
 }
 
-/** An RFC 9457 problem, as the API answers a failure (design.md §6.1). */
-function problem(status: number): Answer {
-  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status });
+/** An RFC 9457 problem, as the API answers a failure (design.md §6.1), with what it includes. */
+function problem(status: number, includes: Record<string, unknown> = {}): Answer {
+  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status, ...includes });
   return () =>
     Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/problem+json' } }));
 }
+
+/**
+ * Answers `participant`'s header and their note for 1 October 2026 (design.md §6.3), which their row opens: the note
+ * itself, `GET {base}`, with `note`, and, for one that is not submitted, its form with `draft`.
+ */
+function serveNoteOf(participant: TodayParticipant, note: Answer, draft?: Answer) {
+  const { id, givenName, familyName } = participant;
+  serve(`/api/participants/${id}`, json({ id, givenName, familyName, status: 'Active' } satisfies ParticipantHeader));
+  serve(`/api/participants/${id}/notes/2026-10-01`, note);
+  if (draft !== undefined) {
+    serve(`/api/participants/${id}/notes/2026-10-01/draft`, draft);
+  }
+}
+
+/** A new note's template, as `GET {base}/draft` gives it, with no goals. */
+const newNote: Draft = {
+  baseVersion: 0,
+  isSaved: false,
+  listsVersion: 'lists-1',
+  guidePrompts: '',
+  goals: [],
+  narrative: '',
+  isFlagged: false,
+  flagReason: null,
+};
+
+/** Alex P.'s note for Jane, as `GET {base}` gives it once submitted at 4:12 pm, unflagged, with no goals. */
+const alexsSubmittedNote: SubmittedNote = {
+  status: 'Submitted',
+  author: { displayName: 'Alex P.' },
+  firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
+  current: { narrative: 'Jane made toast.', goals: [], isFlagged: false, flagReason: null },
+};
 
 /** No connection, which `fetch` rejects at once. */
 const noConnection: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -221,7 +285,13 @@ function rowList(): HTMLElement | null {
   return within(main()).queryByRole('list');
 }
 
-/** The rows' links, in order, each row holding exactly one link and nothing else to read. */
+/** The line that describes `link`, or `null` for a row with none. */
+function statusLine(link: HTMLElement): HTMLElement | null {
+  const describedBy = link.getAttribute('aria-describedby');
+  return describedBy === null ? null : document.getElementById(describedBy);
+}
+
+/** The rows' links, in order, each row holding exactly one link and nothing else to read but the line it describes. */
 function rowLinks(): HTMLElement[] {
   const list = rowList();
   if (list === null) {
@@ -233,9 +303,21 @@ function rowLinks(): HTMLElement[] {
     .map((row) => {
       const links = within(row).getAllByRole('link');
       expect(links).toHaveLength(1);
-      expect(row.textContent).toBe(links[0].textContent);
+      expect(row.textContent).toBe(`${links[0].textContent}${statusLine(links[0])?.textContent ?? ''}`);
       return links[0];
     });
+}
+
+/**
+ * The words of the status line of the row named `name`, as they show: without what only screen readers get, and with
+ * the space after each dot once, as the browser shows it, where the part before it ends in the space of its own dot.
+ */
+function shownStatus(name: string): string | undefined {
+  const line = statusLine(rowLink(name))?.cloneNode(true) as HTMLElement | undefined;
+  line?.querySelectorAll('.visually-hidden').forEach((hidden) => {
+    hidden.remove();
+  });
+  return line?.textContent.replaceAll(/ {2,}/g, ' ');
 }
 
 /** The names of the rows shown, in order. */
@@ -371,7 +453,7 @@ describe('Today', () => {
 
     expect(listedNames()).toEqual(names);
     for (const link of rowLinks()) {
-      // No second line: the row has no status until a note exists, which T09 shows.
+      // No second line: nobody has a note today (A17).
       expect(link).not.toHaveAttribute('aria-describedby');
       expect(link.closest('li')?.querySelector('p')).toBeNull();
     }
@@ -388,7 +470,7 @@ describe('Today', () => {
   it('shows its <h1>, "Today · Thursday 1 October", the hidden <h2>, Find a participant, then the rows', async () => {
     await openToday();
 
-    expect(shownHeading()).toBe(`Today · Thursday 1${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Thursday 1${nbsp}October`);
     expect(pageHeading()).toHaveAccessibleName(`Today, Thursday 1${nbsp}October`);
     expect(pageHeading().querySelector('time')).toHaveAttribute('datetime', '2026-10-01');
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
@@ -409,7 +491,7 @@ describe('Today', () => {
     expect(new Date().getDate()).toBe(3);
     await openToday({ ...worker, today: '2026-10-04' }, listOf(people, '2026-10-04'));
 
-    expect(shownHeading()).toBe(`Today · Sunday 4${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Sunday 4${nbsp}October`);
     expect(pageHeading()).toHaveAccessibleName(`Today, Sunday 4${nbsp}October`);
     const links = rowLinks();
     expect(links).toHaveLength(people.length);
@@ -460,6 +542,147 @@ describe('Today', () => {
   });
 });
 
+describe("Today, each row's note", () => {
+  it.each([
+    { form: 'your own draft', note: myDraft, shown: `Draft${nbsp}· You${nbsp}· saved 9:42${nbsp}am` },
+    { form: "someone else's draft", note: alexsDraft, shown: `Draft${nbsp}· Alex P.${nbsp}· started 9:14${nbsp}am` },
+    {
+      form: "someone else's submitted note",
+      note: alexsSubmitted,
+      shown: `Submitted${nbsp}· Alex P.${nbsp}· 4:12${nbsp}pm`,
+    },
+    { form: 'your own submitted note', note: mySubmitted, shown: `Submitted${nbsp}· You${nbsp}· 4:12${nbsp}pm` },
+  ])('shows $form as "$shown", read as the row link\'s description', async ({ note, shown }) => {
+    await openToday(worker, listOf([zara, madeUp(jane.id, 'Jane', 'Citizen', note), ravi]));
+
+    const link = rowLink('Jane Citizen');
+    expect(link).toHaveAccessibleName('Jane Citizen');
+    expect(shownStatus('Jane Citizen')).toBe(shown);
+    // Each dot hidden from screen readers, which read a comma in its place.
+    expect(link).toHaveAccessibleDescription(shown.replaceAll(`${nbsp}·`, ','));
+    const line = statusLine(link)!;
+    expect(line.tagName).toBe('P');
+    expect(link.closest('li')).toContainElement(line);
+    expect(within(line).queryByText('Flagged')).toBeNull();
+  });
+
+  it.each([
+    { role: 'a worker', me: worker },
+    { role: 'a manager', me: manager },
+  ])("reads Alex P.'s draft as \"Draft · Alex P. · started 9:14 am\" for $role alike", async ({ me }) => {
+    await openToday(me, listOf([madeUp(jane.id, 'Jane', 'Citizen', alexsDraft)]));
+
+    expect(shownStatus('Jane Citizen')).toBe(`Draft${nbsp}· Alex P.${nbsp}· started 9:14${nbsp}am`);
+  });
+
+  it('makes the status word alone bold, and puts each time in a <time> of its instant in UTC', async () => {
+    await openToday(
+      worker,
+      listOf([madeUp(jane.id, 'Jane', 'Citizen', myDraft), madeUp(ravi.id, 'Ravi', 'de Silva', alexsSubmitted)]),
+    );
+
+    for (const [name, word, utc, shown] of [
+      ['Jane Citizen', 'Draft', '2026-09-30T23:42:00Z', `9:42${nbsp}am`],
+      ['Ravi de Silva', 'Submitted', '2026-10-01T06:12:00Z', `4:12${nbsp}pm`],
+    ]) {
+      const line = statusLine(rowLink(name))!;
+      const bold = Array.from(line.querySelectorAll('span')).filter(
+        (span) => getComputedStyle(span).fontWeight === '700',
+      );
+      expect(bold.map((span) => span.textContent)).toEqual([word]);
+      const times = line.querySelectorAll('time');
+      expect(times).toHaveLength(1);
+      expect(times[0]).toHaveAttribute('datetime', utc);
+      expect(times[0].textContent).toBe(shown);
+    }
+  });
+
+  it('keeps each part on one line where it fits, and wraps a long name inside its part, never cut short', async () => {
+    const long = 'Alexandra Konstantinopoulou-Featherstonehaugh';
+    await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', { ...alexsDraft, authorDisplayName: long })]));
+
+    const line = statusLine(rowLink('Jane Citizen'))!;
+    expect(shownStatus('Jane Citizen')).toBe(`Draft${nbsp}· ${long}${nbsp}· started 9:14${nbsp}am`);
+    expect(line).toHaveStyle({ overflowWrap: 'anywhere' });
+    const parts = Array.from(line.querySelectorAll(`.${metaLine.part}`));
+    expect(parts.map((part) => part.textContent)).toEqual([
+      `Draft${nbsp}·, `,
+      `${long}${nbsp}·, `,
+      `started 9:14${nbsp}am`,
+    ]);
+    for (const part of parts) {
+      expect(part).toHaveStyle({ display: 'inline-block' });
+      expect(part).not.toHaveStyle({ whiteSpace: 'nowrap' });
+      expect(part).not.toHaveStyle({ textOverflow: 'ellipsis' });
+    }
+  });
+
+  it('shows Flagged after the line of a flagged submitted note alone, after a pause, never on a draft', async () => {
+    await openToday(
+      worker,
+      listOf([
+        // A draft's flag is seen by no one else (design.md §3.6), so no draft shows it, whatever it holds.
+        madeUp(zara.id, 'Zara', 'Ali', { ...alexsDraft, isFlagged: true }),
+        madeUp(jane.id, 'Jane', 'Citizen', { ...alexsSubmitted, isFlagged: true }),
+        madeUp(ravi.id, 'Ravi', 'de Silva', alexsSubmitted),
+      ]),
+    );
+
+    expect(shownStatus('Jane Citizen')).toBe(`Submitted${nbsp}· Alex P.${nbsp}· 4:12${nbsp}pm Flagged`);
+    expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Submitted, Alex P., 4:12${nbsp}pm, Flagged`);
+    const tag = within(statusLine(rowLink('Jane Citizen'))!).getByText('Flagged');
+    expect(tag).toHaveClass(tagStyles.tag, tagStyles.attention);
+    // After a space, where the line breaks when the tag does not fit, so that it drops to its own line, as at 320 px.
+    expect(tag.previousSibling?.textContent).toBe(' ');
+    for (const name of ['Zara Ali', 'Ravi de Silva']) {
+      expect(within(statusLine(rowLink(name))!).queryByText('Flagged')).toBeNull();
+    }
+  });
+
+  it('says "midday" for a time of exactly 12:00 in Melbourne, 02:00Z on 1 October 2026', async () => {
+    const atMidday = { ...alexsSubmitted, firstSubmittedAtUtc: '2026-10-01T02:00:00Z' };
+    await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', atMidday)]));
+
+    expect(shownStatus('Jane Citizen')).toBe(`Submitted${nbsp}· Alex P.${nbsp}· midday`);
+    expect(statusLine(rowLink('Jane Citizen'))?.querySelector('time')).toHaveAttribute(
+      'datetime',
+      '2026-10-01T02:00:00Z',
+    );
+  });
+
+  // Daylight saving starts at 2 am on Sunday 4 October 2026: 15:59Z on 3 October is 1:59 am in standard time (UTC+10),
+  // and 16:01Z, two minutes on, 3:01 am in daylight time (UTC+11).
+  it('gives the right time just before and just after the change to daylight saving on 4 October 2026', async () => {
+    const before = { ...alexsDraft, startedAtUtc: '2026-10-03T15:59:00Z' };
+    const after = {
+      ...alexsSubmitted,
+      startedAtUtc: '2026-10-03T15:30:00Z',
+      firstSubmittedAtUtc: '2026-10-03T16:01:00Z',
+    };
+    await openToday(
+      { ...worker, today: '2026-10-04' },
+      listOf([madeUp(jane.id, 'Jane', 'Citizen', before), madeUp(ravi.id, 'Ravi', 'de Silva', after)], '2026-10-04'),
+    );
+
+    expect(shownStatus('Jane Citizen')).toBe(`Draft${nbsp}· Alex P.${nbsp}· started 1:59${nbsp}am`);
+    expect(shownStatus('Ravi de Silva')).toBe(`Submitted${nbsp}· Alex P.${nbsp}· 3:01${nbsp}am`);
+  });
+
+  it('gives a row with no note no line and no description, beside rows with one', async () => {
+    await openToday(
+      worker,
+      listOf([madeUp(zara.id, 'Zara', 'Ali', alexsDraft), jane, madeUp(ravi.id, 'Ravi', 'de Silva', mySubmitted)]),
+    );
+
+    const link = rowLink('Jane Citizen');
+    expect(link).not.toHaveAttribute('aria-describedby');
+    expect(link).toHaveAccessibleDescription('');
+    expect(link.closest('li')?.querySelector('p')).toBeNull();
+    expect(statusLine(rowLink('Zara Ali'))).not.toBeNull();
+    expect(statusLine(rowLink('Ravi de Silva'))).not.toBeNull();
+  });
+});
+
 describe('Today, opening a row', () => {
   // On a browser router, as `main.tsx` uses, so that the history is the window's own.
   it("pushes the list date's note with no router state, leaving only React Router's own in history.state", async () => {
@@ -496,6 +719,55 @@ describe('Today, opening a row', () => {
     expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     expect(window.scrollY).toBe(600);
   });
+
+  // Today fetches its list only as it shows and as the page comes back into view, so a row's line can be out of date;
+  // the row never opens by it, as the note's page asks the server and shows what it says then.
+  it("opens the server's empty form at a row whose line says Alex P.'s draft, which was discarded since", async () => {
+    const { router } = await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', alexsDraft)]));
+    serveNoteOf(jane, problem(404), json(newNote));
+
+    await press(rowLink('Jane Citizen'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
+    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('');
+    expect(main()).not.toHaveTextContent(/started/);
+  });
+
+  it("opens the server's read view at a row whose line says Alex P.'s draft, which was submitted since", async () => {
+    const { router } = await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', alexsDraft)]));
+    serveNoteOf(jane, json(alexsSubmittedNote));
+
+    await press(rowLink('Jane Citizen'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
+    expect(within(main()).getByText(/^Written by Alex P\./)).toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+    expect(sent(`/api/participants/${jane.id}/notes/2026-10-01/draft`)).toBe(0);
+  });
+
+  it('says who started the note, as the server says, at a row with no line, as Alex P. began it since', async () => {
+    const { router } = await openToday(worker, listOf([jane]));
+    serveNoteOf(
+      jane,
+      json({ status: 'Draft' } satisfies NoteAnswer),
+      problem(409, {
+        code: 'note.in_progress_by_other',
+        authorDisplayName: 'Alex P.',
+        startedAtUtc: '2026-09-30T23:14:00Z',
+      }),
+    );
+
+    await press(rowLink('Jane Citizen'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
+    expect(within(main()).getByText(/started/).textContent).toBe(
+      `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    );
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+  });
 });
 
 describe('Today while the list loads', () => {
@@ -504,7 +776,7 @@ describe('Today while the list loads', () => {
     renderApp('/');
 
     expect(document.title).toBe('Grow2Notes – Today');
-    expect(shownHeading()).toBe(`Today · Thursday 1${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Thursday 1${nbsp}October`);
     // In the page from the first render, empty, so that the words written into it later are read.
     expect(line()).toBeEmptyDOMElement();
     expect(main().textContent).toBe(pageHeading().textContent);
@@ -663,8 +935,12 @@ describe('Today, finding a participant', () => {
     expect(listedNames()).toEqual([name]);
   });
 
-  it('matches "Alex" to only the names that hold it, whoever is signed in', async () => {
-    await openFindable();
+  it('matches "Alex" to only the names that hold it, never a row whose note Alex P. or Alex Pham wrote', async () => {
+    // Everyone else has a note today, Alex P.'s, or that of Alex Pham, who is signed in.
+    const written = findable.map((person) =>
+      person === mia || person === alex ? person : { ...person, note: person === jane ? mySubmitted : alexsDraft },
+    );
+    await openToday(worker, listOf(written));
 
     type(field(), 'Alex');
 
@@ -843,7 +1119,7 @@ describe('Today, finding a participant', () => {
     focusWindow();
     await settle();
 
-    expect(shownHeading()).toBe(`Today · Friday 2${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Friday 2${nbsp}October`);
     expect(field()).toHaveValue('jan');
     expect(listedNames()).toEqual(['Jane Citizen']);
     expect(rowLink('Jane Citizen')).toHaveAttribute('href', `/participants/${jane.id}/notes/2026-10-02`);
@@ -1040,7 +1316,7 @@ describe('Today, refreshed', () => {
     focusWindow();
     await settle();
 
-    expect(shownHeading()).toBe(`Today · Friday 2${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Friday 2${nbsp}October`);
     expect(listedNames()).toEqual(['Jane Citizen', 'Priya Kumar']);
     expect(rowLink('Jane Citizen')).toHaveAttribute('href', `/participants/${jane.id}/notes/2026-10-02`);
   });
@@ -1053,7 +1329,7 @@ describe('Today, refreshed', () => {
     await settle();
     await settle();
 
-    expect(shownHeading()).toBe(`Today · Friday 2${nbsp}October`);
+    expect(shownHeading()).toBe(`Today${nbsp}· Friday 2${nbsp}October`);
     expect(rowLink('Jane Citizen')).toHaveAttribute('href', `/participants/${jane.id}/notes/2026-10-02`);
     await wait(60_000);
     expect(sent(mePath)).toBe(2);

@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as wait } from 'node:timers/promises';
 import type { Page, Route } from '@playwright/test';
 import type { Me } from './me.ts';
 import type { AdminParticipant } from './participants.ts';
+import type { NoteOf } from './today.ts';
 
 /** A goal on the note form: its ID and its wording, as the manager's list or a draft's snapshot holds it. */
 export type NoteGoal = { id: string; text: string };
@@ -10,22 +11,68 @@ export type NoteGoal = { id: string; text: string };
 /** Who started another user's draft, as `409 note.in_progress_by_other` names them (design.md §6.9). */
 export type StartedBy = { authorDisplayName: string; startedAtUtc: string };
 
-/** A `PUT {base}/draft` that the page sent: its JSON body (design.md §6.3), as far as T08's form fills it. */
+/** A `PUT {base}/draft` that the page sent: its JSON body (design.md §6.3), as far as the form fills it. */
 export type DraftSave = {
   clientId: string;
   seq: number;
   listsVersion?: string;
   narrative: string;
   tickedGoalIds: string[];
+  isFlagged: boolean;
+  flagReason: string | null;
 };
 
-/** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks and text. */
+/** A `POST {base}/versions` that the page sent (design.md §6.3): its JSON body, as far as Submit fills it. */
+export type VersionBody = {
+  baseVersion: number;
+  narrative: string;
+  tickedGoalIds: string[];
+  isFlagged: boolean;
+  flagReason: string | null;
+};
+
+/** A Submit that the page sent: its `Idempotency-Key` and its body. */
+export type VersionPost = { idempotencyKey: string | undefined; body: VersionBody };
+
+/** A note's flag status, as the API names it (design.md §5.3), which a manager's Past notes rows carry. */
+export type FlagStatus = 'None' | 'ToReview' | 'Reviewed';
+
+/** A submitted note to put in the store, as `addSubmitted` takes it: who wrote it, when, and its version 1. */
+export type SubmittedNote = {
+  authorDisplayName: string;
+  /** The author's user ID, someone else's by default. */
+  authorUserId?: string;
+  firstSubmittedAtUtc: string;
+  narrative?: string;
+  /** Every goal of its snapshot, in order, with its tick. */
+  goals?: { text: string; isTicked: boolean }[];
+  /** The reason of a flagged version; an unflagged one has none. */
+  flagReason?: string;
+  /** Set by hand, as T11 and T16 will set it; `None` by default. */
+  flagStatus?: FlagStatus;
+};
+
+/** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks, text and flag. */
 type HeldDraft = StartedBy & {
   authorUserId: string;
   snapshot: NoteGoal[];
   ticked: string[];
   narrative: string;
+  isFlagged: boolean;
+  flagReason: string | null;
   savedAtUtc: string;
+};
+
+/** A submitted note as the store keeps it: its header and its one version (design.md §5.3). */
+type HeldSubmitted = StartedBy & {
+  authorUserId: string;
+  firstSubmittedAtUtc: string;
+  idempotencyKey: string;
+  narrative: string;
+  goals: { text: string; isTicked: boolean }[];
+  isFlagged: boolean;
+  flagReason: string | null;
+  flagStatus: FlagStatus;
 };
 
 /** Alex P., another worker, who started a note at 9:14 am in Melbourne on 1 October 2026 (note-form.md's sketch). */
@@ -34,9 +81,17 @@ export const alexStarted: StartedBy = { authorDisplayName: 'Alex P.', startedAtU
 /** 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm" on that day in Melbourne. */
 const savedAtFourTwelve = '2026-10-01T06:12:00.000Z';
 
-// A participant's header, and their note for a day's working copy, which the form reads and autosave puts.
+// A participant's header; their history; their note for a day, which the page reads first; its working copy, which
+// the form reads and autosave puts; and its versions, which Submit posts to.
 const headerPath = /^\/api\/participants\/([^/]+)$/;
+const historyPath = /^\/api\/participants\/([^/]+)\/notes$/;
+const notePath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)$/;
 const draftPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/draft$/;
+const versionsPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/versions$/;
+const notePaths = [headerPath, historyPath, notePath, draftPath, versionsPath];
+
+/** A page of a history, as design.md §6.1 *Lists* has it. */
+const pageSize = 30;
 
 /** An RFC 9457 problem with the API's stable `code` and any extensions (design.md §6.9). */
 const problem = (status: number, code: string, extensions: Record<string, unknown> = {}) => ({
@@ -44,6 +99,15 @@ const problem = (status: number, code: string, extensions: Record<string, unknow
   contentType: 'application/problem+json',
   body: JSON.stringify({ type: 'about:blank', title: code, status, code, ...extensions }),
 });
+
+/** The validation filter's `422`, naming the field that it refuses. */
+const refused = (field: string) => problem(422, 'validation.failed', { errors: { [field]: ['Refused.'] } });
+
+/** Blank as .NET's `string.IsNullOrWhiteSpace` counts it, U+0085 included, which `trim()` keeps. */
+const isBlank = (text: string | null) => text === null || /^[\s\u0085]*$/.test(text);
+
+/** A GUID, as the API binds the `Idempotency-Key` header. */
+const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A goal as the API gives it, its ID and wording alone, from a goal with more, such as goals.ts's. */
 const goalOf = ({ id, text }: NoteGoal): NoteGoal => ({ id, text });
@@ -54,9 +118,9 @@ const versionOf = (goals: readonly NoteGoal[]) =>
     .update(JSON.stringify(goals.map(({ id, text }) => [id, text])))
     .digest('base64');
 
-/** The day before `date`, both written `yyyy-MM-dd`. */
-const dayBefore = (date: string) =>
-  new Date(Date.parse(`${date}T00:00:00Z`) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+/** The date `days` after `date`, both written `yyyy-MM-dd`; before it for a negative number. */
+export const daysAfter = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 type StoreOptions = {
   /** The server's date in Melbourne, such as `me.today`, which decides which first saves start a note. */
@@ -67,16 +131,18 @@ type StoreOptions = {
   goals?: Readonly<Record<string, readonly NoteGoal[]>>;
   /** The organisation's guide prompts, `""` for none. */
   prompts?: string;
-  /** The time that each save answers with, by default 4:12 pm in Melbourne on 1 October 2026. */
+  /** The time that each save and each Submit answers with, by default 4:12 pm in Melbourne on 1 October 2026. */
   savedAtUtc?: string;
 };
 
 /**
- * Participants' notes as the API keeps them (design.md §5.5 to §5.7), in the browser, so that no note request reaches
- * the app, where no made-up person has a session: a participant's header; the note form, a template, the caller's own
- * draft or another user's `409`, or `404` for a date after today and, to a worker, before yesterday (design.md A65);
- * and autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's own draft.
- * `serve` answers one page's requests as one person's.
+ * Participants' notes as the API keeps them (design.md §5.5 to §5.8), in the browser, so that no note request reaches
+ * the app, where no made-up person has a session: a participant's header; their history; the note, a submitted note's
+ * current version, a draft's `{status}` or `404` for none; the note form, a template, the caller's own draft or
+ * another user's `409`, or `404` for a date after today, to a worker for one before yesterday (design.md A65), and for
+ * a submitted note; autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's
+ * own draft; and Submit's `POST {base}/versions`, with its checks in the API's order. `serve` answers one page's
+ * requests as one person's.
  */
 export function notesStore({
   today: firstToday,
@@ -86,13 +152,30 @@ export function notesStore({
   savedAtUtc = savedAtFourTwelve,
 }: StoreOptions) {
   let today = firstToday;
+  let loseNextSubmitAnswer = false;
   const headers = new Map(participants.map(({ id, givenName, familyName, status }) => [
     id,
     { id, givenName, familyName, status },
   ]));
   const goals = new Map(participants.map(({ id }) => [id, (firstGoals[id] ?? []).map(goalOf)]));
   const drafts = new Map<string, HeldDraft>();
+  const submitted = new Map<string, HeldSubmitted>();
   const saves: DraftSave[] = [];
+  const submits: VersionPost[] = [];
+
+  /** The note at `{base}`, as `GET {base}` answers it: a submitted note's current version, a draft's status or none. */
+  function note(participantId: string, noteDate: string) {
+    const key = `${participantId}/${noteDate}`;
+    const held = submitted.get(key);
+    if (held !== undefined && headers.has(participantId)) {
+      const { authorDisplayName, firstSubmittedAtUtc, narrative, isFlagged, flagReason, goals: ticks } = held;
+      const author = { displayName: authorDisplayName };
+      const current = { narrative, isFlagged, flagReason, goals: ticks };
+      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, current } };
+    }
+
+    return headers.has(participantId) && drafts.has(key) ? { json: { status: 'Draft' } } : { status: 404 };
+  }
 
   /** The note form for `me`, as `GET {base}/draft` answers it. */
   function form(me: Me, participantId: string, noteDate: string) {
@@ -110,12 +193,19 @@ export function notesStore({
         guidePrompts: prompts,
         goals: draft.snapshot.map((goal) => ({ ...goal, isTicked: draft.ticked.includes(goal.id) })),
         narrative: draft.narrative,
+        isFlagged: draft.isFlagged,
+        flagReason: draft.flagReason,
         savedAtUtc: draft.savedAtUtc,
       };
       return { json };
     }
 
-    if (noteDate > today || (noteDate < dayBefore(today) && me.role !== 'Manager')) {
+    // A submitted note has no form until T14 adds pending edits.
+    if (
+      submitted.has(`${participantId}/${noteDate}`)
+      || noteDate > today
+      || (noteDate < daysAfter(today, -1) && me.role !== 'Manager')
+    ) {
       return { status: 404 };
     }
 
@@ -126,6 +216,8 @@ export function notesStore({
       guidePrompts: prompts,
       goals: listed.map((goal) => ({ ...goal, isTicked: false })),
       narrative: '',
+      isFlagged: false,
+      flagReason: null,
     };
     return { json };
   }
@@ -136,6 +228,13 @@ export function notesStore({
     const key = `${participantId}/${noteDate}`;
     const draft = drafts.get(key);
     const ticked = [...new Set(sent.tickedGoalIds)];
+    // The reason only while flagged, as the API stores it (design.md §5.3).
+    const flag = { isFlagged: sent.isFlagged, flagReason: sent.isFlagged ? sent.flagReason : null };
+    if (submitted.has(key)) {
+      // The draft's base, 0, is stale once its note is submitted, and the caller has no pending edit (§6.7).
+      return problem(409, 'note.version_conflict');
+    }
+
     if (draft !== undefined) {
       if (draft.authorUserId !== me.userId) {
         const { authorDisplayName, startedAtUtc } = draft;
@@ -143,10 +242,10 @@ export function notesStore({
       }
 
       if (!ticked.every((id) => draft.snapshot.some((goal) => goal.id === id))) {
-        return problem(422, 'validation.failed', { errors: { tickedGoalIds: ['Unknown goal.'] } });
+        return refused('tickedGoalIds');
       }
 
-      Object.assign(draft, { ticked, narrative: sent.narrative, savedAtUtc });
+      Object.assign(draft, { ticked, narrative: sent.narrative, ...flag, savedAtUtc });
       return { status: 200, json: { savedAtUtc } };
     }
 
@@ -168,7 +267,7 @@ export function notesStore({
     }
 
     if (!ticked.every((id) => listed.some((goal) => goal.id === id))) {
-      return problem(422, 'validation.failed', { errors: { tickedGoalIds: ['Unknown goal.'] } });
+      return refused('tickedGoalIds');
     }
 
     drafts.set(key, {
@@ -178,48 +277,216 @@ export function notesStore({
       snapshot: [...listed],
       ticked,
       narrative: sent.narrative,
+      ...flag,
       savedAtUtc,
     });
     return { status: 201, json: { savedAtUtc } };
   }
 
+  /** Submit, as `POST {base}/versions` answers it, with its checks in the order of T09's Notes. */
+  function submit(
+    me: Me,
+    participantId: string,
+    noteDate: string,
+    idempotencyKey: string | undefined,
+    sent: VersionBody,
+  ) {
+    submits.push({ idempotencyKey, body: sent });
+    if (idempotencyKey === undefined || !guid.test(idempotencyKey)) {
+      return { status: 400 };
+    }
+
+    // The body's own checks, from the validation filter.
+    if (sent.baseVersion !== 0) {
+      return refused('baseVersion');
+    }
+
+    if (isBlank(sent.narrative) || sent.narrative.length > 20_000) {
+      return refused('narrative');
+    }
+
+    if (sent.flagReason !== null && sent.flagReason.length > 200) {
+      return refused('flagReason');
+    }
+
+    if (!Array.isArray(sent.tickedGoalIds)) {
+      return refused('tickedGoalIds');
+    }
+
+    const key = `${participantId}/${noteDate}`;
+    const draft = drafts.get(key);
+    const held = submitted.get(key);
+    if (!headers.has(participantId) || (draft === undefined && held === undefined)) {
+      return { status: 404 };
+    }
+
+    if (draft !== undefined && draft.authorUserId !== me.userId) {
+      const { authorDisplayName, startedAtUtc } = draft;
+      return problem(409, 'note.in_progress_by_other', { authorDisplayName, startedAtUtc });
+    }
+
+    if (held?.idempotencyKey === idempotencyKey) {
+      return { status: 200, json: { versionNumber: 1, createdAtUtc: held.firstSubmittedAtUtc } };
+    }
+
+    if ([...submitted.values()].some((other) => other.idempotencyKey === idempotencyKey)) {
+      return refused('idempotencyKey');
+    }
+
+    if (draft === undefined) {
+      return problem(409, 'note.version_conflict');
+    }
+
+    if (sent.isFlagged && isBlank(sent.flagReason)) {
+      return refused('flagReason');
+    }
+
+    const ticked = new Set(sent.tickedGoalIds);
+    if (![...ticked].every((id) => draft.snapshot.some((goal) => goal.id === id))) {
+      return refused('tickedGoalIds');
+    }
+
+    submitted.set(key, {
+      authorUserId: draft.authorUserId,
+      authorDisplayName: draft.authorDisplayName,
+      startedAtUtc: draft.startedAtUtc,
+      firstSubmittedAtUtc: savedAtUtc,
+      idempotencyKey,
+      narrative: sent.narrative,
+      goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: ticked.has(id) })),
+      isFlagged: sent.isFlagged,
+      flagReason: sent.isFlagged ? sent.flagReason : null,
+      flagStatus: 'None',
+    });
+    drafts.delete(key);
+    return { status: 201, json: { versionNumber: 1, createdAtUtc: savedAtUtc } };
+  }
+
+  /**
+   * A participant's history for `me`, as `GET /api/participants/{participantId}/notes?before=` answers it: up to 30
+   * live notes dated before `before`, tomorrow by default, newest first, with `hasMore`, and `flagStatus` on a
+   * manager's rows alone.
+   */
+  function history(me: Me, participantId: string, before: string | null) {
+    if (before !== null && !/^\d{4}-\d{2}-\d{2}$/.test(before)) {
+      return { status: 400 };
+    }
+
+    const until = before ?? daysAfter(today, 1);
+    const ofParticipant = (key: string) => key.startsWith(`${participantId}/`) && key.slice(-10) < until;
+    const rows = [
+      ...[...drafts].filter(([key]) => ofParticipant(key)).map(([key, held]) => ({
+        noteDate: key.slice(-10),
+        status: 'Draft',
+        authorDisplayName: held.authorDisplayName,
+        isFlagged: false,
+        flagStatus: 'None',
+      })),
+      ...[...submitted].filter(([key]) => ofParticipant(key)).map(([key, held]) => ({
+        noteDate: key.slice(-10),
+        status: 'Submitted',
+        authorDisplayName: held.authorDisplayName,
+        isFlagged: held.isFlagged,
+        flagStatus: held.flagStatus,
+      })),
+    ].sort((a, b) => b.noteDate.localeCompare(a.noteDate));
+    const notes = rows
+      .slice(0, pageSize)
+      .map(({ flagStatus, ...row }) => (me.role === 'Manager' ? { ...row, flagStatus } : row));
+    return { json: { notes, hasMore: rows.length > pageSize } };
+  }
+
+  /** The answer to one request of the page's, as `me`'s. */
+  function answer(me: Me, method: string, url: URL, body: () => unknown, idempotencyKey: string | undefined) {
+    const { pathname } = url;
+    const [, headerId] = headerPath.exec(pathname) ?? [];
+    if (headerId !== undefined) {
+      const header = headers.get(headerId);
+      return header === undefined ? { status: 404 } : { json: header };
+    }
+
+    const [, historyOf] = historyPath.exec(pathname) ?? [];
+    if (historyOf !== undefined) {
+      return headers.has(historyOf) ? history(me, historyOf, url.searchParams.get('before')) : { status: 404 };
+    }
+
+    const [, noteOf, noteDateOf = ''] = notePath.exec(pathname) ?? [];
+    if (noteOf !== undefined) {
+      return note(noteOf, noteDateOf);
+    }
+
+    const [, submittedOf, submittedDate = ''] = versionsPath.exec(pathname) ?? [];
+    if (submittedOf !== undefined) {
+      return submit(me, submittedOf, submittedDate, idempotencyKey, body() as VersionBody);
+    }
+
+    const [, participantId = '', noteDate = ''] = draftPath.exec(pathname) ?? [];
+    if (!headers.has(participantId)) {
+      return { status: 404 };
+    }
+
+    return method === 'PUT'
+      ? save(me, participantId, noteDate, body() as DraftSave)
+      : form(me, participantId, noteDate);
+  }
+
   return {
     /**
-     * Answers `page`'s requests for a participant's header and their notes' working copies from now on as `me`'s, each
-     * `latencyMs` after it is sent, as on a slow network. A later call overrides it, as Playwright tries the latest
-     * route first.
+     * Answers `page`'s requests for a participant's header, history and notes from now on as `me`'s, each `latencyMs`
+     * after it is sent, as on a slow network. A later call overrides it, as Playwright tries the latest route first.
      */
     serve: (page: Page, me: Me, { latencyMs = 0 } = {}) =>
       page.route(
-        ({ pathname }) => headerPath.test(pathname) || draftPath.test(pathname),
+        ({ pathname }) => notePaths.some((path) => path.test(pathname)),
         async (route: Route) => {
           const request = route.request();
-          const { pathname } = new URL(request.url());
           await wait(latencyMs);
-          const [, headerId] = headerPath.exec(pathname) ?? [];
-          if (headerId !== undefined) {
-            const header = headers.get(headerId);
-            await route.fulfill(header === undefined ? { status: 404 } : { json: header });
-            return;
-          }
-
-          const [, participantId = '', noteDate = ''] = draftPath.exec(pathname) ?? [];
-          if (!headers.has(participantId)) {
-            await route.fulfill({ status: 404 });
-            return;
-          }
-
-          await route.fulfill(
-            request.method() === 'PUT'
-              ? save(me, participantId, noteDate, request.postDataJSON() as DraftSave)
-              : form(me, participantId, noteDate),
+          const url = new URL(request.url());
+          const answered = answer(
+            me,
+            request.method(),
+            url,
+            () => request.postDataJSON(),
+            request.headers()['idempotency-key'],
           );
+          if (versionsPath.test(url.pathname) && loseNextSubmitAnswer) {
+            // The version is kept, as the server kept it, but its answer never reaches the page.
+            loseNextSubmitAnswer = false;
+            await route.abort('internetdisconnected');
+            return;
+          }
+
+          await route.fulfill(answered);
         },
       ),
     /** Every save that the pages sent, in order, whatever it was answered. */
     saves,
+    /** Every Submit that the pages sent, in order, whatever it was answered. */
+    submits,
     /** The working copy of a participant's note for a day, as the last save left it, if there is one. */
     draft: (participantId: string, noteDate: string) => drafts.get(`${participantId}/${noteDate}`),
+    /** A participant's submitted note for a day, with its version, if there is one. */
+    submitted: (participantId: string, noteDate: string) => submitted.get(`${participantId}/${noteDate}`),
+    /** Each participant's note today as `me` sees it on Today, for `serveToday`, as it stands when the list is read. */
+    todayNotes: (me: Me): NoteOf => (participantId) => {
+      const key = `${participantId}/${today}`;
+      const draft = drafts.get(key);
+      if (draft !== undefined) {
+        const { authorDisplayName, startedAtUtc } = draft;
+        const isMine = draft.authorUserId === me.userId;
+        const saved = isMine ? { savedAtUtc: draft.savedAtUtc } : {};
+        return { status: 'Draft', authorDisplayName, isMine, startedAtUtc, ...saved, isFlagged: false };
+      }
+
+      const held = submitted.get(key);
+      if (held === undefined) {
+        return null;
+      }
+
+      const { authorDisplayName, startedAtUtc, firstSubmittedAtUtc, isFlagged } = held;
+      const isMine = held.authorUserId === me.userId;
+      return { status: 'Submitted', authorDisplayName, isMine, startedAtUtc, firstSubmittedAtUtc, isFlagged };
+    },
     /** Moves the server's date on, as midnight in Melbourne does. */
     setToday: (date: string) => {
       today = date;
@@ -243,8 +510,55 @@ export function notesStore({
         snapshot: [...(goals.get(participantId) ?? [])],
         ticked: [],
         narrative: '',
+        isFlagged: false,
+        flagReason: null,
         savedAtUtc: startedBy.startedAtUtc,
       });
+    },
+    /** Submits the draft of a participant's note for a day as its author does in another tab, with what it holds. */
+    submitElsewhere: (participantId: string, noteDate: string) => {
+      const key = `${participantId}/${noteDate}`;
+      const draft = drafts.get(key);
+      if (draft === undefined) {
+        throw new Error(`No draft of ${key} is held.`);
+      }
+
+      submitted.set(key, {
+        authorUserId: draft.authorUserId,
+        authorDisplayName: draft.authorDisplayName,
+        startedAtUtc: draft.startedAtUtc,
+        firstSubmittedAtUtc: savedAtUtc,
+        idempotencyKey: randomUUID(),
+        narrative: draft.narrative,
+        goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: draft.ticked.includes(id) })),
+        isFlagged: draft.isFlagged,
+        flagReason: draft.flagReason,
+        flagStatus: 'None',
+      });
+      drafts.delete(key);
+    },
+    /** Puts a submitted note of a participant's for a day in the store, as if its author had submitted it. */
+    addSubmitted: (participantId: string, noteDate: string, added: SubmittedNote) => {
+      const { flagReason = null } = added;
+      submitted.set(`${participantId}/${noteDate}`, {
+        authorDisplayName: added.authorDisplayName,
+        authorUserId: added.authorUserId ?? 'another user',
+        startedAtUtc: added.firstSubmittedAtUtc,
+        firstSubmittedAtUtc: added.firstSubmittedAtUtc,
+        idempotencyKey: randomUUID(),
+        narrative: added.narrative ?? '',
+        goals: added.goals ?? [],
+        isFlagged: flagReason !== null,
+        flagReason,
+        flagStatus: added.flagStatus ?? 'None',
+      });
+    },
+    /**
+     * Keeps the version that the next Submit makes, as the server does, but aborts its answer, as a phone that loses
+     * its signal while the answer is on its way.
+     */
+    loseNextSubmitAnswer: () => {
+      loseNextSubmitAnswer = true;
     },
   };
 }
@@ -252,14 +566,19 @@ export function notesStore({
 /** What `notesStore` gives. */
 export type NotesStore = ReturnType<typeof notesStore>;
 
+/** Whether `pathname` is one that `failNoteReads` fails. */
+const isNoteRead = (pathname: string) =>
+  [headerPath, historyPath, notePath, draftPath].some((path) => path.test(pathname));
+
 /**
- * Aborts each `GET` of a participant's header and of their note's working copy that the page sends from now on, in the
- * browser, as a phone with no signal would. The form's failure then shows about 1 s after it opens, after the query
- * client's silent retry. A later `serve` of a store overrides it.
+ * Aborts each `GET` of a participant's header, of their history, of their note and of its working copy that the page
+ * sends from now on, in the browser, as a phone with no signal would; with `olderOnly`, only each page of the history
+ * after the first, which Show older asks for with `before`. A failure of the first loads then shows about 1 s after
+ * the page opens, after the query client's silent retry. A later `serve` of a store overrides it.
  */
-export async function failNoteReads(page: Page): Promise<void> {
+export async function failNoteReads(page: Page, { olderOnly = false } = {}): Promise<void> {
   await page.route(
-    ({ pathname }) => headerPath.test(pathname) || draftPath.test(pathname),
+    (url) => (olderOnly ? historyPath.test(url.pathname) && url.searchParams.has('before') : isNoteRead(url.pathname)),
     (route) => (route.request().method() === 'GET' ? route.abort('internetdisconnected') : route.fallback()),
   );
 }

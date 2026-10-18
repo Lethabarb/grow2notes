@@ -15,8 +15,17 @@ const confirmedValue = 'confirm';
 const busyLineDelay = 1_000;
 
 type ConfirmDialogProps = {
-  /** The dialog's name, its `<h2>`: the question, such as "Leave without saving?". */
+  /**
+   * The dialog's name, its `<h2>`: the question, such as "Leave without saving?", or, with `titleName`, the words
+   * before the name, such as "Submit today's note for".
+   */
   title: string;
+  /**
+   * The Submit confirmation's name line (confirm-dialog.md *Anatomy*): the participant's full name, as stored, after
+   * the title's words, on its own line at the `<h1>`'s size, bold, never translated, and wrapping anywhere, so that a
+   * long name is never cut short. The heading names the dialog with both: "Submit today's note for Jane Citizen".
+   */
+  titleName?: string;
   /** Its description, one to three short `<p>`. */
   children: ReactNode;
   /** The top button's words, in the primary style. */
@@ -63,6 +72,7 @@ type ConfirmDialogProps = {
  */
 export function ConfirmDialog({
   title,
+  titleName,
   children,
   primary,
   secondary,
@@ -145,6 +155,14 @@ export function ConfirmDialog({
     >
       <h2 id={titleId} ref={titleRef} tabIndex={initialFocus === 'title' ? -1 : undefined} className={styles.title}>
         {title}
+        {titleName !== undefined && (
+          <>
+            {' '}
+            <span className={styles.titleName} translate="no">
+              {titleName}
+            </span>
+          </>
+        )}
       </h2>
       <div id={bodyId} className={styles.body}>{children}</div>
       <p role="alert" className={styles.error}>

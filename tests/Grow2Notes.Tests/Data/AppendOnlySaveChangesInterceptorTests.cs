@@ -10,8 +10,8 @@ namespace Grow2Notes.Tests.Data;
 /// <c>SaveChanges</c> and <c>SaveChangesAsync</c>: for append-only rows, and for the participant, date and author of a
 /// <see cref="Note"/>; and its place on the app's context. <see cref="InsteadOfTheDatabase"/> ends each save where
 /// the database would take over, and the app's context refuses its save before it would open a connection, so these
-/// tests need no database. <see cref="AuditEventAppendOnlyTests"/> and <see cref="NoteTableTests"/> show it on SQL
-/// Server.
+/// tests need no database. <see cref="AuditEventAppendOnlyTests"/>, <see cref="NoteTableTests"/> and
+/// <see cref="NoteVersionTableTests"/> show it on SQL Server.
 /// </summary>
 public sealed class AppendOnlySaveChangesInterceptorTests
 {

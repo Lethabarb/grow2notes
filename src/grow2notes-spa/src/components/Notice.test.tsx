@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { focusPageHeading } from './focusPageHeading.ts';
@@ -55,5 +55,37 @@ describe('Notice', () => {
     expect(focus.mock.calls.at(-1)?.[0]).toBeUndefined();
     render(<PageHeading>Jane Citizen</PageHeading>);
     expect(notice).toHaveFocus();
+  });
+});
+
+// status-messages.md's success banner, Submit's on Today (today.md component 2).
+describe('Notice in its success tone', () => {
+  const submitted = 'Note for Jane Citizen submitted';
+
+  it("is the screen's route focus, which script alone can focus, with no role or live region", () => {
+    const notice = renderNotice(<Notice tone="success">{submitted}</Notice>);
+
+    expect(notice.textContent).toBe(submitted);
+    expect(notice).toHaveAttribute('data-route-focus');
+    expect(notice).toHaveAttribute('tabindex', '-1');
+    for (const attribute of ['role', 'aria-live', 'aria-label']) {
+      expect(notice).not.toHaveAttribute(attribute);
+    }
+    // Shown, not focused: the shell focuses it as the screen arrives.
+    expect(notice).not.toHaveFocus();
+    expect(notice.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('draws its bar in the success colour on its tint, its sentence bold, with a tick in place of the "i"', () => {
+    const notice = renderNotice(<Notice tone="success">{submitted}</Notice>);
+    const plain = renderNotice(<Notice>{submitted}</Notice>);
+
+    expect(notice).toHaveStyle({ background: 'var(--colour-success-tint)' });
+    expect(getComputedStyle(notice).getPropertyValue('--notice-edge')).toBe('var(--colour-success)');
+    expect(within(notice).getByText(submitted)).toHaveStyle({ fontWeight: '700' });
+    expect(notice.querySelectorAll('svg circle')).toHaveLength(1);
+    expect(notice.querySelector('svg path')).not.toBeNull();
+    expect(getComputedStyle(plain).getPropertyValue('--notice-edge')).toBe('var(--colour-action)');
+    expect(within(plain).getByText(submitted)).not.toHaveStyle({ fontWeight: '700' });
   });
 });

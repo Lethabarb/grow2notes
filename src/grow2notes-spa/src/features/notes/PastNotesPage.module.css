@@ -1,0 +1,19 @@
+/* The reading column (participant-notes.md *Layout - laptop*): 40rem, left-aligned, on a phone the whole width. */
+.column {
+  max-inline-size: var(--measure);
+}
+
+/* The <h1>'s caption, on its own line, in body type and the secondary colour (note-identity-header.md). */
+.caption {
+  display: block;
+  margin-block-end: var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
+/* A manager's actions under the <h1>, then the list under them, or under the <h1> itself for a worker. */
+.actions,
+.notes {
+  margin-block-start: var(--space-5);
+}

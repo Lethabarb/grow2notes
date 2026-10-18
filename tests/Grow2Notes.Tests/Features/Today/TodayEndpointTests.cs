@@ -5,6 +5,7 @@ using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -14,10 +15,11 @@ namespace Grow2Notes.Tests.Features.Today;
 /// <summary>
 /// <c>GET /api/today</c> (design.md §6.3), called with the test-only sign-in (<see cref="TestSignIn"/>): every
 /// signed-in user gets the date in Melbourne and their own organisation's active participants, and none of the other's
-/// (§5.9 item 7), sorted by family name, then given name (A5), then ID, as JSON that is never stored (§6.1), and no
-/// call writes an audit event (A28). The tests add their own participants to the seeded organisations, and change no
-/// seeded row (tests/README.md). The endpoint matrix covers who may call it, and <see cref="SignedOutTests"/> what a
-/// signed-out caller gets.
+/// (§5.9 item 7), sorted by family name, then given name (A5), then ID, each with their live note for the day as the
+/// caller sees it, or null (§4.2 item 4), as JSON that is never stored (§6.1), and no call writes an audit
+/// event (A28). The tests add their own participants, users and notes to the seeded organisations, and change no
+/// seeded row (tests/README.md). The endpoint matrix covers who may call it, and <see cref="SignedOutTests"/>
+/// what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -27,6 +29,19 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
 
     // Made up (A35), with milliseconds, which datetime2(3) keeps.
     private static readonly DateTime CreatedAtUtc = new(2026, 10, 2, 3, 4, 5, 678, DateTimeKind.Utc);
+
+    // 4:30 pm on Thursday 1 October 2026 in Melbourne, still in standard time (UTC+10), when the tests of the day's
+    // notes ask for the list.
+    private static readonly DateTimeOffset Now = new(2026, 10, 1, 6, 30, 0, TimeSpan.Zero);
+
+    private static readonly DateOnly Today = new(2026, 10, 1);
+
+    // Made up (A35): a note started at 9:14 am, last saved at 9:42 am and submitted at 4:12 pm that day in Melbourne.
+    private static readonly DateTime StartedAtUtc = new(2026, 9, 30, 23, 14, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime SavedAtUtc = new(2026, 9, 30, 23, 42, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime SubmittedAtUtc = new(2026, 10, 1, 6, 12, 0, DateTimeKind.Utc);
 
     // SQL Server's order of uniqueidentifier values, which compares their last six bytes first, unlike Guid's.
     private static readonly Comparer<Guid> SqlServerGuidOrder =
@@ -42,7 +57,8 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
         var worker = await ListAsync(Caller.WorkerOfA);
         var manager = await ListAsync(Caller.ManagerOfA);
 
-        Assert.Equal(worker.GetRawText(), manager.GetRawText());
+        // The same people, whose notes, which other tests start, differ only in what is the caller's own.
+        Assert.Equal(People(worker), People(manager));
         var ids = ParticipantIds(worker);
         Assert.Equal((await StoredActiveIdsAsync(seeded.A)).Order(), ids.Order());
         Assert.Contains(seeded.A.ParticipantId, ids);
@@ -99,21 +115,157 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
             ids.Where(added.Contains));
     }
 
-    // design.md §6.3's shape, until T09 adds each row's note: the names as typed, accents and all, and never the date
-    // of birth or the status.
+    // design.md §6.3's shape: the names as typed, accents and all, and never the date of birth or the status; and the
+    // note, written as null for a participant with none (A17).
     [Fact]
-    public async Task The_answer_has_the_date_and_each_participant_s_ID_and_names_as_stored()
+    public async Task The_answer_has_the_date_and_each_participant_s_ID_names_as_stored_and_note()
     {
         var added = await AddAsync(seeded.A, ("Nguyễn", "O’Brien-Smith", ParticipantStatus.Active));
 
         var list = await ListAsync(Caller.WorkerOfA);
 
         Assert.Equal(["date", "participants"], list.EnumerateObject().Select(property => property.Name));
-        var participant = list.GetProperty("participants").EnumerateArray().Single(row => Id(row) == added[0]);
+        var participant = Row(list, added[0]);
         Assert.Equal(
-            ["id", "givenName", "familyName"], participant.EnumerateObject().Select(property => property.Name));
+            ["id", "givenName", "familyName", "note"], participant.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Nguyễn", participant.GetProperty("givenName").GetString());
         Assert.Equal("O’Brien-Smith", participant.GetProperty("familyName").GetString());
+        Assert.Equal(JsonValueKind.Null, participant.GetProperty("note").ValueKind);
+    }
+
+    // A discarded draft is not live (§5.5 item 1): alone it leaves the day with no note, and beside a note started
+    // since, the new one is the participant's note.
+    [Fact]
+    public async Task A_discarded_draft_gives_null_alone_and_the_new_note_beside_it()
+    {
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        var alone = await factory.Services.AddParticipantAsync(seeded.A);
+        var startedAgain = await factory.Services.AddParticipantAsync(seeded.A);
+        foreach (var participant in new[] { alone, startedAgain })
+        {
+            var noteId = await factory.Services.AddDraftAsync(
+                seeded.A, new(participant.Id, Today, author, StartedAtUtc, Narrative: "Jane made toast."));
+            await factory.Services.DiscardAsync(seeded.A, noteId, SavedAtUtc);
+        }
+
+        await factory.Services.AddDraftAsync(
+            seeded.A,
+            new(startedAgain.Id, Today, seeded.A.WorkerId, SavedAtUtc.AddMinutes(5), SavedAtUtc: SubmittedAtUtc));
+        await using var app = AppAtNow();
+
+        var list = await ListAsync(app, Caller.WorkerOfA);
+
+        Assert.Equal(JsonValueKind.Null, NoteOf(list, alone.Id).ValueKind);
+        AssertNote(
+            new("Draft", "Casey Nguyen", true, "2026-09-30T23:47:00Z", "2026-10-01T06:12:00Z", null, false),
+            NoteOf(list, startedAgain.Id));
+    }
+
+    // The same row for a worker and a manager (§4.2 item 4): who started the draft, and when, and nothing of what it
+    // says (A9), or of when its author last saved it.
+    [Fact]
+    public async Task Another_user_s_draft_gives_a_worker_and_a_manager_its_author_s_name_and_start_time_alone()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        await factory.Services.AddDraftAsync(
+            seeded.A,
+            new(participant.Id, Today, author, StartedAtUtc, Narrative: "Jane made toast.", SavedAtUtc: SavedAtUtc));
+        await using var app = AppAtNow();
+
+        foreach (var caller in new[] { Caller.WorkerOfA, Caller.ManagerOfA })
+        {
+            var list = await ListAsync(app, caller);
+
+            AssertNote(
+                new("Draft", "Alex P.", false, "2026-09-30T23:14:00Z", null, null, false),
+                NoteOf(list, participant.Id));
+            Assert.DoesNotContain("Jane made toast.", list.GetRawText(), StringComparison.Ordinal);
+        }
+    }
+
+    // When the caller last saved their own draft, from their working copy, which a manager reading the same row never
+    // gets.
+    [Fact]
+    public async Task The_caller_s_own_draft_gives_when_they_last_saved_it()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddDraftAsync(
+            seeded.A, new(participant.Id, Today, seeded.A.WorkerId, StartedAtUtc, SavedAtUtc: SavedAtUtc));
+        await using var app = AppAtNow();
+
+        var mine = NoteOf(await ListAsync(app, Caller.WorkerOfA), participant.Id);
+        var theirs = NoteOf(await ListAsync(app, Caller.ManagerOfA), participant.Id);
+
+        AssertNote(
+            new("Draft", "Casey Nguyen", true, "2026-09-30T23:14:00Z", "2026-09-30T23:42:00Z", null, false), mine);
+        AssertNote(new("Draft", "Casey Nguyen", false, "2026-09-30T23:14:00Z", null, null, false), theirs);
+    }
+
+    // The first submitted time, and never the time of a save: its author has a working copy of it too, a pending edit
+    // (§5.6), added by hand until T14 adds them, which is not a draft.
+    [Fact]
+    public async Task A_submitted_note_gives_its_first_submitted_time()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await factory.Services.AddSubmittedAsync(
+            seeded.A, new(participant.Id, Today, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        await AddPendingEditAsync(noteId, seeded.A.WorkerId);
+        await using var app = AppAtNow();
+
+        var mine = NoteOf(await ListAsync(app, Caller.WorkerOfA), participant.Id);
+        var theirs = NoteOf(await ListAsync(app, Caller.ManagerOfA), participant.Id);
+
+        AssertNote(
+            new("Submitted", "Casey Nguyen", true, "2026-09-30T23:14:00Z", null, "2026-10-01T06:12:00Z", false), mine);
+        AssertNote(
+            new("Submitted", "Casey Nguyen", false, "2026-09-30T23:14:00Z", null, "2026-10-01T06:12:00Z", false),
+            theirs);
+    }
+
+    // The current version's flag (§4.2 item 4), not the review state (A15): flagged while FlagStatus is None, as Submit
+    // leaves it until T11, and not while it is ToReview, set by hand, over a version not flagged. The reason stays off
+    // the row.
+    [Fact]
+    public async Task IsFlagged_is_the_current_version_s_flag_not_the_flag_status()
+    {
+        var flagged = await factory.Services.AddParticipantAsync(seeded.A);
+        var toReview = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddSubmittedAsync(
+            seeded.A,
+            new(
+                flagged.Id, Today, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc,
+                IsFlagged: true, FlagReason: "Jane seemed unwell."));
+        await factory.Services.AddSubmittedAsync(
+            seeded.A,
+            new(toReview.Id, Today, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc, FlagStatus: FlagStatus.ToReview));
+        await using var app = AppAtNow();
+
+        var list = await ListAsync(app, Caller.ManagerOfA);
+
+        Assert.True(NoteOf(list, flagged.Id).GetProperty("isFlagged").GetBoolean());
+        Assert.False(NoteOf(list, toReview.Id).GetProperty("isFlagged").GetBoolean());
+        Assert.DoesNotContain("Jane seemed unwell.", list.GetRawText(), StringComparison.Ordinal);
+    }
+
+    // The list's date's note alone: yesterday's, submitted or a draft still open, is not today's.
+    [Fact]
+    public async Task A_note_of_another_day_is_left_out()
+    {
+        var submitted = await factory.Services.AddParticipantAsync(seeded.A);
+        var draft = await factory.Services.AddParticipantAsync(seeded.A);
+        var yesterday = Today.AddDays(-1);
+        await factory.Services.AddSubmittedAsync(
+            seeded.A,
+            new(submitted.Id, yesterday, seeded.A.WorkerId, StartedAtUtc.AddDays(-1), SubmittedAtUtc.AddDays(-1)));
+        await factory.Services.AddDraftAsync(
+            seeded.A, new(draft.Id, yesterday, seeded.A.WorkerId, StartedAtUtc.AddDays(-1)));
+        await using var app = AppAtNow();
+
+        var list = await ListAsync(app, Caller.WorkerOfA);
+
+        Assert.Equal(JsonValueKind.Null, NoteOf(list, submitted.Id).ValueKind);
+        Assert.Equal(JsonValueKind.Null, NoteOf(list, draft.Id).ValueKind);
     }
 
     [Fact]
@@ -163,6 +315,34 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
     private static List<Guid> ParticipantIds(JsonElement list) =>
         [.. list.GetProperty("participants").EnumerateArray().Select(Id)];
 
+    // The list's participants, in its order, as their IDs and names, without their notes.
+    private static List<(Guid Id, string? GivenName, string? FamilyName)> People(JsonElement list) =>
+    [
+        .. list.GetProperty("participants").EnumerateArray().Select(row => (
+            Id(row), row.GetProperty("givenName").GetString(), row.GetProperty("familyName").GetString())),
+    ];
+
+    private static JsonElement Row(JsonElement list, Guid participantId) =>
+        list.GetProperty("participants").EnumerateArray().Single(row => Id(row) == participantId);
+
+    private static JsonElement NoteOf(JsonElement list, Guid participantId) =>
+        Row(list, participantId).GetProperty("note");
+
+    // The note as its row has it: design.md §6.3's fields, in its order, with no key for a time that the row does not
+    // give, and nothing more, each time in UTC, written with Z.
+    private static void AssertNote(NoteFields expected, JsonElement note)
+    {
+        string?[] keys =
+        [
+            "status", "authorDisplayName", "isMine", "startedAtUtc",
+            expected.SavedAtUtc is null ? null : "savedAtUtc",
+            expected.FirstSubmittedAtUtc is null ? null : "firstSubmittedAtUtc",
+            "isFlagged",
+        ];
+        Assert.Equal(keys.OfType<string>(), note.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(expected, note.Deserialize<NoteFields>(JsonSerializerOptions.Web));
+    }
+
     private static async Task<JsonElement> ReadListAsync(HttpClient client)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -180,6 +360,44 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
     {
         using var client = ClientFor(caller);
         return await ReadListAsync(client);
+    }
+
+    // The app on a clock that says Now, so that the list is the notes' date's whenever the test runs.
+    private WebApplicationFactory<Program> AppAtNow() =>
+        factory.WithWebHostBuilder(builder => builder.UseClock(new FakeTimeProvider(Now)));
+
+    private async Task<JsonElement> ListAsync(WebApplicationFactory<Program> app, Caller caller)
+    {
+        using var client = app.CreateHttpsClient().SignInAs(caller, seeded);
+        var list = await ReadListAsync(client);
+        Assert.Equal("2026-10-01", list.GetProperty("date").GetString());
+        return list;
+    }
+
+    /// <summary>
+    /// Adds <paramref name="editorUserId"/>'s working copy of the submitted note of ID <paramref name="noteId"/> in A,
+    /// on its version 1, as Edit leaves one (design.md §5.6), saved after the note was submitted.
+    /// </summary>
+    private async Task AddPendingEditAsync(Guid noteId, Guid editorUserId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        db.NoteDrafts.Add(new NoteDraft
+        {
+            NoteId = noteId,
+            EditorUserId = editorUserId,
+            OrganisationId = seeded.A.OrganisationId,
+            BaseVersionNumber = 1,
+            Narrative = "Jane made toast, then walked.",
+            LastClientId = Guid.NewGuid(),
+            LastSeq = 1,
+            CreatedAtUtc = SubmittedAtUtc.AddMinutes(1),
+            UpdatedAtUtc = SubmittedAtUtc.AddMinutes(2),
+        });
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
     }
 
     /// <summary>
@@ -236,4 +454,14 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
             .SqlQuery<long?>($"SELECT MAX([Id]) AS [Value] FROM [AuditEvent]")
             .SingleAsync(TestContext.Current.CancellationToken);
     }
+
+    /// <summary>A row's note, its times as the JSON writes them, and those it does not give null.</summary>
+    private sealed record NoteFields(
+        string Status,
+        string AuthorDisplayName,
+        bool IsMine,
+        string StartedAtUtc,
+        string? SavedAtUtc,
+        string? FirstSubmittedAtUtc,
+        bool IsFlagged);
 }

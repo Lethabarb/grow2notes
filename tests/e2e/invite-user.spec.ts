@@ -161,7 +161,7 @@ test('signed in, a double tap sends one invite, "Sending…" from 400 ms, then t
   await expect(heading(page)).toHaveText('Users');
   await expect(heading(page)).toBeFocused();
   await expect(main(page).getByRole('link', { name: person.displayName, exact: true })).toBeVisible();
-  expect(await rowLines(page, person.displayName)).toEqual([person.email, 'Invited · Worker']);
+  expect(await rowLines(page, person.displayName)).toEqual([person.email, 'Invited · Worker']);
   await expect(main(page).getByRole('alert')).toHaveCount(0);
   for (const region of await main(page).getByRole('status').all()) {
     await expect(region).toBeEmpty();
