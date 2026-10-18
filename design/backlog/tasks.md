@@ -3108,10 +3108,17 @@ past notes.
   on Today read once, a row's status and Flagged read as its description, the read view's `<h1>` and each goal "ticked"
   or "not ticked", and Past notes' rows read as the date, then the status, author and tags, with focus on the first new
   row after Show older.
+- Where design.md is silent (step 1), the simplest options, as T08's step 1 took them: EF Core's convention gives each
+  foreign key that no other index starts with an index of its own, so beside §5.3's two unique indexes `NoteVersion`
+  has `(OrganisationId, NoteId)` and `(OrganisationId, CreatedByUserId)`, and `NoteVersionItem`, whose key starts with
+  `NoteVersionId` alone, has `(OrganisationId, NoteVersionId)`, `(OrganisationId, GoalId)` and
+  `(OrganisationId, CommonItemId)`. The check constraint is `CK_NoteVersionItem_Section`. EF Core writes its SQL on a
+  line longer than 120 characters, and writes the snapshot's long lines again, which are wrapped in `AddNoteVersion`,
+  its designer file and the model snapshot, as in `AddNote`.
 
 ### Steps
 
-- [ ] The version tables, which every later note task appends to (S02.03.01's first criterion; design.md §5.3, §5.8
+- [x] The version tables, which every later note task appends to (S02.03.01's first criterion; design.md §5.3, §5.8
       *Append-only*): `NoteVersion` (`ITenantOwned`, `IAppendOnly`) with §5.3's columns, the alternate key
       `(OrganisationId, Id)`, composite foreign keys to the note's and, for `CreatedByUserId`, the user's alternate
       keys, `Narrative` as `nvarchar(max)`, `FlagReason` at `Limits.FlagReason`, and the unique indexes

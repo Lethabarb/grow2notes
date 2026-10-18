@@ -210,8 +210,6 @@ namespace Grow2Notes.Web.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasAlternateKey("OrganisationId", "Id");
-
                     b.HasIndex("OrganisationId", "GroupId", "ArchivedAtUtc", "SortOrder");
 
                     b.ToTable("CommonItem");
@@ -299,8 +297,6 @@ namespace Grow2Notes.Web.Data.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
-
-                    b.HasAlternateKey("OrganisationId", "Id");
 
                     b.HasIndex("OrganisationId", "ParticipantId", "ArchivedAtUtc", "SortOrder");
 
@@ -480,6 +476,107 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.HasIndex("OrganisationId", "NoteId");
 
                     b.ToTable("NoteDraft");
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("FlagReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("IdempotencyKey")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsFlagged")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Narrative")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("NoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganisationId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NoteId", "VersionNumber")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "CreatedByUserId");
+
+                    b.HasIndex("OrganisationId", "IdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "NoteId");
+
+                    b.ToTable("NoteVersion");
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionItem", b =>
+                {
+                    b.Property<Guid>("NoteVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<byte>("Section")
+                        .HasColumnType("tinyint");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("CommonItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("GoalId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int?>("GroupPosition")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsTicked")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganisationId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("NoteVersionId", "Section", "Position");
+
+                    b.HasIndex("OrganisationId", "CommonItemId");
+
+                    b.HasIndex("OrganisationId", "GoalId");
+
+                    b.HasIndex("OrganisationId", "NoteVersionId");
+
+                    b.ToTable("NoteVersionItem", t =>
+                        {
+                            t.HasCheckConstraint("CK_NoteVersionItem_Section",
+                                "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL"
+                                + " AND [GroupPosition] IS NULL)"
+                                + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
+                                + " AND [GroupPosition] IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("Grow2Notes.Web.Data.Organisation", b =>
@@ -735,6 +832,45 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.HasOne("Grow2Notes.Web.Data.Note", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "NoteId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersion", b =>
+                {
+                    b.HasOne("Grow2Notes.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "CreatedByUserId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Grow2Notes.Web.Data.Note", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "NoteId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionItem", b =>
+                {
+                    b.HasOne("Grow2Notes.Web.Data.CommonItem", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "CommonItemId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Grow2Notes.Web.Data.Goal", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "GoalId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Grow2Notes.Web.Data.NoteVersion", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "NoteVersionId")
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();

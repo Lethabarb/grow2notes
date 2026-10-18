@@ -32,6 +32,10 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<NoteDraft> NoteDrafts => Set<NoteDraft>();
 
+    public DbSet<NoteVersion> NoteVersions => Set<NoteVersion>();
+
+    public DbSet<NoteVersionItem> NoteVersionItems => Set<NoteVersionItem>();
+
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
     private Guid TenantId => tenant.OrganisationId;
@@ -263,6 +267,63 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             // For a user's unfinished drafts. It starts with the editor's foreign key, so that needs no index of its
             // own.
             draft.HasIndex(d => new { d.OrganisationId, d.EditorUserId });
+        });
+
+        builder.Entity<NoteVersion>(version =>
+        {
+            // Composite, so the database keeps a version within its note's and its writer's organisation (design.md
+            // §5.1, Tenancy).
+            version.HasOne<Note>().WithMany()
+                .HasForeignKey(v => new { v.OrganisationId, v.NoteId })
+                .HasPrincipalKey(n => new { n.OrganisationId, n.Id });
+            version.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(v => new { v.OrganisationId, v.CreatedByUserId })
+                .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
+
+            // The principal of the composite foreign key from the version's item rows.
+            version.HasAlternateKey(v => new { v.OrganisationId, v.Id });
+
+            // Longer than an nvarchar(n) can hold, so only validation enforces Limits.GuidedNotes (§5.1).
+            version.Property(v => v.Narrative).HasColumnType("nvarchar(max)");
+            version.Property(v => v.FlagReason).HasMaxLength(Limits.FlagReason);
+
+            // One version of each number per note, so of two saves on the same version only one adds the next, whatever
+            // the app's checks let through (design.md §5.3).
+            version.HasIndex(v => new { v.NoteId, v.VersionNumber }).IsUnique();
+
+            // A retried save finds its first try by its key, and two tries at once cannot both add a version (§5.8).
+            version.HasIndex(v => new { v.OrganisationId, v.IdempotencyKey }).IsUnique();
+        });
+
+        builder.Entity<NoteVersionItem>(item =>
+        {
+            // One row per place in each section of a version (design.md §5.3).
+            item.HasKey(i => new { i.NoteVersionId, i.Section, i.Position });
+
+            // Composite, so the database keeps a row within its version's, its goal's and its common item's
+            // organisation (design.md §5.1, Tenancy). Goals and common items are never deleted, so a row can point at
+            // them for good. SQL Server checks no composite foreign key with a null column, so the source key that a
+            // row's section leaves null is never checked.
+            item.HasOne<NoteVersion>().WithMany()
+                .HasForeignKey(i => new { i.OrganisationId, i.NoteVersionId })
+                .HasPrincipalKey(v => new { v.OrganisationId, v.Id });
+            item.HasOne<Goal>().WithMany()
+                .HasForeignKey(i => new { i.OrganisationId, i.GoalId })
+                .HasPrincipalKey(g => new { g.OrganisationId, g.Id });
+            item.HasOne<CommonItem>().WithMany()
+                .HasForeignKey(i => new { i.OrganisationId, i.CommonItemId })
+                .HasPrincipalKey(c => new { c.OrganisationId, c.Id });
+
+            item.Property(i => i.Text).HasMaxLength(Limits.ItemText);
+
+            // Each section with the columns that go with it, so no save can leave a goal row with a common item or a
+            // group, or a common item row without its item and its group (design.md §5.3). GroupPosition's foreign key
+            // comes with the table of the version's groups, which it points at.
+            item.ToTable(table => table.HasCheckConstraint(
+                "CK_NoteVersionItem_Section",
+                "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
+                + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
+                + " AND [GroupPosition] IS NOT NULL)"));
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).

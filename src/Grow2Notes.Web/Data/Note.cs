@@ -2,8 +2,9 @@ namespace Grow2Notes.Web.Data;
 
 /// <summary>
 /// The header of one participant's note for one day (design.md §5.3). Its content is in the working copies
-/// (<see cref="NoteDraft"/>) and, once submitted, in its versions. At most one note per participant and day is live,
-/// a draft or submitted; discarded drafts stay beside it (§5.5, D6). Nothing deletes a note (A29).
+/// (<see cref="NoteDraft"/>) and, once submitted, in its versions (<see cref="NoteVersion"/>). At most one note per
+/// participant and day is live, a draft or submitted; discarded drafts stay beside it (§5.5, D6). Nothing deletes a
+/// note (A29).
 /// </summary>
 internal sealed class Note : ITenantOwned
 {
