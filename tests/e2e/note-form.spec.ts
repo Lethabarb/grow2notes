@@ -1091,7 +1091,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
   await expect(confirmation(phone).getByText('Flagged for manager: Yes', { exact: true })).toBeVisible();
   await expect(goBack(phone)).toBeVisible();
 
-  // Confirmed: version 1 from the app, with the tick, the text and the flag, and one key.
+  // Confirmed: version 1 from the app, with the tick, the text and the flag, and one key, the note To review.
   const posted = phone.waitForResponse(isSubmit);
   await confirmButton(phone).click();
   const answer = await posted;
@@ -1104,7 +1104,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     flagReason,
   });
   expect(answer.request().headers()['idempotency-key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-/);
-  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String) });
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String), flagStatus: 'ToReview' });
 
   // Today, with the banner focused and Jane's row Submitted by "You", flagged.
   await expect(phone).toHaveURL('/');

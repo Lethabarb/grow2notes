@@ -49,7 +49,6 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             narrative,
             IsFlagged: true,
             FlagReason: "Jane seemed unwell.",
-            FlagStatus: FlagStatus.ToReview,
             Goals: [new(goal.Id, "Makes own breakfast", true)]));
 
         var worker = await ReadAsync(Caller.WorkerOfA, participant.Id);

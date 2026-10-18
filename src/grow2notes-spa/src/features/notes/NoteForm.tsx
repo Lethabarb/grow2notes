@@ -3,7 +3,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
-import { useMe } from '../../api/me.ts';
+import { refreshMe, useMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
@@ -27,8 +27,15 @@ import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 import { sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
 
-/** `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when. */
-type VersionSaved = { versionNumber: number; createdAtUtc: string };
+/**
+ * `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when; and the note's flag
+ * status, the `FlagStatus` name, to every caller, which the form reads only to refresh `me` and shows nowhere.
+ */
+export type VersionSaved = {
+  versionNumber: number;
+  createdAtUtc: string;
+  flagStatus: 'None' | 'ToReview' | 'Reviewed';
+};
 
 /** The Submit confirmation while it is open, and how its request goes (note-form.md *Confirmation dialog*). */
 type Confirmation = {
@@ -246,11 +253,18 @@ export function NoteForm({
 
   // After `201`, or `200` for a retry whose first answer was lost (note-form.md *After a successful submit*): the
   // banner's sentence in the store, which Today reads; Today's list dropped, so that Today shows only the server's
-  // rows; the confirmation closed; then Today, popped to when it is the entry before, so that Back never reopens the
-  // finished form, and else put in the form's place.
-  function submitted() {
+  // rows; `me` asked for again when the note is in To review, so that the Flagged badge counts it (app-shell.md
+  // *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to Today then shares; the
+  // confirmation closed; then Today, popped to when it is the entry before, so that Back never reopens the finished
+  // form, and else put in the form's place.
+  function submitted(saved: VersionSaved) {
     messageStore.set(msg.noteSubmitted(name));
     removeToday(queryClient);
+    if (saved.flagStatus === 'ToReview') {
+      // A failure leaves `me` as it was, as the shell's refreshes do.
+      refreshMe(queryClient).catch(() => {});
+    }
+
     confirmationOpen.current = false;
     setConfirmation(undefined);
     if (openerBefore(entryKey)?.path === '/') {

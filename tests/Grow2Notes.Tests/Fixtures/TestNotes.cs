@@ -21,9 +21,9 @@ internal sealed record TestDraft(
 
 /// <summary>
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
-/// they started it and when they submitted it; then its version 1's text, flag and reason; the note's flag status,
-/// None unless the test sets another by hand, as Submit leaves it until T11 (tasks.md, T09's Notes); and version 1's
-/// goal rows, none by default, in their snapshot's order.
+/// they started it and when they submitted it; then its version 1's text, flag and reason; the note's flag status, as
+/// Submit leaves it (design.md §5.8's flag rules), To review when version 1 is flagged and None when it is not, unless
+/// the test sets one by hand; and version 1's goal rows, none by default, in their snapshot's order.
 /// </summary>
 internal sealed record TestSubmittedNote(
     Guid ParticipantId,
@@ -34,7 +34,7 @@ internal sealed record TestSubmittedNote(
     string Narrative = "Jane made toast.",
     bool IsFlagged = false,
     string? FlagReason = null,
-    FlagStatus FlagStatus = FlagStatus.None,
+    FlagStatus? FlagStatus = null,
     IReadOnlyList<TestVersionGoal>? Goals = null);
 
 /// <summary>
@@ -87,15 +87,17 @@ internal static class TestNotes
 
     /// <summary>
     /// Adds <paramref name="submitted"/> to <paramref name="organisation"/>, through the app's context under its
-    /// tenant, as Submit leaves a note (design.md §5.8): the <c>Note</c>, submitted, and its version 1, written by its
-    /// author, with a key of its own and its goal rows, each in its place in the order given, its working copy gone;
-    /// and gives the note's ID.
+    /// tenant, as Submit leaves a note (design.md §5.8): the <c>Note</c>, submitted, with its flag status and, unless
+    /// that is None, version 1 its flagged version, the only one it has; and its version 1, written by its author,
+    /// with a key of its own and its goal rows, each in its place in the order given, its working copy gone; and gives
+    /// the note's ID.
     /// </summary>
     public static async Task<Guid> AddSubmittedAsync(
         this IServiceProvider services, SeededOrganisation organisation, TestSubmittedNote submitted)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var flagStatus = submitted.FlagStatus ?? (submitted.IsFlagged ? FlagStatus.ToReview : FlagStatus.None);
         var note = new Note
         {
             OrganisationId = organisation.OrganisationId,
@@ -106,7 +108,8 @@ internal static class TestNotes
             CreatedAtUtc = submitted.StartedAtUtc,
             FirstSubmittedAtUtc = submitted.SubmittedAtUtc,
             CurrentVersionNumber = 1,
-            FlagStatus = submitted.FlagStatus,
+            FlagStatus = flagStatus,
+            FlaggedVersionNumber = flagStatus == FlagStatus.None ? null : 1,
         };
         db.Notes.Add(note);
         var version = new NoteVersion

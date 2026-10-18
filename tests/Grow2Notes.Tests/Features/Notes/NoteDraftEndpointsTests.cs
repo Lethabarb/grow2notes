@@ -680,6 +680,30 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal((true, longerReason), (draft.IsFlagged, draft.FlagReason));
     }
 
+    // design.md §3.6: a flag on a draft is not seen, so a draft saved flagged, with its reason, by its first save and a
+    // later one, and never submitted, stays out of To review, with no flagged version (S03.01.01).
+    [Fact]
+    public async Task A_draft_saved_flagged_and_never_submitted_has_no_flag_status()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var clientId = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var first = await SaveAsync(
+                   client, participant.Id, Today, FlagBody(listsVersion, clientId, 1, true, "Jane seemed unwell.")))
+        {
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        }
+
+        using var later = await SaveAsync(
+            client, participant.Id, Today, FlagBody(null, clientId, 2, true, "Jane seemed unwell after lunch."));
+
+        Assert.Equal(HttpStatusCode.OK, later.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal(
+            (NoteStatus.Draft, FlagStatus.None, null), (note.Status, note.FlagStatus, note.FlaggedVersionNumber));
+    }
+
     // design.md §5.3: the reason is null unless the note is flagged, whatever the body holds: on the note's first save,
     // and on a later one that unticks a flag saved with a reason.
     [Theory]

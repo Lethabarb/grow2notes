@@ -13,10 +13,9 @@ namespace Grow2Notes.Web.Features.Notes;
 /// adds Save changes on a submitted note.
 /// </summary>
 /// <remarks>
-/// Each save runs in one transaction (§5.9), so the header's change, the version, its goal rows, the working copy's
-/// deletion and <c>note.submitted</c> commit together or not at all. The tenant query filter keeps every query, and
-/// the header's conditional update, to the tenant's organisation (§5.9 item 2). Submit leaves the note's
-/// <c>FlagStatus</c> and <c>FlaggedVersionNumber</c> as they are until T11 adds §5.8's flag rules.
+/// Each save runs in one transaction (§5.9), so the header's change, its flag status with it, the version, its goal
+/// rows, the working copy's deletion and <c>note.submitted</c> commit together or not at all. The tenant query filter
+/// keeps every query, and the header's conditional update, to the tenant's organisation (§5.9 item 2).
 /// </remarks>
 internal sealed class NoteVersions(
     Grow2NotesDbContext db, ITenantContext tenant, IAuditWriter audit, TimeProvider timeProvider)
@@ -38,7 +37,8 @@ internal sealed class NoteVersions(
     /// <summary>
     /// Saves <paramref name="request"/> as version 1 of <paramref name="participantId"/>'s note for
     /// <paramref name="noteDate"/>, submitting <paramref name="actor"/>'s own draft (§5.8): moves the note to
-    /// Submitted, with version 1 its current version and now its first submitted time, by one conditional update;
+    /// Submitted, with version 1 its current version and now its first submitted time, and, when it is flagged, To
+    /// review with version 1 its flagged version (§5.8's flag rules), by one conditional update;
     /// adds version 1 with the request's text and flag, a reason only while flagged, and the goals of the working
     /// copy's snapshot, in its order and with its wording (A3), each ticked as the request says; deletes the working
     /// copy (§5.6); and writes <c>note.submitted</c>, with the version number and no text.
@@ -138,16 +138,25 @@ internal sealed class NoteVersions(
         var now = StoredTime.UtcNow(timeProvider);
 
         // §5.8 step 5, on base 0. ExecuteUpdate bypasses the save interceptors, which is why only this header update
-        // uses it; it still applies the tenant query filter.
+        // uses it; it still applies the tenant query filter. A draft has no flag status (§3.6), so version 1 meets the
+        // flag rules from None: their first row puts a flagged one in To review, and their last leaves an unflagged
+        // one None, its flagged version null.
         var advanced = await db.Notes
             .Where(n => n.Id == note.Id
                 && n.CurrentVersionNumber == 0
                 && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted))
             .ExecuteUpdateAsync(
-                set => set
-                    .SetProperty(n => n.CurrentVersionNumber, FirstVersion)
-                    .SetProperty(n => n.Status, NoteStatus.Submitted)
-                    .SetProperty(n => n.FirstSubmittedAtUtc, now),
+                set =>
+                {
+                    set.SetProperty(n => n.CurrentVersionNumber, FirstVersion)
+                        .SetProperty(n => n.Status, NoteStatus.Submitted)
+                        .SetProperty(n => n.FirstSubmittedAtUtc, now);
+                    if (request.IsFlagged)
+                    {
+                        set.SetProperty(n => n.FlagStatus, FlagStatus.ToReview)
+                            .SetProperty(n => n.FlaggedVersionNumber, FirstVersion);
+                    }
+                },
                 cancellationToken);
         if (advanced == 0)
         {
@@ -185,7 +194,8 @@ internal sealed class NoteVersions(
         await audit.WriteAsync(
             organisationId, actor.UserId, AuditEventTypes.Note.Submitted, AuditEntityTypes.Note, note.Id,
             participantId, new JsonObject { ["versionNumber"] = FirstVersion }, cancellationToken);
-        return NoteVersionResult.Added(new(FirstVersion, now));
+        var flagStatus = request.IsFlagged ? FlagStatus.ToReview : FlagStatus.None;
+        return NoteVersionResult.Added(new(FirstVersion, now, flagStatus.ToString()));
     }
 
     // Another save advanced the note after this one read it: an earlier try with the same key, whose version this is
@@ -196,14 +206,16 @@ internal sealed class NoteVersions(
             ? NoteVersionResult.Retried(keyed.Saved)
             : NoteVersionResult.VersionConflict;
 
-    // The version that has the key in the tenant's organisation, in which the key is unique (§5.3), with its note.
+    // The version that has the key in the tenant's organisation, in which the key is unique (§5.3), with its note, and
+    // that note's flag status as it is now, which a review may have changed since the version was saved.
     private Task<KeyedVersion?> VersionOfKeyAsync(Guid idempotencyKey, CancellationToken cancellationToken) =>
-        db.NoteVersions
-            .AsNoTracking()
-            .Where(version => version.IdempotencyKey == idempotencyKey)
-            .Select(version => new KeyedVersion(
-                version.NoteId, new NoteVersionSaved(version.VersionNumber, version.CreatedAtUtc)))
-            .SingleOrDefaultAsync(cancellationToken);
+        (
+            from version in db.NoteVersions.AsNoTracking()
+            where version.IdempotencyKey == idempotencyKey
+            join n in db.Notes on version.NoteId equals n.Id
+            select new KeyedVersion(
+                n.Id, new NoteVersionSaved(version.VersionNumber, version.CreatedAtUtc, n.FlagStatus.ToString())))
+        .SingleOrDefaultAsync(cancellationToken);
 
     /// <summary>A saved version, with the note it is a version of.</summary>
     private sealed record KeyedVersion(Guid NoteId, NoteVersionSaved Saved);

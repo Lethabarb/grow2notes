@@ -223,9 +223,9 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
             theirs);
     }
 
-    // The current version's flag (§4.2 item 4), not the review state (A15): flagged while FlagStatus is None, as Submit
-    // leaves it until T11, and not while it is ToReview, set by hand, over a version not flagged. The reason stays off
-    // the row.
+    // The current version's flag (§4.2 item 4), not the review state (A15): flagged while FlagStatus is Reviewed, as a
+    // review leaves it, and not while it is ToReview over a version not flagged, as an edit that unticks the flag
+    // leaves it, each set by hand. The reason stays off the row.
     [Fact]
     public async Task IsFlagged_is_the_current_version_s_flag_not_the_flag_status()
     {
@@ -235,7 +235,7 @@ public sealed class TodayEndpointTests(Grow2NotesFactory factory, SqlServerFixtu
             seeded.A,
             new(
                 flagged.Id, Today, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc,
-                IsFlagged: true, FlagReason: "Jane seemed unwell."));
+                IsFlagged: true, FlagReason: "Jane seemed unwell.", FlagStatus: FlagStatus.Reviewed));
         await factory.Services.AddSubmittedAsync(
             seeded.A,
             new(toReview.Id, Today, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc, FlagStatus: FlagStatus.ToReview));

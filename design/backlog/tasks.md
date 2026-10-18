@@ -3619,7 +3619,7 @@ the reason and when it was flagged. Only submitted flags count.
 
 ### Steps
 
-- [ ] Submit sends a flag to To review (S03.01.01's first, third, fourth and fifth criteria, and the second's `422`;
+- [x] Submit sends a flag to To review (S03.01.01's first, third, fourth and fifth criteria, and the second's `422`;
       F03.01's table test, started; design.md §3.6 bullet 2, §5.8 step 5 and its flag rules' first and last rows, §6.3's
       `201 {versionNumber, createdAtUtc, flagStatus}`; note-form.md *After a successful submit* step 2; today.md's
       Submit row): `NoteVersions` sets `FlagStatus = ToReview` and `FlaggedVersionNumber = 1` in the header's one
