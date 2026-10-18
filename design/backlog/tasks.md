@@ -3525,7 +3525,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T11
-status: new
+status: doing
 release: R1
 lane: A
 size: M
@@ -3552,10 +3552,193 @@ the reason and when it was flagged. Only submitted flags count.
   this task's (S03.01.01). The read view's back link takes its label from `useBackTo` (src/routes/routeChange.ts), with
   Today as the default: this task adds "Flagged". `Tag` (src/components) has the Flagged kind, and a manager's Past
   notes rows carry `flagStatus` already.
+- Planned on 19 October 2026 from `origin/main` at `3b52fd2`, with T09 (#63) merged. No owner question holds it:
+  S03.03.01's "Confirm at refinement" on the sort key is answered by the first Note (the flag time). Where the design is
+  silent, the simplest option is taken:
+  - Submit's answer carries `flagStatus` for every caller, as §6.3 lists it with no role condition, as the `FlagStatus`
+    name (`None`, `ToReview` or `Reviewed`), as a manager's Past notes rows give it. A retry's `200` carries the note's
+    flag status as it is now, as the key finds the version, not the status its save set. So a worker's answer carries
+    it too, and a retry's can say `Reviewed`: the SPA shows no tag from Submit's answer and reads it only for
+    `refreshMe()`, and status-tags.md's "Workers never get To review or Reviewed" is about the read view's and the
+    lists' answers, which still send `flagStatus` to managers alone; step 6 says so there in one line.
+  - The form calls `refreshMe()` after a Submit whose answer says `ToReview`, app-shell.md's "a Submit that flags a
+    note": every answer now carries a `flagStatus`, so note-form.md's "when the `201` carries a `flagStatus`" is read as
+    the flagged case. The shell's own refresh on the move to Today shares that request (`fetchQuery`).
+  - Version 1 meets two rows of §5.8's flag rules: flagged sets `ToReview` and `FlaggedVersionNumber = 1` in step 5's
+    one conditional update, and unflagged leaves `None` and null. The table test holds those two rows alone, from
+    `None`, the only start a version 1 has, so that every row is a save, its start and its result, and T16 adds
+    versions 2 and later from each start, once T14's Save changes exists. A flagged submit refused for a blank reason
+    and a draft saved flagged but never submitted are not rows of §5.8's table, so step 1 checks them apart. No rule
+    for later versions is written before a save uses it, so F03.01's feature check stays unticked until T16.
+  - `GET /api/reviews` is in `Features/Reviews`, mapped in the `/api` group with the `Manager` policy of its own, as
+    §6.4 puts it outside `/api/admin`. `status` is required and `toReview` is its one value until T19 adds `reviewed`: a
+    request without it, or with another value, gets a `400` problem, as a `before` that is not a date does on Past
+    notes. The answer is §6.4's array, returned whole (§6.1).
+  - Two rows tie on `flaggedAtUtc` only within one millisecond; the note's ID then orders them, so the order is stable.
+  - `authorDisplayName` is the note's author's, as stored, as on Today and Past notes (§4.6 item 2's "author"), whoever
+    saved the flagged version; a deactivated author keeps their name (§3.7).
+  - An archived participant's flagged note stays listed: a flag leaves To review only through a review (§3.6, A15), and
+    archiving changes no history (§3.7).
+  - `flagReason` is sent whole, as the reason box is a textarea; the screen shows it up to its first line break
+    (flagged.md item 4).
+  - The screen in this task is the `<h1>` and the To review list: the view switch, "To review (n)", Reviewed and
+    `?view=reviewed` come with T19 (S03.03.02), so until then `/flagged?view=reviewed` shows To review, Flagged current.
+  - The query `['reviews', 'toReview']` refetches on mount and on window focus (`staleTime: 0`,
+    `refetchOnWindowFocus: true`, flagged.md component 6) and keeps its rows for 30 minutes (`gcTime`), as Past notes
+    keeps its pages, so that Back shows them at once.
+  - Built once here and reused: `ChronoList`'s whole mode, with `older` left out, as To review is the first whole list
+    (chronological-list.md names T16 and T18), which T18's version history reuses; `LinkRow`'s plain lines after its
+    description, flagged.md item 4's *Extra lines*, which T19's Reviewed rows reuse for Reason and Comment; and a
+    `MetaLine` with no status word. `MetaLine` (src/components) takes its first part as the status word, bold and in
+    the text colour (status-tags.md *Built*), but a To review meta line has none, and flagged.md *Cross-cutting* puts
+    meta lines in 16 px secondary text: so it gains `statusFirst`, true by default, and false renders every part
+    secondary and none bold, which T19's Reviewed rows ("{author} · reviewed by …") and T18's version rows (only
+    version 1 has a status word, status-tags.md *Where it's used*) reuse. To review rows take chronological-list.md's
+    look (link colour, underlined, no chevron), the name and the date in the link.
+  - The note's back link label "Flagged" is the nav item's word (`strings.navItem.flagged`), not a page name, so
+    `useBackTo` takes it beside the page names.
+- Parts of the absorbed criteria come with later tasks and stay unticked, each with a dated Note on S03.03.01 naming
+  the task: the badge half of flagged.md *To review list*'s last bullet (T19, S03.03.03); *The note*'s "either Flagged
+  list" from Reviewed (T19, S03.03.02); design.md §4.6 item 3's review panel under the read view, with its comment and
+  Mark reviewed (T16, S03.02.01), as this task opens the read view without it; and flagged.md component 7's second
+  bullet, the label staying "Flagged" across Edit, Save changes and Cancel (T16, which follows both this task and
+  T14's Edit; T14 may merge first, with no Flagged list yet to open a note from; the shell already copies the opener's
+  record across a replace). flagged.md *Loading and errors* and *Back and place* are S03.03.05's (T19):
+  this task wires the region with its words and declares the route's return point. Step 6 writes these into T19's
+  and T16's Notes, with the refetch of `['reviews']` and `refreshMe()` after Mark reviewed and Save changes into
+  T16's; and the pieces built here for later tasks (above): into T19's, `LinkRow`'s plain lines for the Reason and
+  Comment lines and `MetaLine` with no status word for the Reviewed meta line; into T18's, `ChronoList`'s whole mode
+  and `MetaLine` with no status word for the version rows.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T09's: the passkey worker flags and
+  submits a note on the iPhone, and account A on the laptop and account B on the Android phone each see it in To review
+  on their next page load, with its reason and time, open it and come back with the back link "Flagged" (§14 M3 *Done
+  when* bullet 1, the list half, on real devices); and, with NVDA and Chrome, VoiceOver and Safari, and TalkBack and
+  Chrome, the arrival read as "Flagged notes, heading level 1", a row read as its name and date, "link", then the author
+  and "flagged" with the time, the Reason line when reading on, and the note's back link read as "Flagged" (flagged.md
+  *Visual and device*'s manual pass, for what this task builds).
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] Submit sends a flag to To review (S03.01.01's first, third, fourth and fifth criteria, and the second's `422`;
+      F03.01's table test, started; design.md §3.6 bullet 2, §5.8 step 5 and its flag rules' first and last rows, §6.3's
+      `201 {versionNumber, createdAtUtc, flagStatus}`; note-form.md *After a successful submit* step 2; today.md's
+      Submit row): `NoteVersions` sets `FlagStatus = ToReview` and `FlaggedVersionNumber = 1` in the header's one
+      conditional `ExecuteUpdate` when version 1 is flagged, and leaves `None` and null when it is not;
+      `NoteVersionSaved` gains `flagStatus` (Notes), on the `201` and on a retry's `200`; and
+      `TestNotes.AddSubmittedAsync` leaves a flagged note as Submit now does unless a test sets its status by hand.
+      Integration tests on SQL Server: `FlagRulesTests`, the one table-driven theory that T16 adds to, holding only rows
+      of §5.8's flag rules, here version 1 through `POST {base}/versions` from `None` (flagged, then `ToReview` and 1;
+      unflagged, then `None` and null), each checking `FlagStatus` and `FlaggedVersionNumber` afterwards (Notes); the
+      existing `A_flagged_submit_with_no_reason_…` theory also checking that the note keeps `None` and null; a fact for
+      a draft saved flagged by `PUT {base}/draft` and never submitted, `None` and null; the header's one `UPDATE`
+      setting both, read from the command, as `HoldsTheHeaderUpdateOf` reads it; a failing event save leaving
+      them as they were with the rest (the existing test, its body flagged); the `201`'s and a retry's `200`'s
+      `flagStatus`; and the existing tests that expect `None` after a flagged submit brought into line. On the form,
+      after the answer, `refreshMe(queryClient)` when its `flagStatus` is `ToReview` (Notes). Vitest: a flagged submit's
+      `201` followed by one `GET /api/auth/me`; a retry's `200` the same; and an unflagged submit sending none from the
+      form.
+- [ ] The To review list's API (S03.03.01's four specific criteria; S03.01.01's second criterion, end to end; design.md
+      §4.6 item 2, §6.1 *Lists*, §6.4's `GET /api/reviews?status=toReview` row; F03.03's matrix row for it):
+      `GET /api/reviews?status=toReview` in `Features/Reviews`, with the `Manager` policy (Notes), writing nothing,
+      answering the organisation's Submitted notes with `FlagStatus = ToReview` as §6.4's array `[{participantId,
+      givenName, familyName, noteDate, authorDisplayName, flagReason, flaggedAtUtc, currentVersionNumber,
+      flagRemovedLater}]`: `flagReason` and `flaggedAtUtc` from the version in `FlaggedVersionNumber`,
+      `flagRemovedLater` true exactly when the current version is not flagged, oldest `flaggedAtUtc` first, then by note
+      ID; and a request with no `status`, or another value, `400` (Notes). Its matrix row (`401` signed out, `403` for
+      A's worker, `200` for both managers, A's manager's list holding a note flagged in A and B's manager's not), and a
+      `SignedOutTests` row. Integration tests on SQL Server: a flagged submit then listed for A's manager and for a
+      second manager added to A, with the participant's names, the note date, the author's display name, the reason, the
+      version's time and `currentVersionNumber` 1; a flagged submit refused for a blank reason never listed; a draft
+      with the flag ticked, an unflagged submitted note, a Reviewed note, and a draft and a discarded draft with
+      `ToReview` set by hand, never listed; with a version 2 added by hand, as T14's Save changes will add it, version
+      1's reason and time while version 2 changes the reason or removes the flag and `FlaggedVersionNumber` stays 1,
+      `flagRemovedLater` false when version 2 is flagged and true when it is not, and version 2's reason and time once
+      `FlaggedVersionNumber` is 2; three notes flagged at 9:01 am, 11:20 am and 4:12 pm, their note dates in another
+      order, listed by flag time; an archived participant's note listed, and a deactivated author's name kept; a missing
+      and an unknown `status` `400`; and no audit event written.
+- [ ] The shared list pieces (chronological-list.md *Implementation notes*; flagged.md item 4's *Extra lines* and
+      *Cross-cutting*; status-tags.md *Built*; Notes): `ChronoList`'s whole mode, with `older` left out: the `<ol>` of
+      rows in the order given, or the empty sentence with no list, and no Show older or its status line; `LinkRow`'s
+      plain lines after its description, each a `<p>` in reading order, outside the link's `aria-describedby` and
+      inside the row, so that the link's `::after` covers them too; and `MetaLine`'s `statusFirst`, true by default,
+      false rendering every part secondary and none bold. Vitest: a whole list rendering its rows in the order given
+      with no button or Show older status line; with no rows, the empty sentence and no `<ol>`; Past notes' paged mode
+      unchanged, its tests passing; a row's plain lines after its description, the link's description holding the meta
+      line alone; and a `MetaLine` with `statusFirst` false having no part in its status style, while Today's and Past
+      notes' lines keep theirs.
+- [ ] The Flagged screen's To review list (S03.03.01's links: flagged.md *Access and navigation* and *To review list*,
+      components 1, 2, 4 and 6, and states L2, L4, L5, L6's sentence, L13 and L20; design.md §4.6 item 2 and its empty
+      state): the route `flagged` inside `ManagerOnly`, titled "Grow2Notes – Flagged notes", with
+      `returnFocus: { fallback: 'sameIndex' }` and `backKey: 'flagged'`; the static `<h1>` "Flagged notes";
+      `toReviewQuery` in `src/features/flagged` on `['reviews', 'toReview']` (Notes); the shared `LoadRegion` with
+      "Loading flagged notes…" and "Flagged notes did not load: …" with Try again, a `403` or `404` giving Page not
+      found, and `useReturnFocusReady` once the list has loaded; then `ChronoList` whole, each row a `LinkRow` whose
+      link holds the full name and, after a visually hidden comma, the note date in `dateLong` in a `<time>`, its key
+      and return key `participantId/noteDate`, going to the shared note address; described by a `MetaLine` with no
+      status word (`statusFirst` false), "{author} · flagged {stamp(flaggedAtUtc, noteDate)}", the stamp in a
+      `<time dateTime>` holding `flaggedAtUtc`; then, as plain lines, "Reason: " with the reason up to its first line
+      break and "Flag removed in a later edit" when `flagRemovedLater`; no tags or buttons in rows; "No flagged notes to
+      review." when the list is empty; each string in `src/copy`; and the Header's comment on `/flagged` brought up to
+      date. Vitest: the title, and the `<h1>` shown before the list answers; rows in the API's order, never sorted
+      again; a row's link named "Sam Taylor, Tuesday 29 September 2026" and described as "Priya Nair, flagged 4:42 pm",
+      no part of that meta line in `MetaLine`'s status style, so none bold or in the text colour, and its stamp in a
+      `<time>` whose `dateTime` is `flaggedAtUtc`; "flagged Thu 1 Oct 2026, 9:01 am" for a flag on a later Melbourne
+      day than the note date, and the time alone on the same day, at 11:30 pm too; a 200-character reason shown whole,
+      and a reason with a line break cut there; "Flag removed in a later edit" only when `flagRemovedLater`; no tag or
+      button in a row; the empty sentence with no list; the list asked for again on mount and on window focus; Flagged
+      with `aria-current="page"` at `/flagged` and `/flagged?view=reviewed`; a worker at either address, and a manager
+      whose list answers `403`, seeing Page not found titled "Grow2Notes – Page not found"; and "Loading flagged
+      notes…" at 1 s, and the failure sentence with Try again after a failed first load.
+- [ ] The note opened from Flagged (S03.03.01's links: flagged.md *The note* and component 7's first bullet; design.md
+      §4.6 item 3, the read view without its review panel (Notes); participant-notes.md item 28a from Flagged;
+      app-shell.md component 3a): the read view's back link reads "Flagged" when a To review row opened it, through
+      `useBackTo` taking the nav item's word (Notes), and pops back to the list; it reads "Today", to `/`, after a
+      reload or from a pasted address; and no nav item is current on the note. Vitest: from a To review row, the back
+      link "Flagged", which goes back one entry to `/flagged`, the rows shown at once from memory and focus back on the
+      row opened; the same read view as from Today but for the label; after a reload, "Today"; `history.state` holding
+      no back object; and no `aria-current` in the nav on the note.
+- [ ] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
+      `GET /api/reviews?status=toReview` in the browser from `notesStore`'s notes, whose Submit now sets and answers
+      `flagStatus`, described in tests/README.md; and a new `flagged.spec.ts`. Signed in for real at 375 px, on the
+      app's own answers: a manager adds a participant and invites a worker and a second manager, each set up on a device
+      of their own through `resetSignIn`; the worker flags and submits the participant's note; the first manager,
+      choosing Flagged, sees the row with the name, the date, "{worker} · flagged {time}" and "Reason: …"; the second
+      manager, who opened Flagged before the submit and saw "No flagged notes to review.", moves to Today and back to
+      Flagged after it and sees the same row, over the empty list kept in memory (design.md §14 M3 *Done when* bullet 1,
+      the list half, on their next page load); the first opens it to the read view, whose back link "Flagged" returns
+      to the list; and the worker gets Page not found at `/flagged`. With the API answered in the browser: axe on To
+      review with rows, To review empty and the first-load error, at 375 and 1280 px; no sideways scroll at 320 px with
+      200% text, names and reasons wrapping whole; rows at least 56 px tall; on a row with "Flag removed in a later
+      edit", a click on its Reason line and one on its empty right-hand side each opening that row's note, at 375 and
+      1280 px (flagged.md *To review list*'s fourth bullet); the status line in the DOM before its text; the focus ring
+      and the current nav item's bar under forced colours; the keyboard-only check (README §9) at both widths, in
+      flagged.md's list Tab order for what is built (the nav, then each row link) and on to the note's back link, with
+      a visible ring at each stop; and no name, reason or note text in `location`, `document.title`, `history.state`,
+      `localStorage`, `sessionStorage`, IndexedDB or Cache Storage after each flow. Every new string is in `src/copy`
+      and the copy test passes (no negative contractions, and no "resolved", "closed", "actioned", "please", "sorry" or
+      "click"), and the diff holds no trace of the parent company's name (D72). Docs: design.md §6.4's row gaining the
+      `400` and the tie-break (Notes); flagged.md, chronological-list.md (the whole mode, built here), note-form.md's
+      *As built (T09)* line and app-shell.md gaining only what the build settles; status-tags.md's *Built* line
+      gaining `MetaLine`'s `statusFirst`, and, beside its *Participant notes history* line on workers and `flagStatus`,
+      one line saying that Submit's answer carries it to every caller and shows no tag (Notes); the hand-offs (Notes)
+      in T16's, T18's and T19's Notes and, dated, in S03.03.02's, S03.03.03's and S03.03.05's Notes; the by-hand checks
+      (Notes) on ops/first-use-in-test.md; no migration, as the model is unchanged; and CI's run on the pull request
+      passing.
+- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in: the
+      CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready` answer
+      `200`; `/` and `/flagged` serve this build's `index.html`, its hashed assets answering `200`; signed out,
+      `GET /api/reviews?status=toReview` answers a `401` problem with `no-store`; then headless Chromium under
+      Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager or worker and every other `/api`
+      request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, as the manager,
+      `/flagged`, titled "Grow2Notes – Flagged notes" with Flagged current, shows the rows in the order answered, with
+      "flagged" and the time, or the date and time, "Reason: …" and "Flag removed in a later edit", and an empty list
+      its sentence; a row opens the read view with the back link "Flagged", which returns to the list; a flagged Submit
+      answered `201` with `flagStatus: "ToReview"` is followed by a `GET /api/auth/me`; as the worker, `/flagged` shows
+      Page not found; the console reports no CSP violation or script error, and the origin's storage is empty;
+      Application Insights shows no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes,
+      then set T11's `status` here and its stories' to `done` together, ticking their criteria and leaving unticked,
+      each with its dated Note, the parts handed to T19 and T16 (Notes) and the by-hand checks, whose Notes name their
+      ops/first-use-in-test.md steps (Notes).
 
 ---
 
