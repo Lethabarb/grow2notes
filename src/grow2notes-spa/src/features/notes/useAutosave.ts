@@ -1,6 +1,6 @@
 import { onlineManager, useMutation } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
-import { api, ApiError, type StartedBy } from '../../api/api.ts';
+import { api, ApiError, classify, type Failure, type StartedBy } from '../../api/api.ts';
 import { limits } from '../../limits.ts';
 import { noteBase, readDraft, type Draft, type DraftAnswer } from './noteQueries.ts';
 import type { SaveIndicator } from './SaveIndicator.tsx';
@@ -116,6 +116,13 @@ export type DeadEnd =
   | { code: 'note.past_date_manager_only' | 'note.participant_archived' | 'note.version_conflict' }
   | { code: 'note.in_progress_by_other'; startedBy: StartedBy };
 
+/**
+ * How Load the other version went: `'shown'`, the form showing the other version, or `'deadEnd'`, its read meeting a
+ * dead end, after either of which the takeover banner has gone; why its read failed, the banner kept; or `undefined`
+ * once the form has gone.
+ */
+export type LoadOutcome = 'shown' | 'deadEnd' | Failure | undefined;
+
 type AutosaveOptions = {
   participantId: string;
   noteDate: string;
@@ -130,6 +137,8 @@ type AutosaveOptions = {
    * shows in place of its own before it returns, so that the save sent next reads the ticks now on screen.
    */
   onListsChanged: (reloaded: Draft) => void;
+  /** The other version, as Load the other version read it, which the form shows in place of its own. */
+  onOtherVersion: (other: Draft) => void;
   /** A dead end, after which autosave sends nothing more. */
   onDeadEnd: (deadEnd: DeadEnd) => void;
 };
@@ -144,7 +153,8 @@ export type Autosave = {
    * An unsaved change sent now, the wait for a retry cut short, for a leave or a sign-out that needs it saved first
    * (T10's Notes): `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying the
    * newest change is answered, or as a dead end comes; `false` as "Not saved: no connection…" shows, while the retries
-   * go on, or for a refusal that is not retried, so that nothing waits on a save that is retried for ever.
+   * go on, for a refusal that is not retried, a takeover included, and while the takeover banner shows, so that nothing
+   * waits on a save that is retried for ever, or on the banner's answer.
    */
   flushNow: () => Promise<boolean>;
   /**
@@ -164,6 +174,16 @@ export type Autosave = {
   resume: () => void;
   /** Stops autosave at a dead end that Submit met, for as long as the form is open, as a save's would. */
   end: (deadEnd: DeadEnd) => void;
+  /**
+   * Keep the text on this screen, after a takeover: what the form holds now, the changes made meanwhile included, sent
+   * at once as a change of its own under a new identity, numbered from 1, which takes the note back.
+   */
+  keep: () => void;
+  /**
+   * Load the other version, after a takeover: the draft read again, which `onOtherVersion` shows, after which the
+   * note's saves start again under a new identity, with "Saved" at the other version's time.
+   */
+  load: () => Promise<LoadOutcome>;
 };
 
 /** Where autosave is, kept from render to render. */
@@ -189,6 +209,8 @@ type Progress = {
   stopped: boolean;
   /** Submit's request is out, from `stop()` to `resume()`, so that nothing is sent meanwhile. */
   paused: boolean;
+  /** Another page's save has taken the note over, until Keep or Load, so that nothing is sent meanwhile. */
+  takenOver: boolean;
   /** What the indicator says of a change not yet saved: "Saving…", or "Not saved: no connection…" (`failed`). */
   shown: 'saving' | 'failed' | undefined;
   /** The saves since the last answer that failed for a transient reason, which set the wait before the next. */
@@ -224,6 +246,12 @@ type Progress = {
  * comes online while it is hidden; as it is shown again, an unsaved change goes at once, the wait for a retry cut
  * short. Submit runs a check save before its confirmation opens, and pauses autosave while its own request is out
  * (autosave-status.md *Behaviour* 6).
+ *
+ * A `409 draft.taken_over`, as another page has saved the note since, from a save or Submit's check save, pauses
+ * autosave until the takeover banner is answered, with "Not saved" (autosave-status.md *Behaviour* 5): it is not a
+ * dead end. Each change made meanwhile is counted and kept, but neither said nor sent. Keep sends what the form holds
+ * then under a new identity, numbered from 1, and Load reads the other version for the form to show, after which the
+ * next save does so too (*Behaviour* 3 and 9).
  */
 export function useAutosave({
   participantId,
@@ -232,11 +260,13 @@ export function useAutosave({
   read,
   onIndicator,
   onListsChanged,
+  onOtherVersion,
   onDeadEnd,
 }: AutosaveOptions): Autosave {
-  const callbacks = useRef({ read, onIndicator, onListsChanged, onDeadEnd });
+  const noteKey = `${participantId}/${noteDate}`;
+  const callbacks = useRef({ read, onIndicator, onListsChanged, onOtherVersion, onDeadEnd });
   useLayoutEffect(() => {
-    callbacks.current = { read, onIndicator, onListsChanged, onDeadEnd };
+    callbacks.current = { read, onIndicator, onListsChanged, onOtherVersion, onDeadEnd };
   });
 
   const progress = useRef<Progress>({
@@ -249,6 +279,7 @@ export function useAutosave({
     listsVersion: opened.listsVersion,
     stopped: false,
     paused: false,
+    takenOver: false,
     shown: undefined,
     failures: 0,
     mounted: false,
@@ -338,15 +369,25 @@ export function useAutosave({
     }
 
     state.made += 1;
+    // Kept for Keep to send, while "Not saved" stays.
+    if (state.takenOver) {
+      return;
+    }
+
+    sayUnsaved(state);
+    window.clearTimeout(state.quiet);
+    state.quiet = window.setTimeout(flush, quietMs);
+    state.longest ??= window.setTimeout(flush, longestMs);
+  }
+
+  // "Saving…" for a change that a save is due to carry, or at once "Not saved: no connection…" while offline, when the
+  // save waits for the browser to be online again.
+  function sayUnsaved(state: Progress) {
     if (onlineManager.isOnline()) {
       saySaving(state);
     } else {
       sayFailed(state);
     }
-
-    window.clearTimeout(state.quiet);
-    state.quiet = window.setTimeout(flush, quietMs);
-    state.longest ??= window.setTimeout(flush, longestMs);
   }
 
   function saySaving(state: Progress) {
@@ -428,7 +469,7 @@ export function useAutosave({
     const carried = state.made;
     const content = callbacks.current.read();
     const body: DraftSaveBody = {
-      ...nextIdentity(`${participantId}/${noteDate}`),
+      ...nextIdentity(noteKey),
       ...(state.started || state.listsVersion === undefined ? {} : { listsVersion: state.listsVersion }),
       ...sentContent(content),
     };
@@ -461,13 +502,14 @@ export function useAutosave({
 
   // A save answered, a page-hidden one alike, which may be older than one answered already: "Saved 9:44 am" once the
   // newest change is saved, which ends a failure, but not again for an older save, whose time would put it back; or
-  // "Saving…" again after "Not saved…", as saves go through again.
+  // "Saving…" again after "Not saved…", as saves go through again. Nothing is said for one answered after a takeover,
+  // as the note is another page's until the banner is answered.
   function answered(state: Progress, { carried, content, savedAtUtc }: Answered) {
     const newer = carried > state.saved;
     state.started = true;
     state.saved = Math.max(state.saved, carried);
     state.failures = 0;
-    const shows = state.mounted && !state.stopped;
+    const shows = state.mounted && !state.stopped && !state.takenOver;
     if (state.saved === state.made) {
       stopRetry(state);
       if (shows && (newer || state.shown !== undefined)) {
@@ -532,7 +574,7 @@ export function useAutosave({
 
   function flushNow(): Promise<boolean> {
     const state = progress.current;
-    if (state.stopped || state.saved === state.made) {
+    if (state.stopped || (state.saved === state.made && !state.takenOver)) {
       return Promise.resolve(true);
     }
 
@@ -603,6 +645,11 @@ export function useAutosave({
       return;
     }
 
+    if (error.code === 'draft.taken_over') {
+      takeOver(state);
+      return;
+    }
+
     const deadEnd = deadEndOf(error);
     if (deadEnd === undefined) {
       tell(state, { kind: 'refused' });
@@ -655,6 +702,71 @@ export function useAutosave({
     tell(state, { kind: 'deadEnd' });
   }
 
+  // Another page saved the note since this one last did (design.md §5.6), so a later save would overwrite its words
+  // unasked: nothing is sent until the takeover banner is answered.
+  function takeOver(state: Progress) {
+    state.takenOver = true;
+    state.due = false;
+    state.shown = undefined;
+    stopTimers(state);
+    stopRetry(state);
+    callbacks.current.onIndicator({ kind: 'takenOver' });
+    tell(state, { kind: 'refused' });
+  }
+
+  function keep() {
+    const state = progress.current;
+    identities.delete(noteKey);
+    state.takenOver = false;
+    // What the form holds differs from what the server does, the other version, as a change does.
+    state.made += 1;
+    sayUnsaved(state);
+    sendNow(state);
+  }
+
+  // Outside the draft's query, as the lists-changed reload reads it (T10's Notes). A `404`, the note submitted
+  // meanwhile, is the version-conflict dead end; another user's draft, which the note can be only once discarded and
+  // started again, is the in-progress one; and a note discarded meanwhile loads as a new note's form.
+  async function load(): Promise<LoadOutcome> {
+    const state = progress.current;
+    let answer: DraftAnswer;
+    try {
+      answer = await readDraft(participantId, noteDate);
+    } catch (error) {
+      if (!state.mounted) {
+        return undefined;
+      }
+
+      if (error instanceof ApiError && error.status === 404) {
+        stopAt(state, { code: 'note.version_conflict' });
+        return 'deadEnd';
+      }
+
+      return classify(error);
+    }
+
+    if (!state.mounted) {
+      return undefined;
+    }
+
+    if ('startedBy' in answer) {
+      stopAt(state, { code: 'note.in_progress_by_other', startedBy: answer.startedBy });
+      return 'deadEnd';
+    }
+
+    const { draft } = answer;
+    identities.delete(noteKey);
+    state.takenOver = false;
+    state.started = draft.isSaved;
+    state.listsVersion = draft.listsVersion;
+    state.saved = state.made;
+    callbacks.current.onOtherVersion(draft);
+    callbacks.current.onIndicator(
+      draft.savedAtUtc === undefined ? { kind: 'none' } : { kind: 'saved', savedAtUtc: draft.savedAtUtc },
+    );
+    return 'shown';
+  }
+
   return {
     changed,
     flush,
@@ -665,12 +777,17 @@ export function useAutosave({
     end: (deadEnd) => {
       stopAt(progress.current, deadEnd);
     },
+    keep,
+    load,
   };
 }
 
-/** Whether autosave may send: the form is open, with no dead end, and Submit's request is not out. */
+/**
+ * Whether autosave may send: the form is open, with no dead end, Submit's request is not out, and no takeover waits
+ * for its banner's answer.
+ */
 function canSend(state: Progress): boolean {
-  return state.mounted && !state.stopped && !state.paused;
+  return state.mounted && !state.stopped && !state.paused && !state.takenOver;
 }
 
 /**

@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState, type Ref } from 'react';
 import { useParams } from 'react-router';
 import type { StartedBy } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
+import { Button } from '../../components/Button.tsx';
+import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
@@ -23,7 +25,7 @@ import {
   type DraftAnswer,
   type ParticipantHeader,
 } from './noteQueries.ts';
-import { NoteForm } from './NoteForm.tsx';
+import { NoteForm, type NoteFormHandle } from './NoteForm.tsx';
 import styles from './NotePage.module.css';
 import { ReadView } from './ReadView.tsx';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
@@ -54,18 +56,22 @@ type NoteProps = { participantId: string; noteDate: string };
  *
  * The form, once open, makes the top bar sticky, with the save status at its end, and stays open whatever the note is
  * fetched as later, as after signing in again in place, so that nothing on screen is replaced (note-form.md
- * *Autosave*). A dead end shows its sentence in the top bar's second row, and says it once through the form's assertive
- * region (note-form.md component 16), there and empty from the first render, as a screen reader may not announce words
- * written into one added with them; its polite twin is the page's `PageStatus`.
+ * *Autosave*). A dead end, or a takeover by another page's save, shows its banner in the top bar's second row, and says
+ * its sentence once through the form's assertive region (note-form.md component 16), there and empty from the first
+ * render, as a screen reader may not announce words written into one added with them; its polite twin is the page's
+ * `PageStatus`.
  */
 function Note({ participantId, noteDate }: NoteProps) {
   const participant = useQuery(participantQuery(participantId));
   const note = useQuery(noteQuery(participantId, noteDate));
+  const form = useRef<NoteFormHandle>(null);
   // None until the form mounts and gives the words it opens with.
   const [indicator, setIndicator] = useState<SaveIndicator>();
   // The sentence of the dead end that stopped autosave, if one has.
   const [deadEnd, setDeadEnd] = useState<string>();
   const formOpen = indicator !== undefined;
+  const takenOver = indicator?.kind === 'takenOver';
+  const said = takenOver ? apiErrorCopy['draft.taken_over'] : deadEnd;
   const submitted = !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
   const formNeeded = note.data !== undefined && submitted === undefined;
   const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
@@ -79,6 +85,16 @@ function Note({ participantId, noteDate }: NoteProps) {
             reader takes as the page's own rather than announcing a change (autosave-status.md *Behaviour* 8). */}
         {formOpen && <SaveIndicatorRegion indicator={indicator} />}
         {deadEnd !== undefined && <DeadEndBanner sentence={deadEnd} />}
+        {takenOver && (
+          <TakeoverBanner
+            onKeep={() => {
+              form.current?.keep();
+            }}
+            onLoad={async () => {
+              await form.current?.loadOther();
+            }}
+          />
+        )}
       </PageBar>
       <div className={textBox.column}>
         <LoadRegion
@@ -91,6 +107,7 @@ function Note({ participantId, noteDate }: NoteProps) {
           {() =>
             submitted === undefined ? (
               <Loaded
+                formRef={form}
                 participant={participant.data!}
                 answer={draft.data!}
                 noteDate={noteDate}
@@ -111,7 +128,9 @@ function Note({ participantId, noteDate }: NoteProps) {
         </LoadRegion>
       </div>
       <div role="alert" className="visually-hidden">
-        {deadEnd}
+        {/* Keyed by the state, so that the version-conflict dead end that Load can meet is said, though its words are
+            the takeover's, which React would otherwise leave in place, unchanged and unannounced. */}
+        {said !== undefined && <span key={takenOver ? 'taken-over' : 'dead-end'}>{said}</span>}
       </div>
     </PageStatus>
   );
@@ -162,6 +181,49 @@ function DeadEndBanner({ sentence }: { sentence: string }) {
   );
 }
 
+type TakeoverBannerProps = {
+  onKeep: () => void;
+  /** Settles once Load's read is answered. */
+  onLoad: () => Promise<void>;
+};
+
+/**
+ * The takeover banner, the top bar's second row in place of a failed save's (note-form.md component 1), while another
+ * page's save has the note: as a dead end's banner, a region named by its sentence, then its two choices, Keep the text
+ * on this screen first, as the one that loses nothing on this screen, and Load the other version (autosave-status.md
+ * *Behaviour* 9), stacked full width on a phone and side by side from 40rem, wrapping. Both wait while Load's read is
+ * out, ready again if it fails.
+ */
+function TakeoverBanner({ onKeep, onLoad }: TakeoverBannerProps) {
+  const [loading, setLoading] = useState(false);
+  return (
+    <section className={`${styles.attentionRow} ${styles.takeover}`} aria-labelledby="taken-over">
+      <WarningIcon />
+      <p id="taken-over" className={styles.attentionText}>
+        {apiErrorCopy['draft.taken_over']}
+      </p>
+      <div className={styles.choices}>
+        <ButtonGroup>
+          <Button variant="primary" busy={loading} onClick={onKeep}>
+            {strings.note.keepTheText}
+          </Button>
+          <Button
+            busy={loading}
+            onClick={() => {
+              setLoading(true);
+              void onLoad().finally(() => {
+                setLoading(false);
+              });
+            }}
+          >
+            {strings.note.loadTheOtherVersion}
+          </Button>
+        </ButtonGroup>
+      </div>
+    </section>
+  );
+}
+
 /** The warning icon of the top bar's second row, beside the first line of its words, which carry the meaning. */
 function WarningIcon() {
   return (
@@ -192,6 +254,8 @@ function NoteHeading({ name, noteDate }: { name: string; noteDate: string }) {
 }
 
 type LoadedProps = {
+  /** The form's, for the takeover banner in the top bar. */
+  formRef: Ref<NoteFormHandle>;
   participant: ParticipantHeader;
   answer: DraftAnswer;
   noteDate: string;
@@ -211,7 +275,7 @@ type LoadedProps = {
  * note as it first loaded, so that nothing fetched later, as after signing in again in place, replaces what is on
  * screen (note-form.md *Autosave*).
  */
-function Loaded({ participant, answer, noteDate, indicator, deadEnd, onIndicator, onDeadEnd }: LoadedProps) {
+function Loaded({ formRef, participant, answer, noteDate, indicator, deadEnd, onIndicator, onDeadEnd }: LoadedProps) {
   const me = useMe();
   const [opened] = useState(answer);
   const name = fullName(participant);
@@ -248,6 +312,7 @@ function Loaded({ participant, answer, noteDate, indicator, deadEnd, onIndicator
     </>
   ) : (
     <NoteForm
+      ref={formRef}
       participantId={participant.id}
       noteDate={noteDate}
       name={name}

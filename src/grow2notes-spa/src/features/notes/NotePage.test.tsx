@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import buttonStyles from '../../components/Button.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
@@ -13,6 +14,7 @@ import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
 import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
+import notePage from './NotePage.module.css';
 import readView from './ReadView.module.css';
 
 // A memory router of the app's routes.
@@ -1180,6 +1182,383 @@ describe('A save that fails', () => {
     await settle();
     expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
     expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+  });
+});
+
+describe('Changed on another device or tab', () => {
+  const sentence = 'This note was changed on another device or tab.';
+
+  /** A save refused as another page has saved the note since this page last did (design.md §5.6). */
+  const takenOver = problem(409, { code: 'draft.taken_over' });
+
+  /** The text, ticks, flag and reason on screen as the note is taken over. */
+  const onScreen = {
+    narrative: 'Jane made toast. Then a walk.',
+    tickedGoalIds: [breakfast.id, sister.id, bus.id],
+    isFlagged: true,
+    flagReason: 'Seemed tired.',
+  };
+
+  /** The version that another page saved, at 9:50 am, which Load the other version reads. */
+  const otherVersion: Draft = {
+    ...savedDraft('Jane went to the library.'),
+    goals: [breakfast, { ...bus, isTicked: true }, sister],
+    isFlagged: true,
+    flagReason: 'Seemed tired after lunch.',
+    savedAtUtc: '2026-09-30T23:50:00Z',
+  };
+
+  /**
+   * Opens the worker's draft of a participant of their own, whose first save from this page is answered at 9:43 am, its
+   * second `409 draft.taken_over`, and those after it at 9:44 am; and writes "Jane made toast.", which saves.
+   */
+  async function openToLose(): Promise<ParticipantHeader> {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft('Jane')));
+    serveSave(
+      paths(participant).draft,
+      inTurn(saved('2026-09-30T23:43:00Z'), takenOver, saved('2026-09-30T23:44:00Z')),
+    );
+    renderApp(paths(participant).page);
+    await settle();
+    await write('Jane made toast.');
+    return participant;
+  }
+
+  /**
+   * Opens the note as `openToLose()` does; then, with Bus ticked, the flag ticked with a reason and the text written
+   * on, focus left in the box, saves again, which meets the takeover.
+   */
+  async function loseTheNote(): Promise<ParticipantHeader> {
+    const participant = await openToLose();
+
+    fireEvent.click(within(main()).getByText(bus.text));
+    fireEvent.click(flagBox());
+    typeReason(onScreen.flagReason);
+    guidedNotes().focus();
+    await write(onScreen.narrative);
+    return participant;
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    const banner = within(pageBar()).queryByRole('region', { name: sentence });
+    return banner !== null && within(banner).queryAllByRole('button').length > 0 ? banner : null;
+  }
+
+  /** A choice of the takeover banner, by its name. */
+  function choice(name: 'Keep the text on this screen' | 'Load the other version'): HTMLElement {
+    return within(takeoverBanner()!).getByRole('button', { name });
+  }
+
+  /** What the form shows: its text, its goals' ticks, its flag and its reason. */
+  function shownContent() {
+    return [guidedNotes().value, goalBoxes().map((box) => box.checked), flagBox().checked, reasonField().value];
+  }
+
+  /** Whether the page asks before it goes, as a reload or a closed tab would find. */
+  function unloadAsks(): boolean {
+    const event = new Event('beforeunload', { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  /** The reads of the note form, `GET {base}/draft`, sent for `participant`. */
+  function draftReads(participant: ParticipantHeader): number {
+    return sentRequests().filter((request) => request === `GET ${paths(participant).draft}`).length;
+  }
+
+  it('shows the takeover banner after the back link, its two choices next in Tab order, with "Not saved"', async () => {
+    await loseTheNote();
+
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2]);
+    const banner = takeoverBanner()!;
+    expect(banner.tagName).toBe('SECTION');
+    expect(within(banner).getByText(sentence)).toHaveAttribute('id', 'taken-over');
+    expect(banner.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(banner).queryByRole('status')).toBeNull();
+    expect(within(banner).queryByRole('alert')).toBeNull();
+    const choices = within(banner).getAllByRole('button');
+    expect(choices.map((button) => button.textContent)).toEqual([
+      'Keep the text on this screen',
+      'Load the other version',
+    ]);
+    expect(choices[0]).toHaveClass(buttonStyles.primary);
+    expect(choices[1]).toHaveClass(buttonStyles.secondary);
+    for (const button of choices) {
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-disabled');
+    }
+    // In the Tab order, the back link, then Keep and Load, then <main>.
+    const focusable = [...pageBar().querySelectorAll('a[href], button, input, textarea, [tabindex]')];
+    expect(focusable).toEqual([within(topBar()).getByRole('link', { name: 'Today' }), ...choices]);
+    expect(follows(main(), choices[1])).toBe(true);
+    expect(follows(banner, saveStatus())).toBe(true);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saveStatus().querySelector('svg')).toBeNull();
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status taken-over');
+    expect(submitButton()).toHaveAccessibleDescription(`Not saved ${sentence}`);
+  });
+
+  it('takes the place of "Not saved: …" in the top bar when a save being retried meets the takeover', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft('Jane')));
+    serveSave(
+      paths(participant).draft,
+      inTurn(saved('2026-09-30T23:43:00Z'), noConnection, noConnection, takenOver),
+    );
+    renderApp(paths(participant).page);
+    await settle();
+    await write('Jane made toast.');
+    type(onScreen.narrative);
+    await wait(2_000 + 1_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(saveStatus()).toHaveClass(notePage.attentionRow);
+
+    await wait(2_000);
+    await settle();
+
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2, 3, 4]);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saveStatus().querySelector('svg')).toBeNull();
+    expect(saveStatus()).not.toHaveClass(notePage.attentionRow);
+    await wait(60_000);
+    expect(saves()).toHaveLength(4);
+  });
+
+  it('says its sentence once, assertively, focus kept, keeping what is typed meanwhile and sending none', async () => {
+    await loseTheNote();
+
+    expect(assertive().textContent).toBe(sentence);
+    expect(document.activeElement).toBe(guidedNotes());
+
+    const changes = watchChanges(assertive());
+    type('Jane made toast. Then a walk to the shops.');
+    fireEvent.click(within(main()).getByText(breakfast.text));
+    guidedNotes().blur();
+    await wait(30_000);
+
+    expect(saves()).toHaveLength(2);
+    expect(changes()).toBe(0);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a walk to the shops.');
+    expect(goalBoxes()[0]).not.toBeChecked();
+  });
+
+  it('sends all on screen on Keep, under a new clientId from 1, focus back in the box, then "Saved …"', async () => {
+    await loseTheNote();
+    type('Jane made toast. Then a walk to the shops.');
+
+    await press(choice('Keep the text on this screen'));
+
+    const [first, , kept] = saves().map(({ body }) => body);
+    expect(kept).toEqual({
+      ...onScreen,
+      clientId: expect.stringMatching(uuid) as string,
+      seq: 1,
+      narrative: 'Jane made toast. Then a walk to the shops.',
+    });
+    expect(kept.clientId).not.toBe(first.clientId);
+    expect(document.activeElement).toBe(guidedNotes());
+    expect(takeoverBanner()).toBeNull();
+    expect(assertive()).toBeEmptyDOMElement();
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+
+    await write('Jane made toast. Then a walk to the shops and back.');
+    expect(saves()[3].body).toMatchObject({ clientId: kept.clientId, seq: 2 });
+  });
+
+  it('gives focus to the <h1> on Keep when nothing had it as the note was taken over', async () => {
+    await openToLose();
+    guidedNotes().focus();
+    type('Jane made toast. Then a walk.');
+    guidedNotes().blur();
+    await settle();
+    expect(takeoverBanner()).not.toBeNull();
+
+    await press(choice('Keep the text on this screen'));
+
+    expect(document.activeElement).toBe(pageHeading());
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+      [1, 'Jane made toast.'],
+      [2, 'Jane made toast. Then a walk.'],
+      [1, 'Jane made toast. Then a walk.'],
+    ]);
+  });
+
+  it("shows the other version's ticks, text, flag and reason on Load, focus on the <h1>, saving from 1", async () => {
+    const participant = await loseTheNote();
+    const other = held(json(otherVersion));
+    serve(paths(participant).draft, other.answer);
+    type('Jane made toast. Then a walk to the shops.');
+
+    await press(choice('Load the other version'));
+    // Both choices wait for its read.
+    expect(choice('Keep the text on this screen')).toHaveAttribute('aria-disabled', 'true');
+    expect(choice('Load the other version')).toHaveAttribute('aria-disabled', 'true');
+    await press(choice('Keep the text on this screen'));
+    expect(saves()).toHaveLength(2);
+
+    other.release();
+    await settle();
+
+    expect(shownContent()).toEqual([
+      otherVersion.narrative,
+      [false, true, false],
+      true,
+      otherVersion.flagReason,
+    ]);
+    expect(document.activeElement).toBe(pageHeading());
+    expect(takeoverBanner()).toBeNull();
+    expect(shownSaveStatus()).toBe(`Saved 9:50${nbsp}am`);
+    expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-30T23:50:00Z');
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+    expect(draftReads(participant)).toBe(2);
+    expect(saves()).toHaveLength(2);
+
+    await write('Jane went to the library. Then lunch.');
+    const [first, , next] = saves().map(({ body }) => body);
+    expect(next).toEqual({
+      clientId: expect.stringMatching(uuid) as string,
+      seq: 1,
+      narrative: 'Jane went to the library. Then lunch.',
+      tickedGoalIds: [bus.id],
+      isFlagged: true,
+      flagReason: 'Seemed tired after lunch.',
+    });
+    expect(next.clientId).not.toBe(first.clientId);
+  });
+
+  it('replaces nothing on screen while the banner shows, nor on Keep, as only Load does (item 16)', async () => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, json(otherVersion));
+    const kept = [onScreen.narrative, [true, true, true], true, onScreen.flagReason];
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    goOnline(false);
+    goOnline(true);
+    await wait(60_000);
+    expect(shownContent()).toEqual(kept);
+
+    await press(choice('Keep the text on this screen'));
+    await wait(30_000);
+
+    expect(shownContent()).toEqual(kept);
+    expect(draftReads(participant)).toBe(1);
+  });
+
+  it('opens no confirmation when its check save meets the takeover, a press then saying the sentence', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    serveSave(paths(participant).draft, inTurn(takenOver, saved('2026-09-30T23:44:00Z')));
+
+    await press(submitButton());
+
+    expect(saves()).toHaveLength(2);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(confirmation()).toBeNull();
+    expect(document.activeElement).toBe(submitButton());
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(submitButton());
+    await wait(16);
+    expect(pageStatus().textContent).toBe(sentence);
+    expect(saves()).toHaveLength(2);
+    expect(confirmation()).toBeNull();
+
+    await press(choice('Keep the text on this screen'));
+    await wait(30_000);
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2, 1]);
+    expect(document.activeElement).toBe(submitButton());
+    expect(confirmation()).toBeNull();
+  });
+
+  it.each([
+    { failure: 'no connection', answer: noConnection, cause: 'no connection' },
+    { failure: 'a failure of the server', answer: problem(500), cause: 'something went wrong' },
+  ])("keeps the banner, its choices ready, when Load's read meets $failure, saying so politely", async (failing) => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, failing.answer);
+
+    await press(choice('Load the other version'));
+    await wait(16);
+
+    expect(pageStatus().textContent).toBe(`The note did not load: ${failing.cause}. Try again.`);
+    expect(choice('Keep the text on this screen')).not.toHaveAttribute('aria-disabled');
+    expect(choice('Load the other version')).not.toHaveAttribute('aria-disabled');
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(shownContent()).toEqual([onScreen.narrative, [true, true, true], true, onScreen.flagReason]);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each([
+    {
+      deadEnd: 'the version-conflict dead end when it finds no draft, as the note was submitted meanwhile',
+      answer: problem(404),
+      words: sentence,
+    },
+    {
+      deadEnd: "the in-progress dead end when it finds someone else's draft",
+      // 9:14 am on 1 October in Melbourne.
+      answer: startedBy('2026-09-30T23:14:00Z'),
+      words: `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    },
+  ])("ends at $deadEnd on Load's read, saying it, focus on the <h1>", async ({ answer, words }) => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, answer);
+    const changes = watchChanges(assertive());
+
+    await press(choice('Load the other version'));
+
+    const banner = within(pageBar()).getByRole('region', { name: words });
+    expect(within(banner).queryByRole('button')).toBeNull();
+    expect(takeoverBanner()).toBeNull();
+    expect(assertive().textContent).toBe(words);
+    // Written again, so said, though the version-conflict dead end's words are the takeover's.
+    expect(changes()).toBeGreaterThan(0);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(document.activeElement).toBe(pageHeading());
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status dead-end');
+    expect(guidedNotes()).toHaveValue(onScreen.narrative);
+    type('Jane made toast. Then a walk to the shops.');
+    await wait(30_000);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it("shows a new note's empty form on Load when the note was discarded meanwhile, saving it anew", async () => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, json(template()));
+
+    await press(choice('Load the other version'));
+
+    expect(shownContent()).toEqual(['', [false, false, false], false, '']);
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(takeoverBanner()).toBeNull();
+    expect(document.activeElement).toBe(pageHeading());
+
+    await write('Jane made toast.');
+    const [first, , next] = saves().map(({ body }) => body);
+    expect(next).toMatchObject({ seq: 1, listsVersion: 'lists-1', narrative: 'Jane made toast.' });
+    expect(next.clientId).not.toBe(first.clientId);
+  });
+
+  it('asks before the page goes while the banner shows, and not once Keep has saved', async () => {
+    await openToLose();
+    expect(unloadAsks()).toBe(false);
+
+    await write('Jane made toast. Then a walk.');
+    expect(takeoverBanner()).not.toBeNull();
+    expect(unloadAsks()).toBe(true);
+
+    await press(choice('Keep the text on this screen'));
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(unloadAsks()).toBe(false);
   });
 });
 

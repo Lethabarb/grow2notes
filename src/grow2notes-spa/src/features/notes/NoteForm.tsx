@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState, type ReactNode } from 'react';
+import { useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
@@ -7,6 +7,7 @@ import { refreshMe, useMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
+import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { Notice } from '../../components/Notice.tsx';
 import { useAnnounce } from '../../components/pageStatusContext.ts';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
@@ -17,6 +18,7 @@ import { msg } from '../../copy/messages.ts';
 import { strings } from '../../copy/strings.ts';
 import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
+import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
 import { removeToday } from '../today/todayQuery.ts';
 import { FlagForManager, reasonId } from './FlagForManager.tsx';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
@@ -54,7 +56,15 @@ type Confirmation = {
   canConfirm: boolean;
 };
 
+/** What the takeover banner in the top bar asks of the form (note-form.md *Changed on another device or tab*). */
+export type NoteFormHandle = {
+  keep: () => void;
+  /** Settles once the read of the other version is answered, shown or not. */
+  loadOther: () => Promise<void>;
+};
+
 type NoteFormProps = {
+  ref?: Ref<NoteFormHandle>;
   participantId: string;
   noteDate: string;
   /** The participant's full name, as stored, which the confirmation and Today's banner name. */
@@ -91,8 +101,17 @@ type NoteFormProps = {
  * change, with the content that it saved, checked again, as a change made while an earlier save was out goes with it
  * (note-form.md *Pressing Submit note*). The button stays busy while Submit's request is out, though a browser closes
  * the confirmation meanwhile, so that no press sends a save or opens another confirmation until the request ends.
+ *
+ * While another page's save has taken the note over, the page's takeover banner asks what to do, and Submit note is
+ * unavailable in the same way, described by the banner's sentence too, which a press says again; every tick and the
+ * text stay as they are, to change, though nothing is sent; and the browser asks before the page goes (note-form.md
+ * *Conflicts and refusals*). Keep the text on this screen gives focus back to what had it as the note was taken over,
+ * or else the `<h1>`, and sends everything on screen. Load the other version shows it in place of the form's ticks,
+ * text, flag and reason, with focus on the `<h1>`; or, if its read failed, says so in the page's polite region, the
+ * banner kept (note-form.md *Changed on another device or tab*).
  */
 export function NoteForm({
+  ref,
   participantId,
   noteDate,
   name,
@@ -116,6 +135,9 @@ export function NoteForm({
     () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
   );
   const [listsChanged, setListsChanged] = useState(false);
+  // The text that the Guided notes box opens with, and the versions loaded in place of the draft's, by each of which
+  // the uncontrolled box opens anew with the version's text.
+  const [textLoaded, setTextLoaded] = useState({ text: draft.narrative, loads: 0 });
   const [flagged, setFlagged] = useState(draft.isFlagged);
   const [reason, setReason] = useState(draft.flagReason ?? '');
   // The messages of the fields that the last press refused, each gone with the input that fixes it.
@@ -134,7 +156,10 @@ export function NoteForm({
   const [failure, setFailure] = useState<string>();
   // Whether the confirmation is still open as its request ends.
   const confirmationOpen = useRef(false);
+  // What had focus as the note was taken over, which Keep gives it back to.
+  const focusedAtTakeover = useRef<HTMLElement>(null);
   const hasPrompts = draft.guidePrompts !== '';
+  const takenOver = indicator?.kind === 'takenOver';
 
   function read(): DraftContent {
     return { narrative: box.current!.value, tickedGoalIds: [...ticked], isFlagged: flagged, flagReason: reason };
@@ -145,10 +170,20 @@ export function NoteForm({
     noteDate,
     opened: draft,
     read,
-    onIndicator,
+    onIndicator: (said) => {
+      if (said.kind === 'takenOver') {
+        const focused = document.activeElement;
+        focusedAtTakeover.current = focused instanceof HTMLElement && focused !== document.body ? focused : null;
+      }
+
+      onIndicator(said);
+    },
     onListsChanged: showListsAsNow,
+    onOtherVersion: showOtherVersion,
     onDeadEnd,
   });
+
+  useUnloadWarning(takenOver);
 
   const { mutate } = useMutation({
     mutationFn: ({ key, content }: Pick<Confirmation, 'key' | 'content'>) =>
@@ -174,6 +209,46 @@ export function NoteForm({
       notice.current?.focus();
     }
   }
+
+  // The other version, as Load read it, in place of what the form held: its goals and their ticks, its text, its flag
+  // and its reason; and any message of Submit's checks checked again on it, as an input would.
+  function showOtherVersion(other: Draft) {
+    const content = {
+      narrative: other.narrative,
+      tickedGoalIds: other.goals.filter((goal) => goal.isTicked).map((goal) => goal.id),
+      isFlagged: other.isFlagged,
+      flagReason: other.flagReason ?? '',
+    };
+    setGoals(other.goals);
+    setTicked(new Set(content.tickedGoalIds));
+    setTextLoaded((loaded) => ({ text: content.narrative, loads: loaded.loads + 1 }));
+    setFlagged(content.isFlagged);
+    setReason(content.flagReason);
+    recheck(content);
+  }
+
+  function keep() {
+    const focused = focusedAtTakeover.current;
+    focused?.focus();
+    // Gone, or hidden since, as Reason is once the flag is unticked.
+    if (focused === null || document.activeElement !== focused) {
+      focusPageHeading();
+    }
+
+    autosave.keep();
+  }
+
+  async function loadOther() {
+    const outcome = await autosave.load();
+    if (outcome === 'shown' || outcome === 'deadEnd') {
+      // From Load, which has gone with the banner.
+      focusPageHeading();
+    } else if (outcome === 'offline' || outcome === 'server') {
+      announce?.(msg.loadFailed(strings.note.theNote, outcome, false));
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ keep, loadOther }));
 
   function toggle(goalId: string, isTicked: boolean) {
     setTicked((current) => {
@@ -224,6 +299,11 @@ export function NoteForm({
 
     if (deadEnd !== undefined) {
       announce?.(deadEnd);
+      return;
+    }
+
+    if (takenOver) {
+      announce?.(apiErrorCopy['draft.taken_over']);
       return;
     }
 
@@ -366,8 +446,9 @@ export function NoteForm({
           onToggle={toggle}
         />
         <GuidedNotes
+          key={textLoaded.loads}
           boxRef={box}
-          initialText={draft.narrative}
+          initialText={textLoaded.text}
           prompts={draft.guidePrompts}
           error={errors.narrative}
           onChange={() => {
@@ -399,9 +480,13 @@ export function NoteForm({
             type="submit"
             variant="primary"
             busy={busy}
-            unavailable={indicator?.kind === 'saving' || indicator?.kind === 'failed' || deadEnd !== undefined}
+            unavailable={
+              indicator?.kind === 'saving' || indicator?.kind === 'failed' || takenOver || deadEnd !== undefined
+            }
             onUnavailablePress={() => void pressSubmit()}
-            aria-describedby={deadEnd === undefined ? 'save-status' : 'save-status dead-end'}
+            aria-describedby={
+              deadEnd !== undefined ? 'save-status dead-end' : takenOver ? 'save-status taken-over' : 'save-status'
+            }
           >
             {strings.note.submit}
           </Button>

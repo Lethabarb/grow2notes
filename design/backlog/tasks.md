@@ -3578,6 +3578,21 @@ older page is told the note has moved on, and nothing is overwritten without ask
     that fails keeps the banner, its buttons ready, and says the form's own "The note did not load: …" in the polite
     region; a `404`, the note submitted meanwhile (until T14), is the version-conflict dead end. Typing while the
     banner shows is counted and kept, not sent, and Keep sends it.
+  - The takeover as built (step 3): the save indicator's own state, "Not saved", carries the banner, so that it
+    takes the failed-save row's place and gives way to a dead end, one at a time, and a change typed while it shows
+    leaves "Not saved" as it is. A save answered after the takeover, such as a page-hidden one sent beside the save
+    refused, says nothing, and a page-hidden save's refusal is left to the regular saves, as its other failures are.
+    Keep counts what is on screen as a change, so that it goes with nothing typed since. Both choices wait while
+    Load's read is out, `aria-disabled` with no busy label, so that a press then says nothing and a slow read shows
+    nothing new (the design is silent, and a label would be new copy); step 6's "As built (T10)" notes in
+    note-form.md and autosave-status.md say so. Load opens the uncontrolled Guided notes box anew with the other
+    version's text, and checks again any field with a message, as an input does; a read finding another user's draft
+    is the in-progress dead end, and one finding no live note, the draft discarded meanwhile, loads a new note's
+    empty form, the indicator empty and the next save starting the note. A dead end that Load meets gives focus to
+    the `<h1>`, as its success does, the button that had it having gone, and is said through the assertive region,
+    whose words are keyed by the state, as the version-conflict dead end's are the takeover's and would otherwise be
+    left in place unannounced. The `beforeunload` listener is `useUnloadWarning()`, which T03's
+    `LeaveWarning` now uses too, so that step 4 widens one listener to an unsaved change.
   - The form calls the existing `invalidateToday()` as it unmounts, whichever way it is left (note-form.md *Leaving
     the form*; autosave-status.md *Where it's used*, Today row), so that Today's row matches without leaning on
     `todayQuery`'s `staleTime: 0`; `['me', 'drafts']` comes with T12.
@@ -3652,7 +3667,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       nothing, on a `422` and on a `403`; a change typed while the check save is out opening no confirmation, even
       after a later save succeeds; Submit pressed during "Not saved" opening nothing and saying the sentence; and a
       form left and opened again in the same page load going on from the next `seq` (item 13).
-- [ ] Changed on another device or tab (S02.02.06's second criterion; its links to design.md §4.3's state "Changed on
+- [x] Changed on another device or tab (S02.02.06's second criterion; its links to design.md §4.3's state "Changed on
       another device or tab", §5.6's takeover and note-form.md items 15 and 16; note-form.md component 1's blocking
       banner, *Conflicts and refusals* and *Changed on another device or tab*; autosave-status.md *Behaviour* 5 and
       9): a `409 draft.taken_over`, from a save or Submit's check save, pauses autosave, which is not a dead end; the

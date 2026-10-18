@@ -152,6 +152,7 @@ function renderAutosave(opened: Draft = template) {
           said.push(indicator.kind);
         },
         onListsChanged: () => {},
+        onOtherVersion: () => {},
         onDeadEnd: () => {},
       }),
     {
@@ -606,5 +607,105 @@ describe('flushNow() and checkSave()', () => {
     expect(sentSaves).toHaveLength(2);
     await wait(60_000);
     expect(sentSaves).toHaveLength(2);
+  });
+});
+
+describe('Taken over by another page', () => {
+  /** A save refused as another page has saved the note since this page last did (design.md §5.6). */
+  const takenOver = problem(409, 'draft.taken_over');
+
+  /** Saves "Jane", then "Jane made toast.", which meets the takeover; the saves after it are answered at 9:44 am. */
+  async function loseTheNote() {
+    answerSaves(saved(), takenOver, saved('2026-09-30T23:44:00Z'));
+    const rendered = renderAutosave(reopened);
+    for (const text of ['Jane', 'Jane made toast.']) {
+      rendered.type(text);
+      act(() => {
+        rendered.autosave().flush();
+      });
+      await wait(0);
+    }
+
+    return rendered;
+  }
+
+  it('pauses at a 409 draft.taken_over with "Not saved", keeping each change made after it, sending none', async () => {
+    const { autosave, type, said } = await loseTheNote();
+    expect(said).toEqual(['draft', 'saving', 'saved', 'saving', 'takenOver']);
+
+    type('Jane made toast. Then a walk.');
+    act(() => {
+      autosave().flush();
+      autosave().resume();
+    });
+    showPage('hidden');
+    showPage('visible');
+    goOnline(false);
+    goOnline(true);
+    await wait(60_000);
+
+    expect(sentSaves).toHaveLength(2);
+    expect(said).toEqual(['draft', 'saving', 'saved', 'saving', 'takenOver']);
+  });
+
+  it('gives false from flushNow(), and nothing from checkSave() meeting it or after it, sending no more', async () => {
+    answerSaves(saved(), takenOver);
+    const { autosave, type } = renderAutosave(reopened);
+    type('Jane');
+    act(() => {
+      autosave().flush();
+    });
+    await wait(0);
+
+    const checked = outcome(autosave().checkSave());
+    await wait(0);
+    expect(checked()).toBeUndefined();
+
+    const flushed = outcome(autosave().flushNow());
+    const checkedAgain = outcome(autosave().checkSave());
+    await wait(30_000);
+    expect(flushed()).toBe(false);
+    expect(checkedAgain()).toBeUndefined();
+    expect(sentSaves).toHaveLength(2);
+  });
+
+  it('sends what the form holds at once on keep(), under a new clientId numbered from 1, then "Saved"', async () => {
+    const { autosave, type, said } = await loseTheNote();
+    type('Jane made toast. Then a walk.');
+
+    act(() => {
+      autosave().keep();
+    });
+    await wait(0);
+    type('Jane made toast. Then a walk to the shops.');
+    act(() => {
+      autosave().flush();
+    });
+    await wait(0);
+
+    const firstId = sentSaves[0].body.clientId;
+    expect(sentSaves.map(({ body }) => [body.clientId === firstId, body.seq, body.narrative])).toEqual([
+      [true, 1, 'Jane'],
+      [true, 2, 'Jane made toast.'],
+      [false, 1, 'Jane made toast. Then a walk.'],
+      [false, 2, 'Jane made toast. Then a walk to the shops.'],
+    ]);
+    expect(sentSaves[2].body.clientId).toBe(sentSaves[3].body.clientId);
+    expect(said.slice(5)).toEqual(['saving', 'saved', 'saving', 'saved']);
+  });
+
+  it('sends on keep() with no change made since the takeover, as the server holds the other version', async () => {
+    const { autosave } = await loseTheNote();
+
+    act(() => {
+      autosave().keep();
+    });
+    await wait(0);
+
+    expect(sentTexts()).toEqual([
+      [1, 'Jane'],
+      [2, 'Jane made toast.'],
+      [1, 'Jane made toast.'],
+    ]);
   });
 });

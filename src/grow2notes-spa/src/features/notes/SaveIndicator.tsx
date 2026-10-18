@@ -8,8 +8,9 @@ import { strings } from '../../copy/strings.ts';
  * note with no change yet; "Draft · saved 9:42 am", on a draft reopened, until its first change; "Saving…", from a
  * change until a save that carried the newest change is answered; then "Saved 9:42 am", at the time of that answer;
  * "Not saved: no connection. Keep this page open; retrying." once a retry has failed too, or at once while offline,
- * until a save carrying the newest change is answered, as the top bar's second row; or "Not saved" from a dead end
- * on, which the top bar's second row explains (note-form.md *Conflicts and refusals*).
+ * until a save carrying the newest change is answered, as the top bar's second row; "Not saved" while another page's
+ * save has taken the note over, until the takeover banner in the top bar's second row is answered (`takenOver`); or
+ * "Not saved" from a dead end on, which the top bar's second row explains (note-form.md *Conflicts and refusals*).
  */
 export type SaveIndicator =
   | { kind: 'none' }
@@ -17,6 +18,7 @@ export type SaveIndicator =
   | { kind: 'saving' }
   | { kind: 'saved'; savedAtUtc: string }
   | { kind: 'failed' }
+  | { kind: 'takenOver' }
   | { kind: 'notSaved' };
 
 /**
@@ -31,6 +33,7 @@ export function SaveIndicatorText({ indicator }: { indicator: SaveIndicator }) {
       return strings.saving;
     case 'failed':
       return strings.note.notSavedRetrying;
+    case 'takenOver':
     case 'notSaved':
       return strings.note.notSaved;
     case 'saved':
