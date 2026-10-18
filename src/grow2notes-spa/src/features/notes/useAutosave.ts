@@ -11,11 +11,22 @@ const quietMs = 2_000;
 // pause still saves every few seconds (design.md §14 M2).
 const longestMs = 5_000;
 
-/** What the form holds, as a save sends it. */
-export type DraftContent = { narrative: string; tickedGoalIds: string[] };
+/**
+ * What the form holds, as a save reads it: the Guided notes text, the ticked goals, the flag, and the reason as typed,
+ * which the form keeps while the box is unticked.
+ */
+export type DraftContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string };
 
 /** `PUT {base}/draft`'s body (design.md §6.3), as far as this form fills it. */
-type DraftSaveBody = DraftContent & { clientId: string; seq: number; listsVersion?: string };
+type DraftSaveBody = {
+  clientId: string;
+  seq: number;
+  listsVersion?: string;
+  narrative: string;
+  tickedGoalIds: string[];
+  isFlagged: boolean;
+  flagReason: string | null;
+};
 
 /** A save's answer, the time the working copy was saved, in UTC. */
 type DraftSaved = { savedAtUtc: string };
@@ -55,6 +66,15 @@ export function capped(text: string, limit: number): string {
   const last = text.charCodeAt(limit - 1);
   const splitsAPair = last >= 0xd800 && last <= 0xdbff;
   return text.slice(0, splitsAPair ? limit - 1 : limit);
+}
+
+/**
+ * The reason as a save sends it (note-form.md *Autosave*): `null` while the box is unticked, so that hidden text never
+ * reaches the server, and while the reason is blank; otherwise cut to the limit, as the draft's column holds no more,
+ * while the screen keeps the whole of it, which Submit checks.
+ */
+function savedReason({ isFlagged, flagReason }: DraftContent): string | null {
+  return isFlagged && flagReason.trim() !== '' ? capped(flagReason, limits.flagReason) : null;
 }
 
 /**
@@ -120,14 +140,15 @@ type Progress = {
 
 /**
  * The note form's autosave (note-form.md *Autosave*, autosave-status.md *Behaviour* 1 to 3), which saves the caller's
- * working copy with `PUT {base}/draft`: 2 s after the last change, 5 s at most after the first unsaved one, and at once
- * when a field loses focus with a change unsaved. One save is out at a time, and one that falls due meanwhile goes as
- * it settles, with what the form holds then, so that saves are combined, never queued. The first save, which creates
- * the note, sends the template's lists' version (design.md §5.7). Its `409 note.lists_changed` reads the form again,
- * for the form to show the lists as they are now, and sends the save again at once with their version, "Saving…"
- * shown throughout (autosave-status.md *Behaviour* 5). A dead end stops autosave, with "Not saved". A save that fails
- * otherwise leaves its change unsaved, and "Saving…" shown, until the next change or a blur sends it: the retries, "Not
- * saved: no connection…", the page-hidden save and the rules for leaving are T10's (T08's Notes).
+ * working copy with `PUT {base}/draft`, its text and reason cut to their limits: 2 s after the last change, 5 s at most
+ * after the first unsaved one, and at once when a field loses focus with a change unsaved. One save is out at a time,
+ * and one that falls due meanwhile goes as it settles, with what the form holds then, so that saves are combined, never
+ * queued. The first save, which creates the note, sends the template's lists' version (design.md §5.7). Its
+ * `409 note.lists_changed` reads the form again, for the form to show the lists as they are now, and sends the save
+ * again at once with their version, "Saving…" shown throughout (autosave-status.md *Behaviour* 5). A dead end stops
+ * autosave, with "Not saved". A save that fails otherwise leaves its change unsaved, and "Saving…" shown, until the
+ * next change or a blur sends it: the retries, "Not saved: no connection…", the page-hidden save and the rules for
+ * leaving are T10's (T08's Notes).
  */
 export function useAutosave({
   participantId,
@@ -164,6 +185,8 @@ export function useAutosave({
         ...(listsVersion === undefined ? {} : { listsVersion }),
         narrative: capped(content.narrative, limits.guidedNotes),
         tickedGoalIds: content.tickedGoalIds,
+        isFlagged: content.isFlagged,
+        flagReason: savedReason(content),
       };
       return api<DraftSaved>(`${noteBase(participantId, noteDate)}/draft`, { method: 'PUT', body });
     },

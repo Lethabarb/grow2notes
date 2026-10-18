@@ -26,7 +26,7 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <c>PUT</c>, the autosave: with no live note, the
 /// note, a draft of the caller's, their working copy, the template's goals its snapshot, and
 /// <c>note.draft_started</c>, together or not at all (§5.5 item 2), and <c>201</c>; with the caller's own draft, its
-/// ticks and text replaced, and <c>200</c> (§5.6); and the body's checks. Each, for anyone else's draft,
+/// ticks, text and flag replaced, and <c>200</c> (§5.6); and the body's checks. Each, for anyone else's draft,
 /// <c>409 note.in_progress_by_other</c> with its author's name and start time, and for a participant not in the
 /// caller's organisation, <c>404</c> (§9.2). The tests add their own participants, goals, users, drafts and, to change
 /// guide prompts, organisation (tests/README.md). The endpoint matrix covers who may call them, and
@@ -71,12 +71,13 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var form = await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today);
 
         Assert.Equal(
-            ["baseVersion", "isSaved", "listsVersion", "guidePrompts", "goals", "narrative"],
+            ["baseVersion", "isSaved", "listsVersion", "guidePrompts", "goals", "narrative", "isFlagged", "flagReason"],
             form.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             (0, false, "", await GuidePromptsAsync()),
             (form.GetProperty("baseVersion").GetInt32(), form.GetProperty("isSaved").GetBoolean(),
                 form.GetProperty("narrative").GetString(), form.GetProperty("guidePrompts").GetString()));
+        Assert.Equal((false, null), Flag(form));
         Assert.Equal(
             [
                 (goals[1], "Makes own breakfast", false),
@@ -264,8 +265,9 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var form = await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today);
 
         Assert.Equal(
-            ["baseVersion", "isSaved", "guidePrompts", "goals", "narrative", "savedAtUtc"],
+            ["baseVersion", "isSaved", "guidePrompts", "goals", "narrative", "isFlagged", "flagReason", "savedAtUtc"],
             form.EnumerateObject().Select(property => property.Name));
+        Assert.Equal((false, null), Flag(form));
         Assert.Equal(
             (0, true, "Jane made toast.\nThen a walk to the shops.", "2026-10-01T23:30:00Z", await GuidePromptsAsync()),
             (form.GetProperty("baseVersion").GetInt32(), form.GetProperty("isSaved").GetBoolean(),
@@ -648,6 +650,112 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal(new string('x', Limits.GuidedNotes), Assert.Single(await WorkingCopiesAsync(note.Id)).Narrative);
     }
 
+    // design.md §3.6 and §5.3: the working copy keeps the flag and its reason, from the note's first save and a later
+    // one, and the form gives them again as it opens (conditional-reveal.md *Behaviour*, a saved draft loaded).
+    [Fact]
+    public async Task A_flag_and_its_reason_are_saved_and_read_back()
+    {
+        const string reason = "Jane seemed unwell.";
+        const string longerReason = "Jane seemed unwell.\nShe slept after lunch.";
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var clientId = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var first = await SaveAsync(
+                   client, participant.Id, Today, FlagBody(listsVersion, clientId, 1, true, reason)))
+        {
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        }
+
+        var afterTheFirst = await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today);
+
+        using var later = await SaveAsync(
+            client, participant.Id, Today, FlagBody(null, clientId, 2, true, longerReason));
+
+        Assert.Equal(HttpStatusCode.OK, later.StatusCode);
+        Assert.Equal((true, reason), Flag(afterTheFirst));
+        Assert.Equal((true, longerReason), Flag(await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today)));
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
+        Assert.Equal((true, longerReason), (draft.IsFlagged, draft.FlagReason));
+    }
+
+    // design.md §5.3: the reason is null unless the note is flagged, whatever the body holds: on the note's first save,
+    // and on a later one that unticks a flag saved with a reason.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_unflagged_save_stores_no_reason(bool started)
+    {
+        const string reason = "Jane seemed unwell.";
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var clientId = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        if (started)
+        {
+            using var flagged = await SaveAsync(
+                client, participant.Id, Today, FlagBody(listsVersion, clientId, 1, true, reason));
+            Assert.Equal(HttpStatusCode.Created, flagged.StatusCode);
+        }
+
+        using var response = await SaveAsync(
+            client,
+            participant.Id,
+            Today,
+            started ? FlagBody(null, clientId, 2, false, reason) : FlagBody(listsVersion, clientId, 1, false, reason));
+
+        Assert.Equal(started ? HttpStatusCode.OK : HttpStatusCode.Created, response.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
+        Assert.Equal((false, null), (draft.IsFlagged, draft.FlagReason));
+        Assert.Equal((false, null), Flag(await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today)));
+    }
+
+    // Only Submit needs a reason (design.md §3.4; conditional-reveal.md *Notes*), so a flagged draft is saved without
+    // one, as the form sends it while the reason is blank.
+    [Fact]
+    public async Task A_flag_with_no_reason_is_saved()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client, participant.Id, Today, FlagBody(listsVersion, Guid.NewGuid(), 1, true, null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
+        Assert.Equal((true, null), (draft.IsFlagged, draft.FlagReason));
+        Assert.Equal((true, null), Flag(await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today)));
+    }
+
+    // Limits.FlagReason (A6), the column's size, which validation enforces before the database would.
+    [Fact]
+    public async Task A_reason_of_200_characters_is_saved_and_of_201_refused()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+
+        using var longest = await SaveAsync(
+            client,
+            participant.Id,
+            Today,
+            FlagBody(listsVersion, clientId, 1, true, new string('x', Limits.FlagReason)));
+        var before = await StoredRowsAsync();
+        using var tooLong = await SaveAsync(
+            client, participant.Id, Today, FlagBody(null, clientId, 2, true, new string('y', Limits.FlagReason + 1)));
+
+        Assert.Equal(HttpStatusCode.Created, longest.StatusCode);
+        await ReadValidationProblemAsync(tooLong, "flagReason");
+        Assert.Equal(before, await StoredRowsAsync());
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal(new string('x', Limits.FlagReason), Assert.Single(await WorkingCopiesAsync(note.Id)).FlagReason);
+    }
+
     // The validation filter's checks (DraftSaveRequest), before the endpoint looks for the participant or a note.
     [Theory]
     [InlineData("""{"clientId":"5b0e7c3a-1f42-4d8e-9a61-2c7f0b9d4e13","seq":1,"tickedGoalIds":[]}""", "narrative")]
@@ -979,15 +1087,39 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/draft");
 
     // A save's body as the form sends it once one of its saves has been answered, with no lists' version, which only a
-    // save that creates the note reads.
+    // save that creates the note reads, and the flag unticked, which sends no reason.
     private static object Body(Guid clientId, int seq, string narrative, params Guid[] tickedGoalIds) =>
-        new { clientId, seq, narrative, tickedGoalIds };
+        new { clientId, seq, narrative, tickedGoalIds, isFlagged = false, flagReason = (string?)null };
 
     // A note's first save as the form sends it: from a page that has not saved the note before, with the lists'
-    // version of the template that the form opened with (design.md §5.7).
+    // version of the template that the form opened with (design.md §5.7), and the flag unticked.
     private static object FirstBody(
         string? listsVersion, Guid clientId, string narrative, params Guid[] tickedGoalIds) =>
-        new { clientId, seq = 1, listsVersion, narrative, tickedGoalIds };
+        new
+        {
+            clientId,
+            seq = 1,
+            listsVersion,
+            narrative,
+            tickedGoalIds,
+            isFlagged = false,
+            flagReason = (string?)null,
+        };
+
+    // A save with the flag and the reason given, which the form sends as null while the box is unticked or the reason
+    // is blank, and with the lists' version given, which only the note's first save sends.
+    private static object FlagBody(
+        string? listsVersion, Guid clientId, int seq, bool isFlagged, string? flagReason) =>
+        new
+        {
+            clientId,
+            seq,
+            listsVersion,
+            narrative = "Jane made toast.",
+            tickedGoalIds = Array.Empty<Guid>(),
+            isFlagged,
+            flagReason,
+        };
 
     // Over HTTPS with the caller's antiforgery token, as the SPA saves (tests/README.md).
     private static async Task<HttpResponseMessage> SaveAsync(
@@ -1017,6 +1149,10 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal("validation.failed", problem.RootElement.GetProperty("code").GetString());
         Assert.Equal([field], problem.RootElement.GetProperty("errors").EnumerateObject().Select(error => error.Name));
     }
+
+    // The form's flag and its reason, a JSON null, and never left out, when there is none.
+    private static (bool IsFlagged, string? FlagReason) Flag(JsonElement form) =>
+        (form.GetProperty("isFlagged").GetBoolean(), form.GetProperty("flagReason").GetString());
 
     // The form's goals, in its order.
     private static List<(Guid Id, string? Text, bool IsTicked)> Goals(JsonElement form) =>

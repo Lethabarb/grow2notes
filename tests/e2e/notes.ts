@@ -10,21 +10,25 @@ export type NoteGoal = { id: string; text: string };
 /** Who started another user's draft, as `409 note.in_progress_by_other` names them (design.md §6.9). */
 export type StartedBy = { authorDisplayName: string; startedAtUtc: string };
 
-/** A `PUT {base}/draft` that the page sent: its JSON body (design.md §6.3), as far as T08's form fills it. */
+/** A `PUT {base}/draft` that the page sent: its JSON body (design.md §6.3), as far as the form fills it. */
 export type DraftSave = {
   clientId: string;
   seq: number;
   listsVersion?: string;
   narrative: string;
   tickedGoalIds: string[];
+  isFlagged: boolean;
+  flagReason: string | null;
 };
 
-/** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks and text. */
+/** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks, text and flag. */
 type HeldDraft = StartedBy & {
   authorUserId: string;
   snapshot: NoteGoal[];
   ticked: string[];
   narrative: string;
+  isFlagged: boolean;
+  flagReason: string | null;
   savedAtUtc: string;
 };
 
@@ -110,6 +114,8 @@ export function notesStore({
         guidePrompts: prompts,
         goals: draft.snapshot.map((goal) => ({ ...goal, isTicked: draft.ticked.includes(goal.id) })),
         narrative: draft.narrative,
+        isFlagged: draft.isFlagged,
+        flagReason: draft.flagReason,
         savedAtUtc: draft.savedAtUtc,
       };
       return { json };
@@ -126,6 +132,8 @@ export function notesStore({
       guidePrompts: prompts,
       goals: listed.map((goal) => ({ ...goal, isTicked: false })),
       narrative: '',
+      isFlagged: false,
+      flagReason: null,
     };
     return { json };
   }
@@ -136,6 +144,8 @@ export function notesStore({
     const key = `${participantId}/${noteDate}`;
     const draft = drafts.get(key);
     const ticked = [...new Set(sent.tickedGoalIds)];
+    // The reason only while flagged, as the API stores it (design.md §5.3).
+    const flag = { isFlagged: sent.isFlagged, flagReason: sent.isFlagged ? sent.flagReason : null };
     if (draft !== undefined) {
       if (draft.authorUserId !== me.userId) {
         const { authorDisplayName, startedAtUtc } = draft;
@@ -146,7 +156,7 @@ export function notesStore({
         return problem(422, 'validation.failed', { errors: { tickedGoalIds: ['Unknown goal.'] } });
       }
 
-      Object.assign(draft, { ticked, narrative: sent.narrative, savedAtUtc });
+      Object.assign(draft, { ticked, narrative: sent.narrative, ...flag, savedAtUtc });
       return { status: 200, json: { savedAtUtc } };
     }
 
@@ -178,6 +188,7 @@ export function notesStore({
       snapshot: [...listed],
       ticked,
       narrative: sent.narrative,
+      ...flag,
       savedAtUtc,
     });
     return { status: 201, json: { savedAtUtc } };
@@ -243,6 +254,8 @@ export function notesStore({
         snapshot: [...(goals.get(participantId) ?? [])],
         ticked: [],
         narrative: '',
+        isFlagged: false,
+        flagReason: null,
         savedAtUtc: startedBy.startedAtUtc,
       });
     },

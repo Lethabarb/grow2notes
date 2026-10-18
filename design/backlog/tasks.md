@@ -3115,6 +3115,15 @@ past notes.
   `(OrganisationId, CommonItemId)`. The check constraint is `CK_NoteVersionItem_Section`. EF Core writes its SQL on a
   line longer than 120 characters, and writes the snapshot's long lines again, which are wrapped in `AddNoteVersion`,
   its designer file and the model snapshot, as in `AddNote`.
+- Where the design is silent (step 2), the simplest options: a draft `PUT` without `isFlagged` saves an unflagged
+  draft, as a missing `bool` binds `false`, and a reason over `Limits.FlagReason` gets `422` under `flagReason` whether
+  or not the body is flagged, as the validation filter runs before the endpoint reads the flag. The Reason block's bar
+  is in `--colour-divider`, the colour of GOV.UK's reveal bar, and the label takes `FieldGroup`'s bold look; the field
+  takes the shared text box's look at its four rows, resized by its corner rather than growing, with no error-colour
+  border while it is over the limit, which only the count says (note-form.md *Over the limit while typing*). The flag
+  row is `TickList.module.css`'s `.row`, its dividers included. So that the end-to-end tests already written stay
+  true, `tests/e2e/notes.ts` keeps and gives the flag (tests/README.md), and `note-form.spec.ts`'s save bodies, labels
+  and Tab order include it; step 8 adds the flag's own end-to-end checks.
 
 ### Steps
 
@@ -3132,7 +3141,7 @@ past notes.
       refused by the unique indexes, a row breaking each arm of the check constraint refused, and an update or a delete
       of either table refused by `AppendOnlySaveChangesInterceptor` and, as `grow2notes_runtime`, by the database; and
       the tenancy and model-convention tests passing for both entities.
-- [ ] Flag for manager on the draft (S02.03.02's first criterion; its links to §3.6's first bullet, §4.3 item 6 and
+- [x] Flag for manager on the draft (S02.03.02's first criterion; its links to §3.6's first bullet, §4.3 item 6 and
       §5.3's draft fields, note-form.md *States* › *Flag*, item 23's re-tick and item 24's autosave;
       conditional-reveal.md): `PUT {base}/draft` takes `isFlagged` and `flagReason`, at most `Limits.FlagReason`
       characters, else `422` under `flagReason`, and stores them in `NoteDraft.IsFlagged` and `FlagReason` (Notes);

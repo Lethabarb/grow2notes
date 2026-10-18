@@ -18,6 +18,7 @@ import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { fullName } from '../participants/participantsQuery.ts';
+import { FlagForManager } from './FlagForManager.tsx';
 import { GuidedNotes } from './GuidedNotes.tsx';
 import { draftQuery, participantQuery, type Draft, type DraftAnswer, type ParticipantHeader } from './noteQueries.ts';
 import styles from './NotePage.module.css';
@@ -200,12 +201,13 @@ type NoteFormProps = {
 };
 
 /**
- * The note form (note-form.md components 7, 8 and 10): the lists-changed notice's live region, there and empty from
- * the first render, as a screen reader may not announce words written into one added with them; then Goals, its
- * goals and ticks in this page's state, from the draft's; then Guided notes. Until T13 adds "2. Common items", the
- * sections go from 1 to 3, keeping design.md's numbers. Each tick and each input is a change that autosave saves, and
- * a field that loses focus sends one at once (design.md §3.4). After a dead end, every tick and the text stay as they
- * are, to change and copy, though nothing more is saved (note-form.md *Conflicts and refusals*).
+ * The note form (note-form.md components 7, 8, 10 and 11): the lists-changed notice's live region, there and empty
+ * from the first render, as a screen reader may not announce words written into one added with them; then Goals, its
+ * goals and ticks in this page's state, from the draft's; then Guided notes; then Flag for manager, its tick and reason
+ * in this page's state too, the reason kept while the box is unticked. Until T13 adds "2. Common items", the sections
+ * go from 1 to 3, keeping design.md's numbers. Each tick and each input is a change that autosave saves, and a field
+ * that loses focus sends one at once (design.md §3.4). After a dead end, every tick and the text stay as they are, to
+ * change and copy, though nothing more is saved (note-form.md *Conflicts and refusals*).
  */
 function NoteForm({ participantId, noteDate, givenName, draft, onIndicator, onDeadEnd }: NoteFormProps) {
   const box = useRef<HTMLTextAreaElement>(null);
@@ -215,11 +217,13 @@ function NoteForm({ participantId, noteDate, givenName, draft, onIndicator, onDe
     () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
   );
   const [listsChanged, setListsChanged] = useState(false);
+  const [flagged, setFlagged] = useState(draft.isFlagged);
+  const [reason, setReason] = useState(draft.flagReason ?? '');
   const autosave = useAutosave({
     participantId,
     noteDate,
     opened: draft,
-    read: () => ({ narrative: box.current!.value, tickedGoalIds: [...ticked] }),
+    read: () => ({ narrative: box.current!.value, tickedGoalIds: [...ticked], isFlagged: flagged, flagReason: reason }),
     onIndicator,
     onListsChanged: showListsAsNow,
     onDeadEnd,
@@ -276,6 +280,18 @@ function NoteForm({ participantId, noteDate, givenName, draft, onIndicator, onDe
         initialText={draft.narrative}
         prompts={draft.guidePrompts}
         onChange={autosave.changed}
+      />
+      <FlagForManager
+        flagged={flagged}
+        reason={reason}
+        onFlaggedChange={(isFlagged) => {
+          setFlagged(isFlagged);
+          autosave.changed();
+        }}
+        onReasonChange={(text) => {
+          setReason(text);
+          autosave.changed();
+        }}
       />
     </div>
   );

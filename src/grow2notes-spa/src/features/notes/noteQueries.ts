@@ -16,8 +16,9 @@ export type DraftGoal = { id: string; text: string; isTicked: boolean };
 
 /**
  * The note form with the caller's working copy, as `GET {base}/draft` answers it (design.md §6.3): a new note's
- * template, with `isSaved` false and the lists' version, or the caller's own draft, with the time of its last save.
- * `guidePrompts` are the organisation's as they are now.
+ * template, with `isSaved` false, the lists' version and no flag, or the caller's own draft, with its flag and the time
+ * of its last save. `guidePrompts` are the organisation's as they are now; `flagReason` is `null` unless the draft is
+ * flagged with a reason.
  */
 export type Draft = {
   baseVersion: number;
@@ -26,6 +27,8 @@ export type Draft = {
   guidePrompts: string;
   goals: DraftGoal[];
   narrative: string;
+  isFlagged: boolean;
+  flagReason: string | null;
   savedAtUtc?: string;
 };
 

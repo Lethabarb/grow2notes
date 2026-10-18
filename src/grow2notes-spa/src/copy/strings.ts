@@ -373,7 +373,8 @@ export const strings = {
   /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
-   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; and
+   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; the
+   * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
    * the save indicator on a draft reopened, until its first change, "Draft · saved 9:42 am" (design.md §4.3): its first
    * word, then the word before the time; and the indicator while a dead end in the top bar says why the note cannot be
    * saved (autosave-status.md *Exact copy*).
@@ -384,6 +385,8 @@ export const strings = {
     goals: '1. Goals',
     goalsHint: 'Ticked means reached.',
     guidedNotes: '3. Guided notes',
+    flagForManager: 'Flag for manager',
+    reason: 'Reason',
     draft: 'Draft',
     draftSaved: 'saved',
     notSaved: 'Not saved',

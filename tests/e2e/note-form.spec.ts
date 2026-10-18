@@ -253,6 +253,8 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
     listsVersion: expect.any(String),
     narrative: '',
     tickedGoalIds: [template.goals[0].id],
+    isFlagged: false,
+    flagReason: null,
   });
   await expect(saveStatus(page)).toHaveText(savedAnyTime);
 
@@ -484,7 +486,13 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   for (const text of [breakfast.text, bus.text]) {
     await expect(goalBox(page, text)).not.toBeChecked();
   }
-  await expect(main(page).locator('label')).toHaveText([breakfast.text, bus.text, '3. Guided notes']);
+  await expect(main(page).locator('label')).toHaveText([
+    breakfast.text,
+    bus.text,
+    '3. Guided notes',
+    'Flag for manager',
+    'Reason',
+  ]);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
   await expect(box(page)).toHaveAttribute('placeholder', savedPrompts);
   await expect(box(page)).toHaveAttribute('aria-required', 'true');
@@ -508,7 +516,15 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await save.fallback();
   await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
   expect(store.saves).toEqual([
-    { clientId: expect.any(String), seq: 1, listsVersion: expect.any(String), narrative: '', tickedGoalIds: [bus.id] },
+    {
+      clientId: expect.any(String),
+      seq: 1,
+      listsVersion: expect.any(String),
+      narrative: '',
+      tickedGoalIds: [bus.id],
+      isFlagged: false,
+      flagReason: null,
+    },
   ]);
   await box(page).pressSequentially('Caught the bus.');
   await expect(saveStatus(page)).toHaveText('Saving…');
@@ -566,7 +582,13 @@ test('lists changed before the first save: the text and a listed tick kept, the 
     expect(save.tickedGoalIds).not.toContain(breakfast.id);
   }
   expect(store.draft(jane.id, worker.today)).toMatchObject({ ticked: [bus.id], narrative: 'Caught the bus.' });
-  await expect(main(page).locator('label')).toHaveText([bus.text, sister.text, '3. Guided notes']);
+  await expect(main(page).locator('label')).toHaveText([
+    bus.text,
+    sister.text,
+    '3. Guided notes',
+    'Flag for manager',
+    'Reason',
+  ]);
   await expect(goalBox(page, bus.text)).toBeChecked();
   await expect(goalBox(page, sister.text)).not.toBeChecked();
   await expect(box(page)).toHaveValue('Caught the bus.');
@@ -910,10 +932,17 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
 
-    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then each goal's box and Guided
-    // notes, the indicator and the <h1> being no stops.
-    await expectStops(page, 'Tab', [breakfast.text, bus.text, '3. Guided notes', 'outside the page']);
+    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then each goal's box, Guided
+    // notes and Flag for manager, the indicator, the <h1> and the hidden Reason being no stops.
+    await expectStops(page, 'Tab', [
+      breakfast.text,
+      bus.text,
+      '3. Guided notes',
+      'Flag for manager',
+      'outside the page',
+    ]);
     await expectStops(page, 'Shift+Tab', [
+      'Flag for manager',
       '3. Guided notes',
       bus.text,
       breakfast.text,
@@ -930,7 +959,7 @@ for (const width of [375, 1280]) {
     await page.keyboard.type('Made toast.');
     await page.keyboard.press('Enter');
     await page.keyboard.type('Phoned her sister.');
-    await expectStops(page, 'Tab', ['outside the page']);
+    await expectStops(page, 'Tab', ['Flag for manager', 'outside the page']);
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
     expect(store.draft(jane.id, worker.today)).toMatchObject({
       ticked: [breakfast.id],
@@ -938,7 +967,7 @@ for (const width of [375, 1280]) {
     });
 
     // The back link, by Shift+Tab, returns to Jane's row.
-    await expectStops(page, 'Shift+Tab', ['3. Guided notes', bus.text, breakfast.text, 'Today']);
+    await expectStops(page, 'Shift+Tab', ['Flag for manager', '3. Guided notes', bus.text, breakfast.text, 'Today']);
     await page.keyboard.press('Enter');
     await expect(row(page, 'Jane Citizen')).toBeFocused();
     await expectNothingKept(page, 'Jane', 'Citizen', 'Made toast', 'Phoned');

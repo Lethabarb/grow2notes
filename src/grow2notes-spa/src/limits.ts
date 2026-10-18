@@ -11,4 +11,5 @@ export const limits = {
   itemText: 200,
   groupName: 200,
   guidedNotes: 20_000,
+  flagReason: 200,
 } as const;

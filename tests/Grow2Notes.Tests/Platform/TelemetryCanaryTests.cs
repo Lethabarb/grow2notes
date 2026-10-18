@@ -27,8 +27,8 @@ namespace Grow2Notes.Tests.Platform;
 /// that SQL Server puts in its error text, appears in no log, no telemetry and no response. Since S01.02.02 it is also
 /// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event, and
 /// since T05 the text of a goal that the app's own endpoint adds to them, saved with its own, and since T08 the Guided
-/// notes of their note's first save, which starts the note with its own. The app runs with telemetry on, as in Azure,
-/// and everything it writes or sends goes to a sink here.
+/// notes of their note's first save, which starts the note with its own, and since T09 the reason it flags the note
+/// with. The app runs with telemetry on, as in Azure, and everything it writes or sends goes to a sink here.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -62,7 +62,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         HttpResponseMessage[] failures = [truncation, duplicate];
 
         // As a manager adds one, over HTTPS with a token, as the /api group needs, then a goal of theirs, then opens
-        // their note for today and starts it, as the form's first save does, with the template's lists' version.
+        // their note for today and starts it, flagged with a reason, as the form's first save does, with the template's
+        // lists' version.
         using var manager = app.CreateHttpsClient().SignInAs(sqlServer.Seeded.A.ManagerId);
         using var added = await manager.PostWithTokenAsync(
             ParticipantsPath,
@@ -90,6 +91,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
                 listsVersion = form.GetProperty("listsVersion").GetString(),
                 narrative = Canary,
                 tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = true,
+                flagReason = Canary,
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, noteStarted.StatusCode);
@@ -155,7 +158,7 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         });
 
         // And the requests that added the participant, whose body held the names, the goal, whose body held its text,
-        // and the note, whose body held its Guided notes.
+        // and the note, whose body held its Guided notes and its flag's reason.
         foreach (var (method, path, route) in saves)
         {
             var add = sinks.Spans.Spans.Single(span => IsRequestTo(span, method, path));

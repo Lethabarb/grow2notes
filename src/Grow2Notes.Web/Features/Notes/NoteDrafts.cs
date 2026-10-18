@@ -74,9 +74,9 @@ internal sealed class NoteDrafts(
     /// <paramref name="participantId"/>'s note for <paramref name="noteDate"/> (§5.6): with no live note, creates the
     /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
     /// <c>note.draft_started</c> (§5.5 item 2), if the note may be started; with the actor's own draft, replaces its
-    /// ticks and text; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says who
-    /// started it and when. A save sent again after its answer was lost finds the actor's own draft, and updates it,
-    /// as does a first save that another of the actor's own first saves beat (§5.5 item 3).
+    /// ticks, text and flag; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says
+    /// who started it and when. A save sent again after its answer was lost finds the actor's own draft, and updates
+    /// it, as does a first save that another of the actor's own first saves beat (§5.5 item 3).
     /// </summary>
     /// <returns>
     /// The time saved; or who started another user's draft, also when that user's first save beat this one; or, for a
@@ -179,6 +179,8 @@ internal sealed class NoteDrafts(
                         new DraftItem(NoteSection.Goal, goal.Id, GroupId: null, goal.Text, ticked.Contains(goal.Id))),
                 ],
                 Narrative = request.Narrative,
+                IsFlagged = request.IsFlagged,
+                FlagReason = FlagReasonOf(request),
                 LastClientId = request.ClientId,
                 LastSeq = request.Seq,
                 CreatedAtUtc = now,
@@ -211,12 +213,18 @@ internal sealed class NoteDrafts(
                 IsGoal(item) ? item with { IsTicked = ticked.Contains(item.SourceId) } : item),
         ];
         draft.Narrative = request.Narrative;
+        draft.IsFlagged = request.IsFlagged;
+        draft.FlagReason = FlagReasonOf(request);
         draft.LastClientId = request.ClientId;
         draft.LastSeq = request.Seq;
         draft.UpdatedAtUtc = now;
         await db.SaveChangesAsync(cancellationToken);
         return DraftSaveResult.Updated(new(now));
     }
+
+    // The reason as sent while the note is flagged, a missing one included, as only Submit needs one (§3.4); never
+    // while it is not, as an unflagged note has no reason (§5.3).
+    private static string? FlagReasonOf(DraftSaveRequest request) => request.IsFlagged ? request.FlagReason : null;
 
     // §5.5 item 4's rules for creating a note, in its order: no date after today in Melbourne, for anyone; no day
     // before it but by a manager; no archived participant.
@@ -281,6 +289,8 @@ internal sealed class NoteDrafts(
             await GuidePromptsAsync(cancellationToken),
             goals,
             Narrative: "",
+            IsFlagged: false,
+            FlagReason: null,
             SavedAtUtc: null);
     }
 
@@ -302,6 +312,8 @@ internal sealed class NoteDrafts(
             guidePrompts,
             [.. draft.Items.Where(IsGoal).Select(item => new DraftFormGoal(item.SourceId, item.Text, item.IsTicked))],
             draft.Narrative,
+            draft.IsFlagged,
+            draft.FlagReason,
             draft.UpdatedAtUtc);
 
     private static bool IsGoal(DraftItem item) => item.Section == NoteSection.Goal;

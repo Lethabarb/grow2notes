@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import tickList from '../../components/TickList.module.css';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayParticipant } from '../today/todayQuery.ts';
 import type { Draft, DraftGoal, ParticipantHeader } from './noteQueries.ts';
@@ -66,12 +67,21 @@ const garden = goal('2d7b9f4a-6c13-4e58-9a21-5f8e3c0b7d46', 'Waters the garden')
 
 const prompts = 'Mood and wellbeing today?\nWhat did you do together?\nAnything to follow up?';
 
-/** A new note's template, as `GET {base}/draft` gives it, with `goals`, unticked. */
+/** A new note's template, as `GET {base}/draft` gives it, with `goals`, unticked, and no flag. */
 function template(goals: readonly DraftGoal[] = [breakfast, bus, sister], guidePrompts = prompts): Draft {
-  return { baseVersion: 0, isSaved: false, listsVersion: 'lists-1', guidePrompts, goals: [...goals], narrative: '' };
+  return {
+    baseVersion: 0,
+    isSaved: false,
+    listsVersion: 'lists-1',
+    guidePrompts,
+    goals: [...goals],
+    narrative: '',
+    isFlagged: false,
+    flagReason: null,
+  };
 }
 
-/** The worker's own draft, saved at 9:42 am, with Breakfast and Sister ticked. */
+/** The worker's own draft, saved at 9:42 am, with Breakfast and Sister ticked, unflagged. */
 function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): Draft {
   return {
     baseVersion: 0,
@@ -79,6 +89,8 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
     guidePrompts: prompts,
     goals: [{ ...breakfast, isTicked: true }, bus, { ...sister, isTicked: true }],
     narrative,
+    isFlagged: false,
+    flagReason: null,
     savedAtUtc: '2026-09-30T23:42:00Z',
   };
 }
@@ -301,6 +313,46 @@ function type(value: string) {
   fireEvent.input(guidedNotes(), { target: { value } });
 }
 
+/** The tick boxes of Goals, in its order. */
+function goalBoxes(): HTMLInputElement[] {
+  return within(within(main()).getByRole('group', { name: '1. Goals' })).getAllByRole('checkbox');
+}
+
+/** The Flag for manager tick box. */
+function flagBox(): HTMLInputElement {
+  return within(main()).getByRole('checkbox', { name: 'Flag for manager' });
+}
+
+/** The Reason block that the flag reveals, which is always in the page. */
+function reasonBlock(): HTMLElement {
+  const block = main().querySelector<HTMLElement>('#flag-reason-group');
+  if (block === null) {
+    throw new Error('The form has no #flag-reason-group.');
+  }
+
+  return block;
+}
+
+/** The Reason field, found by its label, which finds it while it is hidden too. */
+function reasonField(): HTMLTextAreaElement {
+  return within(reasonBlock()).getByLabelText<HTMLTextAreaElement>('Reason');
+}
+
+/** Types `value` into Reason, as one input. */
+function typeReason(value: string) {
+  fireEvent.input(reasonField(), { target: { value } });
+}
+
+/** Reason's count as it shows, hidden from screen readers. */
+function reasonCount(): HTMLElement | null {
+  return reasonBlock().querySelector('p[aria-hidden="true"]');
+}
+
+/** The polite twin of Reason's count, which screen readers hear. */
+function reasonTwin(): HTMLElement | null {
+  return reasonBlock().querySelector('[aria-live="polite"]');
+}
+
 /** The save indicator in the top bar. */
 function saveStatus(): HTMLElement {
   const status = pageBar().querySelector<HTMLElement>('#save-status');
@@ -501,7 +553,7 @@ describe('The note form once loaded', () => {
     expect(within(main()).getByRole('heading', { level: 2, name: '1. Goals' })).toBeInTheDocument();
     expect(within(main()).getByText('No goals set up for Jane yet. A manager can add them.')).toBeInTheDocument();
     expect(main().querySelector('fieldset')).toBeNull();
-    expect(within(main()).queryByRole('checkbox')).toBeNull();
+    expect(within(main()).getAllByRole('checkbox')).toEqual([flagBox()]);
     expect(guidedNotes()).toBeInTheDocument();
   });
 
@@ -510,8 +562,7 @@ describe('The note form once loaded', () => {
     renderApp(paths(jane).page);
     await settle();
 
-    const boxes = within(main()).getAllByRole('checkbox');
-    expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false, true]);
+    expect(goalBoxes().map((box) => box.checked)).toEqual([true, false, true]);
     expect(guidedNotes()).toHaveValue('Jane made toast.\nThen a walk to the shops.');
   });
 
@@ -687,7 +738,15 @@ describe('Autosave', () => {
       expect(saves()).toEqual([
         {
           path: paths(participant).draft,
-          body: { clientId: expect.any(String) as string, seq: 1, listsVersion: 'lists-1', narrative, tickedGoalIds },
+          body: {
+            clientId: expect.any(String) as string,
+            seq: 1,
+            listsVersion: 'lists-1',
+            narrative,
+            tickedGoalIds,
+            isFlagged: false,
+            flagReason: null,
+          },
         },
       ]);
       expect(saves()[0].body.clientId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
@@ -897,8 +956,7 @@ describe('Autosave', () => {
       // A new element, put in the page with its words, rather than words written into the one there while loading.
       expect(saveStatus()).not.toBe(whileLoading);
       expect(guidedNotes()).toHaveValue('Jane made toast.\nThen a walk to the shops.');
-      const boxes = within(main()).getAllByRole('checkbox');
-      expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false, true]);
+      expect(goalBoxes().map((box) => box.checked)).toEqual([true, false, true]);
 
       fireEvent.click(within(main()).getByText(sister.text));
       await wait(2_000);
@@ -908,6 +966,8 @@ describe('Autosave', () => {
           seq: 1,
           narrative: 'Jane made toast.\nThen a walk to the shops.',
           tickedGoalIds: [breakfast.id],
+          isFlagged: false,
+          flagReason: null,
         },
       ]);
     },
@@ -947,6 +1007,8 @@ describe('Autosave', () => {
       seq: 2,
       narrative: 'Jane made toast.',
       tickedGoalIds: [breakfast.id, sister.id],
+      isFlagged: false,
+      flagReason: null,
     });
   });
 });
@@ -1103,8 +1165,7 @@ describe('Lists changed before the first save', () => {
       expect(listsNotice()).toBe(notice);
       expect(notice.textContent).toBe('The goal or common-item list was just changed. Please check your ticks.');
       expect(follows(within(main()).getByRole('group', { name: '1. Goals' }), notice)).toBe(true);
-      const boxes = within(main()).getAllByRole<HTMLInputElement>('checkbox');
-      expect(boxes.map((box) => [box.labels?.[0].textContent, box.checked])).toEqual([
+      expect(goalBoxes().map((box) => [box.labels?.[0].textContent, box.checked])).toEqual([
         [breakfast.text, true],
         [garden.text, false],
         [bus.text, false],
@@ -1248,6 +1309,236 @@ describe('The Guided notes box', () => {
     const count = within(main()).getByText('You have 2,000 characters remaining');
     expect(count).toHaveAttribute('aria-hidden', 'true');
     expect(guidedNotes()).toHaveValue('x'.repeat(18_000));
+  });
+});
+
+describe('Flag for manager', () => {
+  const reason = 'Jane seemed unwell after lunch.';
+
+  // jsdom has no scrollIntoView. The spy records each call, of which a tick must make none.
+  const scrollIntoView = vi.fn<(this: Element, options?: boolean | ScrollIntoViewOptions) => void>();
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    scrollIntoView.mockReset();
+  });
+
+  /** Opens a new note for a participant of its own, whose saves are answered with 9:42 am, and gives them. */
+  async function openSaving(): Promise<ParticipantHeader> {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+    return participant;
+  }
+
+  /** The flag and the reason of each save sent, in order. */
+  function sentFlags(): unknown[][] {
+    return saves().map(({ body }) => [body.isFlagged, body.flagReason]);
+  }
+
+  it("is a row after Guided notes, on the tick lists' row and box, with Reason in the page and hidden", async () => {
+    serveNote(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    const box = flagBox();
+    expect(box).toHaveAttribute('id', 'flag-for-manager');
+    expect(box).toHaveClass(tickList.box);
+    expect(box.closest('label')).toHaveClass(tickList.row);
+    expect(box).not.toBeChecked();
+    expect(box).toHaveAttribute('aria-controls', 'flag-reason-group');
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    expect(follows(box, guidedNotes())).toBe(true);
+    expect(within(box.closest('label')!.parentElement!).queryByRole('heading')).toBeNull();
+    expect(reasonBlock()).toHaveAttribute('hidden');
+    expect(follows(reasonBlock(), box)).toBe(true);
+    expect(within(main()).queryByRole('textbox', { name: 'Reason' })).toBeNull();
+    expect(reasonTwin()).toBeEmptyDOMElement();
+  });
+
+  it('shows Reason at once when ticked, with focus kept on the box and nothing scrolled', async () => {
+    serveNote(jane);
+    renderApp(paths(jane).page);
+    await settle();
+    scrollPage(400);
+    const box = flagBox();
+
+    box.focus();
+    fireEvent.click(box);
+
+    expect(box).toBeChecked();
+    expect(box).toHaveAttribute('aria-expanded', 'true');
+    expect(reasonBlock()).not.toHaveAttribute('hidden');
+    expect(box).toHaveFocus();
+    expect(window.scrollY).toBe(400);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    const field = within(main()).getByRole('textbox', { name: 'Reason' });
+    expect(field).toBe(reasonField());
+    expect(follows(field, box)).toBe(true);
+    expect(field).toHaveAttribute('id', 'flag-reason');
+    expect(field).toHaveAttribute('rows', '4');
+    expect(field).toHaveAttribute('aria-required', 'true');
+    expect(field).toHaveAccessibleDescription('You can enter up to 200 characters');
+    expect(main().querySelector('#flag-reason-hint')).toHaveClass('visually-hidden');
+    for (const attribute of ['required', 'maxlength', 'placeholder', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    expect(field).toHaveValue('');
+    expect(field).toHaveStyle({ resize: 'vertical' });
+    expect(within(reasonBlock()).getByText('Reason', { selector: 'label' })).toHaveStyle({ fontWeight: '700' });
+    expect(reasonCount()?.textContent).toBe('You can enter up to 200 characters');
+    expect(reasonTwin()).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    [47, 'You have 153 characters remaining'],
+    [199, 'You have 1 character remaining'],
+  ])('counts %i characters as "%s", not in bold', async (length, words) => {
+    serveNote(jane);
+    renderApp(paths(jane).page);
+    await settle();
+    fireEvent.click(flagBox());
+
+    typeReason('x'.repeat(length));
+
+    expect(reasonCount()?.textContent).toBe(words);
+    expect(reasonCount()).not.toHaveStyle({ fontWeight: '700' });
+  });
+
+  it('counts 212 characters as "You have 12 characters too many", bold, keeping them all, after a pause', async () => {
+    serveNote(jane);
+    renderApp(paths(jane).page);
+    await settle();
+    fireEvent.click(flagBox());
+
+    typeReason('x'.repeat(212));
+
+    expect(reasonCount()?.textContent).toBe('You have 12 characters too many');
+    expect(reasonCount()).toHaveStyle({ fontWeight: '700', color: 'var(--colour-error)' });
+    expect(reasonField()).toHaveValue('x'.repeat(212));
+    expect(reasonField()).not.toHaveAttribute('aria-invalid');
+    await wait(999);
+    expect(reasonTwin()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(reasonTwin()?.textContent).toBe('You have 12 characters too many');
+  });
+
+  it('saves a tick, a reason and an untick, each a change, with no reason while it is blank or unticked', async () => {
+    await openSaving();
+
+    fireEvent.click(flagBox());
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(2_000);
+    await settle();
+    typeReason('   ');
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(2_000);
+    await settle();
+    typeReason(reason);
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(2_000);
+    await settle();
+    fireEvent.click(flagBox());
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(2_000);
+    await settle();
+
+    expect(sentFlags()).toEqual([
+      [true, null],
+      [true, null],
+      [true, reason],
+      [false, null],
+    ]);
+    expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+  });
+
+  it('keeps the reason while unticked, sending none, and brings it back on a re-tick, with no error', async () => {
+    await openSaving();
+    fireEvent.click(flagBox());
+    typeReason(reason);
+
+    fireEvent.click(flagBox());
+    await wait(2_000);
+    await settle();
+
+    expect(reasonBlock()).toHaveAttribute('hidden');
+    expect(flagBox()).toHaveAttribute('aria-expanded', 'false');
+    expect(reasonField()).toHaveValue(reason);
+    expect(sentFlags()).toEqual([[false, null]]);
+
+    fireEvent.click(flagBox());
+    await wait(2_000);
+
+    expect(reasonBlock()).not.toHaveAttribute('hidden');
+    expect(reasonField()).toHaveValue(reason);
+    expect(reasonField()).not.toHaveAttribute('aria-invalid');
+    expect(reasonCount()?.textContent).toBe('You have 169 characters remaining');
+    expect(sentFlags()).toEqual([
+      [false, null],
+      [true, reason],
+    ]);
+  });
+
+  it('keeps all of 210 characters on screen and sends the first 200', async () => {
+    await openSaving();
+    fireEvent.click(flagBox());
+
+    typeReason('x'.repeat(210));
+    await wait(2_000);
+
+    expect(reasonField()).toHaveValue('x'.repeat(210));
+    expect(sentFlags()).toEqual([[true, 'x'.repeat(200)]]);
+  });
+
+  it('sends 199 characters of a reason whose 200th would split a surrogate pair', async () => {
+    await openSaving();
+    fireEvent.click(flagBox());
+
+    // "😀" is a surrogate pair, two code units, the 200th and 201st here.
+    typeReason(`${'x'.repeat(199)}😀${'y'.repeat(9)}`);
+    await wait(2_000);
+
+    expect(reasonCount()?.textContent).toBe('You have 10 characters too many');
+    expect(sentFlags()).toEqual([[true, 'x'.repeat(199)]]);
+  });
+
+  it('shows a draft loaded flagged with its reason from its first render, saying no count', async () => {
+    const participant = freshParticipant();
+    const draft = held(json({ ...savedDraft(), isFlagged: true, flagReason: reason }));
+    serveNote(participant, draft.answer);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+    // Each element whose hidden attribute changed, from before the form is in the page.
+    const toggled: Node[] = [];
+    const observer = new MutationObserver((records) => {
+      toggled.push(...records.map((record) => record.target));
+    });
+    observer.observe(main(), { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+
+    draft.release();
+    await settle();
+    await wait(5_000);
+    observer.disconnect();
+
+    expect(flagBox()).toBeChecked();
+    expect(flagBox()).toHaveAttribute('aria-expanded', 'true');
+    expect(reasonBlock()).not.toHaveAttribute('hidden');
+    expect(toggled).not.toContain(reasonBlock());
+    expect(reasonField()).toHaveValue(reason);
+    expect(reasonCount()?.textContent).toBe('You have 169 characters remaining');
+    expect(reasonTwin()).toBeEmptyDOMElement();
+
+    fireEvent.click(within(main()).getByText(bus.text));
+    await wait(2_000);
+    expect(sentFlags()).toEqual([[true, reason]]);
   });
 });
 
