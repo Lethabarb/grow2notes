@@ -363,11 +363,12 @@ describe('Common items', () => {
     }
   });
 
-  it('leaves out an archived group, with its items', async () => {
+  it('gives an archived group no section and none of its items, only its name in Archived groups', async () => {
     await openPage();
 
-    expect(within(main()).queryByText(respite.name)).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('region', { name: respite.name })).not.toBeInTheDocument();
     expect(within(main()).queryByText(packed.text)).not.toBeInTheDocument();
+    expect(within(main()).getAllByText(respite.name)).toEqual([archivedGroupRow(respite.name).querySelector('p')]);
   });
 
   it('gives Every note its line under its <h2> and no group buttons, not even unavailable ones', async () => {
@@ -760,16 +761,26 @@ function placePath(itemId: string, action: 'archive' | 'restore'): string {
 /** A `204` with no body, as an archive and a restore answer (design.md §6.6). */
 const placed: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
 
+/** The path that the group of `groupId` is archived or restored at (design.md §6.6). */
+function groupPlacePath(groupId: string, action: 'archive' | 'restore'): string {
+  return `${groupPath(groupId)}/${action}`;
+}
+
 /**
- * Has the groups list, the group adds and reorders, each group's renames, adds and reorders, and each item's rewords,
- * archives and restores answered by a server that holds `list`, and gives what it holds, which a test may change as
- * another manager would: a group add puts a group, with no items and an ID and a version of its own, at the end of the
- * active groups other than Every note, one after the highest active `sortOrder` (A2), in the list's order, and answers
- * `201` with its ID; a group reorder refuses IDs that are not the active groups other than Every note, each once (`422
- * config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each group whose `sortOrder`
- * changed, puts the list in its order, Every note first, and answers `204` with no body; a rename refuses an `If-Match`
- * that is not the group's version (`412`), then Every note (`422 config.every_note_fixed`), or else gives the group its
- * name and a new version, and answers `200` with no body; an add puts an item, with an ID and a version of its own, at
+ * Has the groups list, the group adds and reorders, each group's renames, archives, restores, adds and reorders, and
+ * each item's rewords, archives and restores answered by a server that holds `list`, and gives what it holds, which a
+ * test may change as another manager would: a group add puts a group, with no items and an ID and a version of its own,
+ * at the end of the active groups other than Every note, one after the highest active `sortOrder` (A2), in the list's
+ * order, and answers `201` with its ID; a group reorder refuses IDs that are not the active groups other than Every
+ * note, each once (`422 config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each
+ * group whose `sortOrder` changed, puts the list in its order, Every note first, and answers `204` with no body; a
+ * rename refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
+ * config.every_note_fixed`), or else gives the group its name and a new version, and answers `200` with no body; a
+ * group archive or restore refuses an `If-Match` that is not the group's version (`412`), then Every note (`422
+ * config.every_note_fixed`), or else archives the group in its place, with its items as they were, later than anything
+ * archived before it, or restores it, with its items, to the end of the active groups other than Every note, one after
+ * the highest active `sortOrder` (A2), in the list's order, each with a new version, and answers `204` with no body;
+ * an add puts an item, with an ID and a version of its own, at
  * the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a reword refuses
  * an `If-Match` that is not the item's version (`412`), then an item of an archived group (`409
  * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; a reorder
@@ -831,6 +842,16 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       return reworded();
     });
   };
+  // One after the highest active sortOrder of the groups other than Every note (A2).
+  const endOfGroups = () => {
+    const active = held.filter((listed) => !listed.isEveryNote && listed.archivedAtUtc === null);
+    return Math.max(-1, ...active.map((listed) => listed.sortOrder)) + 1;
+  };
+  // In the list's order: after every group but Every note of its SortOrder or less, as it was added or restored last.
+  const putInListOrder = (heldGroup: AdminCommonItemGroup) => {
+    const after = held.findIndex((listed) => !listed.isEveryNote && listed.sortOrder > heldGroup.sortOrder);
+    held.splice(after === -1 ? held.length : after, 0, heldGroup);
+  };
   const serveGroup = (heldGroup: AdminCommonItemGroup) => {
     serve('PUT', groupPath(heldGroup.id), (init) => {
       if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.rowVersion}"`) {
@@ -846,6 +867,31 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       heldGroup.rowVersion = nextVersion();
       return reworded();
     });
+    for (const action of ['archive', 'restore'] as const) {
+      serve('POST', groupPlacePath(heldGroup.id, action), (init) => {
+        if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.rowVersion}"`) {
+          return problem(412)();
+        }
+
+        if (heldGroup.isEveryNote) {
+          return problem(422, 'config.every_note_fixed')();
+        }
+
+        if (action === 'archive' && heldGroup.archivedAtUtc === null) {
+          archives += 1;
+          heldGroup.archivedAtUtc = `2026-10-01T06:${String(archives).padStart(2, '0')}:00Z`;
+          heldGroup.rowVersion = nextVersion();
+        } else if (action === 'restore' && heldGroup.archivedAtUtc !== null) {
+          heldGroup.sortOrder = endOfGroups();
+          heldGroup.archivedAtUtc = null;
+          heldGroup.rowVersion = nextVersion();
+          held.splice(held.indexOf(heldGroup), 1);
+          putInListOrder(heldGroup);
+        }
+
+        return placed();
+      });
+    }
     serve('PUT', orderPath(heldGroup.id), (init) => {
       const { commonItemIds } = JSON.parse(init?.body as string) as { commonItemIds: string[] };
       const active = heldGroup.items.filter((listed) => listed.archivedAtUtc === null);
@@ -882,17 +928,8 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
   serve('GET', listPath, json(held));
   serve('POST', groupsPath, (init) => {
     const { name } = JSON.parse(init?.body as string) as { name: string };
-    const others = held.filter((listed) => !listed.isEveryNote);
-    const active = others.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
-    const added = group(
-      `5d7f9b1e-6a8c-4d93-8eb0-${String(held.length).padStart(12, '0')}`,
-      name,
-      Math.max(-1, ...active) + 1,
-      [],
-    );
-    // In the list's order: after every group of its SortOrder or less, as it was added last.
-    const after = held.findIndex((listed) => !listed.isEveryNote && listed.sortOrder > added.sortOrder);
-    held.splice(after === -1 ? held.length : after, 0, added);
+    const added = group(`5d7f9b1e-6a8c-4d93-8eb0-${String(held.length).padStart(12, '0')}`, name, endOfGroups(), []);
+    putInListOrder(added);
     serveGroup(added);
     return createdWith({ id: added.id })();
   });
@@ -3258,5 +3295,426 @@ describe('Common items, archiving and restoring an item', () => {
     expect(archivedSection(sectionOf('Community outing'))!.open).toBe(false);
     expect(archivedSection(sectionOf('Every note'))!.open).toBe(false);
     expect(archivedSection(sectionOf('Personal care'))!.open).toBe(true);
+  });
+});
+
+const groupArchived = 'Group archived';
+const groupRestored = 'Group restored to the end of the list';
+
+/** The archives or restores sent for the group of `groupId`, each as its `If-Match` and its body, in the order sent. */
+function groupPlacesOf(groupId: string, action: 'archive' | 'restore'): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === groupPlacePath(groupId, action) && init?.method === 'POST'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: init.body }]
+      : [],
+  );
+}
+
+/** The path of each archive and restore sent, of any group, in the order sent. */
+function groupPlacePaths(): string[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    typeof path === 'string'
+    && /^\/api\/admin\/common-item-groups\/[^/]+\/(?:archive|restore)$/.test(path)
+    && init?.method === 'POST'
+      ? [path]
+      : [],
+  );
+}
+
+/** Archived groups, the one `<details>` in no group's section, or `null` while it is left out. */
+function archivedGroups(): HTMLDetailsElement | null {
+  const found = Array.from(main().querySelectorAll('details')).filter((details) => details.closest('section') === null);
+  expect(found.length).toBeLessThanOrEqual(1);
+  return found[0] ?? null;
+}
+
+/** The rows of Archived groups, in the order shown, or none while it is left out. */
+function archivedGroupRows(): HTMLLIElement[] {
+  return Array.from(archivedGroups()?.querySelectorAll<HTMLLIElement>('ul > li') ?? []);
+}
+
+/** The row of the archived group named `name` in Archived groups. */
+function archivedGroupRow(name: string): HTMLLIElement {
+  const row = archivedGroupRows().find((listed) => textOf(listed) === name);
+  expect(row).toBeDefined();
+  return row!;
+}
+
+/** The archived group's Restore, by its name, which ends with ", [name] group". */
+function groupRestoreButton(name: string): HTMLElement {
+  return within(archivedGroupRow(name)).getByRole('button', { name: `Restore, ${name} group` });
+}
+
+/** Opens Archived groups, as the manager does with its summary. */
+function openArchivedGroups() {
+  archivedGroups()!.open = true;
+}
+
+// A second archived group, archived after Overnight respite and so listed before it, with an active item and an
+// archived one, so that a Restore brings back the one and leaves the other in its own Archived items.
+const swimmingKit = item('4bb8c67d-e19f-4f3a-8b2c-0d1e2f3a4b5c', 'Packed swimming kit', 0);
+const towel = item('5cc9d78e-f2a0-4a4b-9c3d-1e2f3a4b5c6d', 'Brought a towel', 1, '2026-09-18T05:12:00Z');
+const swimming = group(
+  '6dd0e89f-a3b1-4b5c-8d4e-2f3a4b5c6d7e',
+  'Swimming',
+  3,
+  [swimmingKit, towel],
+  '2026-09-20T05:12:00Z',
+);
+const twoArchived = [everyNote, outing, care, respite, swimming];
+
+describe('Common items, archiving and restoring a group', () => {
+  it('shows Archived groups after the New group form, closed on load, its groups newest archived first', async () => {
+    await openPage(twoArchived);
+
+    const details = archivedGroups()!;
+    expect(details.open).toBe(false);
+    expect(details).not.toHaveAttribute('open');
+    expect(details.previousElementSibling).toBe(newGroupForm());
+    const summary = details.firstElementChild!;
+    expect(summary.tagName).toBe('SUMMARY');
+    expect(summary.textContent).toBe('Archived groups');
+    expect(details.querySelector('h1, h2, h3, h4, h5, h6')).toBeNull();
+    expect(details.querySelector('ul')?.previousElementSibling).toBe(summary);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    for (const row of archivedGroupRows()) {
+      const name = textOf(row)!;
+      expectButtons(row, [`Restore, ${name} group`]);
+      const button = within(row).getByRole('button');
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-label');
+      expect(button).toHaveStyle({ inlineSize: 'auto', minInlineSize: 'var(--target-min)' });
+      expect(within(button).getByText(`, ${name} group`)).toHaveClass('visually-hidden');
+      const alert = within(row).getByRole('alert');
+      expect(alert).toBeEmptyDOMElement();
+      expect(follows(row.querySelector('p')!, alert)).toBe(true);
+      expect(follows(alert, button)).toBe(true);
+    }
+
+    // Name and Restore alone: none of an archived group's items is listed.
+    for (const text of [packed.text, swimmingKit.text, towel.text]) {
+      expect(within(main()).queryByText(text)).not.toBeInTheDocument();
+    }
+  });
+
+  it('leaves Archived groups out while no group is archived', async () => {
+    await openPage([everyNote, outing, care]);
+
+    expect(archivedGroups()).toBeNull();
+    expect(within(main()).queryByText('Archived groups')).not.toBeInTheDocument();
+  });
+
+  it("on Archive, asks nothing and sends the group's version, then Archived groups opens with it first", async () => {
+    await openPage();
+    serveGroups(groups);
+    const reads = listReads();
+    expect(archivedGroups()!.open).toBe(false);
+
+    await press(groupButton('Community outing', 'Archive'));
+
+    expect(groupPlacesOf(outing.id, 'archive')).toEqual([{ ifMatch: `"${outing.rowVersion}"`, body: undefined }]);
+    expect(groupPlacePaths()).toEqual([groupPlacePath(outing.id, 'archive')]);
+    expect(listReads()).toBe(reads + 1);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // The section has gone, with its items.
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(within(main()).queryByText(busOrTrain.text)).not.toBeInTheDocument();
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+    expect(document.activeElement).toBe(groupRestoreButton(outing.name));
+    // The one group left besides Every note, whose moves are both unavailable now.
+    expect(groupButton('Personal care', 'Move up')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Personal care', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupArchived);
+  });
+
+  it('puts Archived groups after New group once the first group is archived, open, focus on its Restore', async () => {
+    const list = [everyNote, outing, care];
+    await openPage(list);
+    serveGroups(list);
+    expect(archivedGroups()).toBeNull();
+
+    await press(groupButton('Personal care', 'Archive'));
+
+    const details = archivedGroups()!;
+    expect(details.open).toBe(true);
+    expect(details.previousElementSibling).toBe(newGroupForm());
+    expect(archivedGroupRows().map(textOf)).toEqual([care.name]);
+    expect(groupRestoreButton(care.name)).toHaveFocus();
+    expect(headings()).toEqual(['Every note', 'Community outing']);
+  });
+
+  it('keeps the section while the archive is out, busy at once, "Archiving…" after 400 ms, sent once', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('POST', groupPlacePath(outing.id, 'archive'));
+    const button = groupButton('Community outing', 'Archive');
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Archiving…')).toBeInTheDocument();
+    await press(button);
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(groupRestoreButton(outing.name)).toHaveFocus();
+  });
+
+  it('opens Archived groups but leaves focus where the manager went while the archive was out', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('POST', groupPlacePath(outing.id, 'archive'));
+    await press(groupButton('Community outing', 'Archive'));
+    newGroupField().focus();
+
+    release();
+    await settle();
+    await settle();
+
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+    expect(newGroupField()).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupArchived);
+  });
+
+  it("on Restore, sends the group's version, then it is last among the groups, with its active items", async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+    openArchivedGroups();
+    const reads = listReads();
+
+    await press(groupRestoreButton(swimming.name));
+
+    expect(groupPlacesOf(swimming.id, 'restore')).toEqual([{ ifMatch: `"${swimming.rowVersion}"`, body: undefined }]);
+    expect(groupPlacePaths()).toEqual([groupPlacePath(swimming.id, 'restore')]);
+    expect(listReads()).toBe(reads + 1);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Swimming']);
+    const section = sectionOf('Swimming');
+    expect(activeItems(section).map(textOf)).toEqual([swimmingKit.text]);
+    expect(archivedItems(section).map(textOf)).toEqual([towel.text]);
+    expect(archivedSection(section)!.open).toBe(false);
+    expect(document.activeElement).toBe(groupButton('Swimming', 'Archive'));
+    // Last of the groups, so its Move down is unavailable, and Personal care's is not any more.
+    expect(groupButton('Swimming', 'Move down')).toHaveAttribute('aria-disabled', 'true');
+    expect(groupButton('Personal care', 'Move down')).not.toHaveAttribute('aria-disabled');
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([respite.name]);
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(groupRestored);
+  });
+
+  it('takes Archived groups away once Restore empties it', async () => {
+    await openPage();
+    serveGroups(groups);
+    openArchivedGroups();
+
+    await press(groupRestoreButton(respite.name));
+
+    expect(archivedGroups()).toBeNull();
+    expect(within(main()).queryByText('Archived groups')).not.toBeInTheDocument();
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Overnight respite']);
+    expect(activeItems(sectionOf('Overnight respite')).map(textOf)).toEqual([packed.text]);
+    expect(groupButton('Overnight respite', 'Archive')).toHaveFocus();
+  });
+
+  it('keeps the group archived while the restore is out, busy at once, "Restoring…" after 400 ms', async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+    openArchivedGroups();
+    const release = hold('POST', groupPlacePath(respite.id, 'restore'));
+    const button = groupRestoreButton(respite.name);
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Restoring…')).toBeInTheDocument();
+    await press(button);
+    expect(groupPlacesOf(respite.id, 'restore')).toHaveLength(1);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care', 'Overnight respite']);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name]);
+    expect(groupButton('Overnight respite', 'Archive')).toHaveFocus();
+  });
+
+  it.each([
+    ['Archive', groupPlacePath(outing.id, 'archive'), () => groupButton('Community outing', 'Archive')],
+    ['Restore', groupPlacePath(respite.id, 'restore'), () => groupRestoreButton('Overnight respite')],
+  ])('on a 412 from %s, reads the list again and focuses the list conflict, until a write succeeds', async (
+    _,
+    path,
+    button,
+  ) => {
+    await openPage();
+    const held = serveGroups(groups);
+    openArchivedGroups();
+    // Another manager renames both meanwhile.
+    held[1].name = 'Day trips';
+    held[1].rowVersion = 'AAAAAAAAE998=';
+    held[3].name = 'Respite weekends';
+    held[3].rowVersion = 'AAAAAAAAE999=';
+    const reads = listReads();
+
+    await press(button());
+
+    expect(groupPlacePaths()).toEqual([path]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(follows(listConflict()!, sections()[0])).toBe(true);
+    expect(headings()).toEqual(['Every note', 'Day trips', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual(['Respite weekends']);
+    expect(groupAlert('Day trips')).toBeEmptyDOMElement();
+    expect(within(archivedGroupRow('Respite weekends')).getByRole('alert')).toBeEmptyDOMElement();
+    await wait(16);
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(groupButton('Day trips', 'Archive'));
+
+    expect(listConflict()).toBeNull();
+    expect(archivedGroupRows().map(textOf)).toEqual(['Day trips', 'Respite weekends']);
+  });
+
+  it('sends nothing for an Archive whose group was archived elsewhere before its turn: the conflict', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const release = hold('POST', itemsPath(everyNote.id));
+    type(newItem('Every note'), 'Teeth brushed');
+    await press(addItemButton('Every note'));
+    await press(groupButton('Community outing', 'Archive'));
+    // Another manager archives it meanwhile, which the add's re-read brings.
+    held[1].archivedAtUtc = '2026-10-01T06:30:00Z';
+    held[1].rowVersion = 'AAAAAAAAE999=';
+
+    release();
+    await settle();
+    await settle();
+    await settle();
+
+    expect(groupPlacePaths()).toEqual([]);
+    expect(listConflict()).toHaveFocus();
+    expect(headings()).toEqual(['Every note', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([outing.name, respite.name]);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not archived: no connection. Try again.'],
+    ['a 503', problem(503), 'Not archived: something went wrong. Try again.'],
+    ['a 428', problem(428, 'precondition.required'), 'Not archived: something went wrong. Try again.'],
+    [
+      'a 422 config.every_note_fixed',
+      problem(422, 'config.every_note_fixed'),
+      'Not archived: something went wrong. Try again.',
+    ],
+  ])("on %s, says so in the group's alert, keeping the section and focus on Archive, and reads nothing", async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage();
+    serve('POST', groupPlacePath(outing.id, 'archive'), answer);
+    const button = groupButton('Community outing', 'Archive');
+    const reads = listReads();
+
+    await press(button);
+
+    expect(groupAlert('Community outing')).toHaveTextContent(words);
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([respite.name]);
+    expect(groupPlacesOf(outing.id, 'archive')).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(groupAlert('Personal care')).toBeEmptyDOMElement();
+    expect(pageStatus()).not.toHaveTextContent(groupArchived);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not restored: no connection. Try again.'],
+    ['a 503', problem(503), 'Not restored: something went wrong. Try again.'],
+  ])("on %s, says so in the archived group's alert, keeping it and focus on Restore, and reads nothing", async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage(twoArchived);
+    serve('POST', groupPlacePath(respite.id, 'restore'), answer);
+    openArchivedGroups();
+    const button = groupRestoreButton(respite.name);
+    const reads = listReads();
+
+    await press(button);
+
+    expect(within(archivedGroupRow(respite.name)).getByRole('alert')).toHaveTextContent(words);
+    expect(within(archivedGroupRow(swimming.name)).getByRole('alert')).toBeEmptyDOMElement();
+    expect(button).toHaveFocus();
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(headings()).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name, respite.name]);
+    expect(groupPlacesOf(respite.id, 'restore')).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(groupRestored);
+  });
+
+  // Uncontrolled, so that what the manager opened or closed stays so, whatever write comes next, but for a group's
+  // Archive, which opens it with the group first.
+  it('keeps a closed Archived groups closed, and an opened one open, after another write', async () => {
+    await openPage(twoArchived);
+    serveGroups(twoArchived);
+
+    type(newItem('Every note'), 'Teeth brushed');
+    await press(addItemButton('Every note'));
+
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, meal.text, 'Teeth brushed']);
+    expect(archivedGroups()!.open).toBe(false);
+
+    openArchivedGroups();
+    await press(groupButton('Community outing', 'Move down'));
+
+    expect(headings()).toEqual(['Every note', 'Personal care', 'Community outing']);
+    expect(archivedGroups()!.open).toBe(true);
+
+    await press(groupRestoreButton(respite.name));
+
+    expect(archivedGroupRows().map(textOf)).toEqual([swimming.name]);
+    expect(archivedGroups()!.open).toBe(true);
+
+    archivedGroups()!.open = false;
+    await press(archiveButton('Community outing', paid.text));
+
+    expect(archivedSection(sectionOf('Community outing'))!.open).toBe(true);
+    expect(archivedGroups()!.open).toBe(false);
+
+    await press(groupButton('Personal care', 'Archive'));
+
+    expect(archivedGroups()!.open).toBe(true);
+    expect(archivedGroupRows().map(textOf)).toEqual([care.name, swimming.name]);
+    expect(groupRestoreButton(care.name)).toHaveFocus();
   });
 });

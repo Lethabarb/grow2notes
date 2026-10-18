@@ -463,8 +463,8 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expectAxeToPass(page);
 
   // Ready with three groups: Every note first, with its line and no group buttons, then the others in order, the
-  // archived one left out; numbers restart in each group; each group's end buttons unavailable, in place and dashed,
-  // saying why when pressed; and the archived items closed.
+  // archived one in Archived groups alone; numbers restart in each group; each group's end buttons unavailable, in
+  // place and dashed, saying why when pressed; and the archived items and groups closed.
   const store = await serveCommonItems(page, threeGroups);
   await page.goto('/manage/common-items');
   await expect(groupHeadings(page)).toHaveText(['Every note', 'Community outing', 'Personal care']);
@@ -643,7 +643,7 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
       expect(button.x, `${labels[index]} after "${text}"`).toBeGreaterThanOrEqual(words.x + words.width);
     }
   }
-  await expectLabelWidth(main(page).locator('ol button, details button'));
+  await expectLabelWidth(main(page).locator('section ol button, section details button'));
   expect((await boxOf(help(page))).width, 'the help text').toBeLessThanOrEqual(measure);
   for (const group of groupNames) {
     const field = await boxOf(newItem(page, group));
@@ -731,7 +731,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
   const forcedRing = { ...ring, colour: highlight };
 
   // Each group's stops in turn (common-items.md *Focus order*): its group buttons but on Every note, its item rows, its
-  // add form, then its Archived items; then the New group form.
+  // add form, then its Archived items; then the New group form and the Archived groups summary, closed.
   const outingRows = [...rowStops(busOrTrain.text), ...rowStops(paid.text), ...rowStops(lunch.text)];
   await expectStops(
     page,
@@ -746,6 +746,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
       ...groupStops('Personal care'),
       ...['New item in Personal care', 'Add item'],
       ...newGroupStops,
+      'Archived groups',
       'outside the page',
     ],
     forcedRing,
@@ -769,6 +770,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
     page,
     'Shift+Tab',
     [
+      'Archived groups',
       ...newGroupStopsBack,
       ...['Add item', 'New item in Personal care'],
       ...groupStops('Personal care').reverse(),

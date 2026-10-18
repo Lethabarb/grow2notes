@@ -11,7 +11,8 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <summary>
 /// The handler that changes an organisation's common item groups (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups</c>,
-/// <c>PUT /api/admin/common-item-groups/{groupId}</c> and <c>PUT /api/admin/common-item-groups/order</c> call it with
+/// <c>PUT /api/admin/common-item-groups/{groupId}</c>, <c>PUT /api/admin/common-item-groups/order</c> and
+/// <c>POST /api/admin/common-item-groups/{groupId}/archive</c> and <c>/restore</c> call it with
 /// <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved
 /// with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
@@ -88,47 +89,33 @@ internal sealed class CommonItemGroupChanges(
     /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; the name's
     /// message; and <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it was loaded.
     /// </returns>
-    public async Task<CommonItemChangeResult> RenameAsync(
+    public Task<CommonItemChangeResult> RenameAsync(
         Actor actor,
         Guid groupId,
         StringValues ifMatch,
         CommonItemGroupNameRequest request,
-        CancellationToken cancellationToken)
-    {
-        var group = await db.CommonItemGroups.SingleOrDefaultAsync(g => g.Id == groupId, cancellationToken);
-        if (group is null)
-        {
-            return CommonItemChangeResult.NotFound;
-        }
+        CancellationToken cancellationToken) =>
+        ChangeAsync(
+            groupId,
+            ifMatch,
+            group =>
+            {
+                if (!ItemText.GroupName.TryRead(request.Name, out var name, out var errors))
+                {
+                    return Task.FromResult(CommonItemChangeResult.Invalid(errors));
+                }
 
-        if (IfMatch.Check(ifMatch, RowVersionToken.Of(group)) is { } refused)
-        {
-            return CommonItemChangeResult.Refused(refused);
-        }
-
-        if (group.IsEveryNote)
-        {
-            return CommonItemChangeResult.Refused(ErrorCode.EveryNoteFixed);
-        }
-
-        if (!ItemText.GroupName.TryRead(request.Name, out var name, out var errors))
-        {
-            return CommonItemChangeResult.Invalid(errors);
-        }
-
-        var before = NameValues(group);
-        group.Name = name;
-        var saved = await changes.SaveAsync(
-            actor,
-            AuditEventTypes.CommonItemGroup.Updated,
-            AuditEntityTypes.CommonItemGroup,
-            group.Id,
-            participantId: null,
-            before,
-            NameValues(group),
-            cancellationToken: cancellationToken);
-        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
-    }
+                var before = NameValues(group);
+                group.Name = name;
+                return SaveAsync(
+                    actor,
+                    AuditEventTypes.CommonItemGroup.Updated,
+                    group,
+                    before,
+                    NameValues(group),
+                    cancellationToken);
+            },
+            cancellationToken);
 
     /// <summary>
     /// Puts the active groups of the tenant's organisation other than Every note, which always comes first and is never
@@ -178,6 +165,120 @@ internal sealed class CommonItemGroupChanges(
     }
 
     /// <summary>
+    /// Archives a group of the tenant's organisation (design.md §3.7, S01.03.07), checked as <see cref="RenameAsync"/>
+    /// checks a rename, Every note refused as never archived (A43): sets <c>ArchivedAtUtc</c> through
+    /// <see cref="Archiving.Archive"/>, which leaves its <c>SortOrder</c>, and saves it with
+    /// <c>common_item_group.archived</c>, which names no participant. Its items are left as they are, each with its own
+    /// archived state and version (design.md §5.3), so that a restore brings back its active ones, and an item add or
+    /// reword in the group is refused for the group's own state (<see cref="ErrorCode.GroupArchived"/>), which no
+    /// <c>If-Match</c> could catch. A group archived already keeps the time it was archived at, so nothing is saved and
+    /// no event written, and the answer is as a save's (D84).
+    /// </summary>
+    /// <returns>
+    /// <see cref="CommonItemChangeResult.Saved"/>, whether the group changed or not; or, each with nothing written,
+    /// checked in this order: <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the organisation; the
+    /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; and
+    /// <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it was loaded.
+    /// </returns>
+    public Task<CommonItemChangeResult> ArchiveAsync(
+        Actor actor, Guid groupId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            groupId,
+            ifMatch,
+            group =>
+            {
+                var before = PlaceValues(group);
+                Archiving.Archive(group, timeProvider);
+                return SaveAsync(
+                    actor,
+                    AuditEventTypes.CommonItemGroup.Archived,
+                    group,
+                    before,
+                    PlaceValues(group),
+                    cancellationToken);
+            },
+            cancellationToken);
+
+    /// <summary>
+    /// Restores a group of the tenant's organisation (design.md §3.7, S01.03.07), checked as an archive is, Every note
+    /// refused too, though it is never archived, as S01.03.07 names both (T07's Notes): puts it at the end of the
+    /// active groups other than Every note, which always comes first, through <see cref="Archiving.Restore"/> (A2), its
+    /// items as they were, so that its active items show with it again; and saves it with
+    /// <c>common_item_group.restored</c>, which names no participant, and whose <c>Details</c> hold its
+    /// <c>sortOrder</c> only when the end was not already its place. An active group stays where it is, so nothing is
+    /// saved and no event written, and the answer is as a save's (D84).
+    /// </summary>
+    /// <returns>As <see cref="ArchiveAsync"/>'s.</returns>
+    public Task<CommonItemChangeResult> RestoreAsync(
+        Actor actor, Guid groupId, StringValues ifMatch, CancellationToken cancellationToken) =>
+        ChangeAsync(
+            groupId,
+            ifMatch,
+            async group =>
+            {
+                var before = PlaceValues(group);
+                var activeGroups = await db.CommonItemGroups.AsNoTracking()
+                    .Where(g => !g.IsEveryNote && g.ArchivedAtUtc == null)
+                    .ToListAsync(cancellationToken);
+                Archiving.Restore(group, activeGroups);
+                return await SaveAsync(
+                    actor,
+                    AuditEventTypes.CommonItemGroup.Restored,
+                    group,
+                    before,
+                    PlaceValues(group),
+                    cancellationToken);
+            },
+            cancellationToken);
+
+    /// <summary>
+    /// Loads the group through the tenant filter, so that another organisation's is not found (design.md §9.2); checks
+    /// <paramref name="ifMatch"/> against its version; and refuses Every note, which is never renamed, archived or
+    /// restored (A43), before <paramref name="change"/> changes and saves it.
+    /// </summary>
+    private async Task<CommonItemChangeResult> ChangeAsync(
+        Guid groupId,
+        StringValues ifMatch,
+        Func<CommonItemGroup, Task<CommonItemChangeResult>> change,
+        CancellationToken cancellationToken)
+    {
+        var group = await db.CommonItemGroups.SingleOrDefaultAsync(g => g.Id == groupId, cancellationToken);
+        if (group is null)
+        {
+            return CommonItemChangeResult.NotFound;
+        }
+
+        if (IfMatch.Check(ifMatch, RowVersionToken.Of(group)) is { } refused)
+        {
+            return CommonItemChangeResult.Refused(refused);
+        }
+
+        return group.IsEveryNote ? CommonItemChangeResult.Refused(ErrorCode.EveryNoteFixed) : await change(group);
+    }
+
+    // A change to a loaded group, with its event, whose entity is the group, which names no participant, and whose
+    // Details hold the values given before and after, those that changed alone; or nothing when none changed.
+    private async Task<CommonItemChangeResult> SaveAsync(
+        Actor actor,
+        string eventType,
+        CommonItemGroup group,
+        JsonObject before,
+        JsonObject after,
+        CancellationToken cancellationToken)
+    {
+        var saved = await changes.SaveAsync(
+            actor,
+            eventType,
+            AuditEntityTypes.CommonItemGroup,
+            group.Id,
+            participantId: null,
+            before,
+            after,
+            cancellationToken: cancellationToken);
+        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
+    }
+
+    /// <summary>
     /// A group's values as an audit event records them, named and written as design.md §6.6's list gives them, never
     /// <c>id</c>, <c>isEveryNote</c> or <c>rowVersion</c> (<see cref="ChangeDetails"/>): <c>archivedAtUtc</c> as
     /// stored, or JSON <c>null</c>.
@@ -194,4 +295,14 @@ internal sealed class CommonItemGroupChanges(
     /// <see cref="Values"/> names it.
     /// </summary>
     private static JsonObject NameValues(CommonItemGroup group) => new() { ["name"] = group.Name };
+
+    /// <summary>
+    /// The group's place among the groups, the values that archiving and restoring change, as their events record
+    /// them, named as <see cref="Values"/> names them.
+    /// </summary>
+    private static JsonObject PlaceValues(CommonItemGroup group) => new()
+    {
+        ["sortOrder"] = group.SortOrder,
+        ["archivedAtUtc"] = group.ArchivedAtUtc,
+    };
 }

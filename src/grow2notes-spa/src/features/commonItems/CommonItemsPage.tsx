@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState, type FormEvent, type RefObject } from 'react';
+import { useRef, useState, type FormEvent, type MouseEvent, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { Button } from '../../components/Button.tsx';
 import { ListEditor, MovePair, type MoveList } from '../../components/ListEditor.tsx';
@@ -40,19 +40,41 @@ const itemsHelpId = 'items-help';
 // The New group field's id (common-items.md component 7).
 const newGroupFieldId = 'group-new-name';
 
+// Archived groups' key among the elements that take focus after a change, which a group's Archive opens before the
+// group's Restore there takes focus (common-items.md component 8).
+const archivedGroupsKey = 'archived-groups';
+
 /**
  * What every write to a group needs: what a move does (`MoveList`), in the page's one scope, with the read of its one
  * query again, the page's list conflict, the frame's focus that follows a change, and the order of the groups that
- * move; and the groups as last read, which a write reads as it runs.
+ * move; the groups as last read, which a write reads as it runs; and Archived groups, which a group's Archive opens.
  */
 type GroupWriter = MoveList & {
   /** The groups as the page's one query last read them. */
   latest: () => AdminCommonItemGroup[];
+  /**
+   * Opens Archived groups once the render that a group's Archive brings is in the DOM, as it may have only just
+   * appeared, then focuses the element registered under `key`, if one is given.
+   */
+  openArchived: (key: string | undefined) => void;
 };
 
 /** The active group of ID `id` among `groups`, or `undefined` once it is archived or gone. */
 function activeGroup(groups: AdminCommonItemGroup[], id: string): AdminCommonItemGroup | undefined {
   return groups.find((group) => group.id === id && group.archivedAtUtc === null);
+}
+
+/** The archived group of ID `id` among `groups`, or `undefined` once it is active or gone. */
+function archivedGroup(groups: AdminCommonItemGroup[], id: string): AdminCommonItemGroup | undefined {
+  return groups.find((group) => group.id === id && group.archivedAtUtc !== null);
+}
+
+/** The archived groups among `groups`, newest archived first (common-items.md component 8). */
+function archivedNewestFirst(groups: AdminCommonItemGroup[]): AdminCommonItemGroup[] {
+  return groups
+    .flatMap((group) => (group.archivedAtUtc === null ? [] : [{ group, archivedAt: Date.parse(group.archivedAtUtc) }]))
+    .sort((a, b) => b.archivedAt - a.archivedAt)
+    .map(({ group }) => group);
 }
 
 /**
@@ -86,11 +108,12 @@ export function CommonItemsPage() {
 
 /**
  * What the load region shows once the groups have loaded: the list conflict's place, a section for each active group,
- * in the list's order, Every note first, then the New group form. No add form shows before the groups have loaded, as
- * one could add to a list the manager cannot see. It reads the groups from the page's one query, as the frame renders
- * it again with each request for focus, reading the query as the write that asked left it, so that a group just added
- * has its section, and its New item field, by the time the frame focuses that field, and a group just renamed its
- * Rename. Every write to a group is in the page's one scope, and reads the one query again, as every item write does
+ * in the list's order, Every note first, then the New group form, then Archived groups while a group is archived. No
+ * add form shows before the groups have loaded, as one could add to a list the manager cannot see. It reads the groups
+ * from the page's one query, as the frame renders it again with each request for focus, reading the query as the
+ * write that asked left it, so that a group just added has its section, and its New item field, by the time the frame
+ * focuses that field, a group just renamed its Rename, a group just archived its Restore and a group just restored its
+ * Archive. Every write to a group is in the page's one scope, and reads the one query again, as every item write does
  * (common-items.md component 5).
  */
 function Groups() {
@@ -99,6 +122,7 @@ function Groups() {
   // Already read by the page, which renders this only once it has the groups.
   const groups = useQuery({ ...commonItemGroupsQuery, refetchOnMount: false }).data!;
   const movable = movableGroups(groups);
+  const archived = archivedNewestFirst(groups);
   const latest = () => queryClient.getQueryData(commonItemGroupsQuery.queryKey) ?? [];
   const writer: GroupWriter = {
     scopeId: commonItemsScope,
@@ -110,6 +134,9 @@ function Groups() {
     order: () => movableGroups(latest()).map((group) => group.id),
     reorder: commonItemGroupsApi.reorder,
     latest,
+    openArchived: (key) => {
+      frame.openArchivedAfterRender(archivedGroupsKey, key);
+    },
   };
 
   return (
@@ -127,6 +154,7 @@ function Groups() {
           />
         ))}
       <NewGroupForm writer={writer} />
+      {archived.length > 0 && <ArchivedGroups groups={archived} writer={writer} />}
     </>
   );
 }
@@ -177,25 +205,43 @@ function GroupSection({ group, writer, first, last }: GroupProps & GroupEnds) {
 
 /**
  * The heading row of a group other than Every note (common-items.md component 5), a wrapping flex line as an item row
- * is: its `<h2>`, then the group's alert slot, always rendered, which a failed move writes to, and its buttons in two
- * pairs, Move up and Move down, then Rename and Archive, each label width, with ", [name] group" after its label for
- * screen readers alone; beside the heading while the row has room, under it otherwise. Move up and Move down are the
- * item rows' own, moving the group among the groups but Every note, which stays first, so Move up on the first group
- * after it and Move down on the last are unavailable; a move sends every one of those groups' IDs, and the sections
- * take their new order only once the list is read again, focus following the button as its whole section moves.
- * Rename puts the rename form in the buttons' place, under the `<h2>`, which stays, so that the region keeps its name
- * and the manager sees what is being renamed, until Save or Cancel closes it and focus goes back to Rename, unless a
- * Save finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes to its field,
- * with the caret after the name, while the tap still runs, which is what lets a phone open its keyboard. Its typed
- * name is the group's own, so it stays as typed while other groups change.
+ * is: its `<h2>`, then the group's alert slot, always rendered, which a failed move or Archive writes to, and its
+ * buttons in two pairs, Move up and Move down, then Rename and Archive, each label width, with ", [name] group" after
+ * its label for screen readers alone; beside the heading while the row has room, under it otherwise. Move up and Move
+ * down are the item rows' own, moving the group among the groups but Every note, which stays first, so Move up on the
+ * first group after it and Move down on the last are unavailable; a move sends every one of those groups' IDs, and the
+ * sections take their new order only once the list is read again, focus following the button as its whole section
+ * moves. Rename puts the rename form in the buttons' place, under the `<h2>`, which stays, so that the region keeps
+ * its name and the manager sees what is being renamed, until Save or Cancel closes it and focus goes back to Rename,
+ * unless a Save finds it gone elsewhere as it ends. The form is rendered inside the press, so that focus goes to its
+ * field, with the caret after the name, while the tap still runs, which is what lets a phone open its keyboard. Its
+ * typed name is the group's own, so it stays as typed while other groups change.
+ *
+ * Archive asks nothing, as a restore undoes it (design.md §4.9). It is busy at once, "Archiving…" after 400 ms, and
+ * waits its turn in the page's scope; when it runs, it sends the group's version as the list was last read. Once the
+ * list is read again, the section has left the page with its items for the top of Archived groups, which appears if
+ * it was absent and opens, and focus goes to the group's Restore there, unless the person has gone elsewhere meanwhile,
+ * and the page's status region says so. An Archive whose group has already left the active groups, or that the server
+ * refuses as stale, shows the list conflict over the list read again; any other failure says so in the group's alert,
+ * focus staying on Archive, Every note's refusal and a missing `If-Match` among them, as the screen never sends either.
  */
 function GroupHead({ group, writer, first, last, headingId }: GroupProps & GroupEnds & { headingId: string }) {
+  const announce = useAnnounce();
   const [renaming, setRenaming] = useState(false);
-  // The alert's words while it holds a move's failure, which the group's next press, or Rename, clears.
+  // The alert's words while it holds a move's or an Archive's failure, which the group's next press, or Rename, clears.
   const [failure, setFailure] = useState<string>();
   const field = useRef<HTMLInputElement>(null);
   const renameKey = `${group.id}:rename`;
   const context = msg.groupContext(group.name);
+  const archive = useListWrite(writer, async () => {
+    // The version as the write runs, which the list read after the write before it may have changed.
+    const current = activeGroup(writer.latest(), group.id);
+    if (current === undefined) {
+      throw new ListChanged();
+    }
+
+    await sendUnlessListChanged(writer, 412, () => commonItemGroupsApi.archive(group.id, current.rowVersion));
+  });
 
   function rename() {
     flushSync(() => {
@@ -215,6 +261,21 @@ function GroupHead({ group, writer, first, last, headingId }: GroupProps & Group
     if (focusRename) {
       writer.focusAfterRender(renameKey);
     }
+  }
+
+  function pressArchive(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    setFailure(undefined);
+    archive.mutate(undefined, {
+      onSuccess: () => {
+        writer.openArchived(focusStayedIn(button) ? `${group.id}:restore` : undefined);
+        announce?.(strings.commonItems.groupArchived);
+      },
+      onError: (failed) => {
+        setFailure(failureAlert(failed, msg.notArchived));
+      },
+    });
   }
 
   return (
@@ -241,7 +302,13 @@ function GroupHead({ group, writer, first, last, headingId }: GroupProps & Group
                   {strings.commonItems.rename}
                   <span className="visually-hidden">{context}</span>
                 </Button>
-                <Button className={rows.rowButton}>
+                <Button
+                  ref={writer.focusTarget(`${group.id}:archive`)}
+                  className={rows.rowButton}
+                  busy={archive.isPending}
+                  busyLabel={strings.archiving}
+                  onClick={pressArchive}
+                >
                   {strings.listRows.archive}
                   <span className="visually-hidden">{context}</span>
                 </Button>
@@ -421,6 +488,91 @@ function NewGroupForm({ writer }: { writer: GroupWriter }) {
         {strings.commonItems.addGroup}
       </Button>
     </form>
+  );
+}
+
+/**
+ * Archived groups (common-items.md component 8), a section's gap after the New group form, which the page renders only
+ * while a group is archived: a native `<details>`, closed as it loads and left to the manager from then on but for a
+ * group's Archive, which opens it, its summary "Archived groups" in the item lists' style; then the archived groups,
+ * newest archived first, each its name and Restore alone, as nothing else can be done to an archived group.
+ */
+function ArchivedGroups({ groups, writer }: { groups: AdminCommonItemGroup[]; writer: GroupWriter }) {
+  return (
+    <details ref={writer.focusTarget(archivedGroupsKey)} className={styles.archivedGroups}>
+      <summary className={rows.summary}>{strings.commonItems.archivedGroups}</summary>
+      <ul className={rows.archivedList}>
+        {groups.map((group) => (
+          <ArchivedGroupRow key={group.id} group={group} writer={writer} />
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/**
+ * An archived group's row (common-items.md component 8), as an archived item's is: its name, wrapping anywhere, then
+ * its alert slot, always rendered, then Restore, label width, with ", [name] group" after its label for screen readers
+ * alone. Restore is busy at once, "Restoring…" after 400 ms, and waits its turn in the page's scope; when it runs, it
+ * sends the group's version as the list was last read. Once the list is read again, the group's section is the last
+ * of the groups, with its active items, and focus goes to its Archive there, unless the person has gone elsewhere
+ * meanwhile, and the page's status region says so; Archived groups goes once it is empty. A Restore whose group is no
+ * longer archived, or that the server refuses as stale, shows the list conflict over the list read again; any other
+ * failure says so in the row's alert, focus staying on Restore.
+ */
+function ArchivedGroupRow({ group, writer }: GroupProps) {
+  const announce = useAnnounce();
+  // The alert's words while it holds a Restore's failure, which the next press clears.
+  const [failure, setFailure] = useState<string>();
+  const restore = useListWrite(writer, async () => {
+    // The version as the write runs, which the list read after the write before it may have changed.
+    const current = archivedGroup(writer.latest(), group.id);
+    if (current === undefined) {
+      throw new ListChanged();
+    }
+
+    await sendUnlessListChanged(writer, 412, () => commonItemGroupsApi.restore(group.id, current.rowVersion));
+  });
+
+  function press(event: MouseEvent<HTMLButtonElement>) {
+    const button = event.currentTarget;
+    // Emptied at each press, so that what the press brings is written into an empty region and announced.
+    setFailure(undefined);
+    restore.mutate(undefined, {
+      onSuccess: () => {
+        if (focusStayedIn(button)) {
+          writer.focusAfterRender(`${group.id}:archive`);
+        }
+
+        announce?.(strings.commonItems.groupRestored);
+      },
+      onError: (failed) => {
+        setFailure(failureAlert(failed, msg.notRestored));
+      },
+    });
+  }
+
+  return (
+    <li className={rows.row}>
+      <div className={rows.rowInner}>
+        <p className={rows.text}>{group.name}</p>
+        <div className={rows.side}>
+          <RequestAlert>{failure}</RequestAlert>
+          <div className={rows.actions}>
+            <Button
+              ref={writer.focusTarget(`${group.id}:restore`)}
+              className={rows.rowButton}
+              busy={restore.isPending}
+              busyLabel={strings.restoring}
+              onClick={press}
+            >
+              {strings.restore}
+              <span className="visually-hidden">{msg.groupContext(group.name)}</span>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 

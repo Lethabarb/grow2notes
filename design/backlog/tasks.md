@@ -2355,7 +2355,7 @@ group; Every note stays first and fixed.
       group's Move down; with the `PUT` held, the order on screen unchanged and the pressed button reading "Moving…"
       after 400 ms; an end press sending nothing and announcing once; and a group move and an item move pressed at once
       sending two `PUT`s one after the other, the second built from the first's re-read.
-- [ ] Archive and restore groups (S01.03.07; design.md §3.7's Common item group row, its list and API part, §4.9 item
+- [x] Archive and restore groups (S01.03.07; design.md §3.7's Common item group row, its list and API part, §4.9 item
       6, and §5.3 *CommonItem*'s paragraph on archiving a group, its list part, the note side of both being T13's
       (Notes); §14 M1's Every note line, its API part for an archive; common-items.md component 8, "Archiving a
       group…", "Every note can never be renamed, moved or archived…", "Each archived `<details>` keeps…" for Archived

@@ -52,3 +52,8 @@
   inline-size: auto;
   min-inline-size: var(--target-min);
 }
+
+/* Archived groups, a section's gap after the New group form (common-items.md component 8). */
+.archivedGroups {
+  margin-block-start: var(--section-gap);
+}

@@ -251,6 +251,14 @@ internal static class EndpointMatrix
         new(Put,       "/api/admin/common-item-groups/order", Unauthorized, Forbidden, NoContent, UnprocessableEntity,
             ReorderingTheGroupsWithTwoOfItsOwn),
 
+        // Archiving and restoring a common item group (§6.6), in the same group, as the rename is: each call archives
+        // an active group, or restores an archived one, of its own, which its request first adds to A, never the seeded
+        // Every note, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/archive", Unauthorized, Forbidden, NoContent,
+            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/restore", Unauthorized, Forbidden, NoContent,
+            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "restore", archived: true)),
+
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
@@ -529,6 +537,21 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { groupIds }),
         };
+    }
+
+    // An archive or a restore, with no body, of a group that the request first adds to A, archived or not, sent with
+    // the group's ETag as If-Match, so that each call changes a group of its own, never the seeded Every note
+    // (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingTheStateOfAGroupOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var group = await call.Services.AddGroupAsync(
+            call.Seeded.A.OrganisationId,
+            new TestCommonItemGroup(
+                "Community outing", 0, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{group.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(group.ETag));
+        return request;
     }
 
     // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never

@@ -79,8 +79,8 @@ internal sealed class ErrorCode
         new(StatusCodes.Status422UnprocessableEntity, "config.order_mismatch");
 
     /// <summary>
-    /// A change that Every note never takes, as it is built in, always first and fixed (A43), such as a rename, which
-    /// the screen never offers. A reorder refuses its ID as <see cref="OrderMismatch"/> instead.
+    /// A change that Every note never takes, as it is built in, always first and fixed (A43): a rename, an archive or a
+    /// restore, none of which the screen offers. A reorder refuses its ID as <see cref="OrderMismatch"/> instead.
     /// </summary>
     public static readonly ErrorCode EveryNoteFixed =
         new(StatusCodes.Status422UnprocessableEntity, "config.every_note_fixed");

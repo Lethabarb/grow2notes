@@ -107,11 +107,14 @@ export const strings = {
   saving: 'Saving…',
   /** The save status once a save is done, then the time of its answer, if it gave one: "Saved 4:12 pm". */
   saved: 'Saved',
-  /** The busy label of Archive participant and of a list row's Archive (participants.md, list-editor.md). */
+  /**
+   * The busy label of Archive participant and of a list row's or a common item group's Archive (participants.md,
+   * list-editor.md, common-items.md).
+   */
   archiving: 'Archiving…',
   /**
-   * The button that brings back what is archived: a participant, in their archived notice, and an archived row of a
-   * list (participants.md B3, list-editor.md).
+   * The button that brings back what is archived: a participant, in their archived notice, an archived row of a list
+   * and an archived common item group (participants.md B3, list-editor.md, common-items.md component 8).
    */
   restore: 'Restore',
   /** Restore's busy label. */
@@ -408,7 +411,9 @@ export const strings = {
    * region, what an add did; and a group's name as its messages name it, the one for no name and, with `msg.tooLong`,
    * the one for too much (design.md §4.9 *States*), which is the rename form's label too. Then each other group's
    * Rename, beside the Move up, Move down and Archive of `listRows`, and, in the page's status region, what a rename's
-   * Save did (component 5). Each group's list's own words are `listEditor.item`.
+   * Save did, and what a group's Archive did (component 5). Then the archived groups' section's summary, each row's
+   * Restore being `restore`, and, in the page's status region, what a Restore did (component 8). Each group's list's
+   * own words are `listEditor.item`.
    */
   commonItems: {
     loading: 'Loading common items…',
@@ -421,6 +426,9 @@ export const strings = {
     groupName: 'Group name',
     rename: 'Rename',
     groupRenamed: 'Group renamed',
+    groupArchived: 'Group archived',
+    archivedGroups: 'Archived groups',
+    groupRestored: 'Group restored to the end of the list',
   },
   /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
