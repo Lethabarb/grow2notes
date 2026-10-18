@@ -2975,7 +2975,7 @@ lets workers write only today's note, using the Melbourne date.
 
 ```yaml
 id: T09
-status: new
+status: doing
 release: R1
 lane: C
 size: L
@@ -3015,10 +3015,305 @@ past notes.
   fields, which are in none yet, with Submit; and the read view at the shared address for a submitted note. The flag row
   reuses `TickList.module.css`'s `.box` and `.row`, and `useAutosave` (src/features/notes) gains Submit's `checkSave()`
   and `stop()` (autosave-status.md *Behaviour* 6).
+- Planned on 18 October 2026 from `origin/main` at `06f47fc`, with T04 (#58), T06 (#60) and T08 (#61) merged. No owner
+  question holds it: note-form.md open question 2's "Submit the note for" is (P), approved by D67, and open question 10
+  is built as S02.03.01's Notes say, as the confirmation's *No longer possible* state. Where the design is silent, the
+  simplest option is taken:
+  - Each answer and request carries only what this task reads or writes, as in T08, but for the `flagStatus` of a
+    manager's Past notes rows, which S02.04.02's criteria name and no screen reads until T16 adds the To review and
+    Reviewed tags. Today's rows get §6.3's whole `note`, and the draft's `GET` and `PUT` gain `isFlagged` and
+    `flagReason`. `GET {base}` is `{status}` for a draft, until T12 adds the header's `authorDisplayName` and
+    `startedAtUtc` and a manager's content, and, for a submitted note, `{status, author: {displayName},
+    firstSubmittedAtUtc, current: {narrative, isFlagged, flagReason, goals: [{text, isTicked}]}}`, T13 adding
+    `commonItemGroups`, T14 `author.id`, `isEdited`, `lastEdit` and `current.versionNumber`, T16 a manager's
+    `flagStatus` and `reviews`, and T18 `isPastDayNote` and `versionCount`. The history's rows are `{noteDate, status,
+    authorDisplayName, isFlagged, flagStatus?}`, with `hasMore`, T14 adding `currentVersionNumber` and `isEdited`.
+    `POST {base}/versions` takes `{baseVersion, narrative, tickedGoalIds, isFlagged, flagReason}`, T13 adding the picks
+    and common-item ticks, and answers `{versionNumber, createdAtUtc}`, T11 adding `flagStatus`.
+  - `POST {base}/versions` (step 3): the body's own checks come first, from the validation filter: `baseVersion` 0
+    until T14 takes a later one, `narrative` not blank, spaces alone counting as blank, and at most
+    `Limits.GuidedNotes`, `flagReason` at most `Limits.FlagReason`, and `tickedGoalIds` required, each refusal
+    `422 validation.failed` under its name; an `Idempotency-Key` that is missing or not a GUID gets the framework's
+    `400`, which the screen never meets, as it always sends one. Then, in one transaction (§5.9): the participant,
+    else `404`; the live note, else `404`; for a draft whose author is someone else, `409 note.in_progress_by_other`
+    with its extensions, as the draft's endpoints answer anyone but its author; the key, which on a version of this
+    note is the retry's `200` with that version, and on another note's `422` under `Idempotency-Key`; for a submitted
+    note, `409 note.version_conflict`, with no extensions until T14's notice reads them; a flagged body with a blank
+    reason, `422` under `flagReason`; and each ticked ID in the working copy's snapshot, else `422` under
+    `tickedGoalIds`, the ticks a set. A conditional update that changes no row looks for the key again, so that a
+    retry that raced its own first try gets `200`, and otherwise answers the version conflict. There is no date or
+    archive check: §5.5 item 4's rules apply only when a note is created, and a draft already started can still be
+    submitted (§3.7). The `201` names no `Location`, as a version's own address is a manager's, from T18.
+    `note.submitted`'s `Details` are `{"versionNumber": 1}`.
+  - Submit leaves `FlagStatus` and `FlaggedVersionNumber` as they are: §5.8 step 5's flag rules, the `201`'s
+    `flagStatus` and the `refreshMe()` after it are T11's (S03.01.01).
+  - `PUT {base}/draft` on a submitted note where the caller has no working copy answers `409 note.version_conflict`, in
+    place of T08's `404`, as a draft's base, 0, is then stale (§6.7): a tab left open after its note was submitted
+    elsewhere meets it at its next save or check save. T14 keeps it for a stale `baseVersion` when it builds pending
+    edits there, checking who may edit before the base: a worker who is not the author gets design.md §6.3's
+    `403 note.not_editable` at any base, 0 included, so the version conflict reaches only the author or a manager, and
+    T14 decides what the form shows for that `403` at a save. `GET {base}/draft` still answers `404` there until T14,
+    as the shared address no longer asks for it on a submitted note. The `PUT` stores `isFlagged` as sent and the
+    reason only while flagged, and takes a flag with no reason, as only Submit needs one (note-form.md open question 9).
+  - On the form, a `409 note.version_conflict`, from a save or, once the confirmation has closed, from Submit, is a dead
+    end as T08's are, worded "This note was changed on another device or tab." (V), as the *No longer possible* state
+    reuses it: autosave stays stopped, Submit unavailable, the text kept and copyable, and leaving never blocked.
+  - The shared address decides from fresh data (note-form.md *Routes*): it loads the participant header and `GET {base}`
+    together, the latter under `['notes', participantId, noteDate]` with `staleTime: Infinity` and `gcTime: 0`, as the
+    draft's query has, then shows the read view for a submitted note, and otherwise loads the draft as T08 does. Until
+    the note's status is known the page cannot tell which screen it is, so a failed load shows T08's "The note did not
+    load: …", and participant-notes.md's "This note did not load: …" is not added; nor is "There is no note for this
+    day.", as a note that is gone opens the form, or Page not found where the form may not open (A65). The top bar is
+    static until the form, with its save status, makes it sticky.
+  - The back link's label and destination come from the shell's opened-from record (`openerBefore`), read in one helper
+    that later tasks reuse: the note's "Past notes" when the list opened it, else "Today"; and Past notes' "Note", to
+    the note that opened it, "Participant", to the participant's page, else "Today". T11 adds the read view's "Flagged"
+    and T18 the form's "Participant".
+  - Built once here and reused: `Tag` (status-tags.md, one module of words and tones), with the Flagged kind alone, T14
+    adding Edited, T16 To review and Reviewed, and T18 Past-day note; `TickListRead` (checkbox-list.md), its heading at
+    level 2 until T13 gives it `headingLevel`; the paged list with Show older (chronological-list.md), which T19's
+    Reviewed list reuses; the success banner (status-messages.md), which is a success tone of T02's `Notice` (a tick in
+    place of its "i", in `--colour-success` on `--colour-success-tint`), carrying `data-route-focus` and no role, not a
+    second banner component; and a title for T03's `ConfirmDialog` that takes the Submit dialog's name line. Until T13
+    adds "2. Common items", the read view goes from "1. Goals" to "3. Guided notes", as the form does.
+  - Past notes starts from its newest 30 on a push, the cached pages dropped (participant-notes.md item 14), and keeps
+    every page loaded on a pop (item 13). Its `before` is bound as a date, so a value that is not one gets the
+    framework's `400`.
+  - A `422` from Submit closes the confirmation and shows the form's own words for `narrative` and `flagReason`, chosen
+    by the form's checks; any other key, or a field refused that the form's checks pass (such as a text of U+0085
+    alone, which .NET counts as blank and `trim()` keeps), is one unlinked summary item, "Not submitted: something went
+    wrong. Your draft is saved. Try again.", so that no server text shows and the summary always has an item to focus
+    (note-form.md item 29). Submit's body is built from the form's content by the same function as autosave's, taken
+    out of `useAutosave`'s mutation, its text cut by `capped()`; the form's blank checks trim, and its length checks
+    count the whole text, as guided-notes-textarea.md item 9 and conditional-reveal.md's `validateFlag` do, where
+    note-form.md's "on trimmed values" leaves it open, so a text that passes them is sent whole and both sides count
+    the same characters.
+  - `NoteVersionItem.GroupPosition`'s foreign key to `NoteVersionGroup` comes with T13, which adds that table
+    (S02.05.01); until then no row holds a common item.
+- Parts of the absorbed criteria arrive with later tasks, and each stays unticked, with a dated Note naming the task,
+  until that task proves it: note-form.md item 25's press during "Not saved" (T10); and participant-notes.md item 11's
+  Write past-day note (T18) and Export record (T21), as S02.04.02's fourth criterion says, with S01.02.04's archived
+  Export record (T21). Step 8 writes each into the receiving task's Notes and, dated, into the story's Notes, with the
+  fields and rules above that later tasks fill: T10 (the leave guard over the form's Past notes link), T11, T12
+  (`['me', 'drafts']` removed after Submit, and a draft's `GET {base}`), T13 (the 375 px phone check again, F02.03's
+  feature check), T14, T16, T18 and T21.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T08's: the operator running
+  `infra/sql/check-database.sql` after this deploy, its D3 and D5 rows naming `DENY UPDATE` and `DELETE` on
+  `NoteVersion` and `NoteVersionItem`, and B7 and B8 listing them and `AddNoteVersion`; on a phone at 375 px, a worker
+  filling in and submitting a note (S02.03.01's manual check, §14 M2), which only a person can prove, so the criterion
+  stays unticked with a dated Note naming its step (README §9); and, with NVDA and Chrome, VoiceOver and iOS
+  Safari, and TalkBack and Chrome, the flag row read as "checked, expanded" with Reason next and its count after a
+  pause, the error summary after a failed Submit, the confirmation read as "Submit today's note for Jane Citizen, alert
+  dialog, Thursday 1 October 2026, Flagged for manager: Yes" and then its heading, "Submitting…" when slow, the banner
+  on Today read once, a row's status and Flagged read as its description, the read view's `<h1>` and each goal "ticked"
+  or "not ticked", and Past notes' rows read as the date, then the status, author and tags, with focus on the first new
+  row after Show older.
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] The version tables, which every later note task appends to (S02.03.01's first criterion; design.md §5.3, §5.8
+      *Append-only*): `NoteVersion` (`ITenantOwned`, `IAppendOnly`) with §5.3's columns, the alternate key
+      `(OrganisationId, Id)`, composite foreign keys to the note's and, for `CreatedByUserId`, the user's alternate
+      keys, `Narrative` as `nvarchar(max)`, `FlagReason` at `Limits.FlagReason`, and the unique indexes
+      `(NoteId, VersionNumber)` and `(OrganisationId, IdempotencyKey)`; `NoteVersionItem` (`ITenantOwned`,
+      `IAppendOnly`) keyed `(NoteVersionId, Section, Position)`, with composite foreign keys to the version and to the
+      goal's and the common item's alternate keys, `Text` at `Limits.ItemText`, `GroupPosition` with no foreign key
+      until T13 (Notes), and §5.3's check constraint; and their `AddNoteVersion` migration, with `DENY UPDATE, DELETE`
+      on both for `grow2notes_runtime`, in `RuntimeRoleTests` and `infra/sql/check-database.sql` (B7, B8, D3, D5, which
+      `CheckDatabaseScriptTests` reads). Tests: a model test of the keys, foreign keys, indexes and check constraint, as
+      `NoteModelTests` has; on SQL Server, a second version 1 of a note and a second use of a key in one organisation
+      refused by the unique indexes, a row breaking each arm of the check constraint refused, and an update or a delete
+      of either table refused by `AppendOnlySaveChangesInterceptor` and, as `grow2notes_runtime`, by the database; and
+      the tenancy and model-convention tests passing for both entities.
+- [ ] Flag for manager on the draft (S02.03.02's first criterion; its links to §3.6's first bullet, §4.3 item 6 and
+      §5.3's draft fields, note-form.md *States* › *Flag*, item 23's re-tick and item 24's autosave;
+      conditional-reveal.md): `PUT {base}/draft` takes `isFlagged` and `flagReason`, at most `Limits.FlagReason`
+      characters, else `422` under `flagReason`, and stores them in `NoteDraft.IsFlagged` and `FlagReason` (Notes);
+      `GET {base}/draft` gives both, `false` and `null` for a new note; and `flagReason: 200` in `limits.ts`
+      (`SpaLimitsTests`) for the form's Reason check and count. Integration tests: a flag and reason saved and
+      read back; an unflagged save storing no reason; a flag with no reason saved; 200 characters saved and 201 refused;
+      and the canary test sending a reason (design.md §9.5). On the form: the Flag for manager row after Guided notes,
+      on `TickList.module.css`'s `.box` and `.row`, with `aria-controls` and `aria-expanded`, and the Reason block,
+      always in the page and `hidden` while unticked, with its bar, the bold label, the hidden hint, a controlled
+      `<textarea rows=4>` with `aria-required` and no `maxlength`, and T05's `CharacterCount` at 200 with its polite
+      region (note-form.md component 11); the reason kept while unticked; and `useAutosave` reading the flag, sending
+      `flagReason: null` while unticked or blank and the reason cut to 200 characters without splitting a surrogate
+      pair. Vitest: ticking shows Reason with focus kept on the box and nothing scrolled; "You can enter up to 200
+      characters", "You have 153 characters remaining", "You have 1 character remaining" and, bold, "You have 12
+      characters too many"; a tick, a reason and an untick each a change that saves; 210 characters kept on screen and
+      200 sent; unticked sending `isFlagged: false, flagReason: null`; re-ticking bringing the reason back; and a draft
+      loaded flagged showing the block from its first render, with no count announced.
+- [ ] Submit on the server (S02.03.01's second to sixth criteria; S02.03.02's second; design.md §5.8 steps 1 to 8,
+      §6.3 `POST {base}/versions`, §6.7; T08's hand-offs of §5.6's working copy deleted and §14 M2's reworded goal in
+      the submitted version): `POST {base}/versions` with `Idempotency-Key`, its handler `NoteVersions` in
+      `Features/Notes`, taking the `Actor` as `NoteDrafts` does, in one `InTransactionAsync`, with the checks and
+      answers of Notes: for the author's draft, the header moved to Submitted by one conditional `ExecuteUpdate`, with
+      `CurrentVersionNumber = 1` and `FirstSubmittedAtUtc` now, version 1 with the body's narrative and flag, an
+      unflagged one storing no reason, its goal rows copied from the working copy's snapshot, in its order, with the
+      ticks sent, the working copy deleted, and `note.submitted` with the version number and no text, answering
+      `201 {versionNumber, createdAtUtc}`; a key already used on the note `200` with that version, changing nothing;
+      anyone else's draft `409 note.in_progress_by_other`; and a submitted note `409 note.version_conflict`, added to
+      `ErrorCode` (`ErrorCodeTests`), which `PUT {base}/draft` also answers for a submitted note on which the caller
+      has no working copy, in place of T08's `404` (Notes). Its matrix row (a draft started in A for each call, `201`
+      for A's author, `404` for B's manager), the audit-events row, a `SignedOutTests` row and the canary test sending
+      a narrative and a reason. Integration tests on SQL Server: one submit making exactly the version, its goal rows,
+      the header's change, no working copy and one event with IDs and the version number only, and a failing event save
+      changing nothing; a retry with the same key `200` with one version, and two posts with one key held together by
+      an interceptor, as `HoldsTheFirstSaveOfTheUser` holds saves, making one version, the later one `200`; a second
+      submit with a new key `409 note.version_conflict`; another worker's and a manager's submit of a worker's draft
+      `409 note.in_progress_by_other`, creating nothing; a blank, a spaces-only and a 20,001-character narrative `422`
+      under `narrative`; a flagged submit with no reason, a spaces-only one and 201 characters `422` under
+      `flagReason`; an ID outside the snapshot `422`; a goal reworded after the draft started still "Makes own
+      breakfast" in version 1; on a `TestClock`, a draft started at 11:58 pm and submitted at 12:01 am keeping its note
+      date, with `FirstSubmittedAtUtc` the time of the submit; and an autosave after the submit
+      `409 note.version_conflict`, recreating nothing.
+- [ ] Submit note, its checks and the confirmation (S02.03.01's links to note-form.md items 4, 5, 11's
+      `aria-disabled`, 20 to 22, 25 to 30 and 37, *States* › *Confirmation dialog*, app-shell.md's Session bullet and
+      *Press Stay signed in*, and today.md's *After Submit* bullet; S02.03.02's third criterion, and items 23 and 24 at
+      Submit; T08's hand-offs of identity item 3's dialog title and confirm button, item 18's "keep Submit unavailable"
+      with §4.3's Submit disabled while a change is unsaved, and today.md's DOM order with the success banner): the
+      fields in a `<form noValidate>` with Submit note, `type="submit"`, `aria-disabled` while "Saving…" shows or a dead
+      end has stopped autosave, described by `save-status` and the dead end's sentence, its handler guarding Enter's
+      implicit submission; the checks, blank on trimmed values and length on the whole text, with the body built as
+      autosave's (Notes), the inline errors above each field, `ErrorSummary` focused on every failed press and
+      "Error: " in the title (note-form.md *Validation*), each cleared on the keystroke that fixes it and the Reason
+      error gone with the untick; a press during a dead end opening nothing and saying its sentence in the polite
+      region; `useAutosave`'s `checkSave()`, one `PUT` after any save out, and `stop()` and `resume()`
+      (autosave-status.md *Behaviour* 6); the confirmation on T03's `ConfirmDialog`, its title "Submit today's note
+      for" when the note date is `me.today`, else "Submit the note for", with the name on its own line
+      (confirm-dialog.md), the date in `dateLong`, "Flagged for manager: Yes" or "No" from the values being sent,
+      "Submit note for Jane Citizen" and Go back, focus on the title, one `Idempotency-Key` per opening kept for its
+      retries, "Submitting…" after 1 s, the two failure sentences with the dialog kept open, the
+      `409 note.version_conflict` sentence with the confirm button gone and focus on Go back, the form then a dead end
+      (Notes), a `422` closing it for the form's errors and summary or the unlinked item (Notes), and a `401` closing
+      it before signing in again; and, after `201` or `200`, "Note for Jane Citizen submitted" in `messageStore`,
+      Today's query removed, the dialog closed and Today popped to when it is the entry before, else put in place; on
+      Today, T02's `Notice` in its success tone (Notes) before the `<h1>`, read from the store once. Vitest: each of
+      those; an unbroken name of 100 characters wrapping in the title and the confirm button at 320 px; Enter twice
+      after Submit sending nothing; a press during "Saving…" opening the confirmation once the check save is answered;
+      offline, Submit `aria-disabled`; a retry sending the same key; 19,995 characters and ten spaces refused as too
+      long, as the count says; a `422` under `narrative` for a text the checks pass giving the unlinked item, focused;
+      the session warning closing the confirmation with nothing sent, and focus on Submit note after Stay signed in's
+      `204`; and on Today the banner focused, also after a pop, gone after leaving and coming back, and the row
+      Submitted from the fresh list, never "Draft".
+- [ ] Today's note status on each row (S02.01.03; S02.03.02's fourth criterion on Today; design.md §4.2 item 4 and
+      A17, §6.3's `note`; today.md *Content and copy*'s status, Flagged and times bullets and *Focus and navigation*'s
+      stale-status bullet; T08's hand-offs of the Flagged tag on its own line at 320 px and Search's "'Alex' does not
+      match…"): `GET /api/today` gives each row today's live note or `null`, as `{status, authorDisplayName, isMine,
+      startedAtUtc, savedAtUtc?, firstSubmittedAtUtc?, isFlagged}`, `savedAtUtc` only on the caller's own draft, from
+      their working copy, `firstSubmittedAtUtc` only on a submitted note, and `isFlagged` its current version's, false
+      on a draft. Integration tests: `null` with no note, and for a discarded draft, alone or beside a new one; another
+      user's draft giving a worker and a manager the author's name and start time, with no `savedAtUtc` and no content;
+      the caller's own draft with `savedAtUtc`; a submitted note with `firstSubmittedAtUtc`; `isFlagged` from the
+      version, true while `FlagStatus` is None and false while it is ToReview over an unflagged version (set by hand);
+      and another day's note left out. On the SPA: each row's status line from `src/copy`, the status word bold, its
+      times in `time()` `<time>`s and its parts joined by `Sep`, and, after it on a flagged submitted note, `Tag`
+      (status-tags.md), built once in `src/components` with its Flagged kind. Vitest: the four forms "Draft · You ·
+      saved 9:42 am", "Draft · Alex P. · started 9:14 am", "Submitted · Alex P. · 4:12 pm" and "Submitted · You ·
+      4:12 pm", each read as the row link's description; Flagged on a flagged submitted row alone; "midday" at 02:00Z
+      on 1 October 2026, and the right time just after the change on 4 October; no line on a row with no note; "Alex"
+      matching only a participant named Alex; and a row whose cached line says Draft opening the read view that the
+      server now gives.
+- [ ] Read a submitted note (S02.04.01; S02.03.02's fourth criterion on the read view; design.md §4.4 *Read view of
+      one note* and §4.2's "Submitted: opens the read view"; note-form.md *Routes*; participant-notes.md items 15 to 19,
+      21, 23, 28a from Today, and 29 to 35 for the read view): `GET {base}` in `Features/Notes`, writing nothing, `404`
+      with no live note or for another organisation's participant, `{status}` for a draft, and the current version for
+      a submitted note, as Notes give it, its goals in their order. Its matrix row (a note submitted in A, `200` for A's
+      worker and manager, `404` for B's manager) and a `SignedOutTests` row. Integration tests: the fields; the goals in
+      snapshot order with their ticks; a discarded draft `404`; and no `flagStatus`, `reviews` or `versionCount` for a
+      worker or a manager. On the SPA, the shared address deciding from fresh data, as Notes say, in one region with
+      T08's loading and failure words; and the read view in `src/features/notes`: a static `PageBar` with the back
+      link; the `<h1>` with the name, `translate="no"`, and the date; the byline "Written by Priya Nair · Submitted
+      4:42 pm", through `stamp()` with the note date as its reference day; the Flagged line, `Tag` then "Reason: …" in
+      the text colour; "1. Goals" through `TickListRead` (checkbox-list.md), built once in `src/components` on
+      `TickList.module.css`, with "No goals set" for none; and "3. Guided notes" as escaped text with
+      `white-space: pre-wrap`. Vitest: nothing of the note before both answers; the `<h1>` focused, named "Jane Citizen
+      Thursday 1 October 2026"; each goal read "…, ticked" or "…, not ticked", never a control; a 20,000-character text
+      with blank lines, unbroken strings and `<b>hi</b>` shown whole and literal, with no sideways scroll at 320 px;
+      "Submitted Fri 2 Oct 2026, 8:05 am" for a submit on a later day; the flag line only when flagged; no request on
+      window focus; no Edit, which T14 adds, and no Version history, To review, Reviewed or review panel in a worker's
+      DOM; the title "Grow2Notes – Note"; and T08's request checks on the form now expecting `GET {base}` before the
+      draft's `GET`.
+- [ ] Past notes (S02.04.02; S02.04.01's item 28a from Past notes; participant-notes.md items 1 to 9, 11 to 14 and 29
+      to 35 for the list; note-form.md component 5; design.md §4.4 items 1 and 2 and *How to get here*, §6.1 *Lists*;
+      S01.02.04's archived Past notes action): `GET /api/participants/{participantId}/notes?before=`, writing nothing:
+      `404` for another organisation's participant; else the live notes dated before `before`, tomorrow in Melbourne by
+      default, newest first, 30 at a time with `hasMore`, the rows as Notes give them, `flagStatus` for a manager alone,
+      by the role as stored. Its matrix row and a `SignedOutTests` row. Integration tests: 31 notes, the newest dated
+      today, the first page asked with no `before` giving 30, today's first, and `hasMore`, then `before` the last
+      one's date giving the 31st and no more; a discarded draft never listed; a draft row's status and author;
+      `isFlagged` from the version; an archived participant's notes listed; and a manager's rows carrying `flagStatus`,
+      `None` for an unflagged note and `ToReview` set by hand, where a worker's rows have no `flagStatus` key. On the
+      SPA: the route `participants/:participantId/notes`, titled "Grow2Notes – Past notes", with `returnFocus` and
+      `backKey: 'pastNotes'`, the note's route gaining `backKey: 'note'` and a participant's page
+      `backKey: 'participant'`; the static back link labelled by its opener (Notes); the `<h1>`, caption "Past notes"
+      and the name, once the header and the first page have both loaded; Edit participant for a manager alone; the
+      paged list of chronological-list.md, built once in `src/components`: `useInfiniteQuery` on
+      `['pastNotes', participantId]` with `refetchOnWindowFocus`, its rows `LinkRow`s, each the date in `dateLong` in a
+      `<time>`, its return key the date, described by "Submitted · Alex P." or "Draft · Sam Lee" and, on a flagged
+      submitted row, Flagged; Show older with its status line, "Loading older notes…" after 1 s, "Older notes did not
+      load: …" and "…still did not load…", and focus on the first new row; "Loading notes…", "No notes yet for Jane
+      Citizen.", "Past notes did not load: …" with Try again, and Page not found; a push starting from the newest 30
+      and a pop keeping every page (Notes); the Past notes link under the note form's identity block, in the read view's
+      actions, and first in a participant's Actions, active or archived, with the divider before Archive participant;
+      and the note's back link "Past notes" when the list opened it. Vitest: the API's order, never sorted again, the
+      first load with no `before`; Show older only after `hasMore: true`, asking `before` the last row's date and
+      adding up to 30 below; no request on scrolling; no count, total or end-of-list text; focus on the first new row,
+      and, with no more, the button gone and focus not on `<body>`; two quick presses one request, never `disabled`;
+      offline, the failure sentence with the rows kept and focus on the button, and "still" the second time; nothing,
+      then "Loading notes…" at 1 s; a row's name the date alone and its description the status, author and tags; no tag
+      on a draft row; no manager action for a worker; the empty sentence with no list or button; 90 rows loaded, the
+      75th opened and Back showing all 90 at once with the scroll kept and focus on the 75th; Past notes from a note
+      starting at the newest 30, at the top, with the `<h1>` focused; the read view the same from Today and from Past
+      notes but for the back link; and an archived participant's Actions holding Past notes.
+- [ ] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
+      `tests/e2e/notes.ts` and `tests/e2e/today.ts` answer `GET {base}`, `POST {base}/versions`, the history, the flag
+      and Today's `note` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and a
+      new `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: the worker fills
+      in a note, ticks a goal, flags it with a reason, presses Submit, sees the confirmation with the participant's
+      name, the date and "Flagged for manager: Yes", submits, lands on Today with the banner focused and the row
+      "Submitted · You · …" with Flagged, opens it to the read view with the flag line, and goes to Past notes and back
+      (design.md §14 M2 *Done when*; note-form.md item 38); the manager sees "Submitted · {the worker} · …" with Flagged
+      and the same read view; and the other organisation's manager gets Page not found at the note and its Past notes.
+      With the API answered in the browser: a lost `POST` answer retried with the same key and one version; throttled,
+      A's name never in the DOM of B's read view or Past notes (participant-notes.md item 32); axe in Today's After
+      Submit, the form's flag ticked, field errors, version-conflict dead end and each confirmation state, and each
+      state of the read view and Past notes, at both widths; no sideways scroll at 320 px with 200% text, the Flagged
+      tag on its own line there, nothing sticky on the read view or Past notes, targets of 44, 48 and 56 px, live
+      regions in the DOM before their text, the focus ring and tag borders under forced colours, and "1 October" with
+      U+00A0 and "midday"; the keyboard-only check (README §9) at both widths, in today.md's, note-form.md's and
+      participant-notes.md's Tab orders for what is built, with a visible ring at each stop; and no name, note text or
+      message in `location`, `document.title`, `history.state`, `localStorage`, `sessionStorage`, IndexedDB or Cache
+      Storage after each flow. Every new string is in `src/copy` and the copy test passes, and the diff holds no trace
+      of the parent company's name (D72). Docs: design.md §6.3 keeps its full shapes and gains only the new facts (the
+      draft `PUT`'s and the `POST`'s `409`s, the `POST`'s `422` under `Idempotency-Key` for a key used on another
+      note, and the framework's `400` for a missing key); participant-notes.md's *Note not found* and *Load failed*
+      rows each an "As built (T09)" note that they are not built, a note that is gone opening the form, or A65's Page
+      not found, and a failed load showing note-form.md's "The note did not load: …" (Notes); note-form.md (with
+      *Pressing Submit note* item 1's length checks on the whole text), participant-notes.md, today.md,
+      status-tags.md, checkbox-list.md, chronological-list.md, confirm-dialog.md, status-messages.md (the success
+      tone of `Notice`) and autosave-status.md gain only what the build settles; the deferred parts and hand-offs
+      (Notes) in the receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
+      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the four
+      denies; and CI's run on the pull request passing.
+- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
+      the CI and Deploy runs passed every step, the deploy's migration added `NoteVersion` and `NoteVersionItem` and its
+      smoke test passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed
+      assets answering `200`; signed out, `GET /api/participants/{a made-up GUID}/notes` and
+      `GET /api/participants/{that GUID}/notes/{today}` each answer a `401` problem with `no-store`; then headless
+      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker and every other `/api`
+      request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, Today shows the four
+      status forms and Flagged; a row with no note opens the form, where a tick, typing, the flag and a reason show
+      "Saving…" then "Saved …", Submit opens the confirmation with the name, the date and "Flagged for manager: Yes",
+      and confirming lands on Today with the banner focused; a submitted row opens the read view with the flag line;
+      and its Past notes link lists the rows, Show older adding the next ones with focus on the first of them; the
+      console reports no CSP violation or script error, and the origin's storage is empty; Application Insights shows
+      no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T09's `status` here
+      and its stories' to `done` together, ticking their criteria, the parts that T08 handed to T09 in S02.01.01,
+      S02.01.02, S02.02.02, S02.02.03 and S02.02.07, and S01.02.04's archived Past notes action, and leaving unticked,
+      each with its dated Note, any part handed to a task not yet merged (Notes) and S02.03.01's manual check, whose
+      Note names its ops/first-use-in-test.md step: only a person can prove it, and README §9 lets the story be done
+      once CI and these checks pass.
 
 ---
 
