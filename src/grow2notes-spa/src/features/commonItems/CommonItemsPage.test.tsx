@@ -978,6 +978,10 @@ describe('Common items, adding an item', () => {
       type(newItem('Every note'), text);
       await press(addItemButton('Every note'));
 
+      // Emptied, then written on the next frame, so each add is said afresh and not by the words the last one left.
+      expect(pageStatus()).toBeEmptyDOMElement();
+      await wait(16);
+      expect(pageStatus()).toHaveTextContent(added);
       expect(newItem('Every note')).toHaveFocus();
       expect(newItem('Every note')).toHaveValue('');
       expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(texts.slice(0, index + 1));

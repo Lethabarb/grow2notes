@@ -580,7 +580,7 @@ Expected wording, not verified. It varies by screen reader.
 ## Accessibility checklist
 
 **Headings and landmarks**
-- [ ] One `<h1>` "Common items", focused on arrival. One `<h2>` per active group, Every note first, so heading
+- [x] One `<h1>` "Common items", focused on arrival. One `<h2>` per active group, Every note first, so heading
       navigation reaches every group (71.6% of screen-reader users navigate long pages by headings first; WebAIM #10).
       The archived sections are `<summary>`s, not headings (headings inside `<summary>` are not reliably exposed;
       O'Hara 2022).
@@ -596,14 +596,14 @@ Expected wording, not verified. It varies by screen reader.
 - [ ] Every row button's accessible name starts with its visible word, followed by visually hidden ", [item text]";
       every group button's by ", [group name] group"; each archived-items summary by " in [group name]". No
       `aria-label` anywhere on this screen (SC 2.5.3).
-- [ ] Arrows are `aria-hidden` SVG. No button is icon-only.
+- [x] Arrows are `aria-hidden` SVG. No button is icon-only.
 
 **Keyboard**
 - [ ] Every action works with Tab plus Enter or Space (arrows inside the radio set). Nothing needs dragging (SC
       2.5.7) or a shortcut (SC 2.1.4).
 - [ ] Focus is never dropped on `<body>` after any move (item or group), Edit, Rename, Save, Cancel, Add, Archive,
       Restore or Try again (SC 2.4.3).
-- [ ] Unavailable and busy buttons use `aria-disabled`, never `disabled`, so they stay focusable.
+- [x] Unavailable and busy buttons use `aria-disabled`, never `disabled`, so they stay focusable.
 - [ ] The focus ring (3 px near-black, 2 px offset, `:focus-visible`, `Highlight` in forced colours) is on every
       stop, including summaries, radios and the script-focused conflict message (SC 2.4.7, 1.4.11). Nothing is
       sticky, so the focused item is never covered (SC 2.4.11).
@@ -624,7 +624,7 @@ Expected wording, not verified. It varies by screen reader.
       The selected radio is a drawn dot, not colour alone (SC 1.4.1).
 - [ ] Targets: buttons and the group name input 48 px tall (`--target-button`), at least 44 px wide; radio rows 56
       px; summaries at least 44 px. At least 8 px between separate targets (A32; SC 2.5.8, also 2.5.5).
-- [ ] Works at 320 px, 200% text and 400% zoom with no sideways scroll; long words and long group names wrap (SC
+- [x] Works at 320 px, 200% text and 400% zoom with no sideways scroll; long words and long group names wrap (SC
       1.4.4, 1.4.10, 1.4.12).
 - [ ] No motion: the archived sections open instantly; no spinners (SC 2.2.2, 2.3.3).
 

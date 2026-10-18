@@ -29,8 +29,9 @@ internal sealed class ErrorCode
     public static readonly ErrorCode UserNotActive = new(StatusCodes.Status409Conflict, "user.not_active");
 
     /// <summary>
-    /// A common item was to be added to a group that is archived, which is restored first. Archiving a group leaves its
-    /// items' versions as they were, so no <c>If-Match</c> could catch it.
+    /// A common item was to be added to, reworded in or (from T07) moved into a group that is archived, which is
+    /// restored first (design.md §6.9). Archiving a group leaves its items' versions as they were, so no
+    /// <c>If-Match</c> could catch it.
     /// </summary>
     public static readonly ErrorCode GroupArchived = new(StatusCodes.Status409Conflict, "config.group_archived");
 

@@ -1847,9 +1847,11 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
     under `text`; a body with no `text`, or a `null` one, is refused as an empty one.
   - Event `Details`: `common_item.created` holds the item's `groupId`, `text`, `sortOrder` and `archivedAtUtc` as
     `new`, `groupId` named as S01.03.08's Note names it, so that the event says which group; `common_item.updated` the
-    old and new `text`; `common_item.archived` and `common_item.restored` `sortOrder` and `archivedAtUtc`; and
-    `common_item.reordered` the old and new `order` with `groupId` beside them (S01.03.03's Note). None names a
-    participant.
+    old and new `text`; `common_item.archived` and `common_item.restored` are given `sortOrder` and `archivedAtUtc`
+    before and after, of which `ChangeDetails` keeps the values that changed, so `common_item.archived` holds the old
+    and new `archivedAtUtc` alone, as archiving keeps `SortOrder`, and `common_item.restored` holds `sortOrder` too
+    unless the item's old `SortOrder` was already its group's end; and `common_item.reordered` the old and new `order`
+    with `groupId` beside them (S01.03.03's Note). None names a participant.
   - A reorder whose body has no `commonItemIds`, or a `null` one, is `422 validation.failed` under `commonItemIds`, as
     the goals' reorder is; IDs that are not the group's active items, each once, are `422 config.order_mismatch`.
   - The list gives the groups `ORDER BY IsEveryNote DESC, SortOrder, CreatedAtUtc, Id` (§5.3's "lists sort by
@@ -1919,14 +1921,59 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
 - Step 7's run: the 8 tests of `common-items.spec.ts` and the 18 of `participants.spec.ts` passed locally against the
   published app. Of the whole end-to-end suite's 218, run there with 12 workers, all passed but T02's first
   participants test, whose wait for the list read after Archive met a read already out; it passed in four runs of its
-  own, and nothing it runs changed but where its helpers live. `migrate.sql`, scripted locally with the command CI
-  scripts its artifact's copy with, gives `AddCommonItems` only additions: `CREATE TABLE [CommonItemGroup]`, with its
-  primary key, the `(OrganisationId, Id)` alternate key, `CK_CommonItemGroup_EveryNoteActive` and the foreign key to
-  `Organisation`; `CREATE TABLE [CommonItem]`, with its primary key, alternate key and the composite foreign key to
-  its group's; the two indexes and the unique index on `OrganisationId` filtered `[IsEveryNote] = 1`; the `INSERT`
-  of each organisation's Every note; and `DENY DELETE` on both tables to `grow2notes_runtime`. The artifact's own copy
-  is read in the pull request, and CI's run on it recorded, once the branch is pushed, so step 7 stays unticked until
-  then, as T05's step 6 did.
+  own. That test does run what this branch changed: the participant page's Goals section, now in a `ListFrame` that
+  holds its help text, list conflict and focus map, with `ListEditor` reading its rows through `rowsOf`; and, after
+  each test, the live-region watcher, now in `liveRegions.ts` and also reporting a region in `<main>` with
+  `aria-live` (its `expectNothingKept` is its own, as on `origin/main`, not `kept.ts`'s). The wait that failed is for
+  the participants list's read, whose query and refetch after Archive the branch leaves as they were, and a region
+  that the watcher reports fails a test after it has run, not in that wait, so timing is the likely cause. No run on
+  `origin/main` shows that, though, so the failure stays open until CI's run on the pull request, which is
+  authoritative and is recorded here. `migrate.sql`, scripted locally with the command CI scripts its artifact's copy
+  with, gives `AddCommonItems` only additions: `CREATE TABLE [CommonItemGroup]`, with its primary key, the
+  `(OrganisationId, Id)` alternate key, `CK_CommonItemGroup_EveryNoteActive` and the foreign key to `Organisation`;
+  `CREATE TABLE [CommonItem]`, with its primary key, alternate key and the composite foreign key to its group's; the
+  two indexes and the unique index on `OrganisationId` filtered `[IsEveryNote] = 1`; the `INSERT` of each
+  organisation's Every note; and `DENY DELETE` on both tables to `grow2notes_runtime`. The artifact's own copy is read
+  in the pull request, and CI's run on it recorded, once the branch is pushed, so step 7 stays unticked until then,
+  as T05's step 6 did.
+- Step 7's checklist (18 October 2026, review): the runs above and the Vitest suite prove four items of
+  common-items.md's *Accessibility checklist* whole for what T06 builds, and they are ticked: the one `<h1>`, focused
+  on arrival, an `<h2>` per active group, Every note first, and the archived sections as summaries; the arrows
+  `aria-hidden`, with no button icon-only (the arrow is the shared row's, which `ListEditor.test.tsx` checks);
+  unavailable and busy buttons `aria-disabled`, still focus stops; and no sideways scroll at 320 px with 200% text,
+  long words and group names wrapping. The three *Screen reader* items wait for ops/first-use-in-test.md step 45,
+  which listens for them, as T03's waited for its step 24, though the live-region watcher and Vitest show their markup
+  for T06's parts. The items that name a group part are T07's, written in T07's Notes, though the runs prove their
+  item parts: the group's region staying named while renaming, the Group name and New group labels, the Group radios,
+  the group buttons' names, the radio set's arrow keys, focus after a group move or Rename, the ring on radios, and
+  the radio and group name parts of the contrast, colour and target items. No run checks three parts yet: the ring on
+  the focused list conflict, text at 7:1, as axe runs its AA rules alone, and the archived sections opening with no
+  motion. T07 checks the first with the ring on radios and the second with the contrast item (T07's Notes); the
+  no-motion item stays open for T26's pass of each screen's checklist (S06.02.01).
+- 18 October 2026, review: 7 findings were confirmed and are fixed here. None changes the design, so no A-number is
+  added:
+  - `EveryNoteGroupTests`' two constraint tests made their refused writes to seeded organisation A's Every note, with
+    nothing to roll them back, so a dropped filtered index or check constraint would have left a second Every note,
+    or an archived one, in A, and failed the tests that read A's seeded group too, which ones depending on the run's
+    order. Each now adds an organisation of its own with its Every note group, through the helper that the third
+    test now uses too, so that such a regression fails those two tests alone (tests/README.md, the seeded-rows rule).
+  - No test showed each add said afresh: the Every note loop's status check in `common-items.spec.ts` passes on the
+    words that the add before it left, and the five-adds Vitest case never read the status region. That case now
+    checks the region emptied at each press and "Item added to the end of the list" in it a frame later, and fails
+    once `AddForm` announces only its first add (step 3).
+  - list-editor.md's *Request errors* and *Exact copy* did not say what the shared `ListEditor` does for the item
+    kind: a `409 config.group_archived` on Add or Save shows the list conflict, and the edit conflict puts the item's
+    wording in typographic quotes. Both now say so, after common-items.md *States* and *Failures*.
+  - The plan never ticked common-items.md's *Accessibility checklist*, which README §9's accessibility row asks for.
+    Step 7 now does, and its checklist Note above says which items the runs prove, which wait for step 45 and which
+    are T07's.
+  - The event `Details` bullet above said that `common_item.archived` holds `sortOrder`, where it holds only the
+    values that changed, `archivedAtUtc` alone for an archive. That bullet and step 6 now say so.
+  - Step 7's run Note said that nothing the failing participants test runs had changed but where its helpers live,
+    where its Goals section and the live-region watcher had. It now names them and leaves the failure open for CI's
+    run.
+  - `ErrorCode.GroupArchived`'s summary named only the add, though the reword returns it too and design.md §6.9 names
+    the move as well. It now names all three, the move from T07.
 
 ### Steps
 
@@ -2009,8 +2056,9 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       kept and focus on Add item; a `409` reading the list again and showing the list conflict; and a `401` handing
       over to sign-in in place, the text kept, with the list read again after signing in. Vitest: each message, with
       `aria-invalid`, focus on the field and nothing sent, cleared silently once the text is fixed; five adds in a row
-      with focus in the field after each; 210 characters typed kept whole; a pasted line break sent as one space; the
-      item last in its own group alone; one `POST` after a lost answer; and the `409` and the `401`.
+      with focus in the field after each, and each said afresh, the status region emptied at the press; 210
+      characters typed kept whole; a pasted line break sent as one space; the item last in its own group alone; one
+      `POST` after a lost answer; and the `409` and the `401`.
 - [x] Reword an item in its row (S01.03.02's second criterion; common-items.md *Add, edit, rename, move*' "Edit opens
       the row form…", its wording part, and *Failures and conflicts*' "A `412` on an item Save…", with the network
       and `401` bullets for Save): `PUT /api/admin/common-items/{id}` with `{text}` (Notes), loading the item through
@@ -2060,8 +2108,9 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       Restore part): `POST /api/admin/common-items/{id}/archive` and `/restore` with `If-Match`, loading the item
       through the tenant filter, archiving it with `Archiving.Archive`, which keeps its `SortOrder`, and restoring it
       with `Archiving.Restore` to `ListOrder.End` of its group's items, each saving `common_item.archived` or
-      `common_item.restored` with `sortOrder` and `archivedAtUtc` old and new, and `204`, a repeat saving nothing
-      (D84); their matrix rows (an active and an archived item added to A for each call) and audit-events rows.
+      `common_item.restored`, given `sortOrder` and `archivedAtUtc` old and new and keeping those that changed
+      (Notes), and `204`, a repeat saving nothing (D84); their matrix rows (an active and an archived item added to A
+      for each call) and audit-events rows.
       Integration tests: `428`, `412`, another organisation's item `404`, a restored item at one more than the highest
       active `SortOrder` of its own group, whatever another group holds, and a repeat with no event. On the SPA:
       Archive, busy with "Archiving…", then the row gone with the numbers closing up, the group's Archived items
@@ -2089,11 +2138,14 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       clipping at 200% text; the help text and the textareas no wider than 40rem; no sideways scroll at 320 px with
       200% text; live regions in the DOM before their text; the focus ring, the dashed unavailable buttons, the summary
       markers and the row dividers in forced colours; and no item text in `location`, `document.title`,
-      `history.state` or the origin's storage after each flow. Docs, each to the code as built: common-items.md and
-      list-editor.md (the item kind and the shared list wrapper); design.md §6.6's common item rows (the `404` for a
-      group or an item not in the organisation); the by-hand checks (Notes) on ops/first-use-in-test.md;
-      `migrate.sql` from CI's artifact, read in the pull request, expand-only, with both tables, the filtered index,
-      the check constraint, the Every note `INSERT` and both `DENY DELETE`s; and CI's run on the pull request passing.
+      `history.state` or the origin's storage after each flow. Then tick the items of common-items.md's
+      *Accessibility checklist* that these runs and Vitest prove whole for what T06 builds; the *Screen reader* ones
+      wait for ops/first-use-in-test.md step 45, and those that name a group part for T07 (Notes). Docs, each to the
+      code as built: common-items.md and list-editor.md (the item kind and the shared list wrapper); design.md §6.6's
+      common item rows (the `404` for a group or an item not in the organisation); the by-hand checks (Notes) on
+      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with both
+      tables, the filtered index, the check constraint, the Every note `INSERT` and both `DENY DELETE`s; and CI's run
+      on the pull request passing.
 - [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
       passed every step, the deploy's migration applied `AddCommonItems` and its smoke test passed; `/` serves this
       build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with and without
@@ -2154,6 +2206,13 @@ group; Every note stays first and fixed.
     item writes alone, and the group parts of `common-items.spec.ts`: each other group's stops in its keyboard and
     forced-colours tests, and its group buttons in the layout test (common-items.md *Layout*, its first bullet's
     group part and the laptop bullet's group heading row).
+- From T06's review (18 October 2026): T06 ticks the items of common-items.md's *Accessibility checklist* that its
+  runs prove whole, and leaves to this task those that name a group part (T06's Notes, step 7's checklist): the
+  group's region staying named while renaming; the Group name and New group labels; the Group radios; the group
+  buttons' names; the radio set's arrow keys; focus after a group move or Rename; the ring on radios and on the
+  focused list conflict, which no run checks yet; and the radio and group name parts of the contrast, colour and
+  target items, the contrast item's 7:1 text included, which axe's AA rules do not check. This task ticks each once
+  its runs prove the whole item, and the *Screen reader* ones once the by-hand pass has heard them.
 
 ### Steps
 

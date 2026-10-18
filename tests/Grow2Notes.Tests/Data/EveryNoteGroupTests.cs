@@ -24,54 +24,52 @@ public sealed class EveryNoteGroupTests(SqlServerFixture sqlServer, Grow2NotesFa
     [Fact]
     public async Task A_second_Every_note_group_is_refused_by_the_filtered_unique_index_and_writes_nothing()
     {
-        var a = sqlServer.Seeded.A;
-        var before = await StoredGroupsAsync(a.OrganisationId);
+        var (organisationId, _) = await AddOrganisationAsync();
+        var before = await StoredGroupsAsync(organisationId);
 
-        var refusal = await RefusedSaveAsync(a, db =>
+        var refusal = await RefusedSaveAsync(organisationId, db =>
         {
-            db.CommonItemGroups.Add(CommonItemGroup.EveryNote(a.OrganisationId, AddedAtUtc));
+            db.CommonItemGroups.Add(CommonItemGroup.EveryNote(organisationId, AddedAtUtc));
             return Task.CompletedTask;
         });
 
         // 2601: a duplicate key in a unique index.
         Assert.Equal(2601, refusal.Number);
         Assert.Contains("'IX_CommonItemGroup_OrganisationId'", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, await StoredGroupsAsync(a.OrganisationId));
+        Assert.Equal(before, await StoredGroupsAsync(organisationId));
     }
 
     [Fact]
     public async Task Archiving_Every_note_is_refused_by_the_check_constraint_and_writes_nothing()
     {
-        var a = sqlServer.Seeded.A;
-        var before = await StoredGroupsAsync(a.OrganisationId);
+        var (organisationId, everyNoteGroupId) = await AddOrganisationAsync();
+        var before = await StoredGroupsAsync(organisationId);
 
-        var refusal = await RefusedSaveAsync(a, async db =>
+        var refusal = await RefusedSaveAsync(organisationId, async db =>
         {
             var everyNote = await db.CommonItemGroups.SingleAsync(
-                group => group.Id == a.EveryNoteGroupId, TestContext.Current.CancellationToken);
+                group => group.Id == everyNoteGroupId, TestContext.Current.CancellationToken);
             everyNote.ArchivedAtUtc = AddedAtUtc;
         });
 
         // 547: a statement conflicted with a constraint.
         Assert.Equal(547, refusal.Number);
         Assert.Contains("\"CK_CommonItemGroup_EveryNoteActive\"", refusal.Message, StringComparison.Ordinal);
-        Assert.Equal(before, await StoredGroupsAsync(a.OrganisationId));
+        Assert.Equal(before, await StoredGroupsAsync(organisationId));
     }
 
-    // In an organisation of the test's own, with its Every note group, so the seeded ones keep only theirs.
     [Fact]
     public async Task An_organisation_s_other_groups_can_be_many_and_archived()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var (organisationId, _) = await AddOrganisationAsync();
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        var organisation = new Organisation { Name = "Every note test", CreatedAtUtc = AddedAtUtc };
-        db.Organisations.Add(organisation);
         var outing = OtherGroup("Community outing", sortOrder: 0);
         var care = OtherGroup("Personal care", sortOrder: 1);
-        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.Id))
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
         {
-            db.CommonItemGroups.AddRange(CommonItemGroup.EveryNote(organisation.Id, AddedAtUtc), outing, care);
+            db.CommonItemGroups.AddRange(outing, care);
             await db.SaveChangesAsync(cancellationToken);
             outing.ArchivedAtUtc = AddedAtUtc;
             await db.SaveChangesAsync(cancellationToken);
@@ -86,14 +84,14 @@ public sealed class EveryNoteGroupTests(SqlServerFixture sqlServer, Grow2NotesFa
             (await db.Database.SqlQuery<StoredGroup>($"""
                     SELECT [Name], [IsEveryNote], [ArchivedAtUtc]
                     FROM [CommonItemGroup]
-                    WHERE [OrganisationId] = {organisation.Id}
+                    WHERE [OrganisationId] = {organisationId}
                     """).ToListAsync(cancellationToken))
                 .Select(group => (group.Name, group.IsEveryNote, group.ArchivedAtUtc))
                 .OrderBy(group => group.Name, StringComparer.Ordinal));
 
         CommonItemGroup OtherGroup(string name, int sortOrder) => new()
         {
-            OrganisationId = organisation.Id,
+            OrganisationId = organisationId,
             Name = name,
             SortOrder = sortOrder,
             CreatedAtUtc = AddedAtUtc,
@@ -145,14 +143,32 @@ public sealed class EveryNoteGroupTests(SqlServerFixture sqlServer, Grow2NotesFa
         });
     }
 
-    // Makes the change through the app's context under the organisation as tenant, as the app's code would, and gives
-    // the error with which SQL Server refused the save.
-    private async Task<SqlException> RefusedSaveAsync(
-        SeededOrganisation organisation, Func<Grow2NotesDbContext, Task> change)
+    // An organisation of the test's own with its Every note group, as admin bootstrap adds them (design.md §7.4), so
+    // that a change that the database should refuse but lets through stays where no other test looks, and never
+    // reaches a seeded organisation's Every note group, which other tests read as bootstrap leaves it.
+    private async Task<(Guid OrganisationId, Guid EveryNoteGroupId)> AddOrganisationAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        using var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId);
+        var organisation = new Organisation { Name = "Every note test", CreatedAtUtc = AddedAtUtc };
+        db.Organisations.Add(organisation);
+        var everyNote = CommonItemGroup.EveryNote(organisation.Id, AddedAtUtc);
+        db.CommonItemGroups.Add(everyNote);
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.Id))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        return (organisation.Id, everyNote.Id);
+    }
+
+    // Makes the change through the app's context under the organisation as tenant, as the app's code would, and gives
+    // the error with which SQL Server refused the save.
+    private async Task<SqlException> RefusedSaveAsync(Guid organisationId, Func<Grow2NotesDbContext, Task> change)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId);
 
         await change(db);
         var error = await Assert.ThrowsAsync<DbUpdateException>(

@@ -310,8 +310,8 @@ queued move whose item has already reached the end sends nothing.
 | Response | What happens |
 |---|---|
 | Network failure or `5xx` | The button returns to normal. The row's alert slot (always rendered, above that row's buttons, or above Save or Add in a form) shows the message. Focus stays on the button. Typed text is kept. |
-| `412 precondition.failed` on **Save** (someone else reworded or reordered the row first) | Re-read the list. If the row is still active, keep the typed text and show, in the form: "Someone else changed this goal while you were editing. It now says: [their text]. Save to replace it with your wording, or Cancel to keep it." The next Save carries the new version. If the row has been archived, use the conflict row below instead. |
-| `412` on Archive or Restore, or `422 config.order_mismatch` on a move | Re-read the list. Show the list-level message above the list and focus it: "Someone else changed this list just now. Check it, then try again." It stays until the next successful change on this list. |
+| `412 precondition.failed` on **Save** (someone else reworded or reordered the row first) | Re-read the list. If the row is still active, keep the typed text and show, in the form: "Someone else changed this goal while you were editing. It now says: [their text]. Save to replace it with your wording, or Cancel to keep it." (on 4.9 "this item", with the wording in typographic quotes: ‘[their text]’, common-items.md *States*). The next Save carries the new version. If the row has been archived, use the conflict row below instead. |
+| `412` on Archive or Restore, `422 config.order_mismatch` on a move, or `409 config.group_archived` on Add or Save (4.9 only: the list's group was archived meanwhile, common-items.md *Failures*) | Re-read the list. Show the list-level message above the list and focus it: "Someone else changed this list just now. Check it, then try again." It stays until the next successful change on this list. |
 | `401` | Not handled here. The app's sign-in-in-place flow takes over (`session-timeout.md`), and the typed text stays in memory. |
 
 **Leaving with an open edit form.** There is no "unsaved changes" warning. The design asks for one only on Guide
@@ -370,7 +370,7 @@ two open at once, and moving other rows doesn't close or reset them. **[Opinion]
 | Busy labels | Moving… · Saving… · Adding… · Archiving… · Restoring… | **Proposed** (`primary-actions.md` busy pattern) |
 | Announcements | Moved up to number 2 of 5 · Moved down to number 4 of 5 · Already at the top · Already at the bottom · Goal saved · Goal added to the end of the list · Goal archived · Goal restored to the end of the list (and "Item …" on 4.9, counted within the group, plus "Item saved and moved to the end of [group name]"). One phrase each, no full stop (microcopy.md). | **Proposed** |
 | Request errors | One verb per action: Not moved · Not added · Not saved · Not archived · Not restored, then ": no connection. Try again." or ": something went wrong. Try again." | microcopy.md §9 (editorial pass; "Not saved" after a failed Move is not literally true) |
-| Edit conflict | Someone else changed this goal while you were editing. It now says: [text]. Save to replace it with your wording, or Cancel to keep it. ("this item" on 4.9) | **Proposed** |
+| Edit conflict | Someone else changed this goal while you were editing. It now says: [text]. Save to replace it with your wording, or Cancel to keep it. (On 4.9 "this item", with the wording in typographic quotes: ‘[text]’, as common-items.md *States* has it) | **Proposed** |
 | List conflict | Someone else changed this list just now. Check it, then try again. | **Proposed** |
 | Load failure | Superseded by microcopy.md §9: "This participant did not load: [cause]. Try again." (Goals load with the participant, participants.md) · "Common items did not load: [cause]. Try again." · Button: Try again | microcopy.md §9 |
 
