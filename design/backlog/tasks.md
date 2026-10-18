@@ -2283,6 +2283,15 @@ group; Every note stays first and fixed.
   longer active once the list is read again, as after a `409` for a group archived meanwhile, leaves the radios, which
   then have the item's own group chosen, so that the set never shows none chosen; and "Item saved and moved to the end
   of [group name]" names the group as its radio named it when Save was pressed.
+- From step 6 (18 October 2026), where the design is silent: `serveCommonItems` holds the groups other than Every
+  note in a `HeldRows`, each as a row whose text is the group's name, so that the groups are added, renamed, archived,
+  restored and reordered by the rules the items are; the keyboard-only check of the group parts answers the list in
+  the browser, so that it can meet the list conflict that another manager's change gives, while T06's keyboard checks
+  still meet the app's own answers; and the text's 7:1 is checked by axe's AAA contrast rule, with each group's name,
+  which that rule holds to 4.5:1 as large text, measured on its own (`contrastOf`). Of common-items.md's
+  *Accessibility checklist*, the *Screen reader* items wait for ops/first-use-in-test.md step 48, and the no-motion
+  item stays T26's. Step 6 stays unticked until CI's run on the pull request, which alone runs the SQL Server tests,
+  has passed and its run ID is recorded here, as T05's matching step did.
 
 ### Steps
 

@@ -59,6 +59,36 @@ export async function expectLabelWidth(buttons: Locator) {
   }
 }
 
+/**
+ * The WCAG contrast ratio (SC 1.4.6, 1.4.11) of a colour of the element against the colour that shows next to it: its
+ * text's `color` against its own background or, where it paints none, its nearest ancestor's; a border's or its focus
+ * ring's colour, at its edge or outside it, against its nearest ancestor's background; the page's white where nothing
+ * paints one. Rounded down to two places, so that a ratio just below a minimum never reads as reaching it.
+ */
+export function contrastOf(locator: Locator, colour: 'color' | 'border-top-color' | 'outline-color'): Promise<number> {
+  return locator.evaluate((element, property) => {
+    // Computed colours are rgb() or rgba(), each channel 0 to 255 and the alpha 0 to 1.
+    const channels = (value: string) => (value.match(/[\d.]+/g) ?? []).map(Number);
+    const luminance = (value: string) => {
+      const [red, green, blue] = channels(value).map((channel) => {
+        const fraction = channel / 255;
+        return fraction <= 0.04045 ? fraction / 12.92 : ((fraction + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+    };
+    let painter = property === 'color' ? element : element.parentElement;
+    while (painter !== null && channels(getComputedStyle(painter).backgroundColor)[3] === 0) {
+      painter = painter.parentElement;
+    }
+
+    const background = painter === null ? 'rgb(255, 255, 255)' : getComputedStyle(painter).backgroundColor;
+    const [lighter, darker] = [getComputedStyle(element).getPropertyValue(property), background]
+      .map(luminance)
+      .sort((a, b) => b - a);
+    return Math.floor(((lighter + 0.05) / (darker + 0.05)) * 100) / 100;
+  }, colour);
+}
+
 /** The colour that a system colour, such as `Highlight`, takes under the forced colours that the page emulates. */
 export function systemColour(page: Page, keyword: string): Promise<string> {
   return page.evaluate((colour) => {

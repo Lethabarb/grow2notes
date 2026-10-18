@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright';
 import type { Locator, Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import {
@@ -5,6 +6,7 @@ import {
   busOrTrain,
   everyNote,
   failCommonItems,
+  groupWrites,
   itemWrites,
   laundry,
   listRead,
@@ -19,10 +21,11 @@ import {
   type AdminCommonItemGroup,
 } from './commonItems.ts';
 import { expect, test } from './fixtures.ts';
-import { expectStops, ring } from './focus.ts';
+import { expectFocusAt, expectStops, ring } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
 import {
   boxOf,
+  contrastOf,
   expectAtLeast,
   expectLabelWidth,
   scrollsSideways,
@@ -34,13 +37,14 @@ import { manager, serveMe } from './me.ts';
 import { holdNext } from './requests.ts';
 import { signInThroughSetup } from './setupSignIn.ts';
 
-// Common items in the published app (S01.03.01 to S01.03.04), against common-items.md's criteria for what T06 builds
-// (tasks.md, T06's Notes): the Every note group and each other active group's items, with their add forms and
-// archived items. Three tests sign in for real, through setup with a passkey on the virtual authenticator, as the
-// manager whom admin bootstrap invited with the organisation, and so with its Every note group, empty, and add,
-// reword, move, archive and restore its items on the app's own answers; the others answer /api/auth/me, the groups
-// list and each item write in the browser with made-up groups and items (me.ts, commonItems.ts), so that none of
-// those requests reaches the app.
+// Common items in the published app (S01.03.01 to S01.03.08), against common-items.md's criteria for what T06 and T07
+// build (tasks.md, T06's and T07's Notes): the Every note group and each other active group's items, with their add
+// forms and archived items; and the groups themselves, added, renamed, moved, archived and restored, with an item
+// moved between them. Four tests sign in for real, through setup with a passkey on the virtual authenticator, as the
+// manager whom admin bootstrap invited with the organisation, and so with its Every note group, empty, and add, reword,
+// move, archive and restore its items, or add, rename, move, archive and restore groups and move an item into one, on
+// the app's own answers; the others answer /api/auth/me, the groups list and each group and item write in the browser
+// with made-up groups and items (me.ts, commonItems.ts), so that none of those requests reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -80,12 +84,38 @@ const itemButton = (page: Page, label: RowButton, text: string) =>
 /** An active item row's four focus stops, in order (common-items.md *Focus order*). */
 const rowStops = (text: string) =>
   (['Move up', 'Move down', 'Edit', 'Archive'] as const).map((label) => rowName(label, text));
+type GroupButton = 'Move up' | 'Move down' | 'Rename' | 'Archive' | 'Restore';
 /**
- * A group's four focus stops, in order, each its label, then ", [group name] group", hidden but for screen readers, as
- * a row's are (common-items.md *Focus order*); Every note has none.
+ * A group's button, in its heading row or, for Restore, in Archived groups, as its name and its focus stop read: its
+ * label, then ", [group name] group", hidden but for screen readers, as a row's are (common-items.md component 5).
  */
+const groupButtonName = (label: GroupButton, group: string) => `${label} , ${group} group`;
+const groupButton = (page: Page, label: GroupButton, group: string) =>
+  main(page).getByRole('button', { name: groupButtonName(label, group), exact: true });
+// Every group button on the page, by the hidden words after its label, which neither Add group nor a row has.
+const groupButtonPattern = / , .+ group$/;
+const groupButtons = (page: Page) => main(page).getByRole('button', { name: groupButtonPattern });
+/** A group's four focus stops, in order (common-items.md *Focus order*); Every note has none. */
 const groupStops = (group: string) =>
-  ['Move up', 'Move down', 'Rename', 'Archive'].map((label) => `${label} , ${group} group`);
+  (['Move up', 'Move down', 'Rename', 'Archive'] as const).map((label) => groupButtonName(label, group));
+// A group's heading row: its <h2>, then its alert slot and buttons (common-items.md component 5).
+const groupHead = (page: Page, group: string) => section(page, group).getByRole('heading', { level: 2 }).locator('..');
+// A rename's form, under the group's heading.
+const groupNameField = (page: Page) => main(page).getByRole('textbox', { name: 'Group name', exact: true });
+const renameForm = (page: Page) =>
+  main(page).locator('form').filter({ has: page.getByRole('textbox', { name: 'Group name', exact: true }) });
+const saveRename = (page: Page) => renameForm(page).getByRole('button', { name: 'Save', exact: true });
+const cancelRename = (page: Page) => renameForm(page).getByRole('button', { name: 'Cancel', exact: true });
+// The New group form, after the last group's section (common-items.md component 7).
+const newGroup = (page: Page) => main(page).getByRole('textbox', { name: 'New group', exact: true });
+const newGroupForm = (page: Page) =>
+  main(page).locator('form').filter({ has: page.getByRole('textbox', { name: 'New group', exact: true }) });
+const addGroup = (page: Page) => main(page).getByRole('button', { name: 'Add group', exact: true });
+// Archived groups, after the New group form, and the name of each group in it (common-items.md component 8).
+const archivedGroups = (page: Page) =>
+  main(page).locator('details').filter({ has: page.locator('summary', { hasText: /^Archived groups$/ }) });
+const archivedGroupsSummary = (page: Page) => archivedGroups(page).locator('summary');
+const archivedGroupNames = (page: Page) => archivedGroups(page).locator('li > div > p');
 /** An archived items summary's focus stop: its words, then " in [group name]", hidden but for screen readers. */
 const summaryStop = (group: string) => `Archived items in ${group}`;
 /** The New group form's focus stops, after the last group's section (common-items.md *Focus order*). */
@@ -101,11 +131,18 @@ const editForm = (page: Page) =>
   main(page).locator('form').filter({ has: page.getByRole('textbox', { name: 'Edit item', exact: true }) });
 const saveItem = (page: Page) => editForm(page).getByRole('button', { name: 'Save', exact: true });
 const cancelItem = (page: Page) => editForm(page).getByRole('button', { name: 'Cancel', exact: true });
+// An item's Group radios, in a fieldset whose legend is "Group", one per active group, each named by the group, and
+// the row of each, which is all its label (common-items.md component 6).
+const groupRadios = (page: Page) =>
+  editForm(page).getByRole('group', { name: 'Group', exact: true }).getByRole('radio');
+const groupRadio = (page: Page, group: string) => editForm(page).getByRole('radio', { name: group, exact: true });
+const radioRows = (page: Page) => editForm(page).locator('label').filter({ has: page.getByRole('radio') });
 // A field's message above its box, with its hidden "Error: " (form-validation.md).
 const fieldError = (page: Page, group: string) => section(page, group).locator('[id$="-error"]');
-const conflictMessage = (page: Page) =>
-  main(page).getByText('Someone else changed this list just now. Check it, then try again.', { exact: true });
-// The page's one status region, visually hidden, where each item change says what it did (common-items.md component 9).
+// The list conflict above the groups, which takes focus (common-items.md component 4).
+const conflictText = 'Someone else changed this list just now. Check it, then try again.';
+const conflictMessage = (page: Page) => main(page).getByText(conflictText, { exact: true });
+// The page's one status region, visually hidden, where each change says what it did (common-items.md component 9).
 const pageStatus = (page: Page) => main(page).locator('p.visually-hidden[role="status"]');
 // A button busy for 400 ms, which then shows its busy label, and is named by it, in place of the one it rests with.
 const busyButton = (page: Page) => main(page).locator('button[data-busy]');
@@ -114,8 +151,8 @@ const busyButton = (page: Page) => main(page).locator('button[data-busy]');
 const isListRead = (response: Response) =>
   response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/admin/common-item-groups';
 
-/** Whether the response answers an item write by `method` to the path after `/api/admin` (design.md §6.6). */
-const isItemWrite = (method: 'POST' | 'PUT', path: string) => (response: Response) =>
+/** Whether the response answers a write by `method` to the path after `/api/admin` (design.md §6.6). */
+const isWrite = (method: 'POST' | 'PUT', path: string) => (response: Response) =>
   response.request().method() === method && new URL(response.url()).pathname === `/api/admin${path}`;
 
 /** The groups that a response to the list holds. */
@@ -126,6 +163,16 @@ const everyNoteIn = (groups: AdminCommonItemGroup[]) => {
   const found = groups.find((group) => group.isEveryNote);
   if (found === undefined) {
     throw new Error('The list holds no Every note group.');
+  }
+
+  return found;
+};
+
+/** The group of `name`, with its items, in a list as the API gives it. */
+const groupIn = (groups: AdminCommonItemGroup[], name: string) => {
+  const found = groups.find((group) => group.name === name);
+  if (found === undefined) {
+    throw new Error(`The list holds no group named ${name}.`);
   }
 
   return found;
@@ -196,7 +243,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   let listed: AdminCommonItemGroup['items'] = [];
   for (const [index, text] of fiveItems.entries()) {
     await page.keyboard.type(text);
-    const posted = page.waitForResponse(isItemWrite('POST', `/common-item-groups/${groupId}/items`));
+    const posted = page.waitForResponse(isWrite('POST', `/common-item-groups/${groupId}/items`));
     read = page.waitForResponse(isListRead);
     await addItem(page, 'Every note').click();
     const post = await posted;
@@ -228,7 +275,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   );
   await expect(editForm(page).getByRole('radio')).toHaveCount(0);
   await editItem(page).fill(reworded);
-  const put = page.waitForResponse(isItemWrite('PUT', `/common-items/${ids[1]}`));
+  const put = page.waitForResponse(isWrite('PUT', `/common-items/${ids[1]}`));
   read = page.waitForResponse(isListRead);
   await saveItem(page).click();
   const putAnswer = await put;
@@ -246,7 +293,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
 
   // The first moved down: the group's active IDs, built from the list, sent; the app's 204; the list read again in the
   // new order, and focus back on the item's Move down.
-  const reordered = page.waitForResponse(isItemWrite('PUT', `/common-item-groups/${groupId}/items/order`));
+  const reordered = page.waitForResponse(isWrite('PUT', `/common-item-groups/${groupId}/items/order`));
   read = page.waitForResponse(isListRead);
   await itemButton(page, 'Move down', fiveItems[0]).click();
   const order = await reordered;
@@ -261,7 +308,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   await expect(pageStatus(page)).toHaveText('Moved down to number 2 of 5');
 
   // The third archived: its version as If-Match, the app's 204, then Archived items open with it, its Restore focused.
-  const archived = page.waitForResponse(isItemWrite('POST', `/common-items/${ids[2]}/archive`));
+  const archived = page.waitForResponse(isWrite('POST', `/common-items/${ids[2]}/archive`));
   read = page.waitForResponse(isListRead);
   await itemButton(page, 'Archive', fiveItems[2]).click();
   const archiveAnswer = await archived;
@@ -276,7 +323,7 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   await expect(pageStatus(page)).toHaveText('Item archived');
 
   // Restored: the app's 204, the item at the end of the group, focus on its Archive, and Archived items gone.
-  const restored = page.waitForResponse(isItemWrite('POST', `/common-items/${ids[2]}/restore`));
+  const restored = page.waitForResponse(isWrite('POST', `/common-items/${ids[2]}/restore`));
   read = page.waitForResponse(isListRead);
   await itemButton(page, 'Restore', fiveItems[2]).click();
   const restoreAnswer = await restored;
@@ -297,6 +344,191 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   await expect(itemButton(page, 'Archive', fiveItems[2])).toBeFocused();
   await expect(pageStatus(page)).toHaveText('Item restored to the end of the list');
   await expectNothingKept(page, ...fiveItems, reworded);
+});
+
+// Two made-up groups (A35), as common-items.md's sketch has them, the second renamed; three made-up items for the
+// renamed one, the last added to the first group by mistake and moved.
+const [outingName, careName] = ['Community outing', 'Personal care'];
+const careRenamed = 'Personal care at home';
+const [showered, teeth, misplaced] = ['Showered', 'Brushed teeth', 'Changed into clean clothes'];
+
+test('signed in for real at 375 px, a manager adds two groups, renames one, adds items to it, moves an item into it, '
+  + 'moves a group down, then archives and restores the renamed one', async ({ page, invite, authenticator }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Manage', exact: true }).click();
+  let read = page.waitForResponse(isListRead);
+  await main(page).getByRole('link', { name: 'Common items', exact: true }).click();
+
+  // Only Every note, as admin bootstrap leaves it: no group buttons, then the New group form, and no Archived groups
+  // (common-items.md *States*, "Only Every note").
+  let listed = await groupsIn(read);
+  expect(listed.map((group) => group.name)).toEqual(['Every note']);
+  await expect(groupHeadings(page)).toHaveText(['Every note']);
+  await expect(groupButtons(page)).toHaveCount(0);
+  await expect(newGroup(page)).toHaveValue('');
+  await expect(archivedGroups(page)).toHaveCount(0);
+
+  // Two groups, each typed into New group and added with Add group: the app's 201 with the group's ID and no Location,
+  // then the list read again with the group last, empty; the field emptied, focus in the group's New item field, the
+  // next useful step, and the add said (design.md §14 M1).
+  const ids: string[] = [];
+  for (const [index, name] of [outingName, careName].entries()) {
+    await newGroup(page).fill(name);
+    const posted = page.waitForResponse(isWrite('POST', '/common-item-groups'));
+    read = page.waitForResponse(isListRead);
+    await addGroup(page).click();
+    const post = await posted;
+    expect(post.status()).toBe(201);
+    expect(post.request().postDataJSON()).toEqual({ name });
+    expect(post.headers().location).toBeUndefined();
+    const { id } = (await post.json()) as { id: string };
+    ids.push(id);
+    listed = await groupsIn(read);
+    expect(listed.at(-1)).toMatchObject({ id, name, sortOrder: index, archivedAtUtc: null, items: [] });
+    expect(listed.at(-1)?.isEveryNote).toBe(false);
+    await expect(groupHeadings(page)).toHaveText(['Every note', outingName, careName].slice(0, index + 2));
+    await expect(section(page, name).getByText(emptyLine, { exact: true })).toBeVisible();
+    await expect(newItem(page, name)).toBeFocused();
+    await expect(newGroup(page)).toHaveValue('');
+    await expect(pageStatus(page)).toHaveText('Group added at the end of the list');
+  }
+  const [outingId, careId] = ids;
+
+  // An item added to Community outing that belongs in the other group.
+  await newItem(page, outingName).fill(misplaced);
+  const misplacedAdd = page.waitForResponse(isWrite('POST', `/common-item-groups/${outingId}/items`));
+  read = page.waitForResponse(isListRead);
+  await addItem(page, outingName).click();
+  expect((await misplacedAdd).status()).toBe(201);
+  listed = await groupsIn(read);
+  await expect(itemTexts(page, outingName)).toHaveText([misplaced]);
+
+  // Personal care renamed in its section: Rename puts the Group name field under the group's <h2>, which stays, filled
+  // with the name and focused with the caret after it; Save sends the name with the group's version as If-Match and
+  // gets the app's 200, with no body and no ETag; then the heading and the New item label say the new name, and focus
+  // is back on Rename.
+  await groupButton(page, 'Rename', careName).click();
+  await expect(section(page, careName).getByRole('textbox', { name: 'Group name', exact: true })).toBeFocused();
+  await expect(groupNameField(page)).toHaveValue(careName);
+  const caret = await groupNameField(page).evaluate((box: HTMLInputElement) => [box.selectionStart, box.selectionEnd]);
+  expect(caret).toEqual([careName.length, careName.length]);
+  await expect(section(page, careName).getByRole('button', { name: groupButtonPattern })).toHaveCount(0);
+  await page.keyboard.type(' at home');
+  const renamed = page.waitForResponse(isWrite('PUT', `/common-item-groups/${careId}`));
+  read = page.waitForResponse(isListRead);
+  await saveRename(page).click();
+  const renameAnswer = await renamed;
+  expect(renameAnswer.status()).toBe(200);
+  expect(renameAnswer.request().postDataJSON()).toEqual({ name: careRenamed });
+  expect(await renameAnswer.request().headerValue('if-match')).toBe(`"${groupIn(listed, careName).rowVersion}"`);
+  expect(await renameAnswer.text()).toBe('');
+  expect(renameAnswer.headers().etag).toBeUndefined();
+  listed = await groupsIn(read);
+  expect(groupIn(listed, careRenamed)).toMatchObject({ id: careId, sortOrder: 1 });
+  await expect(groupHeadings(page)).toHaveText(['Every note', outingName, careRenamed]);
+  await expect(groupButton(page, 'Rename', careRenamed)).toBeFocused();
+  await expect(newItem(page, careRenamed)).toBeVisible();
+  await expect(pageStatus(page)).toHaveText('Group renamed');
+
+  // Two items added to the renamed group, each at its end, focus staying in its field.
+  for (const text of [showered, teeth]) {
+    await newItem(page, careRenamed).fill(text);
+    const added = page.waitForResponse(isWrite('POST', `/common-item-groups/${careId}/items`));
+    read = page.waitForResponse(isListRead);
+    await addItem(page, careRenamed).click();
+    expect((await added).status()).toBe(201);
+    listed = await groupsIn(read);
+    await expect(newItem(page, careRenamed)).toBeFocused();
+  }
+  await expect(itemTexts(page, careRenamed)).toHaveText([showered, teeth]);
+
+  // The misplaced item moved through its Edit: the Group radios, one per active group in order, its own group chosen;
+  // Save, with the renamed group chosen, sends its words and that group, with its version as If-Match, and gets the
+  // app's 200; then the item is last in the renamed group, Community outing empty, and focus on the item's Edit there.
+  const item = groupIn(listed, outingName).items[0];
+  await itemButton(page, 'Edit', misplaced).click();
+  await expect(editItem(page)).toBeFocused();
+  await expect(groupRadios(page)).toHaveCount(3);
+  for (const [index, name] of ['Every note', outingName, careRenamed].entries()) {
+    await expect(groupRadios(page).nth(index)).toHaveAccessibleName(name);
+  }
+  await expect(groupRadio(page, outingName)).toBeChecked();
+  await groupRadio(page, careRenamed).check();
+  const moved = page.waitForResponse(isWrite('PUT', `/common-items/${item.id}`));
+  read = page.waitForResponse(isListRead);
+  await saveItem(page).click();
+  const moveAnswer = await moved;
+  expect(moveAnswer.status()).toBe(200);
+  expect(moveAnswer.request().postDataJSON()).toEqual({ text: misplaced, groupId: careId });
+  expect(await moveAnswer.request().headerValue('if-match')).toBe(`"${item.rowVersion}"`);
+  listed = await groupsIn(read);
+  expect(groupIn(listed, careRenamed).items.map((each) => [each.text, each.sortOrder])).toEqual([
+    [showered, 0],
+    [teeth, 1],
+    [misplaced, 2],
+  ]);
+  expect(groupIn(listed, outingName).items).toEqual([]);
+  await expect(itemTexts(page, careRenamed)).toHaveText([showered, teeth, misplaced]);
+  await expect(section(page, outingName).getByText(emptyLine, { exact: true })).toBeVisible();
+  await expect(
+    section(page, careRenamed).getByRole('button', { name: rowName('Edit', misplaced), exact: true }),
+  ).toBeFocused();
+  await expect(pageStatus(page)).toHaveText(`Item saved and moved to the end of ${careRenamed}`);
+
+  // Community outing moved down, its Move up unavailable as the first group after Every note: every active group's ID
+  // but Every note's sent, the two swapped; the app's 204; the sections in the new order, focus on the same button.
+  await expect(groupButton(page, 'Move up', outingName)).toHaveAttribute('aria-disabled', 'true');
+  await expect(groupButton(page, 'Move down', careRenamed)).toHaveAttribute('aria-disabled', 'true');
+  const reordered = page.waitForResponse(isWrite('PUT', '/common-item-groups/order'));
+  read = page.waitForResponse(isListRead);
+  await groupButton(page, 'Move down', outingName).click();
+  const order = await reordered;
+  expect(order.status()).toBe(204);
+  expect(order.request().postDataJSON()).toEqual({ groupIds: [careId, outingId] });
+  listed = await groupsIn(read);
+  expect(listed.map((group) => [group.name, group.sortOrder])).toEqual([
+    ['Every note', 0],
+    [careRenamed, 0],
+    [outingName, 1],
+  ]);
+  await expect(groupHeadings(page)).toHaveText(['Every note', careRenamed, outingName]);
+  await expect(groupButton(page, 'Move down', outingName)).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Group moved down');
+
+  // The renamed group archived, with no dialog: its version as If-Match, the app's 204; its section gone, its items
+  // still active, and Archived groups there, open, with it first, focus on its Restore.
+  const archived = page.waitForResponse(isWrite('POST', `/common-item-groups/${careId}/archive`));
+  read = page.waitForResponse(isListRead);
+  await groupButton(page, 'Archive', careRenamed).click();
+  const archiveAnswer = await archived;
+  expect(archiveAnswer.status()).toBe(204);
+  expect(await archiveAnswer.request().headerValue('if-match')).toBe(`"${groupIn(listed, careRenamed).rowVersion}"`);
+  listed = await groupsIn(read);
+  expect(groupIn(listed, careRenamed)).toMatchObject({ sortOrder: 0, archivedAtUtc: expect.any(String) });
+  expect(groupIn(listed, careRenamed).items.map((each) => each.archivedAtUtc)).toEqual([null, null, null]);
+  await expect(groupHeadings(page)).toHaveText(['Every note', outingName]);
+  await expect(archivedGroups(page)).toHaveAttribute('open', '');
+  await expect(archivedGroupNames(page)).toHaveText([careRenamed]);
+  await expect(groupButton(page, 'Restore', careRenamed)).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Group archived');
+
+  // Restored: the app's 204, the section last among the groups with its items, focus on its Archive, and Archived
+  // groups gone.
+  const restored = page.waitForResponse(isWrite('POST', `/common-item-groups/${careId}/restore`));
+  read = page.waitForResponse(isListRead);
+  await groupButton(page, 'Restore', careRenamed).click();
+  const restoreAnswer = await restored;
+  expect(restoreAnswer.status()).toBe(204);
+  expect(await restoreAnswer.request().headerValue('if-match')).toBe(`"${groupIn(listed, careRenamed).rowVersion}"`);
+  listed = await groupsIn(read);
+  expect(groupIn(listed, careRenamed)).toMatchObject({ sortOrder: 2, archivedAtUtc: null });
+  await expect(groupHeadings(page)).toHaveText(['Every note', outingName, careRenamed]);
+  await expect(itemTexts(page, careRenamed)).toHaveText([showered, teeth, misplaced]);
+  await expect(archivedGroups(page)).toHaveCount(0);
+  await expect(groupButton(page, 'Archive', careRenamed)).toBeFocused();
+  await expect(pageStatus(page)).toHaveText('Group restored to the end of the list');
+  await expectNothingKept(page, outingName, careName, careRenamed, showered, teeth, misplaced);
 });
 
 // Three made-up items (A35) for the keyboard-only check, the third reworded, then archived and restored.
@@ -340,7 +572,7 @@ for (const width of [375, 1280]) {
     for (const text of [first, second, third]) {
       await page.keyboard.type(text);
       await expectStops(page, 'Tab', ['Add item']);
-      const added = page.waitForResponse(isItemWrite('POST', `/common-item-groups/${groupId}/items`));
+      const added = page.waitForResponse(isWrite('POST', `/common-item-groups/${groupId}/items`));
       read = page.waitForResponse(isListRead);
       await page.keyboard.press('Enter');
       expect((await added).status()).toBe(201);
@@ -369,7 +601,7 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Shift+Tab', ['New item in Every note', 'Cancel', 'Save', 'Edit item']);
     await page.keyboard.type(' and put away');
     await expectStops(page, 'Tab', ['Save']);
-    const saved = page.waitForResponse(isItemWrite('PUT', `/common-items/${ids[2]}`));
+    const saved = page.waitForResponse(isWrite('PUT', `/common-items/${ids[2]}`));
     await page.keyboard.press('Enter');
     expect((await saved).request().postDataJSON()).toEqual({ text: thirdReworded, groupId });
     await expect(itemButton(page, 'Edit', thirdReworded)).toBeFocused();
@@ -389,7 +621,7 @@ for (const width of [375, 1280]) {
       ...rowStops(second).reverse(),
       ...rowStops(first).slice(1).reverse(),
     ]);
-    const moved = page.waitForResponse(isItemWrite('PUT', `/common-item-groups/${groupId}/items/order`));
+    const moved = page.waitForResponse(isWrite('PUT', `/common-item-groups/${groupId}/items/order`));
     await page.keyboard.press('Enter');
     expect((await moved).status()).toBe(204);
     await expect(itemTexts(page, 'Every note')).toHaveText([second, first, thirdReworded]);
@@ -398,7 +630,7 @@ for (const width of [375, 1280]) {
     // The third archived from its row: Archived items opens, with focus on its Restore, which comes after the summary,
     // last in the group's section while the section is open, before the New group form.
     await expectStops(page, 'Tab', [...rowStops(first).slice(2), ...rowStops(thirdReworded)]);
-    const archived = page.waitForResponse(isItemWrite('POST', `/common-items/${ids[2]}/archive`));
+    const archived = page.waitForResponse(isWrite('POST', `/common-items/${ids[2]}/archive`));
     await page.keyboard.press('Enter');
     expect((await archived).status()).toBe(204);
     await expect(itemButton(page, 'Restore', thirdReworded)).toBeFocused();
@@ -422,7 +654,7 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', [rowName('Restore', thirdReworded)]);
 
     // Restored with Enter: the item last in the group, focus on its Archive, and Archived items gone.
-    const restored = page.waitForResponse(isItemWrite('POST', `/common-items/${ids[2]}/restore`));
+    const restored = page.waitForResponse(isWrite('POST', `/common-items/${ids[2]}/restore`));
     await page.keyboard.press('Enter');
     expect((await restored).status()).toBe(204);
     await expect(itemTexts(page, 'Every note')).toHaveText([second, first, thirdReworded]);
@@ -431,6 +663,214 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', [...addForm, ...newGroupStops, 'outside the page']);
     await expectNothingKept(page, first, second, third, thirdReworded);
   });
+}
+
+/**
+ * Every Tab stop of the page with `threeGroups` served, from the <h1> on, the archived sections closed (common-items.md
+ * *Focus order*): each group's buttons, but Every note's, which has none; its item rows; its add form; and its Archived
+ * items summary, if it has archived items; then the New group form and the Archived groups summary.
+ */
+const threeGroupsStops = [
+  ...rowStops(medication.text),
+  ...rowStops(meal.text),
+  ...['New item in Every note', 'Add item', summaryStop('Every note')],
+  ...groupStops('Community outing'),
+  ...rowStops(busOrTrain.text),
+  ...rowStops(paid.text),
+  ...rowStops(lunch.text),
+  ...['New item in Community outing', 'Add item'],
+  ...groupStops('Personal care'),
+  ...['New item in Personal care', 'Add item'],
+  ...newGroupStops,
+  'Archived groups',
+];
+
+// A made-up group (A35), added with the keyboard alone, then renamed.
+const [respite, respiteRenamed] = ['Respite', 'Respite care'];
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: each group's buttons, a rename, the Group radios and Archived groups, with the `
+    + 'focus ring at each stop and on the list conflict', async ({ page }) => {
+    await serveMe(page, manager);
+    const store = await serveCommonItems(page, threeGroups);
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/manage/common-items');
+    await expect(groupHeadings(page)).toHaveText(groupNames);
+    await heading(page).focus();
+
+    // Nothing needs a shortcut or a drag (SC 2.1.4, 2.5.7), and nothing is fixed or sticky, which could cover the stop
+    // that has focus (SC 2.4.11).
+    await expect(page.locator('[accesskey], [aria-keyshortcuts], [draggable="true"]')).toHaveCount(0);
+    const pinned = await page.evaluate(() =>
+      [...document.querySelectorAll('*')]
+        .filter((element) => ['fixed', 'sticky'].includes(getComputedStyle(element).position))
+        .map((element) => element.localName),
+    );
+    expect(pinned, 'fixed or sticky elements').toEqual([]);
+
+    // From the <h1>, every stop in turn, each other group's four after its heading, then out of the page; and back to
+    // New group.
+    await expectStops(page, 'Tab', [...threeGroupsStops, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Archived groups', ...newGroupStopsBack]);
+
+    // A group added with Enter in New group, which sends its one-field form: its section last, just above New group,
+    // and focus in its New item field.
+    await page.keyboard.type(respite);
+    const added = page.waitForResponse(isWrite('POST', '/common-item-groups'));
+    await page.keyboard.press('Enter');
+    const { id: respiteId } = (await (await added).json()) as { id: string };
+    await expect(newItem(page, respite)).toBeFocused();
+    await expectFocusAt(page, `New item in ${respite}`);
+    await expect(groupHeadings(page)).toHaveText([...groupNames, respite]);
+    await expect(newGroup(page)).toHaveValue('');
+    await expectStops(page, 'Tab', ['Add item', ...newGroupStops, 'Archived groups', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [
+      'Archived groups',
+      ...newGroupStopsBack,
+      'Add item',
+      `New item in ${respite}`,
+      ...groupStops(respite).slice(2).reverse(),
+    ]);
+
+    // Rename with Enter: the Group name field, Save and Cancel in the buttons' place, then the group's add form.
+    await page.keyboard.press('Enter');
+    await expect(groupNameField(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Save', 'Cancel', `New item in ${respite}`]);
+    await expectStops(page, 'Shift+Tab', ['Cancel', 'Save', 'Group name']);
+
+    // Cancel with Enter drops what was typed, focus back on Rename; Save, after it once more, renames the group, focus
+    // back on Rename under the new name.
+    await page.keyboard.type(' care');
+    await expectStops(page, 'Tab', ['Save', 'Cancel']);
+    await page.keyboard.press('Enter');
+    await expect(groupButton(page, 'Rename', respite)).toBeFocused();
+    await expectFocusAt(page, groupButtonName('Rename', respite));
+    await page.keyboard.press('Enter');
+    await page.keyboard.type(' care');
+    await expectStops(page, 'Tab', ['Save']);
+    await page.keyboard.press('Enter');
+    await expect(groupButton(page, 'Rename', respiteRenamed)).toBeFocused();
+    await expectFocusAt(page, groupButtonName('Rename', respiteRenamed));
+    await expect(groupHeadings(page)).toHaveText([...groupNames, respiteRenamed]);
+
+    // Move down on the last group, unavailable, says so; Move up with Enter puts it before Personal care, focus staying
+    // on its Move up as its whole section moves.
+    await expectStops(page, 'Shift+Tab', [groupButtonName('Move down', respiteRenamed)]);
+    await expect(groupButton(page, 'Move down', respiteRenamed)).toHaveAttribute('aria-disabled', 'true');
+    await page.keyboard.press('Enter');
+    await expect(pageStatus(page)).toHaveText('Already at the bottom');
+    await expectStops(page, 'Shift+Tab', [groupButtonName('Move up', respiteRenamed)]);
+    await page.keyboard.press('Enter');
+    await expect(groupHeadings(page)).toHaveText(['Every note', 'Community outing', respiteRenamed, 'Personal care']);
+    await expect(groupButton(page, 'Move up', respiteRenamed)).toBeFocused();
+    await expectFocusAt(page, groupButtonName('Move up', respiteRenamed));
+    await expect(pageStatus(page)).toHaveText('Group moved up');
+
+    // Bought lunch's Edit, back past Community outing's add form, with Enter: the Group radios are one stop, at the
+    // group chosen, the item's own; the arrows move between them, choosing each; Tab leaves the set for Save, and
+    // Shift+Tab comes back to the radio chosen.
+    await expectStops(page, 'Shift+Tab', [
+      'Add item',
+      'New item in Community outing',
+      ...rowStops(lunch.text).slice(2).reverse(),
+    ]);
+    await page.keyboard.press('Enter');
+    await expect(editItem(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Community outing']);
+    await expectStops(page, 'ArrowDown', [respiteRenamed, 'Personal care']);
+    await expectStops(page, 'ArrowUp', [respiteRenamed]);
+    await expect(groupRadio(page, respiteRenamed)).toBeChecked();
+    await expectStops(page, 'Tab', ['Save', 'Cancel', 'New item in Community outing']);
+    await expectStops(page, 'Shift+Tab', ['Cancel', 'Save', respiteRenamed, 'Edit item']);
+
+    // Saved with Enter: the item at the end of the group chosen, focus on its Edit there.
+    await expectStops(page, 'Tab', [respiteRenamed, 'Save']);
+    const moved = page.waitForResponse(isWrite('PUT', `/common-items/${lunch.id}`));
+    await page.keyboard.press('Enter');
+    expect((await moved).request().postDataJSON()).toEqual({ text: lunch.text, groupId: respiteId });
+    await expect(
+      section(page, respiteRenamed).getByRole('button', { name: rowName('Edit', lunch.text), exact: true }),
+    ).toBeFocused();
+    await expectFocusAt(page, rowName('Edit', lunch.text));
+    await expect(itemTexts(page, respiteRenamed)).toHaveText([lunch.text]);
+
+    // The group archived with Enter: Archived groups opens with it first, focus on its Restore, then the older one's,
+    // the page's last stops.
+    await expectStops(page, 'Shift+Tab', [
+      ...rowStops(lunch.text).slice(0, 2).reverse(),
+      groupButtonName('Archive', respiteRenamed),
+    ]);
+    await page.keyboard.press('Enter');
+    await expect(groupButton(page, 'Restore', respiteRenamed)).toBeFocused();
+    await expectFocusAt(page, groupButtonName('Restore', respiteRenamed));
+    await expect(archivedGroups(page)).toHaveAttribute('open', '');
+    await expect(archivedGroupNames(page)).toHaveText([respiteRenamed, 'Overnight respite']);
+    await expectStops(page, 'Tab', [groupButtonName('Restore', 'Overnight respite'), 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [
+      groupButtonName('Restore', 'Overnight respite'),
+      groupButtonName('Restore', respiteRenamed),
+      'Archived groups',
+      ...newGroupStopsBack,
+    ]);
+
+    // Enter on the summary closes it, and Tab then passes the Restores by; Enter opens it again.
+    await expectStops(page, 'Tab', ['Add group', 'Archived groups']);
+    await page.keyboard.press('Enter');
+    await expect(archivedGroups(page)).not.toHaveAttribute('open');
+    await expectStops(page, 'Tab', ['outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Archived groups']);
+    await page.keyboard.press('Enter');
+    await expectStops(page, 'Tab', [groupButtonName('Restore', respiteRenamed)]);
+
+    // Restored with Enter: its section last among the groups, with its item, focus on its Archive.
+    await page.keyboard.press('Enter');
+    await expect(groupButton(page, 'Archive', respiteRenamed)).toBeFocused();
+    await expectFocusAt(page, groupButtonName('Archive', respiteRenamed));
+    await expect(groupHeadings(page)).toHaveText([...groupNames, respiteRenamed]);
+    await expect(itemTexts(page, respiteRenamed)).toHaveText([lunch.text]);
+    await expect(archivedGroupNames(page)).toHaveText(['Overnight respite']);
+
+    // Someone else archives Personal care, so a Move up with Enter, built from the list as the page last read it, is
+    // refused: the list is read again, and the conflict above the groups takes focus, with the ring.
+    store.changeElsewhere(groupIn([...threeGroups], 'Personal care').id, { archived: true });
+    await expectStops(page, 'Shift+Tab', [...groupStops(respiteRenamed).slice(0, 3)].reverse());
+    await page.keyboard.press('Enter');
+    await expect(conflictMessage(page)).toBeFocused();
+    await expectFocusAt(page, conflictText);
+    await expect(groupHeadings(page)).toHaveText(['Every note', 'Community outing', respiteRenamed]);
+    await expectNothingKept(page, respite, respiteRenamed, lunch.text, ...groupNames.slice(1));
+  });
+}
+
+/**
+ * Expects the shell's landmarks alone, a banner, a navigation and the <main>, and in it a region for each of `groups`,
+ * the active groups, named by its <h2>, in order, but no form landmark, as no form has a name; and no `aria-label` in
+ * <main>, so that every name there is the words that show (common-items.md *Accessibility checklist*; SC 2.5.3).
+ */
+async function expectLandmarks(page: Page, groups: readonly string[]) {
+  for (const role of ['banner', 'navigation', 'main'] as const) {
+    await expect(page.getByRole(role), role).toHaveCount(1);
+  }
+
+  await expect(page.getByRole('form')).toHaveCount(0);
+  await expect(main(page).getByRole('region')).toHaveCount(groups.length);
+  for (const [index, group] of groups.entries()) {
+    await expect(main(page).getByRole('region').nth(index)).toHaveAccessibleName(group);
+  }
+
+  await expect(main(page).locator('[aria-label]')).toHaveCount(0);
+}
+
+/**
+ * Expects a field refused on a press to show it by more than its words and its colour: a 4 px bar down its group and a
+ * 3 px border (form-validation.md *Anatomy*; SC 1.4.1).
+ */
+async function expectErrorDrawn(field: Locator) {
+  const group = field.locator('xpath=ancestor::*[@data-invalid][1]');
+  await expect(group).toHaveCSS('border-left-style', 'solid');
+  await expect(group).toHaveCSS('border-left-width', '4px');
+  await expect(field).toHaveCSS('border-top-style', 'solid');
+  await expect(field).toHaveCSS('border-top-width', '3px');
 }
 
 test('Common items in each of its states passes axe at phone and laptop width', async ({ page }) => {
@@ -452,11 +892,15 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await read.abort('internetdisconnected');
   await expect(loadLine(page)).toHaveText('Common items did not load: no connection. Try again.');
   await expect(tryAgain(page)).toBeVisible();
+  await expectAtLeast(tryAgain(page), 44, 48);
   await expectAxeToPass(page);
 
-  // Only Every note, as admin bootstrap leaves it: Try again brings it, empty, and focuses the <h1>.
+  // Only Every note, as admin bootstrap leaves it: Try again, reached by Tab from the <h1> and pressed with Enter,
+  // brings it, empty, and focuses the <h1>.
   await serveCommonItems(page, [everyNote]);
-  await tryAgain(page).click();
+  await heading(page).focus();
+  await expectStops(page, 'Tab', ['Try again']);
+  await page.keyboard.press('Enter');
   await expect(heading(page)).toBeFocused();
   await expect(groupHeadings(page)).toHaveText(['Every note']);
   await expect(section(page, 'Every note').getByText(everyNoteLine, { exact: true })).toBeVisible();
@@ -474,7 +918,7 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(itemTexts(page, 'Every note')).toHaveText([medication.text, meal.text]);
   await expect(itemTexts(page, 'Community outing')).toHaveText([busOrTrain.text, paid.text, lunch.text]);
   await expect(section(page, 'Personal care').getByText(emptyLine, { exact: true })).toBeVisible();
-  await expect(section(page, 'Every note').getByRole('button', { name: / group$/ })).toHaveCount(0);
+  await expect(section(page, 'Every note').getByRole('button', { name: groupButtonPattern })).toHaveCount(0);
   for (const end of [
     itemButton(page, 'Move up', medication.text),
     itemButton(page, 'Move down', meal.text),
@@ -488,6 +932,7 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await itemButton(page, 'Move up', busOrTrain.text).press('Enter');
   await expect(pageStatus(page)).toHaveText('Already at the top');
   await expect(archivedSection(page, 'Every note')).not.toHaveAttribute('open');
+  await expectLandmarks(page, groupNames);
   await expectAxeToPass(page);
 
   // Busy: a move held until Move down shows "Moving…" and axe has passed, the order on screen unchanged meanwhile.
@@ -502,11 +947,19 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(itemButton(page, 'Move down', busOrTrain.text)).toBeFocused();
   await expect(pageStatus(page)).toHaveText('Moved down to number 2 of 3');
 
-  // Editing an item: the row's form in its place, its box focused, holding the item's words.
+  // Editing an item: the row's form in its place, its box focused, holding the item's words, with the Group radios,
+  // one per active group in order, named item-{id}-group, the item's own group chosen.
   await itemButton(page, 'Edit', paid.text).click();
   await expect(editItem(page)).toBeFocused();
   await expect(editItem(page)).toHaveValue(paid.text);
   await expect(editItem(page)).toHaveId(`item-${paid.id}-text`);
+  await expect(groupRadios(page)).toHaveCount(groupNames.length);
+  for (const [index, name] of groupNames.entries()) {
+    await expect(groupRadios(page).nth(index)).toHaveAccessibleName(name);
+    await expect(groupRadios(page).nth(index)).toHaveAttribute('name', `item-${paid.id}-group`);
+  }
+  await expect(groupRadio(page, 'Community outing')).toBeChecked();
+  await expectLandmarks(page, groupNames);
   await expectAxeToPass(page);
 
   // Field error: whitespace alone, refused on Save above the box, with focus in it, and no "Error: " in the title.
@@ -516,6 +969,7 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(editItem(page)).toHaveAttribute('aria-invalid', 'true');
   await expect(editItem(page)).toBeFocused();
   await expect(page).toHaveTitle(title('Common items'));
+  await expectErrorDrawn(editItem(page));
   await expectAxeToPass(page);
 
   // Edit conflict: someone else rewords the item first, so the Save is stale; the typed words stay, with theirs.
@@ -569,7 +1023,47 @@ test('Common items in each of its states passes axe at phone and laptop width', 
   await expect(newItem(page, 'Personal care')).toHaveAttribute('aria-invalid', 'true');
   await expect(newItem(page, 'Personal care')).toBeFocused();
   await expectAxeToPass(page);
-  await expectNothingKept(page, medication.text, meal.text, busOrTrain.text, paid.text, lunch.text, theirs, typed);
+
+  // Renaming a group: the Group name field under the group's heading, which stays, so that its section keeps its name,
+  // holding the name, focused; then its field error, a name of spaces alone refused on Save.
+  await groupButton(page, 'Rename', 'Personal care').click();
+  await expect(section(page, 'Personal care').getByRole('textbox', { name: 'Group name', exact: true })).toBeFocused();
+  await expect(groupNameField(page)).toHaveValue('Personal care');
+  await expect(groupNameField(page)).toHaveId(`group-${groupIn([...threeGroups], 'Personal care').id}-name`);
+  await expectLandmarks(page, groupNames);
+  await expectAxeToPass(page);
+  await groupNameField(page).fill('   ');
+  await saveRename(page).click();
+  await expect(renameForm(page).locator('[id$="-error"]')).toHaveText('Error: Enter the group name');
+  await expect(groupNameField(page)).toHaveAttribute('aria-invalid', 'true');
+  await expect(groupNameField(page)).toBeFocused();
+  await expectErrorDrawn(groupNameField(page));
+  await expectAxeToPass(page);
+  await cancelRename(page).click();
+  await expect(groupButton(page, 'Rename', 'Personal care')).toBeFocused();
+
+  // Archived groups open: a group's Archive, with no dialog, opens it with the group first, newest archived first,
+  // focus on its Restore.
+  await expect(archivedGroups(page)).not.toHaveAttribute('open');
+  await groupButton(page, 'Archive', 'Personal care').click();
+  await expect(groupButton(page, 'Restore', 'Personal care')).toBeFocused();
+  await expect(archivedGroups(page)).toHaveAttribute('open', '');
+  await expect(archivedGroupNames(page)).toHaveText(['Personal care', 'Overnight respite']);
+  await expect(groupHeadings(page)).toHaveText(['Every note', 'Community outing']);
+  await expect(pageStatus(page)).toHaveText('Group archived');
+  await expectLandmarks(page, ['Every note', 'Community outing']);
+  await expectAxeToPass(page);
+  await expectNothingKept(
+    page,
+    medication.text,
+    meal.text,
+    busOrTrain.text,
+    paid.text,
+    lunch.text,
+    theirs,
+    typed,
+    ...groupNames.slice(1),
+  );
 });
 
 // Each active item row of the three groups served, by group.
@@ -590,7 +1084,10 @@ type Box = Awaited<ReturnType<typeof boxOf>>;
 const overlap = (a: Box, b: Box) =>
   a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-/** The text and buttons in `row` whose content does not fit in them, by their text, which none should be. */
+/**
+ * The text and buttons in `row`, an item's row or a group's heading row, whose content does not fit in them, by their
+ * text, which none should be.
+ */
 const clippedIn = (row: Locator) =>
   row.evaluate((element) =>
     [...element.querySelectorAll('p, button')]
@@ -610,7 +1107,7 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
   const textOf = (group: string, text: string) => boxOf(itemRow(page, group, text).locator('p').first());
 
   // On a phone, Move up and Move down share a line under the text, and Edit and Archive the next (common-items.md
-  // *Layout - phone*), each label width, at least 44 by 48 px.
+  // *Layout - phone*), each label width, at least 44 by 48 px, and 8 px apart.
   for (const { group, text } of activeRows) {
     const words = await textOf(group, text);
     const [up, down, edit, archive] = await boxesOf(text);
@@ -618,6 +1115,7 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
     expect(down.y, `Move down beside Move up, "${text}"`).toBeCloseTo(up.y, 0);
     expect(archive.y, `Archive beside Edit, "${text}"`).toBeCloseTo(edit.y, 0);
     expect(edit.y, `Edit on the line after Move up, "${text}"`).toBeGreaterThanOrEqual(up.y + up.height);
+    expectApart([up, down, edit, archive], `the buttons of "${text}"`);
   }
   await expectLabelWidth(main(page).locator('ol button'));
   await archivedSummary(page, 'Every note').click();
@@ -626,6 +1124,7 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
   await itemButton(page, 'Edit', paid.text).click();
   await expectLabelWidth(editForm(page).getByRole('button'));
   expect((await boxOf(cancelItem(page))).y, 'Cancel beside Save').toBeCloseTo((await boxOf(saveItem(page))).y, 0);
+  expectApart(await Promise.all([saveItem(page), cancelItem(page)].map(boxOf)), 'Save and Cancel');
   // Add item keeps the shared button's rule: as wide as the field on a phone, in each group.
   for (const group of groupNames) {
     expect((await boxOf(addItem(page, group))).width, group).toBeCloseTo((await boxOf(newItem(page, group))).width, 0);
@@ -633,17 +1132,20 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
   }
   await cancelItem(page).click();
 
-  // On a laptop, on the 60rem page, the four sit at the top of each row, after the text, on its line; Add item is its
-  // label's width; and the help text and the fields stay in the 40rem reading column while the lists use the page.
+  // On a laptop, on the 60rem page, the four sit at the top of each row, after the text, on its line, 8 px apart; Add
+  // item is its label's width; and the help text and the fields stay in the 40rem reading column while the lists use
+  // the page.
   await page.setViewportSize({ width: 1280, height: 800 });
   const measure = 40 * 16;
   expect((await boxOf(main(page))).width, 'the page').toBeLessThanOrEqual(60 * 16);
   for (const { group, text } of activeRows) {
     const words = await textOf(group, text);
-    for (const [index, button] of (await boxesOf(text)).entries()) {
+    const boxes = await boxesOf(text);
+    for (const [index, button] of boxes.entries()) {
       expect(button.y, `${labels[index]} on the line of "${text}"`).toBeCloseTo(words.y, 0);
       expect(button.x, `${labels[index]} after "${text}"`).toBeGreaterThanOrEqual(words.x + words.width);
     }
+    expectApart(boxes, `the buttons of "${text}"`);
   }
   await expectLabelWidth(main(page).locator('section ol button, section details button'));
   expect((await boxOf(help(page))).width, 'the help text').toBeLessThanOrEqual(measure);
@@ -675,6 +1177,105 @@ test('item rows: two lines of label-width buttons at 375 px, beside the text on 
   await expectNothingKept(page, ...shownTexts);
 });
 
+/**
+ * Expects at least 8 px between each of `boxes` and the one before it, beside it or on the line under it (A32;
+ * SC 2.5.8, 2.5.5).
+ */
+function expectApart(boxes: readonly Box[], what: string) {
+  for (const [index, box] of boxes.slice(1).entries()) {
+    const before = boxes[index];
+    const gap = Math.max(box.x - (before.x + before.width), box.y - (before.y + before.height));
+    expect(Math.round(gap), `the space between ${what} ${index + 1} and ${index + 2}`).toBeGreaterThanOrEqual(8);
+  }
+}
+
+test('group heading rows: two lines of label-width buttons at 375 px, beside the name at 1280 px and under it at 200% '
+  + 'with no overlap or clipping; 48 px name fields no wider than 40rem; 56 px radio rows', async ({ page }) => {
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+  const others = groupNames.slice(1);
+  const labels = ['Move up', 'Move down', 'Rename', 'Archive'] as const;
+  const boxesOf = (group: string) => Promise.all(labels.map((label) => boxOf(groupButton(page, label, group))));
+  const nameOf = (group: string) => boxOf(section(page, group).getByRole('heading', { level: 2 }));
+  const radioRowBoxes = async () => Promise.all((await radioRows(page).all()).map(boxOf));
+
+  // On a phone, each group's Move up and Move down share a line under its name, and Rename and Archive the next
+  // (common-items.md *Layout - phone*), each label width, at least 44 by 48 px, and 8 px apart; Add group label width,
+  // where Add item keeps the shared full width; and the New group field 48 px tall.
+  for (const group of others) {
+    const name = await nameOf(group);
+    const [up, down, rename, archive] = await boxesOf(group);
+    expect(up.y, `Move up under ${group}`).toBeGreaterThanOrEqual(name.y + name.height);
+    expect(down.y, `Move down beside Move up, ${group}`).toBeCloseTo(up.y, 0);
+    expect(archive.y, `Archive beside Rename, ${group}`).toBeCloseTo(rename.y, 0);
+    expect(rename.y, `Rename on the line after Move up, ${group}`).toBeGreaterThan(up.y + up.height);
+    expectApart([up, down, rename, archive], `${group}'s buttons`);
+  }
+  await expectLabelWidth(groupButtons(page));
+  await expectLabelWidth(addGroup(page));
+  expect((await boxOf(newGroup(page))).height, 'New group').toBeCloseTo(48, 0);
+
+  // Archived groups' summary at least 44 px tall and, open, each Restore label width.
+  await archivedGroupsSummary(page).click();
+  await expectAtLeast(archivedGroupsSummary(page), 44, 44);
+  await expectLabelWidth(archivedGroups(page).getByRole('button'));
+
+  // Renaming: the Group name field 48 px tall, Save and Cancel label width, 8 px apart.
+  await groupButton(page, 'Rename', 'Community outing').click();
+  expect((await boxOf(groupNameField(page))).height, 'Group name').toBeCloseTo(48, 0);
+  await expectLabelWidth(renameForm(page).getByRole('button'));
+  expectApart(await Promise.all([saveRename(page), cancelRename(page)].map(boxOf)), 'Save and Cancel');
+  await cancelRename(page).click();
+
+  // Editing an item: each Group radio's row, which is all its label, at least 56 px tall, and 8 px apart.
+  await itemButton(page, 'Edit', paid.text).click();
+  await expectAtLeast(radioRows(page), 44, 56);
+  expectApart(await radioRowBoxes(), 'the radio rows');
+  await cancelItem(page).click();
+
+  // On a laptop, each group's name and its four buttons on one line, the buttons after the name, at its top, 8 px
+  // apart; still label width; and the New group and Group name fields in the 40rem reading column.
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const measure = 40 * 16;
+  for (const group of others) {
+    const name = await nameOf(group);
+    const boxes = await boxesOf(group);
+    for (const [index, button] of boxes.entries()) {
+      expect(button.y, `${labels[index]} on the line of ${group}`).toBeCloseTo(name.y, 0);
+      expect(button.x, `${labels[index]} after ${group}`).toBeGreaterThanOrEqual(name.x + name.width);
+    }
+    expectApart(boxes, `${group}'s buttons`);
+  }
+  await expectLabelWidth(groupButtons(page));
+  await expectLabelWidth(addGroup(page));
+  expect((await boxOf(newGroup(page))).width, 'New group').toBeLessThanOrEqual(measure);
+  await groupButton(page, 'Rename', 'Community outing').click();
+  expect((await boxOf(groupNameField(page))).width, 'Group name').toBeLessThanOrEqual(measure);
+  await cancelRename(page).click();
+  await itemButton(page, 'Edit', paid.text).click();
+  expectApart(await radioRowBoxes(), 'the radio rows');
+  await cancelItem(page).click();
+
+  // At 200% text, the name keeps its 16rem, so the four drop under it by themselves, none over another or cut off.
+  await setTextTo200Percent(page);
+  for (const group of others) {
+    const [name, edge] = await Promise.all([nameOf(group), boxOf(groupHead(page, group))]);
+    const buttons = await boxesOf(group);
+    for (const [index, button] of buttons.entries()) {
+      expect(button.y, `${labels[index]} under ${group}`).toBeGreaterThanOrEqual(name.y + name.height);
+      expect(button.x + button.width, `${labels[index]} inside its row`).toBeLessThanOrEqual(edge.x + edge.width);
+      for (const other of buttons.slice(index + 1)) {
+        expect(overlap(button, other), `${labels[index]} over another button of ${group}`).toBe(false);
+      }
+    }
+    expect(await clippedIn(groupHead(page, group)), `cut off in ${group}'s heading row`).toEqual([]);
+  }
+  await expectNothingKept(page, ...others, 'Overnight respite', ...shownTexts);
+});
+
 test('at 320 px with text at 200%, no Common items state scrolls sideways', async ({ page }) => {
   const word = 'Wolfeschlegelsteinhausenbergerdorff';
   const long = madeUpItem('9cc4f018-adb5-4b09-9ebe-6a8cafc13f29', word.repeat(5), 0);
@@ -688,8 +1289,29 @@ test('at 320 px with text at 200%, no Common items state scrolls sideways', asyn
   expect(await scrollsSideways(page), 'a long group name, and an item a word of 175 letters').toBe(false);
 
   await itemButton(page, 'Edit', long.text).click();
-  expect(await scrollsSideways(page), 'its edit form').toBe(false);
+  await expect(groupRadio(page, longGroup.name)).toBeChecked();
+  expect(await scrollsSideways(page), 'its edit form, with a Group radio of the long name').toBe(false);
   await cancelItem(page).click();
+
+  await groupButton(page, 'Rename', longGroup.name).click();
+  await expect(groupNameField(page)).toHaveValue(longGroup.name);
+  expect(await scrollsSideways(page), 'the long group renamed').toBe(false);
+  await cancelRename(page).click();
+
+  await newGroup(page).fill('a'.repeat(250));
+  await addGroup(page).click();
+  await expect(newGroupForm(page).locator('[id$="-error"]')).toHaveText(
+    'Error: Group name must be 200 characters or less',
+  );
+  expect(await scrollsSideways(page), 'the New group form with 250 characters, refused').toBe(false);
+  await newGroup(page).fill('');
+
+  await page.route(groupWrites.archive, (route) => route.abort('internetdisconnected'), { times: 1 });
+  await groupButton(page, 'Archive', longGroup.name).click();
+  await expect(groupHead(page, longGroup.name).getByRole('alert')).toHaveText(
+    'Not archived: no connection. Try again.',
+  );
+  expect(await scrollsSideways(page), 'the long group not archived').toBe(false);
 
   await newItem(page, 'Every note').fill('a'.repeat(250));
   await addItem(page, 'Every note').click();
@@ -712,14 +1334,21 @@ test('at 320 px with text at 200%, no Common items state scrolls sideways', asyn
   await itemButton(page, 'Archive', long.text).click();
   await expect(itemButton(page, 'Restore', long.text)).toBeFocused();
   expect(await scrollsSideways(page), 'the archived items open').toBe(false);
+
+  await groupButton(page, 'Archive', longGroup.name).click();
+  await expect(groupButton(page, 'Restore', longGroup.name)).toBeFocused();
+  await expect(archivedGroupNames(page)).toHaveText([longGroup.name, 'Overnight respite']);
+  expect(await scrollsSideways(page), 'Archived groups open, with the long name').toBe(false);
   await expectNothingKept(page, long.text, longGroup.name, paid.text, lunch.text, 'a'.repeat(20));
 });
 
-test('in forced colours, the focus ring shows in Highlight at each stop, unavailable buttons are dashed in GrayText, '
-  + 'and the summary markers and row dividers are drawn', async ({ page }) => {
+test('in forced colours, the focus ring shows in Highlight at each stop, the radios and the list conflict included, '
+  + 'unavailable buttons are dashed in GrayText, and summary markers, radio dots and row dividers are drawn', async ({
+  page,
+}) => {
   await page.emulateMedia({ forcedColors: 'active' });
   await serveMe(page, manager);
-  await serveCommonItems(page, threeGroups);
+  const store = await serveCommonItems(page, threeGroups);
   await page.goto('/manage/common-items');
   await expect(groupHeadings(page)).toHaveCount(3);
   await heading(page).focus();
@@ -735,39 +1364,24 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
   // Each group's stops in turn (common-items.md *Focus order*): its group buttons but on Every note, its item rows, its
   // add form, then its Archived items; then the New group form and the Archived groups summary, closed.
   const outingRows = [...rowStops(busOrTrain.text), ...rowStops(paid.text), ...rowStops(lunch.text)];
-  await expectStops(
-    page,
-    'Tab',
-    [
-      ...rowStops(medication.text),
-      ...rowStops(meal.text),
-      ...['New item in Every note', 'Add item', summaryStop('Every note')],
-      ...groupStops('Community outing'),
-      ...outingRows,
-      ...['New item in Community outing', 'Add item'],
-      ...groupStops('Personal care'),
-      ...['New item in Personal care', 'Add item'],
-      ...newGroupStops,
-      'Archived groups',
-      'outside the page',
-    ],
-    forcedRing,
-  );
+  await expectStops(page, 'Tab', [...threeGroupsStops, 'outside the page'], forcedRing);
 
-  // Every note's Archived items, closed, then opened with Enter, its marker drawn either way, in the system colour that
-  // forced colours give the summary's words, not the background's; and each Restore, newest archived first, after it.
+  // Every note's Archived items and Archived groups, closed, then the first opened with Enter, each marker drawn either
+  // way, in the system colour that forced colours give the summary's words, not the background's; and each Restore,
+  // newest archived first, after it.
   const summary = archivedSummary(page, 'Every note');
-  const expectMarkerDrawn = async (shape: 'disclosure-closed' | 'disclosure-open') => {
-    await expect(summary).toHaveCSS('display', 'list-item');
-    await expect(summary).toHaveCSS('list-style-type', shape);
-    const [marker, words] = await summary.evaluate((element) => [
+  const expectMarkerDrawn = async (drawn: Locator, shape: 'disclosure-closed' | 'disclosure-open') => {
+    await expect(drawn).toHaveCSS('display', 'list-item');
+    await expect(drawn).toHaveCSS('list-style-type', shape);
+    const [marker, words] = await drawn.evaluate((element) => [
       getComputedStyle(element, '::marker').color,
       getComputedStyle(element).color,
     ]);
     expect(marker, 'the marker in the colour of the summary').toBe(words);
     expect(marker, 'the marker unlike the background').not.toBe(canvas);
   };
-  await expectMarkerDrawn('disclosure-closed');
+  await expectMarkerDrawn(archivedGroupsSummary(page), 'disclosure-closed');
+  await expectMarkerDrawn(summary, 'disclosure-closed');
   await expectStops(
     page,
     'Shift+Tab',
@@ -784,23 +1398,30 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
     forcedRing,
   );
   await page.keyboard.press('Enter');
-  await expectMarkerDrawn('disclosure-open');
+  await expectMarkerDrawn(summary, 'disclosure-open');
   await expectStops(page, 'Tab', [rowName('Restore', bed.text), rowName('Restore', laundry.text)], forcedRing);
 
-  // Each group's end buttons, unavailable: GrayText words and dashed GrayText borders, where the others keep theirs
-  // (list-editor.md *States*).
+  // Each group's end item buttons, and the end group buttons, unavailable: GrayText words and dashed GrayText borders,
+  // where the others keep theirs (list-editor.md *States*).
   for (const end of [
     itemButton(page, 'Move up', medication.text),
     itemButton(page, 'Move down', meal.text),
     itemButton(page, 'Move up', busOrTrain.text),
     itemButton(page, 'Move down', lunch.text),
+    groupButton(page, 'Move up', 'Community outing'),
+    groupButton(page, 'Move down', 'Personal care'),
   ]) {
     await expect(end).toHaveCSS('color', grayText);
     await expect(end).toHaveCSS('border-top-color', grayText);
     await expect(end).toHaveCSS('border-top-style', 'dashed');
   }
-  await expect(itemButton(page, 'Move down', medication.text)).not.toHaveCSS('color', grayText);
-  await expect(itemButton(page, 'Move down', medication.text)).toHaveCSS('border-top-style', 'solid');
+  for (const available of [
+    itemButton(page, 'Move down', medication.text),
+    groupButton(page, 'Move down', 'Community outing'),
+  ]) {
+    await expect(available).not.toHaveCSS('color', grayText);
+    await expect(available).toHaveCSS('border-top-style', 'solid');
+  }
 
   // The rule under each row, active or archived, in CanvasText.
   const everyNoteRows = section(page, 'Every note').locator('ol > li, details li');
@@ -810,5 +1431,111 @@ test('in forced colours, the focus ring shows in Highlight at each stop, unavail
     await expect(row).toHaveCSS('border-bottom-width', '1px');
     await expect(row).toHaveCSS('border-bottom-color', canvasText);
   }
+
+  // An item's Group radios, from its edit box: one Tab stop, at the radio chosen, and an arrow moving the choice, each
+  // with the ring in Highlight; every circle drawn, and the dot of the chosen one alone, both borders, which forced
+  // colours keep, in a system colour unlike the background (ChoiceRow.module.css).
+  await itemButton(page, 'Edit', paid.text).click();
+  await expect(editItem(page)).toBeFocused();
+  await expectStops(page, 'Tab', ['Community outing'], forcedRing);
+  await expectStops(page, 'ArrowDown', ['Personal care'], forcedRing);
+  for (const radio of await groupRadios(page).all()) {
+    const drawn = await radio.evaluate((element: HTMLInputElement) => {
+      const [circle, dot] = [getComputedStyle(element), getComputedStyle(element, '::before')];
+      return {
+        circle: [circle.borderTopStyle, circle.borderTopColor],
+        dot: [dot.visibility, dot.borderTopStyle, dot.borderTopColor],
+        checked: element.checked,
+      };
+    });
+    const name = (await radio.getAttribute('id')) ?? '';
+    expect(drawn.circle[0], `the circle of ${name}`).toBe('solid');
+    expect(drawn.circle[1], `the circle of ${name}`).not.toBe(canvas);
+    expect(drawn.dot.slice(0, 2), `the dot of ${name}`).toEqual([drawn.checked ? 'visible' : 'hidden', 'solid']);
+    expect(drawn.dot[2], `the dot of ${name}`).not.toBe(canvas);
+  }
+  await expect(groupRadio(page, 'Personal care')).toBeChecked();
+
+  // The list conflict, after a move with Enter that someone else's archive made stale, takes focus with the ring in
+  // Highlight.
+  await expectStops(page, 'Tab', ['Save', 'Cancel'], forcedRing);
+  await page.keyboard.press('Enter');
+  await expect(itemButton(page, 'Edit', paid.text)).toBeFocused();
+  store.changeElsewhere(lunch.id, { archived: true });
+  await expectStops(page, 'Shift+Tab', [rowName('Move down', paid.text)], forcedRing);
+  await page.keyboard.press('Enter');
+  await expect(conflictMessage(page)).toBeFocused();
+  await expectFocusAt(page, conflictText, forcedRing);
   await expectNothingKept(page, ...shownTexts);
+});
+
+test('text is 7:1 against its background, and button borders, radio circles and the focus ring are 3:1', async ({
+  page,
+}) => {
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+
+  // Every text at 7:1, beyond what axe's AA rules check (common-items.md *Accessibility checklist*, *Visual*), by axe's
+  // AAA rule, which holds large text, such as a heading, to 4.5:1: ready, with the archived sections open, and in an
+  // item's edit form, with its Group radios, then its field error.
+  const expectTextAt7 = async (state: string) => {
+    const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast-enhanced']).analyze();
+    const failing = violations.flatMap(({ nodes }) => nodes.map(({ target }) => target.join(' ')));
+    expect(failing, `text below 7:1, ${state}`).toEqual([]);
+  };
+  await expectTextAt7('ready');
+  await archivedSummary(page, 'Every note').click();
+  await archivedGroupsSummary(page).click();
+  await expectTextAt7('with the archived sections open');
+  await itemButton(page, 'Edit', meal.text).click();
+  await expectTextAt7('in an edit form');
+  await editItem(page).fill('');
+  await saveItem(page).click();
+  await expect(editItem(page)).toHaveAttribute('aria-invalid', 'true');
+  await expectTextAt7('with a field error');
+  await cancelItem(page).click();
+
+  // The help text, Every note's line, each group's name, which axe holds to 4.5:1 alone, and the unavailable labels, on
+  // their grey, each at 7:1.
+  const texts: [string, Locator][] = [
+    ['the help text', help(page)],
+    ["Every note's line", section(page, 'Every note').getByText(everyNoteLine, { exact: true })],
+    ...groupNames.map((name): [string, Locator] => [name, section(page, name).getByRole('heading', { level: 2 })]),
+    ["Community outing's Move up, unavailable", groupButton(page, 'Move up', 'Community outing')],
+    ["Personal care's Move down, unavailable", groupButton(page, 'Move down', 'Personal care')],
+    [`${medication.text}'s Move up, unavailable`, itemButton(page, 'Move up', medication.text)],
+  ];
+  for (const [what, text] of texts) {
+    expect(await contrastOf(text, 'color'), what).toBeGreaterThanOrEqual(7);
+  }
+
+  // Each group button's border, dashed or not, and Add group's, against the page, at 3:1.
+  for (const button of [...(await groupButtons(page).all()), addGroup(page)]) {
+    const name = await button.innerText();
+    expect(await contrastOf(button, 'border-top-color'), `the border of ${name}`).toBeGreaterThanOrEqual(3);
+  }
+
+  // An item's Group radios: each label at 7:1, and each circle at 3:1 against its row.
+  await itemButton(page, 'Edit', paid.text).click();
+  for (const row of await radioRows(page).all()) {
+    const name = await row.innerText();
+    expect(await contrastOf(row.locator('span'), 'color'), `the label of ${name}`).toBeGreaterThanOrEqual(7);
+    const circle = await contrastOf(row.getByRole('radio'), 'border-top-color');
+    expect(circle, `the circle of ${name}`).toBeGreaterThanOrEqual(3);
+  }
+
+  // The focus ring, reached by Tab, on the radio chosen and on a group's button, at 3:1 against the page.
+  await expectStops(page, 'Tab', ['Community outing']);
+  expect(await contrastOf(groupRadio(page, 'Community outing'), 'outline-color'), 'the ring').toBeGreaterThanOrEqual(3);
+  await expectStops(page, 'Tab', ['Save', 'Cancel']);
+  await page.keyboard.press('Enter');
+  await expectStops(page, 'Shift+Tab', [
+    ...rowStops(paid.text).slice(0, 2).reverse(),
+    ...rowStops(busOrTrain.text).reverse(),
+    groupButtonName('Archive', 'Community outing'),
+  ]);
+  expect(await contrastOf(groupButton(page, 'Archive', 'Community outing'), 'outline-color')).toBeGreaterThanOrEqual(3);
+  await expectNothingKept(page, ...shownTexts, ...groupNames.slice(1));
 });

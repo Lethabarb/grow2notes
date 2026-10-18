@@ -61,7 +61,7 @@ function group(
 
 // common-items.md's sketch (*Layout - phone*): Every note with two items and two archived ones, archived in this order
 // and so shown the other way round; Community outing with three; Personal care with none; and an archived group,
-// which the page leaves out, with an item of its own.
+// which the page lists in Archived groups alone, with an item of its own.
 const medication = item('1a4c7e90-2b5d-4f81-9c36-8e0a2d4f6b17', 'Medication prompted', 0);
 const meal = item('2b5d8fa1-3c6e-4a92-8d47-9f1b3e5a7c28', 'Meal prepared', 1);
 const laundry = item('3c6e9ab2-4d7f-4ba3-9e58-0a2c4f6b8d39', 'Laundry done', 2, '2026-09-21T05:12:00Z');

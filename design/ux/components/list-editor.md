@@ -447,9 +447,20 @@ Role, Value · 4.1.3 Status Messages (results that don't move focus go to the st
   that group's active IDs); its `query` is the page's one grouped query `['admin', 'common-item-groups']`, from which
   its `rowsOf` picks the group's rows, as `select`, and from which each write reads the rows as it runs; and its
   `scopeId` is `'common-items'` for every group, so item and group writes on the page run one at a time. The edit
-  form renders the Group radios from the page's list of active groups when there are two or more; a Save that changes
-  the group sends `{text, groupId}` and focuses the item's **Edit** in its new group's list after the re-read (the
-  focus map is shared by the page). The radios and the move are T07's; T06's item `PUT` sends `{text}`.
+  form renders the Group radios from the page's list of active groups when there are two or more: the editor's
+  optional `groups` prop, `{own, active, fieldName}`, gives the list's own group, the active groups from the page's one
+  query and the radios' `name`, `item-{id}-group`, and its `GroupRadios` is a `FieldGroup` fieldset of `ChoiceRow`s,
+  whose hint is optional. Every Save sends `{text, groupId}`, the list's own group unless another is chosen, and a Save
+  that changes the group focuses the item's **Edit** in its new group's list after the re-read (the focus map is
+  shared by the page). A Goals list has no `groups`, so its edit form is as it was.
+- **Shared with the group parts (4.9):** the helpers every write needs are one module, `listWrite.ts`, which the rows
+  and Common items' group heading rows, rename form, New group form and archived group rows all use: `useListWrite`
+  (the scoped write that sends, then reads the list again, never retried), `ListChanged` and `sendUnlessListChanged`
+  (the refusal that shows the list conflict), `failureAlert`, `focusStayedIn`, `cleanText`, and `useFieldText` (the
+  one-field text, its message on press and the server's `422` shown on the field from the key it is given, `text` for
+  a row and `name` for a group). A group's Move up and Move down are the rows' own `MovePair`, given the groups as the
+  list that it moves in, so the arrow, the words, the busy label, the unavailable press and focus after a whole
+  section moves are the rows'.
 - **Reuse the shared pieces:** the button with `unavailable`, `onUnavailablePress`, `busy` and `busyLabel`
   (`primary-actions.md`; imported as `ActionButton` in `review-panel.md`), `CharacterCount`
   (`conditional-reveal.md`), the page status region (`PageStatus`, app-shell.md; `primary-actions.md`),

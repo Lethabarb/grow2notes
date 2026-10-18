@@ -387,13 +387,14 @@ rewords, moves, archives and restores one of them; and two more add, correct, ar
 add two goals and archive one, with the keyboard alone, at 375 px and at a laptop's width.
 `signInThroughSetup(page, invite, authenticator)` from `e2e/setupSignIn.ts` sets the account up, adding one passkey
 to the authenticator, and ends on Today.
-`expectStops(page, key, stops)` from `e2e/focus.ts` presses Tab or Shift+Tab and reads each stop: the focused element
-by the text that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and
-"outside the page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is
-drawn, on a row's link on the `::after` that covers the row, which it expects to be `ring`, or the ring given, such as
-one in `Highlight` under forced colours. A goal row's button reads as its label, then its goal's hidden text after a
-space and a comma, "Move up , Makes own breakfast", as its accessible name does too: the hidden text is a block of its
-own to both, and screen readers do not voice the space.
+`expectStops(page, key, stops)` from `e2e/focus.ts` presses Tab or Shift+Tab, or an arrow key in a set of radios, and
+reads each stop: the focused element by the text that shows, so that a button's busy label, hidden until it is busy, is
+left out, a field or a radio by its label, and "outside the page" past the last stop, from where the next Shift+Tab
+comes back to it; and its focus ring as it is drawn, on a row's link on the `::after` that covers the row, which it
+expects to be `ring`, or the ring given, such as one in `Highlight` under forced colours. `expectFocusAt(page, stop)`
+reads the stop that a script focused after a key, such as the list conflict, in the same way. A goal row's button
+reads as its label, then its goal's hidden text after a space and a comma, "Move up , Makes own breakfast", as its
+accessible name does too: the hidden text is a block of its own to both, and screen readers do not voice the space.
 
 Every test in `e2e/participants.spec.ts` also watches the live regions, through `watchLiveRegions(page, path)` from
 `e2e/liveRegions.ts`: an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and
@@ -423,8 +424,8 @@ with the goal's `ETag`, and the others `204`, a restored goal going to the end; 
 active goals, each once, and `422 config.order_mismatch` otherwise. A goal whose words or place change takes a new
 version, as its `RowVersion` would, so that the page meets what the API would say to its next write; a change that
 leaves it as it was saves nothing, as the API's does (D84). The list itself is a `HeldRows` from `e2e/rows.ts`, which
-`serveCommonItems` keeps for each group's items too. Call it before `page.goto`, with `[]` for no goals; a later call
-overrides it, as Playwright tries the latest route first.
+`serveCommonItems` keeps for each group's items, and for the groups other than Every note, too. Call it before
+`page.goto`, with `[]` for no goals; a later call overrides it, as Playwright tries the latest route first.
 
 It gives the list's `changeElsewhere(id, change)`, which rewords a goal, `{ text }`, or archives it,
 `{ archived: true }`, with a new version, as another manager would: a Save then meets the edit conflict, and a move or
@@ -447,7 +448,9 @@ its `style`, which the policy allows); at 1280 px the buttons on the text's line
 scrolling sideways at 320 px with 200% text; and, under forced colours, the focus ring in `Highlight` and the
 unavailable buttons in `GrayText`. `e2e/layout.ts` has the helpers for those: `boxOf`, `expectAtLeast`,
 `expectLabelWidth`, `setTextTo200Percent`, `scrollsSideways`, and `systemColour(page, keyword)`, the colour that forced
-colours give a system colour such as `Highlight`.
+colours give a system colour such as `Highlight`; and `contrastOf(locator, colour)`, the WCAG ratio of an element's
+text, border or focus ring against the background next to it, for the 7:1 that a screen's checklist asks of its text
+beyond axe's AA rules, and the 3:1 of borders and rings.
 
 ### Answering `/api/admin/common-item-groups`
 
@@ -457,20 +460,27 @@ Common items reads every group, with its items, active and archived, with
 as `CommonItemsPage.test.tsx` has them: `everyNote`, the built-in group as `admin bootstrap` leaves it, with no items;
 and `threeGroups`, common-items.md's sketch, Every note with Medication prompted and Meal prepared, and Laundry done and
 Bed made archived, Community outing with Travelled by bus or train, Paid for a ticket at the counter and Bought lunch,
-Personal care with none, and Overnight respite, archived, which the page leaves out, in the API's order.
-`madeUpItem` and `madeUpGroup` make others, such as an item of a long word or a group of a long name.
+Personal care with none, and Overnight respite, archived, which the page lists in Archived groups alone, in the API's
+order. `madeUpItem` and `madeUpGroup` make others, such as an item of a long word or a group of a long name.
 
-`serveCommonItems(page, groups)`, beside `serveGoals`, answers the read and each item write in the browser, through
-`page.route`, from a copy of `groups` that it keeps in memory as the API keeps them, with a `HeldRows` for each group's
-items, so that no request reaches the app: the list, Every note first; an add at the end of the group, `201` with no
-body, or `409 config.group_archived` for an archived group; an item's reword, archive and restore, each with its version
-as `If-Match`, `428` without one and `412` with an old one, the reword then `200` with no body and no `ETag`, or `409`
-while its group is archived, and the others `204`, a restored item going to the end of its group; a reorder of a
-group's active items `204`, or `422 config.order_mismatch`; and `404` for a group or an item that it does not hold. It
-gives `changeElsewhere(id, change)`, as `serveGoals` does, for an item. `failCommonItems(page)` aborts each read, as
-`failParticipants` does; `listRead` is the read's address, for `holdNext`, so that a test holds it for the loading line;
-and `itemWrites` names a move's and an Archive's addresses, as `goalWrites` does. `e2e/shell.spec.ts`'s walk, whose
-Common items link opens the screen, answers the read with `[everyNote]`.
+`serveCommonItems(page, groups)`, beside `serveGoals`, answers the read and each group and item write in the browser,
+through `page.route`, from a copy of `groups` that it keeps in memory as the API keeps them, with a `HeldRows` for the
+groups other than Every note, each held as a row whose text is the group's name, and one for each group's items, so
+that no request reaches the app. For the groups: the list, Every note first; a group add at the end, `201` with the new
+group's ID and no `Location`; a group's rename, archive and restore, each with its version as `If-Match`, `428` without
+one, `412` with an old one and `422 config.every_note_fixed` for Every note, the rename then `200` with no body and no
+`ETag`, and the others `204`, a restored group going to the end; and a reorder of the active groups other than Every
+note `204`, or `422 config.order_mismatch`. For the items: an add at the end of the group, `201` with no body, or
+`409 config.group_archived` for an archived group; an item's reword or move, archive and restore, each with its version
+as `If-Match`, `428` and `412` as for a group, the reword or move then `200` with no body and no `ETag`, or `409` while
+its group, or the group it is moved to, is archived, a moved item going to the end of its new group, and the others
+`204`, a restored item going to the end of its group; and a reorder of a group's active items `204`, or
+`422 config.order_mismatch`. A group or an item that it does not hold is `404`. It gives `changeElsewhere(id, change)`,
+as `serveGoals` does, for an item, or for a group other than Every note, whose `{ text }` renames it.
+`failCommonItems(page)` aborts each read, as `failParticipants` does; `listRead` is the read's address, for `holdNext`,
+so that a test holds it for the loading line; `itemWrites` names an item move's and an item Archive's addresses, as
+`goalWrites` does, and `groupWrites` a group Archive's. `e2e/shell.spec.ts`'s walk, whose Common items link opens the
+screen, answers the read with `[everyNote]`.
 
 ```ts
 await serveMe(page, manager);
@@ -481,15 +491,21 @@ await page.goto('/manage/common-items');
 The tests that meet the app's own answers, in `e2e/common-items.spec.ts`, sign in for real, through the `invite`
 fixture and setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made
 has its Every note group, empty, as the bootstrap creates it with the organisation: one adds five items at 375 px, with
-focus in New item in Every note after each, then rewords, moves, archives and restores one; and two more add three with
-the keyboard alone, at 375 px and at a laptop's width, and reword, move, archive and restore one. The integration tests'
-seeded organisations have their Every note group too (*The seeded organisations and the tenant*, below). The other
-tests check each state with axe; the item rows' layout at 375 px and at 1280 px, and at 200% text with no button over
-another or cut off; nothing scrolling sideways at 320 px with 200% text; under forced colours, every stop's ring in
-`Highlight`, the unavailable buttons dashed in `GrayText`, the summary markers and the row dividers; and every test
-watches the live regions, as `e2e/participants.spec.ts` does. `expectNothingKept(page, ...values)` from `e2e/kept.ts`
-then checks that no item's words are kept where the page could keep them: on a page that `page.goto` loaded, the
-history entry holds React Router's index alone.
+focus in New item in Every note after each, then rewords, moves, archives and restores one; one adds the groups
+Community outing and Personal care at 375 px, with focus in each new group's New item field, renames one, adds items to
+it, moves an item into it through Edit's Group radios, moves a group down, and archives and restores the renamed one;
+and two more add three items with the keyboard alone, at 375 px and at a laptop's width, and reword, move, archive and
+restore one. The integration tests' seeded organisations have their Every note group too (*The seeded organisations and
+the tenant*, below). The other tests answer the list in the browser: two go through the group parts with the keyboard
+alone, at both widths, adding a group, renaming it, moving it, moving an item into it with the arrow keys in its Group
+radios, archiving and restoring it, and meeting the list conflict; and the others check each state with axe; the item
+rows' and the group heading rows' layout at 375 px and at 1280 px, and at 200% text with no button over another or cut
+off, with the targets' sizes and the space between them; nothing scrolling sideways at 320 px with 200% text; the text
+at 7:1 and the borders, radio circles and ring at 3:1 (`contrastOf`); and, under forced colours, every stop's ring in
+`Highlight`, the radios and the list conflict included, the unavailable buttons dashed in `GrayText`, the summary
+markers, the radio dots and the row dividers. Every test watches the live regions, as `e2e/participants.spec.ts` does.
+`expectNothingKept(page, ...values)` from `e2e/kept.ts` then checks that no group's name or item's words are kept where
+the page could keep them: on a page that `page.goto` loaded, the history entry holds React Router's index alone.
 
 ### Answering Today and a participant's note
 
