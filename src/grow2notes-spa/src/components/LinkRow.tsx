@@ -21,9 +21,10 @@ type LinkRowProps = {
    */
   extra?: readonly ReactNode[];
   /**
-   * `'date'` for a row of a list of notes by date, such as Past notes (chronological-list.md), whose link is the
-   * date, in the link colour and underlined, with no chevron (participant-notes.md component 5); a person's or a
-   * user's row by default (participant-list-rows.md).
+   * `'date'` for a row of a list of notes by date (chronological-list.md), such as Past notes', whose link is the
+   * date, or To review's, whose link is a name and a date, in the link colour and underlined, with no chevron
+   * (participant-notes.md component 5, flagged.md item 4); a person's or a user's row by default
+   * (participant-list-rows.md).
    */
   look?: 'name' | 'date';
 };

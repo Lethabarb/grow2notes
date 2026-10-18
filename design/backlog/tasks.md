@@ -3666,7 +3666,7 @@ the reason and when it was flagged. Only submitted flags count.
       unchanged, its tests passing; a row's plain lines after its description, the link's description holding the meta
       line alone; and a `MetaLine` with `statusFirst` false having no part in its status style, while Today's and Past
       notes' lines keep theirs.
-- [ ] The Flagged screen's To review list (S03.03.01's links: flagged.md *Access and navigation* and *To review list*,
+- [x] The Flagged screen's To review list (S03.03.01's links: flagged.md *Access and navigation* and *To review list*,
       components 1, 2, 4 and 6, and states L2, L4, L5, L6's sentence, L13 and L20; design.md §4.6 item 2 and its empty
       state): the route `flagged` inside `ManagerOnly`, titled "Grow2Notes – Flagged notes", with
       `returnFocus: { fallback: 'sameIndex' }` and `backKey: 'flagged'`; the static `<h1>` "Flagged notes";

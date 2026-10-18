@@ -92,7 +92,8 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
     }
   }, [warning]);
 
-  // Page not found marks nothing, even at an address the table marks, such as /flagged until E03 builds Flagged.
+  // Page not found marks nothing, even at an address the table marks, such as /flagged for a worker, or for a manager
+  // whose To review list the API refused, as after a change of role (flagged.md L20).
   const mark =
     page === pageName.pageNotFound ? undefined : markTable.find(({ path }) => matchPath(path, pathname) !== null);
   const isManager = me.role === 'Manager';

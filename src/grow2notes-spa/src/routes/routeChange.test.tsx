@@ -516,7 +516,7 @@ describe('a new screen', () => {
   it.each([
     { link: 'Grow2Notes', heading: /^Today/ },
     { link: 'Today', heading: /^Today/ },
-    { link: 'Flagged', heading: /^Page not found$/ },
+    { link: 'Flagged', heading: /^Flagged notes$/ },
     { link: 'Report', heading: /^Page not found$/ },
     { link: 'Manage', heading: /^Manage$/ },
   ])("from the nav link $link focuses the new screen's <h1> and scrolls to the top", async ({ link, heading }) => {

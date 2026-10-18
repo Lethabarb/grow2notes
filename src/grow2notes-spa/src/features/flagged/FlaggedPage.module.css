@@ -1,0 +1,9 @@
+/* The list, or its loading line, under the <h1>, as Past notes' is (flagged.md *Layout - phone*). */
+.list {
+  margin-block-start: var(--space-5);
+}
+
+/* A row link's second line, the note date under the participant's name (chronological-list.md *Anatomy* 1). */
+.noteDate {
+  display: block;
+}
