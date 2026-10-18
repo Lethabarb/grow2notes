@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavigationType, useLocation, useNavigationType } from 'react-router';
 import { focusInsteadOfHeading, focusPageHeading } from '../components/focusPageHeading.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
+import type { strings } from '../copy/strings.ts';
 import type { BackKey, RouteHandle } from './routes.tsx';
 
 /** A history entry, as the rule compares the one on screen with the next, with what its route declares. */
@@ -196,8 +197,15 @@ export function openerBefore(key: string): OpenedFrom | undefined {
   return index > 0 && order[index - 1] === opener?.entryKey ? opener : undefined;
 }
 
+/**
+ * A back link's label, the destination's name (app-shell.md component 3a): its page name, or, where the nav names it
+ * otherwise, the nav item's word, as the note's back link reads "Flagged", not "Flagged notes" (flagged.md
+ * component 7).
+ */
+type BackLabel = PageName | (typeof strings.navItem)[keyof typeof strings.navItem];
+
 /** A back link's destination, with the label that names it (app-shell.md component 3a). */
-export type BackTo = { to: string; label: PageName };
+export type BackTo = { to: string; label: BackLabel };
 
 /**
  * The back link of a screen with several openers (app-shell.md component 3a), such as a note's or Past notes': to the
@@ -207,7 +215,7 @@ export type BackTo = { to: string; label: PageName };
  * replace that brought it, so the opener is worked out as `follow` will record it: for a push, the entry still on
  * screen; for a replace, the opener of the entry it replaces.
  */
-export function useBackTo(labels: Partial<Record<BackKey, PageName>>): BackTo {
+export function useBackTo(labels: Partial<Record<BackKey, BackLabel>>): BackTo {
   const { key } = useLocation();
   const action = useNavigationType();
   const opener = openerAsRendered(key, action);

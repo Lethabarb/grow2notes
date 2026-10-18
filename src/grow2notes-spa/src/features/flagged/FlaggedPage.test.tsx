@@ -1,7 +1,7 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
-import { createMemoryRouter, parsePath } from 'react-router';
+import { createBrowserRouter, createMemoryRouter, parsePath } from 'react-router';
 import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/api.ts';
@@ -10,8 +10,12 @@ import { createQueryClient } from '../../api/queryClient.ts';
 import metaLine from '../../components/MetaLine.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
+import type { ParticipantHeader, SubmittedNote } from '../notes/noteQueries.ts';
 import type { TodayList } from '../today/todayQuery.ts';
 import type { ToReviewNote } from './toReviewQuery.ts';
+
+// A memory router and a browser router alike.
+type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
@@ -148,16 +152,13 @@ function reviewRequests(): string[] {
 const oneMount = [reviewsPath, reviewsPath];
 
 /**
- * Renders the app at `path` for `me` on a memory router, under StrictMode, which runs each effect twice, as
- * `main.tsx` does, and a query client of its own, in which `['me']` holds `me` already, as after the start-up.
+ * Renders the app on `router` for `me`, under StrictMode, which runs each effect twice, as `main.tsx` does, and a
+ * query client of its own, in which `['me']` holds `me` already, as after the start-up.
  */
-function renderApp(path: string, me: Me = manager) {
+function show(router: Router, me: Me) {
   serve(mePath, json(me));
   const client = createQueryClient();
   client.setQueryData(meQuery.queryKey, me);
-  // With a key of its own, as a browser gives it, where a memory router gives every test's first entry the key
-  // "default", under which the shell's memory would carry a row or a position from one test into the next.
-  const router = createMemoryRouter(routes, { initialEntries: [{ ...parsePath(path), key: crypto.randomUUID() }] });
   render(
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -165,6 +166,18 @@ function renderApp(path: string, me: Me = manager) {
       </QueryClientProvider>
     </StrictMode>,
   );
+}
+
+/**
+ * Renders the app at `path` for `me` on a memory router, after the entries `before` it, as a reload keeps them while
+ * the shell's memory of them has gone.
+ */
+function renderApp(path: string, me: Me = manager, before: readonly string[] = []) {
+  // Each with a key of its own, as a browser gives it, where a memory router gives every test's first entry the key
+  // "default", under which the shell's memory would carry a row or a position from one test into the next.
+  const initialEntries = [...before, path].map((entry) => ({ ...parsePath(entry), key: crypto.randomUUID() }));
+  const router = createMemoryRouter(routes, { initialEntries, initialIndex: before.length });
+  show(router, me);
   return router;
 }
 
@@ -268,6 +281,51 @@ function extraLines(row: ToReviewNote): string[] {
     .map((paragraph) => paragraph.textContent);
 }
 
+/** Scrolls the page to `y`, as the person does, with the scroll event that the browser fires. */
+function scrollPage(y: number) {
+  Object.defineProperty(window, 'scrollY', { value: y, configurable: true, writable: true });
+  window.dispatchEvent(new Event('scroll'));
+}
+
+/** The back link, the one link of the top bar in the shell's before-main bar slot. */
+function backLink(): HTMLElement {
+  return within(document.getElementById('page-bar')!).getByRole('link');
+}
+
+/** The shared note address of `row`'s note. */
+function notePage(row: ToReviewNote): string {
+  return `/participants/${row.participantId}/notes/${row.noteDate}`;
+}
+
+/**
+ * Answers the reads of `row`'s note page: its participant's header, and the note as `GET {base}` gives it, submitted
+ * by its author when it was flagged, its current version flagged unless a later edit removed the flag.
+ */
+function serveNote(row: ToReviewNote) {
+  const { participantId: id, givenName, familyName } = row;
+  const participant: ParticipantHeader = { id, givenName, familyName, status: 'Active' };
+  const flag = row.flagRemovedLater
+    ? ({ isFlagged: false, flagReason: null } as const)
+    : ({ isFlagged: true, flagReason: row.flagReason } as const);
+  const goals = [{ text: 'Catches bus to day program', isTicked: true }];
+  const note: SubmittedNote = {
+    status: 'Submitted',
+    author: { displayName: row.authorDisplayName },
+    firstSubmittedAtUtc: row.flaggedAtUtc,
+    current: { narrative: 'Had lunch at the cafe, then a walk.', goals, ...flag },
+  };
+  serve(`/api/participants/${id}`, json(participant));
+  serve(`/api/participants/${id}/notes/${row.noteDate}`, json(note));
+}
+
+/** `html` with the IDs that React's `useId` makes, which differ from one mount to the next, taken out. */
+function withoutIds(html: string): string {
+  return html.replace(/_r_[0-9a-z]+_/g, '');
+}
+
+// The browser routers that tests make, each disposed of after its test, as it listens to the window's history.
+const browserRouters: Router[] = [];
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string.
@@ -294,9 +352,15 @@ beforeEach(() => {
   });
   // Emptied, so that a title a test finds is one the app set.
   document.title = '';
+  scrollPage(0);
 });
 
 afterEach(() => {
+  for (const router of browserRouters.splice(0)) {
+    router.dispose();
+  }
+
+  window.history.replaceState(null, '', '/');
   answers.clear();
   fetchMock.mockReset();
   vi.unstubAllGlobals();
@@ -517,5 +581,147 @@ describe('Flagged notes when the list did not load', () => {
     expect(rowKeys()).toEqual(flags.map(keyOf));
     expect(line()).toBeEmptyDOMElement();
     expect(within(main()).queryByRole('button')).toBeNull();
+  });
+});
+
+describe('A note opened from Flagged', () => {
+  // flagged.md component 7 and *Interactions and focus*: the list's place kept in memory, and its rows shown at once.
+  it('has the back link "Flagged", which goes back one entry to the rows kept, focus on the row opened', async () => {
+    serve(reviewsPath, json(flags));
+    serveNote(lee);
+    const router = await open();
+    scrollPage(600);
+
+    await press(rowLink(lee));
+    await settle();
+    expect(router.state.historyAction).toBe('PUSH');
+    expect(router.state.location.pathname).toBe(notePage(lee));
+    expect(pageHeading()).toHaveAccessibleName(`Lee Wong Thursday 1${nbsp}October 2026`);
+    expect(pageHeading()).toHaveFocus();
+    expect(backLink()).toHaveAccessibleName('Flagged');
+    expect(backLink()).toHaveAttribute('href', '/flagged');
+    // The list asked for again as it shows, answered only after the rows kept in memory have shown.
+    const refetch = held(json(flags));
+    serve(reviewsPath, refetch.answer);
+    fetchMock.mockClear();
+
+    await press(backLink());
+
+    expect(router.state.historyAction).toBe('POP');
+    expect(router.state.location.pathname).toBe('/flagged');
+    expect(rowKeys()).toEqual(flags.map(keyOf));
+    expect(rowLink(lee)).toHaveFocus();
+    expect(window.scrollY).toBe(600);
+    expect(reviewRequests()).toEqual(oneMount);
+
+    refetch.release();
+    await settle();
+    expect(rowKeys()).toEqual(flags.map(keyOf));
+    expect(rowLink(lee)).toHaveFocus();
+
+    // And the same by browser Back.
+    serve(reviewsPath, json(flags));
+    await press(rowLink(lee));
+    await settle();
+    await act(() => router.navigate(-1));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/flagged');
+    expect(rowLink(lee)).toHaveFocus();
+    expect(window.scrollY).toBe(600);
+  });
+
+  // app-shell.md component 2b: a note's address marks no nav item, whichever list opened it.
+  it('marks no nav item as current', async () => {
+    serve(reviewsPath, json(flags));
+    serveNote(sam);
+    await open();
+
+    await press(rowLink(sam));
+    await settle();
+
+    expect(backLink()).toHaveAccessibleName('Flagged');
+    expect(navLink('Flagged')).not.toHaveAttribute('aria-current');
+    expect(currentItems()).toEqual([]);
+  });
+
+  // participant-notes.md item 28a: only the back link's label differs between the routes that open the read view.
+  it('shows the same read view as from Today, but for the back link', async () => {
+    const today: TodayList = {
+      date: manager.today,
+      participants: [
+        {
+          id: lee.participantId,
+          givenName: lee.givenName,
+          familyName: lee.familyName,
+          note: {
+            status: 'Submitted',
+            authorDisplayName: lee.authorDisplayName,
+            isMine: false,
+            startedAtUtc: '2026-09-30T23:14:00Z',
+            firstSubmittedAtUtc: lee.flaggedAtUtc,
+            isFlagged: false,
+          },
+        },
+      ],
+    };
+    serve(todayPath, json(today));
+    serve(reviewsPath, json(flags));
+    serveNote(lee);
+    const router = renderApp('/');
+    await settle();
+    await press(within(main()).getByRole('link', { name: 'Lee Wong' }));
+    await settle();
+    expect(backLink()).toHaveAccessibleName('Today');
+    const fromToday = withoutIds(main().innerHTML);
+
+    await press(navLink('Flagged'));
+    await press(rowLink(lee));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(notePage(lee));
+    expect(backLink()).toHaveAccessibleName('Flagged');
+    expect(withoutIds(main().innerHTML)).toBe(fromToday);
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  // flagged.md component 7: opened from outside the app, the shell's memory holds nothing of how it was reached.
+  it.each([
+    { how: 'after a reload', before: ['/flagged'] },
+    { how: 'from a pasted address', before: [] },
+  ])('has the back link "Today" $how, which adds an entry for Today', async ({ before }) => {
+    serveNote(lee);
+    serve(todayPath, json({ date: manager.today, participants: [] } satisfies TodayList));
+    const router = renderApp(notePage(lee), manager, before);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName(`Lee Wong Thursday 1${nbsp}October 2026`);
+    expect(backLink()).toHaveAccessibleName('Today');
+    expect(backLink()).toHaveAttribute('href', '/');
+
+    await press(backLink());
+
+    expect(router.state.historyAction).toBe('PUSH');
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  // On a browser router, as `main.tsx` uses, so that the history is the window's own: where the note was opened from
+  // is kept in memory alone (app-shell.md *Where a screen was opened from*).
+  it("pushes the note with no router state, leaving only React Router's own in history.state", async () => {
+    serve(reviewsPath, json(flags));
+    serveNote(lee);
+    window.history.replaceState({ usr: null, key: crypto.randomUUID(), idx: 0 }, '', '/flagged');
+    const router = createBrowserRouter(routes);
+    browserRouters.push(router);
+    show(router, manager);
+    await settle();
+
+    await press(rowLink(lee));
+    await settle();
+
+    expect(window.location.pathname).toBe(notePage(lee));
+    expect(backLink()).toHaveAccessibleName('Flagged');
+    expect(router.state.location.state).toBeNull();
+    expect(window.history.state).toEqual({ usr: null, key: expect.any(String) as string, idx: 1 });
   });
 });

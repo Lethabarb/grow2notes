@@ -3689,7 +3689,7 @@ the reason and when it was flagged. Only submitted flags count.
       with `aria-current="page"` at `/flagged` and `/flagged?view=reviewed`; a worker at either address, and a manager
       whose list answers `403`, seeing Page not found titled "Grow2Notes – Page not found"; and "Loading flagged
       notes…" at 1 s, and the failure sentence with Try again after a failed first load.
-- [ ] The note opened from Flagged (S03.03.01's links: flagged.md *The note* and component 7's first bullet; design.md
+- [x] The note opened from Flagged (S03.03.01's links: flagged.md *The note* and component 7's first bullet; design.md
       §4.6 item 3, the read view without its review panel (Notes); participant-notes.md item 28a from Flagged;
       app-shell.md component 3a): the read view's back link reads "Flagged" when a To review row opened it, through
       `useBackTo` taking the nav item's word (Notes), and pops back to the list; it reads "Today", to `/`, after a
