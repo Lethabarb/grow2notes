@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Platform.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Fixtures;
@@ -19,6 +20,12 @@ internal sealed record TestCommonItemGroup(
 /// </summary>
 internal sealed record TestCommonItem(
     string Text, int SortOrder, DateTime? CreatedAtUtc = null, Guid? Id = null, DateTime? ArchivedAtUtc = null);
+
+/// <summary>
+/// A common item that <see cref="TestCommonItems.AddItemAsync"/> added: its ID, and its <c>ETag</c>, the
+/// <c>If-Match</c> that a change to it sends.
+/// </summary>
+internal sealed record AddedCommonItem(Guid Id, string ETag);
 
 /// <summary>
 /// Groups and items that a test adds straight through the app's context, as no endpoint adds a group until T07, and
@@ -55,6 +62,23 @@ internal static class TestCommonItems
     /// given.
     /// </summary>
     public static async Task<List<Guid>> AddItemsAsync(
+        this IServiceProvider services, Guid organisationId, Guid groupId, params TestCommonItem[] items) =>
+        [.. (await services.AddItemRowsAsync(organisationId, groupId, items)).Select(item => item.Id)];
+
+    /// <summary>
+    /// Adds one item as <see cref="AddItemsAsync"/> adds them, and gives its ID and its <c>ETag</c>, for a test that
+    /// changes it.
+    /// </summary>
+    public static async Task<AddedCommonItem> AddItemAsync(
+        this IServiceProvider services, Guid organisationId, Guid groupId, TestCommonItem item)
+    {
+        var row = Assert.Single(await services.AddItemRowsAsync(organisationId, groupId, item));
+
+        // EF Core reads back the version that SQL Server gave the row as it saved it.
+        return new(row.Id, RowVersionToken.ETag(row));
+    }
+
+    private static async Task<List<CommonItem>> AddItemRowsAsync(
         this IServiceProvider services, Guid organisationId, Guid groupId, params TestCommonItem[] items)
     {
         var rows = items.Select(item => new CommonItem
@@ -68,7 +92,7 @@ internal static class TestCommonItems
             CreatedAtUtc = item.CreatedAtUtc ?? AddedAtUtc,
         }).ToList();
         await services.SaveAsync(organisationId, db => db.CommonItems.AddRange(rows));
-        return [.. rows.Select(item => item.Id)];
+        return rows;
     }
 
     private static async Task SaveAsync(

@@ -52,6 +52,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Goal.Archived] = test => test.ArchiveGoalAsync(),
         [AuditEventTypes.Goal.Restored] = test => test.RestoreGoalAsync(),
         [AuditEventTypes.CommonItem.Created] = test => test.AddCommonItemAsync(),
+        [AuditEventTypes.CommonItem.Updated] = test => test.RewordCommonItemAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -552,6 +553,41 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             await StoredItemIdAsync(groupId),
             null,
             new JsonObject { ["new"] = values }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>common_item.updated</c>: A's manager rewords an item of a group added for the row, typing the new text over
+    /// two lines, with <c>PUT /api/admin/common-items/{id}</c> and the item's <c>ETag</c>, which records the item as
+    /// the entity, with no participant, and the old and new text, as stored, alone: the reword keeps the item in its
+    /// group, so no other value changes.
+    /// </summary>
+    private async Task<WrittenEvent> RewordCommonItemAsync()
+    {
+        var groupId = Assert.Single(
+            await factory.Services.AddGroupsAsync(a.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await factory.Services.AddItemAsync(
+            a.OrganisationId, groupId, new TestCommonItem("Travelled by bus or train", 3));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PutWithTokenAsync(
+            $"/api/admin/common-items/{item.Id}",
+            await client.FetchTokenAsync(),
+            new { text = " Travelled by\ntram " },
+            item.ETag);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var details = new JsonObject
+        {
+            ["old"] = new JsonObject { ["text"] = "Travelled by bus or train" },
+            ["new"] = new JsonObject { ["text"] = "Travelled by tram" },
+        };
+        return new(
+            AuditEventTypes.CommonItem.Updated,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.CommonItem,
+            item.Id,
+            null,
+            details.ToJsonString());
     }
 
     /// <summary>

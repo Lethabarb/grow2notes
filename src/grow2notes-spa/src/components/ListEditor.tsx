@@ -83,20 +83,26 @@ type ListEditorProps<TData> = {
    * (common-items.md component 5); otherwise one of React's own.
    */
   addFieldId?: string;
+  /**
+   * A row's edit field's id, given the row's ID, where its page names it, such as `item-{id}-text` on Common items
+   * (common-items.md component 6); otherwise one of React's own.
+   */
+  editFieldId?: (rowId: string) => string;
   /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
 
 /**
- * What the editor's rows and forms share with it: the list's kind, name and writes; the id of the page's help text,
- * which describes each text field; the rows as last read, and the read that follows each write; focus that follows a
- * change, and the list's archived section that an Archive opens; and the list conflict, which a write shows and the
- * next write that succeeds takes away.
+ * What the editor's rows and forms share with it: the list's kind, name and writes; the ids of its rows' edit fields
+ * where its page names them, and the id of the page's help text, which describes each text field; the rows as last
+ * read, and the read that follows each write; focus that follows a change, and the list's archived section that an
+ * Archive opens; and the list conflict, which a write shows and the next write that succeeds takes away.
  */
 type ListContext = {
   kind: ListKind;
   name: string | undefined;
   api: ListWrites;
+  editFieldId: ((rowId: string) => string) | undefined;
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
@@ -125,6 +131,15 @@ const moveWords = {
   up: { label: strings.listRows.moveUp, atEnd: strings.listRows.atTop },
   down: { label: strings.listRows.moveDown, atEnd: strings.listRows.atBottom },
 } as const;
+
+/**
+ * A row's wording now, as the edit conflict gives it for each kind of list, each as its screen's spec words it: a
+ * goal's as it is (participants.md *States*), and a common item's in typographic quotes (common-items.md *States*).
+ */
+const wordingNow: Record<ListKind, (text: string) => string> = {
+  goal: (text) => text,
+  item: msg.quoted,
+};
 
 // Each move button's arrow, filled with the button's colour, which forced colours give it too.
 const arrowPaths = {
@@ -165,9 +180,9 @@ class RowChanged extends Error {
 /**
  * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
  * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
- * an add's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md *Failures*). That
- * refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what the server now
- * holds; any other failure fails as it is.
+ * an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md
+ * *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what
+ * the server now holds; any other failure fails as it is.
  */
 async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
   try {
@@ -250,7 +265,14 @@ function focusStayedIn(origin: HTMLElement | null): boolean {
  * participant does with a new participant's empty one, so the editor reads it from the query and never fetches it as
  * it mounts.
  */
-export function ListEditor<TData>({ kind, api, name, addFieldId, readOnly = false }: ListEditorProps<TData>) {
+export function ListEditor<TData>({
+  kind,
+  api,
+  name,
+  addFieldId,
+  editFieldId,
+  readOnly = false,
+}: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
   const frame = useListFrame();
   // The archived section's key in the frame's focus map, which an Archive opens before its row's Restore takes focus.
@@ -271,6 +293,7 @@ export function ListEditor<TData>({ kind, api, name, addFieldId, readOnly = fals
     kind,
     name,
     api,
+    editFieldId,
     helpId: frame.helpId,
     latest: () => {
       const data = queryClient.getQueryData<TData>(api.query.queryKey);
@@ -705,14 +728,16 @@ type EditFormProps = {
  * closes the form, focus going to Edit unless the person has gone elsewhere meanwhile, and the page's status region
  * says so. A failure keeps the text, focus staying on Save: the server's refusal of the text shows on the field as
  * Save's own does; a Save refused as stale whose row is still active says what the row now says, and the next Save
- * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows;
- * and anything else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a
- * write once started runs to its end and the list then shows what the server holds.
+ * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows,
+ * as it does for a Save refused as the row's group was archived meanwhile (common-items.md *Failures*); and anything
+ * else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write once
+ * started runs to its end and the list then shows what the server holds.
  */
 function EditForm({ row, list, field, onClose }: EditFormProps) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
-  const fieldId = useId();
+  const ownId = useId();
+  const fieldId = list.editFieldId?.(row.id) ?? ownId;
   const form = useRef<HTMLFormElement>(null);
   const box = useItemText(list.kind, row.text, field);
   // The alert's words while it holds a request's failure, which the next press clears.
@@ -725,7 +750,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     }
 
     try {
-      await list.api.update(row.id, text, current.rowVersion);
+      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion));
     } catch (failed) {
       if (!(failed instanceof ApiError && failed.status === 412)) {
         throw failed;
@@ -758,7 +783,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
       },
       onError: (failed) => {
         if (failed instanceof RowChanged) {
-          setFailure(msg.rowChangedWhileEditing(copy.row, failed.text));
+          setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
           return;
         }
 

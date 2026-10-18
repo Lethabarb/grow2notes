@@ -208,6 +208,11 @@ internal static class EndpointMatrix
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
             AddingAnItemToAGroupOfItsOwn),
+
+        // Rewording a common item (§6.6), in the same group. Each call rewords an item of its own, which its request
+        // first adds to a group that it adds to A, so B's manager, to whom A's items are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/common-items/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RewordingAnItemOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -411,6 +416,22 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { text = "Travelled by bus or train" }),
         };
+    }
+
+    // A reword of an item that the request first adds to a group that it adds to A, sent with the item's ETag as
+    // If-Match, so that each call changes an item of its own, never one of the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> RewordingAnItemOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await call.Services.AddItemAsync(
+            call.Seeded.A.OrganisationId, groupId, new TestCommonItem("Travelled by bus or train", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-items/{item.Id}")
+        {
+            Content = JsonContent.Create(new { text = "Travelled by tram" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(item.ETag));
+        return request;
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

@@ -4,14 +4,16 @@ using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 
 namespace Grow2Notes.Web.Features.CommonItems;
 
 /// <summary>
 /// The handler that changes a group's common items (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>
-/// calls it with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each
-/// change is saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// and <c>PUT /api/admin/common-items/{id}</c> call it with <see cref="Actor.InApp"/>, and Release 2's tools will call
+/// it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
+/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemChanges(
     Grow2NotesDbContext db,
@@ -85,6 +87,78 @@ internal sealed class CommonItemChanges(
     }
 
     /// <summary>
+    /// Rewords a common item of the tenant's organisation in its own group (S01.03.02), as T07 adds the move to another
+    /// group to the same request (T06's Notes): loads it through the tenant filter, so that another organisation's is
+    /// not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version; refuses an item whose group
+    /// is archived, which is restored first; reads the text from <paramref name="request"/> by the add's rules
+    /// (<see cref="ItemText.CommonItem"/>); then saves it with <c>common_item.updated</c>, whose <c>Details</c> hold
+    /// the old and new <c>text</c>, and which names no participant; or, when the text is already stored, saves nothing
+    /// and writes no event, and answers as a save does (D84). An archived item of an active group is reworded too, as
+    /// design.md §6.6 names no refusal, though the screen offers Edit on active items alone (T06's Notes).
+    /// </summary>
+    /// <remarks>
+    /// The group is read just before the save, and carries no token that the save checks (design.md §6.9), so a group
+    /// archived in that instant is not caught (T06's Notes).
+    /// </remarks>
+    /// <param name="actor">Who rewords it.</param>
+    /// <param name="itemId">The item.</param>
+    /// <param name="ifMatch">
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
+    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
+    /// </param>
+    /// <param name="request">The text as sent.</param>
+    /// <param name="cancellationToken">Cancels the reword.</param>
+    /// <returns>
+    /// <see cref="CommonItemChangeResult.Saved"/>, whether the text changed or not; or, each with nothing written,
+    /// checked in this order: <see cref="CommonItemChangeResult.NotFound"/>, for an item not in the organisation; the
+    /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.GroupArchived"/>, for an item whose group is
+    /// archived; the text's message; and <see cref="ErrorCode.PreconditionFailed"/>, when the item changed after it
+    /// was loaded.
+    /// </returns>
+    public async Task<CommonItemChangeResult> UpdateAsync(
+        Actor actor,
+        Guid itemId,
+        StringValues ifMatch,
+        CommonItemTextRequest request,
+        CancellationToken cancellationToken)
+    {
+        var item = await db.CommonItems.SingleOrDefaultAsync(i => i.Id == itemId, cancellationToken);
+        if (item is null)
+        {
+            return CommonItemChangeResult.NotFound;
+        }
+
+        if (IfMatch.Check(ifMatch, RowVersionToken.Of(item)) is { } refused)
+        {
+            return CommonItemChangeResult.Refused(refused);
+        }
+
+        if (await db.CommonItemGroups.AnyAsync(
+                group => group.Id == item.GroupId && group.ArchivedAtUtc != null, cancellationToken))
+        {
+            return CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
+        }
+
+        if (!ItemText.CommonItem.TryRead(request.Text, out var text, out var errors))
+        {
+            return CommonItemChangeResult.Invalid(errors);
+        }
+
+        var before = TextValues(item);
+        item.Text = text;
+        var saved = await changes.SaveAsync(
+            actor,
+            AuditEventTypes.CommonItem.Updated,
+            AuditEntityTypes.CommonItem,
+            item.Id,
+            participantId: null,
+            before,
+            TextValues(item),
+            cancellationToken: cancellationToken);
+        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
+    }
+
+    /// <summary>
     /// An item's values as an audit event records them, named and written as design.md §6.6's list gives them, never
     /// <c>id</c> or <c>rowVersion</c> (<see cref="ChangeDetails"/>): its <c>groupId</c>, named as S01.03.08's Note
     /// names it, so that the event says which group; and <c>archivedAtUtc</c> as stored, or JSON <c>null</c>.
@@ -96,4 +170,10 @@ internal sealed class CommonItemChanges(
         ["sortOrder"] = item.SortOrder,
         ["archivedAtUtc"] = item.ArchivedAtUtc,
     };
+
+    /// <summary>
+    /// The one value that a reword changes, as <c>common_item.updated</c> records it, named as <see cref="Values"/>
+    /// names it.
+    /// </summary>
+    private static JsonObject TextValues(CommonItem item) => new() { ["text"] = item.Text };
 }

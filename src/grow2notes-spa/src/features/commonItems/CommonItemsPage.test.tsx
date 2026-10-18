@@ -121,7 +121,7 @@ const answers = new Map<string, Answer>();
 let queryClient: QueryClient;
 
 /** Stubs `fetch` as the server, which answers each `method` request for `path` with `answer` from now on. */
-function serve(method: 'GET' | 'POST', path: string, answer: Answer) {
+function serve(method: 'GET' | 'POST' | 'PUT', path: string, answer: Answer) {
   answers.set(`${method} ${path}`, answer);
 }
 
@@ -661,13 +661,43 @@ function addsTo(groupId: string): unknown[] {
   );
 }
 
+/** The path that the item of `itemId` is reworded at (design.md §6.6). */
+function itemPath(itemId: string): string {
+  return `/api/admin/common-items/${itemId}`;
+}
+
+/** A `200` with no body and no `ETag`, as a reword answers (design.md §6.6). */
+const reworded: Answer = () => Promise.resolve(new Response(null, { status: 200 }));
+
 /**
- * Has the groups list and each group's adds answered by a server that holds `list`: an add puts an item, with an ID
- * and a version of its own, at the end of its group, one after the highest active `sortOrder` (A2), and answers `201`
- * with no body; and a read gives what it holds.
+ * Has the groups list, each group's adds and each item's rewords answered by a server that holds `list`, and gives
+ * what it holds, which a test may change as another manager would: an add puts an item, with an ID and a version of
+ * its own, at the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a
+ * reword refuses an `If-Match` that is not the item's version (`412`), then an item of an archived group (`409
+ * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; and a
+ * read gives what it holds.
  */
-function serveGroups(list: readonly AdminCommonItemGroup[]) {
+function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGroup[] {
   const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
+  let versions = 0;
+  const serveReword = (heldGroup: AdminCommonItemGroup, itemId: string) => {
+    serve('PUT', itemPath(itemId), (init) => {
+      const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
+      if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.items[at].rowVersion}"`) {
+        return problem(412)();
+      }
+
+      if (heldGroup.archivedAtUtc !== null) {
+        return problem(409, 'config.group_archived')();
+      }
+
+      const { text } = JSON.parse(init?.body as string) as { text: string };
+      versions += 1;
+      const rowVersion = `AAAAAAAAE${String(versions).padStart(3, '0')}=`;
+      heldGroup.items[at] = { ...heldGroup.items[at], text, rowVersion };
+      return reworded();
+    });
+  };
   serve('GET', listPath, json(held));
   for (const heldGroup of held) {
     serve('POST', itemsPath(heldGroup.id), (init) => {
@@ -675,9 +705,15 @@ function serveGroups(list: readonly AdminCommonItemGroup[]) {
       const active = heldGroup.items.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
       const id = `9e8d7c6b-5a49-4382-a1b0-${String(heldGroup.items.length).padStart(12, '0')}`;
       heldGroup.items.push(item(id, text, Math.max(-1, ...active) + 1));
+      serveReword(heldGroup, id);
       return created();
     });
+    for (const { id } of heldGroup.items) {
+      serveReword(heldGroup, id);
+    }
   }
+
+  return held;
 }
 
 /** The group's New item field, by its label, which names the group. */
@@ -1013,5 +1049,382 @@ describe('Common items, adding an item', () => {
     expect(newItem('Community outing')).toHaveValue('Visited the library');
     expect(addAlert('Community outing')).toBeEmptyDOMElement();
     expect(addsTo(outing.id)).toHaveLength(1);
+  });
+});
+
+const saved = 'Item saved';
+
+/** The rewords sent to the item of `itemId`, each as its `If-Match` and the JSON of its body, in the order sent. */
+function rewordsOf(itemId: string): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === itemPath(itemId) && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The Edit of the item whose text is `text`, in the group named `name`, by its name, which ends with the text. */
+function editButton(name: string, text: string): HTMLElement {
+  return within(sectionOf(name)).getByRole('button', { name: `Edit, ${text}` });
+}
+
+/** The item's Edit item field, by the id that the page gives it, or `null` while its row is not being edited. */
+function editField(itemId: string): HTMLTextAreaElement | null {
+  return document.getElementById(`item-${itemId}-text`) as HTMLTextAreaElement | null;
+}
+
+/** The item's edit form. */
+function editForm(itemId: string): HTMLFormElement {
+  return editField(itemId)!.closest('form')!;
+}
+
+/** The item's Save, by its name, which its busy label leaves as it is. */
+function saveButton(itemId: string): HTMLElement {
+  return within(editForm(itemId)).getByRole('button', { name: 'Save' });
+}
+
+function cancelButton(itemId: string): HTMLElement {
+  return within(editForm(itemId)).getByRole('button', { name: 'Cancel' });
+}
+
+/** The alert above the item's Save. */
+function editAlert(itemId: string): HTMLElement {
+  return within(editForm(itemId)).getByRole('alert');
+}
+
+/** The message on the item's Edit item field, without its hidden "Error: ", or `null` while it shows none. */
+function editMessage(itemId: string): string | null {
+  const message = editForm(itemId).querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+/** Focuses the Edit of `row` in the group named `name` and presses it, and gives the field that takes its place. */
+function openEdit(name: string, row: ListRow): HTMLTextAreaElement {
+  const button = editButton(name, row.text);
+  button.focus();
+  fireEvent.click(button);
+  return editField(row.id)!;
+}
+
+describe('Common items, rewording an item', () => {
+  it('turns the row into a form in place, still numbered: "Edit item", its text, caret at the end', async () => {
+    await openPage();
+    const section = sectionOf('Community outing');
+
+    const field = openEdit('Community outing', paid);
+
+    const row = activeItems(section)[1];
+    expect(activeItems(section)).toHaveLength(3);
+    expect(field.closest('li')).toBe(row);
+    expect(editForm(paid.id)).toHaveAttribute('novalidate');
+    expect(field.tagName).toBe('TEXTAREA');
+    expect(document.querySelector(`label[for="item-${paid.id}-text"]`)?.textContent).toBe('Edit item');
+    expect(field).toHaveAccessibleName('Edit item');
+    expect(field).toHaveAttribute('rows', '3');
+    for (const attribute of ['maxlength', 'required', 'readonly', 'aria-invalid']) {
+      expect(field).not.toHaveAttribute(attribute);
+    }
+
+    expect(field).toHaveValue(paid.text);
+    expect(field).toHaveFocus();
+    expect([field.selectionStart, field.selectionEnd]).toEqual([paid.text.length, paid.text.length]);
+    // Described as the add's field is: the hidden hint, then the page's help text, never the count.
+    expect(field.getAttribute('aria-describedby')).toBe(`item-${paid.id}-text-hint items-help`);
+    expect(field).toHaveAccessibleDescription(`${hint} ${help}`);
+    expect(within(row).queryByRole('button', { name: /^Edit/ })).toBeNull();
+    expect(within(row).queryByText(paid.text, { selector: 'p' })).toBeNull();
+    expect(editButton('Community outing', busOrTrain.text)).toBeInTheDocument();
+  });
+
+  it('shows the count, then the empty alert, then Save, primary, and Cancel, both label width', async () => {
+    await openPage();
+
+    const field = openEdit('Community outing', paid);
+
+    const count = editForm(paid.id).querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(count.textContent).toBe(`You have ${200 - paid.text.length} characters remaining`);
+    expect(editAlert(paid.id)).toBeEmptyDOMElement();
+    const save = saveButton(paid.id);
+    const cancel = cancelButton(paid.id);
+    expect(follows(field, count)).toBe(true);
+    expect(follows(count, editAlert(paid.id))).toBe(true);
+    expect(follows(editAlert(paid.id), save)).toBe(true);
+    expect(follows(save, cancel)).toBe(true);
+    expect(save).toHaveAttribute('type', 'submit');
+    expect(save.className).toMatch(/primary/);
+    expect(cancel).toHaveAttribute('type', 'button');
+    expect(cancel.className).toMatch(/secondary/);
+    for (const button of [save, cancel]) {
+      expect(button.className).toMatch(/rowButton/);
+    }
+  });
+
+  it("on Cancel, drops what was typed, sends nothing, and puts focus on the row's Edit", async () => {
+    await openPage();
+    type(openEdit('Community outing', paid), 'Paid at the machine');
+
+    await press(cancelButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    expect(openEdit('Community outing', paid)).toHaveValue(paid.text);
+  });
+
+  it('on Save of the text unchanged once cleaned, closes as Cancel does and sends nothing', async () => {
+    await openPage();
+    type(openEdit('Community outing', paid), '  Paid for a ticket\n  at the counter ');
+
+    await press(saveButton(paid.id));
+    await wait(16);
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editField(paid.id)).toBeNull();
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it.each([
+    ['only spaces and line breaks', ' \n\t \n ', enterTheItem],
+    ['201 characters once its line break is a space', `${'a'.repeat(100)}\n${'b'.repeat(100)}`, tooLong],
+  ])('on Save with %s, shows its message above the field, focused, and sends nothing', async (_, text, message) => {
+    await openPage();
+    const field = openEdit('Every note', meal);
+    type(field, text);
+
+    await press(saveButton(meal.id));
+
+    expect(rewordsOf(meal.id)).toEqual([]);
+    expect(editMessage(meal.id)).toBe(message);
+    expect(field).toHaveFocus();
+    expect(field).toHaveValue(text);
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')).toBe(
+      `item-${meal.id}-text-error item-${meal.id}-text-hint items-help`,
+    );
+    expect(field).toHaveAccessibleDescription(`Error: ${message} ${hint} ${help}`);
+    expect(follows(within(editForm(meal.id)).getByText(message), field)).toBe(true);
+    expect(editAlert(meal.id)).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it("sends the text on one line with the item's version, reads the list again, shows it, focusing Edit", async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(openEdit('Community outing', paid), ' Paid at\n  the machine ');
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      'Paid at the machine',
+      lunch.text,
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, meal.text]);
+    expect(editButton('Community outing', 'Paid at the machine')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('shows Save busy, "Saving…" after 400 ms, the field read-only; a press while it is sends no more', async () => {
+    await openPage();
+    serve('PUT', itemPath(paid.id), noAnswer);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    const save = saveButton(paid.id);
+
+    save.focus();
+    fireEvent.click(save);
+    await settle();
+    expect(save).toHaveAttribute('aria-disabled', 'true');
+    expect(field).toHaveAttribute('readonly');
+    await wait(398);
+    expect(save).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(save).toHaveAttribute('data-busy');
+    expect(within(save).getByText('Saving…')).toBeInTheDocument();
+    fireEvent.click(save);
+    await settle();
+
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+    expect(field).toHaveValue('Paid at the machine');
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not saved: no connection. Try again.'],
+    ['a 503', problem(503), 'Not saved: something went wrong. Try again.'],
+  ])('on %s, says so above Save, keeping the text and focus on Save, and reads nothing', async (_, answer, words) => {
+    await openPage();
+    serve('PUT', itemPath(paid.id), answer);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    const save = saveButton(paid.id);
+    const reads = listReads();
+
+    await press(save);
+
+    expect(editAlert(paid.id)).toHaveTextContent(words);
+    expect(save).toHaveFocus();
+    expect(field).toHaveValue('Paid at the machine');
+    expect(field).not.toHaveAttribute('readonly');
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(pageStatus()).not.toHaveTextContent(saved);
+  });
+
+  it('on a 412 finding the item active, keeps the text, quotes what it says now, saves at the next Save', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    const save = saveButton(paid.id);
+    // Another manager rewords it meanwhile.
+    held[1].items[1] = { ...paid, text: 'Paid for a ticket online', rowVersion: 'AAAAAAAAE999=' };
+
+    await press(save);
+
+    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(editAlert(paid.id)).toHaveTextContent(
+      'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
+        + 'replace it with your wording, or Cancel to keep it.',
+    );
+    expect(field).toHaveValue('Paid at the machine');
+    expect(save).toHaveFocus();
+    expect(listConflict()).toBeNull();
+
+    await press(save);
+
+    expect(rewordsOf(paid.id).map(({ ifMatch }) => ifMatch)).toEqual([`"${paid.rowVersion}"`, '"AAAAAAAAE999="']);
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      'Paid at the machine',
+      lunch.text,
+    ]);
+    expect(editButton('Community outing', 'Paid at the machine')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+  });
+
+  it('on a 412 finding the item archived, shows the list conflict, focused, the row gone with its form', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openEdit('Community outing', paid), 'Paid at the machine');
+    // Another manager archives it meanwhile.
+    held[1].items[1] = { ...paid, archivedAtUtc: '2026-10-01T06:00:00Z', rowVersion: 'AAAAAAAAE999=' };
+
+    await press(saveButton(paid.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text]);
+    expect(archivedItems(sectionOf('Community outing')).map(textOf)).toEqual([paid.text]);
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+
+  it('on a 409 for a group archived meanwhile, reads the list again and focuses the list conflict', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openEdit('Community outing', paid), 'Paid at the machine');
+    held[1].archivedAtUtc = '2026-10-01T06:00:00Z';
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(sections()).toEqual([sectionOf('Every note'), sectionOf('Personal care')]);
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+
+  it('keeps the text, with the list conflict focused, for a 409 whose re-read still lists the group', async () => {
+    await openPage();
+    serve('PUT', itemPath(paid.id), problem(409, 'config.group_archived'));
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+
+    await press(saveButton(paid.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(field).toHaveValue('Paid at the machine');
+    expect(editAlert(paid.id)).toBeEmptyDOMElement();
+  });
+
+  it('keeps rows of two groups in edit mode at once, each as typed, through a save in the other', async () => {
+    await openPage();
+    serveGroups(groups);
+    type(openEdit('Every note', medication), 'Medication given');
+    type(openEdit('Community outing', lunch), 'Bought lunch at the café');
+
+    await press(saveButton(medication.id));
+
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(['Medication given', meal.text]);
+    expect(editField(lunch.id)).toHaveValue('Bought lunch at the café');
+    expect(editButton('Every note', 'Medication given')).toHaveFocus();
+
+    await press(saveButton(lunch.id));
+
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      paid.text,
+      'Bought lunch at the café',
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(['Medication given', meal.text]);
+    expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([{ text: 'Medication given' }]);
+    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([{ text: 'Bought lunch at the café' }]);
+  });
+
+  it('hands a 401 on Save to sign-in in place, keeping the text, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('PUT', itemPath(paid.id), problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const alert = editAlert(paid.id);
+
+    await press(saveButton(paid.id));
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(field).not.toBeVisible();
+    expect(field).toHaveValue('Paid at the machine');
+    expect(alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(editField(paid.id)).toHaveValue('Paid at the machine');
+    expect(editAlert(paid.id)).toBeEmptyDOMElement();
+    expect(rewordsOf(paid.id)).toHaveLength(1);
   });
 });

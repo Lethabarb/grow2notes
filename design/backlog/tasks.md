@@ -1979,7 +1979,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       `aria-invalid`, focus on the field and nothing sent, cleared silently once the text is fixed; five adds in a row
       with focus in the field after each; 210 characters typed kept whole; a pasted line break sent as one space; the
       item last in its own group alone; one `POST` after a lost answer; and the `409` and the `401`.
-- [ ] Reword an item in its row (S01.03.02's second criterion; common-items.md *Add, edit, rename, move*' "Edit opens
+- [x] Reword an item in its row (S01.03.02's second criterion; common-items.md *Add, edit, rename, move*' "Edit opens
       the row form…", its wording part, and *Failures and conflicts*' "A `412` on an item Save…", with the network
       and `401` bullets for Save): `PUT /api/admin/common-items/{id}` with `{text}` (Notes), loading the item through
       the tenant filter, checking `If-Match` with `IfMatch.Check` against `RowVersionToken.Of(item)`, refusing an

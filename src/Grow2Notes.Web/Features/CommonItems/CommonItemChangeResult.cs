@@ -3,17 +3,19 @@ using Grow2Notes.Web.Platform;
 namespace Grow2Notes.Web.Features.CommonItems;
 
 /// <summary>
-/// What <see cref="CommonItemChanges"/> did with a change to a group's common items: found no such group in the
+/// What <see cref="CommonItemChanges"/> did with a change to a group's common items: found no such group or item in the
 /// tenant's organisation, another organisation's included (design.md §9.2); refused the change with a design.md §6.9
-/// code (<see cref="Error"/>); refused the text, with its message (<see cref="Errors"/>); or took the change, and saved
-/// it with its audit event.
+/// code, <c>If-Match</c>'s, the group's or the save's (<see cref="Error"/>); refused the text, with its message
+/// (<see cref="Errors"/>); or took the change, and saved it with its audit event when a value changed.
 /// </summary>
 internal sealed record CommonItemChangeResult
 {
-    /// <summary>No group of that ID is in the tenant's organisation, so nothing was changed.</summary>
+    /// <summary>No group or item of that ID is in the tenant's organisation, so nothing was changed.</summary>
     public static readonly CommonItemChangeResult NotFound = new() { Found = false };
 
-    /// <summary>The change is saved, with its audit event.</summary>
+    /// <summary>
+    /// The change is taken: saved, with its audit event, or, when no value changed, with nothing to save (D84).
+    /// </summary>
     public static readonly CommonItemChangeResult Saved = new();
 
     private CommonItemChangeResult()
