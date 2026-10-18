@@ -10,6 +10,7 @@ export type ApiErrorCode =
   | 'note.lists_changed'
   | 'note.participant_archived'
   | 'note.past_date_manager_only'
+  | 'note.version_conflict'
   | 'user.email_in_use';
 
 /** What the in-progress sentence names: the server's author and start time, and what the note form knows. */
@@ -54,6 +55,12 @@ export const apiErrorCopy = {
    */
   'note.past_date_manager_only':
     'It’s now after midnight, so this note can’t be started for yesterday. Ask a manager to record it.',
+  /**
+   * A note submitted on another device or tab (note-form.md *Confirmation dialog* › *No longer possible*, open question
+   * 10): design.md §4.3's takeover sentence, word for word, in the Submit confirmation's alert line, and then the note
+   * form's dead end in its top bar, as an autosave of the submitted note meets it too.
+   */
+  'note.version_conflict': 'This note was changed on another device or tab.',
   /** The Email address field's message on Invite user (users.md *States*, microcopy.md's words). */
   'user.email_in_use':
     'Another account already uses this email address. Use a different one, or find the person in the Users list.',

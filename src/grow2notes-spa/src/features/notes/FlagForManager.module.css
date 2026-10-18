@@ -15,6 +15,11 @@
   border-inline-start: 4px solid var(--colour-divider);
 }
 
+/* After a press of Submit that found the reason blank or too long, the bar in the error colour (component 11). */
+.reveal[data-invalid] {
+  border-inline-start-color: var(--colour-error);
+}
+
 /*
  * Four rows tall, as rows={4} sets it, and resized by its corner, where the shared text box grows with its text and
  * never shrinks below six lines. Two classes, so that it outranks the shared rule whichever stylesheet comes first.

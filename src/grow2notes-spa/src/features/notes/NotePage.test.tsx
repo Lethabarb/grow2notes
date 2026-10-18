@@ -97,11 +97,12 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
 
 const nbsp = ' ';
 
-/** The paths of `participant`'s header and of their note's form for `noteDate`. */
+/** The paths of `participant`'s header, of their note's form and versions for `noteDate`, and of its page. */
 function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
   return {
     header: `/api/participants/${participant.id}`,
     draft: `/api/participants/${participant.id}/notes/${noteDate}/draft`,
+    versions: `/api/participants/${participant.id}/notes/${noteDate}/versions`,
     page: `/participants/${participant.id}/notes/${noteDate}`,
   };
 }
@@ -381,9 +382,14 @@ function listsNotice(): HTMLElement {
   return notices[0];
 }
 
-/** The form's assertive region, which says a dead end's sentence once. */
+/**
+ * The form's assertive region, after the page's content, which says a dead end's sentence once: visually hidden, where
+ * the alert above Submit note and the confirmation's alert line show their words.
+ */
 function assertive(): HTMLElement {
-  return screen.getByRole('alert');
+  const regions = screen.getAllByRole('alert').filter((region) => region.classList.contains('visually-hidden'));
+  expect(regions).toHaveLength(1);
+  return regions[0];
 }
 
 /** Today's row link named `name`. */
@@ -1642,5 +1648,964 @@ describe('Back to Today', () => {
     expect(router.state.location.pathname).toBe('/');
     expect(within(main()).queryByRole('link', { name: 'Jane Citizen' })).toBeNull();
     expect(pageHeading()).toHaveFocus();
+  });
+});
+
+// Submit note, its checks and its confirmation (note-form.md components 2 and 12 to 14, *Validation*, *Pressing Submit
+// note*, *In the confirmation* and *After a successful submit*).
+
+/** Answers each Submit of a note, a `POST {base}/versions` to `path`, with `answer` from now on. */
+function serveSubmit(path: string, answer: Answer) {
+  answers.set(`POST ${path}`, answer);
+}
+
+/** Submit's answer, `201`, or `200` for a retry whose first answer was lost: version 1, saved at 4:12 pm. */
+function versionSaved(status: 200 | 201 = 201): Answer {
+  const body = JSON.stringify({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00Z' });
+  return () => Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/json' } }));
+}
+
+/** A Submit as it was sent: its path, its `Idempotency-Key` and its body as JSON. */
+type SentSubmit = { path: string; key: string | null; body: Record<string, unknown> };
+
+/** Every Submit sent, in order. */
+function submits(): SentSubmit[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'POST' && (path as string).endsWith('/versions'))
+    .map(([path, init]) => ({
+      path: path as string,
+      key: new Headers(init?.headers).get('Idempotency-Key'),
+      body: JSON.parse(init!.body as string) as Record<string, unknown>,
+    }));
+}
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+/** Submit note, at the end of the form. */
+function submitButton(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Submit note' });
+}
+
+/** The Submit confirmation, if it is open. */
+function confirmation(): HTMLElement | null {
+  return screen.queryByRole('alertdialog');
+}
+
+/** The open Submit confirmation. */
+function openConfirmation(): HTMLElement {
+  const dialog = confirmation();
+  if (dialog === null) {
+    throw new Error('The Submit confirmation is not open.');
+  }
+
+  return dialog;
+}
+
+/** A button of the open confirmation, by its name. */
+function dialogButton(name: string): HTMLElement {
+  return within(openConfirmation()).getByRole('button', { name });
+}
+
+/** The words of the open confirmation's buttons, in order. */
+function dialogButtons(): string[] {
+  return within(openConfirmation())
+    .getAllByRole('button')
+    .map((button) => button.textContent);
+}
+
+/** The error summary at the top of `<main>`, if it shows. */
+function errorSummary(): HTMLElement | null {
+  return within(main()).queryByRole('heading', { level: 2, name: 'There is a problem' })?.parentElement ?? null;
+}
+
+/** The error summary's items, in order: each one's words, and where its link goes, if it has one. */
+function summaryItems(): [string, string | undefined][] {
+  return within(errorSummary()!)
+    .getAllByRole('listitem')
+    .map((item) => [item.textContent, item.querySelector('a')?.getAttribute('href') ?? undefined]);
+}
+
+/** The page's visually hidden polite region, its `PageStatus`. */
+function pageStatus(): HTMLElement {
+  const regions = within(main())
+    .getAllByRole('status')
+    .filter((region) => region.tagName === 'P' && region.classList.contains('visually-hidden'));
+  expect(regions).toHaveLength(1);
+  return regions[0];
+}
+
+/** Today's success banner, found by its words. */
+function banner(): HTMLElement | null {
+  const words = within(main()).queryByText('Note for Jane Citizen submitted');
+  return words?.closest<HTMLElement>('[data-route-focus]') ?? null;
+}
+
+/**
+ * Opens a new note for a participant of their own, Jane Citizen by name, whose saves are answered at 9:42 am and whose
+ * Submit gets `submit`, with Today's list to land on, and gives them and the router.
+ */
+async function openToSubmit(draft: Answer = json(template()), submit: Answer = versionSaved()) {
+  const participant = freshParticipant();
+  serveNote(participant, draft);
+  serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+  serveSubmit(paths(participant).versions, submit);
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+  const { router } = renderApp(paths(participant).page);
+  await settle();
+  return { participant, router };
+}
+
+/** Writes `text` in the Guided notes box and lets it save. */
+async function write(text = 'Jane made toast.') {
+  type(text);
+  await wait(2_000);
+  await settle();
+}
+
+/** Presses the confirmation's confirming button, and lets its request be answered. */
+async function confirmSubmit() {
+  await press(dialogButton('Submit note for Jane Citizen'));
+  await settle();
+}
+
+/**
+ * Stands in for what a browser does with focus as a modal dialog opens and closes, which vitest.setup.ts's stand-ins
+ * leave out (HTML's dialog focusing steps): showModal() focuses the element with `autofocus`, or else the first
+ * button, and close() gives focus back to what had it as the dialog opened. Otherwise as those stand-ins, `close`
+ * fired in a task of its own. Gives the two spies.
+ */
+function focusLikeABrowser() {
+  const openedFrom = new Map<HTMLDialogElement, Element | null>();
+  const opened = vi
+    .spyOn(HTMLDialogElement.prototype, 'showModal')
+    .mockImplementation(function showModal(this: HTMLDialogElement) {
+      openedFrom.set(this, document.activeElement);
+      this.open = true;
+      this.querySelector<HTMLElement>('[autofocus], button')?.focus();
+    });
+  const closed = vi
+    .spyOn(HTMLDialogElement.prototype, 'close')
+    .mockImplementation(function close(this: HTMLDialogElement, returnValue?: string) {
+      if (!this.open) {
+        return;
+      }
+
+      if (returnValue !== undefined) {
+        this.returnValue = returnValue;
+      }
+
+      this.open = false;
+      (openedFrom.get(this) as HTMLElement | null | undefined)?.focus();
+      setTimeout(() => {
+        this.dispatchEvent(new Event('close'));
+      });
+    });
+  return { opened, closed };
+}
+
+describe('Submit note', () => {
+  it('is the submit button of a <form noValidate> round the fields, after the flag, under an alert', async () => {
+    await openToSubmit();
+
+    const form = submitButton().closest('form');
+    expect(form).toHaveAttribute('novalidate');
+    expect(submitButton()).toHaveAttribute('type', 'submit');
+    for (const field of [goalBoxes()[0], guidedNotes(), flagBox(), reasonField()]) {
+      expect(form).toContainElement(field);
+    }
+    const alert = form!.querySelector('div[role="alert"]');
+    expect(alert).toBeEmptyDOMElement();
+    expect(follows(alert!, reasonBlock())).toBe(true);
+    expect(follows(submitButton(), alert!)).toBe(true);
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status');
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+    expect(submitButton()).not.toHaveAttribute('disabled');
+  });
+
+  it('is aria-disabled while "Saving…" shows, described by it, and available once the change is saved', async () => {
+    await openToSubmit();
+
+    type('Jane made toast.');
+
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAttribute('data-unavailable');
+    expect(submitButton()).not.toHaveAttribute('disabled');
+    expect(submitButton()).toHaveAccessibleDescription('Saving…');
+    await wait(2_000);
+    await settle();
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+    expect(submitButton()).toHaveAccessibleDescription(`Saved 9:42${nbsp}am`);
+  });
+
+  it('is aria-disabled with no connection, as the change stays unsaved', async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, noConnection);
+
+    await write();
+
+    expect(saves()).toHaveLength(1);
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAccessibleDescription('Saving…');
+  });
+
+  it("is aria-disabled after a dead end, described by the indicator and the dead end's sentence", async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, problem(422, { code: 'note.participant_archived' }));
+
+    await write();
+
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status dead-end');
+    expect(submitButton()).toHaveAccessibleDescription(
+      'Not saved Jane Citizen is archived, so this note cannot be started. Ask a manager.',
+    );
+  });
+});
+
+describe("Submit's checks", () => {
+  // jsdom has no scrollIntoView, which a summary link calls.
+  const scrollIntoView = vi.fn<(this: Element, options?: boolean | ScrollIntoViewOptions) => void>();
+
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = scrollIntoView;
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    scrollIntoView.mockReset();
+  });
+
+  const blank = 'Write your notes in the Guided notes box. The grey text is only a guide.';
+
+  it('refuses a blank box, its message above it, the summary focused at the top, "Error: " in the title', async () => {
+    await openToSubmit();
+
+    await press(submitButton());
+
+    const summary = errorSummary();
+    expect(summary).toHaveFocus();
+    expect(summary).toHaveAttribute('tabindex', '-1');
+    expect(follows(pageHeading(), summary!)).toBe(true);
+    expect(summaryItems()).toEqual([[blank, '#guided-notes']]);
+    const message = main().querySelector('#guided-notes-error');
+    expect(message?.textContent).toBe(`Error: ${blank}`);
+    expect(follows(message!, within(main()).getByRole('heading', { level: 2, name: '3. Guided notes' }))).toBe(true);
+    expect(follows(guidedNotes(), message!)).toBe(true);
+    expect(guidedNotes()).toHaveAttribute('aria-invalid', 'true');
+    expect(guidedNotes()).toHaveAccessibleDescription(`Error: ${blank}`);
+    expect(guidedNotes().closest('[data-invalid]')).toContainElement(message as HTMLElement);
+    expect(document.title).toBe('Error: Grow2Notes – Note');
+    expect(saves()).toEqual([]);
+    expect(confirmation()).toBeNull();
+  });
+
+  it('refuses spaces alone as blank, and words it with no guide when no prompts are set', async () => {
+    await openToSubmit(json(template([breakfast], '')));
+    await write('     ');
+
+    await press(submitButton());
+
+    expect(summaryItems()).toEqual([['Write your notes in the Guided notes box', '#guided-notes']]);
+    expect(confirmation()).toBeNull();
+  });
+
+  it('refuses 19,995 characters and ten spaces as too long, as the count says, counting the whole text', async () => {
+    await openToSubmit();
+    await write(`${'x'.repeat(19_995)}${' '.repeat(10)}`);
+    expect(within(main()).getByText('You have 5 characters too many', { selector: '[aria-hidden="true"]' }))
+      .toBeInTheDocument();
+
+    await press(submitButton());
+
+    expect(summaryItems()).toEqual([['Guided notes must be 20,000 characters or less', '#guided-notes']]);
+    expect(saves()).toHaveLength(1);
+    expect(confirmation()).toBeNull();
+  });
+
+  it.each([
+    { reason: 'none', typed: '', message: 'Enter a reason for the flag' },
+    { reason: 'spaces alone', typed: '   ', message: 'Enter a reason for the flag' },
+    { reason: '201 characters', typed: 'x'.repeat(201), message: 'Reason must be 200 characters or less' },
+  ])('refuses a flagged note with $reason for its reason, after Guided notes in the summary', async ({
+    typed,
+    message,
+  }) => {
+    await openToSubmit();
+    fireEvent.click(flagBox());
+    typeReason(typed);
+
+    await press(submitButton());
+
+    expect(summaryItems()).toEqual([
+      [blank, '#guided-notes'],
+      [message, '#flag-reason'],
+    ]);
+    const inline = main().querySelector('#flag-reason-error');
+    expect(inline?.textContent).toBe(`Error: ${message}`);
+    expect(follows(inline!, main().querySelector('#flag-reason-hint')!)).toBe(true);
+    expect(follows(reasonField(), inline!)).toBe(true);
+    expect(reasonField()).toHaveAttribute('aria-invalid', 'true');
+    expect(reasonField()).toHaveAttribute('aria-describedby', 'flag-reason-error flag-reason-hint');
+    expect(reasonField()).toHaveAccessibleDescription(`Error: ${message} You can enter up to 200 characters`);
+    expect(reasonBlock()).toHaveAttribute('data-invalid');
+    expect(reasonField()).toHaveValue(typed);
+  });
+
+  it('focuses the summary again on every failed press, even with the same errors', async () => {
+    await openToSubmit();
+    await press(submitButton());
+    expect(errorSummary()).toHaveFocus();
+    guidedNotes().focus();
+
+    await press(submitButton());
+
+    expect(errorSummary()).toHaveFocus();
+  });
+
+  it("clears each message on the input that fixes it, the summary and the title's prefix with the last", async () => {
+    await openToSubmit();
+    fireEvent.click(flagBox());
+    await press(submitButton());
+    expect(summaryItems()).toHaveLength(2);
+
+    type('J');
+
+    expect(main().querySelector('#guided-notes-error')).toBeNull();
+    expect(guidedNotes()).not.toHaveAttribute('aria-invalid');
+    expect(guidedNotes().closest('[data-invalid]')).toBeNull();
+    expect(summaryItems()).toEqual([['Enter a reason for the flag', '#flag-reason']]);
+    expect(document.title).toBe('Error: Grow2Notes – Note');
+
+    typeReason('Jane seemed unwell after lunch.');
+
+    expect(errorSummary()).toBeNull();
+    expect(main().querySelector('#flag-reason-error')).toBeNull();
+    expect(reasonField()).not.toHaveAttribute('aria-invalid');
+    expect(reasonField()).toHaveAttribute('aria-describedby', 'flag-reason-hint');
+    expect(document.title).toBe('Grow2Notes – Note');
+  });
+
+  it("takes the reason's message away with the untick, and gives none on a re-tick until the next press", async () => {
+    await openToSubmit();
+    await write();
+    fireEvent.click(flagBox());
+    await press(submitButton());
+    expect(summaryItems()).toEqual([['Enter a reason for the flag', '#flag-reason']]);
+
+    fireEvent.click(flagBox());
+
+    expect(errorSummary()).toBeNull();
+    expect(main().querySelector('#flag-reason-error')).toBeNull();
+    expect(reasonBlock()).not.toHaveAttribute('data-invalid');
+    expect(document.title).toBe('Grow2Notes – Note');
+
+    fireEvent.click(flagBox());
+
+    expect(main().querySelector('#flag-reason-error')).toBeNull();
+    expect(reasonField()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('goes from a summary link to its field, the label scrolled into view first, the address unchanged', async () => {
+    const { participant, router } = await openToSubmit();
+    await press(submitButton());
+
+    fireEvent.click(within(errorSummary()!).getByRole('link', { name: blank }));
+
+    expect(guidedNotes()).toHaveFocus();
+    expect(scrollIntoView.mock.contexts).toEqual([guidedNotes().labels[0]]);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(router.state.location.hash).toBe('');
+  });
+});
+
+describe('Pressing Submit note', () => {
+  it('sends one check save of a draft with no change, "Saving…" until it is answered, then confirms', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft()));
+    const check = held(saved('2026-10-01T05:42:00Z'));
+    serveSave(paths(participant).draft, check.answer);
+    renderApp(paths(participant).page);
+    await settle();
+
+    await press(submitButton());
+
+    expect(saves()).toEqual([
+      {
+        path: paths(participant).draft,
+        body: {
+          clientId: expect.any(String) as string,
+          seq: 1,
+          narrative: 'Jane made toast.\nThen a walk to the shops.',
+          tickedGoalIds: [breakfast.id, sister.id],
+          isFlagged: false,
+          flagReason: null,
+        },
+      },
+    ]);
+    expect(shownSaveStatus()).toBe('Saving…');
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(confirmation()).toBeNull();
+
+    check.release();
+    await settle();
+
+    expect(shownSaveStatus()).toBe(`Saved 3:42${nbsp}pm`);
+    expect(openConfirmation()).toBeInTheDocument();
+    expect(saves()).toHaveLength(1);
+  });
+
+  it('waits for the save out, then sends one check save, opening the confirmation once it is answered', async () => {
+    const { participant } = await openToSubmit();
+    const first = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, first.answer);
+    guidedNotes().focus();
+    type('Jane made toast.');
+    guidedNotes().blur();
+    await wait(0);
+    expect(saves()).toHaveLength(1);
+    const check = held(saved('2026-09-30T23:43:00Z'));
+    serveSave(paths(participant).draft, check.answer);
+
+    await press(submitButton());
+
+    expect(saves()).toHaveLength(1);
+    first.release();
+    await settle();
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+      [1, 'Jane made toast.'],
+      [2, 'Jane made toast.'],
+    ]);
+    expect(confirmation()).toBeNull();
+
+    check.release();
+    await settle();
+    expect(openConfirmation()).toBeInTheDocument();
+    expect(saves()).toHaveLength(2);
+  });
+
+  /** Opens a new note whose first save, of "Jane made toast.", is out and held, and gives its release. */
+  async function openWithASaveOut() {
+    const { participant } = await openToSubmit();
+    const first = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, first.answer);
+    guidedNotes().focus();
+    type('Jane made toast.');
+    guidedNotes().blur();
+    await wait(0);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:43:00Z'));
+    return first.release;
+  }
+
+  it('confirms and sends what the check save sent, with a change made while the save out was answered', async () => {
+    const release = await openWithASaveOut();
+
+    await press(submitButton());
+    type('Jane made toast. Then a walk.');
+    fireEvent.click(flagBox());
+    typeReason('Jane seemed unwell after lunch.');
+    release();
+    await settle();
+
+    expect(saves().map(({ body }) => [body.narrative, body.isFlagged])).toEqual([
+      ['Jane made toast.', false],
+      ['Jane made toast. Then a walk.', true],
+    ]);
+    expect(openConfirmation()).toHaveAccessibleDescription(`Thursday 1${nbsp}October 2026 Flagged for manager: Yes`);
+    await confirmSubmit();
+
+    expect(submits().map(({ body }) => [body.narrative, body.isFlagged, body.flagReason])).toEqual([
+      ['Jane made toast. Then a walk.', true, 'Jane seemed unwell after lunch.'],
+    ]);
+  });
+
+  it('checks what the check save sent, opening only the summary for a change made meanwhile that fails', async () => {
+    const release = await openWithASaveOut();
+
+    await press(submitButton());
+    fireEvent.click(flagBox());
+    release();
+    await settle();
+
+    expect(saves().map(({ body }) => body.isFlagged)).toEqual([false, true]);
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toHaveFocus();
+    expect(summaryItems()).toEqual([['Enter a reason for the flag', '#flag-reason']]);
+  });
+
+  it('opens nothing when the check save fails, then or later', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    serveSave(paths(participant).draft, problem(503));
+
+    await press(submitButton());
+    await wait(30_000);
+
+    expect(saves()).toHaveLength(2);
+    expect(confirmation()).toBeNull();
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('ends at the dead end, opening nothing, when the check save finds the note submitted elsewhere', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    serveSave(paths(participant).draft, problem(409, { code: 'note.version_conflict' }));
+
+    await press(submitButton());
+
+    const sentence = 'This note was changed on another device or tab.';
+    expect(within(pageBar()).getByRole('region', { name: sentence })).toBeInTheDocument();
+    expect(assertive().textContent).toBe(sentence);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(confirmation()).toBeNull();
+    expect(guidedNotes()).toHaveValue('Jane made toast.');
+  });
+
+  it("opens nothing during a dead end, saying its sentence again in the page's polite region", async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, problem(422, { code: 'note.participant_archived' }));
+    await write();
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(submitButton());
+    await wait(16);
+
+    expect(pageStatus().textContent).toBe('Jane Citizen is archived, so this note cannot be started. Ask a manager.');
+    expect(saves()).toHaveLength(1);
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toBeNull();
+  });
+
+  it("answers Enter's implicit submission as a press, its checks first", async () => {
+    await openToSubmit();
+
+    fireEvent.submit(submitButton().closest('form')!);
+    await settle();
+
+    expect(errorSummary()).toHaveFocus();
+    expect(saves()).toEqual([]);
+    expect(confirmation()).toBeNull();
+  });
+
+  it('ignores a second press while its check save is out, and Enter twice after Submit sends nothing', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    const check = held(saved('2026-09-30T23:43:00Z'));
+    serveSave(paths(participant).draft, check.answer);
+
+    await press(submitButton());
+    await press(submitButton());
+    expect(saves()).toHaveLength(2);
+    check.release();
+    await settle();
+
+    const focused = document.activeElement ?? document.body;
+    expect(focused).toBe(within(openConfirmation()).getByRole('heading', { level: 2 }));
+    for (const key of ['Enter', 'Enter']) {
+      fireEvent.keyDown(focused, { key });
+      fireEvent.keyUp(focused, { key });
+    }
+    await wait(1_000);
+
+    expect(submits()).toEqual([]);
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+    expect(saves()).toHaveLength(2);
+  });
+});
+
+describe('The Submit confirmation', () => {
+  it("asks \"Submit today's note for\" and the name, on its title, with the date, the flag, two buttons", async () => {
+    await openToSubmit();
+    await write();
+
+    await press(submitButton());
+
+    const dialog = openConfirmation();
+    expect(dialog).toHaveAccessibleName('Submit today’s note for Jane Citizen');
+    const title = within(dialog).getByRole('heading', { level: 2 });
+    expect(title).toHaveFocus();
+    expect(within(title).getByText('Jane Citizen')).toHaveAttribute('translate', 'no');
+    expect(dialog).toHaveAccessibleDescription(`Thursday 1${nbsp}October 2026 Flagged for manager: No`);
+    expect(dialog.querySelector('time')).toHaveAttribute('datetime', '2026-10-01');
+    expect(dialogButtons()).toEqual(['Submit note for Jane Citizen', 'Go back']);
+    expect(within(dialog).getByRole('alert')).toBeEmptyDOMElement();
+    expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('says "Flagged for manager: Yes" for a note flagged with a reason', async () => {
+    await openToSubmit();
+    fireEvent.click(flagBox());
+    typeReason('Jane seemed unwell after lunch.');
+    await write();
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleDescription(`Thursday 1${nbsp}October 2026 Flagged for manager: Yes`);
+  });
+
+  // note-form.md item 24: the reason typed is kept on screen, and sent with no flag.
+  it('says "Flagged for manager: No" for a note unticked after a reason was typed, which sends no reason', async () => {
+    await openToSubmit();
+    fireEvent.click(flagBox());
+    typeReason('Jane seemed unwell after lunch.');
+    fireEvent.click(flagBox());
+    await write();
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleDescription(`Thursday 1${nbsp}October 2026 Flagged for manager: No`);
+    await confirmSubmit();
+
+    expect(submits().map(({ body }) => [body.isFlagged, body.flagReason])).toEqual([[false, null]]);
+  });
+
+  it('asks "Submit the note for" the name for a note of an earlier day, with its date', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft()), '2026-09-30');
+    serveSave(paths(participant, '2026-09-30').draft, saved('2026-10-01T05:42:00Z'));
+    renderApp(paths(participant, '2026-09-30').page, manager);
+    await settle();
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleName('Submit the note for Jane Citizen');
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `Wednesday 30${nbsp}September 2026 Flagged for manager: No`,
+    );
+  });
+
+  it('wraps an unbroken name of 100 characters in its title and its confirming button, never cutting it', async () => {
+    const long = { ...freshParticipant(), givenName: 'X'.repeat(50), familyName: 'Y'.repeat(49) };
+    const name = `${long.givenName} ${long.familyName}`;
+    serveNote(long, json(savedDraft()));
+    serveSave(paths(long).draft, saved('2026-10-01T05:42:00Z'));
+    renderApp(paths(long).page);
+    await settle();
+
+    await press(submitButton());
+
+    expect(name).toHaveLength(100);
+    expect(openConfirmation()).toHaveAccessibleName(`Submit today’s note for ${name}`);
+    for (const element of [within(openConfirmation()).getByText(name), dialogButton(`Submit note for ${name}`)]) {
+      expect(element).toHaveStyle({ overflowWrap: 'anywhere' });
+      for (const cut of [{ textTransform: 'uppercase' }, { textOverflow: 'ellipsis' }, { whiteSpace: 'nowrap' }]) {
+        expect(element).not.toHaveStyle(cut);
+      }
+    }
+  });
+
+  it('goes back with nothing sent, focus on Submit note, and autosave going on', async () => {
+    focusLikeABrowser();
+    await openToSubmit();
+    await write();
+    await press(submitButton());
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(submitButton()).toHaveFocus();
+    expect(submits()).toEqual([]);
+    type('Jane made toast. Then a walk.');
+    await wait(2_000);
+    expect(saves().map(({ body }) => body.narrative)).toEqual([
+      'Jane made toast.',
+      'Jane made toast.',
+      'Jane made toast. Then a walk.',
+    ]);
+  });
+
+  it('sends the version with its key, the content as autosave sends it, and "Submitting…" after 1 s', async () => {
+    const { participant } = await openToSubmit(json(template()), noAnswer);
+    fireEvent.click(within(main()).getByText(bus.text));
+    fireEvent.click(flagBox());
+    typeReason('Jane seemed unwell after lunch.');
+    await write();
+    await press(submitButton());
+    const status = within(openConfirmation()).getByRole('status');
+
+    await press(dialogButton('Submit note for Jane Citizen'));
+
+    expect(submits()).toEqual([
+      {
+        path: paths(participant).versions,
+        key: expect.stringMatching(uuid) as string,
+        body: {
+          baseVersion: 0,
+          narrative: 'Jane made toast.',
+          tickedGoalIds: [bus.id],
+          isFlagged: true,
+          flagReason: 'Jane seemed unwell after lunch.',
+        },
+      },
+    ]);
+    // Both buttons busy, with their words kept, and the status line empty until the request has taken 1 s.
+    expect(dialogButtons()).toEqual(['Submit note for Jane Citizen', 'Go back']);
+    for (const button of within(openConfirmation()).getAllByRole('button')) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+    }
+    await wait(998);
+    expect(status).toBeEmptyDOMElement();
+    await wait(1);
+    expect(status).toHaveTextContent(/^Submitting…$/);
+  });
+
+  it('sends no save while its request is out, though a browser closed it, and its failure shows', async () => {
+    const post = held(noConnection);
+    await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    expect(confirmation()).toBeNull();
+    type('Jane made toast. Then a walk.');
+    await wait(5_000);
+    expect(saves()).toHaveLength(2);
+
+    post.release();
+    await settle();
+
+    const alert = submitButton().closest('form')!.querySelector('div[role="alert"]');
+    expect(alert?.textContent).toBe('Not submitted: no connection. Your draft is saved. Try again.');
+    expect(saves().map(({ body }) => body.narrative).at(-1)).toBe('Jane made toast. Then a walk.');
+  });
+
+  it('keeps Submit note busy while its request is out after a browser closed it, a press sending nothing', async () => {
+    const post = held(noConnection);
+    await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    await press(submitButton());
+    await wait(5_000);
+    expect(saves()).toHaveLength(2);
+    expect(confirmation()).toBeNull();
+
+    post.release();
+    await settle();
+
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+    await press(submitButton());
+    await settle();
+    expect(saves()).toHaveLength(3);
+    const [first] = submits();
+    await confirmSubmit();
+    expect(submits()).toHaveLength(2);
+    expect(submits()[1].key).not.toBe(first.key);
+  });
+
+  it.each([
+    { cause: 'no connection', answer: noConnection },
+    { cause: 'something went wrong', answer: problem(503) },
+  ])(
+    'stays open for "Not submitted: $cause…", focus on its confirming button, and a retry sends the same key',
+    async ({ cause, answer }) => {
+      await openToSubmit(json(template()), inTurn(answer, versionSaved(200)));
+      await write();
+      await press(submitButton());
+      const confirm = dialogButton('Submit note for Jane Citizen');
+
+      await press(confirm);
+
+      expect(within(openConfirmation()).getByRole('alert').textContent).toBe(
+        `Not submitted: ${cause}. Your draft is saved. Try again.`,
+      );
+      expect(confirm).toHaveFocus();
+      expect(confirm).not.toHaveAttribute('aria-disabled');
+
+      // Its first answer lost, the retry finds the version saved: 200, a success too.
+      await press(confirm);
+      await settle();
+
+      const [first, retry] = submits();
+      expect(first.key).toMatch(uuid);
+      expect(retry.key).toBe(first.key);
+      expect(retry.body).toEqual(first.body);
+      expect(banner()).toHaveFocus();
+    },
+  );
+
+  it('makes a new key for each opening', async () => {
+    await openToSubmit(json(template()), problem(503));
+    await write();
+    await press(submitButton());
+    await confirmSubmit();
+    await press(dialogButton('Go back'));
+    await settle();
+
+    await press(submitButton());
+    await confirmSubmit();
+
+    const [first, second] = submits();
+    expect(second.key).toMatch(uuid);
+    expect(second.key).not.toBe(first.key);
+  });
+
+  it('takes its confirming button away for a note submitted elsewhere, then the form is a dead end', async () => {
+    await openToSubmit(json(template()), problem(409, { code: 'note.version_conflict' }));
+    await write();
+    await press(submitButton());
+
+    await confirmSubmit();
+
+    const sentence = 'This note was changed on another device or tab.';
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(sentence);
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+    expect(assertive()).toBeEmptyDOMElement();
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(within(pageBar()).getByRole('region', { name: sentence })).toBeInTheDocument();
+    expect(assertive().textContent).toBe(sentence);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(guidedNotes()).toHaveValue('Jane made toast.');
+    type('Jane made toast. Then a walk.');
+    await wait(5_000);
+    expect(saves()).toHaveLength(2);
+    expect(submits()).toHaveLength(1);
+  });
+
+  it.each([
+    // .NET counts U+0085 as blank, where trim() keeps it, so the form's checks pass a text that the server refuses.
+    { field: 'narrative', text: '\u0085' },
+    { field: 'idempotencyKey', text: 'Jane made toast.' },
+  ])('closes for a 422 under $field, which the checks do not explain, focusing one unlinked item', async ({
+    field,
+    text,
+  }) => {
+    const refused = problem(422, { code: 'validation.failed', errors: { [field]: ['Refused.'] } });
+    await openToSubmit(json(template()), refused);
+    await write(text);
+    await press(submitButton());
+
+    await confirmSubmit();
+
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toHaveFocus();
+    expect(summaryItems()).toEqual([
+      ['Not submitted: something went wrong. Your draft is saved. Try again.', undefined],
+    ]);
+    expect(guidedNotes()).not.toHaveAttribute('aria-invalid');
+    expect(within(main()).queryByText('Refused.')).toBeNull();
+    expect(document.title).toBe('Error: Grow2Notes – Note');
+    type(`${text} Then a walk.`);
+    await wait(2_000);
+    expect(saves()).toHaveLength(3);
+  });
+
+  it('closes for a 401 before sign-in shows in place, sending nothing more', async () => {
+    await openToSubmit(json(template()), problem(401));
+    await write();
+    await press(submitButton());
+    const dialog = openConfirmation();
+    const close = vi.spyOn(HTMLDialogElement.prototype, 'close');
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
+
+    await confirmSubmit();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(pageHeading()).toHaveFocus();
+    expect(close.mock.contexts).toEqual([dialog]);
+    const viewCFocused = focus.mock.invocationCallOrder[focus.mock.contexts.indexOf(pageHeading())];
+    expect(close.mock.invocationCallOrder[0]).toBeLessThan(viewCFocused);
+    expect(confirmation()).toBeNull();
+    expect(submits()).toHaveLength(1);
+  });
+
+  it('closes as Go back as the 28-minute warning opens, sending nothing, focus on Submit note after Stay', async () => {
+    const { opened, closed } = focusLikeABrowser();
+    await openToSubmit();
+    await write();
+    await press(submitButton());
+    const dialog = openConfirmation();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(closed.mock.contexts).toEqual([dialog]);
+    expect(opened.mock.contexts.at(-1)).toBe(warning);
+    expect(closed.mock.invocationCallOrder[0]).toBeLessThan(opened.mock.invocationCallOrder.at(-1)!);
+    expect(confirmation()).toBeNull();
+    expect(submits()).toEqual([]);
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(warning).not.toHaveAttribute('open');
+    expect(submitButton()).toHaveFocus();
+    expect(submits()).toEqual([]);
+  });
+});
+
+describe('After Submit', () => {
+  it('pops back to Today, the banner focused before its <h1>, and fetches the list afresh', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    serveSubmit(paths(participant).versions, versionSaved());
+    const list = { date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList;
+    serve(todayPath, json(list));
+    const { router } = renderApp('/');
+    await settle();
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    await write();
+    await press(submitButton());
+    const fresh = held(json(list));
+    serve(todayPath, fresh.answer);
+
+    await confirmSubmit();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('POP');
+    expect(banner()).toHaveFocus();
+    expect(banner()).toHaveTextContent(/^Note for Jane Citizen submitted$/);
+    expect(banner()?.nextElementSibling).toBe(pageHeading());
+    for (const attribute of ['role', 'aria-live']) {
+      expect(banner()).not.toHaveAttribute(attribute);
+    }
+    // No row kept from before the Submit: the rows come with the list that the server gives now.
+    expect(within(main()).queryByRole('list')).toBeNull();
+    const sent = sentRequests();
+    expect(sent.lastIndexOf(`GET ${todayPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
+    fresh.release();
+    await settle();
+    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(banner()).toHaveFocus();
+  });
+
+  it('puts Today in place of a form opened from its address, the banner focused, and shows it once', async () => {
+    const { participant, router } = await openToSubmit();
+    await write();
+    await press(submitButton());
+
+    await confirmSubmit();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(banner()).toHaveFocus();
+    expect(document.title).toBe('Grow2Notes – Today');
+
+    // Gone once Today is left and opened again.
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    await press(within(pageBar()).getByRole('link', { name: 'Today' }));
+    await settle();
+    expect(router.state.location.pathname).toBe('/');
+    expect(banner()).toBeNull();
   });
 });

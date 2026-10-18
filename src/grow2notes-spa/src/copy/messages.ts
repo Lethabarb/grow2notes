@@ -34,6 +34,19 @@ export const msg = {
    * given name, as design.md writes it.
    */
   noGoalsSetUp: (givenName: string) => `No goals set up for ${givenName} yet. A manager can add them.`,
+  /**
+   * The Submit confirmation's confirming button (note-form.md component 14), with the participant's full name, which
+   * the title shows too (design.md §3.9).
+   */
+  submitNoteFor: (name: string) => `Submit note for ${name}`,
+  /**
+   * A Submit that failed (note-form.md *Confirmation dialog*, microcopy.md §9): in the confirmation's alert line, or
+   * above Submit note when a browser closed the confirmation while its request was out; and the error summary's one
+   * unlinked item, for a `422` from Submit.
+   */
+  notSubmitted: (cause: Cause): string => msg.notDone('submitted', cause, strings.note.draftIsSaved),
+  /** Today's success banner after Submit (design.md §4.3), with the participant's full name, one phrase. */
+  noteSubmitted: (name: string) => `Note for ${name} submitted`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */

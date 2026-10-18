@@ -3,16 +3,27 @@
  * body's colour, in the reading column. The bar is a border, so that forced colours keep it.
  */
 .notice {
+  --notice-edge: var(--colour-action);
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
   max-inline-size: var(--measure);
   padding: var(--space-3) var(--space-4);
-  border: var(--border-divider) solid var(--colour-action);
+  border: var(--border-divider) solid var(--notice-edge);
   border-inline-start-width: 6px;
   border-radius: var(--radius-s);
   background: var(--colour-action-tint);
   color: var(--colour-text);
+}
+
+/*
+ * The success banner (status-messages.md), Submit's on Today: its bar, border and tick in the success colour on its
+ * tint, with the space before the <h1> that it comes before (today.md *Layout - phone*).
+ */
+.success {
+  --notice-edge: var(--colour-success);
+  margin-block-end: var(--space-4);
+  background: var(--colour-success-tint);
 }
 
 /* Beside the first line of the words, whatever their size. */
@@ -21,7 +32,7 @@
   inline-size: 1.25em;
   block-size: 1.25em;
   margin-block-start: calc((var(--line-height-body) * 1em - 1.25em) / 2);
-  color: var(--colour-action);
+  color: var(--notice-edge);
 }
 
 /* The words, then the action under them on a phone, full width, as Button is there. */
@@ -35,6 +46,11 @@
 
 .text {
   margin: 0;
+}
+
+/* The success banner's one sentence, bold, as design.md's one-phrase message (status-messages.md *Anatomy*). */
+.success .text {
+  font-weight: 700;
 }
 
 /*

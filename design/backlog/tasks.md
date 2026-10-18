@@ -3079,10 +3079,10 @@ past notes.
   - Past notes starts from its newest 30 on a push, the cached pages dropped (participant-notes.md item 14), and keeps
     every page loaded on a pop (item 13). Its `before` is bound as a date, so a value that is not one gets the
     framework's `400`.
-  - A `422` from Submit closes the confirmation and shows the form's own words for `narrative` and `flagReason`, chosen
-    by the form's checks; any other key, or a field refused that the form's checks pass (such as a text of U+0085
-    alone, which .NET counts as blank and `trim()` keeps), is one unlinked summary item, "Not submitted: something went
-    wrong. Your draft is saved. Try again.", so that no server text shows and the summary always has an item to focus
+  - A `422` from Submit closes the confirmation and is always one unlinked summary item, "Not submitted: something went
+    wrong. Your draft is saved. Try again.", with no field message, as the confirmation sends only content that the
+    form's checks have passed, so the server refuses only what they do not explain (such as a text of U+0085 alone,
+    which .NET counts as blank and `trim()` keeps); no server text shows and the summary always has an item to focus
     (note-form.md item 29). Submit's body is built from the form's content by the same function as autosave's, taken
     out of `useAutosave`'s mutation, its text cut by `capped()`; the form's blank checks trim, and its length checks
     count the whole text, as guided-notes-textarea.md item 9 and conditional-reveal.md's `validateFlag` do, where
@@ -3137,6 +3137,28 @@ past notes.
   `StoredTime.UtcNow` (`Platform`), the clock's time cut to the millisecond, which `Archiving` takes too. The test of
   two submits with one key holds the header's `ExecuteUpdate` with a command interceptor, as no `SaveChanges` sends it,
   before which the transaction has only read.
+- Where the design is silent (step 4), the simplest options: the check save opens the confirmation only when it saved
+  the newest change, so a change made while it was out opens nothing and the press is not remembered; Submit note has
+  no busy label of its own while the check save is out, as "Saving…" in the indicator says why it is busy; and the
+  confirmation's flag line and request take the content that the check save sent, checked again, so that a change
+  made while a save out at the press was being answered goes with them, or shows its errors and opens nothing, the
+  page being inert while it is open. A press during a dead end runs the checks first, as *Pressing Submit note* orders
+  them, so it shows their errors, and says the dead end's sentence only when they pass. Component 12's alert above
+  Submit note shows Submit's failure only after a browser has closed the confirmation while its request was out
+  (confirm-dialog.md *Behaviour* 7), Submit note staying busy until that request ends, so that no press sends a save
+  or opens a second confirmation meanwhile; a `409 note.version_conflict` then makes the form a dead end and a `422`
+  its unlinked item at once. A `422` from Submit is
+  always that unlinked item, never a field's message, as the confirmation sends only content that the form's checks
+  have passed (a text of U+0085 alone, for one, which the server refuses). An input into a field with a message checks
+  it again and shows what it now fails, or nothing once it passes; the summary's one unlinked item comes first, as
+  Invite user's does, and stays until the next press. `ConfirmDialog` gains `titleName`, the name line at the `<h1>`'s
+  size, wrapping anywhere; `Notice`'s success tone is an inline-SVG tick and keeps `--space-4` before the `<h1>` as its
+  own margin; `Idempotency-Key` is an `api()` option. Focus returns to Submit note natively as the confirmation closes,
+  so the Vitest checks of it stand in for the browser's dialog focusing steps. Today's rows carry no status until step
+  5, so step 4 shows the list after Submit to be the server's fresh one, with nothing kept, and step 5 extends the
+  *After Submit* Vitest to show the row reading "Submitted · You · …" from the fresh answer, never "Draft". So that the
+  end-to-end tests already written stay true, `note-form.spec.ts`'s Tab orders include Submit note and its assertive
+  region is found among the page's two alerts; step 8 adds Submit's own end-to-end checks.
 
 ### Steps
 
@@ -3196,7 +3218,7 @@ past notes.
       breakfast" in version 1; on a `TestClock`, a draft started at 11:58 pm and submitted at 12:01 am keeping its note
       date, with `FirstSubmittedAtUtc` the time of the submit; and an autosave after the submit
       `409 note.version_conflict`, recreating nothing.
-- [ ] Submit note, its checks and the confirmation (S02.03.01's links to note-form.md items 4, 5, 11's
+- [x] Submit note, its checks and the confirmation (S02.03.01's links to note-form.md items 4, 5, 11's
       `aria-disabled`, 20 to 22, 25 to 30 and 37, *States* › *Confirmation dialog*, app-shell.md's Session bullet and
       *Press Stay signed in*, and today.md's *After Submit* bullet; S02.03.02's third criterion, and items 23 and 24 at
       Submit; T08's hand-offs of identity item 3's dialog title and confirm button, item 18's "keep Submit unavailable"

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useState } from 'react';
 import { useParams } from 'react-router';
 import type { StartedBy } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
@@ -11,19 +10,16 @@ import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import textBox from '../../components/TextBox.module.css';
-import { TickListField } from '../../components/TickListField.tsx';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly } from '../../copy/format.ts';
-import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { fullName } from '../participants/participantsQuery.ts';
-import { FlagForManager } from './FlagForManager.tsx';
-import { GuidedNotes } from './GuidedNotes.tsx';
-import { draftQuery, participantQuery, type Draft, type DraftAnswer, type ParticipantHeader } from './noteQueries.ts';
+import { draftQuery, participantQuery, type DraftAnswer, type ParticipantHeader } from './noteQueries.ts';
+import { NoteForm } from './NoteForm.tsx';
 import styles from './NotePage.module.css';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
-import { useAutosave, type DeadEnd } from './useAutosave.ts';
+import type { DeadEnd } from './useAutosave.ts';
 
 /**
  * A participant's note for a day at `/participants/{participantId}/notes/{noteDate}` (note-form.md *Routes*), keyed by
@@ -87,6 +83,8 @@ function Note({ participantId, noteDate }: NoteProps) {
               participant={participant.data!}
               answer={draft.data!}
               noteDate={noteDate}
+              indicator={indicator}
+              deadEnd={deadEnd}
               onIndicator={setIndicator}
               onDeadEnd={setDeadEnd}
             />
@@ -124,6 +122,10 @@ type LoadedProps = {
   participant: ParticipantHeader;
   answer: DraftAnswer;
   noteDate: string;
+  /** What the save indicator says, none until the form first says it. */
+  indicator: SaveIndicator | undefined;
+  /** The sentence of the dead end that stopped autosave, if one has. */
+  deadEnd: string | undefined;
   onIndicator: (indicator: SaveIndicator) => void;
   /** The sentence of a dead end that stopped autosave. */
   onDeadEnd: (sentence: string) => void;
@@ -132,12 +134,12 @@ type LoadedProps = {
 /**
  * The note once loaded: the identity `<h1>` (note-identity-header.md), which takes the focus left pending for it on
  * arrival, the name as stored, never translated, then the note date, so that a screen reader reads the person and the
- * day together; then the form, or, for another user's draft, who started it and when, in a notice, and no form
- * (note-form.md *Loading and load errors*), worded for today's note, or for an earlier day's, as the first save's
- * dead end words it too. It keeps the note as it first loaded, so that nothing fetched later, as after signing in again
- * in place, replaces what is on screen (note-form.md *Autosave*).
+ * day together; then the form, which puts its error summary above the `<h1>`, or, for another user's draft, who started
+ * it and when, in a notice, and no form (note-form.md *Loading and load errors*), worded for today's note, or for an
+ * earlier day's, as the first save's dead end words it too. It keeps the note as it first loaded, so that nothing
+ * fetched later, as after signing in again in place, replaces what is on screen (note-form.md *Autosave*).
  */
-function Loaded({ participant, answer, noteDate, onIndicator, onDeadEnd }: LoadedProps) {
+function Loaded({ participant, answer, noteDate, indicator, deadEnd, onIndicator, onDeadEnd }: LoadedProps) {
   const me = useMe();
   const [opened] = useState(answer);
   const name = fullName(participant);
@@ -152,147 +154,49 @@ function Loaded({ participant, answer, noteDate, onIndicator, onDeadEnd }: Loade
     });
   }
 
-  function deadEndSentence(deadEnd: DeadEnd): string {
-    switch (deadEnd.code) {
+  function deadEndSentence(stopped: DeadEnd): string {
+    switch (stopped.code) {
       case 'note.past_date_manager_only':
         return apiErrorCopy['note.past_date_manager_only'];
       case 'note.participant_archived':
         return apiErrorCopy['note.participant_archived'](name);
+      case 'note.version_conflict':
+        return apiErrorCopy['note.version_conflict'];
       case 'note.in_progress_by_other':
-        return startedBySentence(deadEnd.startedBy);
+        return startedBySentence(stopped.startedBy);
     }
   }
 
-  return (
+  const heading = (
+    <PageHeading>
+      <span className={styles.name} translate="no">
+        {name}
+      </span>{' '}
+      <time className={styles.date} dateTime={noteDate}>
+        {dateLong(date)}
+      </time>
+    </PageHeading>
+  );
+
+  return 'startedBy' in opened ? (
     <>
-      <PageHeading>
-        <span className={styles.name} translate="no">
-          {name}
-        </span>{' '}
-        <time className={styles.date} dateTime={noteDate}>
-          {dateLong(date)}
-        </time>
-      </PageHeading>
-      {'startedBy' in opened ? (
-        <Notice>{startedBySentence(opened.startedBy)}</Notice>
-      ) : (
-        <NoteForm
-          participantId={participant.id}
-          noteDate={noteDate}
-          givenName={participant.givenName}
-          draft={opened.draft}
-          onIndicator={onIndicator}
-          onDeadEnd={(deadEnd) => {
-            onDeadEnd(deadEndSentence(deadEnd));
-          }}
-        />
-      )}
+      {heading}
+      <Notice>{startedBySentence(opened.startedBy)}</Notice>
     </>
-  );
-}
-
-type NoteFormProps = {
-  participantId: string;
-  noteDate: string;
-  givenName: string;
-  draft: Draft;
-  onIndicator: (indicator: SaveIndicator) => void;
-  onDeadEnd: (deadEnd: DeadEnd) => void;
-};
-
-/**
- * The note form (note-form.md components 7, 8, 10 and 11): the lists-changed notice's live region, there and empty
- * from the first render, as a screen reader may not announce words written into one added with them; then Goals, its
- * goals and ticks in this page's state, from the draft's; then Guided notes; then Flag for manager, its tick and reason
- * in this page's state too, the reason kept while the box is unticked. Until T13 adds "2. Common items", the sections
- * go from 1 to 3, keeping design.md's numbers. Each tick and each input is a change that autosave saves, and a field
- * that loses focus sends one at once (design.md §3.4). After a dead end, every tick and the text stay as they are, to
- * change and copy, though nothing more is saved (note-form.md *Conflicts and refusals*).
- */
-function NoteForm({ participantId, noteDate, givenName, draft, onIndicator, onDeadEnd }: NoteFormProps) {
-  const box = useRef<HTMLTextAreaElement>(null);
-  const notice = useRef<HTMLDivElement>(null);
-  const [goals, setGoals] = useState(draft.goals);
-  const [ticked, setTicked] = useState(
-    () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
-  );
-  const [listsChanged, setListsChanged] = useState(false);
-  const [flagged, setFlagged] = useState(draft.isFlagged);
-  const [reason, setReason] = useState(draft.flagReason ?? '');
-  const autosave = useAutosave({
-    participantId,
-    noteDate,
-    opened: draft,
-    read: () => ({ narrative: box.current!.value, tickedGoalIds: [...ticked], isFlagged: flagged, flagReason: reason }),
-    onIndicator,
-    onListsChanged: showListsAsNow,
-    onDeadEnd,
-  });
-
-  // The goals as the form now has them, after a first save found the lists changed (design.md §5.7): the ticks of the
-  // goals still listed kept, by ID, the text as it is, and the notice above Goals until the person leaves. Committed at
-  // once, so that the save sent next reads the ticks shown, and focus, if the box that had it has gone, goes to the
-  // notice; otherwise it stays where it is.
-  function showListsAsNow(reloaded: Draft) {
-    const focused = document.activeElement;
-    flushSync(() => {
-      setGoals(reloaded.goals);
-      setTicked((current) => new Set(reloaded.goals.filter((goal) => current.has(goal.id)).map((goal) => goal.id)));
-      setListsChanged(true);
-    });
-    if (focused?.isConnected === false) {
-      notice.current?.focus();
-    }
-  }
-
-  function toggle(goalId: string, isTicked: boolean) {
-    setTicked((current) => {
-      const next = new Set(current);
-      if (isTicked) {
-        next.add(goalId);
-      } else {
-        next.delete(goalId);
-      }
-
-      return next;
-    });
-    autosave.changed();
-  }
-
-  return (
-    // React's onBlur bubbles, as focusout does, so it hears every field of the form.
-    <div onBlur={autosave.flush}>
-      <div ref={notice} role="status" tabIndex={-1} className={styles.listsChanged}>
-        {listsChanged && <Notice>{apiErrorCopy['note.lists_changed']}</Notice>}
-      </div>
-      <TickListField
-        idPrefix="goal"
-        className={styles.section}
-        heading={strings.note.goals}
-        hint={strings.note.goalsHint}
-        emptyText={msg.noGoalsSetUp(givenName)}
-        items={goals}
-        ticked={ticked}
-        onToggle={toggle}
-      />
-      <GuidedNotes
-        boxRef={box}
-        initialText={draft.narrative}
-        prompts={draft.guidePrompts}
-        onChange={autosave.changed}
-      />
-      <FlagForManager
-        flagged={flagged}
-        reason={reason}
-        onFlaggedChange={(isFlagged) => {
-          setFlagged(isFlagged);
-          autosave.changed();
-        }}
-        onReasonChange={(text) => {
-          setReason(text);
-          autosave.changed();
-        }}
-      />
-    </div>
+  ) : (
+    <NoteForm
+      participantId={participant.id}
+      noteDate={noteDate}
+      name={name}
+      givenName={participant.givenName}
+      draft={opened.draft}
+      heading={heading}
+      indicator={indicator}
+      deadEnd={deadEnd}
+      onIndicator={onIndicator}
+      onDeadEnd={(stopped) => {
+        onDeadEnd(deadEndSentence(stopped));
+      }}
+    />
   );
 }

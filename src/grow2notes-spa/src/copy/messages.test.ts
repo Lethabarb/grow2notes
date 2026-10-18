@@ -24,6 +24,23 @@ describe('the character count words (microcopy.md §4)', () => {
   });
 });
 
+// note-form.md *Confirmation dialog* and design.md §4.3, word for word.
+describe("Submit's words", () => {
+  it("name the participant in full on the confirming button and in Today's banner", () => {
+    expect(msg.submitNoteFor('Jane Citizen')).toBe('Submit note for Jane Citizen');
+    expect(msg.noteSubmitted('Jane Citizen')).toBe('Note for Jane Citizen submitted');
+  });
+
+  it('say that it was not submitted, and why, and that the draft is saved', () => {
+    expect(msg.notSubmitted('offline')).toBe('Not submitted: no connection. Your draft is saved. Try again.');
+    expect(msg.notSubmitted('server')).toBe('Not submitted: something went wrong. Your draft is saved. Try again.');
+  });
+
+  it("give Guided notes' too-long message, its limit grouped", () => {
+    expect(msg.tooLong('Guided notes', 20_000)).toBe('Guided notes must be 20,000 characters or less');
+  });
+});
+
 describe("a Save's failure (microcopy.md §4's Action failed)", () => {
   it('says it was not saved, and why', () => {
     expect(msg.notSaved('offline')).toBe('Not saved: no connection. Try again.');

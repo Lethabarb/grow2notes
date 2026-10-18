@@ -38,6 +38,11 @@ export type ApiOptions = {
   body?: unknown;
   /** The row's token as the API's JSON gives it, a `rowVersion` or a user's `ConcurrencyStamp` (design.md §6.6). */
   ifMatch?: string;
+  /**
+   * A version save's `Idempotency-Key` (design.md §6.3): one for each opening of the Submit confirmation, which each
+   * retry in it sends again, so that a retry after a lost answer finds the version saved rather than saving a second.
+   */
+  idempotencyKey?: string;
   /** How long the whole answer may take; the two file downloads pass 30 seconds (empty-loading-error.md *Timing*). */
   timeoutMs?: number;
   /** The caller's own signal, such as TanStack Query's, whose abort is rethrown as it came. */
@@ -116,13 +121,16 @@ function heldRequest<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
 }
 
 async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
-  const { method = 'GET', body, ifMatch, timeoutMs = defaultTimeoutMs, signal } = options;
+  const { method = 'GET', body, ifMatch, idempotencyKey, timeoutMs = defaultTimeoutMs, signal } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
   if (ifMatch !== undefined) {
     headers['If-Match'] = entityTag(ifMatch);
+  }
+  if (idempotencyKey !== undefined) {
+    headers['Idempotency-Key'] = idempotencyKey;
   }
 
   const json = body === undefined ? undefined : JSON.stringify(body);

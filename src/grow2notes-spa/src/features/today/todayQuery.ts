@@ -44,6 +44,15 @@ export function invalidateToday(queryClient: QueryClient): Promise<void> {
 }
 
 /**
+ * Drops every Today list after Submit (note-form.md *After a successful submit*), so that Today, which shows next,
+ * fetches its list afresh and shows the submitted row only as the server gives it, never a row built here or kept from
+ * before, which could still say "Draft" (today.md *Conflicts resolved* 2).
+ */
+export function removeToday(queryClient: QueryClient): void {
+  queryClient.removeQueries({ queryKey: todayKey });
+}
+
+/**
  * Fetches the Today list that shows again, as TanStack does as the page becomes visible, sharing a request already
  * out, so that the window's `focus` and `visibilitychange`, which come together as a person returns to the tab, send
  * one request between them.

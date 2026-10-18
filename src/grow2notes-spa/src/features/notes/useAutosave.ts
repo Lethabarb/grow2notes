@@ -17,16 +17,11 @@ const longestMs = 5_000;
  */
 export type DraftContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string };
 
+/** The note's content as `PUT {base}/draft` and `POST {base}/versions` alike send it (design.md §6.3). */
+export type SentContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string | null };
+
 /** `PUT {base}/draft`'s body (design.md §6.3), as far as this form fills it. */
-type DraftSaveBody = {
-  clientId: string;
-  seq: number;
-  listsVersion?: string;
-  narrative: string;
-  tickedGoalIds: string[];
-  isFlagged: boolean;
-  flagReason: string | null;
-};
+type DraftSaveBody = SentContent & { clientId: string; seq: number; listsVersion?: string };
 
 /** A save's answer, the time the working copy was saved, in UTC. */
 type DraftSaved = { savedAtUtc: string };
@@ -78,12 +73,27 @@ function savedReason({ isFlagged, flagReason }: DraftContent): string | null {
 }
 
 /**
+ * The form's content as a save sends it, and as Submit sends it too, built here once (T09's Notes): the text cut to
+ * its limit, the ticks, the flag, and the reason as `savedReason()` gives it. Submit's checks have by then refused a
+ * text or a reason over its limit, so that Submit sends them whole.
+ */
+export function sentContent(content: DraftContent): SentContent {
+  return {
+    narrative: capped(content.narrative, limits.guidedNotes),
+    tickedGoalIds: content.tickedGoalIds,
+    isFlagged: content.isFlagged,
+    flagReason: savedReason(content),
+  };
+}
+
+/**
  * A refusal of a save that no later save gets past, so that autosave stops (note-form.md *Conflicts and refusals*): a
  * worker's first save of a note for a day before today, as after midnight; a first save for an archived participant;
- * and another user's draft, with who started it and when.
+ * another user's draft, with who started it and when; and a note submitted meanwhile, on another device or tab, which
+ * Submit can meet too (T09's Notes).
  */
 export type DeadEnd =
-  | { code: 'note.past_date_manager_only' | 'note.participant_archived' }
+  | { code: 'note.past_date_manager_only' | 'note.participant_archived' | 'note.version_conflict' }
   | { code: 'note.in_progress_by_other'; startedBy: StartedBy };
 
 type AutosaveOptions = {
@@ -110,6 +120,19 @@ export type Autosave = {
   changed: () => void;
   /** A field lost focus: an unsaved change is sent at once. */
   flush: () => void;
+  /**
+   * Submit's check save (autosave-status.md *Behaviour* 6): once any save out has settled, one `PUT` now, changed or
+   * not, which sends the last change and meets any refusal that the note has had since its last save. The content that
+   * it read and saved, which carries any change made while the save out was being answered; `undefined` for a dead end,
+   * a failure, or a change made while it was out, so that nothing opens.
+   */
+  checkSave: () => Promise<DraftContent | undefined>;
+  /** Pauses autosave as Submit's request goes, its timers cleared, once any save out has settled. */
+  stop: () => Promise<void>;
+  /** Lets autosave go on after `stop()`, sending at once a change made meanwhile. */
+  resume: () => void;
+  /** Stops autosave at a dead end that Submit met, for as long as the form is open, as a save's would. */
+  end: (deadEnd: DeadEnd) => void;
 };
 
 /** Where autosave is, kept from render to render. */
@@ -118,8 +141,8 @@ type Progress = {
   made: number;
   /** The newest change that an answered save carried. */
   saved: number;
-  /** A save is out. */
-  sending: boolean;
+  /** The save out, if one is, whose promise settles, saved or not, as it ends. */
+  out: Promise<DraftContent | undefined> | undefined;
   /** A save fell due while one was out, and goes as that one settles. */
   due: boolean;
   /** The note exists: the draft was saved before it opened, or a save from this form was answered. */
@@ -128,6 +151,8 @@ type Progress = {
   listsVersion: string | undefined;
   /** A dead end stopped autosave, for as long as the form is open. */
   stopped: boolean;
+  /** Submit's request is out, from `stop()` to `resume()`, so that nothing is sent meanwhile. */
+  paused: boolean;
   /** The indicator says "Saving…". */
   saying: boolean;
   /** The form is on the page, so that a timer or an answer after it has gone sends and says nothing. */
@@ -148,7 +173,8 @@ type Progress = {
  * again at once with their version, "Saving…" shown throughout (autosave-status.md *Behaviour* 5). A dead end stops
  * autosave, with "Not saved". A save that fails otherwise leaves its change unsaved, and "Saving…" shown, until the
  * next change or a blur sends it: the retries, "Not saved: no connection…", the page-hidden save and the rules for
- * leaving are T10's (T08's Notes).
+ * leaving are T10's (T08's Notes). Submit runs a check save before its confirmation opens, and pauses autosave while
+ * its own request is out (autosave-status.md *Behaviour* 6).
  */
 export function useAutosave({
   participantId,
@@ -167,11 +193,12 @@ export function useAutosave({
   const progress = useRef<Progress>({
     made: 0,
     saved: 0,
-    sending: false,
+    out: undefined,
     due: false,
     started: opened.isSaved,
     listsVersion: opened.listsVersion,
     stopped: false,
+    paused: false,
     saying: false,
     mounted: false,
     quiet: undefined,
@@ -183,10 +210,7 @@ export function useAutosave({
       const body: DraftSaveBody = {
         ...nextIdentity(`${participantId}/${noteDate}`),
         ...(listsVersion === undefined ? {} : { listsVersion }),
-        narrative: capped(content.narrative, limits.guidedNotes),
-        tickedGoalIds: content.tickedGoalIds,
-        isFlagged: content.isFlagged,
-        flagReason: savedReason(content),
+        ...sentContent(content),
       };
       return api<DraftSaved>(`${noteBase(participantId, noteDate)}/draft`, { method: 'PUT', body });
     },
@@ -217,24 +241,27 @@ export function useAutosave({
     }
 
     state.made += 1;
-    if (!state.saying) {
-      state.saying = true;
-      callbacks.current.onIndicator({ kind: 'saving' });
-    }
-
+    saySaving(state);
     window.clearTimeout(state.quiet);
     state.quiet = window.setTimeout(flush, quietMs);
     state.longest ??= window.setTimeout(flush, longestMs);
   }
 
+  function saySaving(state: Progress) {
+    if (!state.saying) {
+      state.saying = true;
+      callbacks.current.onIndicator({ kind: 'saving' });
+    }
+  }
+
   function flush() {
     const state = progress.current;
     stopTimers(state);
-    if (!state.mounted || state.stopped || state.saved === state.made) {
+    if (!state.mounted || state.stopped || state.paused || state.saved === state.made) {
       return;
     }
 
-    if (state.sending) {
+    if (state.out !== undefined) {
       state.due = true;
       return;
     }
@@ -242,12 +269,18 @@ export function useAutosave({
     void send(state);
   }
 
-  async function send(state: Progress) {
-    state.sending = true;
+  function send(state: Progress): Promise<DraftContent | undefined> {
+    state.out = save(state);
+    return state.out;
+  }
+
+  // The form's content as the save read it, once saved; `undefined` if it was not.
+  async function save(state: Progress): Promise<DraftContent | undefined> {
     const carried = state.made;
     try {
+      const content = callbacks.current.read();
       const { savedAtUtc } = await mutateAsync({
-        content: callbacks.current.read(),
+        content,
         listsVersion: state.started ? undefined : state.listsVersion,
       });
       state.started = true;
@@ -256,17 +289,58 @@ export function useAutosave({
         state.saying = false;
         callbacks.current.onIndicator({ kind: 'saved', savedAtUtc });
       }
+
+      return content;
     } catch (error) {
       if (state.mounted && error instanceof ApiError) {
         await refused(state, error);
       }
+
+      return undefined;
     } finally {
-      state.sending = false;
+      state.out = undefined;
       if (state.due) {
         state.due = false;
         flush();
       }
     }
+  }
+
+  // Until no save is out, taking the place of the save due to follow one, as what comes next reads the form anew.
+  async function settled(state: Progress) {
+    while (state.out !== undefined) {
+      state.due = false;
+      await state.out;
+    }
+  }
+
+  async function checkSave(): Promise<DraftContent | undefined> {
+    const state = progress.current;
+    if (!state.mounted || state.stopped) {
+      return undefined;
+    }
+
+    stopTimers(state);
+    saySaving(state);
+    await settled(state);
+    if (!state.mounted || state.stopped) {
+      return undefined;
+    }
+
+    const content = await send(state);
+    return state.saved === state.made ? content : undefined;
+  }
+
+  async function stop() {
+    const state = progress.current;
+    state.paused = true;
+    stopTimers(state);
+    await settled(state);
+  }
+
+  function resume() {
+    progress.current.paused = false;
+    flush();
   }
 
   // A refusal that autosave answers itself (autosave-status.md *Behaviour* 5). Any other failure leaves the change
@@ -279,7 +353,7 @@ export function useAutosave({
 
     const deadEnd = deadEndOf(error);
     if (deadEnd !== undefined) {
-      stop(state, deadEnd);
+      stopAt(state, deadEnd);
     }
   }
 
@@ -298,7 +372,7 @@ export function useAutosave({
     }
 
     if ('startedBy' in answer) {
-      stop(state, { code: 'note.in_progress_by_other', startedBy: answer.startedBy });
+      stopAt(state, { code: 'note.in_progress_by_other', startedBy: answer.startedBy });
       return;
     }
 
@@ -309,7 +383,7 @@ export function useAutosave({
     state.due = true;
   }
 
-  function stop(state: Progress, deadEnd: DeadEnd) {
+  function stopAt(state: Progress, deadEnd: DeadEnd) {
     state.stopped = true;
     state.due = false;
     stopTimers(state);
@@ -317,7 +391,16 @@ export function useAutosave({
     callbacks.current.onDeadEnd(deadEnd);
   }
 
-  return { changed, flush };
+  return {
+    changed,
+    flush,
+    checkSave,
+    stop,
+    resume,
+    end: (deadEnd) => {
+      stopAt(progress.current, deadEnd);
+    },
+  };
 }
 
 /** The dead end that `error` is, if it is one. */
@@ -325,6 +408,7 @@ function deadEndOf(error: ApiError): DeadEnd | undefined {
   switch (error.code) {
     case 'note.past_date_manager_only':
     case 'note.participant_archived':
+    case 'note.version_conflict':
       return { code: error.code };
     case 'note.in_progress_by_other':
       return error.startedBy === undefined ? undefined : { code: error.code, startedBy: error.startedBy };

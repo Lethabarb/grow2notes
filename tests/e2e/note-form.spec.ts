@@ -45,8 +45,9 @@ const topBar = (page: Page) => page.locator('#page-bar > div');
 const backLink = (page: Page) => page.locator('#page-bar').getByRole('link', { name: 'Today', exact: true });
 const saveStatus = (page: Page) => page.locator('#save-status');
 const deadEnd = (page: Page) => page.locator('#page-bar').getByRole('region');
-// The form's assertive region, after the page's content, which says a dead end's sentence once.
-const alert = (page: Page) => page.getByRole('alert');
+// The form's assertive region, after the page's content, which says a dead end's sentence once: visually hidden, where
+// the alert above Submit note shows its words.
+const alert = (page: Page) => main(page).locator('div.visually-hidden[role="alert"]');
 const goals = (page: Page) => main(page).getByRole('group', { name: '1. Goals' });
 const goalBox = (page: Page, text: string) => main(page).getByRole('checkbox', { name: text, exact: true });
 const goalRow = (page: Page, text: string) => main(page).locator('label').filter({ hasText: text });
@@ -933,15 +934,17 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toBeFocused();
 
     // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then each goal's box, Guided
-    // notes and Flag for manager, the indicator, the <h1> and the hidden Reason being no stops.
+    // notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason being no stops.
     await expectStops(page, 'Tab', [
       breakfast.text,
       bus.text,
       '3. Guided notes',
       'Flag for manager',
+      'Submit note',
       'outside the page',
     ]);
     await expectStops(page, 'Shift+Tab', [
+      'Submit note',
       'Flag for manager',
       '3. Guided notes',
       bus.text,
@@ -959,7 +962,7 @@ for (const width of [375, 1280]) {
     await page.keyboard.type('Made toast.');
     await page.keyboard.press('Enter');
     await page.keyboard.type('Phoned her sister.');
-    await expectStops(page, 'Tab', ['Flag for manager', 'outside the page']);
+    await expectStops(page, 'Tab', ['Flag for manager', 'Submit note', 'outside the page']);
     await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
     expect(store.draft(jane.id, worker.today)).toMatchObject({
       ticked: [breakfast.id],
@@ -967,7 +970,14 @@ for (const width of [375, 1280]) {
     });
 
     // The back link, by Shift+Tab, returns to Jane's row.
-    await expectStops(page, 'Shift+Tab', ['Flag for manager', '3. Guided notes', bus.text, breakfast.text, 'Today']);
+    await expectStops(page, 'Shift+Tab', [
+      'Submit note',
+      'Flag for manager',
+      '3. Guided notes',
+      bus.text,
+      breakfast.text,
+      'Today',
+    ]);
     await page.keyboard.press('Enter');
     await expect(row(page, 'Jane Citizen')).toBeFocused();
     await expectNothingKept(page, 'Jane', 'Citizen', 'Made toast', 'Phoned');

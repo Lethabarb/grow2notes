@@ -377,7 +377,13 @@ export const strings = {
    * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
    * the save indicator on a draft reopened, until its first change, "Draft · saved 9:42 am" (design.md §4.3): its first
    * word, then the word before the time; and the indicator while a dead end in the top bar says why the note cannot be
-   * saved (autosave-status.md *Exact copy*).
+   * saved (autosave-status.md *Exact copy*). Then Submit note (component 12) and Submit's checks (*Validation*),
+   * inline and in the error summary: Guided notes left blank, with the second sentence only while guide prompts are
+   * set, as they are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with
+   * `reason`; and Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead,
+   * for a note dated `me.today` and for any other, before the name on its own line; its flag line, from the values
+   * that Submit sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not
+   * submitted: no connection. Your draft is saved. Try again." (microcopy.md §9).
    */
   note: {
     loading: 'Loading note…',
@@ -390,6 +396,17 @@ export const strings = {
     draft: 'Draft',
     draftSaved: 'saved',
     notSaved: 'Not saved',
+    submit: 'Submit note',
+    writeYourNotes: 'Write your notes in the Guided notes box',
+    writeYourNotesNotTheGuide: 'Write your notes in the Guided notes box. The grey text is only a guide.',
+    guidedNotesName: 'Guided notes',
+    enterAReason: 'Enter a reason for the flag',
+    submitTodaysNoteFor: 'Submit today’s note for',
+    submitTheNoteFor: 'Submit the note for',
+    flaggedYes: 'Flagged for manager: Yes',
+    flaggedNo: 'Flagged for manager: No',
+    submitting: 'Submitting…',
+    draftIsSaved: 'Your draft is saved.',
   },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
