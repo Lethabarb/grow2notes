@@ -754,19 +754,23 @@ acts in A and checks that nothing of B's reaches it.
   (`Grow2Notes.Tests/Fixtures/TestUsers.cs`), as `Grow2Notes.Tests/Features/Notes/NoteDraftEndpointsTests.cs` does.
 - No test changes a seeded Every note group either, which the groups list's tests and its matrix row read as
   bootstrap leaves it (*The endpoint matrix*). A test adds groups and items of its own straight through the app's
-  context, as no endpoint adds a group until T07, with `TestCommonItems`
-  (`Grow2Notes.Tests/Fixtures/TestCommonItems.cs`):
+  context with `TestCommonItems` (`Grow2Notes.Tests/Fixtures/TestCommonItems.cs`), which writes no audit event and
+  keeps every value given, so that a test can set up gaps, ties and archived rows that no endpoint would leave:
   `services.AddGroupsAsync(organisationId, groups)` adds groups other than Every note, and
   `services.AddItemsAsync(organisationId, groupId, items)` adds items to a group, each with its `SortOrder`, its
   `CreatedAtUtc` and ID when the test needs them, such as fixed IDs that SQL Server orders the other way round from
   their times, and its archive time, if any, and gives their IDs in the order given; and
   `services.AddItemAsync(organisationId, groupId, item)` adds one and gives its ID and its ETag, the `If-Match` of a
   change to it, as `Grow2Notes.Tests/Features/CommonItems/UpdateCommonItemEndpointTests.cs` does. A reorder of the
-  groups sends every active group of the organisation but Every note, and a restore puts a group after them all, so a
-  test that reorders them, or finds where a restored group lands, works in an organisation of its own, as
+  groups sends every active group of the organisation but Every note, and an add through
+  `POST /api/admin/common-item-groups` or a restore puts a group after them all, so a test that reorders them, or
+  finds where an added or restored group lands, works in an organisation of its own, as
+  `Grow2Notes.Tests/Features/CommonItems/AddCommonItemGroupEndpointTests.cs`,
   `Grow2Notes.Tests/Features/CommonItems/ReorderCommonItemGroupsEndpointTests.cs` and
   `Grow2Notes.Tests/Features/CommonItems/ArchiveCommonItemGroupEndpointsTests.cs` do, or, among other tests' groups in
-  A, as the reorder's matrix row does, reads their order with `services.ActiveGroupIdsAsync(organisationId)`.
+  A, as the reorder's matrix row does, reads their order with `services.ActiveGroupIdsAsync(organisationId)`. An add
+  through the endpoint also writes `common_item_group.created`, which `TestCommonItems` never does, so a test that
+  adds a group to A that way reads the events of that group alone, by its ID.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
 - A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation

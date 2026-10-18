@@ -474,17 +474,17 @@ nine in all. Every word typed into a note is made up (A35).
 These steps hold T07's by-hand checks ([tasks.md](../design/backlog/tasks.md), T07's Notes). They need account A and
 the kit of steps 26 to 28. Every group and item typed is made up (A35), such as `Community outing`.
 
-46. On the iPhone, as account A, open Common items, add a group if there is none besides Every note, and press Rename
+50. On the iPhone, as account A, open Common items, add a group if there is none besides Every note, and press Rename
     on it. Look for the keyboard opening at once, with the cursor after the group's name; then press Cancel. Do the
     same on the Android phone. (common-items.md *Add, edit, rename, move*, "Rename shows the Group name field…"; open
     question 7.)
-47. As account A on the laptop, in Chrome at its usual window size and text size, open Common items with two groups
+51. As account A on the laptop, in Chrome at its usual window size and text size, open Common items with two groups
     besides Every note, each with an item. Look for each group's heading with its four buttons on one line. Press Move
     down on the first of the two, then press Edit on one of its items, choose the other group and press Save. Look for
     the two sections swapping, with focus still on that group's Move down, then the item last in the other group,
     scrolled into view, with focus on its Edit. (common-items.md *Layout*, its laptop bullet; open question 7.)
-48. With NVDA and Chrome on the laptop, and VoiceOver and Safari on the iPhone, as account A, open Common items and
-    Archive any group there besides Every note (those of steps 46 and 47, and of the other pass), so that each pass
+52. With NVDA and Chrome on the laptop, and VoiceOver and Safari on the iPhone, as account A, open Common items and
+    Archive any group there besides Every note (those of the two steps above, and of the other pass), so that each pass
     starts with Every note alone and no group name repeats. Then add the groups `Community outing` and
     `Personal care`, rename one and rename it back, press Move up on the first of them, then Move down on it, Edit an
     item of Every note and move it into Personal care, Archive Community outing and Restore it, and open and close

@@ -2274,7 +2274,7 @@ group; Every note stays first and fixed.
   first specific criterion (only active groups with at least one active item are offered), and the snapshot rule (A3,
   §5.7) with S02.05.04 for groups that change before the first save. T06's Notes passed that paragraph's archived
   group to this task, which proves its list and API parts (step 4). The hand-off is written, dated, in T13's Notes.
-- By-hand checks, written on ops/first-use-in-test.md as steps 46 to 48, in a section of their own after T06's: on the
+- By-hand checks, written on ops/first-use-in-test.md as steps 50 to 52, in a section of their own after T08's: on the
   iPhone and the Android phone, the keyboard opening at once on Rename; on the laptop, focus after a whole section
   moves, and each group heading with its four buttons on one line at the usual window size (common-items.md open
   question 7); and with NVDA and Chrome, and VoiceOver and iOS Safari, the group parts of the manual pass. The *Screen
@@ -2289,9 +2289,23 @@ group; Every note stays first and fixed.
   the browser, so that it can meet the list conflict that another manager's change gives, while T06's keyboard checks
   still meet the app's own answers; and the text's 7:1 is checked by axe's AAA contrast rule, with each group's name,
   which that rule holds to 4.5:1 as large text, measured on its own (`contrastOf`). Of common-items.md's
-  *Accessibility checklist*, the *Screen reader* items wait for ops/first-use-in-test.md step 48, and the no-motion
+  *Accessibility checklist*, the *Screen reader* items wait for ops/first-use-in-test.md step 52, and the no-motion
   item stays T26's. Step 6 stays unticked until CI's run on the pull request, which alone runs the SQL Server tests,
   has passed and its run ID is recorded here, as T05's matching step did.
+- 18 October 2026, review: 3 findings were confirmed and are fixed here, two of them the same clash with T08 (#61),
+  which merged after this branch was cut from `9c64b27`. None changes the design, so no A-number is added:
+  - T07's by-hand steps took the numbers 46 to 48, which T08's section on `main` already has, as steps 46 to 49, and
+    the Notes above, step 6 and the last step's own text named them. A rebase that kept both sections would have left
+    two of each, with T07's references pointing at T08's database, Today and screen-reader checks. T07's steps are now
+    50 to 52, so that on the rebase they follow T08's section, which stays first, in merge order; until then the file
+    goes from step 45 to step 50. Step 52 now names the steps it follows without their numbers, as T08's section does,
+    and the Notes above and step 6 name steps 50 to 52 and step 52. The rebase keeps both `groupName: 200` and T08's
+    `guidedNotes: 20_000` in `limits.ts`.
+  - tests/README.md's seeded-rows rule still said that tests add groups through the context as no endpoint adds a
+    group until T07, which this task's add made false. It now gives the reason `TestCommonItems` gives, that it writes
+    no audit event and keeps every value given, and says that a test that adds a group through
+    `POST /api/admin/common-item-groups` and finds where it lands works in an organisation of its own, as
+    `AddCommonItemGroupEndpointTests` does, and that one adding a group to A that way reads that group's events alone.
 
 ### Steps
 
@@ -2438,10 +2452,10 @@ group; Every note stays first and fixed.
       in the DOM before their text; and no group or item text in `location`, `document.title`, `history.state` or the
       origin's storage after each flow. Then tick the items of common-items.md's *Accessibility checklist* that these
       runs and Vitest prove whole, as T06's Notes hand them on; the *Screen reader* ones wait for
-      ops/first-use-in-test.md step 48. Docs, each to the code as built: common-items.md, list-editor.md and
+      ops/first-use-in-test.md step 52. Docs, each to the code as built: common-items.md, list-editor.md and
       group-picker.md's *Manager side*; design.md §6.6's group rows and the item `PUT` (Notes), and §6.9's
       `config.every_note_fixed` and §5.3 *CommonItemGroup*'s Constraints, which name renaming and archiving alone, to
-      the restore refusal as well (Notes); ops/first-use-in-test.md's steps 46 to 48; and CI's run on the pull request
+      the restore refusal as well (Notes); ops/first-use-in-test.md's steps 50 to 52; and CI's run on the pull request
       passing.
 - [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
       passed every step, the deploy's migration step finding nothing new to apply, and its smoke test passed; `/`
