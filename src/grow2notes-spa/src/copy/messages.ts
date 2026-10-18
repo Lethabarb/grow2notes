@@ -63,13 +63,24 @@ export const msg = {
    */
   rowContext: (text: string) => `, ${text}`,
   /**
+   * After a list's words that would be the same in every group's list on Common items, its group's name, so that each
+   * is told from the others': after "New item" in the add field's label, as in "New item in Every note", and, for
+   * screen readers alone, after "Archived items" in the archived section's summary (common-items.md component 5).
+   */
+  inList: (name: string) => ` in ${name}`,
+  /**
    * A list row's Save refused as stale (`412`) that finds the row still active once the list is read again
    * (list-editor.md *Request errors*), in the edit form's alert, naming the row as its kind does and with its wording
-   * now, as stored.
+   * now, as stored, given as its kind's screen gives it: a goal's as it is, a common item's `quoted`.
    */
-  rowChangedWhileEditing: (row: string, text: string) =>
-    `Someone else changed this ${row} while you were editing. It now says: ${text}. Save to replace it with your `
+  rowChangedWhileEditing: (row: string, wording: string) =>
+    `Someone else changed this ${row} while you were editing. It now says: ${wording}. Save to replace it with your `
     + 'wording, or Cancel to keep it.',
+  /**
+   * Words that someone typed, in typographic quotes (microcopy.md §1, Quotes and apostrophes), as a common item's
+   * wording is in its edit conflict: "It now says: ‘Meal prepared’." (common-items.md *States*).
+   */
+  quoted: (text: string) => `‘${text}’`,
   /**
    * The archived participant's notice (participants.md B3), under the `<h1>`, with their full name as stored, from
    * design.md §3.7.

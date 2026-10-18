@@ -401,3 +401,34 @@ the kit of steps 26 to 28. Every goal typed is made up (A35), such as `Makes own
     list", with focus on Archive; "Goal added to the end of the list" after each Add, with focus still in New goal;
     and "Archived goals" with "collapsed" or "expanded". (participants.md's screen-reader pass; list-editor.md
     *Implementation notes*, the manual pass.)
+
+### Common items, once T06 is in test
+
+These steps hold T06's by-hand checks ([tasks.md](../design/backlog/tasks.md), T06's Notes). They need account A and
+the kit of steps 26 to 28. Every common item typed is made up (A35), such as `Medication prompted`.
+
+42. The database, as in step 26: run `infra/sql/check-database.sql` for test after T06's deploy. Look for PASS on
+    every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.CommonItemGroup` and `dbo.CommonItem`
+    for `grow2notes_runtime`, and B7 and B8, which list the `CommonItemGroup` and `CommonItem` tables and the
+    `AddCommonItems` migration. (S01.03.01's first criterion, in test.)
+43. As account A on the laptop, in Chrome, choose Manage, then Common items. Look for one group, Every note, with
+    "Always shown first, on every note." under its heading. Write down whether step 3 ran before T06's deploy or
+    after it: before, this shows that the migration gave the organisation that it bootstrapped its Every note group;
+    after, that `admin bootstrap` made the group with the organisation. (S01.03.01's fourth criterion, or its third,
+    in test.)
+44. On the iPhone, as account A, open Common items, add an item to Every note if it has none, and press Edit on it.
+    Look for the keyboard opening at once, with the cursor after the item's words; then press Cancel. Do the same on
+    the Android phone. (common-items.md *Add, edit, rename, move*, "keyboard open on iOS Safari and Android Chrome";
+    open question 7.)
+45. With NVDA and Chrome on the laptop, and VoiceOver and Safari on the iPhone, as account A, open Common items, add
+    three items to Every note, then on row 2 press Move up, then press Move up on row 1, then Edit an item and Save
+    it, Archive an item and Restore it, and open and close Archived items. Look for each reading in common-items.md's
+    *What a screen-reader user hears* and *Accessibility checklist*, *Screen reader*, heard once each: "Every note,
+    heading level 2", and Every note as a region, when moving by heading and by region; "Move up" and the item's
+    words, then "button", on row 2; "Moved up to number 1 of 3" after the press; "dimmed" or "unavailable" on row 1's
+    Move up, and "Already at the top" when it is pressed; on Edit, "Edit item", the words, then "You can enter up to
+    200 characters" and the help text; "Item saved", with focus on Edit; "Item archived", with focus on Restore and
+    the item's words; "Item restored to the end of the list", with focus on Archive; "Item added to the end of the
+    list" after each Add, with focus still in New item in Every note; and "Archived items in Every note" with
+    "collapsed" or "expanded". T07 adds the group parts of the pass. (common-items.md *Accessibility runs*, the manual
+    pass.)

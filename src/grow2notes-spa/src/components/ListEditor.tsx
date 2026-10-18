@@ -1,14 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
-import {
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type FormEvent,
-  type MouseEvent,
-  type RefObject,
-} from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { ApiError, classify } from '../api/api.ts';
 import { msg } from '../copy/messages.ts';
@@ -18,6 +9,7 @@ import { Button } from './Button.tsx';
 import { CharacterCount } from './CharacterCount.tsx';
 import { FieldGroup } from './FieldGroup.tsx';
 import styles from './ListEditor.module.css';
+import { useListFrame } from './listFrameContext.ts';
 import { useAnnounce } from './pageStatusContext.ts';
 import { RequestAlert } from './RequestAlert.tsx';
 import textBox from './TextBox.module.css';
@@ -36,13 +28,12 @@ export type ListRow = {
   rowVersion: string;
 };
 
-/**
- * How the editor reaches one list's API (list-editor.md *Implementation notes*): the query of its rows, active and
- * archived, in the API's order; the scope of its writes; and the writes themselves.
- */
-export type ListApi = {
-  query: UseQueryOptions<ListRow[], Error, ListRow[], string[]>;
-  /** The TanStack mutation scope that every write on the list shares, such as `goals:<participantId>`. */
+/** How the editor writes to one list's API (list-editor.md *Implementation notes*): its writes, and their scope. */
+type ListWrites = {
+  /**
+   * The TanStack mutation scope that every write on the list shares, such as `goals:<participantId>`, or
+   * `common-items` for every group's list on Common items, so that the writes on the page run one at a time.
+   */
   scopeId: string;
   /** Adds a row of `text` at the end of the list, as the API's `POST` does; the editor reads nothing of the answer. */
   add: (text: string) => Promise<unknown>;
@@ -68,22 +59,50 @@ export type ListApi = {
   restore: (id: string, rowVersion: string) => Promise<unknown>;
 };
 
-type ListEditorProps = {
+/**
+ * How the editor reaches one list's API (list-editor.md *Implementation notes*): the query that holds its rows, which
+ * may hold other lists' too, as Common items' one query holds every group's; the list's rows, active and archived, in
+ * the API's order, picked from that query's data; and its writes.
+ */
+export type ListApi<TData> = ListWrites & {
+  query: UseQueryOptions<TData, Error, TData, string[]>;
+  rowsOf: (data: TData) => ListRow[];
+};
+
+type ListEditorProps<TData> = {
   kind: ListKind;
-  api: ListApi;
-  /** For an archived participant's goals (participants.md B6): the rows' text alone, with no help text or controls. */
+  api: ListApi<TData>;
+  /**
+   * The list's name among the lists on the page, a group's name on Common items, after which its add field's label
+   * and, for screen readers alone, its archived section's summary say " in [name]", so that each is told from the
+   * others' (common-items.md component 5).
+   */
+  name?: string;
+  /**
+   * The add field's id where its page names it, such as a group's `item-new-{groupId}` on Common items
+   * (common-items.md component 5); otherwise one of React's own.
+   */
+  addFieldId?: string;
+  /**
+   * A row's edit field's id, given the row's ID, where its page names it, such as `item-{id}-text` on Common items
+   * (common-items.md component 6); otherwise one of React's own.
+   */
+  editFieldId?: (rowId: string) => string;
+  /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
 
 /**
- * What the editor's rows and forms share with it: the list's kind and API; the id of its help text, which describes
- * each text field; the rows as last read, and the read that follows each write; focus that follows a change, and the
- * archived section that an Archive opens; and the list conflict, which a write shows and the next write that succeeds
- * takes away.
+ * What the editor's rows and forms share with it: the list's kind, name and writes; the ids of its rows' edit fields
+ * where its page names them, and the id of the page's help text, which describes each text field; the rows as last
+ * read, and the read that follows each write; focus that follows a change, and the list's archived section that an
+ * Archive opens; and the list conflict, which a write shows and the next write that succeeds takes away.
  */
 type ListContext = {
   kind: ListKind;
-  api: ListApi;
+  name: string | undefined;
+  api: ListWrites;
+  editFieldId: ((rowId: string) => string) | undefined;
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
@@ -104,12 +123,6 @@ type ListContext = {
   written: () => void;
 };
 
-// The list conflict's key among the elements that take focus after a change.
-const conflictKey = 'conflict';
-
-// The archived section's key among them, which an Archive opens before its row's Restore takes focus.
-const archivedKey = 'archived';
-
 /** Which way a row's move button moves it. */
 type Direction = 'up' | 'down';
 
@@ -118,6 +131,15 @@ const moveWords = {
   up: { label: strings.listRows.moveUp, atEnd: strings.listRows.atTop },
   down: { label: strings.listRows.moveDown, atEnd: strings.listRows.atBottom },
 } as const;
+
+/**
+ * A row's wording now, as the edit conflict gives it for each kind of list, each as its screen's spec words it: a
+ * goal's as it is (participants.md *States*), and a common item's in typographic quotes (common-items.md *States*).
+ */
+const wordingNow: Record<ListKind, (text: string) => string> = {
+  goal: (text) => text,
+  item: msg.quoted,
+};
 
 // Each move button's arrow, filled with the button's colour, which forced colours give it too.
 const arrowPaths = {
@@ -157,9 +179,10 @@ class RowChanged extends Error {
 
 /**
  * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
- * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), or an archive's or a restore's `412`.
- * That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what the server
- * now holds; any other failure fails as it is.
+ * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
+ * an add's or a Save's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md
+ * *Failures*). That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what
+ * the server now holds; any other failure fails as it is.
  */
 async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
   try {
@@ -230,26 +253,36 @@ function focusStayedIn(origin: HTMLElement | null): boolean {
 }
 
 /**
- * An ordered list that managers edit (list-editor.md *Anatomy*, *States*): the help text; then, after a write that
- * found the list changed by someone else, the list conflict, focused, until the next write on the list succeeds; the
- * active rows as a numbered `<ol>`, in the API's order, which the editor never sorts again, as the API breaks ties in
- * `SortOrder` as the reorder reads them; or, with no active row, the kind's empty sentence; then the add form; then
- * the archived rows, newest archived first, each with Restore, as a `<ul>` in a `<details>`, closed as it loads and
- * left to the person from then on but for an Archive, which opens it, and left out while none is archived (decision
- * 7). Read-only, each row is its text alone, and the help text and the add form are left out, as nothing can be
- * changed.
+ * An ordered list that managers edit (list-editor.md *Anatomy*, *States*), in a `ListFrame`, which holds the help text
+ * and the list conflict that it shares with any other lists on the page: the active rows as a numbered `<ol>`, in the
+ * API's order, which the editor never sorts again, as the API breaks ties in `SortOrder` as the reorder reads them;
+ * or, with no active row, the kind's empty sentence; then the add form; then the archived rows, newest archived first,
+ * each with Restore, as a `<ul>` in a `<details>`, closed as it loads and left to the person from then on but for an
+ * Archive, which opens it, and left out while none is archived (decision 7). Read-only, each row is its text alone,
+ * and the add form is left out, as nothing can be changed.
  *
  * The page loads the list before rendering the editor, in its load region, or puts it in the query itself, as Add
  * participant does with a new participant's empty one, so the editor reads it from the query and never fetches it as
  * it mounts.
  */
-export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
+export function ListEditor<TData>({
+  kind,
+  api,
+  name,
+  addFieldId,
+  editFieldId,
+  readOnly = false,
+}: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
-  const helpId = useId();
+  const frame = useListFrame();
+  // The archived section's key in the frame's focus map, which an Archive opens before its row's Restore takes focus.
+  const archivedKey = useId();
   const queryClient = useQueryClient();
-  const { data: rows = [] } = useQuery({ ...api.query, refetchOnMount: false });
-  const [changed, setChanged] = useState(false);
-  const focus = useFocusAfterRender();
+  const { data: rows = [] } = useQuery<TData, Error, ListRow[], string[]>({
+    ...api.query,
+    select: api.rowsOf,
+    refetchOnMount: false,
+  });
   const active = rows.filter((row) => row.archivedAtUtc === null);
   const archived = rows
     .flatMap((row) => (row.archivedAtUtc === null ? [] : [{ row, archivedAt: Date.parse(row.archivedAtUtc) }]))
@@ -258,34 +291,26 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
 
   const list: ListContext = {
     kind,
+    name,
     api,
-    helpId,
-    latest: () => queryClient.getQueryData<ListRow[]>(api.query.queryKey) ?? [],
+    editFieldId,
+    helpId: frame.helpId,
+    latest: () => {
+      const data = queryClient.getQueryData<TData>(api.query.queryKey);
+      return data === undefined ? [] : api.rowsOf(data);
+    },
     reread: () => queryClient.refetchQueries({ queryKey: api.query.queryKey, exact: true }),
-    focusTarget: focus.target,
-    focusAfterRender: focus.request,
-    openArchivedAfterRender: focus.openArchived,
-    changedMeanwhile: () => {
-      setChanged(true);
-      focus.request(conflictKey);
+    focusTarget: frame.focusTarget,
+    focusAfterRender: frame.focusAfterRender,
+    openArchivedAfterRender: (key) => {
+      frame.openArchivedAfterRender(archivedKey, key);
     },
-    written: () => {
-      setChanged(false);
-    },
+    changedMeanwhile: frame.changedMeanwhile,
+    written: frame.written,
   };
 
   return (
     <>
-      {!readOnly && (
-        <p id={helpId} className={styles.help}>
-          {copy.help}
-        </p>
-      )}
-      {changed && (
-        <p ref={focus.target(conflictKey)} tabIndex={-1} className={styles.conflict}>
-          {strings.listRows.listChanged}
-        </p>
-      )}
       {active.length === 0 ? (
         <p>{copy.empty}</p>
       ) : (
@@ -307,10 +332,13 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
           )}
         </ol>
       )}
-      {!readOnly && <AddForm list={list} />}
+      {!readOnly && <AddForm list={list} fieldId={addFieldId} />}
       {archived.length > 0 && (
-        <details ref={focus.target(archivedKey)} className={styles.archived}>
-          <summary className={styles.summary}>{copy.archivedSummary}</summary>
+        <details ref={frame.focusTarget(archivedKey)} className={styles.archived}>
+          <summary className={styles.summary}>
+            {copy.archivedSummary}
+            {name !== undefined && <span className="visually-hidden">{msg.inList(name)}</span>}
+          </summary>
           <ul className={styles.archivedList}>
             {archived.map((row) =>
               readOnly ? (
@@ -326,50 +354,6 @@ export function ListEditor({ kind, api, readOnly = false }: ListEditorProps) {
       )}
     </>
   );
-}
-
-/**
- * Focus that follows the item (list-editor.md *Implementation notes*): each element that may take it registers under
- * a key, and a request focuses the one under its key in a layout effect, once the render that the change brings is in
- * the DOM and before it is painted, as React may have only just added the element, or moved it. `openArchived` opens
- * the archived section first, registered under `archivedKey`, as an Archive does, as its row's Restore cannot take
- * focus while the section is closed, and the section may have only just appeared; given no key, it moves no focus.
- */
-function useFocusAfterRender() {
-  const elements = useRef(new Map<string, HTMLElement>());
-  // A new object at each request, so that a second request for the same key focuses it again.
-  const [request, setRequest] = useState<{ key: string | undefined; openArchived: boolean }>();
-
-  useLayoutEffect(() => {
-    if (request === undefined) {
-      return;
-    }
-
-    const section = request.openArchived ? elements.current.get(archivedKey) : undefined;
-    if (section instanceof HTMLDetailsElement) {
-      section.open = true;
-    }
-
-    if (request.key !== undefined) {
-      elements.current.get(request.key)?.focus();
-    }
-  }, [request]);
-
-  return {
-    target: (key: string) => (element: HTMLElement | null) => {
-      if (element === null) {
-        elements.current.delete(key);
-      } else {
-        elements.current.set(key, element);
-      }
-    },
-    request: (key: string) => {
-      setRequest({ key, openArchived: false });
-    },
-    openArchived: (key: string | undefined) => {
-      setRequest({ key, openArchived: true });
-    },
-  };
 }
 
 /**
@@ -744,14 +728,16 @@ type EditFormProps = {
  * closes the form, focus going to Edit unless the person has gone elsewhere meanwhile, and the page's status region
  * says so. A failure keeps the text, focus staying on Save: the server's refusal of the text shows on the field as
  * Save's own does; a Save refused as stale whose row is still active says what the row now says, and the next Save
- * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows;
- * and anything else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a
- * write once started runs to its end and the list then shows what the server holds.
+ * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows,
+ * as it does for a Save refused as the row's group was archived meanwhile (common-items.md *Failures*); and anything
+ * else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write once
+ * started runs to its end and the list then shows what the server holds.
  */
 function EditForm({ row, list, field, onClose }: EditFormProps) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
-  const fieldId = useId();
+  const ownId = useId();
+  const fieldId = list.editFieldId?.(row.id) ?? ownId;
   const form = useRef<HTMLFormElement>(null);
   const box = useItemText(list.kind, row.text, field);
   // The alert's words while it holds a request's failure, which the next press clears.
@@ -764,7 +750,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     }
 
     try {
-      await list.api.update(row.id, text, current.rowVersion);
+      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion));
     } catch (failed) {
       if (!(failed instanceof ApiError && failed.status === 412)) {
         throw failed;
@@ -797,7 +783,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
       },
       onError: (failed) => {
         if (failed instanceof RowChanged) {
-          setFailure(msg.rowChangedWhileEditing(copy.row, failed.text));
+          setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
           return;
         }
 
@@ -852,18 +838,19 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
  * title. Sent, the row goes to the end of the list, which is read again before Add is free, then the field is emptied
  * if it still holds the text sent, with focus kept in it for the next one, and the page's status region says so; text
  * typed while the add was out stays. A failure keeps the text and says so in the alert, focus staying on Add, but for
- * the server's refusal of the text, which shows on the field as Add's own does.
+ * the server's refusal of the text, which shows on the field as Add's own does, and for an add refused as the list's
+ * group was archived meanwhile, which shows the list conflict over the list read again.
  */
-function AddForm({ list }: { list: ListContext }) {
+function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undefined }) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
-  const fieldId = useId();
+  const ownId = useId();
   const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const box = useItemText(list.kind, '', field);
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
-  const add = useListWrite(list, list.api.add);
+  const add = useListWrite(list, (text: string) => sendUnlessListChanged(list, 409, () => list.api.add(text)));
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -895,8 +882,8 @@ function AddForm({ list }: { list: ListContext }) {
   return (
     <form ref={form} noValidate className={`${textBox.column} ${styles.addForm}`} onSubmit={submit}>
       <ItemTextField
-        fieldId={fieldId}
-        label={copy.newLabel}
+        fieldId={fieldId ?? ownId}
+        label={list.name === undefined ? copy.newLabel : `${copy.newLabel}${msg.inList(list.name)}`}
         helpId={list.helpId}
         text={box.text}
         error={box.error}

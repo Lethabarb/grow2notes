@@ -131,6 +131,39 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
                 """).ToListAsync(cancellationToken)));
     }
 
+    // Added with the organisation (A43), whose admin.bootstrap event covers it, so it has no event of its own; the
+    // invite core writes none either.
+    [Fact]
+    public async Task One_run_gives_the_organisation_exactly_one_Every_note_group_and_writes_no_event_for_it()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var clock = new FakeTimeProvider(TestClock.Start);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var email = NewAddress();
+
+        var run = await app.RunAdminCommandAsync(Bootstrap(managerEmail: email));
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        var organisationId = (await FindUserAsync(email)).OrganisationId;
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        // Read in SQL, so that neither the tenant filter nor a tracked row decides what is seen.
+        Assert.Equal(
+            new StoredGroup(
+                "Every note", SortOrder: 0, IsEveryNote: true, ArchivedAtUtc: null, TestClock.Start.UtcDateTime),
+            Assert.Single(await db.Database.SqlQuery<StoredGroup>($"""
+                SELECT [Name], [SortOrder], [IsEveryNote], [ArchivedAtUtc], [CreatedAtUtc]
+                FROM [CommonItemGroup]
+                WHERE [OrganisationId] = {organisationId}
+                """).ToListAsync(cancellationToken)));
+        Assert.Equal(
+            [AuditEventTypes.Admin.Bootstrap],
+            await db.Database.SqlQuery<string>($"""
+                SELECT [EventType] AS [Value] FROM [AuditEvent] WHERE [OrganisationId] = {organisationId}
+                """).ToListAsync(cancellationToken));
+    }
+
     [Fact]
     public async Task A_second_run_with_the_address_in_another_letter_case_is_refused_and_changes_nothing()
     {
@@ -148,6 +181,9 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         Assert.Equal(
             Refusal("The address in --manager-email already has an account, and an address can have only one."),
             second.Error);
+
+        // The common item groups among them: the second run saved its Every note group before the invite was refused,
+        // in the transaction that the refusal rolled back, so it left none.
         Assert.Equal(counts, await CountRowsAsync());
 
         // Its security stamp among them, so the first run's link still works.
@@ -223,7 +259,9 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         Assert.Equal(2, commits.Attempts);
         Assert.Equal(
-            new RowCounts(counts.Organisations + 1, counts.Users + 1, counts.AuditEvents + 1), await CountRowsAsync());
+            new RowCounts(
+                counts.Organisations + 1, counts.CommonItemGroups + 1, counts.Users + 1, counts.AuditEvents + 1),
+            await CountRowsAsync());
         var manager = await FindUserAsync(email);
         var setupLink = run.SingleOutputLine();
         Assert.StartsWith($"{Grow2NotesFactory.Origin}/setup#u={manager.Id:D}&t=", setupLink, StringComparison.Ordinal);
@@ -333,17 +371,20 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
                 """).ToListAsync(TestContext.Current.CancellationToken));
     }
 
-    // Every organisation, user and audit event in the shared database. The tests of the collection run one at a time,
-    // so only the run between two counts can change them.
+    // Every organisation, common item group, user and audit event in the shared database. The tests of the collection
+    // run one at a time, so only the run between two counts can change them.
     private async Task<RowCounts> CountRowsAsync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        // The tenant-owned tables in SQL, since the tenant filter would count one organisation's rows only.
         return new(
             await db.Organisations.CountAsync(cancellationToken),
+            Assert.Single(await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS [Value] FROM [CommonItemGroup]")
+                .ToListAsync(cancellationToken)),
             await db.Users.CountAsync(cancellationToken),
-            // In SQL, since the tenant filter would count one organisation's events only.
             Assert.Single(await db.Database.SqlQuery<int>($"SELECT COUNT(*) AS [Value] FROM [AuditEvent]")
                 .ToListAsync(cancellationToken)));
     }
@@ -358,9 +399,12 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
             user, SetupTokenProvider.ProviderName, SetupTokenProvider.Purpose, token);
     }
 
-    private sealed record RowCounts(int Organisations, int Users, int AuditEvents);
+    private sealed record RowCounts(int Organisations, int CommonItemGroups, int Users, int AuditEvents);
 
     private sealed record StoredOrganisation(string Name, DateTime CreatedAtUtc);
+
+    private sealed record StoredGroup(
+        string Name, int SortOrder, bool IsEveryNote, DateTime? ArchivedAtUtc, DateTime CreatedAtUtc);
 
     private sealed record StoredUser(
         Guid Id,

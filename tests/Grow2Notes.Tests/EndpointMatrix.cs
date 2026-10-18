@@ -197,6 +197,36 @@ internal static class EndpointMatrix
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "archive", archived: false)),
         new(Post,      "/api/admin/goals/{goalId:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "restore", archived: true)),
+
+        // The common item groups with their items (§6.6), in the same group. The list loads no record of A's, so B's
+        // manager gets B's own list, which must hold B's seeded Every note and not A's; tests add other groups to the
+        // seeded organisations, so the seeded Every note groups alone are looked for.
+        new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
+            Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
+
+        // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
+        // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
+            AddingAnItemToAGroupOfItsOwn),
+
+        // Rewording a common item (§6.6), in the same group. Each call rewords an item of its own, which its request
+        // first adds to a group that it adds to A, so B's manager, to whom A's items are not found, gets 404 (§9.2).
+        new(Put,       "/api/admin/common-items/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+            RewordingAnItemOfItsOwn),
+
+        // Reordering a group's common items (§6.6), in the same group. Each call reorders the active items of a group
+        // of its own, which its request first adds to A, so B's manager, to whom A's groups are not found, gets 404
+        // (§9.2).
+        new(Put,       "/api/admin/common-item-groups/{groupId:guid}/items/order", Unauthorized, Forbidden, NoContent,
+            NotFound, ReorderingTheItemsOfAGroupOfItsOwn),
+
+        // Archiving and restoring a common item (§6.6), in the same group, as the reword is: each call archives an
+        // active item, or restores an archived one, of its own, which its request first adds to a group that it adds
+        // to A, so B's manager gets 404.
+        new(Post,      "/api/admin/common-items/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAnItemOfItsOwn(call, "archive", archived: false)),
+        new(Post,      "/api/admin/common-items/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+            call => ChangingThePlaceOfAnItemOfItsOwn(call, "restore", archived: true)),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -388,6 +418,71 @@ internal static class EndpointMatrix
         {
             Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
         };
+    }
+
+    // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never
+    // the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> AddingAnItemToAGroupOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        return new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{groupId}/items")
+        {
+            Content = JsonContent.Create(new { text = "Travelled by bus or train" }),
+        };
+    }
+
+    // A reword of an item that the request first adds to a group that it adds to A, sent with the item's ETag as
+    // If-Match, so that each call changes an item of its own, never one of the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> RewordingAnItemOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await call.Services.AddItemAsync(
+            call.Seeded.A.OrganisationId, groupId, new TestCommonItem("Travelled by bus or train", 0));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-items/{item.Id}")
+        {
+            Content = JsonContent.Create(new { text = "Travelled by tram" }),
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(item.ETag));
+        return request;
+    }
+
+    // A reorder of the active items of a group that the request first adds to A with two active items and an archived
+    // one, sending the active ones' IDs the other way round, so that each call changes items of its own, never those of
+    // the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheItemsOfAGroupOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var items = await call.Services.AddItemsAsync(
+            call.Seeded.A.OrganisationId,
+            groupId,
+            new("Travelled by bus or train", 0),
+            new("Packed a day bag", 1, ArchivedAtUtc: TestCommonItems.AddedAtUtc),
+            new("Bought lunch", 2));
+        return new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{groupId}/items/order")
+        {
+            Content = JsonContent.Create(new { commonItemIds = new[] { items[2], items[0] } }),
+        };
+    }
+
+    // An archive or a restore, with no body, of an item that the request first adds to a group that it adds to A,
+    // archived or not, sent with the item's ETag as If-Match, so that each call changes an item of its own, never one
+    // of the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> ChangingThePlaceOfAnItemOfItsOwn(
+        EndpointCall call, string action, bool archived)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await call.Services.AddItemAsync(
+            call.Seeded.A.OrganisationId,
+            groupId,
+            new TestCommonItem(
+                "Travelled by bus or train", 0, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        var request = new HttpRequestMessage(call.Method, $"/api/admin/common-items/{item.Id}/{action}");
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(item.ETag));
+        return request;
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads

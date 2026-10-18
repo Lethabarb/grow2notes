@@ -105,4 +105,12 @@ describe("a list row's Save refused as stale (list-editor.md *Request errors*)",
   it('names the row by its kind, says its wording now, and says what Save and Cancel each do', () => {
     expect(msg.rowChangedWhileEditing('goal', 'Phones her sister')).toBe(words);
   });
+
+  // common-items.md *States*: an item's wording in typographic quotes, where a goal's has none.
+  it("says a common item's wording now in typographic quotes", () => {
+    expect(msg.rowChangedWhileEditing('item', msg.quoted('Meal prepared'))).toBe(
+      'Someone else changed this item while you were editing. It now says: ‘Meal prepared’. Save to replace it with '
+        + 'your wording, or Cancel to keep it.',
+    );
+  });
 });

@@ -10,6 +10,7 @@ import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx'
 import { FieldGroup } from '../../components/FieldGroup.tsx';
 import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { ListEditor } from '../../components/ListEditor.tsx';
+import { ListConflict, ListFrame } from '../../components/ListFrame.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
@@ -331,6 +332,7 @@ function Participant({ participant, onAdded }: ParticipantProps) {
   const queryClient = useQueryClient();
   const detailsHeadingId = useId();
   const goalsHeadingId = useId();
+  const goalsHelpId = useId();
   const actionsHeadingId = useId();
   const [known, setKnown] = useState<Known | undefined>(() =>
     participant === undefined ? undefined : knownOf(participant),
@@ -602,7 +604,10 @@ function Participant({ participant, onAdded }: ParticipantProps) {
       {known !== undefined && (
         <section aria-labelledby={goalsHeadingId} className={styles.goals}>
           <h2 id={goalsHeadingId}>{strings.participantGoals.heading}</h2>
-          <ListEditor kind="goal" api={goalsApi(known.id)} readOnly={archived} />
+          <ListFrame helpId={goalsHelpId} help={archived ? undefined : strings.listEditor.goal.help}>
+            <ListConflict />
+            <ListEditor kind="goal" api={goalsApi(known.id)} readOnly={archived} />
+          </ListFrame>
         </section>
       )}
       {known !== undefined && !archived && (

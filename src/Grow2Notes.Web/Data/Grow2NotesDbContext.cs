@@ -23,6 +23,10 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<Goal> Goals => Set<Goal>();
 
+    public DbSet<CommonItemGroup> CommonItemGroups => Set<CommonItemGroup>();
+
+    public DbSet<CommonItem> CommonItems => Set<CommonItem>();
+
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
     private Guid TenantId => tenant.OrganisationId;
@@ -126,6 +130,47 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             // Every list of goals is one participant's, the active ones or all, in their order. It starts with the
             // foreign key's columns, so the foreign key needs no index of its own.
             goal.HasIndex(g => new { g.OrganisationId, g.ParticipantId, g.ArchivedAtUtc, g.SortOrder });
+        });
+
+        builder.Entity<CommonItemGroup>(group =>
+        {
+            group.HasOne<Organisation>().WithMany().HasForeignKey(g => g.OrganisationId);
+
+            // The principal of the composite foreign keys from the group's items and a note version's group rows, so
+            // the database keeps them within the group's organisation (design.md §5.1, Tenancy).
+            group.HasAlternateKey(g => new { g.OrganisationId, g.Id });
+
+            group.Property(g => g.Name).HasMaxLength(Limits.GroupName);
+            group.Property(g => g.RowVersion).IsRowVersion();
+
+            // Every list of groups is one organisation's, the active ones or all, in their order.
+            group.HasIndex(g => new { g.OrganisationId, g.ArchivedAtUtc, g.SortOrder });
+
+            // At most one Every note group in an organisation (design.md §5.3, Constraints). Bootstrap and the
+            // migration that added the table give each its one, and nothing deletes a group, so each has exactly one.
+            group.HasIndex(g => g.OrganisationId).IsUnique().HasFilter("[IsEveryNote] = 1");
+
+            // Every note is never archived, whatever the app's code does.
+            group.ToTable(table => table.HasCheckConstraint(
+                "CK_CommonItemGroup_EveryNoteActive", "[IsEveryNote] = 0 OR [ArchivedAtUtc] IS NULL"));
+        });
+
+        builder.Entity<CommonItem>(item =>
+        {
+            // Composite, so the database keeps an item within its group's organisation (design.md §5.1, Tenancy).
+            item.HasOne<CommonItemGroup>().WithMany()
+                .HasForeignKey(i => new { i.OrganisationId, i.GroupId })
+                .HasPrincipalKey(g => new { g.OrganisationId, g.Id });
+
+            // The principal of the composite foreign key from a note version's item rows (design.md §5.3).
+            item.HasAlternateKey(i => new { i.OrganisationId, i.Id });
+
+            item.Property(i => i.Text).HasMaxLength(Limits.ItemText);
+            item.Property(i => i.RowVersion).IsRowVersion();
+
+            // Every list of items is one group's, the active ones or all, in their order. It starts with the foreign
+            // key's columns, so the foreign key needs no index of its own.
+            item.HasIndex(i => new { i.OrganisationId, i.GroupId, i.ArchivedAtUtc, i.SortOrder });
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).

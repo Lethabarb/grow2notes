@@ -37,8 +37,8 @@ Vault as the app does.
 
 ## admin bootstrap
 
-Creates an organisation and its first manager's invite, and prints the manager's setup link (design.md §7.4, §8.1).
-There is no sign-up screen (D23, A1), so this is how every organisation starts.
+Creates an organisation, with its Every note group, and its first manager's invite, and prints the manager's setup
+link (design.md §7.4, §8.1). There is no sign-up screen (D23, A1), so this is how every organisation starts.
 
 ### When to run it
 
@@ -94,6 +94,9 @@ cd /home/site/wwwroot && {
 In one transaction (design.md §5.9), so all of it or none of it, it writes:
 
 - the organisation, with its name and the time it was created;
+- the organisation's Every note group, the built-in group of common items that every note shows first (A43,
+  design.md §5.3), named "Every note", with no items yet; it has no audit event of its own, as it is part of the
+  organisation that `admin.bootstrap` records;
 - the first manager's account: a Manager, Invited, which cannot sign in before setup completes, invited by no one,
   with the name as their display name, the address as their user name and email, no password, and an authenticator
   key generated now, so that no setup step before completion changes the security stamp (design.md §8.1 step 1);
@@ -137,9 +140,9 @@ so neither goes to telemetry (design.md §9.5).
   address again rather than pasting it.
 - **A refusal wrote nothing, with one exception: a first run with a new address that is refused as already having an
   account.** That happens only when a brief database failure hid the commit of the run's first attempt, and the
-  retry was refused on the address that attempt had saved. The organisation and the Invited manager exist, but no
-  link was printed. Do not run it again with another address or organisation name, which would add a second
-  organisation: the manager's link comes from [admin reset-signin](#admin-reset-signin).
+  retry was refused on the address that attempt had saved. The organisation, its Every note group and the Invited
+  manager exist, but no link was printed. Do not run it again with another address or organisation name, which would
+  add a second organisation: the manager's link comes from [admin reset-signin](#admin-reset-signin).
 - **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
   its retries; .NET writes the exception on standard error. Check `/healthz/ready` as above, then run it again with
   the same three values. If the failed run had committed, the address refuses this one, which is the exception above;

@@ -9,6 +9,8 @@ public sealed record SeededOrganisations(SeededOrganisation A, SeededOrganisatio
 
 /// <summary>
 /// A seeded organisation, its two users, an Active manager and an Active worker, as setup leaves them: with a confirmed
-/// <c>example.org</c> address and a security stamp, but no passkey or password yet; and its one active participant.
+/// <c>example.org</c> address and a security stamp, but no passkey or password yet; its one active participant; and
+/// its Every note group, as <c>admin bootstrap</c> adds it, with no items.
 /// </summary>
-public sealed record SeededOrganisation(Guid OrganisationId, Guid ManagerId, Guid WorkerId, Guid ParticipantId);
+public sealed record SeededOrganisation(
+    Guid OrganisationId, Guid ManagerId, Guid WorkerId, Guid ParticipantId, Guid EveryNoteGroupId);

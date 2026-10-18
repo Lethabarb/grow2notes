@@ -30,16 +30,17 @@ export function goalsQuery(participantId: string) {
 }
 
 /**
- * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query; the one scope of
- * every write on them, `goals:<participantId>` (participants.md B6); the add, whose `201` has no body; a goal's
- * reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and whose `ETag` the editor does not read,
- * as it reads each goal's next version from the list; the reorder of the active goals, with no `If-Match`, as the
- * set of their IDs is its check (design.md §6.7), whose `204` has no body; and a goal's archive and restore, with no
- * body and its `rowVersion` as `If-Match`, whose `204`s have none.
+ * `ListEditor`'s way to a participant's goals (list-editor.md *Implementation notes*): their query, whose data is the
+ * goals themselves; the one scope of every write on them, `goals:<participantId>` (participants.md B6); the add,
+ * whose `201` has no body; a goal's reword, with its `rowVersion` as `If-Match`, whose `200` has none either, and
+ * whose `ETag` the editor does not read, as it reads each goal's next version from the list; the reorder of the
+ * active goals, with no `If-Match`, as the set of their IDs is its check (design.md §6.7), whose `204` has no body;
+ * and a goal's archive and restore, with no body and its `rowVersion` as `If-Match`, whose `204`s have none.
  */
-export function goalsApi(participantId: string): ListApi {
+export function goalsApi(participantId: string): ListApi<ListRow[]> {
   return {
     query: goalsQuery(participantId),
+    rowsOf: (goals) => goals,
     scopeId: `goals:${participantId}`,
     add: (text) => api<undefined>(goalsPath(participantId), { method: 'POST', body: { text } }),
     update: (id, text, rowVersion) =>

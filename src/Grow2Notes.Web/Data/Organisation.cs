@@ -3,8 +3,9 @@ using Grow2Notes.Web.Platform.Configuration;
 namespace Grow2Notes.Web.Data;
 
 /// <summary>
-/// The tenant (design.md §5.3, D3). It is not tenant-owned, because it is the tenant. The <c>admin bootstrap</c> command
-/// creates it; there is no sign-up. Its time zone is not stored, because it is always Australia/Melbourne (D37).
+/// The tenant (design.md §5.3, D3). It is not tenant-owned, because it is the tenant. The <c>admin bootstrap</c>
+/// command creates it, with its Every note group (<see cref="CommonItemGroup.EveryNote"/>); there is no sign-up. Its
+/// time zone is not stored, because it is always Australia/Melbourne (D37).
 /// </summary>
 internal sealed class Organisation : IVersionedRow
 {

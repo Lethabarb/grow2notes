@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { pageName } from '../copy/pageNames.ts';
+import type { AdminCommonItemGroup } from '../features/commonItems/commonItemsQuery.ts';
 import type { AdminParticipant } from '../features/participants/participantsQuery.ts';
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { routes, type AppRoute } from './routes.tsx';
@@ -56,11 +57,25 @@ const participants: AdminParticipant[] = [
   },
 ];
 
+// The organisation's built-in Every note group, with no items yet, the one group on the made-up list of groups.
+const commonItemGroups: AdminCommonItemGroup[] = [
+  {
+    id: '0e2a4c6f-1b3d-4e5f-8a7b-9c0d1e2f3a4b',
+    name: 'Every note',
+    isEveryNote: true,
+    sortOrder: 0,
+    archivedAtUtc: null,
+    rowVersion: 'AAAAAAAAC1E=',
+    items: [],
+  },
+];
+
 // The made-up answers of the manager screens' requests, by path.
 const managerAnswers: Readonly<Record<string, unknown>> = {
   '/api/admin/users': users,
   '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
+  '/api/admin/common-item-groups?includeArchived=true': commonItemGroups,
 };
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -76,8 +91,9 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers the users' and the participants' lists and `GET /api/admin/guide-prompts`
- * with their made-up answers and any other request, `GET /api/auth/me`, with `me`, or, for none, never answers.
+ * Stubs `fetch` as the server, which answers the users', the participants' and the common item groups' lists and
+ * `GET /api/admin/guide-prompts` with their made-up answers and any other request, `GET /api/auth/me`, with `me`, or,
+ * for none, never answers.
  */
 function serveMe(me: Me | undefined) {
   fetchMock.mockImplementation((path, init) =>
@@ -195,20 +211,20 @@ describe('Manage', () => {
     expect(within(main).getAllByRole('link')).toEqual(listed);
   });
 
-  it.each(links.filter(({ name }) => !['Participants', 'Guide prompts', 'Users'].includes(name)))(
-    'opens Page not found from $name, until its screen is built',
-    async ({ name, address }) => {
-      serveMe(manager);
-      const router = renderApp('/manage');
-      await settle();
+  it('opens the groups from Common items, not Page not found, with Manage still marked', async () => {
+    serveMe(manager);
+    const router = renderApp('/manage');
+    await settle();
 
-      fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name }));
-      await settle();
+    fireEvent.click(within(screen.getByRole('main')).getByRole('link', { name: 'Common items' }));
+    await settle();
 
-      expect(router.state.location.pathname).toBe(address);
-      expectPageNotFound();
-    },
-  );
+    expect(router.state.location.pathname).toBe('/manage/common-items');
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(within(screen.getByRole('main')).getByRole('region', { name: 'Every note' })).toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(currentItems()).toEqual(['Manage true']);
+  });
 
   it('opens the participant list from Participants, not Page not found, with Manage still marked', async () => {
     serveMe(manager);
