@@ -70,3 +70,14 @@ export function systemColour(page: Page, keyword: string): Promise<string> {
     return color;
   }, keyword);
 }
+
+/** The words that show, without the visually hidden ones, such as the comma that screen readers read for " · ". */
+export const shownText = (locator: Locator) =>
+  locator.evaluate((element) => {
+    const copy = element.cloneNode(true) as Element;
+    for (const hidden of copy.querySelectorAll('.visually-hidden')) {
+      hidden.remove();
+    }
+
+    return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+  });

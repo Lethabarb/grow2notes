@@ -200,6 +200,12 @@ For the read view (4.4), a manager reading someone else's draft (4.2), one versi
 - IDs: `goal-${item.id}` and `common-${item.id}`. Server item IDs are unique and stable, which also keeps the right rows mounted after a lists reload. `name`/`value` are set for clear semantics and tests; the form is never natively submitted.
 - Item wording is rendered as React text children, never with `dangerouslySetInnerHTML`, never auto-linked, and never truncated.
 - The Flag for manager tick box (`conditional-reveal.md`) should reuse the same `.box` class, so every tick box in the app looks and behaves the same.
+- **Built** (T08, for Goals): `TickListField` in `src/components/TickListField.tsx`, with `TickList.module.css`, as
+  sketched below but for these: it takes a `className`, as `FindParticipant` does, for the form's `--section-gap`
+  before it; the native box is `appearance: none`, drawn 2.5rem with a border in the text's colour and its tick by
+  borders on `::before`, which forced colours and printing keep; and each row is the item's `<label>`, at least
+  `--target-row` tall and the column wide, so a tap anywhere on it, its far end included, toggles the box. T13 adds
+  `headingLevel` and `hintId` with the common items, and T09's flag row and T13's group rows reuse `.box` and `.row`.
 
 ```tsx
 // TickListField.tsx

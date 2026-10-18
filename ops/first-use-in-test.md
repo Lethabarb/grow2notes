@@ -432,3 +432,35 @@ the kit of steps 26 to 28. Every common item typed is made up (A35), such as `Me
     list" after each Add, with focus still in New item in Every note; and "Archived items in Every note" with
     "collapsed" or "expanded". T07 adds the group parts of the pass. (common-items.md *Accessibility runs*, the manual
     pass.)
+
+### Today and the note form, once T08 is in test
+
+These steps hold T08's by-hand checks ([tasks.md](../design/backlog/tasks.md), T08's Notes). They need account A, the
+kit of steps 26 to 28, and made-up participants with two goals each, such as `Jane Citizen` with `Makes own breakfast`
+and `Phones her sister`, whose notes for today nobody has started: three for step 47 and one more for each phone in
+step 48. Every word typed into a note is made up (A35).
+
+46. The database, as in step 26: run `infra/sql/check-database.sql` for test after T08's deploy. Look for PASS on
+    every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Note` for `grow2notes_runtime`, with
+    none on `dbo.NoteDraft`, and B7 and B8, which list the `Note` and `NoteDraft` tables and the `AddNote` migration.
+    (S02.02.02's first criterion and S02.02.07's database test, in test.)
+47. As account A on the laptop, with NVDA and Chrome, choose Today. Look for each row read as the participant's name
+    and "link" alone, with nothing after it, and the list's item count as you move into it, such as "list, 3 items".
+    Type a name that matches nobody in Find a participant and stop typing: look for "No participant matches" and the
+    name read once, after a short pause. Clear it, open the first participant's row and look for: the `<h1>` read as
+    "Jane Citizen Thursday 1 October 2026, heading level 1", with today's date; "1. Goals, grouping, Ticked means
+    reached." and the first goal as you Tab into Goals; and, as you tick a goal and type a sentence, "Saving…" once
+    for each burst, then "Saved" and the time. Then open the second participant's note in a second tab and change
+    nothing there; in the first tab, add a goal on that participant's page; back in the second tab, tick a goal and
+    look for "The goal or common-item list was just changed. Please check your ticks." read once. Last, open the third
+    participant's note in the second tab, again changing nothing; archive them in the first tab; type into Guided
+    notes in the second tab and look for "… is archived, so this note cannot be started. Ask a manager." read once;
+    then Restore them in the first tab. (today.md's *Screen reader*; note-form.md's *Announcements*, for what T08
+    builds.)
+48. Do the first part of step 47, up to "Saved" and the time, again on the iPhone with VoiceOver and Safari, and on
+    the Android phone with TalkBack and Chrome, each with its own participant.
+49. On each phone, with the screen reader off: in Find a participant, type a name and press Clear, and look for the
+    keyboard staying open with the cursor still in the field; open a participant's note whose box is empty, tap into
+    Guided notes and look for the guide prompts showing while the box has focus, and the top bar, with Today and the
+    save status, staying in view above the keyboard; then dictate a sentence with the keyboard's microphone and look
+    for it in the box and the status ending in "Saved" and the time. (A31; note-form.md open question 11.)

@@ -2424,6 +2424,18 @@ lets workers write only today's note, using the Melbourne date.
   assertive region, after the page's content beside `PageStatus`'s, keeps its sentence once written; and
   `note.future_date` has no words, as it never reaches the form, whose `GET` answers `404` for a date after today. A
   dead end stops autosave for as long as the form is open, which T10's leave guard reads to let the person leave.
+- Where the design is silent (step 7), the simplest options: the end-to-end helpers that more than one spec needs live
+  in shared files, `expectStops`, `ring` and `systemColour` in `e2e/focus.ts`, `setTextTo200Percent`,
+  `scrollsSideways`, `expectAtLeast` and `shownText` in `e2e/layout.ts`, and the live-region watcher in
+  `e2e/liveRegions.ts`, which participants.spec.ts imports in place of its own copies; `expectNothingKept`
+  (`e2e/kept.ts`) also takes the entry that the page loaded on, to which React Router gives its index alone; Today's
+  Waiting state is held for axe by holding the page's timers of 1 s, as axe settles each rule on a timer and never
+  finishes under Playwright's paused clock; the in-browser note store (`e2e/notes.ts`) refuses a creating save as the
+  server does, in §5.5's order, so that each dead end and the lists change come from the answer the app would give;
+  and the dead end's sentence wraps anywhere, as a 100-character unbroken name made the banner, which the bar's row
+  cannot shrink below its widest word, scroll the page sideways at 320 px. `migrate.sql`, scripted as CI scripts it
+  (`dotnet ef migrations script --idempotent`), gives `AddNote` additions alone: the two tables, seven indexes and
+  `DENY DELETE ON [dbo].[Note] TO [grow2notes_runtime]`.
 
 ### Steps
 
@@ -2678,6 +2690,18 @@ past notes.
   and submits a note. The Submit confirm uses T03's dialog shell.
 - Waits for T06 because note versions point at common items.
 - Reuses T05's `CharacterCount` (src/components) for the Reason count.
+- From T08 (18 October 2026): T08 leaves T09 these parts of its stories' criteria, each with a dated Note on the story:
+  today.md's DOM order with the success banner, and its Focus and navigation bullet *After Submit*; the Flagged tag
+  dropping to its own line at 320 px; today.md Search's "'Alex' does not match a row only because Alex P. wrote its
+  note", which passes trivially until rows carry the author's name; note-form.md identity item 3's dialog title and
+  confirm button; §14 M2's reworded goal in the submitted version; note-form.md item 18's "keep Submit unavailable",
+  with §4.3's Submit disabled while a change is unsaved; item 38's "fill in and submit" at 375 px; and §5.6's working
+  copy deleted when its version is saved. T09 adds what T08's interim shapes leave out: `note`, with the status line, on
+  `GET /api/today`'s rows (S02.01.03); `isFlagged` and `flagReason` on `GET {base}/draft`, and the flag on the `PUT`'s
+  body, `NoteDraft.IsFlagged` and `FlagReason` being `false` and `null` until then; a `<form noValidate>` round the
+  fields, which are in none yet, with Submit; and the read view at the shared address for a submitted note. The flag row
+  reuses `TickList.module.css`'s `.box` and `.row`, and `useAutosave` (src/features/notes) gains Submit's `checkSave()`
+  and `stop()` (autosave-status.md *Behaviour* 6).
 
 ### Steps
 
@@ -2712,6 +2736,14 @@ older page is told the note has moved on, and nothing is overwritten without ask
 
 - Reuses T01's sign-in again in place. The storage and phone-to-laptop checks are Playwright tests; the real-device runs
   go on ops/first-use-in-test.md.
+- From T08 (18 October 2026): `useAutosave` (src/features/notes) saves with `retry: 0`, and `PUT {base}/draft` applies
+  every save of the draft's author, storing its `clientId` and `seq` as `LastClientId` and `LastSeq`. This task adds
+  §5.6's stale `seq` and takeover (`409 draft.taken_over`), the retries, the page-hidden save, the `401` retry with the
+  same `clientId` and the next `seq`, `flushNow()`, and §4.3's "Not saved: no connection. Keep this page open;
+  retrying.", which S02.02.02 waits for (its dated Note); until then a failed save leaves "Saving…" shown until the next
+  change or blur sends it. The note form registers no leave guard: this task registers T03's, which lets the person
+  leave once a dead end has stopped autosave (`DeadEnd` in useAutosave.ts), as note-form.md item 18 never blocks
+  leaving.
 
 ### Steps
 
@@ -2783,6 +2815,11 @@ manager can read it.
 - T12, T13 and T14 run one after another: all three change the note form, the draft save and Today.
 - A Discard that met a `401` is not sent again after signing in again in T01's view C (note-form.md *Interactions* ›
   *Session*; app-shell.md's Session criteria, the never-replayed bullet).
+- From T08 (18 October 2026): today.md's DOM order with the drafts section, and its Focus and navigation bullet's
+  "after Discard (a replace)" focusing the `<h1>`, wait for this task (S02.01.01's dated Note); Today's `LoadRegion`
+  then takes the drafts query beside `['today', me.today]`. A manager who opens another person's draft sees the
+  worker's in-progress sentence (`Loaded` in NotePage.tsx) until this task gives managers the read-only draft with
+  Discard draft (S02.04.03).
 
 ### Steps
 
@@ -2826,6 +2863,12 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
 ### Notes
 
 - Runs after T12 because both change the note form, the draft save and Today.
+- From T08 (18 October 2026): note-form.md item 17's groups and common items wait for this task (S02.02.03's dated
+  Note). It adds "2. Common items" between "1. Goals" and "3. Guided notes", which keep their numbers;
+  `commonItemGroups` on `GET {base}/draft`, and the picks and common-item ticks on the `PUT`'s body; the common items
+  and their groups in `listsVersion` (ListsVersion.cs hashes the active goals' IDs and wording in the list's order); the
+  snapshot's groups and items in `NoteDraft.Groups` and `Items`, whose JSON has §5.3's names already, `section` 2 for a
+  common item; `headingLevel` and `hintId` on `TickListField`; and the lists-changed reload's picks by group ID.
 
 ### Steps
 
@@ -2862,6 +2905,9 @@ and shown the newer version, so nothing is silently overwritten.
 - Runs after T13: it changes the same note form and draft save.
 - A Save changes or a Cancel that met a `401` is not sent again after signing in again in T01's view C (note-form.md
   *Interactions* › *Session*; app-shell.md's Session criteria, the never-replayed bullet).
+- From T08 (18 October 2026): `GET` and `PUT {base}/draft` answer `404` for a submitted note on which the caller has no
+  working copy; this task gives the working copy from the current version there, and adds `baseVersion` to the `PUT`'s
+  body (design.md §6.3).
 
 ### Steps
 
@@ -3022,6 +3068,9 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   action: it shows in an active participant's Actions, is gone after Archive participant and back after Restore
   (participants.md *Archive and Restore* and *Interactions*); and the page's title is "Grow2Notes – Write past-day
   note" (participants.md *Access and privacy*).
+- From T08 (18 October 2026): a manager's first `PUT {base}/draft` for a day before today already creates the note,
+  with them as its author (design.md §5.5 item 4), and the form shows no notice for it: §4.3 item 2's past-day banner
+  is this task's, which S02.02.02 waits for (its dated Note).
 
 ### Steps
 
@@ -3142,6 +3191,8 @@ choose, to answer an access or correction request. The form says what to fix and
 - Reuses T15's note block and T17's download hook. A CI test shows that a one-year export with versions takes under 30
   seconds; real-device timing goes on ops/first-use-in-test.md.
 - A To date after today is accepted as sent (design.md A60, answering the plan's question 4).
+- From T08 (18 October 2026): `GET /api/participants/{participantId}` answers `{id, givenName, familyName, status}`;
+  this task adds `firstNoteDate` (D80), the record export's default From date.
 
 ### Steps
 

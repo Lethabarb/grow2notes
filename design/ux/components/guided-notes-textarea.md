@@ -346,6 +346,14 @@ The Dragon poll from Behaviour item 6 adds an `onFocus` that starts a 1 s interv
 }
 ```
 
+**Built** (T08): `GuidedNotes` in `src/features/notes/GuidedNotes.tsx`, on `TextBox.module.css`, the stylesheet that
+Guide prompts' editor shares, as sketched above but for these: the box is uncontrolled, and the form reads its value
+through a ref as each save is sent, so the component has no `value()` handle; `writingsuggestions="false"` is set in a
+layout effect, as React has no prop for it; the copies behind the box come from its wrapper's `data-prompts` and
+`data-value`, so the prompts keep the box as tall as they are and the page does not jump as the first character takes
+them away; the box has no `overflow-y` of its own, as `field-sizing: content` or the copy sizes it to its text; and the
+count is the shared `CharacterCount`, from 18,000.
+
 **Form-side notes** (for the note-form owner):
 - `onSubmit` with `e.preventDefault()`; read `notes.current.value()` at the moment of the check and again when the confirmation's submit button is pressed. The `POST {base}/versions` body "repeats the latest content" (6.3).
 - Capture `initialText` once and key the component by `participantId + noteDate`, so a different note remounts it cleanly.

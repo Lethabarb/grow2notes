@@ -63,10 +63,15 @@
   color: var(--colour-attention-edge);
 }
 
+/*
+ * A long unbroken name in the sentence wraps anywhere, as the banner, a flex item of the bar's row, is never narrower
+ * than its widest word, which would otherwise make the page scroll sideways at 320 px (SC 1.4.10).
+ */
 .deadEndText {
   flex: 1 1 0;
   min-inline-size: 0;
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (forced-colors: active) {

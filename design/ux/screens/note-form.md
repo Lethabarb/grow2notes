@@ -78,6 +78,9 @@ participants.md link to it. URLs hold IDs and dates only, and no route pushes ro
   `/edit` with `replace`.
 - **Out of edit mode:** Save changes and Cancel `replace` `/edit` with the shared URL, which then renders the read
   view. The shell copies the opened-from record across each replace, so the back link keeps its destination.
+- **As built (T08):** `{participantId}` is a GUID and `{noteDate}` a date written `yyyy-MM-dd`. Any other value, a
+  date that does not exist, such as 2026-02-30, or a date after today shows Page not found, as the API answers each
+  with `404` (design.md §6.3): no note can exist after today, and Page not found's words are the app's own.
 - **Groups add nothing to the URLs** (D44–D47). Picks live in form state and on the server only: never in the URL,
   router state or device storage (D22). They change the payloads, not the routes or caches:
   - `GET {base}/draft` returns the whole snapshot as `commonItemGroups: [{id, name, isEveryNote, isPicked, items}]`
@@ -361,7 +364,9 @@ route in the signed-out-in-place view. `position: sticky; inset-block-start: 0`,
 minimum 3.5rem, one row.
 Static under `@media (max-height: 30rem)` [Standard, advisory text in Understanding 1.4.10]. A `ResizeObserver` writes
 its height to `--topbar-h`; `:root { scroll-padding-block-start: calc(var(--topbar-h) + 0.5rem) }`, 0 when static
-[Standard] SC 2.4.11, technique C43. It is the only sticky element in the app (`foundations.md`).
+[Standard] SC 2.4.11, technique C43. It is the only sticky element in the app (`foundations.md`). As built (T08), the
+shell's slot lays out no box of its own (`display: contents`, and still not shown while empty), so the bar, its one
+child, sticks for the whole page rather than for the slot's height.
 
 | Part | Settings |
 |---|---|
@@ -369,7 +374,7 @@ its height to `--topbar-h`; `:root { scroll-padding-block-start: calc(var(--topb
 | **Compact name** | **Pending owner sign-off (Open questions).** Once the `<h1>` has scrolled behind the bar (IntersectionObserver), show "Jane Citizen" on one line, bold, body size, between the back link and the indicator, `translate="no"`. May end in "…"; hidden when its slot is under 6rem (container query) and whenever the bar is static. Plain text, not a heading, link or live region; in the DOM only while shown. Instant, no animation. [Convention] Apple large-title behaviour; SAFER 1.3 "all portions" [Convention]. If the owner declines it, drop it; nothing else depends on it. |
 | **Save indicator** | `<p id="save-status" role="status" aria-live="polite" aria-atomic="true">`, always mounted from the moment the form renders, right-aligned, 16 px, `--colour-text-secondary`, `tabular-nums`, wraps, never truncated. No spinner, no animation. Text per **States**. [Standard] SC 4.1.3 via ARIA22. |
 | **Row 2: failed save** | In the failed state the same `#save-status` element spans the full width as the banner (attention tint, 2 px attention border, `aria-hidden` warning icon). The text is never shown or announced twice. |
-| **Row 2: blocking banner** | One at a time, replacing the failed-save row: takeover (with two buttons), started by someone else, after midnight, or participant archived. `<section aria-labelledby>` whose label is the sentence; not a live region (it holds controls); the sentence is announced once through the form's assertive announcer (item 16). Buttons are native, stacked full width at 44 px+ on a phone. |
+| **Row 2: blocking banner** | One at a time, replacing the failed-save row: takeover (with two buttons), started by someone else, after midnight, or participant archived. `<section aria-labelledby>` whose label is the sentence; not a live region (it holds controls); the sentence is announced once through the form's assertive announcer (item 16). Buttons are native, stacked full width at 44 px+ on a phone. As built for the three dead ends (T08): in the attention colours of the failed-save row, with its `aria-hidden` warning icon and a real 2 px border, `CanvasText` under forced colours, and the sentence wrapping anywhere, so that a long unbroken name never widens the page. |
 
 ### 2. Error summary: [form-validation.md](../components/form-validation.md)
 
@@ -578,6 +583,8 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
   failed (polite), and (c) carry the page buttons' busy labels ("Saving changes…", "Cancelling…"): the polite region
   is this page's `PageStatus` (app-shell.md component 3), so the shared Button finds it through context. Writing the
   same text twice: clear, then set on the next frame, so it is announced again.
+- As built (T08): the assertive region follows the page's content, beside `PageStatus`'s, from the first render, and
+  keeps a dead end's sentence once written, as the dead end lasts for as long as the form is open.
 
 ### 17. Session warning: [session-timeout.md](../components/session-timeout.md)
 
@@ -598,7 +605,7 @@ Interactions; "unavailable" means `aria-disabled` with the reason in `#save-stat
 | **Did not load** (network, timeout, 5xx after one silent retry) | Fallback `<h1>` **Note** (the page name), then **The note did not load: no connection. Try again.** or **The note did not load: something went wrong. Try again.** (P, `microcopy.md` §4/§9 pattern) and a secondary **Try again** button that refetches only the failed request. Back link stays. | Not rendered | Focus to the fallback `<h1>`; the status region carries the message. |
 | **Not found** (`404`: bad or old participant ID, another organisation) | Whole-page **Page not found** (`empty-loading-error.md`). | — | Focus to its `<h1>`. |
 | **Not allowed to edit** (`403 note.not_editable`, stale link) | Whole-page **You cannot edit this note** · "Only the person who wrote it, or a manager, can edit it." · link **Read the note** (P, `empty-loading-error.md`). | — | Focus to its `<h1>`. |
-| **Someone else's draft** (`409 note.in_progress_by_other` on load, from a stale link) | Identity block, then the sentence as a notice: **Alex P. started today's note for Jane Citizen at 9:14 am. Only Alex P. can finish it.** (N; for a non-today date: "started the note for", D). No form. | — | Focus to `<h1>`. |
+| **Someone else's draft** (`409 note.in_progress_by_other` on load, from a stale link) | Identity block, then the sentence as a notice: **Alex P. started today's note for Jane Citizen at 9:14 am. Only Alex P. can finish it.** (N; for a non-today date: "started the note for", D). No form. As built (T08), the start time is `stamp()`'s with the note date as its reference day (microcopy.md §3), so a draft started on its own date reads "at 9:14 am", and the earlier-day form is used for a note date before `me.today`, on load and as the first save's dead end alike. | — | Focus to `<h1>`. |
 | **Signed out** (`401` at any point) | `session-timeout.md` shows sign-in in place: the route stays mounted but `hidden`, all on-screen text stays in memory, autosave pauses. | — | See Interactions, "Session". |
 
 ### Kinds of note (set when the form loads)
@@ -785,6 +792,11 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 - The payload also sends `pickedGroupIds` (every on-screen pick) and `tickedCommonItemIds` filtered to Every note and
   the picked groups' items. Picks are part of the working copy everywhere ticks are: autosave, page-hidden saves,
   takeover (Keep / Load), the lists-changed reload, signing in again in place, and Cancel in edit mode.
+- As built (T08): any field losing focus with a change unsaved sends it at once, a move from one tick box to the next
+  included. A save that falls due while one is out goes as that one settles, answered or failed, while one that the
+  timers have not yet called waits for them, so that non-stop typing saves about every 5 s rather than after every
+  answer. The lists-changed reload reads `GET {base}/draft` outside the draft's query, so the form's load states never
+  show again, and a dead end stops autosave for as long as the form is open.
 - The draft query uses `staleTime: Infinity`, `refetchOnWindowFocus: false`, `refetchOnReconnect: false`; the form
   copies it into its own state once.
 

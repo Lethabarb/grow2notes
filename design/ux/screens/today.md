@@ -260,6 +260,8 @@ listed here.
 - The typed text lives in Today's component state only: never the URL, title, `history.state`, query keys, storage,
   logs or telemetry (D22, §4.0, §9.5). It resets when the user leaves Today.
 - Not sticky (SC 2.4.11, and the keyboard would cover the list).
+- As built (T08): the text stays through every refresh of the list, a new day's included: on a *Midnight rollover*
+  the box leaves while that day's list loads and comes back holding the text over the new list.
 
 ### 8. Participant rows (main list)
 
@@ -423,7 +425,7 @@ and the banner after Submit always wins. Today does **not** use React Router `<S
 | Enter or Escape in the field | Nothing | Field | No |
 | Try again (load failed) | Refetch only the failed request(s) | Success: the `<h1>`. Failure: stays on Try again | Failure: "The participant list still did not load: …" (polite) |
 | Add participant (manager, empty state) | Navigate to the Add participant page (§4.8) | That page's `<h1>` | That page |
-| Window regains focus / tab becomes visible | `GET /api/auth/me` refetches (badge, `today`); the Today and drafts queries refetch silently. Rows update in place; no animation; scroll, focus and search text unchanged | Unchanged | No |
+| Window regains focus / tab becomes visible | `GET /api/auth/me` refetches (badge, `today`); the Today and drafts queries refetch silently. Rows update in place; no animation; scroll, focus and search text unchanged. TanStack Query 5 listens for `visibilitychange` alone, so Today also listens for the window's `focus`, which a click back into a window left visible beside another fires alone; the two events of a return to the tab share one request (T08) | Unchanged | No |
 | Submit on the note form (from this screen) | The form removes the cached `['today']` and drafts queries, calls `refreshMe()` when the response has a `flagStatus`, writes the message to `messageStore`, closes the dialog, then returns to Today (pop if Today is the previous entry, otherwise replace; note-identity-header.md) | Success banner | Through focus: "Note for Jane Citizen submitted" |
 | Flagged / Report / Manage / Account / Sign out | Shell behaviour (app-shell-nav.md) | Shell | Shell |
 
@@ -513,7 +515,9 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
 
 **Order and layout**
 - [ ] DOM order: (banner) → `<h1>` → status/Try again → drafts section → hidden "Participants" → search → list or
-  empty/no-match text.
+  empty/no-match text. As built (T08), the shared `LoadRegion` renders its status line, and Try again after a failure,
+  after its content, so once the region is ready the line, empty from then on, follows the list: nothing shown, read or
+  reached by Tab is out of order. The banner comes with Submit (T09) and the drafts section with S02.01.04 (T12).
 - [ ] Rows follow the server order (family, then given); filtering and refetching never reorder them.
 - [ ] Drafts section lists only drafts/pending edits not on today's list, sorted family, given, then note date oldest
   first; hidden entirely when there are none.

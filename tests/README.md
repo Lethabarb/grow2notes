@@ -6,7 +6,7 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
   the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
-  items and Guide prompts, with axe accessibility checks, run against the published app.
+  items, Guide prompts, Today and the note form, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -116,14 +116,14 @@ app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in agai
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
 Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
 app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
-(`e2e/user-actions.spec.ts`) and the Edit user test that meets the app's own save
-(`e2e/edit-user.spec.ts`) get their setup links from the published app's own `admin bootstrap` and
-`admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the second terminal gives
-them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
-string and `App__Origin`, which must be the address that the tests open. Without one of the three,
-each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
-database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
-Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`) and the two
+note form tests that meet the app's own Today and notes (`e2e/note-form.spec.ts`) get their setup links from the
+published app's own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn`
+fixtures, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder,
+in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
+Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
+organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
+holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -385,7 +385,8 @@ the `authenticator` fixture, so that the organisation that `admin bootstrap` mad
 corrects, archives and restores a participant at 375 px; one adds a participant and five goals at 375 px, then
 rewords, moves, archives and restores one of them; and two more add, correct, archive and restore a participant, and
 add two goals and archive one, with the keyboard alone, at 375 px and at a laptop's width.
-`signInThroughSetup(page, invite, authenticator)` from `e2e/setupSignIn.ts` sets the account up and ends on Today.
+`signInThroughSetup(page, invite, authenticator)` from `e2e/setupSignIn.ts` sets the account up, adding one passkey
+to the authenticator, and ends on Today.
 `expectStops(page, key, stops)` from `e2e/focus.ts` presses Tab or Shift+Tab and reads each stop: the focused element
 by the text that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and
 "outside the page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is
@@ -489,6 +490,60 @@ another or cut off; nothing scrolling sideways at 320 px with 200% text; under f
 watches the live regions, as `e2e/participants.spec.ts` does. `expectNothingKept(page, ...values)` from `e2e/kept.ts`
 then checks that no item's words are kept where the page could keep them: on a page that `page.goto` loaded, the
 history entry holds React Router's index alone.
+
+### Answering Today and a participant's note
+
+Today reads its list with `GET /api/today`, and a participant's note reads their header with
+`GET /api/participants/{participantId}` and the form with `GET {base}/draft`, whose autosave is `PUT {base}/draft`
+(design.md §6.3). Each needs a session, so a test of Today or the note form with a made-up person answers them in the
+browser, as it answers `/api/admin/participants`.
+
+`e2e/today.ts`, beside `e2e/participants.ts`, has two helpers, each routing the page's `GET /api/today` through
+`page.route` and overriding `serveMe`'s empty list, as Playwright tries the latest route first, so call them after
+`serveMe`:
+
+- `serveToday(page, date, participants)` answers each with `todayList(date, participants)`: the date, and the active
+  ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, in the order given.
+- `failToday(page, failure)` aborts each, for `'no connection'`, or answers it with a status, such as `503`. The failure
+  shows about 1 s after the request, after the query client's silent retry.
+
+`e2e/notes.ts` keeps participants' notes in memory as the API keeps them:
+`notesStore({ today, participants, goals, prompts })` takes the server's date in Melbourne, the made-up participants,
+each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the organisation's guide prompts. Its
+`serve(page, me)` answers the page's requests for a header and a note as `me`'s, through `page.route`: the header, or
+`404` for a participant that it does not hold; the form, a template with the goals unticked and the lists' version, the
+caller's own draft, `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404`
+for a date after today; and each save, which updates the caller's own draft with `200`, or creates it with `201` after
+the creating save's checks in design.md §5.5's order, `422 note.future_date`, `422 note.past_date_manager_only` for a
+worker, `422 note.participant_archived`, `409 note.lists_changed` for any lists' version but the current one's, and
+`422 validation.failed` for a goal not listed. Each save answers with `savedAtUtc`, by default 06:12 UTC on 1 October
+2026, which the page shows as "Saved 4:12 pm", and `serve(page, me, { latencyMs })` holds each answer that long, as on a
+slow network. The store's `saves` lists the body of every save sent, `draft(participantId, noteDate)` gives a working
+copy, and four more do what someone else does while the form is open: `setToday(date)`, midnight in Melbourne;
+`setGoals(participantId, goals)`, a manager's change to the list; `archive(participantId)`; and
+`startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as `alexStarted`, Alex P.'s at 9:14 am.
+`failNoteReads(page)` aborts each read of a header or a form, as `failParticipants` does, until the store serves the
+page again.
+
+```ts
+await serveMe(page, worker);
+await serveToday(page, worker.today, participants);
+await notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } }).serve(page, worker);
+await page.goto('/');
+```
+
+The two tests that meet the app's own answers sign in for real through the `invite` fixture: a manager adds a
+participant with two goals from Today's empty state, finds them, starts their note and reopens the draft, then saves new
+guide prompts, which the emptied draft shows, and then `""`, which leaves its box with no placeholder; and a worker whom
+the manager invites, set up on `secondDevice` from the link that `resetSignIn` gives, meets the in-progress sentence at
+that note, while the other organisation's manager, `secondInvite`, meets Page not found there. `e2e/today.spec.ts` and
+`e2e/note-form.spec.ts` are the examples. They watch the live regions as `e2e/participants.spec.ts` does, but for the
+save indicator, which a reopened draft's form puts in anew with its first words (autosave-status.md *Behaviour* 8).
+Their checks of 200% text, sideways scroll and target sizes use `setTextTo200Percent`, `scrollsSideways` and
+`expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words that show, without the visually hidden ones, and
+the forced-colours ring uses `systemColour` from there too. Today's Waiting state holds the page's timers of 1 s
+with an init script rather than on Playwright's clock, as axe settles each rule on a timer and never finishes under a
+paused clock; the after-midnight refusal runs on `page.clock`.
 
 ### Signing in with a passkey, end to end
 

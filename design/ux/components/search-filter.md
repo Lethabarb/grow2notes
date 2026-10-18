@@ -183,7 +183,8 @@ No participant matches ‘xyz’.                visible message where the list 
   these: the words come from `src/copy` (`msg.noParticipantMatches`, with its full stop); Clear is the shared secondary
   `Button`; the status region is `<p role="status">`, with no `aria-live`; and the field takes the shared text field's
   look (`textInput.module.css`). The screen shows the box only once its list has loaded, and never when there are no
-  participants at all.
+  participants at all. It takes a `className`, as `Button` does, for the screen's own space under it: Today's
+  `--space-4` before the rows (T08).
 - **Matching** lives in one pure function, unit-tested with Vitest:
 
 ```ts
@@ -316,8 +317,10 @@ The visible no-match paragraph, on the screen's own module: `overflow-wrap: anyw
   with VoiceOver on an iPhone to confirm the no-match announcement and the 500 ms timing (axe cannot test
   announcements). For Manage > Participants these are `tests/e2e/participants.spec.ts` (axe on each state at both
   widths, every live region in the page before its words, no sideways scroll at 320 px with 200% text, Clear focusing
-  the field from the keyboard) and the *Participants* steps on `ops/first-use-in-test.md` for the manual pass; Today's
-  come with it (T08).
+  the field from the keyboard) and the *Participants* steps on `ops/first-use-in-test.md` for the manual pass. For
+  Today they are `tests/e2e/today.spec.ts` (axe on each state at both widths, every live region in the page before its
+  words, no sideways scroll at 320 px with 200% text with Clear under the field, Clear keeping focus in the field, and
+  no request while typing) and the *Today and the note form* steps on `ops/first-use-in-test.md` (T08).
 
 ---
 
@@ -329,6 +332,9 @@ The visible no-match paragraph, on the screen's own module: `overflow-wrap: anyw
 - No-match state: only "No participant matches ‘xyz’." Do not show "Add participant" here (the design shows it only
   for "No participants yet."), do not show a count, and do not show suggestions.
 - The text resets when the user leaves Today, so after Submit the user returns to the full list and can see the new "Submitted" status (4.13).
+- As built (T08): the text is the Today page's own state, so a background refresh of the list keeps it, and the box,
+  which is never unmounted by one. On a new day in Melbourne the box leaves while that day's list loads, as the
+  *Midnight rollover* state has it, and comes back holding the text over the new list.
 - This is the screen tired workers use on phones. The 16px text, the 48px Clear target, autocorrect off and the
   punctuation-tolerant matching matter most here.
 
