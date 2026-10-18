@@ -51,6 +51,24 @@ const ana = madeUp('8d1f5b3a-6c24-4e98-a7b0-2e9c4f6a1d53', 'Ana', 'Ward');
 const people = [zara, jane, ravi, priya, sean, ana];
 const names = ['Zara Ali', 'Jane Citizen', 'Ravi de Silva', 'Priya Kumar', 'Seán O’Brien', 'Ana Ward'];
 
+// With them, for Find a participant: an accented name, and two that hold "Alex", one a given name and one the start
+// of a family name.
+const mia = madeUp('618514b4-feaa-4052-9f1b-58a69cec966f', 'Mia', 'Alexander');
+const zoe = madeUp('1ed79dc1-9d94-4e70-8e19-90b09a353926', 'Zoë', 'Hill');
+const alex = madeUp('461db3e7-eacd-473f-8254-3d1fef9ece1b', 'Alex', 'Nguyen');
+const findable = [mia, zara, jane, ravi, zoe, priya, alex, sean, ana];
+const findableNames = [
+  'Mia Alexander',
+  'Zara Ali',
+  'Jane Citizen',
+  'Ravi de Silva',
+  'Zoë Hill',
+  'Priya Kumar',
+  'Alex Nguyen',
+  'Seán O’Brien',
+  'Ana Ward',
+];
+
 const nbsp = ' ';
 
 /** The Today list of `participants` for `date`. */
@@ -235,6 +253,35 @@ function addParticipant(): HTMLElement | null {
   return within(main()).queryByRole('link', { name: 'Add participant' });
 }
 
+/** The Find a participant landmark, or `null` while Today has none. */
+function search(): HTMLElement | null {
+  return main().querySelector('search');
+}
+
+/** The Find a participant field. */
+function field(): HTMLElement {
+  return within(search()!).getByRole('textbox', { name: 'Find a participant' });
+}
+
+/** Clear, or `null` while the field is empty. */
+function clearButton(): HTMLElement | null {
+  return within(search()!).queryByRole('button', { name: 'Clear search' });
+}
+
+/** The search's own status region, which says the no-match sentence once typing pauses. */
+function searchStatus(): HTMLElement {
+  return within(search()!).getByRole('status');
+}
+
+/** The no-match sentence in place of the rows, beside the search's status, or `null` where there is none. */
+function noMatchSentence(): HTMLElement | null {
+  const shown = within(main())
+    .queryAllByText(/^No participant matches/)
+    .filter((element) => !search()?.contains(element));
+  expect(shown.length).toBeLessThanOrEqual(1);
+  return shown[0] ?? null;
+}
+
 /** Focuses Try again and presses it, as a keyboard user would, and returns it. */
 function pressTryAgain(): HTMLElement {
   const button = within(main()).getByRole('button', { name: 'Try again' });
@@ -338,7 +385,7 @@ describe('Today', () => {
     expect(link).toHaveAttribute('data-return-key', person.id);
   });
 
-  it('shows its <h1>, "Today · Thursday 1 October", then the hidden <h2> "Participants", then the rows', async () => {
+  it('shows its <h1>, "Today · Thursday 1 October", the hidden <h2>, Find a participant, then the rows', async () => {
     await openToday();
 
     expect(shownHeading()).toBe(`Today · Thursday 1${nbsp}October`);
@@ -349,7 +396,7 @@ describe('Today', () => {
     expect(hidden).toHaveAccessibleName('Participants');
     expect(hidden).toHaveClass('visually-hidden');
     expect(within(main()).getAllByRole('heading', { level: 2 })).toHaveLength(1);
-    const inOrder = [pageHeading(), hidden, rowList()!, rowLink('Zara Ali'), rowLink('Ana Ward')];
+    const inOrder = [pageHeading(), hidden, search()!, field(), rowList()!, rowLink('Zara Ali'), rowLink('Ana Ward')];
     for (const [before, after] of inOrder.slice(0, -1).map((element, index) => [element, inOrder[index + 1]])) {
       expect(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
@@ -572,6 +619,336 @@ describe('Today with no participants', () => {
     await openToday(manager);
 
     expect(addParticipant()).toBeNull();
+  });
+});
+
+describe('Today, finding a participant', () => {
+  /** Opens Today for a worker, Alex Pham, on the people whose names test the matching. */
+  function openFindable() {
+    return openToday(worker, listOf(findable));
+  }
+
+  it('gives Find a participant its label and description, with nothing typed, no Clear and nothing said', async () => {
+    await openFindable();
+
+    const input = field();
+    expect(input).toHaveAttribute('type', 'text');
+    expect(input).toHaveValue('');
+    expect(input).toHaveAccessibleDescription('The list of participants below changes as you type.');
+    expect(input).not.toHaveAttribute('placeholder');
+    expect(input).not.toHaveFocus();
+    expect(clearButton()).toBeNull();
+    expect(search()!.querySelector('form')).toBeNull();
+    // In the page from the start, empty, so that the words written into it later are read.
+    expect(searchStatus()).toBeEmptyDOMElement();
+    expect(listedNames()).toEqual(findableNames);
+  });
+
+  it.each(['jan', 'JANE', 'cit jane', 'citizen, jane', 'Jane.'])('finds Jane Citizen alone for "%s"', async (typed) => {
+    await openFindable();
+
+    type(field(), typed);
+
+    expect(listedNames()).toEqual(['Jane Citizen']);
+  });
+
+  it.each([
+    ['zoe', 'Zoë Hill'],
+    ['obr', 'Seán O’Brien'],
+  ])('finds "%s" as %s, accents and apostrophes aside', async (typed, name) => {
+    await openFindable();
+
+    type(field(), typed);
+
+    expect(listedNames()).toEqual([name]);
+  });
+
+  it('matches "Alex" to only the names that hold it, whoever is signed in', async () => {
+    await openFindable();
+
+    type(field(), 'Alex');
+
+    expect(listedNames()).toEqual(['Mia Alexander', 'Alex Nguyen']);
+  });
+
+  it('filters the rows on every key, in the API order, with focus kept in the field and no request', async () => {
+    await openFindable();
+    const requests = fetchMock.mock.calls.length;
+    field().focus();
+
+    type(field(), 'a');
+    // Sorting by the full name would put Alex Nguyen first.
+    expect(listedNames()).toEqual(['Mia Alexander', 'Zara Ali', 'Alex Nguyen', 'Ana Ward']);
+    type(field(), 'al');
+    expect(listedNames()).toEqual(['Mia Alexander', 'Zara Ali', 'Alex Nguyen']);
+    type(field(), 'ali');
+    expect(listedNames()).toEqual(['Zara Ali']);
+    await wait(10_000);
+
+    expect(field()).toHaveValue('ali');
+    expect(field()).toHaveFocus();
+    expect(fetchMock.mock.calls.length).toBe(requests);
+  });
+
+  it.each(['   ', '.'])('shows every row and says nothing for "%s"', async (typed) => {
+    await openFindable();
+
+    type(field(), typed);
+    await wait(1000);
+
+    expect(listedNames()).toEqual(findableNames);
+    expect(noMatchSentence()).toBeNull();
+    expect(searchStatus()).toBeEmptyDOMElement();
+  });
+
+  it('shows the no-match sentence at once in place of the rows, and says it once typing pauses 500 ms', async () => {
+    await openFindable();
+
+    type(field(), 'x');
+    await wait(300);
+    type(field(), 'xy');
+    await wait(300);
+    type(field(), ' xyz ');
+
+    expect(rowList()).toBeNull();
+    // From the text as typed, its ends trimmed, after the search box and outside it, with no role and in plain text.
+    const sentence = noMatchSentence()!;
+    expect(sentence).toHaveTextContent(/^No participant matches ‘xyz’\.$/);
+    expect(sentence.tagName).toBe('P');
+    expect(sentence).not.toHaveAttribute('role');
+    expect(sentence).toHaveStyle({ overflowWrap: 'anywhere' });
+    expect(search()!.compareDocumentPosition(sentence)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(addParticipant()).toBeNull();
+    // Not said while the keys came less than 500 ms apart.
+    expect(searchStatus()).toBeEmptyDOMElement();
+
+    await wait(499);
+    expect(searchStatus()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(searchStatus()).toHaveTextContent(/^No participant matches ‘xyz’\.$/);
+    expect(field()).toHaveValue(' xyz ');
+    expect(clearButton()).toBeInTheDocument();
+  });
+
+  it('brings the rows back at once when something matches again, and empties the search status', async () => {
+    await openFindable();
+    type(field(), 'xyz');
+    await wait(500);
+    expect(searchStatus()).toHaveTextContent(/^No participant matches ‘xyz’\.$/);
+
+    type(field(), 'z');
+
+    expect(listedNames()).toEqual(['Zara Ali', 'Zoë Hill']);
+    expect(noMatchSentence()).toBeNull();
+    await wait(500);
+    expect(searchStatus()).toBeEmptyDOMElement();
+  });
+
+  it('shows Clear only while there is text, which it empties, keeping focus in the field, all rows back', async () => {
+    await openFindable();
+    field().focus();
+    type(field(), 'xyz');
+
+    const clear = clearButton()!;
+    expect(clear).toHaveTextContent('Clear');
+    // Its mouse-down never takes focus from the field, so a phone keeps its keyboard open.
+    expect(fireEvent.mouseDown(clear)).toBe(false);
+    fireEvent.click(clear);
+
+    expect(field()).toHaveValue('');
+    expect(field()).toHaveFocus();
+    expect(clearButton()).toBeNull();
+    expect(noMatchSentence()).toBeNull();
+    expect(listedNames()).toEqual(findableNames);
+  });
+
+  it('puts focus back in the field when Clear is pressed from the keyboard', async () => {
+    await openFindable();
+    type(field(), 'jane');
+
+    await press(clearButton()!);
+
+    expect(field()).toHaveValue('');
+    expect(field()).toHaveFocus();
+    expect(listedNames()).toEqual(findableNames);
+  });
+
+  it('changes nothing for Enter or Escape in the field', async () => {
+    const { router } = await openFindable();
+    field().focus();
+    type(field(), 'jane');
+    const requests = fetchMock.mock.calls.length;
+
+    for (const key of ['Enter', 'Escape']) {
+      fireEvent.keyDown(field(), { key });
+      fireEvent.keyUp(field(), { key });
+    }
+    await settle();
+
+    expect(field()).toHaveValue('jane');
+    expect(field()).toHaveFocus();
+    expect(listedNames()).toEqual(['Jane Citizen']);
+    expect(router.state.location.pathname).toBe('/');
+    expect(fetchMock.mock.calls.length).toBe(requests);
+  });
+
+  it('keeps the field, its text and focus through a refetch, filtering the list that comes back', async () => {
+    await openFindable();
+    const input = field();
+    input.focus();
+    type(input, 'jan');
+    const list = held(json(listOf([...findable, madeUp('2b7d9e4f-3a61-4c85-9e02-6f1a8c3d5b47', 'Janet', 'Young')])));
+    serve(todayPath, list.answer);
+
+    becomeVisible();
+    await settle();
+
+    // While the request is out, as it was: neither taken away nor made unavailable.
+    expect(field()).toBe(input);
+    expect(input).toBeEnabled();
+    expect(input).not.toHaveAttribute('aria-disabled');
+    expect(input).toHaveFocus();
+
+    list.release();
+    await settle();
+
+    expect(field()).toBe(input);
+    expect(input).toHaveValue('jan');
+    expect(input).toHaveFocus();
+    expect(listedNames()).toEqual(['Jane Citizen', 'Janet Young']);
+  });
+
+  it('keeps the field and its text when a refetch in the background fails', async () => {
+    await openFindable();
+    const input = field();
+    type(input, 'jan');
+    serve(todayPath, noConnection);
+
+    becomeVisible();
+    // The silent retry fails too.
+    await wait(2000);
+
+    expect(field()).toBe(input);
+    expect(input).toHaveValue('jan');
+    expect(listedNames()).toEqual(['Jane Citizen']);
+    expect(line()).toBeEmptyDOMElement();
+  });
+
+  it("keeps what is typed through a new day's list, which it filters", async () => {
+    await openFindable();
+    type(field(), 'jan');
+    serve(mePath, json({ ...worker, today: '2026-10-02' }));
+    serve(todayPath, json(listOf([jane, priya], '2026-10-02')));
+
+    focusWindow();
+    await settle();
+
+    expect(shownHeading()).toBe(`Today · Friday 2${nbsp}October`);
+    expect(field()).toHaveValue('jan');
+    expect(listedNames()).toEqual(['Jane Citizen']);
+    expect(rowLink('Jane Citizen')).toHaveAttribute('href', `/participants/${jane.id}/notes/2026-10-02`);
+  });
+
+  // On a browser router, as `main.tsx` uses, so that the address and history are the window's own.
+  it('keeps what is typed out of the address, history.state, the title, the query keys and storage', async () => {
+    serve(mePath, json(worker));
+    serve(todayPath, json(listOf(findable)));
+    window.history.replaceState(null, '', '/');
+    const client = createQueryClient();
+    client.setQueryData(meQuery.queryKey, worker);
+    const router = createBrowserRouter(routes);
+    browserRouters.push(router);
+    show(router, client);
+    await settle();
+
+    type(field(), 'Citizen');
+    await wait(1000);
+
+    expect(listedNames()).toEqual(['Jane Citizen']);
+    expect(`${window.location.pathname}${window.location.search}${window.location.hash}`).toBe('/');
+    expect(router.state.location.state).toBeNull();
+    expect(JSON.stringify(window.history.state)).not.toMatch(/citizen/i);
+    expect(document.title).toBe('Grow2Notes – Today');
+    const keys = client.getQueryCache().getAll().map(({ queryKey }) => queryKey);
+    expect(keys).toEqual([['me'], ['today', '2026-10-01']]);
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('is gone after a row is opened and Today comes back, which focuses that row', async () => {
+    const { router } = await openFindable();
+    type(field(), 'kum');
+    expect(listedNames()).toEqual(['Priya Kumar']);
+    await press(rowLink('Priya Kumar'));
+    expect(router.state.location.pathname).toBe(`/participants/${priya.id}/notes/2026-10-01`);
+
+    await goBack(router);
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(field()).toHaveValue('');
+    expect(clearButton()).toBeNull();
+    expect(listedNames()).toEqual(findableNames);
+    expect(rowLink('Priya Kumar')).toHaveFocus();
+  });
+
+  it('is gone after leaving Today by the nav and coming back by it', async () => {
+    await openToday(manager, listOf(findable));
+    type(field(), 'jan');
+    const nav = within(screen.getByRole('banner'));
+
+    await press(nav.getByRole('link', { name: 'Manage' }));
+    expect(search()).toBeNull();
+    await press(nav.getByRole('link', { name: 'Today' }));
+    await settle();
+
+    expect(field()).toHaveValue('');
+    expect(listedNames()).toEqual(findableNames);
+    expect(pageHeading()).toHaveFocus();
+  });
+});
+
+describe('Today, Find a participant only once there is someone to find', () => {
+  it('has no search box while waiting or while "Loading participants…" shows', async () => {
+    serve(todayPath, noAnswer);
+    renderApp('/');
+
+    expect(search()).toBeNull();
+    await wait(999);
+    expect(search()).toBeNull();
+    await wait(1);
+
+    expect(line()).toHaveTextContent(/^Loading participants…$/);
+    expect(search()).toBeNull();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('has no search box after a failed load, and shows it once Try again loads the list', async () => {
+    serve(todayPath, noConnection);
+    renderApp('/');
+    await wait(1000);
+    await settle();
+
+    expect(line().textContent).toBe('The participant list did not load: no connection. Try again.');
+    expect(search()).toBeNull();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
+
+    serve(todayPath, json(listOf(people)));
+    pressTryAgain();
+    await settle();
+
+    expect(field()).toHaveValue('');
+    expect(listedNames()).toEqual(names);
+  });
+
+  it.each([
+    { role: 'worker', me: worker },
+    { role: 'manager', me: manager },
+  ])('has no search box for a $role when there are no participants', async ({ me }) => {
+    await openToday(me, listOf([]));
+
+    expect(within(main()).getByText('No participants yet.')).toBeInTheDocument();
+    expect(search()).toBeNull();
+    expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
   });
 });
 

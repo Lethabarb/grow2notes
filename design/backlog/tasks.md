@@ -2383,6 +2383,11 @@ lets workers write only today's note, using the Melbourne date.
   background refresh says nothing (today.md *Background refresh failed*), so nothing shown, read or reached by Tab is
   out of order; `LoadRegion`, which every loading screen shares, keeps that order, and step 7 writes it into today.md's
   DOM-order criterion beside the parts that T09 and T12 bring.
+- Where the design is silent (step 3), the simplest options: what is typed in Find a participant is the Today page's
+  state, as today.md's sketch has it, so that it stays through every refresh of the list (today.md *Actions*), a new
+  day's included, where the box leaves while that day's list loads, as the *Midnight rollover* state has it, and comes
+  back holding the text over the new list; and `FindParticipant` takes a `className`, as `Button` does, for Today's
+  `--space-4` between the field and the list.
 
 ### Steps
 
@@ -2435,7 +2440,7 @@ lets workers write only today's note, using the Melbourne date.
       focus or visibility keeping focus and scroll, and nothing polling; a new `me.today` loading that day's list, its
       links on the list's `date`; and, on a participant's page, Archive participant taking them off Today and Restore
       putting them back (S01.02.04's hand-off from T02).
-- [ ] Find a participant on Today (S02.01.02; design.md §4.2 item 3 and *No search match*; today.md component 7, its
+- [x] Find a participant on Today (S02.01.02; design.md §4.2 item 3 and *No search match*; today.md component 7, its
       *Search* criteria and *Loading, empty and error*'s search box bullet; search-filter.md): T02's `FindParticipant`
       and `matchesName` after the hidden heading, rendered once the list has loaded with at least one participant,
       never while waiting or loading, after a failed load or with no participants, and never unmounted by a

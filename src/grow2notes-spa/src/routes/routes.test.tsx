@@ -314,8 +314,11 @@ describe('every page', () => {
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
     expect(main).toContainElement(headings[0]);
-    // The page's own, visually hidden; a screen's region that loads has a line of its own, which shows.
-    const regions = screen.getAllByRole('status').filter((region) => region.classList.contains('visually-hidden'));
+    // The page's own, visually hidden; a screen's region that loads has a line of its own, which shows, and Find a
+    // participant a hidden one of its own, in its landmark.
+    const regions = screen
+      .getAllByRole('status')
+      .filter((region) => region.classList.contains('visually-hidden') && region.closest('search') === null);
     expect(regions).toHaveLength(1);
     expect(main).toContainElement(regions[0]);
   });

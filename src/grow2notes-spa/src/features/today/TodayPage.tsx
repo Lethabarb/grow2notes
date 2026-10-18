@@ -1,13 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { refreshMe, useMe } from '../../api/me.ts';
+import { FindParticipant } from '../../components/FindParticipant.tsx';
 import { LinkRow } from '../../components/LinkRow.tsx';
 import { LinkRowList } from '../../components/LinkRowList.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
+import { matchesName } from '../../components/matchesName.ts';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import { dateToday, parseDateOnly } from '../../copy/format.ts';
+import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
@@ -26,6 +29,10 @@ export function TodayPage() {
   const queryClient = useQueryClient();
   const today = useQuery(todayQuery(me.today));
   useReturnFocusReady(!today.isPending);
+  // What is typed in Find a participant, here in memory alone, never in the address, the title, a query key or storage
+  // (today.md component 7): it stays through a refresh of the list, a new day's included, and goes as the person
+  // leaves Today.
+  const [typed, setTyped] = useState('');
 
   // A list for another day than the header's: Melbourne's date has changed since `/me` last answered, so `/me` is
   // asked again, once, and its new `today` puts the header right and loads that day's list (today.md *Conflicts
@@ -59,19 +66,33 @@ export function TodayPage() {
       </PageHeading>
       <LoadRegion queries={[today]} loading={strings.participants.listLoading} what={strings.participants.theList}>
         {/* Called only once the query has data. */}
-        {() => <Participants list={today.data!} isManager={me.role === 'Manager'} />}
+        {() => (
+          <Participants list={today.data!} isManager={me.role === 'Manager'} typed={typed} onType={setTyped} />
+        )}
       </LoadRegion>
     </PageStatus>
   );
 }
 
+type ParticipantsProps = {
+  list: TodayList;
+  isManager: boolean;
+  /** What is typed in Find a participant, which Today holds. */
+  typed: string;
+  onType: (typed: string) => void;
+};
+
 /**
- * The day's participants (today.md components 6, 8 and 9), under the visually hidden `<h2>`: a row for each, in the
- * API's order, never sorted again, whose link names them alone and opens their note for the list's date, with no
- * router state; or, with none, "No participants yet.", and, for a manager alone, Add participant. T09 gives each row
- * its status line.
+ * The day's participants (today.md components 6 to 9), under the visually hidden `<h2>`: Find a participant, then a
+ * row for each person whose name matches what is typed, in the API's order, never sorted again, whose link names them
+ * alone and opens their note for the list's date, with no router state, or, when nobody matches, the no-match sentence
+ * in place of the rows; or, with no participants at all, no search box, "No participants yet." and, for a manager
+ * alone, Add participant. T09 gives each row its status line.
  */
-function Participants({ list, isManager }: { list: TodayList; isManager: boolean }) {
+function Participants({ list, isManager, typed, onType }: ParticipantsProps) {
+  const shown = list.participants.filter((participant) => matchesName(participant, typed));
+  const noMatch = list.participants.length > 0 && shown.length === 0;
+
   return (
     <>
       <h2 className="visually-hidden">{strings.today.participantsHeading}</h2>
@@ -87,16 +108,23 @@ function Participants({ list, isManager }: { list: TodayList; isManager: boolean
           )}
         </>
       ) : (
-        <LinkRowList>
-          {list.participants.map((participant) => (
-            <LinkRow
-              key={participant.id}
-              to={`/participants/${participant.id}/notes/${list.date}`}
-              name={fullName(participant)}
-              returnKey={participant.id}
-            />
-          ))}
-        </LinkRowList>
+        <>
+          <FindParticipant className={styles.find} value={typed} onChange={onType} noMatch={noMatch} />
+          {noMatch ? (
+            <p className={styles.noMatch}>{msg.noParticipantMatches(typed.trim())}</p>
+          ) : (
+            <LinkRowList>
+              {shown.map((participant) => (
+                <LinkRow
+                  key={participant.id}
+                  to={`/participants/${participant.id}/notes/${list.date}`}
+                  name={fullName(participant)}
+                  returnKey={participant.id}
+                />
+              ))}
+            </LinkRowList>
+          )}
+        </>
       )}
     </>
   );

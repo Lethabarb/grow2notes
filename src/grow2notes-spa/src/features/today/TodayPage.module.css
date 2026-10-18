@@ -4,3 +4,13 @@
   align-items: center;
   min-block-size: var(--target-min);
 }
+
+/* Between the search box and the rows, or the no-match sentence in their place (today.md *Layout - phone*). */
+.find {
+  margin-block-end: var(--space-4);
+}
+
+/* Plain body text, not an error: a long text typed wraps rather than make the page scroll sideways. */
+.noMatch {
+  overflow-wrap: anywhere;
+}
