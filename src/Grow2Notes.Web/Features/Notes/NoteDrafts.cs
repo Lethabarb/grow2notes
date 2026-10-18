@@ -36,8 +36,9 @@ internal sealed class NoteDrafts(
     /// <summary>
     /// The note form for <paramref name="actor"/> on <paramref name="participantId"/>'s note for
     /// <paramref name="noteDate"/>: with no live note, the template of a new note, unless the date is after today in
-    /// Melbourne, when no note can exist (§5.5 item 4); with the actor's own draft, their working copy; with anyone
-    /// else's draft, who started it and when, as only its author may open it (§6.3).
+    /// Melbourne, when no note can exist (§5.5 item 4), or, for an actor who is not a manager, before yesterday (A65);
+    /// with the actor's own draft, their working copy; with anyone else's draft, who started it and when, as only its
+    /// author may open it (§6.3).
     /// </summary>
     public async Task<DraftRead> ReadAsync(
         Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken)
@@ -50,9 +51,9 @@ internal sealed class NoteDrafts(
         var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
         if (note is null)
         {
-            return noteDate > clock.Today()
-                ? DraftRead.NotFound
-                : DraftRead.Of(await TemplateAsync(participantId, cancellationToken));
+            return await MayOpenANewNoteAsync(actor, noteDate, cancellationToken)
+                ? DraftRead.Of(await TemplateAsync(participantId, cancellationToken))
+                : DraftRead.NotFound;
         }
 
         if (note.StartedByOtherThan(actor) is { } inProgress)
@@ -218,7 +219,7 @@ internal sealed class NoteDrafts(
     }
 
     // §5.5 item 4's rules for creating a note, in its order: no date after today in Melbourne, for anyone; no day
-    // before it but by a manager, a role named as convention 4 of mcp-server.md §3.5 has it; no archived participant.
+    // before it but by a manager; no archived participant.
     private async Task<ErrorCode?> StartRefusalAsync(
         Actor actor, ParticipantStatus status, DateOnly noteDate, CancellationToken cancellationToken)
     {
@@ -228,15 +229,27 @@ internal sealed class NoteDrafts(
             return ErrorCode.FutureDate;
         }
 
-        if (noteDate < today
-            && !await db.Users.AnyAsync(
-                user => user.Id == actor.UserId && user.Role == UserRole.Manager, cancellationToken))
+        if (noteDate < today && !await IsManagerAsync(actor, cancellationToken))
         {
             return ErrorCode.PastDateManagerOnly;
         }
 
         return status == ParticipantStatus.Archived ? ErrorCode.ParticipantArchived : null;
     }
+
+    // Whether a new note's form opens (A65): never for a date after today, and for a day before yesterday only to a
+    // manager, as a worker's first save there could only be refused with the after-midnight sentence, which names
+    // yesterday (§3.3). Yesterday's opens to a worker too: the sentence is true of a first save there.
+    private async Task<bool> MayOpenANewNoteAsync(Actor actor, DateOnly noteDate, CancellationToken cancellationToken)
+    {
+        var today = clock.Today();
+        return noteDate <= today
+            && (noteDate >= today.AddDays(-1) || await IsManagerAsync(actor, cancellationToken));
+    }
+
+    // The role as stored, named as convention 4 of mcp-server.md §3.5 has it.
+    private Task<bool> IsManagerAsync(Actor actor, CancellationToken cancellationToken) =>
+        db.Users.AnyAsync(user => user.Id == actor.UserId && user.Role == UserRole.Manager, cancellationToken);
 
     // The participant's status, or null for no participant of that ID in the tenant's organisation.
     private Task<ParticipantStatus?> ParticipantStatusAsync(Guid participantId, CancellationToken cancellationToken) =>

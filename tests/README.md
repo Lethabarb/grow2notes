@@ -513,13 +513,14 @@ each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the org
 `serve(page, me)` answers the page's requests for a header and a note as `me`'s, through `page.route`: the header, or
 `404` for a participant that it does not hold; the form, a template with the goals unticked and the lists' version, the
 caller's own draft, `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404`
-for a date after today; and each save, which updates the caller's own draft with `200`, or creates it with `201` after
-the creating save's checks in design.md §5.5's order, `422 note.future_date`, `422 note.past_date_manager_only` for a
-worker, `422 note.participant_archived`, `409 note.lists_changed` for any lists' version but the current one's, and
-`422 validation.failed` for a goal not listed. Each save answers with `savedAtUtc`, by default 06:12 UTC on 1 October
-2026, which the page shows as "Saved 4:12 pm", and `serve(page, me, { latencyMs })` holds each answer that long, as on a
-slow network. The store's `saves` lists the body of every save sent, `draft(participantId, noteDate)` gives a working
-copy, and four more do what someone else does while the form is open: `setToday(date)`, midnight in Melbourne;
+for a date after today and, to a worker, for one before yesterday (design.md A65); and each save, which updates the
+caller's own draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
+`422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
+`409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
+listed. Each save answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
+4:12 pm", and `serve(page, me, { latencyMs })` holds each answer that long, as on a slow network. The store's `saves`
+lists the body of every save sent, `draft(participantId, noteDate)` gives a working copy, and four more do what
+someone else does while the form is open: `setToday(date)`, midnight in Melbourne;
 `setGoals(participantId, goals)`, a manager's change to the list; `archive(participantId)`; and
 `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as `alexStarted`, Alex P.'s at 9:14 am.
 `failNoteReads(page)` aborts each read of a header or a form, as `failParticipants` does, until the store serves the

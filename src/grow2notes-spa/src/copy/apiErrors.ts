@@ -33,7 +33,8 @@ export const apiErrorCopy = {
   /**
    * Someone else's draft (note-form.md *States*), with the author's display name in both places, never a first name
    * made from it (microcopy.md): "today's note", or "the note" for an earlier day's (open question 2), started at a
-   * time that has its date only when that was another day than the note's (microcopy.md §3, *Reference day*).
+   * time that has its date only when that was another day than the note's (design.md A64), as microcopy.md §3 has no
+   * format for a date and time inside a sentence.
    */
   'note.in_progress_by_other': ({ authorDisplayName, startedAtUtc, participantName, noteDate, onToday }: InProgress) =>
     `${authorDisplayName} started ${onToday ? 'today’s note' : 'the note'} for ${participantName} at `
@@ -48,7 +49,8 @@ export const apiErrorCopy = {
     `${participantName} is archived, so this note cannot be started. Ask a manager.`,
   /**
    * The after-midnight dead end in the note form's top bar (note-form.md *Conflicts and refusals*): design.md §3.3's
-   * words, its contraction included, for a worker's first save of a note for a day before today.
+   * words, its contraction included, for a worker's first save of a note for yesterday: a worker's form for an older
+   * day does not open (design.md A65).
    */
   'note.past_date_manager_only':
     'It’s now after midnight, so this note can’t be started for yesterday. Ask a manager to record it.',

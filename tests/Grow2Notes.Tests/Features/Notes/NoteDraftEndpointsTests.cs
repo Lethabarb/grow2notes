@@ -21,8 +21,9 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <c>GET</c> and <c>PUT {base}/draft</c> (design.md §6.3), called with the test-only sign-in
 /// (<see cref="TestSignIn"/>). The <c>GET</c>: with no live note, the template of a new note, with the participant's
 /// active goals in the manager's order, unticked, the organisation's guide prompts and the lists' version (§5.7),
-/// unless the date is after today (§5.5 item 4); with the caller's own draft, their working copy, with the wording it
-/// started with (A3); and opening the form writes nothing (§3.3). The <c>PUT</c>, the autosave: with no live note, the
+/// unless the date is after today (§5.5 item 4), or, for a worker, before yesterday (A65); with the caller's own draft,
+/// their working copy, with the wording it started with (A3); and opening the form writes nothing (§3.3). The
+/// <c>PUT</c>, the autosave: with no live note, the
 /// note, a draft of the caller's, their working copy, the template's goals its snapshot, and
 /// <c>note.draft_started</c>, together or not at all (§5.5 item 2), and <c>201</c>; with the caller's own draft, its
 /// ticks and text replaced, and <c>200</c> (§5.6); and the body's checks. Each, for anyone else's draft,
@@ -192,6 +193,50 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
 
         await tomorrow.ReadProblemAsync(HttpStatusCode.NotFound);
         Assert.Equal(HttpStatusCode.OK, today.StatusCode);
+    }
+
+    // Only a manager may start a note for a day before today (design.md §5.5 item 4), and the refusal of a worker's
+    // first save names yesterday (§3.3), so a worker gets no new note's form for a day before yesterday (A65), and
+    // yesterday's, of which the refusal is true, still opens.
+    [Theory]
+    [InlineData(Caller.WorkerOfA, -2, HttpStatusCode.NotFound)]
+    [InlineData(Caller.WorkerOfA, -30, HttpStatusCode.NotFound)]
+    [InlineData(Caller.WorkerOfA, -1, HttpStatusCode.OK)]
+    [InlineData(Caller.ManagerOfA, -2, HttpStatusCode.OK)]
+    [InlineData(Caller.ManagerOfA, -30, HttpStatusCode.OK)]
+    public async Task A_new_note_s_form_for_a_day_before_yesterday_opens_for_a_manager_alone(
+        Caller caller, int days, HttpStatusCode expected)
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var client = factory.CreateHttpsClient().SignInAs(caller, seeded);
+
+        using var response = await client.GetAsync(
+            DraftPath(participant.Id, Today.AddDays(days)), TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    // The rule is for a new note alone: a worker's own draft of an earlier day still opens, and another user's still
+    // says who started it.
+    [Fact]
+    public async Task A_live_note_for_a_day_before_yesterday_opens_for_a_worker_as_for_today()
+    {
+        var own = await factory.Services.AddParticipantAsync(seeded.A);
+        var others = await factory.Services.AddParticipantAsync(seeded.A);
+        var earlier = Today.AddDays(-2);
+        await factory.Services.AddDraftAsync(
+            seeded.A, new(own.Id, earlier, seeded.A.WorkerId, StartedAtUtc, Narrative: "Jane made toast."));
+        await factory.Services.AddDraftAsync(seeded.A, new(others.Id, earlier, seeded.A.ManagerId, StartedAtUtc));
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        var form = await ReadFormAsync(Caller.WorkerOfA, own.Id, earlier);
+        using var response = await client.GetAsync(
+            DraftPath(others.Id, earlier), TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            (true, "Jane made toast."),
+            (form.GetProperty("isSaved").GetBoolean(), form.GetProperty("narrative").GetString()));
+        await response.ReadProblemAsync(HttpStatusCode.Conflict);
     }
 
     // The goals as the draft started with them, reworded and added to since, the ticks and text as saved, and the

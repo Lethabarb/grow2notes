@@ -437,8 +437,8 @@ the kit of steps 26 to 28. Every common item typed is made up (A35), such as `Me
 
 These steps hold T08's by-hand checks ([tasks.md](../design/backlog/tasks.md), T08's Notes). They need account A, the
 kit of steps 26 to 28, and made-up participants with two goals each, such as `Jane Citizen` with `Makes own breakfast`
-and `Phones her sister`, whose notes for today nobody has started: three for step 47 and one more for each phone in
-step 48. Every word typed into a note is made up (A35).
+and `Phones her sister`, whose notes for today nobody has started: three for each screen reader in the steps below,
+nine in all. Every word typed into a note is made up (A35).
 
 46. The database, as in step 26: run `infra/sql/check-database.sql` for test after T08's deploy. Look for PASS on
     every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Note` for `grow2notes_runtime`, with
@@ -457,8 +457,12 @@ step 48. Every word typed into a note is made up (A35).
     notes in the second tab and look for "… is archived, so this note cannot be started. Ask a manager." read once;
     then Restore them in the first tab. (today.md's *Screen reader*; note-form.md's *Announcements*, for what T08
     builds.)
-48. Do the first part of step 47, up to "Saved" and the time, again on the iPhone with VoiceOver and Safari, and on
-    the Android phone with TalkBack and Chrome, each with its own participant.
+48. Do all of the step above again on the iPhone with VoiceOver and Safari, then on the Android phone with TalkBack
+    and Chrome, each time with three participants of its own as the first, second and third. The phone, signed in as
+    account A, does what that step does on the laptop, the second tab's part included, while the laptop, as account A
+    in Chrome, makes the changes that it makes in the first tab: the goal added, the archive and the Restore. Look
+    for the same readings, the lists-changed and archived sentences each read once included. (note-form.md's
+    *Announcements* and today.md's manual pass, on the phones.)
 49. On each phone, with the screen reader off: in Find a participant, type a name and press Clear, and look for the
     keyboard staying open with the cursor still in the field; open a participant's note whose box is empty, tap into
     Guided notes and look for the guide prompts showing while the box has focus, and the top bar, with Today and the

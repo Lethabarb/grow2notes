@@ -880,11 +880,13 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(shown.some((element) => element.textContent?.includes('Tuesday 13'))).toBe(true);
     expect(shown.filter((element) => element.textContent?.includes(chooseMethod))).toEqual([]);
     await wait(10 * 60_000);
-    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more but Today's list.
+    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more but Today's list,
+    // twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the first request,
+    // whose query function takes the abort signal; a production build sends it once. Counted rather than compared as
+    // a set, so that a request sent once more fails.
     const sentSince = sentAfter(requests);
     expect(sentSince[0]).toBe(passwordPath);
-    expect(sentSince.filter((path) => path === mePath)).toHaveLength(1);
-    expect(new Set(sentSince)).toEqual(new Set([passwordPath, mePath, todayPath]));
+    expect(sentSince.toSorted()).toEqual([passwordPath, mePath, todayPath, todayPath].toSorted());
 
     // The two entries after Today's are Forward's, where setup's memory has gone.
     await act(() => router.navigate(1));

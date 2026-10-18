@@ -80,7 +80,9 @@ participants.md link to it. URLs hold IDs and dates only, and no route pushes ro
   view. The shell copies the opened-from record across each replace, so the back link keeps its destination.
 - **As built (T08):** `{participantId}` is a GUID and `{noteDate}` a date written `yyyy-MM-dd`. Any other value, a
   date that does not exist, such as 2026-02-30, or a date after today shows Page not found, as the API answers each
-  with `404` (design.md §6.3): no note can exist after today, and Page not found's words are the app's own.
+  with `404` (design.md §6.3): no note can exist after today, and Page not found's words are the app's own. So does a
+  day before yesterday with no note started, for a worker (design.md A65), who may not start it and whose refusal
+  would name yesterday.
 - **Groups add nothing to the URLs** (D44–D47). Picks live in form state and on the server only: never in the URL,
   router state or device storage (D22). They change the payloads, not the routes or caches:
   - `GET {base}/draft` returns the whole snapshot as `commonItemGroups: [{id, name, isEveryNote, isPicked, items}]`
@@ -605,7 +607,7 @@ Interactions; "unavailable" means `aria-disabled` with the reason in `#save-stat
 | **Did not load** (network, timeout, 5xx after one silent retry) | Fallback `<h1>` **Note** (the page name), then **The note did not load: no connection. Try again.** or **The note did not load: something went wrong. Try again.** (P, `microcopy.md` §4/§9 pattern) and a secondary **Try again** button that refetches only the failed request. Back link stays. | Not rendered | Focus to the fallback `<h1>`; the status region carries the message. |
 | **Not found** (`404`: bad or old participant ID, another organisation) | Whole-page **Page not found** (`empty-loading-error.md`). | — | Focus to its `<h1>`. |
 | **Not allowed to edit** (`403 note.not_editable`, stale link) | Whole-page **You cannot edit this note** · "Only the person who wrote it, or a manager, can edit it." · link **Read the note** (P, `empty-loading-error.md`). | — | Focus to its `<h1>`. |
-| **Someone else's draft** (`409 note.in_progress_by_other` on load, from a stale link) | Identity block, then the sentence as a notice: **Alex P. started today's note for Jane Citizen at 9:14 am. Only Alex P. can finish it.** (N; for a non-today date: "started the note for", D). No form. As built (T08), the start time is `stamp()`'s with the note date as its reference day (microcopy.md §3), so a draft started on its own date reads "at 9:14 am", and the earlier-day form is used for a note date before `me.today`, on load and as the first save's dead end alike. | — | Focus to `<h1>`. |
+| **Someone else's draft** (`409 note.in_progress_by_other` on load, from a stale link) | Identity block, then the sentence as a notice: **Alex P. started today's note for Jane Citizen at 9:14 am. Only Alex P. can finish it.** (N; for a non-today date: "started the note for", D). No form. As built (T08), the start time is `stamp()`'s with the note date as its reference day, so a draft started on its own date reads "at 9:14 am", and a manager's earlier-day draft started on a later day reads "at Thu 1 Oct 2026, 9:14 am", a `dateTime` inside a sentence, which microcopy.md §3 does not give (design.md A64; open question 2); the earlier-day form is used for a note date before `me.today`, on load and as the first save's dead end alike. | — | Focus to `<h1>`. |
 | **Signed out** (`401` at any point) | `session-timeout.md` shows sign-in in place: the route stays mounted but `hidden`, all on-screen text stays in memory, autosave pauses. | — | See Interactions, "Session". |
 
 ### Kinds of note (set when the form loads)
@@ -1241,6 +1243,8 @@ Each is recorded once, with the evidence in the cited component file.
 1. **Compact name in the sticky top bar** once the large name scrolls away: keep or drop? It is the one behaviour not
    in the 4.3 sketch.
 2. **"Submit the note for"** (and "started the note for") when the note date is not today: approve the derived wording.
+   As built (T08), a note started on a later day than its date gives that start as "at Thu 1 Oct 2026, 9:14 am"
+   (design.md A64), for want of a format for a date and time inside a sentence: approve it or give the words.
 3. **"Editing submitted note (version 2)"**: is the number the version being edited (assumed here) or the version Save
    changes will create?
 4. **Derived back-link labels** "Participant" and "Past notes" for past-day notes; edit mode returns to the read view's

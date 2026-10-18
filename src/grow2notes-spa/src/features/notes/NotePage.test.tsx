@@ -1256,8 +1256,13 @@ describe('Opening the note form', () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
-    const opened = new Set(sentRequests());
-    expect(opened).toEqual(new Set([`GET ${mePath}`, `GET ${paths(jane).header}`, `GET ${paths(jane).draft}`]));
+    // Each read twice, as StrictMode mounts the page, unmounts it and mounts it again: the unmount cancels the first
+    // request, whose query function takes the abort signal, and the second mount sends it again. A production build
+    // sends each once. Counted rather than compared as a set, so that a read sent once more as the form opens fails.
+    const { header, draft } = paths(jane);
+    expect(sentRequests().toSorted()).toEqual(
+      [`GET ${mePath}`, `GET ${header}`, `GET ${header}`, `GET ${draft}`, `GET ${draft}`].toSorted(),
+    );
     const sent = sentRequests().length;
 
     scrollPage(400);

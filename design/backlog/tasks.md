@@ -2276,7 +2276,9 @@ lets workers write only today's note, using the Melbourne date.
   other than today, are built as the specs word them ([Open owner questions](#open-owner-questions)). Where the
   design is silent, the simplest option is taken:
   - Each answer and request carries only what this task reads or writes, so that no field ships unread or always
-    empty, and the later tasks add the rest of design.md §6.3 with what uses it: `GET /api/today`'s rows are
+    empty, but for two fields that S02.02.02's criteria name: the header's `status`, which no screen of this task
+    reads, and the draft's `baseVersion`, always 0 until T14's pending edits, which T14 reads. The later tasks add
+    the rest of design.md §6.3 with what uses it: `GET /api/today`'s rows are
     `{id, givenName, familyName}` until T09 adds `note` with the status line (the Cut above);
     `GET /api/participants/{participantId}` is `{id, givenName, familyName, status}` until T21 adds `firstNoteDate`
     (D80); `GET {base}/draft` is `{baseVersion, isSaved, listsVersion?, guidePrompts, goals, narrative, savedAtUtc?}`,
@@ -2311,8 +2313,10 @@ lets workers write only today's note, using the Melbourne date.
     `GET {base}/draft` gives for another person's draft too.
   - `GET {base}/draft` for a date after today answers `404`, as no note can exist then, so that a hand-edited address
     shows Page not found, words the app has: a refusal on the form would need a new string, and so the owner's
-    approval (D67). A creating `PUT` still refuses the date (S02.02.07). Every `note.past_date_manager_only` shows the
-    after-midnight sentence, the design's only words for it, a worker's pasted address for an earlier day included.
+    approval (D67). A creating `PUT` still refuses the date (S02.02.07). It answers `404` to a worker, too, for a day
+    before yesterday with no live note (design.md A65, from the review Note below), as the after-midnight sentence,
+    the design's only words for `note.past_date_manager_only`, names yesterday; yesterday's form opens, and its first
+    save shows that sentence, as one opened before midnight does.
   - The routes take a GUID and a `yyyy-MM-dd` date, another value getting the unknown path's `404`, so that the screen
     shows Page not found for it.
   - `listsVersion` is a SHA-256, as base64, of the active goals' IDs and wording in `GoalList.InListOrder`, the order
@@ -2397,8 +2401,9 @@ lets workers write only today's note, using the Melbourne date.
   for the whole page, where the slot's own box would hold it to its height; `TickListField` takes a `className`, as
   `FindParticipant` does, for the form's `--section-gap`; the fields are in no `<form>` until T09 adds Submit with the
   form's `noValidate`; the in-progress sentence gives the start time through `stamp()` with the note date as its
-  reference day (microcopy.md §3), so that a draft started on its own date reads "at 9:14 am" and a manager's
-  past-day draft started later reads its date too; and `GET {base}/draft` answers `404` for a submitted note on which
+  reference day, so that a draft started on its own date reads "at 9:14 am" and a manager's past-day draft started
+  later reads its date too, a `dateTime` in a sentence, which microcopy.md §3 does not give (design.md A64, from the
+  review Note below); and `GET {base}/draft` answers `404` for a submitted note on which
   the caller has no working copy, which T14 gives from the current version instead, as no note is submitted before T09.
 - Where the design is silent (step 5), the simplest options: the first save's `201` names no `Location`, as the
   note's address is the draft's own, and `PUT {base}/draft` answers `404` for a submitted note on which the caller has
@@ -2436,6 +2441,46 @@ lets workers write only today's note, using the Melbourne date.
   cannot shrink below its widest word, scroll the page sideways at 320 px. `migrate.sql`, scripted as CI scripts it
   (`dotnet ef migrations script --idempotent`), gives `AddNote` additions alone: the two tables, seven indexes and
   `DENY DELETE ON [dbo].[Note] TO [grow2notes_runtime]`.
+- 18 October 2026, review: 8 findings were confirmed and are fixed here, two of them about the rebase onto `main`
+  that the branch needs before its pull request, as T06 (#60) merged after it was cut from `c55cec5`:
+  - On that rebase, git would keep B7's "13 present, none missing" and `@b7Present = 13` and B8's
+    `@b8Expected = 5` in `infra/sql/check-database.sql` without a conflict, as both branches made those lines the
+    same, so after this deploy, with 15 tables and 6 migrations, the operator's check would show FAIL on both rows,
+    and nothing in CI runs the script. `CheckDatabaseScriptTests`, which needs no database, now reads the script
+    against the app's model and migrations: B7's tables and both its counts; B8's migration IDs, in its check and its
+    expected text, and its count; D3's expected denies, its text and its counts; and the permissions that D5's pass
+    expression wants refused. Each stale count, and each table, migration or deny left out, fails it. The rebase
+    must give B7 15 tables and B8 6 migrations, listing both branches' tables and migrations, D3 9 denies, and D5's
+    checks and texts the four new tables, and re-create `AddNote` on top of `AddCommonItems`, so that its designer
+    file and the model snapshot hold the common-item tables, with `dotnet ef migrations has-pending-model-changes`
+    passing and the `migrate.sql` scripted again and read in the pull request (step 7).
+  - T08's by-hand steps took the numbers 42 to 45, which T06's section on `main` already has. On the rebase they
+    follow T06's section as steps 46 to 49. Their section no longer names its own steps by number, so renumbering
+    them changes nothing else in it.
+  - Three request checks compared sets, so a read sent once more as the screen opened still passed: the note form's
+    two reads (`NotePage.test.tsx`), and Today's list at start-up (`useRefreshMe.test.tsx`) and after setup
+    (`AuthenticatorSetup.test.tsx`). Each now compares the sorted list of requests, with each read twice, as
+    StrictMode's second mount sends again the request that its unmount cancelled, and fails once a second query reads
+    the header or Today's list.
+  - The step 4 Note's in-progress sentence, whose `dateTime` for a manager's earlier-day note started on a later day
+    is inside a sentence, cited microcopy.md §3, which gives no format for a date and time there. It is design.md A64,
+    and joins note-form.md open question 2; that Note, note-form.md's *Someone else's draft* row and the copy's
+    comment now say so.
+  - The after-midnight sentence, which names yesterday, showed for a worker's first save on any earlier day, which a
+    pasted address could open. `GET {base}/draft` now answers `404` to a worker for a day before yesterday with no
+    live note (design.md A65), so that the form shows Page not found, and yesterday's form still opens, as the
+    sentence is true of it. `NoteDraftEndpointsTests` checks both, a manager's form for those days, and a worker's own
+    draft and another user's `409` there; `e2e/notes.ts` answers the same; and design.md §6.3, note-form.md *Routes*,
+    tests/README.md, steps 4 and 7 and the Notes above say so.
+  - S02.01.01's first Note says that each row's `note` is `null` until S02.01.03, where the rows have no `note` key
+    until T09. A dated T08 Note there now says so.
+  - The first bullet of the planning Note above said that no field ships unread or always empty, where the header's
+    `status` is read by no screen of this task and the draft's `baseVersion` is always 0 until T14. It now names both
+    as the exceptions that S02.02.02's criteria ask for.
+  - ops/first-use-in-test.md's phone step did only the first part of the NVDA step, so the lists-changed and archived
+    announcements were checked with NVDA alone, where the by-hand Note above names all three screen readers. Each
+    phone now does the whole step, with three participants of its own, while the laptop adds the goal, archives and
+    restores.
 
 ### Steps
 
@@ -2508,15 +2553,16 @@ lets workers write only today's note, using the Melbourne date.
       birth, and an unknown participant or another organisation's is `404`. `GET {base}/draft` finds the participant,
       then the live note: with none, the template, `baseVersion: 0`, `isSaved: false`, the organisation's
       `guidePrompts`, the active goals in `GoalList.InListOrder`, unticked, `narrative: ""` and `listsVersion`
-      (Notes), or `404` for a date after today (Notes); with the caller's own draft, its snapshot, ticks, narrative
-      and `savedAtUtc`, `isSaved: true` and the prompts as they are now; with anyone else's,
-      `409 note.in_progress_by_other` with the author's name and start time (Notes), the code added to `ErrorCode`
-      (`ErrorCodeTests`). Matrix rows (`401`, `200` for A's worker and manager, `404` for B's manager at A's
-      participant) and `SignedOutTests` rows. Integration tests: the header's fields; the template's goals in order,
-      archived ones left out; one list giving one `listsVersion`, and a reword, an add, an archive and a reorder each
-      changing it; the future date's `404`; the `409` to another worker and to a manager; and no row written. On the
-      SPA, in `src/features/notes`: the route `participants/:participantId/notes/:noteDate`, named `pageName.note`,
-      the page keyed by participant and date; the top bar in `PageBar` (note-form.md component 1), sticky, opaque and
+      (Notes), or `404` for a date after today and, to a worker, before yesterday (Notes); with the caller's own
+      draft, its snapshot, ticks, narrative and `savedAtUtc`, `isSaved: true` and the prompts as they are now; with
+      anyone else's, `409 note.in_progress_by_other` with the author's name and start time (Notes), the code added to
+      `ErrorCode` (`ErrorCodeTests`). Matrix rows (`401`, `200` for A's worker and manager, `404` for B's manager at
+      A's participant) and `SignedOutTests` rows. Integration tests: the header's fields; the template's goals in
+      order, archived ones left out; one list giving one `listsVersion`, and a reword, an add, an archive and a reorder
+      each changing it; the future date's `404`, and a worker's for a day before yesterday; the `409` to another
+      worker and to a manager; and no row written. On the SPA, in `src/features/notes`: the route
+      `participants/:participantId/notes/:noteDate`, named `pageName.note`, the page keyed by participant and date;
+      the top bar in `PageBar` (note-form.md component 1), sticky, opaque and
       at least 3.5rem, static under `max-height: 30rem`, its height in `--topbar-h` for
       `scroll-padding-block-start`, holding `BackLink` "Today" to `/` and the save indicator
       `<p id="save-status" role="status" aria-live="polite" aria-atomic="true">`, empty, from the first render; the
@@ -2634,8 +2680,9 @@ lets workers write only today's note, using the Melbourne date.
       `localStorage`, `sessionStorage`, IndexedDB or Cache Storage after each flow. Every new string is in `src/copy`
       and the copy test passes (note-form.md item 43), and the diff holds no trace of the parent company's name (D72).
       Docs: design.md §6.3 keeps its full shapes, which the later tasks fill, and gains only the new facts, the draft
-      `GET`'s `404` for a date after today, the `409`'s problem extensions and the `404` for a route's GUID or date
-      that does not parse, while the interim subsets stay in this section's Notes and the hand-offs; today.md,
+      `GET`'s `404` for a date after today and, to a worker, before yesterday (A65), the `409`'s problem extensions and
+      the `404` for a route's GUID or date that does not parse, while the interim subsets stay in this section's Notes
+      and the hand-offs; today.md,
       note-form.md, checkbox-list.md, guided-notes-textarea.md, autosave-status.md and search-filter.md likewise keep
       their full design and gain only what the build settles; the deferred parts and hand-offs (Notes) in the
       receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on

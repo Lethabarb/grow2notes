@@ -8,8 +8,9 @@ internal sealed record DraftRead
 {
     /// <summary>
     /// No participant of that ID is in the tenant's organisation, another organisation's included (design.md §9.2);
-    /// or no note can exist for the date, which is after today; or the caller has no working copy of a submitted note,
-    /// which T14 gives from the note's current version.
+    /// or no note can exist for the date, which is after today; or a caller who is not a manager may not start the
+    /// note, for a day before yesterday (design.md A65); or the caller has no working copy of a submitted note, which
+    /// T14 gives from the note's current version.
     /// </summary>
     public static readonly DraftRead NotFound = new();
 

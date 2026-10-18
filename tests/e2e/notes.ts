@@ -54,6 +54,10 @@ const versionOf = (goals: readonly NoteGoal[]) =>
     .update(JSON.stringify(goals.map(({ id, text }) => [id, text])))
     .digest('base64');
 
+/** The day before `date`, both written `yyyy-MM-dd`. */
+const dayBefore = (date: string) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
 type StoreOptions = {
   /** The server's date in Melbourne, such as `me.today`, which decides which first saves start a note. */
   today: string;
@@ -70,8 +74,9 @@ type StoreOptions = {
 /**
  * Participants' notes as the API keeps them (design.md §5.5 to §5.7), in the browser, so that no note request reaches
  * the app, where no made-up person has a session: a participant's header; the note form, a template, the caller's own
- * draft or another user's `409`, or `404` for a date after today; and autosave's `PUT`, which creates the note with the
- * creating save's checks, or updates the caller's own draft. `serve` answers one page's requests as one person's.
+ * draft or another user's `409`, or `404` for a date after today and, to a worker, before yesterday (design.md A65);
+ * and autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's own draft.
+ * `serve` answers one page's requests as one person's.
  */
 export function notesStore({
   today: firstToday,
@@ -110,7 +115,7 @@ export function notesStore({
       return { json };
     }
 
-    if (noteDate > today) {
+    if (noteDate > today || (noteDate < dayBefore(today) && me.role !== 'Manager')) {
       return { status: 404 };
     }
 

@@ -199,8 +199,10 @@ describe('the refresh of /api/auth/me', () => {
     renderApp('/');
     await wait(0);
 
-    expect(meRequests()).toBe(1);
-    expect(new Set(fetchMock.mock.calls.map(([path]) => path))).toEqual(new Set([mePath, todayPath]));
+    // Today's list twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the
+    // first request, whose query function takes the abort signal; a production build sends it once. Counted rather
+    // than compared as a set, so that a request sent once more at start-up fails.
+    expect(fetchMock.mock.calls.map(([path]) => path).toSorted()).toEqual([mePath, todayPath, todayPath].toSorted());
   });
 
   // Each once the start-up's request has been answered.
