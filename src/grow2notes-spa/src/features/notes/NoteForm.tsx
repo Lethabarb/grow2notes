@@ -23,6 +23,7 @@ import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
 import styles from './NotePage.module.css';
 import { noteBase, type Draft } from './noteQueries.ts';
+import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 import { sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
 
@@ -64,11 +65,12 @@ type NoteFormProps = {
 };
 
 /**
- * The note form (note-form.md components 2, 7, 8 and 10 to 14): the error summary after a press of Submit note that
- * its checks refused, then the page's `<h1>`; then, in a `<form noValidate>`, the lists-changed notice's live region,
- * there and empty from the first render, as a screen reader may not announce words written into one added with them;
- * Goals, its goals and ticks in this page's state, from the draft's; Guided notes; Flag for manager, its tick and
- * reason in this page's state too, the reason kept while the box is unticked; and Submit note, with the alert above it.
+ * The note form (note-form.md components 2, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note that
+ * its checks refused, then the page's `<h1>` and the Past notes link; then, in a `<form noValidate>`, the lists-changed
+ * notice's live region, there and empty from the first render, as a screen reader may not announce words written into
+ * one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided notes; Flag for
+ * manager, its tick and reason in this page's state too, the reason kept while the box is unticked; and Submit note,
+ * with the alert above it.
  * Until T13 adds "2. Common items", the sections go from 1 to 3, keeping design.md's numbers. Each tick and each input
  * is a change that autosave saves, and a field that loses focus sends one at once (design.md §3.4). After a dead end,
  * every tick and the text stay as they are, to change and copy, though nothing more is saved (note-form.md *Conflicts
@@ -321,6 +323,7 @@ export function NoteForm({
     <>
       <ErrorSummary errors={summary} attempt={attempt} />
       {heading}
+      <PastNotesLink participantId={participantId} />
       <form
         noValidate
         onSubmit={(event) => {

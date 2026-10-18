@@ -1,0 +1,27 @@
+/*
+ * Show older directly after the rows (chronological-list.md *Anatomy* 4): the shared secondary button, full width on a
+ * phone and sized to its label from 40rem, with its label unchanged while it loads, which the cursor shows instead.
+ */
+.older {
+  margin-block-start: var(--space-4);
+}
+
+.older[aria-disabled="true"] {
+  cursor: progress;
+}
+
+/* The status line under it, in the reading column, which takes no space while empty. */
+.status {
+  margin: var(--space-3) 0 0;
+  max-inline-size: var(--measure);
+}
+
+.status:empty {
+  margin: 0;
+}
+
+/* The screen's empty sentence in place of the list, plain body text that wraps, such as a long name. */
+.empty {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

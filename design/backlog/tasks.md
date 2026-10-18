@@ -3191,6 +3191,34 @@ past notes.
   does not. So that the end-to-end tests already written stay true, `tests/e2e/notes.ts` answers `GET {base}`,
   `{status: 'Draft'}` for a draft it holds or else `404` (tests/README.md), and `note-form.spec.ts` expects no save
   status while the note loads and on someone else's draft; step 8 adds the read view's own end-to-end checks.
+- Where the design is silent (step 7), the simplest options: `GET /api/participants/{participantId}/notes`
+  (`NoteHistoryEndpoint`, `NoteHistory`) checks the participant first, so another organisation's or no participant is
+  a `404`, then reads one row more than a page through `LiveNote.All`, on the one-live-note index, the 31st saying
+  `hasMore`; a row's `isFlagged` is its current version's, as on Today, and a manager's `flagStatus` the `FlagStatus`
+  name, by the role as stored through `StoredRole`, which `NoteDrafts` now shares, built once. The SPA's `PastNote`
+  leaves `flagStatus` out, as no screen reads it until T16. Past notes (`PastNotesPage`, `pastNotesQuery`,
+  `src/features/notes`) reads its header under `['pastNotes', participantId, 'participant']`, kept 30 minutes with the
+  pages, so that Back shows the `<h1>` and every row at once, where the note's page reads `['participant', id]` afresh;
+  a push or replace drops both as the page mounts, before either query reads the cache, and a pop keeps both; the
+  pages refetch on TanStack's own focus event, `visibilitychange`, as app-shell.md's opt-in says, with no window
+  `focus` listener of Today's. `ChronoList` (`src/components`) is built in its paged mode alone, the whole lists
+  coming with T16 and T18: Show older is the shared `Button`, `aria-disabled` while its request is out, and a `401`
+  says nothing there, as the session flow has it. Its rows are `LinkRow`s in a `LinkRowList` that gains `ordered`, an
+  `<ol>`; `LinkRow` takes a node as its name, the `<time>`, and gains `look: 'date'`, the link in base.css's colour,
+  underline and hover with no chevron (participant-notes.md component 5). The meta line is `MetaLine`
+  (`src/components`, status-tags.md), built once, through which Today's `NoteStatus` now renders, its stylesheet moved
+  there. The back links come from `useBackTo` (`src/routes/routeChange.ts`), the one helper that later tasks reuse,
+  with Today as the default; as the shell's rule records the opener only after a screen's first render, it works out
+  a push or replace as the rule will record it, so that the label never changes under a reader. Edit participant is a
+  link styled as a secondary button under the `<h1>`; the `<h1>`'s caption is a line of its own in body type and the
+  secondary colour. `PastNotesLink` (`src/features/notes`), a plain link on a 44 px line of its own, is on the form
+  under the `<h1>`, outside the `<form>`, before Goals, and on the read view after its status lines, before the rule,
+  alone in the action row until T14's Edit and T18's Version history. A participant's Actions puts Past notes, a link
+  styled as a secondary button, first, then Archive participant and its alert after a 1 px rule in `--colour-divider`,
+  and an archived participant's Actions holds Past notes alone until T21 adds Export record. So that the end-to-end
+  tests already written stay true, `note-form.spec.ts`'s and `participants.spec.ts`'s Tab orders include Past notes,
+  and `participants.spec.ts` finds it alone in an archived participant's Actions; step 8 adds Past notes' own
+  end-to-end checks.
 
 ### Steps
 
@@ -3317,7 +3345,7 @@ past notes.
       window focus; no Edit, which T14 adds, and no Version history, To review, Reviewed or review panel in a worker's
       DOM; the title "Grow2Notes – Note"; and T08's request checks on the form now expecting `GET {base}` before the
       draft's `GET`.
-- [ ] Past notes (S02.04.02; S02.04.01's item 28a from Past notes; participant-notes.md items 1 to 9, 11 to 14 and 29
+- [x] Past notes (S02.04.02; S02.04.01's item 28a from Past notes; participant-notes.md items 1 to 9, 11 to 14 and 29
       to 35 for the list; note-form.md component 5; design.md §4.4 items 1 and 2 and *How to get here*, §6.1 *Lists*;
       S01.02.04's archived Past notes action): `GET /api/participants/{participantId}/notes?before=`, writing nothing:
       `404` for another organisation's participant; else the live notes dated before `before`, tomorrow in Melbourne by

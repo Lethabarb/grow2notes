@@ -6,11 +6,11 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import metaLine from '../../components/MetaLine.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
 import type { Draft, NoteAnswer, ParticipantHeader, SubmittedNote } from '../notes/noteQueries.ts';
 import type { AdminParticipant } from '../participants/participantsQuery.ts';
-import noteStatus from './NoteStatus.module.css';
 import { todayQuery, type TodayList, type TodayNote, type TodayParticipant } from './todayQuery.ts';
 
 // A memory router and a browser router alike.
@@ -604,7 +604,7 @@ describe("Today, each row's note", () => {
     const line = statusLine(rowLink('Jane Citizen'))!;
     expect(shownStatus('Jane Citizen')).toBe(`Draft${nbsp}· ${long}${nbsp}· started 9:14${nbsp}am`);
     expect(line).toHaveStyle({ overflowWrap: 'anywhere' });
-    const parts = Array.from(line.querySelectorAll(`.${noteStatus.part}`));
+    const parts = Array.from(line.querySelectorAll(`.${metaLine.part}`));
     expect(parts.map((part) => part.textContent)).toEqual([
       `Draft${nbsp}·, `,
       `${long}${nbsp}·, `,

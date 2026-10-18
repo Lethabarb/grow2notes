@@ -625,6 +625,20 @@ describe('The note form once loaded', () => {
     }
   });
 
+  // note-form.md component 5: a plain link on its own line under the <h1>, outside the form, before Goals.
+  it("has the Past notes link under the <h1>, before Goals, to the participant's Past notes", async () => {
+    serveNote(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
+    expect(link.closest('form')).toBeNull();
+    expect(follows(link, pageHeading())).toBe(true);
+    expect(follows(within(main()).getByRole('group', { name: '1. Goals' }), link)).toBe(true);
+    expect(within(main()).getAllByRole('link')).toEqual([link]);
+  });
+
   it("says that Jane has no goals in place of the tick boxes, with no fieldset, and keeps Guided notes", async () => {
     serveNote(jane, json(template([])));
     renderApp(paths(jane).page);
@@ -2844,6 +2858,18 @@ describe('The read view of a submitted note', () => {
     expect(follows(reason, tag)).toBe(true);
   });
 
+  // participant-notes.md component 5, the action row, which holds Past notes alone until T14 and T18 add theirs.
+  it('has the Past notes link after the byline and the flag line, before Goals', async () => {
+    serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
+    expect(follows(link, statusLines()[1])).toBe(true);
+    expect(follows(section('1. Goals'), link)).toBe(true);
+  });
+
   it('shows no flag line, and no Reason, on a note that is not flagged', async () => {
     serveSubmitted(jane);
     renderApp(paths(jane).page);
@@ -2927,7 +2953,7 @@ describe('The read view of a submitted note', () => {
     renderApp(paths(jane).page);
     await settle();
 
-    expect(within(main()).queryAllByRole('link')).toEqual([]);
+    expect(within(main()).getAllByRole('link').map((link) => link.textContent)).toEqual(['Past notes']);
     expect(within(main()).queryAllByRole('button')).toEqual([]);
     expect(main()).not.toHaveTextContent(/Edit|Version history|To review|Reviewed|Mark reviewed|Comment/);
     expect(main().querySelector('form, textarea')).toBeNull();

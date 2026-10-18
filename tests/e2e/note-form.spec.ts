@@ -907,7 +907,7 @@ test('in forced colours, the ring is Highlight at each stop of the form, and the
   expect(highlight).not.toBe(ring.colour);
   const forcedRing = { ...ring, colour: highlight };
   await expectStops(page, 'Shift+Tab', ['Today'], forcedRing);
-  await expectStops(page, 'Tab', [breakfast.text, bus.text, '3. Guided notes'], forcedRing);
+  await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes'], forcedRing);
 
   store.archive(jane.id);
   await page.keyboard.type('Went for a walk.');
@@ -934,9 +934,10 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     await expect(heading(page)).toBeFocused();
 
-    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then each goal's box, Guided
-    // notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason being no stops.
+    // note-form.md *Focus order (Tab)*, for what is built: the back link before <main>, then Past notes, each goal's
+    // box, Guided notes, Flag for manager and Submit note, the indicator, the <h1> and the hidden Reason no stops.
     await expectStops(page, 'Tab', [
+      'Past notes',
       breakfast.text,
       bus.text,
       '3. Guided notes',
@@ -950,10 +951,11 @@ for (const width of [375, 1280]) {
       '3. Guided notes',
       bus.text,
       breakfast.text,
+      'Past notes',
       'Today',
       ...[...shell].reverse(),
     ]);
-    await expectStops(page, 'Tab', [...shell.slice(1), 'Today', breakfast.text]);
+    await expectStops(page, 'Tab', [...shell.slice(1), 'Today', 'Past notes', breakfast.text]);
 
     // Space ticks the box with focus; typing in the box, then Tab out of it, saves at once.
     await page.keyboard.press('Space');
@@ -977,6 +979,7 @@ for (const width of [375, 1280]) {
       '3. Guided notes',
       bus.text,
       breakfast.text,
+      'Past notes',
       'Today',
     ]);
     await page.keyboard.press('Enter');

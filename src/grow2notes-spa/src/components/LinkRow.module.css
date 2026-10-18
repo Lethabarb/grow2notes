@@ -24,13 +24,20 @@
   min-inline-size: 0;
 }
 
-/* The name, the link's only text, in the text colour, visited or not, with no underline at rest. */
+/*
+ * The link's only text: a name, or a note's date, which keeps base.css's link colour, underline and hover, as a list of
+ * notes by date has no chevron to say that its rows open (participant-notes.md component 5).
+ */
 .link {
   font-weight: 700;
   line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* A name, in the text colour, visited or not, with no underline at rest. */
+.name {
   color: var(--colour-text);
   text-decoration: none;
-  overflow-wrap: anywhere;
 }
 
 /* Over the whole row, so that a tap on the name, the detail, the chevron or the space between opens the link. */
@@ -76,7 +83,7 @@
   }
 
   /* Two classes' weight, so that base.css's a:hover colour does not win. */
-  .link:hover {
+  .name:hover {
     color: var(--colour-text);
     text-decoration: underline;
   }

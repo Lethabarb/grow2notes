@@ -6,9 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { LinkRow } from './LinkRow.tsx';
 import { LinkRowList } from './LinkRowList.tsx';
 
-/** Renders `rows` in a `LinkRowList`, on a router of its own, and gives the list. */
-function renderList(rows: ReactNode): HTMLElement {
-  const router = createMemoryRouter([{ path: '*', element: <LinkRowList>{rows}</LinkRowList> }]);
+/** Renders `rows` in a `LinkRowList`, `ordered` or not, on a router of its own, and gives the list. */
+function renderList(rows: ReactNode, ordered = false): HTMLElement {
+  const router = createMemoryRouter([{ path: '*', element: <LinkRowList ordered={ordered}>{rows}</LinkRowList> }]);
   render(<RouterProvider router={router} />);
   return screen.getByRole('list');
 }
@@ -24,6 +24,7 @@ describe('LinkRow', () => {
       />,
     );
 
+    expect(list.tagName).toBe('UL');
     expect(list).toHaveAttribute('role', 'list');
     const [row] = within(list).getAllByRole('listitem');
     const links = within(row).getAllByRole('link');
@@ -73,5 +74,32 @@ describe('LinkRow', () => {
     const chevron = list.querySelector('svg');
     expect(chevron).toHaveAttribute('aria-hidden', 'true');
     expect(chevron).toHaveAttribute('focusable', 'false');
+  });
+
+  it('is an item of an <ol> for rows whose order is their meaning', () => {
+    const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" returnKey="4e7a2c1b" />, true);
+
+    expect(list.tagName).toBe('OL');
+    expect(list).toHaveAttribute('role', 'list');
+  });
+
+  // participant-notes.md component 5: the note's date, with no chevron; its link's look is checked end to end.
+  it("names a note's row by its date in a <time>, with no chevron", () => {
+    const list = renderList(
+      <LinkRow
+        look="date"
+        to="/made-up/notes/2026-10-01"
+        name={<time dateTime="2026-10-01">Thursday 1 October 2026</time>}
+        returnKey="2026-10-01"
+        detail={['Submitted']}
+      />,
+      true,
+    );
+
+    const link = within(list).getByRole('link');
+    expect(link).toHaveAccessibleName('Thursday 1 October 2026');
+    expect(link.querySelector('time')).toHaveAttribute('datetime', '2026-10-01');
+    expect(link).toHaveAccessibleDescription('Submitted');
+    expect(list.querySelector('svg')).toBeNull();
   });
 });

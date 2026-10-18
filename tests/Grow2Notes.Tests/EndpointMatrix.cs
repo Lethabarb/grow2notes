@@ -136,6 +136,13 @@ internal static class EndpointMatrix
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}", Unauthorized, OK, OK,
             NotFound, ANoteSubmittedInA),
 
+        // A participant's history (§6.3), for every signed-in user, at A's seeded participant, whose notes no test
+        // starts (tests/README.md), so each of A's users gets an empty page, and reading writes nothing (A28). B's
+        // manager does not find the participant (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}/notes", Unauthorized, OK, OK, NotFound,
+            call => Task.FromResult(
+                new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}/notes"))),
+
         // The note form (§6.3), for every signed-in user, at A's seeded participant's note for today, which no test
         // starts (tests/README.md), so each of A's users gets the template and opening it writes nothing (§3.3). B's
         // manager does not find the participant (§9.2).

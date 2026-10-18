@@ -7,11 +7,13 @@ import { Pause } from '../../copy/Pause.tsx';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
 import type { SubmittedNote } from './noteQueries.ts';
+import { PastNotesLink } from './PastNotesLink.tsx';
 import styles from './ReadView.module.css';
 
 type ReadViewProps = {
   /** The note's identity `<h1>`, the participant's name and the note date, as the form shows it. */
   heading: ReactNode;
+  participantId: string;
   note: SubmittedNote;
   noteDate: string;
 };
@@ -21,12 +23,12 @@ type ReadViewProps = {
  * written, in the daily report's order and words (design.md §11.3), with no control on it: the `<h1>`; the byline,
  * "Written by Priya Nair · Submitted 4:42 pm", the time alone when the note was submitted on its own date in
  * Melbourne, else with its date (microcopy.md §3, *Reference day*); then, only when the version is flagged, the Flagged
- * tag and the reason after a pause; then each section after a rule: "1. Goals", every goal of the snapshot ticked or
- * not ticked, and "3. Guided notes", the text as React's escaped text, never HTML. T13 adds "2. Common items" between
- * them, as the form does; T14 Edit and the Edited line, T16 a manager's review lines and panel, and T18 the past-day
- * line and Version history.
+ * tag and the reason after a pause; then the actions, the Past notes link; then each section after a rule: "1. Goals",
+ * every goal of the snapshot ticked or not ticked, and "3. Guided notes", the text as React's escaped text, never HTML.
+ * T13 adds "2. Common items" between them, as the form does; T14 Edit and the Edited line, T16 a manager's review lines
+ * and panel, and T18 the past-day line and Version history.
  */
-export function ReadView({ heading, note, noteDate }: ReadViewProps) {
+export function ReadView({ heading, participantId, note, noteDate }: ReadViewProps) {
   const { author, firstSubmittedAtUtc, current } = note;
   return (
     <>
@@ -46,6 +48,7 @@ export function ReadView({ heading, note, noteDate }: ReadViewProps) {
           </p>
         )}
       </div>
+      <PastNotesLink participantId={participantId} />
       <div className={styles.section}>
         <TickListRead heading={strings.note.goals} emptyText={strings.readView.noGoals} items={current.goals} />
       </div>

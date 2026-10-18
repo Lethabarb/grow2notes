@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { msg } from './messages.ts';
+import { strings } from './strings.ts';
 
 describe('the character count words (microcopy.md §4)', () => {
   it('give the limit hint, with the limit grouped', () => {
@@ -47,6 +48,26 @@ describe("the read view's lines", () => {
     expect(msg.writtenBy('Priya Nair')).toBe('Written by Priya Nair');
     expect(msg.flagReason('Mentioned pain in his left knee after the walk.')).toBe(
       'Reason: Mentioned pain in his left knee after the walk.',
+    );
+  });
+});
+
+// participant-notes.md *History list* states, word for word.
+describe('Past notes', () => {
+  it('say that there are no notes yet for the participant, named in full', () => {
+    expect(msg.noNotesYet('Jane Citizen')).toBe('No notes yet for Jane Citizen.');
+  });
+
+  it('say that the list or Show older did not load, and why, with "still" after a second failure', () => {
+    expect(msg.loadFailed('Past notes', 'offline', false)).toBe('Past notes did not load: no connection. Try again.');
+    expect(msg.loadFailed('Past notes', 'server', true)).toBe(
+      'Past notes still did not load: something went wrong. Try again.',
+    );
+    expect(msg.loadFailed(strings.showOlder.olderNotes, 'offline', false)).toBe(
+      'Older notes did not load: no connection. Try again.',
+    );
+    expect(msg.loadFailed(strings.showOlder.olderNotes, 'offline', true)).toBe(
+      'Older notes still did not load: no connection. Try again.',
     );
   });
 });

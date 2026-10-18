@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NavigationType, useLocation, useNavigationType } from 'react-router';
 import { focusInsteadOfHeading, focusPageHeading } from '../components/focusPageHeading.ts';
+import { pageName, type PageName } from '../copy/pageNames.ts';
 import type { BackKey, RouteHandle } from './routes.tsx';
 
 /** A history entry, as the rule compares the one on screen with the next, with what its route declares. */
@@ -21,8 +22,8 @@ type ReturnRow = { key: string; index: number };
 /**
  * Where a screen was opened from, which an in-app push records on the entry that it adds (app-shell.md *Where a screen
  * was opened from*): the entry that opened it, that entry's back key, and its pathname, which holds IDs and dates only.
- * A screen with several openers takes its back link's label and `href` from it; on a screen with one, as every screen
- * built so far is, it says only whether the back link goes back one entry, which needs no back key.
+ * A screen with several openers, as a note and Past notes are, takes its back link's label and `href` from it
+ * (`useBackTo`); on a screen with one, it says only whether the back link goes back one entry, which needs no back key.
  */
 type OpenedFrom = { entryKey: string; backKey: BackKey | undefined; path: string };
 
@@ -39,6 +40,10 @@ const memory = new Map<string, EntryMemory>();
 // so that the entry before it is known, which React Router does not say. In memory only, as the rest.
 let order: string[] = [];
 let place = 0;
+
+// The entry on screen, as far as the shell has followed the history: as the next screen first renders, before the
+// rule follows the push or replace that brought it, still the entry before it (useBackTo).
+let onScreen: Entry | undefined;
 
 /** A pop back to a list, whose return point waits for the list to be ready, with the position kept for its entry. */
 type Waiting = { entryKey: string; row: ReturnRow; fallback: 'h1' | 'sameIndex'; scrollY: number };
@@ -129,6 +134,7 @@ export function useRouteChange(handle: RouteHandle | undefined): void {
     }
 
     shown.current = to;
+    onScreen = to;
     // A return point left waiting was for the entry that has gone.
     waiting = undefined;
     if (from === undefined) {
@@ -188,6 +194,41 @@ export function openerBefore(key: string): OpenedFrom | undefined {
   const opener = memory.get(key)?.openedFrom;
   const index = order.indexOf(key);
   return index > 0 && order[index - 1] === opener?.entryKey ? opener : undefined;
+}
+
+/** A back link's destination, with the label that names it (app-shell.md component 3a). */
+export type BackTo = { to: string; label: PageName };
+
+/**
+ * The back link of a screen with several openers (app-shell.md component 3a), such as a note's or Past notes': to the
+ * screen that opened it, named by `labels` after its back key, when that screen is the entry before; otherwise, as
+ * after a reload, from a pasted address or in a new tab, or from an opener that `labels` does not name, to Today, the
+ * default of the screens that use it. As the screen first renders, the shell's rule has not yet followed the push or
+ * replace that brought it, so the opener is worked out as `follow` will record it: for a push, the entry still on
+ * screen; for a replace, the opener of the entry it replaces.
+ */
+export function useBackTo(labels: Partial<Record<BackKey, PageName>>): BackTo {
+  const { key } = useLocation();
+  const action = useNavigationType();
+  const opener = openerAsRendered(key, action);
+  const label = opener?.backKey === undefined ? undefined : labels[opener.backKey];
+  return opener === undefined || label === undefined ? { to: '/', label: pageName.today } : { to: opener.path, label };
+}
+
+/** `openerBefore(key)`, also before the shell's rule has followed the push or replace that reached the entry. */
+function openerAsRendered(key: string, action: NavigationType): OpenedFrom | undefined {
+  if (onScreen === undefined || onScreen.key === key) {
+    return openerBefore(key);
+  }
+
+  switch (action) {
+    case NavigationType.Push:
+      return { entryKey: onScreen.key, backKey: onScreen.backKey, path: onScreen.pathname };
+    case NavigationType.Replace:
+      return openerBefore(onScreen.key);
+    case NavigationType.Pop:
+      return openerBefore(key);
+  }
 }
 
 /**

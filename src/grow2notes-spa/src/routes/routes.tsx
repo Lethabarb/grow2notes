@@ -3,6 +3,7 @@ import { pageName, type PageName } from '../copy/pageNames.ts';
 import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { NotePage } from '../features/notes/NotePage.tsx';
+import { PastNotesPage } from '../features/notes/PastNotesPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
@@ -92,9 +93,14 @@ export const routes: AppRoute[] = [
             handle: { pageName: pageName.today, returnFocus: {}, backKey: 'today' },
           },
           {
+            path: 'participants/:participantId/notes',
+            element: <PastNotesPage />,
+            handle: { pageName: pageName.pastNotes, returnFocus: {}, backKey: 'pastNotes' },
+          },
+          {
             path: 'participants/:participantId/notes/:noteDate',
             element: <NotePage />,
-            handle: { pageName: pageName.note },
+            handle: { pageName: pageName.note, backKey: 'note' },
           },
           // Every manager screen goes in here.
           {
@@ -116,7 +122,7 @@ export const routes: AppRoute[] = [
               {
                 path: 'manage/participants/:participantId',
                 element: <ParticipantPage />,
-                handle: { pageName: pageName.participant },
+                handle: { pageName: pageName.participant, backKey: 'participant' },
               },
               {
                 path: 'manage/common-items',

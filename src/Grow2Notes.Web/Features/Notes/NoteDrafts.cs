@@ -246,7 +246,7 @@ internal sealed class NoteDrafts(
             return ErrorCode.FutureDate;
         }
 
-        if (noteDate < today && !await IsManagerAsync(actor, cancellationToken))
+        if (noteDate < today && !await StoredRole.IsManagerAsync(db, actor, cancellationToken))
         {
             return ErrorCode.PastDateManagerOnly;
         }
@@ -261,12 +261,8 @@ internal sealed class NoteDrafts(
     {
         var today = clock.Today();
         return noteDate <= today
-            && (noteDate >= today.AddDays(-1) || await IsManagerAsync(actor, cancellationToken));
+            && (noteDate >= today.AddDays(-1) || await StoredRole.IsManagerAsync(db, actor, cancellationToken));
     }
-
-    // The role as stored, named as convention 4 of mcp-server.md §3.5 has it.
-    private Task<bool> IsManagerAsync(Actor actor, CancellationToken cancellationToken) =>
-        db.Users.AnyAsync(user => user.Id == actor.UserId && user.Role == UserRole.Manager, cancellationToken);
 
     // The participant's status, or null for no participant of that ID in the tenant's organisation.
     private Task<ParticipantStatus?> ParticipantStatusAsync(Guid participantId, CancellationToken cancellationToken) =>

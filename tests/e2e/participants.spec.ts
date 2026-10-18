@@ -80,6 +80,7 @@ const saveStatus = (page: Page) => details(page).getByRole('status');
 const saveAlert = (page: Page) => details(page).getByRole('alert');
 const archive = (page: Page) => main(page).getByRole('button', { name: 'Archive participant' });
 const archiveAlert = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('alert');
+const actionLinks = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('link');
 const restore = (page: Page) => main(page).getByRole('button', { name: 'Restore', exact: true });
 // The archived notice's words (participants.md B3); the notice holds them, then Restore with its alert above it.
 const archivedWords = (name: string) =>
@@ -553,12 +554,13 @@ for (const width of [375, 1280]) {
     await expect(heading(page)).toHaveText(siobhan.name);
     await expect(saveStatus(page)).toHaveText(savedAtAnyTime);
     await expect(save(page)).toBeFocused();
-    // The next Tab reaches Goals (participants.md *Interactions*), then Archive participant.
-    await expectStops(page, 'Tab', [...addForm, 'Archive participant', 'outside the page']);
+    // The next Tab reaches Goals (participants.md *Interactions*), then Past notes and Archive participant.
+    await expectStops(page, 'Tab', [...addForm, 'Past notes', 'Archive participant', 'outside the page']);
 
     // The date of birth corrected.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Past notes',
       ...[...addForm].reverse(),
       'Save',
       'Year',
@@ -591,15 +593,16 @@ for (const width of [375, 1280]) {
     await expect(goalTexts(page)).toHaveText([kept, archivedLater]);
 
     // From Save, each goal row's Move up, Move down, Edit and Archive, the end ones unavailable but there, then New
-    // goal and Add goal, then Archive participant (participants.md *Keyboard*).
+    // goal and Add goal, then Past notes and Archive participant (participants.md *Keyboard*).
     const bothRows = [...rowStops(kept), ...rowStops(archivedLater)];
     await expectStops(page, 'Shift+Tab', [...bothRows].reverse().concat('Save'));
-    await expectStops(page, 'Tab', [...bothRows, ...addForm, 'Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', [...bothRows, ...addForm, 'Past notes', 'Archive participant', 'outside the page']);
 
     // The second archived from its row: Archived goals opens, with focus on its Restore, which comes after the summary
-    // and before Archive participant while the section is open.
+    // and before Actions while the section is open.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Past notes',
       ...[...addForm].reverse(),
       rowName('Archive', archivedLater),
     ]);
@@ -609,9 +612,10 @@ for (const width of [375, 1280]) {
     await expect(goalButton(page, 'Restore', archivedLater)).toBeFocused();
     await expect(archivedSection(page)).toHaveAttribute('open', '');
     const goalStops = [...rowStops(kept), ...addForm, 'Archived goals'];
-    await expectStops(page, 'Tab', ['Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', ['Past notes', 'Archive participant', 'outside the page']);
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Past notes',
       rowName('Restore', archivedLater),
       ...[...goalStops].reverse(),
       'Save',
@@ -621,16 +625,16 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', goalStops);
     await page.keyboard.press('Enter');
     await expect(archivedSection(page)).not.toHaveAttribute('open');
-    await expectStops(page, 'Tab', ['Archive participant']);
+    await expectStops(page, 'Tab', ['Past notes', 'Archive participant']);
 
-    // Archived: the notice takes focus, then an archived participant's page has the back link, Restore and the
-    // Archived goals summary, as its goals are text alone.
+    // Archived: the notice takes focus, then an archived participant's page has the back link, Restore, the Archived
+    // goals summary, as its goals are text alone, and Past notes.
     const archived = page.waitForResponse(isChange('POST', `/${id}/archive`));
     await page.keyboard.press('Enter');
     expect((await archived).status()).toBe(204);
     await expect.poll(() => whereFocusIs(page)).toContain(archivedWords(siobhan.name));
-    await expectStops(page, 'Tab', ['Restore', 'Archived goals', 'outside the page']);
-    await expectStops(page, 'Shift+Tab', ['Archived goals', 'Restore', 'Participants', 'Manage']);
+    await expectStops(page, 'Tab', ['Restore', 'Archived goals', 'Past notes', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Past notes', 'Archived goals', 'Restore', 'Participants', 'Manage']);
     await expectStops(page, 'Tab', ['Participants', 'Restore']);
 
     // Restored: the <h1> takes focus, and the form, the goal's buttons, the add form and Archive participant are back.
@@ -638,11 +642,12 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     expect((await restored).status()).toBe(204);
     await expect(heading(page)).toBeFocused();
-    await expectStops(page, 'Tab', [...form, ...goalStops, 'Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', [...form, ...goalStops, 'Past notes', 'Archive participant', 'outside the page']);
 
     // Back to the list, where they are now to be found: Find a participant, then Clear while it holds text.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Past notes',
       ...[...form, ...goalStops].reverse(),
       'Participants',
     ]);
@@ -879,7 +884,8 @@ test("a participant's page saved, stale, refused, archived and restored, each pa
   await archive(page).click();
   await expect.poll(() => whereFocusIs(page)).toContain(archivedWords('Jane Citizen'));
   await expect(main(page).getByRole('definition')).toHaveText(['Jane', 'Citizen', '8 March 1987']);
-  await expect(main(page).getByRole('region', { name: 'Actions' })).toHaveCount(0);
+  await expect(actionLinks(page)).toHaveText(['Past notes']);
+  await expect(archive(page)).toHaveCount(0);
   await expectAxeToPass(page);
 
   // Restore with no connection: the alert above Restore, in the notice.
@@ -907,14 +913,17 @@ test("an archived participant's page, a page that did not load and an unknown ID
   await serveParticipants(page, participants);
   await serveGoals(page, []);
 
-  // Opened on an archived participant: the notice there as plain content, which takes no focus, and no Actions.
+  // Opened on an archived participant: the notice there as plain content, which takes no focus, and Actions with Past
+  // notes alone.
   await page.goto(`/manage/participants/${ben.id}`);
   await expect(heading(page)).toHaveText('Ben Archer');
   await expect(noticeWords(page)).toHaveText(archivedWords('Ben Archer'));
   await expect(noticeWords(page).locator('xpath=../..')).not.toHaveAttribute('tabindex');
   await expect(noticeWords(page).locator('xpath=../..')).not.toBeFocused();
   await expect(main(page).getByRole('definition')).toHaveText(['Ben', 'Archer', '7 March 1987']);
-  await expect(main(page).getByRole('region', { name: 'Actions' })).toHaveCount(0);
+  await expect(actionLinks(page)).toHaveText(['Past notes']);
+  await expect(actionLinks(page)).toHaveAttribute('href', `/participants/${ben.id}/notes`);
+  await expect(archive(page)).toHaveCount(0);
   await expect(backLink(page)).toHaveAttribute('href', '/manage/participants?view=archived');
   await expectAxeToPass(page);
 
@@ -1089,7 +1098,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, and una
   );
   await page.keyboard.press('Enter');
   await expectStops(page, 'Tab', [rowName('Restore', washing.text), rowName('Restore', shop.text)], forcedRing);
-  await expectStops(page, 'Tab', ['Archive participant'], forcedRing);
+  await expectStops(page, 'Tab', ['Past notes', 'Archive participant'], forcedRing);
 
   // Move up on the first goal and Move down on the last, unavailable: GrayText words and dashed GrayText borders, where
   // the others keep theirs (list-editor.md *States*).

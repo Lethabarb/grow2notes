@@ -13,11 +13,12 @@ namespace Grow2Notes.Tests;
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
-/// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header, note and note
-/// form, a note's save and submit, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup
-/// link, deactivation and reactivation show; so the others show that the page, its files and the health endpoints are
-/// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
-/// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
+/// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header, history, note
+/// and note form, a note's save and submit, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit,
+/// setup link, deactivation and reactivation show; so the others show that the page, its files and the health
+/// endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches
+/// one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie
+/// never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -43,13 +44,15 @@ public sealed class SignedOutTests : IAsyncDisposable
     // to a login page, which the app does not have (design.md §7.2). Without the app's OnRedirectToLogin, the cookie
     // handler still answers 401, but with a Location naming /Account/Login, so the Location is the check. The session's
     // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user, and Today's list,
-    // a participant's header, their note and their note form (§6.3), which would need the database that is not here,
-    // others.
+    // a participant's header, their history, with or without its cursor, their note and their note form (§6.3), which
+    // would need the database that is not here, others.
     [Theory]
     [InlineData(FallbackPolicyPath)]
     [InlineData("/api/auth/me")]
     [InlineData("/api/today")]
     [InlineData(Participant)]
+    [InlineData($"{Participant}/notes")]
+    [InlineData($"{Participant}/notes?before=2026-10-01")]
     [InlineData($"{Participant}/notes/2026-10-01")]
     [InlineData($"{Participant}/notes/2026-10-01/draft")]
     public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored(string path)
@@ -255,10 +258,12 @@ public sealed class SignedOutTests : IAsyncDisposable
         await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }
 
-    // A note's address names a participant's GUID and a date that exists, written yyyy-MM-dd (design.md §6.1), and any
-    // other value matches no route: the unknown path's 404 answers, where the endpoints' own route would answer 401.
+    // A note's address names a participant's GUID and a date that exists, written yyyy-MM-dd (design.md §6.1), and a
+    // history's the GUID, and any other value matches no route: the unknown path's 404 answers, where the endpoints'
+    // own route would answer 401.
     [Theory]
     [InlineData("/api/participants/not-a-guid")]
+    [InlineData("/api/participants/not-a-guid/notes")]
     [InlineData("/api/participants/not-a-guid/notes/2026-10-01")]
     [InlineData($"{Participant}/notes/2026-02-30")]
     [InlineData("/api/participants/not-a-guid/notes/2026-10-01/draft")]

@@ -54,6 +54,8 @@ export const msg = {
   writtenBy: (displayName: string) => `Written by ${displayName}`,
   /** The read view's flag line after the Flagged tag (design.md §4.4): the reason, after the form's label for it. */
   flagReason: (reason: string) => `${strings.note.reason}: ${reason}`,
+  /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
+  noNotesYet: (name: string) => `No notes yet for ${name}.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */

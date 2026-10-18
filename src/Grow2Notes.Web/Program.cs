@@ -368,6 +368,7 @@ var api = app.MapApiGroup()
     .MapTodayEndpoint()
     .MapParticipantHeaderEndpoint()
     .MapNoteEndpoint()
+    .MapNoteHistoryEndpoint()
     .MapNoteDraftEndpoints()
     .MapNoteVersionEndpoints();
 

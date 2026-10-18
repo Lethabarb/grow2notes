@@ -426,6 +426,17 @@ export const strings = {
    */
   readView: { submitted: 'Submitted', noGoals: 'No goals set' },
   /**
+   * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the
+   * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).
+   */
+  pastNotes: { loading: 'Loading notes…', editParticipant: 'Edit participant' },
+  /**
+   * A paged list's Show older (chronological-list.md *Exact copy*), one set for every paged list of notes: the button;
+   * the status line once it has taken 1 s; and what did not load, as its failure sentence starts, "Older notes did not
+   * load: no connection. Try again.".
+   */
+  showOlder: { button: 'Show older', loading: 'Loading older notes…', olderNotes: 'Older notes' },
+  /**
    * A read-only tick list's state after each item's wording, for screen readers alone (checkbox-list.md
    * `TickListRead`), after a pause, as in "Makes own breakfast, ticked".
    */
