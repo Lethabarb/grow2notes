@@ -197,6 +197,12 @@ internal static class EndpointMatrix
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "archive", archived: false)),
         new(Post,      "/api/admin/goals/{goalId:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "restore", archived: true)),
+
+        // The common item groups with their items (§6.6), in the same group. The list loads no record of A's, so B's
+        // manager gets B's own list, which must hold B's seeded Every note and not A's; tests add other groups to the
+        // seeded organisations, so the seeded Every note groups alone are looked for.
+        new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
+            Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.

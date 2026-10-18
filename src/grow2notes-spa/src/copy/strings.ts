@@ -378,12 +378,23 @@ export const strings = {
   /** A participant's Goals section (participants.md B6): its `<h2>`. The list's own words are `listEditor.goal`. */
   participantGoals: { heading: 'Goals' },
   /**
+   * Manage > Common items (common-items.md), whose fixed `<h1>` is its page name: the region's loading line and what
+   * did not load, as its failure sentence starts; and the line under Every note's `<h2>` (component 5). Each group's
+   * list's own words are `listEditor.item`.
+   */
+  commonItems: {
+    loading: 'Loading common items…',
+    items: 'Common items',
+    everyNote: 'Always shown first, on every note.',
+  },
+  /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals
-   * (design.md §4.8): the help text above the list, unless it is read-only; the sentence in place of the list when no
-   * row is active; and the summary of the archived rows' section. Then the add form: its field's label, its button,
-   * and, in the page's status region, what an add did; then a row's edit form: its field's label, and what a Save did;
-   * then, in the page's status region too, what an Archive and a Restore did; and a row as `msg.rowChangedWhileEditing`
-   * names it, and its text as its messages name it, the one for no text and, with `msg.tooLong`, the one for too much
+   * (design.md §4.8) and a group's common items (§4.9): the help text above the lists, unless they are read-only; the
+   * sentence in place of a list when no row is active; and the summary of the archived rows' section. Then the add
+   * form: its field's label, which a group's list follows with " in [group name]", its button, and, in the page's
+   * status region, what an add did; then a row's edit form: its field's label, and what a Save did; then, in the
+   * page's status region too, what an Archive and a Restore did; and a row as `msg.rowChangedWhileEditing` names it,
+   * and its text as its messages name it, the one for no text and, with `msg.tooLong`, the one for too much
    * (form-validation.md).
    */
   listEditor: {
@@ -403,6 +414,23 @@ export const strings = {
       row: 'goal',
       enter: 'Enter the goal',
       text: 'Goal',
+    },
+    item: {
+      help:
+        'Items in Every note show on every note. For other groups, the writer ticks the ones that happened. Changes '
+        + 'apply to notes started from now on.',
+      empty: 'No items in this group. It does not show on notes until it has one.',
+      archivedSummary: 'Archived items',
+      newLabel: 'New item',
+      add: 'Add item',
+      added: 'Item added to the end of the list',
+      editLabel: 'Edit item',
+      saved: 'Item saved',
+      archived: 'Item archived',
+      restored: 'Item restored to the end of the list',
+      row: 'item',
+      enter: 'Enter the common item',
+      text: 'Common item',
     },
   },
   /**

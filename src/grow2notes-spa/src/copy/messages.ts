@@ -63,6 +63,12 @@ export const msg = {
    */
   rowContext: (text: string) => `, ${text}`,
   /**
+   * After a list's words that would be the same in every group's list on Common items, its group's name, so that each
+   * is told from the others': after "New item" in the add field's label, as in "New item in Every note", and, for
+   * screen readers alone, after "Archived items" in the archived section's summary (common-items.md component 5).
+   */
+  inList: (name: string) => ` in ${name}`,
+  /**
    * A list row's Save refused as stale (`412`) that finds the row still active once the list is read again
    * (list-editor.md *Request errors*), in the edit form's alert, naming the row as its kind does and with its wording
    * now, as stored.

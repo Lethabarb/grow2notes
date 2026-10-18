@@ -1919,7 +1919,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       group, active and named "Every note"; a bootstrap run giving its organisation exactly one, and a refused run (an
       address in use) leaving none, which shows the group in the transaction, as it is saved before the invite is
       refused; and `IsEveryNote` with no public setter.
-- [ ] The groups list and the Common items screen that shows it (S01.03.01's fifth criterion; design.md §4.9 items 1
+- [x] The groups list and the Common items screen that shows it (S01.03.01's fifth criterion; design.md §4.9 items 1
       and 2, §6.6's list row; common-items.md *Content and copy*, for what T06 builds (Notes), and *Loading, empty,
       errors*, every bullet): `GET /api/admin/common-item-groups?includeArchived=` in the `/api/admin` group, its
       handler class `CommonItemGroupList` in `Features/CommonItems` taking an `Actor`, reading the groups and each

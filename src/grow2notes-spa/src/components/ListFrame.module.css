@@ -1,0 +1,20 @@
+/*
+ * The help text, body size in the secondary colour (foundations.md, Participants and goals and Common items), stays in
+ * the reading column while the lists use the wider page (participants.md and common-items.md *Layout - laptop*).
+ */
+.help {
+  margin-block: 0 var(--space-4);
+  max-inline-size: var(--measure);
+  color: var(--colour-text-secondary);
+}
+
+/*
+ * The list conflict above the lists, with the 4 px bar of a field in error (list-editor.md *States*), in the reading
+ * column. The bar is a border, so that forced colours keep it.
+ */
+.conflict {
+  max-inline-size: var(--measure);
+  margin-block: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-inline-start: 4px solid var(--colour-error);
+}

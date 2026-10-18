@@ -1,9 +1,3 @@
-/* The help text stays in the reading column while the list uses the wider page (participants.md *Layout - laptop*). */
-.help {
-  margin-block: 0 var(--space-4);
-  max-inline-size: var(--measure);
-}
-
 /* The native numbers stay, in a column of their own, so each <li> stays display: list-item (list-editor.md). */
 .list {
   margin: 0;
@@ -82,17 +76,6 @@
   block-size: 1em;
   margin-inline-end: var(--space-1);
   vertical-align: -0.125em;
-}
-
-/*
- * The list conflict above the list, with the 4 px bar of a field in error (list-editor.md *States*), in the reading
- * column. The bar is a border, so that forced colours keep it.
- */
-.conflict {
-  max-inline-size: var(--measure);
-  margin-block: 0 var(--space-4);
-  padding: var(--space-2) var(--space-3);
-  border-inline-start: 4px solid var(--colour-error);
 }
 
 /*

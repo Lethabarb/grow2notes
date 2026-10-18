@@ -1,0 +1,15 @@
+/* Each group a section's gap below the one before (common-items.md component 5). */
+.group + .group {
+  margin-block-start: var(--section-gap);
+}
+
+/* A long group name wraps rather than pushing the page sideways, and is never cut short (SC 1.4.10). */
+.heading {
+  overflow-wrap: anywhere;
+}
+
+/* Every note's line, in the secondary colour (common-items.md component 5), in the reading column. */
+.everyNote {
+  max-inline-size: var(--measure);
+  color: var(--colour-text-secondary);
+}

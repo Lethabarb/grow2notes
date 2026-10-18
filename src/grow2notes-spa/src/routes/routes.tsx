@@ -1,5 +1,6 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
+import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
@@ -106,6 +107,11 @@ export const routes: AppRoute[] = [
                 path: 'manage/participants/:participantId',
                 element: <ParticipantPage />,
                 handle: { pageName: pageName.participant },
+              },
+              {
+                path: 'manage/common-items',
+                element: <CommonItemsPage />,
+                handle: { pageName: pageName.commonItems },
               },
               {
                 path: 'manage/guide-prompts',

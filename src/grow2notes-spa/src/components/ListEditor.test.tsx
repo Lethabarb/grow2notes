@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/api.ts';
 import { createQueryClient } from '../api/queryClient.ts';
 import { ListEditor, type ListApi, type ListRow } from './ListEditor.tsx';
+import { ListConflict, ListFrame } from './ListFrame.tsx';
 import { PageStatus } from './PageStatus.tsx';
 
 const participantId = '3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95';
@@ -44,9 +45,10 @@ type Rendered = {
 };
 
 /**
- * Renders the editor for goals in a page's status region, its list in the query already, as its page puts it there,
- * under a query client of its own, beside a button elsewhere on the page; gives the client, the query's function and
- * the writes' functions.
+ * Renders the editor for goals in a page's status region, in its frame with the help text, unless it is read-only, and
+ * the list conflict above it, as a participant's Goals section has it, its list in the query already, as its page puts
+ * it there, under a query client of its own, beside a button elsewhere on the page; gives the client, the query's
+ * function and the writes' functions.
  */
 function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   const client = createQueryClient();
@@ -57,8 +59,9 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   const reorder = vi.fn<(ids: string[]) => Promise<unknown>>();
   const archive = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
   const restore = vi.fn<(id: string, rowVersion: string) => Promise<unknown>>();
-  const api: ListApi = {
+  const api: ListApi<ListRow[]> = {
     query: queryOptions({ queryKey, queryFn }),
+    rowsOf: (goals) => goals,
     scopeId: `goals:${participantId}`,
     add,
     update,
@@ -69,7 +72,10 @@ function renderEditor(rows: ListRow[], readOnly = false): Rendered {
   render(
     <QueryClientProvider client={client}>
       <PageStatus>
-        <ListEditor kind="goal" api={api} readOnly={readOnly} />
+        <ListFrame helpId="goals-help" help={readOnly ? undefined : help}>
+          <ListConflict />
+          <ListEditor kind="goal" api={api} readOnly={readOnly} />
+        </ListFrame>
         <button type="button">Elsewhere</button>
       </PageStatus>
     </QueryClientProvider>,
