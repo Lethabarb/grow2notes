@@ -412,8 +412,9 @@ export const strings = {
    * the one for too much (design.md §4.9 *States*), which is the rename form's label too. Then each other group's
    * Rename, beside the Move up, Move down and Archive of `listRows`, and, in the page's status region, what a rename's
    * Save did, and what a group's Archive did (component 5). Then the archived groups' section's summary, each row's
-   * Restore being `restore`, and, in the page's status region, what a Restore did (component 8). Each group's list's
-   * own words are `listEditor.item`.
+   * Restore being `restore`, and, in the page's status region, what a Restore did (component 8). Then the legend of an
+   * item's Group radios in its edit form (component 6), whose Save that moves the item says `msg.itemSavedAndMoved`.
+   * Each group's list's own words are `listEditor.item`.
    */
   commonItems: {
     loading: 'Loading common items…',
@@ -429,6 +430,7 @@ export const strings = {
     groupArchived: 'Group archived',
     archivedGroups: 'Archived groups',
     groupRestored: 'Group restored to the end of the list',
+    group: 'Group',
   },
   /**
    * The words of each kind of list that `ListEditor` edits (list-editor.md *Exact copy*), a participant's goals

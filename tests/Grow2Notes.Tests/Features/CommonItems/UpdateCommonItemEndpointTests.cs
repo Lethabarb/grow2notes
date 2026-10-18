@@ -1,10 +1,12 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.Configuration;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -15,16 +17,19 @@ using Microsoft.Extensions.Time.Testing;
 namespace Grow2Notes.Tests.Features.CommonItems;
 
 /// <summary>
-/// <c>PUT /api/admin/common-items/{id}</c> (design.md §6.6, S01.03.02), called with the test-only sign-in
-/// (<see cref="TestSignIn"/>) on a fake clock: a manager rewords an item of their own organisation in its own group
-/// with the item's <c>ETag</c> as <c>If-Match</c>, its text cleaned and checked by the add's rules, and gets
-/// <c>200</c> with no body and no <c>ETag</c>; the text already stored answers the same and writes nothing (D84); an
-/// item that is unknown, or another organisation's, gets <c>404</c>, then, with no <c>If-Match</c>, <c>428</c>, with a
-/// stale one, or an item changed after the handler loaded it, <c>412</c>, then an item whose group is archived
-/// <c>409 config.group_archived</c>, then a text that the add refuses <c>422 validation.failed</c> in the screen's
-/// words; each refusal changing nothing and writing no event. Each test rewords an item that it adds to a group of its
-/// own in A, and changes no seeded row (tests/README.md). The endpoint matrix covers the statuses of every caller, and
-/// <see cref="Platform.Audit.AuditEventsTests"/> the <c>common_item.updated</c> that a reword writes.
+/// <c>PUT /api/admin/common-items/{id}</c> (design.md §6.6, S01.03.02, S01.03.08), called with the test-only sign-in
+/// (<see cref="TestSignIn"/>) on a fake clock: a manager rewords an item of their own organisation with the item's
+/// <c>ETag</c> as <c>If-Match</c>, its text cleaned and checked by the add's rules, in its own group when the body
+/// names no other, or moves it to the end of another active group (A42), and gets <c>200</c> with no body and no
+/// <c>ETag</c>; the text already stored, in the item's own group, answers the same and writes nothing (D84); an item
+/// that is unknown, or another organisation's, gets <c>404</c>, then, with no <c>If-Match</c>, <c>428</c>, with a stale
+/// one, or an item changed after the handler loaded it, <c>412</c>, then an item whose group is archived
+/// <c>409 config.group_archived</c>, then a chosen group that is unknown, or another organisation's, <c>404</c>, and an
+/// archived one <c>409 config.group_archived</c>, then a text that the add refuses <c>422 validation.failed</c> in the
+/// screen's words; each refusal changing nothing and writing no event. Each test changes an item that it adds to a
+/// group of its own in A, moving it to another group of its own, or, into Every note, in an organisation of its own,
+/// and changes no seeded row (tests/README.md). The endpoint matrix covers the statuses of every caller, and
+/// <see cref="Platform.Audit.AuditEventsTests"/> the <c>common_item.updated</c> that a reword and a move write.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -34,6 +39,9 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
     private const string EnterTheCommonItem = "Enter the common item";
 
     private const string TooLong = "Common item must be 200 characters or less";
+
+    // The group that a move chooses, beside the item's own, Community outing.
+    private const string ChosenGroupName = "Personal care";
 
     private static readonly DateTime ArchivedAtUtc = TestCommonItems.AddedAtUtc;
 
@@ -48,6 +56,9 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
     }
 
     public static TheoryData<string?> BlankTexts { get; } = new("", "   ", "\t \r\n \n", null);
+
+    // Each groupId that keeps the item in its own group: none, a null one, or the item's own (T07's Notes).
+    public static TheoryData<string> OwnGroupIds { get; } = new("none", "null", "own");
 
     [Fact]
     public async Task A_reword_answers_200_with_no_body_and_no_ETag_and_stores_the_text_alone()
@@ -218,6 +229,207 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
         await AssertUnchangedAsync(item);
     }
 
+    // A42: one more than the highest active SortOrder of the chosen group, past the gap that an archive left and
+    // whatever SortOrder its archived item holds, as only a reorder closes gaps; the old group's other items keep their
+    // places and versions. The event records the group and the place, before and after, and not the text, sent as it
+    // was (S01.03.08's Note).
+    [Fact]
+    public async Task A_move_puts_the_item_after_the_chosen_group_s_active_items_and_leaves_the_old_group_as_it_was()
+    {
+        var (groupId, item) = await AddItemAsync(new(StoredText, 1));
+        await app.Services.AddItemsAsync(
+            seeded.A.OrganisationId, groupId, new("Paid for a ticket", 0), new("Bought lunch", 2));
+        var chosenId = await AddGroupAsync(new(ChosenGroupName, 1));
+        await app.Services.AddItemsAsync(
+            seeded.A.OrganisationId,
+            chosenId,
+            new("Showered", 0),
+            new("Dressed", 3),
+            new("Packed an overnight bag", 7, ArchivedAtUtc: ArchivedAtUtc));
+        var oldGroupBefore = await StoredItemsAsync(groupId);
+
+        using var response = await PutAsync(
+            Caller.ManagerOfA, item.Id, new { text = StoredText, groupId = chosenId }, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.ETag);
+        Assert.Empty(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var stored = await StoredAsync(item.Id);
+        Assert.Equal(
+            (chosenId, StoredText, 4, (DateTime?)null),
+            (stored.GroupId, stored.Text, stored.SortOrder, stored.ArchivedAtUtc));
+        Assert.NotEqual(item.ETag, RowVersionToken.ETag(stored));
+        Assert.Equal([.. oldGroupBefore.Where(listed => listed.Id != item.Id)], await StoredItemsAsync(groupId));
+        AssertDetails(
+            new JsonObject
+            {
+                ["old"] = new JsonObject { ["groupId"] = groupId, ["sortOrder"] = 1 },
+                ["new"] = new JsonObject { ["groupId"] = chosenId, ["sortOrder"] = 4 },
+            },
+            Assert.Single(await EventDetailsAsync(item.Id)));
+    }
+
+    // One PUT, one event, which records the three values that changed, the text as stored once cleaned.
+    [Fact]
+    public async Task A_move_with_new_text_stores_both_and_records_the_group_the_text_and_the_place()
+    {
+        var (groupId, item) = await AddItemAsync(new(StoredText, 2));
+        var chosenId = await AddGroupAsync(new(ChosenGroupName, 1));
+
+        using var response = await PutAsync(
+            Caller.ManagerOfA, item.Id, new { text = " Travelled by\n tram ", groupId = chosenId }, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var stored = await StoredAsync(item.Id);
+        Assert.Equal((chosenId, "Travelled by tram", 0), (stored.GroupId, stored.Text, stored.SortOrder));
+        AssertDetails(
+            new JsonObject
+            {
+                ["old"] = new JsonObject { ["groupId"] = groupId, ["text"] = StoredText, ["sortOrder"] = 2 },
+                ["new"] = new JsonObject { ["groupId"] = chosenId, ["text"] = "Travelled by tram", ["sortOrder"] = 0 },
+            },
+            Assert.Single(await EventDetailsAsync(item.Id)));
+    }
+
+    // T06's callers send {text} alone, and the screen sends the item's own group when no other is chosen: each is a
+    // reword in place, whose event records the text alone.
+    [Theory]
+    [MemberData(nameof(OwnGroupIds))]
+    public async Task A_body_with_no_other_group_rewords_the_item_in_its_place(string groupIdSent)
+    {
+        var (groupId, item) = await AddItemAsync(new(StoredText, 2));
+        object body = groupIdSent switch
+        {
+            "none" => new { text = "Travelled by tram" },
+            "null" => new { text = "Travelled by tram", groupId = (Guid?)null },
+            _ => new { text = "Travelled by tram", groupId },
+        };
+
+        using var response = await PutAsync(Caller.ManagerOfA, item.Id, body, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var stored = await StoredAsync(item.Id);
+        Assert.Equal((groupId, "Travelled by tram", 2), (stored.GroupId, stored.Text, stored.SortOrder));
+        AssertDetails(
+            new JsonObject
+            {
+                ["old"] = new JsonObject { ["text"] = StoredText },
+                ["new"] = new JsonObject { ["text"] = "Travelled by tram" },
+            },
+            Assert.Single(await EventDetailsAsync(item.Id)));
+    }
+
+    // D84: the screen sends the item's own group with the text that it closes on when nothing changed; a body that
+    // changes neither saves nothing, and the version stays the one the If-Match matched.
+    [Fact]
+    public async Task The_stored_text_with_the_item_s_own_group_answers_200_and_writes_nothing()
+    {
+        var (groupId, item) = await AddItemAsync(new(StoredText, 0));
+
+        using var response = await PutAsync(Caller.ManagerOfA, item.Id, new { text = StoredText, groupId }, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Null(response.Headers.ETag);
+        await AssertUnchangedAsync(item);
+    }
+
+    // The chosen group is looked at before the text, so an archived one is a 409 even when the text would be refused
+    // too; the group, restored first, is the screen's way out (design.md §6.6).
+    [Theory]
+    [InlineData("Travelled by tram")]
+    [InlineData("")]
+    public async Task An_archived_chosen_group_is_a_409_group_archived_problem_and_nothing_is_changed(string text)
+    {
+        var (_, item) = await AddItemAsync(new(StoredText, 0));
+        var chosenId = await AddGroupAsync(new(ChosenGroupName, 1, ArchivedAtUtc: ArchivedAtUtc));
+
+        using var response = await PutAsync(Caller.ManagerOfA, item.Id, new { text, groupId = chosenId }, item.ETag);
+
+        await AssertProblemAsync(response, ErrorCode.GroupArchived);
+        await AssertUnchangedAsync(item);
+        Assert.Empty(await StoredItemsAsync(chosenId));
+    }
+
+    // The item's own group is looked at before the chosen one, so an item of an archived group is not moved out of it
+    // either: its group, restored first, is the way out (design.md §6.6).
+    [Fact]
+    public async Task An_archived_group_s_item_sent_with_an_active_group_is_a_409_group_archived_problem_and_not_moved()
+    {
+        var groupId = await AddGroupAsync(new("Overnight respite", 0, ArchivedAtUtc: ArchivedAtUtc));
+        var item = await app.Services.AddItemAsync(seeded.A.OrganisationId, groupId, new(StoredText, 0));
+        var chosenId = await AddGroupAsync(new(ChosenGroupName, 1));
+
+        using var response = await PutAsync(
+            Caller.ManagerOfA, item.Id, new { text = StoredText, groupId = chosenId }, item.ETag);
+
+        await AssertProblemAsync(response, ErrorCode.GroupArchived);
+        await AssertUnchangedAsync(item);
+        Assert.Empty(await StoredItemsAsync(chosenId));
+    }
+
+    // The chosen group is found through the tenant filter, as the add finds its group, so B's is not found (design.md
+    // §9.2), and it is looked for before the text, so a text that would be refused does not hide it.
+    [Theory]
+    [InlineData(true, "Travelled by tram")]
+    [InlineData(false, "")]
+    public async Task A_chosen_group_of_another_organisation_or_of_none_is_a_404_problem_and_nothing_is_changed(
+        bool anotherOrganisations, string text)
+    {
+        var (_, item) = await AddItemAsync(new(StoredText, 0));
+        var chosenId = anotherOrganisations
+            ? Assert.Single(await app.Services.AddGroupsAsync(
+                seeded.B.OrganisationId, new TestCommonItemGroup(ChosenGroupName, 0)))
+            : Guid.NewGuid();
+
+        using var response = await PutAsync(Caller.ManagerOfA, item.Id, new { text, groupId = chosenId }, item.ETag);
+
+        await response.ReadProblemAsync(HttpStatusCode.NotFound);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        await AssertUnchangedAsync(item);
+    }
+
+    // Every note takes items as any active group does: only a rename, a move or an archive of Every note itself is
+    // refused (A43). In an organisation of the test's own, as no test changes a seeded Every note (tests/README.md).
+    [Fact]
+    public async Task An_item_moved_into_Every_note_goes_after_its_highest_active_item()
+    {
+        var (organisationId, managerId) = await AddOrganisationWithAManagerAsync();
+        var everyNoteId = await AddEveryNoteAsync(organisationId);
+        await app.Services.AddItemsAsync(
+            organisationId, everyNoteId, new("Medication prompted", 0), new("Meal prepared", 1));
+        var groupId = Assert.Single(
+            await app.Services.AddGroupsAsync(organisationId, new TestCommonItemGroup("Community outing", 0)));
+        var item = await app.Services.AddItemAsync(organisationId, groupId, new(StoredText, 0));
+
+        using var response = await PutAsync(
+            managerId, item.Id, new { text = StoredText, groupId = everyNoteId }, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var stored = await StoredAsync(item.Id, organisationId);
+        Assert.Equal((everyNoteId, StoredText, 2), (stored.GroupId, stored.Text, stored.SortOrder));
+        Assert.Equal([AuditEventTypes.CommonItem.Updated], await EventTypesAsync(item.Id));
+    }
+
+    // As the reword of an archived item is taken (T06's Notes), so is its move, though the screen moves active items
+    // alone: it keeps the time it was archived at, and goes after the chosen group's active items, as a restore would
+    // put it.
+    [Fact]
+    public async Task An_archived_item_moved_to_another_group_stays_archived_after_that_group_s_active_items()
+    {
+        var (_, item) = await AddItemAsync(new(StoredText, 4, ArchivedAtUtc: ArchivedAtUtc));
+        var chosenId = await AddGroupAsync(new(ChosenGroupName, 1));
+        await app.Services.AddItemsAsync(seeded.A.OrganisationId, chosenId, new TestCommonItem("Showered", 0));
+
+        using var response = await PutAsync(
+            Caller.ManagerOfA, item.Id, new { text = StoredText, groupId = chosenId }, item.ETag);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var stored = await StoredAsync(item.Id);
+        Assert.Equal(
+            (chosenId, 1, (DateTime?)ArchivedAtUtc), (stored.GroupId, stored.SortOrder, stored.ArchivedAtUtc));
+    }
+
     // The screen offers Edit on active items alone, but the server refuses nothing on an archived item of an active
     // group (T06's Notes).
     [Fact]
@@ -294,6 +506,11 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
 
+    private static void AssertDetails(JsonObject expected, string? written) =>
+        Assert.True(
+            JsonNode.DeepEquals(JsonNode.Parse(expected.ToJsonString()), JsonNode.Parse(written ?? "null")),
+            $"Details: expected {expected.ToJsonString()}, written {written}.");
+
     private static async Task AssertProblemAsync(HttpResponseMessage response, ErrorCode code)
     {
         using var problem = JsonDocument.Parse(await response.ReadProblemAsync((HttpStatusCode)code.Status));
@@ -333,32 +550,64 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
     // An item, as given, of an active group added to A for the test.
     private async Task<(Guid GroupId, AddedCommonItem Item)> AddItemAsync(TestCommonItem item)
     {
-        var groupId = Assert.Single(await app.Services.AddGroupsAsync(
-            seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var groupId = await AddGroupAsync(new("Community outing", 0));
         return (groupId, await app.Services.AddItemAsync(seeded.A.OrganisationId, groupId, item));
     }
+
+    // A group, as given, added to A for the test.
+    private async Task<Guid> AddGroupAsync(TestCommonItemGroup group) =>
+        Assert.Single(await app.Services.AddGroupsAsync(seeded.A.OrganisationId, group));
 
     private Task<HttpResponseMessage> PutAsync(Caller caller, Guid itemId, object body, string? ifMatch) =>
         PutAsync(app, caller, itemId, body, ifMatch);
 
-    // As the SPA rewords one: over HTTPS, with a token fetched as the caller, and, unless null, the ETag as If-Match.
     private async Task<HttpResponseMessage> PutAsync(
         WebApplicationFactory<Program> host, Caller caller, Guid itemId, object body, string? ifMatch)
     {
         using var client = host.CreateHttpsClient().SignInAs(caller, seeded);
-        return await client.PutWithTokenAsync(
-            $"/api/admin/common-items/{itemId}", await client.FetchTokenAsync(), body, ifMatch);
+        return await PutAsync(client, itemId, body, ifMatch);
     }
 
-    // The item as its row holds it in A, through the app's context under A's tenant.
-    private async Task<CommonItem> StoredAsync(Guid itemId)
+    private async Task<HttpResponseMessage> PutAsync(Guid userId, Guid itemId, object body, string? ifMatch)
+    {
+        using var client = app.CreateHttpsClient().SignInAs(userId);
+        return await PutAsync(client, itemId, body, ifMatch);
+    }
+
+    // As the SPA rewords or moves one: over HTTPS, with a token fetched as the caller, and, unless null, the ETag as
+    // If-Match.
+    private static async Task<HttpResponseMessage> PutAsync(
+        HttpClient client, Guid itemId, object body, string? ifMatch) =>
+        await client.PutWithTokenAsync(
+            $"/api/admin/common-items/{itemId}", await client.FetchTokenAsync(), body, ifMatch);
+
+    // The item as its row holds it, through the app's context under its organisation's tenant, A's unless given.
+    private async Task<CommonItem> StoredAsync(Guid itemId, Guid? organisationId = null)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var tenant = scope.ServiceProvider.GetRequiredService<ITenantContext>();
+        using (tenant.Use(organisationId ?? seeded.A.OrganisationId))
+        {
+            return await db.CommonItems.AsNoTracking()
+                .SingleAsync(item => item.Id == itemId, TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The items of a group of A, each as its row holds it, its version included, in SortOrder.
+    private async Task<List<(Guid Id, string Text, int SortOrder, DateTime? ArchivedAtUtc, string ETag)>>
+        StoredItemsAsync(Guid groupId)
     {
         await using var scope = app.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
         {
-            return await db.CommonItems.AsNoTracking()
-                .SingleAsync(item => item.Id == itemId, TestContext.Current.CancellationToken);
+            var items = await db.CommonItems.AsNoTracking()
+                .Where(item => item.GroupId == groupId)
+                .OrderBy(item => item.SortOrder)
+                .ToListAsync(TestContext.Current.CancellationToken);
+            return [.. items.Select(item =>
+                (item.Id, item.Text, item.SortOrder, item.ArchivedAtUtc, RowVersionToken.ETag(item)))];
         }
     }
 
@@ -372,6 +621,16 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
             .ToListAsync(TestContext.Current.CancellationToken);
     }
 
+    // The Details of the events written about the item, oldest first, read in SQL, with no tenant needed.
+    private async Task<List<string?>> EventDetailsAsync(Guid itemId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<string?>(
+                $"SELECT [Details] AS [Value] FROM [AuditEvent] WHERE [EntityId] = {itemId} ORDER BY [Id]")
+            .ToListAsync(TestContext.Current.CancellationToken);
+    }
+
     // The tests of the collection run one at a time, so none writes an event while a test compares this before and
     // after its request.
     private async Task<long?> LastEventIdAsync()
@@ -380,6 +639,51 @@ public sealed class UpdateCommonItemEndpointTests : IClassFixture<Grow2NotesFact
         return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
             .SqlQuery<long?>($"SELECT MAX([Id]) AS [Value] FROM [AuditEvent]")
             .SingleAsync(TestContext.Current.CancellationToken);
+    }
+
+    // An organisation of the test's own, with no group yet, and an Active manager, who needs no passkey or password to
+    // sign in with the test-only sign-in. An organisation is the tenant, not tenant-owned, and AspNetUsers is not
+    // filtered, so neither save needs a tenant.
+    private async Task<(Guid OrganisationId, Guid ManagerId)> AddOrganisationWithAManagerAsync()
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var organisation = new Organisation { Name = "Move items test", CreatedAtUtc = TestCommonItems.AddedAtUtc };
+        db.Organisations.Add(organisation);
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        var email = $"{Guid.NewGuid():N}@example.org";
+        var manager = new ApplicationUser
+        {
+            OrganisationId = organisation.Id,
+            DisplayName = "Jamie Lee",
+            Role = UserRole.Manager,
+            Status = UserStatus.Active,
+            InvitedAtUtc = TestCommonItems.AddedAtUtc,
+            ActivatedAtUtc = TestCommonItems.AddedAtUtc,
+            UserName = email,
+            Email = email,
+            EmailConfirmed = true,
+        };
+        var result = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>()
+            .CreateAsync(manager);
+        Assert.True(result.Succeeded);
+        return (organisation.Id, manager.Id);
+    }
+
+    // The organisation's Every note group, made as the app makes it.
+    private async Task<Guid> AddEveryNoteAsync(Guid organisationId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var everyNote = CommonItemGroup.EveryNote(organisationId, TestCommonItems.AddedAtUtc);
+        db.CommonItemGroups.Add(everyNote);
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        return everyNote.Id;
     }
 
     /// <summary>

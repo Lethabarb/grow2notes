@@ -898,6 +898,20 @@ describe('ListEditor, rewording', () => {
     expect(cancel.className).toMatch(/rowButton/);
   });
 
+  it('gives a goal no Group radios, which Common items alone has, nor any control between box and Save', async () => {
+    renderEditor([breakfast, bus]);
+
+    await openEdit(bus.text);
+
+    const form = rowOf(bus.text).querySelector('form')!;
+    expect(within(form).queryAllByRole('radio')).toEqual([]);
+    expect(within(form).queryByRole('group')).toBeNull();
+    expect(form.querySelector('fieldset')).toBeNull();
+    expect(Array.from(form.querySelectorAll('textarea, input, button, select'), (control) => control.tagName)).toEqual(
+      ['TEXTAREA', 'BUTTON', 'BUTTON'],
+    );
+  });
+
   it("on Cancel, drops what was typed, sends nothing, and puts focus on the row's Edit", async () => {
     const { update } = renderEditor([breakfast, bus]);
     retype(await openEdit(breakfast.text), 'Makes own lunch');
@@ -930,7 +944,12 @@ describe('ListEditor, rewording', () => {
 
     await press(saveButton(rowOf(' Makes own\n  lunch ')));
 
-    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion);
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(
+      breakfast.id,
+      'Makes own lunch',
+      breakfast.rowVersion,
+      undefined,
+    );
     expect(rendered.queryFn).toHaveBeenCalledOnce();
     expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
     expect(editBox(rowOf('Makes own lunch'))).toBeNull();
@@ -1081,7 +1100,7 @@ describe('ListEditor, rewording', () => {
 
     await press(save);
 
-    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion);
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', breakfast.rowVersion, undefined);
     expect(rendered.queryFn).toHaveBeenCalledOnce();
     expect(within(item).getByRole('alert')).toHaveTextContent(changedWhileEditing);
     expect(box).toHaveValue('Makes own lunch');
@@ -1090,7 +1109,7 @@ describe('ListEditor, rewording', () => {
 
     await press(save);
 
-    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=');
+    expect(rendered.update).toHaveBeenLastCalledWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', undefined);
     expect(activeTexts()).toEqual(['Makes own lunch', bus.text]);
     expect(editButton('Makes own lunch')).toHaveFocus();
   });
@@ -1184,7 +1203,7 @@ describe('ListEditor, rewording', () => {
     answer.resolve(undefined);
     await wait(1);
 
-    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=');
+    expect(rendered.update).toHaveBeenCalledExactlyOnceWith(breakfast.id, 'Makes own lunch', 'AAAAAAAAC1E=', undefined);
   });
 
   it('sends nothing for a Save whose goal the write before it found archived, showing the list conflict', async () => {

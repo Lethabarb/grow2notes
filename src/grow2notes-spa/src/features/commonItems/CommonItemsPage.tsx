@@ -121,6 +121,7 @@ function Groups() {
   const queryClient = useQueryClient();
   // Already read by the page, which renders this only once it has the groups.
   const groups = useQuery({ ...commonItemGroupsQuery, refetchOnMount: false }).data!;
+  const active = groups.filter((group) => group.archivedAtUtc === null);
   const movable = movableGroups(groups);
   const archived = archivedNewestFirst(groups);
   const latest = () => queryClient.getQueryData(commonItemGroupsQuery.queryKey) ?? [];
@@ -142,17 +143,16 @@ function Groups() {
   return (
     <>
       <ListConflict />
-      {groups
-        .filter((group) => group.archivedAtUtc === null)
-        .map((group) => (
-          <GroupSection
-            key={group.id}
-            group={group}
-            writer={writer}
-            first={group === movable[0]}
-            last={group === movable.at(-1)}
-          />
-        ))}
+      {active.map((group) => (
+        <GroupSection
+          key={group.id}
+          group={group}
+          writer={writer}
+          active={active}
+          first={group === movable[0]}
+          last={group === movable.at(-1)}
+        />
+      ))}
       <NewGroupForm writer={writer} />
       {archived.length > 0 && <ArchivedGroups groups={archived} writer={writer} />}
     </>
@@ -169,15 +169,22 @@ type GroupEnds = {
   last: boolean;
 };
 
+type GroupSectionProps = GroupProps &
+  GroupEnds & {
+    /** The active groups, in the list's order, which each item's Group radios list. */
+    active: AdminCommonItemGroup[];
+  };
+
 /**
  * An active group's section (common-items.md component 5), a region named by its `<h2>`, the group's name as stored,
  * which wraps anywhere and is never cut short: Every note's with the line that says why it has no group buttons, as
  * it can never be renamed, moved or archived (A43), and every other group's in its heading row; then the group's
  * items, in a list of their own whose words say " in [group name]" where the page's lists would otherwise read alike,
- * each item's edit field `item-{id}-text` (component 6), and its add form, whose field is `item-new-{groupId}`, which
- * adds to the end of this group alone.
+ * each item's edit field `item-{id}-text`, with its Group radios, `item-{id}-group`, listing `active`, the active
+ * groups in the list's order (component 6), and its add form, whose field is `item-new-{groupId}`, which adds to the
+ * end of this group alone.
  */
-function GroupSection({ group, writer, first, last }: GroupProps & GroupEnds) {
+function GroupSection({ group, writer, active, first, last }: GroupSectionProps) {
   const headingId = `group-${group.id}-heading`;
 
   return (
@@ -198,6 +205,7 @@ function GroupSection({ group, writer, first, last }: GroupProps & GroupEnds) {
         name={group.name}
         addFieldId={newItemFieldId(group.id)}
         editFieldId={itemFieldId}
+        groups={{ own: group.id, active, fieldName: itemGroupFieldName }}
       />
     </section>
   );
@@ -584,4 +592,9 @@ function newItemFieldId(groupId: string): string {
 /** An item's edit field's id (common-items.md component 6). */
 function itemFieldId(itemId: string): string {
   return `item-${itemId}-text`;
+}
+
+/** The `name` of an item's Group radios (common-items.md component 6). */
+function itemGroupFieldName(itemId: string): string {
+  return `item-${itemId}-group`;
 }

@@ -2279,6 +2279,10 @@ group; Every note stays first and fixed.
   moves, and each group heading with its four buttons on one line at the usual window size (common-items.md open
   question 7); and with NVDA and Chrome, and VoiceOver and iOS Safari, the group parts of the manual pass. The *Screen
   reader* items of common-items.md's checklist that name a group part wait for them.
+- From step 5 (18 October 2026), where the design is silent: a group chosen in an item's Group radios that is no
+  longer active once the list is read again, as after a `409` for a group archived meanwhile, leaves the radios, which
+  then have the item's own group chosen, so that the set never shows none chosen; and "Item saved and moved to the end
+  of [group name]" names the group as its radio named it when Save was pressed.
 
 ### Steps
 
@@ -2380,7 +2384,7 @@ group; Every note stays first and fixed.
       restored to the end of the list", Archived groups gone once empty; a `412` showing the list conflict; and "Not
       archived: …" or "Not restored: …" in the group's or the row's alert slot. Vitest: those; and an Archived groups
       section that the manager closed staying closed, and one opened staying open, after another write.
-- [ ] Move an item to another group (S01.03.08; design.md §4.9 *Moving an item*, A42; common-items.md component 6,
+- [x] Move an item to another group (S01.03.08; design.md §4.9 *Moving an item*, A42; common-items.md component 6,
       "Edit opens the row form…", its Group radios part, "Choosing another group and pressing Save…", and *Failures and
       conflicts*' "A `412` on an item Save keeps the typed text and chosen group…" and the `409` for a chosen group
       archived meanwhile): `groupId` on `PUT /api/admin/common-items/{id}`, checked in the order Notes give, the item

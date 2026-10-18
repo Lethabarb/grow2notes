@@ -42,16 +42,9 @@ internal sealed class CommonItemChanges(
     public async Task<CommonItemChangeResult> AddAsync(
         Actor actor, Guid groupId, CommonItemTextRequest request, CancellationToken cancellationToken)
     {
-        var group = await db.CommonItemGroups.AsNoTracking()
-            .SingleOrDefaultAsync(g => g.Id == groupId, cancellationToken);
-        if (group is null)
+        if (await RefusalOfGroupAsync(groupId, cancellationToken) is { } refused)
         {
-            return CommonItemChangeResult.NotFound;
-        }
-
-        if (group.ArchivedAtUtc is not null)
-        {
-            return CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
+            return refused;
         }
 
         if (!ItemText.CommonItem.TryRead(request.Text, out var text, out var errors))
@@ -61,15 +54,12 @@ internal sealed class CommonItemChanges(
 
         // Two adds at once can read the same end and give their items the same SortOrder, which the list's order
         // breaks by CreatedAtUtc, then Id (ListOrder).
-        var activeItems = await db.CommonItems.AsNoTracking()
-            .Where(item => item.GroupId == groupId && item.ArchivedAtUtc == null)
-            .ToListAsync(cancellationToken);
         var item = new CommonItem
         {
             OrganisationId = tenant.OrganisationId,
             GroupId = groupId,
             Text = text,
-            SortOrder = ListOrder.End(activeItems),
+            SortOrder = ListOrder.End(await ActiveItemsAsync(groupId, cancellationToken)),
             CreatedAtUtc = timeProvider.GetUtcNow().UtcDateTime,
         };
         db.CommonItems.Add(item);
@@ -88,39 +78,46 @@ internal sealed class CommonItemChanges(
     }
 
     /// <summary>
-    /// Rewords a common item of the tenant's organisation in its own group (S01.03.02), as T07 adds the move to another
-    /// group to the same request (T06's Notes): loads it through the tenant filter, so that another organisation's is
-    /// not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version; refuses an item whose group
-    /// is archived, which is restored first; reads the text from <paramref name="request"/> by the add's rules
-    /// (<see cref="ItemText.CommonItem"/>); then saves it with <c>common_item.updated</c>, whose <c>Details</c> hold
-    /// the old and new <c>text</c>, and which names no participant; or, when the text is already stored, saves nothing
-    /// and writes no event, and answers as a save does (D84). An archived item of an active group is reworded too, as
-    /// design.md §6.6 names no refusal, though the screen offers Edit on active items alone (T06's Notes).
+    /// Rewords a common item of the tenant's organisation, and moves it to another group of the organisation when
+    /// <paramref name="request"/> names one (S01.03.02, S01.03.08): loads it through the tenant filter, so that another
+    /// organisation's is not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version; refuses an
+    /// item whose own group is archived, which is restored first; finds the chosen group through the tenant filter too,
+    /// as the add finds its group, and refuses an archived one; reads the text from <paramref name="request"/> by the
+    /// add's rules (<see cref="ItemText.CommonItem"/>); then puts a moved item at the end of the chosen group's active
+    /// items (<see cref="ListOrder.End"/>, A42), keeping its archived state, and saves it with
+    /// <c>common_item.updated</c>, which names no participant, and whose <c>Details</c> hold the old and new values of
+    /// those of its <c>groupId</c>, <c>sortOrder</c> and <c>text</c> that changed (S01.03.08's Note); or, when none
+    /// changed, saves nothing and writes no event, and answers as a save does (D84). A missing or <c>null</c>
+    /// <c>groupId</c>, or the item's own, keeps it in its place in its group. Any active group can be chosen, Every
+    /// note included. An archived item of an active group is reworded and moved too, as design.md §6.6 names no
+    /// refusal, though the screen offers Edit on active items alone (T06's and T07's Notes).
     /// </summary>
     /// <remarks>
-    /// The group is read just before the save, and carries no token that the save checks (design.md §6.9), so a group
-    /// archived in that instant is not caught (T06's Notes).
+    /// The groups are read just before the save, and carry no token that the save checks (design.md §6.9), so a group
+    /// archived in that instant is not caught (T06's Notes); and two items put at the end of one group at once can read
+    /// the same end, as two adds can (<see cref="AddAsync"/>).
     /// </remarks>
-    /// <param name="actor">Who rewords it.</param>
+    /// <param name="actor">Who rewords or moves it.</param>
     /// <param name="itemId">The item.</param>
     /// <param name="ifMatch">
     /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
     /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
     /// </param>
-    /// <param name="request">The text as sent.</param>
-    /// <param name="cancellationToken">Cancels the reword.</param>
+    /// <param name="request">The text as sent, and the group to put the item in.</param>
+    /// <param name="cancellationToken">Cancels the change.</param>
     /// <returns>
-    /// <see cref="CommonItemChangeResult.Saved"/>, whether the text changed or not; or, each with nothing written,
+    /// <see cref="CommonItemChangeResult.Saved"/>, whether a value changed or not; or, each with nothing written,
     /// checked in this order: <see cref="CommonItemChangeResult.NotFound"/>, for an item not in the organisation; the
     /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.GroupArchived"/>, for an item whose group is
-    /// archived; the text's message; and <see cref="ErrorCode.PreconditionFailed"/>, when the item changed after it
-    /// was loaded.
+    /// archived; <see cref="CommonItemChangeResult.NotFound"/>, for a chosen group not in the organisation;
+    /// <see cref="ErrorCode.GroupArchived"/>, for an archived chosen group; the text's message; and
+    /// <see cref="ErrorCode.PreconditionFailed"/>, when the item changed after it was loaded.
     /// </returns>
     public Task<CommonItemChangeResult> UpdateAsync(
         Actor actor,
         Guid itemId,
         StringValues ifMatch,
-        CommonItemTextRequest request,
+        CommonItemUpdateRequest request,
         CancellationToken cancellationToken) =>
         ChangeAsync(
             itemId,
@@ -133,15 +130,28 @@ internal sealed class CommonItemChanges(
                     return CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
                 }
 
+                var groupId = request.GroupId ?? item.GroupId;
+                var moved = groupId != item.GroupId;
+                if (moved && await RefusalOfGroupAsync(groupId, cancellationToken) is { } refused)
+                {
+                    return refused;
+                }
+
                 if (!ItemText.CommonItem.TryRead(request.Text, out var text, out var errors))
                 {
                     return CommonItemChangeResult.Invalid(errors);
                 }
 
-                var before = TextValues(item);
+                var before = UpdateValues(item);
                 item.Text = text;
+                if (moved)
+                {
+                    item.SortOrder = ListOrder.End(await ActiveItemsAsync(groupId, cancellationToken));
+                    item.GroupId = groupId;
+                }
+
                 return await SaveAsync(
-                    actor, AuditEventTypes.CommonItem.Updated, item, before, TextValues(item), cancellationToken);
+                    actor, AuditEventTypes.CommonItem.Updated, item, before, UpdateValues(item), cancellationToken);
             },
             cancellationToken);
 
@@ -248,10 +258,7 @@ internal sealed class CommonItemChanges(
             async item =>
             {
                 var before = PlaceValues(item);
-                var activeItems = await db.CommonItems.AsNoTracking()
-                    .Where(i => i.GroupId == item.GroupId && i.ArchivedAtUtc == null)
-                    .ToListAsync(cancellationToken);
-                Archiving.Restore(item, activeItems);
+                Archiving.Restore(item, await ActiveItemsAsync(item.GroupId, cancellationToken));
                 return await SaveAsync(
                     actor, AuditEventTypes.CommonItem.Restored, item, before, PlaceValues(item), cancellationToken);
             },
@@ -277,6 +284,33 @@ internal sealed class CommonItemChanges(
             ? CommonItemChangeResult.Refused(refused)
             : await change(item);
     }
+
+    /// <summary>
+    /// What refuses a group that an item is added to or moved into, found through the tenant filter, so that another
+    /// organisation's is not found (design.md §9.2): <see cref="CommonItemChangeResult.NotFound"/>, for a group not in
+    /// the organisation, or <see cref="ErrorCode.GroupArchived"/>, for an archived one, which is restored first; or
+    /// <see langword="null"/> for an active group of the organisation.
+    /// </summary>
+    private async Task<CommonItemChangeResult?> RefusalOfGroupAsync(Guid groupId, CancellationToken cancellationToken)
+    {
+        var group = await db.CommonItemGroups.AsNoTracking()
+            .SingleOrDefaultAsync(g => g.Id == groupId, cancellationToken);
+        if (group is null)
+        {
+            return CommonItemChangeResult.NotFound;
+        }
+
+        return group.ArchivedAtUtc is null ? null : CommonItemChangeResult.Refused(ErrorCode.GroupArchived);
+    }
+
+    /// <summary>
+    /// The active items of the group of ID <paramref name="groupId"/>, untracked and in no order, after which an item
+    /// added, moved or restored to the group goes (<see cref="ListOrder.End"/>).
+    /// </summary>
+    private Task<List<CommonItem>> ActiveItemsAsync(Guid groupId, CancellationToken cancellationToken) =>
+        db.CommonItems.AsNoTracking()
+            .Where(item => item.GroupId == groupId && item.ArchivedAtUtc == null)
+            .ToListAsync(cancellationToken);
 
     // A change to a loaded item, with its event, whose entity is the item, which names no participant, and whose
     // Details hold the values given before and after, those that changed alone; or nothing when none changed.
@@ -314,10 +348,15 @@ internal sealed class CommonItemChanges(
     };
 
     /// <summary>
-    /// The one value that a reword changes, as <c>common_item.updated</c> records it, named as <see cref="Values"/>
-    /// names it.
+    /// The values that an update changes, a move's group and place in it and a reword's text, as
+    /// <c>common_item.updated</c> records those of them that changed, named as <see cref="Values"/> names them.
     /// </summary>
-    private static JsonObject TextValues(CommonItem item) => new() { ["text"] = item.Text };
+    private static JsonObject UpdateValues(CommonItem item) => new()
+    {
+        ["groupId"] = item.GroupId,
+        ["text"] = item.Text,
+        ["sortOrder"] = item.SortOrder,
+    };
 
     /// <summary>
     /// The item's place in its group, the values that archiving and restoring change, as their events record them,

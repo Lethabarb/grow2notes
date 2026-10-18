@@ -7,6 +7,7 @@ import { strings } from '../copy/strings.ts';
 import { limits } from '../limits.ts';
 import { Button } from './Button.tsx';
 import { CharacterCount } from './CharacterCount.tsx';
+import { ChoiceRow } from './ChoiceRow.tsx';
 import { FieldGroup } from './FieldGroup.tsx';
 import styles from './ListEditor.module.css';
 import { useListFrame } from './listFrameContext.ts';
@@ -48,10 +49,11 @@ type ListWrites = {
   /** Adds a row of `text` at the end of the list, as the API's `POST` does; the editor reads nothing of the answer. */
   add: (text: string) => Promise<unknown>;
   /**
-   * Rewords a row, with its `rowVersion` as `If-Match`, as the API's `PUT` does; the editor reads nothing of the
-   * answer, as it reads the row's next version from the list.
+   * Rewords a row, with its `rowVersion` as `If-Match`, as the API's `PUT` does, and, on Common items, puts it in the
+   * group of `groupId`, its own unless the Group radios chose another (`RowGroups`); the editor reads nothing of the
+   * answer, as it reads the row's next version, and its group, from the list.
    */
-  update: (id: string, text: string, rowVersion: string) => Promise<unknown>;
+  update: (id: string, text: string, rowVersion: string, groupId?: string) => Promise<unknown>;
   /**
    * Puts the list's active rows in the order of `ids`, each active row's ID once, as the API's `PUT …/order` does; the
    * editor reads nothing of the answer, as it reads the new order, and each row's next version, from the list.
@@ -79,6 +81,21 @@ export type ListApi<TData> = ListWrites & {
   rowsOf: (data: TData) => ListRow[];
 };
 
+/** A group that a row of Common items can be moved to, as the Group radios name it (common-items.md component 6). */
+type GroupChoice = { id: string; name: string };
+
+/**
+ * How the rows of a group's list on Common items move to another group (common-items.md component 6), which no other
+ * list does: the list's own group, which each of its rows is in; the active groups, in the list's order, Every note
+ * first, as the page's one query holds them, which a row's edit form offers as its Group radios while there are two or
+ * more; and the `name` of a row's radios, given the row's ID, `item-{id}-group`.
+ */
+type RowGroups = {
+  own: string;
+  active: GroupChoice[];
+  fieldName: (rowId: string) => string;
+};
+
 type ListEditorProps<TData> = {
   kind: ListKind;
   api: ListApi<TData>;
@@ -98,6 +115,8 @@ type ListEditorProps<TData> = {
    * (common-items.md component 6); otherwise one of React's own.
    */
   editFieldId?: (rowId: string) => string;
+  /** On Common items alone, the groups that a row can be moved to from its edit form. */
+  groups?: RowGroups;
   /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
@@ -121,15 +140,16 @@ export type MoveList = ListWriter & {
 
 /**
  * What the editor's rows and forms share with it: what a move needs of the list (`MoveList`), most of which every other
- * write needs too; the list's kind, name and writes; the ids of its rows' edit fields where its page names them, and
- * the id of the page's help text, which describes each text field; the rows as last read; and the list's archived
- * section that an Archive opens.
+ * write needs too; the list's kind, name and writes; the ids of its rows' edit fields where its page names them, the
+ * groups that a row can be moved to, on Common items, and the id of the page's help text, which describes each text
+ * field; the rows as last read; and the list's archived section that an Archive opens.
  */
 type ListContext = MoveList & {
   kind: ListKind;
   name: string | undefined;
   api: ListWrites;
   editFieldId: ((rowId: string) => string) | undefined;
+  groups: RowGroups | undefined;
   helpId: string;
   /** The rows as the list was last read, which a write reads as it runs. */
   latest: () => ListRow[];
@@ -231,6 +251,7 @@ export function ListEditor<TData>({
   name,
   addFieldId,
   editFieldId,
+  groups,
   readOnly = false,
 }: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
@@ -260,6 +281,7 @@ export function ListEditor<TData>({
     name,
     api,
     editFieldId,
+    groups,
     helpId: frame.helpId,
     latest,
     order: () => latest().flatMap((listed) => (listed.archivedAtUtc === null ? [listed.id] : [])),
@@ -635,18 +657,22 @@ type EditFormProps = {
 };
 
 /**
- * A row's edit form (list-editor.md *Behaviour*, participants.md B6): the row's text field, filled with its text, then
- * the alert for a request that failed, then Save, primary, and Cancel, which drops what was typed, both label width.
- * Save checks the text as Add does, sending nothing while it fails; then, when the text as Save would send it is the
- * row's own, it closes the form as Cancel does and sends nothing, as there is nothing to save. Otherwise it sends the
- * text with the row's version as the write runs, the box read-only while it is out, and once the list is read again,
- * closes the form, focus going to Edit unless the person has gone elsewhere meanwhile, and the page's status region
- * says so. A failure keeps the text, focus staying on Save: the server's refusal of the text shows on the field as
- * Save's own does; a Save refused as stale whose row is still active says what the row now says, and the next Save
- * sends its new version; a row archived meanwhile leaves the list, and its form with it, and the list conflict shows,
- * as it does for a Save refused as the row's group was archived meanwhile (common-items.md *Failures*); and anything
- * else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write once
- * started runs to its end and the list then shows what the server holds.
+ * A row's edit form (list-editor.md *Behaviour*, participants.md B6, common-items.md component 6): the row's text
+ * field, filled with its text, then, on Common items while two or more groups are active, the Group radios, the row's
+ * own group chosen, then the alert for a request that failed, then Save, primary, and Cancel, which drops what was
+ * typed and chosen, both label width. Save checks the text as Add does, sending nothing while it fails; then, when the
+ * text as Save would send it is the row's own, and its group too, it closes the form as Cancel does and sends nothing,
+ * as there is nothing to save. Otherwise it sends the text, and the group chosen, with the row's version as the write
+ * runs, the box read-only while it is out, and once the list is read again, closes the form, focus going to Edit,
+ * which a row moved to another group has at the end of that group's list, unless the person has gone elsewhere
+ * meanwhile, and the page's status region says so, naming the group that a moved row went to. A failure keeps the text
+ * and the group chosen, focus staying on Save: the server's refusal of the text shows on the field as Save's own does;
+ * a Save refused as stale whose row is still in the list says what the row now says, and the next Save sends its new
+ * version; a row archived or moved meanwhile leaves the list, and its form with it, and the list conflict shows, as it
+ * does for a Save refused as the row's group, or the group chosen, was archived meanwhile (common-items.md
+ * *Failures*), a group chosen that is no longer active leaving the radios, which then have the row's own chosen; and
+ * anything else says so in the alert. Cancel stays free while a Save is out or queued, closing the form, as a write
+ * once started runs to its end and the list then shows what the server holds.
  */
 function EditForm({ row, list, field, onClose }: EditFormProps) {
   const copy = strings.listEditor[list.kind];
@@ -655,9 +681,13 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
   const fieldId = list.editFieldId?.(row.id) ?? ownId;
   const form = useRef<HTMLFormElement>(null);
   const box = useFieldText(row.text, textRule(list.kind), 'text', field);
+  // The group chosen in the Group radios, the row's own until another is chosen, on Common items alone.
+  const [groupId, setGroupId] = useState(list.groups?.own);
+  // The group chosen while it is still active, or else the row's own, as a group archived meanwhile leaves the radios.
+  const chosen = list.groups?.active.some(({ id }) => id === groupId) ? groupId : list.groups?.own;
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
-  const save = useListWrite(list, async (text: string) => {
+  const save = useListWrite(list, async ({ text, to }: { text: string; to: string | undefined }) => {
     // The version as the write runs, which the list read after the write before it may have changed.
     const current = activeRow(list.latest(), row.id);
     if (current === undefined) {
@@ -665,7 +695,7 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
     }
 
     try {
-      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion));
+      await sendUnlessListChanged(list, 409, () => list.api.update(row.id, text, current.rowVersion, to));
     } catch (failed) {
       if (!(failed instanceof ApiError && failed.status === 412)) {
         throw failed;
@@ -686,27 +716,32 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
       return;
     }
 
-    if (sent === row.text) {
+    if (sent === row.text && chosen === list.groups?.own) {
       onClose(true);
       return;
     }
 
-    save.mutate(sent, {
-      onSuccess: () => {
-        onClose(focusStayedIn(form.current));
-        announce?.(copy.saved);
-      },
-      onError: (failed) => {
-        if (failed instanceof RowChanged) {
-          setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
-          return;
-        }
+    // The group as its radio names it as Save is pressed, or nothing while the row stays in its own.
+    const movedTo = chosen === list.groups?.own ? undefined : list.groups?.active.find(({ id }) => id === chosen);
+    save.mutate(
+      { text: sent, to: chosen },
+      {
+        onSuccess: () => {
+          onClose(focusStayedIn(form.current));
+          announce?.(movedTo === undefined ? copy.saved : msg.itemSavedAndMoved(movedTo.name));
+        },
+        onError: (failed) => {
+          if (failed instanceof RowChanged) {
+            setFailure(msg.rowChangedWhileEditing(copy.row, wordingNow[list.kind](failed.text)));
+            return;
+          }
 
-        if (!box.refusedByServer(failed)) {
-          setFailure(failureAlert(failed, msg.notSaved));
-        }
+          if (!box.refusedByServer(failed)) {
+            setFailure(failureAlert(failed, msg.notSaved));
+          }
+        },
       },
-    });
+    );
   }
 
   return (
@@ -722,6 +757,14 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
         fieldRef={field}
         onChange={box.edit}
       />
+      {list.groups !== undefined && list.groups.active.length >= 2 && (
+        <GroupRadios
+          name={list.groups.fieldName(row.id)}
+          groups={list.groups.active}
+          chosen={chosen}
+          onChoose={setGroupId}
+        />
+      )}
       <RequestAlert>{failure}</RequestAlert>
       <div className={styles.actions}>
         <Button
@@ -743,6 +786,40 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
         </Button>
       </div>
     </form>
+  );
+}
+
+type GroupRadiosProps = {
+  /** The `name` of every radio in the set, `item-{id}-group`, which each radio's id starts with. */
+  name: string;
+  groups: GroupChoice[];
+  /** The ID of the group chosen, whose radio is checked. */
+  chosen: string | undefined;
+  onChoose: (groupId: string) => void;
+};
+
+/**
+ * An item's Group radios (common-items.md component 6): a `<fieldset>` whose legend is "Group", then a `ChoiceRow` for
+ * each active group, in the list's order, Every note first, named by the group's name alone, the group chosen checked.
+ * One Tab stop, in which the arrow keys move and choose, as the browser's own radios do; choosing sends nothing until
+ * Save (SC 3.2.2). Radios, not a `<select>`, which some find very hard to use (GOV.UK).
+ */
+function GroupRadios({ name, groups, chosen, onChoose }: GroupRadiosProps) {
+  return (
+    <div className={styles.field}>
+      <FieldGroup fieldId={name} label={strings.commonItems.group} group>
+        {groups.map((group) => (
+          <ChoiceRow
+            key={group.id}
+            id={`${name}-${group.id}`}
+            name={name}
+            label={group.name}
+            checked={group.id === chosen}
+            onChange={() => onChoose(group.id)}
+          />
+        ))}
+      </FieldGroup>
+    </div>
   );
 }
 

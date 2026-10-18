@@ -97,6 +97,12 @@ describe("a list row's move (list-editor.md *Behaviour* and *Request errors*)", 
   });
 });
 
+describe("a common item's Save that moved it (common-items.md *Item actions*)", () => {
+  it('names the group it went to the end of, with no full stop', () => {
+    expect(msg.itemSavedAndMoved('Personal care')).toBe('Item saved and moved to the end of Personal care');
+  });
+});
+
 describe("a list row's Save refused as stale (list-editor.md *Request errors*)", () => {
   const words =
     'Someone else changed this goal while you were editing. It now says: Phones her sister. Save to replace it with '

@@ -69,6 +69,12 @@ export const msg = {
    */
   groupMoved: (direction: 'up' | 'down') => `Group moved ${direction}`,
   /**
+   * A common item's Save that moved it to another group, in the page's status region once the list shows it at the end
+   * of that group (common-items.md *Item actions*): "Item saved and moved to the end of Personal care", naming the
+   * group as its Group radio does, one phrase with no full stop, as "Item saved" is.
+   */
+  itemSavedAndMoved: (group: string) => `Item saved and moved to the end of ${group}`,
+  /**
    * After the visible label of a button that acts on a list's row, for screen readers alone, the row's text, so that
    * "Edit" is read as "Edit, Makes own breakfast" (list-editor.md *Repeated buttons in every row*): hidden text rather
    * than `aria-label`, which automatic translation misses, and after the label, so that the name starts with the words

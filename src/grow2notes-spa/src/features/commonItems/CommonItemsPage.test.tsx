@@ -780,15 +780,17 @@ function groupPlacePath(groupId: string, action: 'archive' | 'restore'): string 
  * config.every_note_fixed`), or else archives the group in its place, with its items as they were, later than anything
  * archived before it, or restores it, with its items, to the end of the active groups other than Every note, one after
  * the highest active `sortOrder` (A2), in the list's order, each with a new version, and answers `204` with no body;
- * an add puts an item, with an ID and a version of its own, at
- * the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a reword refuses
- * an `If-Match` that is not the item's version (`412`), then an item of an archived group (`409
- * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; a reorder
- * refuses IDs that are not the group's active items, each once (`422 config.order_mismatch`), or else gives them
- * `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder` changed, and answers `204` with no body; an
- * archive or a restore refuses an `If-Match` that is not the item's version (`412`), or else archives the item in its
- * place, later than anything archived before it, or restores it to the end of its group, one after the highest active
- * `sortOrder` (A2), each with a new version, and answers `204` with no body; and a read gives what it holds.
+ * an add puts an item, with an ID and a version of its own, at the end of its group, one after the highest active
+ * `sortOrder` (A2), and answers `201` with no body; a reword refuses an `If-Match` that is not the item's version
+ * (`412`), then an item of an archived group (`409 config.group_archived`), then a `groupId` of no group it holds
+ * (`404`) or of an archived one (`409 config.group_archived`), or else gives the item its text and a new version, in
+ * its place when the `groupId` is its own group's, or else at the end of that group, one after its highest active
+ * `sortOrder` (A42), and answers `200` with no body; a reorder refuses IDs that are not the group's active items, each
+ * once (`422 config.order_mismatch`), or else gives them `sortOrder` 0 to n-1, with a new version for each item whose
+ * `sortOrder` changed, and answers `204` with no body; an archive or a restore refuses an `If-Match` that is not the
+ * item's version (`412`), or else archives the item in its place, later than anything archived before it, or restores
+ * it to the end of its group, one after the highest active `sortOrder` (A2), each with a new version, and answers `204`
+ * with no body; and a read gives what it holds. Each item write finds the item in whichever group holds it then.
  */
 function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGroup[] {
   const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
@@ -797,10 +799,16 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     versions += 1;
     return `AAAAAAAAE${String(versions).padStart(3, '0')}=`;
   };
+  // One after the highest active sortOrder of a group's items (A2, A42).
+  const endOf = (items: ListRow[]) =>
+    Math.max(-1, ...items.flatMap((row) => (row.archivedAtUtc === null ? [row.sortOrder] : []))) + 1;
+  // The group that holds the item of `itemId` now, which a move changes.
+  const holderOf = (itemId: string) => held.find((listed) => listed.items.some(({ id }) => id === itemId))!;
   let archives = 0;
-  const servePlace = (heldGroup: AdminCommonItemGroup, itemId: string) => {
+  const servePlace = (itemId: string) => {
     for (const action of ['archive', 'restore'] as const) {
       serve('POST', placePath(itemId, action), (init) => {
+        const heldGroup = holderOf(itemId);
         const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
         const listed = heldGroup.items[at];
         if (new Headers(init?.headers).get('If-Match') !== `"${listed.rowVersion}"`) {
@@ -812,11 +820,10 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
           const archivedAtUtc = `2026-10-01T06:${String(archives).padStart(2, '0')}:00Z`;
           heldGroup.items[at] = { ...listed, archivedAtUtc, rowVersion: nextVersion() };
         } else if (action === 'restore' && listed.archivedAtUtc !== null) {
-          const active = heldGroup.items.flatMap((row) => (row.archivedAtUtc === null ? [row.sortOrder] : []));
           heldGroup.items.splice(at, 1);
           heldGroup.items.push({
             ...listed,
-            sortOrder: Math.max(-1, ...active) + 1,
+            sortOrder: endOf(heldGroup.items),
             archivedAtUtc: null,
             rowVersion: nextVersion(),
           });
@@ -826,19 +833,36 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       });
     }
   };
-  const serveReword = (heldGroup: AdminCommonItemGroup, itemId: string) => {
+  const serveReword = (itemId: string) => {
     serve('PUT', itemPath(itemId), (init) => {
-      const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
-      if (new Headers(init?.headers).get('If-Match') !== `"${heldGroup.items[at].rowVersion}"`) {
+      const from = holderOf(itemId);
+      const at = from.items.findIndex((listed) => listed.id === itemId);
+      const listed = from.items[at];
+      if (new Headers(init?.headers).get('If-Match') !== `"${listed.rowVersion}"`) {
         return problem(412)();
       }
 
-      if (heldGroup.archivedAtUtc !== null) {
+      if (from.archivedAtUtc !== null) {
         return problem(409, 'config.group_archived')();
       }
 
-      const { text } = JSON.parse(init?.body as string) as { text: string };
-      heldGroup.items[at] = { ...heldGroup.items[at], text, rowVersion: nextVersion() };
+      const { text, groupId } = JSON.parse(init?.body as string) as { text: string; groupId: string };
+      const to = held.find((heldGroup) => heldGroup.id === groupId);
+      if (to === undefined) {
+        return problem(404)();
+      }
+
+      if (to.archivedAtUtc !== null) {
+        return problem(409, 'config.group_archived')();
+      }
+
+      if (to === from) {
+        from.items[at] = { ...listed, text, rowVersion: nextVersion() };
+      } else {
+        from.items.splice(at, 1);
+        to.items.push({ ...listed, text, sortOrder: endOf(to.items), rowVersion: nextVersion() });
+      }
+
       return reworded();
     });
   };
@@ -913,16 +937,15 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
     });
     serve('POST', itemsPath(heldGroup.id), (init) => {
       const { text } = JSON.parse(init?.body as string) as { text: string };
-      const active = heldGroup.items.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
       const id = `9e8d7c6b-5a49-4382-a1b0-${String(heldGroup.items.length).padStart(12, '0')}`;
-      heldGroup.items.push(item(id, text, Math.max(-1, ...active) + 1));
-      serveReword(heldGroup, id);
-      servePlace(heldGroup, id);
+      heldGroup.items.push(item(id, text, endOf(heldGroup.items)));
+      serveReword(id);
+      servePlace(id);
       return created();
     });
     for (const { id } of heldGroup.items) {
-      serveReword(heldGroup, id);
-      servePlace(heldGroup, id);
+      serveReword(id);
+      servePlace(id);
     }
   };
   serve('GET', listPath, json(held));
@@ -2225,7 +2248,9 @@ describe('Common items, rewording an item', () => {
 
     await press(saveButton(paid.id));
 
-    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+    ]);
     expect(listReads()).toBe(reads + 1);
     expect(editField(paid.id)).toBeNull();
     expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
@@ -2307,7 +2332,9 @@ describe('Common items, rewording an item', () => {
 
     await press(save);
 
-    expect(rewordsOf(paid.id)).toEqual([{ ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine' } }]);
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: outing.id } },
+    ]);
     expect(editAlert(paid.id)).toHaveTextContent(
       'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
         + 'replace it with your wording, or Cancel to keep it.',
@@ -2394,8 +2421,12 @@ describe('Common items, rewording an item', () => {
       'Bought lunch at the café',
     ]);
     expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(['Medication given', meal.text]);
-    expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([{ text: 'Medication given' }]);
-    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([{ text: 'Bought lunch at the café' }]);
+    expect(rewordsOf(medication.id).map(({ body }) => body)).toEqual([
+      { text: 'Medication given', groupId: everyNote.id },
+    ]);
+    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
+      { text: 'Bought lunch at the café', groupId: outing.id },
+    ]);
   });
 
   it('hands a 401 on Save to sign-in in place, keeping the text, and reads the list again once signed in', async () => {
@@ -2432,6 +2463,298 @@ describe('Common items, rewording an item', () => {
     expect(editField(paid.id)).toHaveValue('Paid at the machine');
     expect(editAlert(paid.id)).toBeEmptyDOMElement();
     expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+});
+
+/** What the page's status region says once a Save has moved an item to the group named `name`. */
+function savedAndMoved(name: string): string {
+  return `Item saved and moved to the end of ${name}`;
+}
+
+/** The item's Group radios, the set named "Group" in its edit form, or `null` while the form has none. */
+function groupSet(itemId: string): HTMLFieldSetElement | null {
+  return within(editForm(itemId)).queryByRole<HTMLFieldSetElement>('group', { name: 'Group' });
+}
+
+/** The item's Group radio of the group named `name`. */
+function groupRadio(itemId: string, name: string): HTMLInputElement {
+  return within(groupSet(itemId)!).getByRole<HTMLInputElement>('radio', { name });
+}
+
+/** The names of the item's Group radios, in the order shown. */
+function groupNames(itemId: string): (string | null)[] {
+  return within(groupSet(itemId)!)
+    .getAllByRole('radio')
+    .map((radio) => radio.closest('label')!.textContent);
+}
+
+/** Chooses the group named `name` in the item's Group radios, as a tap on its row does. */
+function chooseGroup(itemId: string, name: string) {
+  fireEvent.click(groupRadio(itemId, name));
+}
+
+/**
+ * Presses the down arrow on `radio` as a browser does, which jsdom does not: focus moves to the next radio of its set,
+ * those of its `name` in its form, in document order, which the browser chooses with a click.
+ */
+function pressArrowDown(radio: HTMLInputElement) {
+  fireEvent.keyDown(radio, { key: 'ArrowDown' });
+  const set = Array.from(radio.form!.elements).filter(
+    (control): control is HTMLInputElement =>
+      control instanceof HTMLInputElement && control.type === 'radio' && control.name === radio.name,
+  );
+  const next = set[(set.indexOf(radio) + 1) % set.length];
+  next.focus();
+  fireEvent.click(next);
+}
+
+describe('Common items, moving an item to another group', () => {
+  it('gives the edit form no Group radios while Every note is the only active group; Save sends its ID', async () => {
+    const alone = [everyNote, respite];
+    await openPage(alone);
+    serveGroups(alone);
+    const field = openEdit('Every note', meal);
+
+    expect(groupSet(meal.id)).toBeNull();
+    expect(within(editForm(meal.id)).queryAllByRole('radio')).toEqual([]);
+    expect(editForm(meal.id).querySelector('fieldset')).toBeNull();
+
+    type(field, 'Meal cooked');
+    await press(saveButton(meal.id));
+
+    expect(rewordsOf(meal.id)).toEqual([
+      { ifMatch: `"${meal.rowVersion}"`, body: { text: 'Meal cooked', groupId: everyNote.id } },
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, 'Meal cooked']);
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(saved);
+  });
+
+  it("puts the Group radios after the count: each active group in the list's order, its own checked", async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+
+    const set = groupSet(paid.id)!;
+    expect(set.tagName).toBe('FIELDSET');
+    expect(set.querySelector('legend')?.textContent).toBe('Group');
+    const radios = within(set).getAllByRole<HTMLInputElement>('radio');
+    expect(groupNames(paid.id)).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(radios.map(({ id, name, type: kind }) => [id, name, kind])).toEqual(
+      [everyNote, outing, care].map(({ id }) => [`item-${paid.id}-group-${id}`, `item-${paid.id}-group`, 'radio']),
+    );
+    expect(radios.filter(({ checked }) => checked)).toEqual([groupRadio(paid.id, 'Community outing')]);
+    for (const radio of radios) {
+      // Named by its group alone, with no hint to describe it.
+      expect(radio).not.toHaveAttribute('aria-describedby');
+      expect(radio).toHaveAccessibleDescription('');
+      expect(radio).not.toBeDisabled();
+      expect(radio.form).toBe(editForm(paid.id));
+    }
+
+    const count = editForm(paid.id).querySelector<HTMLElement>('p[aria-hidden="true"]')!;
+    expect(follows(editField(paid.id)!, count)).toBe(true);
+    expect(follows(count, set)).toBe(true);
+    expect(follows(set, editAlert(paid.id))).toBe(true);
+    expect(follows(editAlert(paid.id), saveButton(paid.id))).toBe(true);
+
+    openEdit('Every note', meal);
+    expect(groupNames(meal.id)).toEqual(['Every note', 'Community outing', 'Personal care']);
+    expect(groupRadio(meal.id, 'Every note')).toBeChecked();
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
+  });
+
+  it('chooses the next group with the down arrow, the radios one set, and sends nothing until Save', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    const own = groupRadio(paid.id, 'Community outing');
+    own.focus();
+
+    pressArrowDown(own);
+
+    expect(groupRadio(paid.id, 'Personal care')).toBeChecked();
+    expect(groupRadio(paid.id, 'Personal care')).toHaveFocus();
+    expect(own).not.toBeChecked();
+    expect(rewordsOf(paid.id)).toEqual([]);
+  });
+
+  it('on Save of the text unchanged, its own group chosen again, closes as Cancel does, sending nothing', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    chooseGroup(paid.id, 'Community outing');
+
+    await press(saveButton(paid.id));
+    await wait(16);
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editField(paid.id)).toBeNull();
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it('on Cancel, drops the group chosen, sending nothing, and opens again with its own group chosen', async () => {
+    await openPage();
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+
+    await press(cancelButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([]);
+    expect(editButton('Community outing', paid.text)).toHaveFocus();
+    openEdit('Community outing', paid);
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
+  });
+
+  it('moves it with one PUT of the text and group, last in that group, focus on its Edit, saying so', async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: paid.text, groupId: care.id } },
+    ]);
+    expect(listReads()).toBe(reads + 1);
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(within(sectionOf('Personal care')).queryByText(emptyLine)).toBeNull();
+    expect(editButton('Personal care', paid.text)).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Personal care'));
+    // Nothing the manager typed or chose is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it("moves it with its new text after the chosen group's last active item, its archived ones after", async () => {
+    await openPage();
+    serveGroups(groups);
+    type(openEdit('Community outing', lunch), ' Bought lunch\n at the café ');
+    chooseGroup(lunch.id, 'Every note');
+
+    await press(saveButton(lunch.id));
+
+    expect(rewordsOf(lunch.id).map(({ body }) => body)).toEqual([
+      { text: 'Bought lunch at the café', groupId: everyNote.id },
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([
+      medication.text,
+      meal.text,
+      'Bought lunch at the café',
+    ]);
+    expect(archivedItems(sectionOf('Every note')).map(textOf)).toEqual([bed.text, laundry.text]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text]);
+    expect(editButton('Every note', 'Bought lunch at the café')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Every note'));
+  });
+
+  it('keeps the item in its group while the move is out, Save busy and the field read-only', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = hold('PUT', itemPath(paid.id));
+    const field = openEdit('Community outing', paid);
+    chooseGroup(paid.id, 'Personal care');
+    const save = saveButton(paid.id);
+
+    save.focus();
+    fireEvent.click(save);
+    await settle();
+    await wait(400);
+
+    expect(save).toHaveAttribute('data-busy');
+    expect(field).toHaveAttribute('readonly');
+    expect(activeItems(sectionOf('Community outing'))).toHaveLength(3);
+    expect(within(sectionOf('Personal care')).getByText(emptyLine)).toBeInTheDocument();
+
+    release();
+    await settle();
+    await settle();
+
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(editButton('Personal care', paid.text)).toHaveFocus();
+  });
+
+  it('on a 412, keeps the text and group chosen, says what it says now, and moves it at the next Save', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    chooseGroup(paid.id, 'Personal care');
+    const save = saveButton(paid.id);
+    // Another manager rewords it meanwhile.
+    held[1].items[1] = { ...paid, text: 'Paid for a ticket online', rowVersion: 'AAAAAAAAE999=' };
+
+    await press(save);
+
+    expect(editAlert(paid.id)).toHaveTextContent(
+      'Someone else changed this item while you were editing. It now says: ‘Paid for a ticket online’. Save to '
+        + 'replace it with your wording, or Cancel to keep it.',
+    );
+    expect(field).toHaveValue('Paid at the machine');
+    expect(groupRadio(paid.id, 'Personal care')).toBeChecked();
+    expect(save).toHaveFocus();
+    expect(listConflict()).toBeNull();
+
+    await press(save);
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
+      { ifMatch: '"AAAAAAAAE999="', body: { text: 'Paid at the machine', groupId: care.id } },
+    ]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual(['Paid at the machine']);
+    expect(editButton('Personal care', 'Paid at the machine')).toHaveFocus();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(savedAndMoved('Personal care'));
+  });
+
+  it('on a 412 finding the item moved meanwhile, shows the list conflict, the row gone with its form', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    type(openEdit('Community outing', paid), 'Paid at the machine');
+    // Another manager moves it to Personal care meanwhile.
+    held[1].items.splice(1, 1);
+    held[2].items.push({ ...paid, sortOrder: 0, rowVersion: 'AAAAAAAAE999=' });
+
+    await press(saveButton(paid.id));
+
+    expect(listConflict()).toHaveFocus();
+    expect(editField(paid.id)).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, lunch.text]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual([paid.text]);
+    expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+
+  it('on a 409 for the group chosen archived meanwhile, focuses the list conflict, keeping the text', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const field = openEdit('Community outing', paid);
+    type(field, 'Paid at the machine');
+    chooseGroup(paid.id, 'Personal care');
+    // Another manager archives Personal care meanwhile.
+    held[2].archivedAtUtc = '2026-10-01T06:00:00Z';
+    const reads = listReads();
+
+    await press(saveButton(paid.id));
+
+    expect(rewordsOf(paid.id)).toEqual([
+      { ifMatch: `"${paid.rowVersion}"`, body: { text: 'Paid at the machine', groupId: care.id } },
+    ]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(sections()).toEqual([sectionOf('Every note'), sectionOf('Community outing')]);
+    expect(field).toHaveValue('Paid at the machine');
+    expect(editAlert(paid.id)).toBeEmptyDOMElement();
+    // The group archived has left the radios, which have the item's own group chosen again.
+    expect(groupNames(paid.id)).toEqual(['Every note', 'Community outing']);
+    expect(groupRadio(paid.id, 'Community outing')).toBeChecked();
   });
 });
 

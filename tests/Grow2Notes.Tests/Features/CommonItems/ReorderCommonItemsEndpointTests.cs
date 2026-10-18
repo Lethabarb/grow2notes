@@ -169,7 +169,11 @@ public sealed class ReorderCommonItemsEndpointTests(Grow2NotesFactory factory, S
         using (second.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
         {
             var reworded = await second.ServiceProvider.GetRequiredService<CommonItemChanges>().UpdateAsync(
-                Manager, paid.Id, paid.ETag, new("Paid at the machine"), TestContext.Current.CancellationToken);
+                Manager,
+                paid.Id,
+                paid.ETag,
+                new("Paid at the machine", groupId),
+                TestContext.Current.CancellationToken);
             Assert.Same(CommonItemChangeResult.Saved, reworded);
         }
 

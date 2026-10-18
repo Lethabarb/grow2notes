@@ -216,8 +216,9 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   await expect(section(page, 'Every note').getByText(emptyLine)).toHaveCount(0);
   const ids = listed.map((item) => item.id);
 
-  // The second reworded in its row: Edit focuses the box with the caret after the words; Save sends the row's version
-  // as If-Match and gets the app's 200, with no body and no ETag; focus goes back to Edit.
+  // The second reworded in its row: Edit focuses the box with the caret after the words, with no Group radios while
+  // Every note is the only group; Save sends the words with the item's own group, and the row's version as If-Match,
+  // and gets the app's 200, with no body and no ETag; focus goes back to Edit.
   const reworded = 'Meal prepared with support';
   await itemButton(page, 'Edit', fiveItems[1]).click();
   await expect(editItem(page)).toBeFocused();
@@ -225,13 +226,14 @@ test('signed in for real at 375 px, a manager adds five items to Every note, the
   expect(await editItem(page).evaluate((box: HTMLTextAreaElement) => [box.selectionStart, box.selectionEnd])).toEqual(
     [fiveItems[1].length, fiveItems[1].length],
   );
+  await expect(editForm(page).getByRole('radio')).toHaveCount(0);
   await editItem(page).fill(reworded);
   const put = page.waitForResponse(isItemWrite('PUT', `/common-items/${ids[1]}`));
   read = page.waitForResponse(isListRead);
   await saveItem(page).click();
   const putAnswer = await put;
   expect(putAnswer.status()).toBe(200);
-  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded });
+  expect(putAnswer.request().postDataJSON()).toEqual({ text: reworded, groupId });
   expect(await putAnswer.request().headerValue('if-match')).toBe(`"${listed[1].rowVersion}"`);
   expect(await putAnswer.text()).toBe('');
   expect(putAnswer.headers().etag).toBeUndefined();
@@ -369,7 +371,7 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', ['Save']);
     const saved = page.waitForResponse(isItemWrite('PUT', `/common-items/${ids[2]}`));
     await page.keyboard.press('Enter');
-    expect((await saved).request().postDataJSON()).toEqual({ text: thirdReworded });
+    expect((await saved).request().postDataJSON()).toEqual({ text: thirdReworded, groupId });
     await expect(itemButton(page, 'Edit', thirdReworded)).toBeFocused();
 
     // Edit again, then Cancel: the typed words dropped, focus back on Edit.

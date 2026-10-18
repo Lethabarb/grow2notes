@@ -63,9 +63,10 @@ export const commonItemGroupsQuery = queryOptions({
  * `ListEditor`'s way to a group's items (list-editor.md *Implementation notes*): the page's one query, from which it
  * picks the group's items; the one scope of every write on the page, `common-items` (common-items.md component 5);
  * the add to the end of the group, whose `201` has no body; an item's reword, with its `rowVersion` as `If-Match`,
- * whose `200` has none either; the reorder of the group's active items, with no `If-Match`, as the set of their IDs is
- * its check (design.md §6.7), whose `204` has no body; and an item's archive and restore, with no body and its
- * `rowVersion` as `If-Match`, whose `204`s have none.
+ * which always sends the group to put it in, this one unless the Group radios chose another, whose `200` has no body
+ * either (common-items.md component 6); the reorder of the group's active items, with no `If-Match`, as the set of
+ * their IDs is its check (design.md §6.7), whose `204` has no body; and an item's archive and restore, with no body
+ * and its `rowVersion` as `If-Match`, whose `204`s have none.
  */
 export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]> {
   return {
@@ -73,8 +74,8 @@ export function commonItemsApi(groupId: string): ListApi<AdminCommonItemGroup[]>
     rowsOf: (groups) => groups.find((group) => group.id === groupId)?.items ?? [],
     scopeId: commonItemsScope,
     add: (text) => api<undefined>(groupItemsPath(groupId), { method: 'POST', body: { text } }),
-    update: (id, text, rowVersion) =>
-      api<undefined>(itemPath(id), { method: 'PUT', body: { text }, ifMatch: rowVersion }),
+    update: (id, text, rowVersion, to = groupId) =>
+      api<undefined>(itemPath(id), { method: 'PUT', body: { text, groupId: to }, ifMatch: rowVersion }),
     reorder: (commonItemIds) =>
       api<undefined>(`${groupItemsPath(groupId)}/order`, { method: 'PUT', body: { commonItemIds } }),
     archive: (id, rowVersion) => api<undefined>(`${itemPath(id)}/archive`, { method: 'POST', ifMatch: rowVersion }),
