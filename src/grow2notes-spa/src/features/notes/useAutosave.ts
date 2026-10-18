@@ -1,8 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 import { useLayoutEffect, useRef } from 'react';
-import { api } from '../../api/api.ts';
+import { api, ApiError, type StartedBy } from '../../api/api.ts';
 import { limits } from '../../limits.ts';
-import { noteBase, type Draft } from './noteQueries.ts';
+import { noteBase, readDraft, type Draft, type DraftAnswer } from './noteQueries.ts';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 
 // design.md §3.4: a save "about 2 seconds after the last change".
@@ -57,6 +57,15 @@ export function capped(text: string, limit: number): string {
   return text.slice(0, splitsAPair ? limit - 1 : limit);
 }
 
+/**
+ * A refusal of a save that no later save gets past, so that autosave stops (note-form.md *Conflicts and refusals*): a
+ * worker's first save of a note for a day before today, as after midnight; a first save for an archived participant;
+ * and another user's draft, with who started it and when.
+ */
+export type DeadEnd =
+  | { code: 'note.past_date_manager_only' | 'note.participant_archived' }
+  | { code: 'note.in_progress_by_other'; startedBy: StartedBy };
+
 type AutosaveOptions = {
   participantId: string;
   noteDate: string;
@@ -66,6 +75,13 @@ type AutosaveOptions = {
   read: () => DraftContent;
   /** Each new state of the save indicator, from the one that the form opens with. */
   onIndicator: (indicator: SaveIndicator) => void;
+  /**
+   * The form as `GET {base}/draft` gives it again after a first save found the lists changed, whose lists the form
+   * shows in place of its own before it returns, so that the save sent next reads the ticks now on screen.
+   */
+  onListsChanged: (reloaded: Draft) => void;
+  /** A dead end, after which autosave sends nothing more. */
+  onDeadEnd: (deadEnd: DeadEnd) => void;
 };
 
 /** What the form tells autosave. */
@@ -88,6 +104,10 @@ type Progress = {
   due: boolean;
   /** The note exists: the draft was saved before it opened, or a save from this form was answered. */
   started: boolean;
+  /** The version of the lists that the form shows, which each save sends until the note exists (design.md §5.7). */
+  listsVersion: string | undefined;
+  /** A dead end stopped autosave, for as long as the form is open. */
+  stopped: boolean;
   /** The indicator says "Saving…". */
   saying: boolean;
   /** The form is on the page, so that a timer or an answer after it has gone sends and says nothing. */
@@ -103,14 +123,24 @@ type Progress = {
  * working copy with `PUT {base}/draft`: 2 s after the last change, 5 s at most after the first unsaved one, and at once
  * when a field loses focus with a change unsaved. One save is out at a time, and one that falls due meanwhile goes as
  * it settles, with what the form holds then, so that saves are combined, never queued. The first save, which creates
- * the note, sends the template's lists' version (design.md §5.7). A save that fails leaves its change unsaved, and
- * "Saving…" shown, until the next change or a blur sends it: the retries, "Not saved", the page-hidden save and the
- * rules for leaving are T10's (T08's Notes).
+ * the note, sends the template's lists' version (design.md §5.7). Its `409 note.lists_changed` reads the form again,
+ * for the form to show the lists as they are now, and sends the save again at once with their version, "Saving…"
+ * shown throughout (autosave-status.md *Behaviour* 5). A dead end stops autosave, with "Not saved". A save that fails
+ * otherwise leaves its change unsaved, and "Saving…" shown, until the next change or a blur sends it: the retries, "Not
+ * saved: no connection…", the page-hidden save and the rules for leaving are T10's (T08's Notes).
  */
-export function useAutosave({ participantId, noteDate, opened, read, onIndicator }: AutosaveOptions): Autosave {
-  const callbacks = useRef({ read, onIndicator });
+export function useAutosave({
+  participantId,
+  noteDate,
+  opened,
+  read,
+  onIndicator,
+  onListsChanged,
+  onDeadEnd,
+}: AutosaveOptions): Autosave {
+  const callbacks = useRef({ read, onIndicator, onListsChanged, onDeadEnd });
   useLayoutEffect(() => {
-    callbacks.current = { read, onIndicator };
+    callbacks.current = { read, onIndicator, onListsChanged, onDeadEnd };
   });
 
   const progress = useRef<Progress>({
@@ -119,6 +149,8 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
     sending: false,
     due: false,
     started: opened.isSaved,
+    listsVersion: opened.listsVersion,
+    stopped: false,
     saying: false,
     mounted: false,
     quiet: undefined,
@@ -126,10 +158,10 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
   });
 
   const { mutateAsync } = useMutation({
-    mutationFn: ({ content, started }: { content: DraftContent; started: boolean }) => {
+    mutationFn: ({ content, listsVersion }: { content: DraftContent; listsVersion: string | undefined }) => {
       const body: DraftSaveBody = {
         ...nextIdentity(`${participantId}/${noteDate}`),
-        ...(started ? {} : { listsVersion: opened.listsVersion }),
+        ...(listsVersion === undefined ? {} : { listsVersion }),
         narrative: capped(content.narrative, limits.guidedNotes),
         tickedGoalIds: content.tickedGoalIds,
       };
@@ -157,6 +189,10 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
 
   function changed() {
     const state = progress.current;
+    if (state.stopped) {
+      return;
+    }
+
     state.made += 1;
     if (!state.saying) {
       state.saying = true;
@@ -171,7 +207,7 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
   function flush() {
     const state = progress.current;
     stopTimers(state);
-    if (!state.mounted || state.saved === state.made) {
+    if (!state.mounted || state.stopped || state.saved === state.made) {
       return;
     }
 
@@ -187,15 +223,20 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
     state.sending = true;
     const carried = state.made;
     try {
-      const { savedAtUtc } = await mutateAsync({ content: callbacks.current.read(), started: state.started });
+      const { savedAtUtc } = await mutateAsync({
+        content: callbacks.current.read(),
+        listsVersion: state.started ? undefined : state.listsVersion,
+      });
       state.started = true;
       state.saved = carried;
       if (state.mounted && state.saved === state.made) {
         state.saying = false;
         callbacks.current.onIndicator({ kind: 'saved', savedAtUtc });
       }
-    } catch {
-      // The change stays unsaved, with "Saving…", for the next change or blur to send.
+    } catch (error) {
+      if (state.mounted && error instanceof ApiError) {
+        await refused(state, error);
+      }
     } finally {
       state.sending = false;
       if (state.due) {
@@ -205,7 +246,68 @@ export function useAutosave({ participantId, noteDate, opened, read, onIndicator
     }
   }
 
+  // A refusal that autosave answers itself (autosave-status.md *Behaviour* 5). Any other failure leaves the change
+  // unsaved, with "Saving…", for the next change or blur to send.
+  async function refused(state: Progress, error: ApiError) {
+    if (error.code === 'note.lists_changed') {
+      await reloadLists(state);
+      return;
+    }
+
+    const deadEnd = deadEndOf(error);
+    if (deadEnd !== undefined) {
+      stop(state, deadEnd);
+    }
+  }
+
+  // Outside the draft's query, which the form read once as it opened, so that the form's load states never show
+  // again. A reload that fails leaves the change unsaved, so that its next save meets the same refusal and reloads.
+  async function reloadLists(state: Progress) {
+    let answer: DraftAnswer;
+    try {
+      answer = await readDraft(participantId, noteDate);
+    } catch {
+      return;
+    }
+
+    if (!state.mounted) {
+      return;
+    }
+
+    if ('startedBy' in answer) {
+      stop(state, { code: 'note.in_progress_by_other', startedBy: answer.startedBy });
+      return;
+    }
+
+    // A draft of the caller's own, if another of their pages started the note meanwhile, takes later saves.
+    state.started = answer.draft.isSaved;
+    state.listsVersion = answer.draft.listsVersion;
+    callbacks.current.onListsChanged(answer.draft);
+    state.due = true;
+  }
+
+  function stop(state: Progress, deadEnd: DeadEnd) {
+    state.stopped = true;
+    state.due = false;
+    stopTimers(state);
+    callbacks.current.onIndicator({ kind: 'notSaved' });
+    callbacks.current.onDeadEnd(deadEnd);
+  }
+
   return { changed, flush };
+}
+
+/** The dead end that `error` is, if it is one. */
+function deadEndOf(error: ApiError): DeadEnd | undefined {
+  switch (error.code) {
+    case 'note.past_date_manager_only':
+    case 'note.participant_archived':
+      return { code: error.code };
+    case 'note.in_progress_by_other':
+      return error.startedBy === undefined ? undefined : { code: error.code, startedBy: error.startedBy };
+    default:
+      return undefined;
+  }
 }
 
 function stopTimers(state: Progress) {

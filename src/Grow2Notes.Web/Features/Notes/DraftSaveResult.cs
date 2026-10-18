@@ -1,10 +1,12 @@
+using Grow2Notes.Web.Platform;
+
 namespace Grow2Notes.Web.Features.Notes;
 
 /// <summary>
 /// What <see cref="NoteDrafts.SaveAsync"/> did with a save: saved the working copy (<see cref="Saved"/>), creating the
 /// note with it when the save was the note's first (<see cref="Created"/>); found another user's draft, which only its
-/// author may save (<see cref="InProgress"/>); refused a field of the body (<see cref="Errors"/>); or found nothing to
-/// save. Each but the first writes nothing.
+/// author may save (<see cref="InProgress"/>); refused to start the note (<see cref="Refusal"/>); refused a field of
+/// the body (<see cref="Errors"/>); or found nothing to save. Each but the first writes nothing.
 /// </summary>
 internal sealed record DraftSaveResult
 {
@@ -28,6 +30,12 @@ internal sealed record DraftSaveResult
     public DraftInProgress? InProgress { get; private init; }
 
     /// <summary>
+    /// Why the note cannot be started, by the date rules, the participant's status or the lists' version (design.md
+    /// §5.5 item 4, §5.7), or <see langword="null"/>.
+    /// </summary>
+    public ErrorCode? Refusal { get; private init; }
+
+    /// <summary>
     /// Each refused field's messages, keyed by its member's name in the request, or <see langword="null"/>.
     /// </summary>
     public IReadOnlyDictionary<string, string[]>? Errors { get; private init; }
@@ -39,6 +47,8 @@ internal sealed record DraftSaveResult
     public static DraftSaveResult Updated(DraftSaved saved) => new() { Saved = saved };
 
     public static DraftSaveResult StartedByOther(DraftInProgress inProgress) => new() { InProgress = inProgress };
+
+    public static DraftSaveResult NotStarted(ErrorCode refusal) => new() { Refusal = refusal };
 
     public static DraftSaveResult Invalid(IReadOnlyDictionary<string, string[]> errors) => new() { Errors = errors };
 }

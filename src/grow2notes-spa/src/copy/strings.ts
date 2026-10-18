@@ -372,7 +372,8 @@ export const strings = {
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
    * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; and
    * the save indicator on a draft reopened, until its first change, "Draft · saved 9:42 am" (design.md §4.3): its first
-   * word, then the word before the time.
+   * word, then the word before the time; and the indicator while a dead end in the top bar says why the note cannot be
+   * saved (autosave-status.md *Exact copy*).
    */
   note: {
     loading: 'Loading note…',
@@ -382,6 +383,7 @@ export const strings = {
     guidedNotes: '3. Guided notes',
     draft: 'Draft',
     draftSaved: 'saved',
+    notSaved: 'Not saved',
   },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,

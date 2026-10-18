@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Hosting;
@@ -739,9 +740,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
 
     /// <summary>
     /// <c>note.draft_started</c>: A's worker makes the first change to today's note of a participant added for the row,
-    /// a goal ticked and a sentence written, with <c>PUT {base}/draft</c>, which records the new note as the entity and
-    /// its participant as the participant, and no <c>Details</c>, so no note text or goal wording (design.md §5.3,
-    /// §9.5).
+    /// a goal ticked and a sentence written, with <c>PUT {base}/draft</c> and the template's lists' version, which
+    /// records the new note as the entity and its participant as the participant, and no <c>Details</c>, so no note
+    /// text or goal wording (design.md §5.3, §9.5).
     /// </summary>
     private async Task<WrittenEvent> StartDraftAsync()
     {
@@ -755,7 +756,11 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             await client.FetchTokenAsync(),
             new
             {
-                clientId = Guid.NewGuid(), seq = 1, narrative = "Jane made toast.", tickedGoalIds = new[] { goal.Id },
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = ListsVersion.Of([new(goal.Id, "Makes own breakfast", IsTicked: false)]),
+                narrative = "Jane made toast.",
+                tickedGoalIds = new[] { goal.Id },
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);

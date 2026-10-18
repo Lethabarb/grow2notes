@@ -61,8 +61,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
             DuplicateEmailPath, new CanaryRequest($"{Canary}@example.org"), cancellationToken);
         HttpResponseMessage[] failures = [truncation, duplicate];
 
-        // As a manager adds one, over HTTPS with a token, as the /api group needs, then a goal of theirs, then starts
-        // their note for today, as the form's first save does.
+        // As a manager adds one, over HTTPS with a token, as the /api group needs, then a goal of theirs, then opens
+        // their note for today and starts it, as the form's first save does, with the template's lists' version.
         using var manager = app.CreateHttpsClient().SignInAs(sqlServer.Seeded.A.ManagerId);
         using var added = await manager.PostWithTokenAsync(
             ParticipantsPath,
@@ -79,10 +79,18 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         var today = app.Services.GetRequiredService<MelbourneClock>().Today();
         var draftPath = string.Create(
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{today:yyyy-MM-dd}/draft");
+        var form = await manager.GetFromJsonAsync<JsonElement>(draftPath, cancellationToken);
         using var noteStarted = await manager.PutWithTokenAsync(
             draftPath,
             await manager.FetchTokenAsync(),
-            new { clientId = Guid.NewGuid(), seq = 1, narrative = Canary, tickedGoalIds = Array.Empty<Guid>() },
+            new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = form.GetProperty("listsVersion").GetString(),
+                narrative = Canary,
+                tickedGoalIds = Array.Empty<Guid>(),
+            },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, noteStarted.StatusCode);
 
@@ -94,14 +102,18 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
             .Append(await goalAdded.Content.ReadAsStringAsync(cancellationToken))
             .Append(await noteStarted.Content.ReadAsStringAsync(cancellationToken));
         HttpResponseMessage[] responses = [.. failures, added, goalAdded, noteStarted];
-        (string Path, string Route)[] saves =
-            [(ParticipantsPath, ParticipantsPath), (goalsPath, GoalsRoute), (draftPath, DraftRoute)];
+        (string Method, string Path, string Route)[] saves =
+        [
+            ("POST", ParticipantsPath, ParticipantsPath),
+            ("POST", goalsPath, GoalsRoute),
+            ("PUT", draftPath, DraftRoute),
+        ];
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
         Assert.True(
             SpinWait.SpinUntil(
                 () => sinks.Spans.Spans.Count(IsFailingRequest) == 2
-                    && saves.All(save => sinks.Spans.Spans.Any(span => IsRequestTo(span, save.Path))),
+                    && saves.All(save => sinks.Spans.Spans.Any(span => IsRequestTo(span, save.Method, save.Path))),
                 TimeSpan.FromSeconds(10)),
             "The requests' spans did not end.");
         Assert.True(app.Services.GetRequiredService<TracerProvider>().ForceFlush());
@@ -144,9 +156,9 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
 
         // And the requests that added the participant, whose body held the names, the goal, whose body held its text,
         // and the note, whose body held its Guided notes.
-        foreach (var (path, route) in saves)
+        foreach (var (method, path, route) in saves)
         {
-            var add = sinks.Spans.Spans.Single(span => IsRequestTo(span, path));
+            var add = sinks.Spans.Spans.Single(span => IsRequestTo(span, method, path));
             Assert.Contains(sinks.Metrics.Points, p => p.Name == "http.server.request.duration"
                 && p.Tags.Contains(new("http.route", route))
                 && p.Tags.Contains(new("http.response.status_code", 201)));
@@ -187,8 +199,11 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     private static bool IsFailingRequest(Activity span) =>
         span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is TruncationPath or DuplicateEmailPath;
 
-    private static bool IsRequestTo(Activity span, string path) =>
-        span.Kind == ActivityKind.Server && span.GetTagItem("url.path") as string == path;
+    // By method too, as the note's form is read and saved at one path.
+    private static bool IsRequestTo(Activity span, string method, string path) =>
+        span.Kind == ActivityKind.Server
+        && span.GetTagItem("http.request.method") as string == method
+        && span.GetTagItem("url.path") as string == path;
 
     private static IEnumerable<(string Sink, string? Text)> ResponseHeaders(HttpResponseMessage response)
     {

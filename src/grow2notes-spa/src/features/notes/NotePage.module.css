@@ -30,3 +30,51 @@
 .section {
   margin-block-start: var(--section-gap);
 }
+
+/* The lists-changed notice's region above Goals (component 7): no space while empty, a section's gap once filled. */
+.listsChanged:not(:empty) {
+  margin-block-start: var(--section-gap);
+}
+
+/*
+ * A dead end, the top bar's second row (component 1): the whole width of the bar's row, under the back link and the
+ * save status, in the attention colours, with the words in the body's colour. Its border is a real one, so that forced
+ * colours keep it.
+ */
+.deadEnd {
+  display: flex;
+  flex: 1 0 100%;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-block-end: var(--space-3);
+  padding: var(--space-3);
+  border: 2px solid var(--colour-attention-edge);
+  border-radius: var(--radius-s);
+  background: var(--colour-attention-tint);
+  color: var(--colour-text);
+}
+
+/* Beside the first line of the words, whatever their size. */
+.deadEndIcon {
+  flex: none;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  margin-block-start: calc((var(--line-height-body) * 1em - 1.25em) / 2);
+  color: var(--colour-attention-edge);
+}
+
+.deadEndText {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  margin: 0;
+}
+
+@media (forced-colors: active) {
+  .deadEnd {
+    border-color: CanvasText;
+  }
+
+  .deadEndIcon {
+    color: CanvasText;
+  }
+}

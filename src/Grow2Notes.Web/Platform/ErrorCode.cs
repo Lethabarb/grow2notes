@@ -20,6 +20,12 @@ internal sealed class ErrorCode
     public static readonly ErrorCode InProgressByOther =
         new(StatusCodes.Status409Conflict, "note.in_progress_by_other");
 
+    /// <summary>
+    /// The participant's goals changed between the form opening and the note's first save (§5.7), which would store
+    /// other lists than the form showed, and so creates nothing. A first save with no lists' version is refused alike.
+    /// </summary>
+    public static readonly ErrorCode ListsChanged = new(StatusCodes.Status409Conflict, "note.lists_changed");
+
     /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 
@@ -48,6 +54,22 @@ internal sealed class ErrorCode
     /// <summary>A stale <c>If-Match</c>.</summary>
     public static readonly ErrorCode PreconditionFailed =
         new(StatusCodes.Status412PreconditionFailed, "precondition.failed");
+
+    /// <summary>
+    /// A note's first save for a date after today in Melbourne, for which nobody may start a note (§5.5 item 4).
+    /// </summary>
+    public static readonly ErrorCode FutureDate = new(StatusCodes.Status422UnprocessableEntity, "note.future_date");
+
+    /// <summary>
+    /// A worker's first save of a note for a day before today in Melbourne, which only a manager may start (§5.5 item
+    /// 4, D35), as when a form opened before midnight makes its first change after it (§3.3).
+    /// </summary>
+    public static readonly ErrorCode PastDateManagerOnly =
+        new(StatusCodes.Status422UnprocessableEntity, "note.past_date_manager_only");
+
+    /// <summary>A note's first save for an archived participant, who gets no new notes (§3.7, §5.5 item 4).</summary>
+    public static readonly ErrorCode ParticipantArchived =
+        new(StatusCodes.Status422UnprocessableEntity, "note.participant_archived");
 
     /// <summary>
     /// A reorder's IDs are not the list's active rows, each exactly once

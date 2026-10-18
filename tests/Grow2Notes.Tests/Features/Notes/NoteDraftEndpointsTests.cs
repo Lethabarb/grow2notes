@@ -8,6 +8,7 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -38,6 +39,15 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
     private static readonly DateTime StartedAtUtc = new(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc);
 
     private static readonly DateTime SavedAtUtc = new(2026, 10, 1, 23, 30, 0, DateTimeKind.Utc);
+
+    // 9:14 am on Saturday 3 October 2026 in Melbourne, and two minutes before midnight on the day before there.
+    private static readonly DateTimeOffset OnTheThird = new(2026, 10, 2, 23, 14, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset BeforeMidnight = new(2026, 10, 2, 13, 58, 0, TimeSpan.Zero);
+
+    private static readonly DateOnly TheThird = new(2026, 10, 3);
+
+    private static readonly DateOnly TheSecond = new(2026, 10, 2);
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
@@ -331,11 +341,12 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             new("Makes own breakfast", 0),
             new("Uses the washing machine", 2, ArchivedAtUtc: TestGoals.AddedAtUtc));
         var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         var before = await StoredRowsAsync();
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
 
         using var response = await SaveAsync(
-            client, participant.Id, Today, Body(clientId, 1, "Jane made toast.", goals[0], goals[0]));
+            client, participant.Id, Today, FirstBody(listsVersion, clientId, "Jane made toast.", goals[0], goals[0]));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Null(response.Headers.Location);
@@ -378,11 +389,12 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             services.ConfigureDbContext<Grow2NotesDbContext>(
                 options => options.AddInterceptors(new FailsTheEventsOf(participant.Id)))));
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         var before = await StoredRowsAsync();
         using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
 
         using var response = await SaveAsync(
-            client, participant.Id, Today, Body(Guid.NewGuid(), 1, "Jane made toast."));
+            client, participant.Id, Today, FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
 
         await response.ReadProblemAsync(HttpStatusCode.InternalServerError);
         Assert.Empty(await NotesAsync(participant.Id));
@@ -399,9 +411,11 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         await using var app = factory.WithWebHostBuilder(
             builder => builder.UseClock(new FakeTimeProvider(firstChange)));
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
 
-        using var response = await SaveAsync(client, participant.Id, new(2026, 10, 4), Body(Guid.NewGuid(), 1, ""));
+        using var response = await SaveAsync(
+            client, participant.Id, new(2026, 10, 4), FirstBody(listsVersion, Guid.NewGuid(), ""));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var startedAtUtc = new DateTime(2026, 10, 3, 14, 30, 0, 456, DateTimeKind.Utc);
@@ -423,9 +437,10 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var goals = await factory.Services.AddGoalsAsync(
             seeded.A, participant.Id, new("Makes own breakfast", 0), new("Phones her sister", 1));
         var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
         using (var first = await SaveAsync(
-                   client, participant.Id, new(2026, 10, 2), Body(clientId, 1, "Jane", goals[0])))
+                   client, participant.Id, new(2026, 10, 2), FirstBody(listsVersion, clientId, "Jane", goals[0])))
         {
             Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         }
@@ -490,7 +505,9 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             seeded.A, participant.Id, new TestGoal("Makes own breakfast", 0));
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
         var clientId = Guid.NewGuid();
-        using (var first = await SaveAsync(client, participant.Id, Today, Body(clientId, 1, "", goals[0])))
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        using (var first = await SaveAsync(
+                   client, participant.Id, Today, FirstBody(listsVersion, clientId, "", goals[0])))
         {
             Assert.Equal(HttpStatusCode.Created, first.StatusCode);
         }
@@ -522,10 +539,12 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             new("Uses the washing machine", 1, ArchivedAtUtc: TestGoals.AddedAtUtc));
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
         var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         var notTheNotes = goals[1];
         if (started)
         {
-            using var first = await SaveAsync(client, participant.Id, Today, Body(clientId, 1, "Jane", goals[0]));
+            using var first = await SaveAsync(
+                client, participant.Id, Today, FirstBody(listsVersion, clientId, "Jane", goals[0]));
             Assert.Equal(HttpStatusCode.Created, first.StatusCode);
             notTheNotes = (await factory.Services.AddGoalsAsync(
                 seeded.A, participant.Id, new TestGoal("Waters the garden", 2)))[0];
@@ -534,7 +553,12 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var before = await StoredRowsAsync();
 
         using var response = await SaveAsync(
-            client, participant.Id, Today, Body(clientId, 2, "Jane made toast.", goals[0], notTheNotes));
+            client,
+            participant.Id,
+            Today,
+            started
+                ? Body(clientId, 2, "Jane made toast.", goals[0], notTheNotes)
+                : FirstBody(listsVersion, clientId, "Jane made toast.", goals[0], notTheNotes));
 
         await ReadValidationProblemAsync(response, "tickedGoalIds");
         Assert.Equal(before, await StoredRowsAsync());
@@ -545,10 +569,11 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
     public async Task A_note_of_a_participant_with_no_goals_is_saved()
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
 
         using var response = await SaveAsync(
-            client, participant.Id, Today, Body(Guid.NewGuid(), 1, "Jane made toast."));
+            client, participant.Id, Today, FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var note = Assert.Single(await NotesAsync(participant.Id));
@@ -563,9 +588,10 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
         var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
 
         using var longest = await SaveAsync(
-            client, participant.Id, Today, Body(clientId, 1, new string('x', Limits.GuidedNotes)));
+            client, participant.Id, Today, FirstBody(listsVersion, clientId, new string('x', Limits.GuidedNotes)));
         var before = await StoredRowsAsync();
         using var tooLong = await SaveAsync(
             client, participant.Id, Today, Body(clientId, 2, new string('y', Limits.GuidedNotes + 1)));
@@ -621,6 +647,259 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal(before, await StoredRowsAsync());
     }
 
+    // design.md §5.5 item 4 (D35): nobody starts a note for a day after today in Melbourne, and only a manager one for
+    // a day before it, today being the server's.
+    [Theory]
+    [InlineData(Caller.WorkerOfA, -1, "note.past_date_manager_only")]
+    [InlineData(Caller.WorkerOfA, 1, "note.future_date")]
+    [InlineData(Caller.ManagerOfA, 1, "note.future_date")]
+    public async Task A_first_save_for_a_day_that_the_caller_may_not_start_a_note_for_is_refused_and_creates_nothing(
+        Caller caller, int days, string code)
+    {
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new(OnTheThird)));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var before = await StoredRowsAsync();
+        using var client = app.CreateHttpsClient().SignInAs(caller, seeded);
+
+        using var response = await SaveAsync(
+            client,
+            participant.Id,
+            TheThird.AddDays(days),
+            FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
+
+        await ReadCodeAsync(response, HttpStatusCode.UnprocessableEntity, code);
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // A manager may start a note for any day up to today, and becomes its author (design.md §5.5 item 4); T18 builds
+    // its screens.
+    [Fact]
+    public async Task A_manager_s_first_save_for_an_earlier_day_creates_the_note_with_them_as_its_author()
+    {
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new(OnTheThird)));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.ManagerOfA, participant.Id);
+        using var client = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client, participant.Id, TheSecond, FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal(
+            (TheSecond, seeded.A.ManagerId, OnTheThird.UtcDateTime),
+            (note.NoteDate, note.AuthorUserId, note.CreatedAtUtc));
+    }
+
+    // design.md §3.3: the form opened at 11:58 pm, and its first change came at 12:01 am, when the note's date is
+    // yesterday's, which a worker may not start.
+    [Fact]
+    public async Task A_worker_s_first_save_at_12_01_am_of_a_form_opened_at_11_58_pm_is_refused_and_creates_nothing()
+    {
+        var clock = new FakeTimeProvider(BeforeMidnight);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var listsVersion = await ListsVersionAsync(client, participant.Id, TheSecond);
+        var before = await StoredRowsAsync();
+        clock.Advance(TimeSpan.FromMinutes(3));
+
+        using var response = await SaveAsync(
+            client, participant.Id, TheSecond, FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
+
+        await ReadCodeAsync(response, HttpStatusCode.UnprocessableEntity, "note.past_date_manager_only");
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // design.md §5.5 item 4: "The check applies only when the note is created."
+    [Fact]
+    public async Task A_draft_started_at_11_58_pm_is_saved_at_12_01_am_and_keeps_its_date()
+    {
+        var clock = new FakeTimeProvider(BeforeMidnight);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var clientId = Guid.NewGuid();
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var started = await SaveAsync(
+                   client, participant.Id, TheSecond, FirstBody(listsVersion, clientId, "Jane")))
+        {
+            Assert.Equal(HttpStatusCode.Created, started.StatusCode);
+        }
+
+        clock.Advance(TimeSpan.FromMinutes(3));
+
+        using var response = await SaveAsync(
+            client, participant.Id, TheSecond, Body(clientId, 2, "Jane made toast."));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal((TheSecond, BeforeMidnight.UtcDateTime), (note.NoteDate, note.CreatedAtUtc));
+        Assert.Equal("Jane made toast.", Assert.Single(await WorkingCopiesAsync(note.Id)).Narrative);
+    }
+
+    // An archived participant gets no new notes (design.md §3.7, §5.5 item 4), from a manager either.
+    [Theory]
+    [InlineData(Caller.WorkerOfA)]
+    [InlineData(Caller.ManagerOfA)]
+    public async Task An_archived_participant_s_first_save_is_refused_and_creates_nothing(Caller caller)
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A, archived: true);
+        var listsVersion = await ListsVersionAsync(caller, participant.Id);
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(caller, seeded);
+
+        using var response = await SaveAsync(
+            client, participant.Id, Today, FirstBody(listsVersion, Guid.NewGuid(), "Jane made toast."));
+
+        await ReadCodeAsync(response, HttpStatusCode.UnprocessableEntity, "note.participant_archived");
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // design.md §5.7: a goal added since the form opened, so the template has changed, or a first save with no lists'
+    // version at all, which never matches.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_first_save_with_a_stale_lists_version_or_none_is_refused_and_creates_nothing(bool stale)
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new TestGoal("Makes own breakfast", 0));
+        var opened = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        await factory.Services.AddGoalsAsync(seeded.A, participant.Id, new TestGoal("Phones her sister", 1));
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client,
+            participant.Id,
+            Today,
+            stale
+                ? FirstBody(opened, Guid.NewGuid(), "Jane made toast.", goals[0])
+                : Body(Guid.NewGuid(), 1, "Jane made toast.", goals[0]));
+
+        await ReadCodeAsync(response, HttpStatusCode.Conflict, "note.lists_changed");
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // The creating save's checks in turn (T08's Notes): §5.5 item 4's rules in that item's order, then the lists'
+    // version, then the ticks. Each body breaks every check after the one that refuses it: an archived participant, no
+    // lists' version, and a ticked ID that is not one of the template's goals.
+    [Theory]
+    [InlineData(Caller.WorkerOfA, 1, true, "note.future_date")]
+    [InlineData(Caller.WorkerOfA, -1, true, "note.past_date_manager_only")]
+    [InlineData(Caller.ManagerOfA, -1, true, "note.participant_archived")]
+    [InlineData(Caller.ManagerOfA, 0, false, "note.lists_changed")]
+    public async Task A_first_save_is_refused_for_the_first_check_that_it_fails(
+        Caller caller, int days, bool archived, string code)
+    {
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new(OnTheThird)));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A, archived);
+        var before = await StoredRowsAsync();
+        using var client = app.CreateHttpsClient().SignInAs(caller, seeded);
+
+        using var response = await SaveAsync(
+            client, participant.Id, TheThird.AddDays(days), Body(Guid.NewGuid(), 1, "Jane", Guid.NewGuid()));
+
+        await ReadCodeAsync(
+            response,
+            code == "note.lists_changed" ? HttpStatusCode.Conflict : HttpStatusCode.UnprocessableEntity,
+            code);
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // design.md §5.5 item 3: two users' first saves for one participant and day, each finding no live note, the first
+    // to arrive held just before it saves the note while the second starts the note at 9:14 am. The held save then
+    // meets the one-live-note index, and is answered as a save on another user's draft, writing nothing.
+    [Fact]
+    public async Task Two_users_first_saves_at_once_make_one_note_and_the_other_gets_who_started_it_and_when()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc.AddMinutes(-1)));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var noteDate = new DateOnly(2026, 10, 2);
+        var before = await StoredRowsAsync();
+        var gate = new HoldsTheFirstNoteOf(participant.Id);
+        await using var gated = gate.On(app);
+        using var worker = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var other = gated.CreateHttpsClient().SignInAs(author);
+
+        var held = SaveAsync(worker, participant.Id, noteDate, FirstBody(listsVersion, Guid.NewGuid(), "Jane"));
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            using var first = await SaveAsync(
+                other, participant.Id, noteDate, FirstBody(listsVersion, Guid.NewGuid(), "Jane went out."));
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var response = await held;
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(HttpStatusCode.Conflict));
+        Assert.Equal(
+            ("note.in_progress_by_other", "Alex P.", "2026-10-01T23:14:00Z"),
+            (problem.RootElement.GetProperty("code").GetString(),
+                problem.RootElement.GetProperty("authorDisplayName").GetString(),
+                problem.RootElement.GetProperty("startedAtUtc").GetString()));
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal((author, StartedAtUtc), (note.AuthorUserId, note.CreatedAtUtc));
+        var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
+        Assert.Equal((author, "Jane went out."), (draft.EditorUserId, draft.Narrative));
+        Assert.Equal(
+            new WrittenEvent(
+                AuditEventTypes.Note.DraftStarted, seeded.A.OrganisationId, author, AuditEntityTypes.Note, note.Id,
+                participant.Id, null),
+            Assert.Single(await EventsAfterAsync(before.LastEventId ?? 0)));
+    }
+
+    // design.md §5.5 item 3: the same person's first saves from two devices, the first to arrive held while the second
+    // starts the note; the held save, finding the note theirs, is applied as a later save, so the note holds it.
+    [Fact]
+    public async Task One_user_s_two_first_saves_at_once_make_one_note_that_holds_the_save_applied_last()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new TestGoal("Makes own breakfast", 0));
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var before = await StoredRowsAsync();
+        var gate = new HoldsTheFirstNoteOf(participant.Id);
+        await using var gated = gate.On(factory);
+        using var phone = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var laptop = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var phoneId = Guid.NewGuid();
+
+        var held = SaveAsync(
+            phone, participant.Id, Today, FirstBody(listsVersion, phoneId, "Jane made toast.", goals[0]));
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            using var first = await SaveAsync(
+                laptop, participant.Id, Today, FirstBody(listsVersion, Guid.NewGuid(), "Jane"));
+            Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var response = await held;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal(seeded.A.WorkerId, note.AuthorUserId);
+        var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
+        Assert.Equal(("Jane made toast.", phoneId), (draft.Narrative, draft.LastClientId));
+        Assert.Equal([true], draft.Items.Select(item => item.IsTicked));
+        Assert.Single(await EventsAfterAsync(before.LastEventId ?? 0));
+    }
+
     // design.md §4.10: "Changes apply straight away to every empty Guided notes box, including open drafts", as the
     // prompts come with each GET {base}/draft (T03's hand-off (2)). In an organisation of the test's own, so that no
     // seeded organisation's prompts change (tests/README.md).
@@ -632,7 +911,9 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         using var manager = factory.CreateHttpsClient().SignInAs(managerId);
         var participantId = await AddParticipantThroughTheAppAsync(manager);
         var today = Today;
-        using (var started = await SaveAsync(manager, participantId, today, Body(Guid.NewGuid(), 1, "")))
+        var listsVersion = await ListsVersionAsync(manager, participantId, today);
+        using (var started = await SaveAsync(
+                   manager, participantId, today, FirstBody(listsVersion, Guid.NewGuid(), "")))
         {
             Assert.Equal(HttpStatusCode.Created, started.StatusCode);
         }
@@ -652,9 +933,16 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         string.Create(
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/draft");
 
-    // A save's body as the form sends it, with no lists' version, which no check reads on these saves.
+    // A save's body as the form sends it once one of its saves has been answered, with no lists' version, which only a
+    // save that creates the note reads.
     private static object Body(Guid clientId, int seq, string narrative, params Guid[] tickedGoalIds) =>
         new { clientId, seq, narrative, tickedGoalIds };
+
+    // A note's first save as the form sends it: from a page that has not saved the note before, with the lists'
+    // version of the template that the form opened with (design.md §5.7).
+    private static object FirstBody(
+        string? listsVersion, Guid clientId, string narrative, params Guid[] tickedGoalIds) =>
+        new { clientId, seq = 1, listsVersion, narrative, tickedGoalIds };
 
     // Over HTTPS with the caller's antiforgery token, as the SPA saves (tests/README.md).
     private static async Task<HttpResponseMessage> SaveAsync(
@@ -668,6 +956,13 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(["savedAtUtc"], answer.EnumerateObject().Select(property => property.Name));
         return answer.GetProperty("savedAtUtc").GetDateTime();
+    }
+
+    // A problem with the status and code given (design.md §6.9).
+    private static async Task ReadCodeAsync(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(status));
+        Assert.Equal(code, problem.RootElement.GetProperty("code").GetString());
     }
 
     // A 422 validation.failed whose errors name the field alone (design.md §6.1).
@@ -700,6 +995,16 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
 
     private async Task<string?> ListsVersionAsync(Caller caller, Guid participantId) =>
         (await ReadFormAsync(caller, participantId, Today)).GetProperty("listsVersion").GetString();
+
+    // The lists' version of the template of the participant's new note for the day, as the form opens with it.
+    private static async Task<string?> ListsVersionAsync(HttpClient client, Guid participantId, DateOnly noteDate)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var response = await client.GetAsync(DraftPath(participantId, noteDate), cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var form = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        return form.GetProperty("listsVersion").GetString();
+    }
 
     // A's guide prompts as they are stored now.
     private async Task<string> GuidePromptsAsync()
@@ -882,4 +1187,42 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
     }
 
     private sealed class EventNotSavedException() : Exception("The audit event was not saved.");
+
+    /// <summary>
+    /// Holds back the first save, made inside a transaction, that adds a note of the participant whose ID it is given,
+    /// until the test lets it go: a note's first save, once it has found no live note and passed its checks, just
+    /// before it inserts the note. Every other save passes, so a test's second first save meanwhile starts the note.
+    /// </summary>
+    private sealed class HoldsTheFirstNoteOf(Guid participantId) : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int held;
+
+        /// <summary>Completes once the save is held.</summary>
+        public Task Reached => reached.Task;
+
+        /// <summary><paramref name="app"/>, with this interceptor on every context it makes.</summary>
+        public WebApplicationFactory<Program> On(WebApplicationFactory<Program> app) =>
+            app.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(this))));
+
+        /// <summary>Lets the held save go on.</summary>
+        public void Release() => released.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { Database.CurrentTransaction: not null } context
+                && context.ChangeTracker.Entries<Note>().Any(
+                    entry => entry.State == EntityState.Added && entry.Entity.ParticipantId == participantId)
+                && Interlocked.Exchange(ref held, 1) == 0)
+            {
+                reached.SetResult();
+                await released.Task.WaitAsync(cancellationToken);
+            }
+
+            return result;
+        }
+    }
 }

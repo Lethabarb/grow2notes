@@ -41,6 +41,22 @@ export function noteBase(participantId: string, noteDate: string): string {
 }
 
 /**
+ * Reads the note form with the caller's working copy, `GET {base}/draft`: as the form opens, and again when a first
+ * save finds the lists changed (design.md §5.7). Another user's draft is an answer, not a failure.
+ */
+export async function readDraft(participantId: string, noteDate: string, signal?: AbortSignal): Promise<DraftAnswer> {
+  try {
+    return { draft: await api<Draft>(`${noteBase(participantId, noteDate)}/draft`, { signal }) };
+  } catch (error) {
+    if (error instanceof ApiError && error.startedBy !== undefined) {
+      return { startedBy: error.startedBy };
+    }
+
+    throw error;
+  }
+}
+
+/**
  * The `['participant', participantId]` query: the name over the note (note-identity-header.md). Fetched afresh as the
  * form opens, as `gcTime: 0` drops it once the form has gone, so that no name kept from before ever shows, and never
  * again while it is open.
@@ -63,17 +79,7 @@ export function participantQuery(participantId: string) {
 export function draftQuery(participantId: string, noteDate: string) {
   return queryOptions({
     queryKey: ['noteDraft', participantId, noteDate],
-    queryFn: async ({ signal }): Promise<DraftAnswer> => {
-      try {
-        return { draft: await api<Draft>(`${noteBase(participantId, noteDate)}/draft`, { signal }) };
-      } catch (error) {
-        if (error instanceof ApiError && error.startedBy !== undefined) {
-          return { startedBy: error.startedBy };
-        }
-
-        throw error;
-      }
-    },
+    queryFn: ({ signal }) => readDraft(participantId, noteDate, signal),
     staleTime: Infinity,
     gcTime: 0,
     refetchOnReconnect: false,

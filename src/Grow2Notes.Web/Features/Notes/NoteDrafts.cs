@@ -2,6 +2,7 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace Grow2Notes.Web.Features.Notes;
@@ -41,7 +42,7 @@ internal sealed class NoteDrafts(
     public async Task<DraftRead> ReadAsync(
         Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken)
     {
-        if (!await ParticipantExistsAsync(participantId, cancellationToken))
+        if (await ParticipantStatusAsync(participantId, cancellationToken) is null)
         {
             return DraftRead.NotFound;
         }
@@ -71,14 +72,17 @@ internal sealed class NoteDrafts(
     /// Saves <paramref name="request"/> as <paramref name="actor"/>'s working copy of
     /// <paramref name="participantId"/>'s note for <paramref name="noteDate"/> (§5.6): with no live note, creates the
     /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
-    /// <c>note.draft_started</c> (§5.5 item 2); with the actor's own draft, replaces its ticks and text; with anyone
-    /// else's draft, saves nothing, as only its author may save it (§6.3), and says who started it and when. A save
-    /// sent again after its answer was lost finds the actor's own draft, and updates it.
+    /// <c>note.draft_started</c> (§5.5 item 2), if the note may be started; with the actor's own draft, replaces its
+    /// ticks and text; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says who
+    /// started it and when. A save sent again after its answer was lost finds the actor's own draft, and updates it,
+    /// as does a first save that another of the actor's own first saves beat (§5.5 item 3).
     /// </summary>
     /// <returns>
-    /// The time saved; or who started another user's draft; or the refusal of a ticked ID that is not one of the
-    /// note's goals, the template's for a new note and the snapshot's for a draft (§5.7), the ticks a set, so that an
-    /// ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
+    /// The time saved; or who started another user's draft, also when that user's first save beat this one; or, for a
+    /// save that would create the note, the first of §5.5 item 4's rules that it breaks, in that item's order, then a
+    /// lists' version that is missing or no longer the template's (§5.7); or the refusal of a ticked ID that is not
+    /// one of the note's goals, the template's for a new note and the snapshot's for a draft, the ticks a set, so that
+    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
     /// </returns>
     public async Task<DraftSaveResult> SaveAsync(
         Actor actor,
@@ -87,7 +91,7 @@ internal sealed class NoteDrafts(
         DraftSaveRequest request,
         CancellationToken cancellationToken)
     {
-        if (!await ParticipantExistsAsync(participantId, cancellationToken))
+        if (await ParticipantStatusAsync(participantId, cancellationToken) is not { } status)
         {
             return DraftSaveResult.NotFound;
         }
@@ -95,7 +99,21 @@ internal sealed class NoteDrafts(
         var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
         if (note is null)
         {
-            return await StartAsync(actor, participantId, noteDate, request, cancellationToken);
+            try
+            {
+                return await StartAsync(actor, participantId, status, noteDate, request, cancellationToken);
+            }
+            catch (DbUpdateException exception) when (exception.InnerException is SqlException { Number: 2601 or 2627 })
+            {
+                // The one-live-note index refused the note (§5.5 item 3): another first save for the participant and
+                // day committed after this one found no live note. The rolled-back rows are still tracked as added.
+                db.ChangeTracker.Clear();
+                note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
+                if (note is null)
+                {
+                    throw;
+                }
+            }
         }
 
         if (note.StartedByOtherThan(actor) is { } inProgress)
@@ -113,11 +131,22 @@ internal sealed class NoteDrafts(
     private async Task<DraftSaveResult> StartAsync(
         Actor actor,
         Guid participantId,
+        ParticipantStatus status,
         DateOnly noteDate,
         DraftSaveRequest request,
         CancellationToken cancellationToken)
     {
+        if (await StartRefusalAsync(actor, status, noteDate, cancellationToken) is { } refusal)
+        {
+            return DraftSaveResult.NotStarted(refusal);
+        }
+
         var goals = await TemplateGoalsAsync(participantId, cancellationToken);
+        if (request.ListsVersion != ListsVersion.Of(goals))
+        {
+            return DraftSaveResult.NotStarted(ErrorCode.ListsChanged);
+        }
+
         var ticked = request.TickedGoalIds.ToHashSet();
         if (!ticked.IsSubsetOf(goals.Select(goal => goal.Id)))
         {
@@ -188,8 +217,33 @@ internal sealed class NoteDrafts(
         return DraftSaveResult.Updated(new(now));
     }
 
-    private Task<bool> ParticipantExistsAsync(Guid participantId, CancellationToken cancellationToken) =>
-        db.Participants.AnyAsync(participant => participant.Id == participantId, cancellationToken);
+    // §5.5 item 4's rules for creating a note, in its order: no date after today in Melbourne, for anyone; no day
+    // before it but by a manager, a role named as convention 4 of mcp-server.md §3.5 has it; no archived participant.
+    private async Task<ErrorCode?> StartRefusalAsync(
+        Actor actor, ParticipantStatus status, DateOnly noteDate, CancellationToken cancellationToken)
+    {
+        var today = clock.Today();
+        if (noteDate > today)
+        {
+            return ErrorCode.FutureDate;
+        }
+
+        if (noteDate < today
+            && !await db.Users.AnyAsync(
+                user => user.Id == actor.UserId && user.Role == UserRole.Manager, cancellationToken))
+        {
+            return ErrorCode.PastDateManagerOnly;
+        }
+
+        return status == ParticipantStatus.Archived ? ErrorCode.ParticipantArchived : null;
+    }
+
+    // The participant's status, or null for no participant of that ID in the tenant's organisation.
+    private Task<ParticipantStatus?> ParticipantStatusAsync(Guid participantId, CancellationToken cancellationToken) =>
+        db.Participants
+            .Where(participant => participant.Id == participantId)
+            .Select(participant => (ParticipantStatus?)participant.Status)
+            .SingleOrDefaultAsync(cancellationToken);
 
     // Written as the one-live-note index's filter, [Status] IN (0, 1), so that SQL Server reads it there.
     private Task<LiveNote?> LiveNoteAsync(Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>

@@ -2412,6 +2412,18 @@ lets workers write only today's note, using the Melbourne date.
   keyed by the header's participant ID and the note date; and the save indicator, there and empty from the first
   render, is put in the page anew, with its first words, as the form mounts, so that a reopened draft's "Draft · saved
   9:42 am" is the page's own rather than announced as a change (autosave-status.md *Behaviour* 8).
+- Where the design is silent (step 6), the simplest options: a creating `PUT` reads the caller's role as stored, by
+  exact equality with Manager (mcp-server.md §3.5 convention 4), and only for a date before today; the unique index's
+  refusal is known by SQL Server's error number, and a read again that then finds no live note, which only a discard in
+  between could leave, fails as any database failure does; the lists-changed reload reads `GET {base}/draft` outside
+  the draft's query, so that the form's load states never show again, and a reload that fails leaves the change unsaved,
+  with "Saving…", until the next change or blur, whose save meets the same `409` and reloads, while one that finds
+  another user's draft is the in-progress dead end, and one that finds the caller's own draft, started meanwhile on
+  another of their pages, takes the screen's text and its ticks still in that snapshot as a later save; the dead end's
+  banner is in the attention colours that foundations.md gives "Not saved", with an `aria-hidden` warning icon, and the
+  assertive region, after the page's content beside `PageStatus`'s, keeps its sentence once written; and
+  `note.future_date` has no words, as it never reaches the form, whose `GET` answers `404` for a date after today. A
+  dead end stops autosave for as long as the form is open, which T10's leave guard reads to let the person leave.
 
 ### Steps
 
@@ -2555,7 +2567,7 @@ lets workers write only today's note, using the Melbourne date.
       wait; a change made while a save is out keeping "Saving…" until the next answer; 20,050 characters all kept on
       screen, with "You have 50 characters too many", and 20,000 sent; and a reopened draft showing its text and
       ticks.
-- [ ] One note per participant per day, the date rules and the lists check (S02.02.07's other criteria;
+- [x] One note per participant per day, the date rules and the lists check (S02.02.07's other criteria;
       S02.02.03's second criterion; note-form.md items 17, for goals, and 18; design.md §3.2, §3.3, §5.5 items
       3 and 4, §5.7 *New draft*): the creating `PUT`'s checks in the order of Notes, each creating nothing,
       `422 note.future_date`, `422 note.past_date_manager_only`, `422 note.participant_archived` and

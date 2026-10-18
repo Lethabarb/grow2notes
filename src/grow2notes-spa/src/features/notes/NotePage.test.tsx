@@ -27,6 +27,14 @@ const worker: Me = {
   today: '2026-10-01',
 };
 
+// Jordan Ellis, a manager of the same organisation, who may start a note for an earlier day (design.md §5.5 item 4).
+const manager: Me = {
+  ...worker,
+  userId: '9c4d2b7e-3a18-4f65-8d90-7e1b5a3c6f24',
+  displayName: 'Jordan Ellis',
+  role: 'Manager',
+};
+
 const jane: ParticipantHeader = {
   id: '3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95',
   givenName: 'Jane',
@@ -54,6 +62,7 @@ function goal(id: string, text: string): DraftGoal {
 const breakfast = goal('0b2f6c1e-4d38-4a95-9e07-6c1d8f3a5b24', 'Makes own breakfast');
 const bus = goal('5e9a3d7c-1b46-4f82-a0d3-8c2e6b4f1a97', 'Catches bus to day program');
 const sister = goal('8a1c6e3f-7d52-4b09-b3e4-1f9d2c7a5e68', 'Phones her sister');
+const garden = goal('2d7b9f4a-6c13-4e58-9a21-5f8e3c0b7d46', 'Waters the garden');
 
 const prompts = 'Mood and wellbeing today?\nWhat did you do together?\nAnything to follow up?';
 
@@ -150,6 +159,12 @@ function serveSave(path: string, answer: Answer) {
 /** A save's answer: when it was saved. */
 function saved(savedAtUtc: string): Answer {
   return json({ savedAtUtc });
+}
+
+/** Each request answered with the next of `answers`, and the last one's answer again once they have all been given. */
+function inTurn(...answers: Answer[]): Answer {
+  let next = 0;
+  return (init) => answers[Math.min(next++, answers.length - 1)](init);
 }
 
 /** A save as it was sent: its path, and its body as JSON. */
@@ -303,6 +318,20 @@ function shownSaveStatus(): string {
     hidden.remove();
   });
   return shown.textContent;
+}
+
+/** The lists-changed notice's region above Goals, a `<div role="status">` in `<main>`. */
+function listsNotice(): HTMLElement {
+  const notices = within(main())
+    .getAllByRole('status')
+    .filter((region) => region.tagName === 'DIV');
+  expect(notices).toHaveLength(1);
+  return notices[0];
+}
+
+/** The form's assertive region, which says a dead end's sentence once. */
+function assertive(): HTMLElement {
+  return screen.getByRole('alert');
 }
 
 /** Today's row link named `name`. */
@@ -919,6 +948,243 @@ describe('Autosave', () => {
       narrative: 'Jane made toast.',
       tickedGoalIds: [breakfast.id, sister.id],
     });
+  });
+});
+
+describe('A dead end at the first save', () => {
+  const afterMidnight =
+    'It’s now after midnight, so this note can’t be started for yesterday. Ask a manager to record it.';
+
+  it.each([
+    {
+      deadEnd: 'after midnight, on a form opened at 11:58 pm whose first change came at 12:01 am',
+      me: worker,
+      noteDate: '2026-10-01',
+      // 11:58 pm on 1 October in Melbourne, three minutes before the first change.
+      openedAt: '2026-10-01T13:58:00Z',
+      waited: 3 * 60_000,
+      refusal: problem(422, { code: 'note.past_date_manager_only' }),
+      sentence: afterMidnight,
+    },
+    {
+      deadEnd: "someone else's draft of today's note",
+      me: worker,
+      noteDate: '2026-10-01',
+      openedAt: '2026-10-01T00:30:00Z',
+      waited: 0,
+      // 9:14 am on 1 October in Melbourne.
+      refusal: startedBy('2026-09-30T23:14:00Z'),
+      sentence: `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    },
+    {
+      deadEnd: "someone else's draft of an earlier day's note, which a manager may start",
+      me: manager,
+      noteDate: '2026-09-30',
+      openedAt: '2026-10-01T00:30:00Z',
+      waited: 0,
+      // 9:14 am on 30 September in Melbourne.
+      refusal: startedBy('2026-09-29T23:14:00Z'),
+      sentence: `Alex P. started the note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    },
+    {
+      deadEnd: 'an archived participant',
+      me: worker,
+      noteDate: '2026-10-01',
+      openedAt: '2026-10-01T00:30:00Z',
+      waited: 0,
+      refusal: problem(422, { code: 'note.participant_archived' }),
+      sentence: 'Jane Citizen is archived, so this note cannot be started. Ask a manager.',
+    },
+  ])(
+    'shows $deadEnd in the top bar\'s second row, says it once, and keeps the ticks and text',
+    async ({ me, noteDate, openedAt, waited, refusal, sentence }) => {
+      vi.setSystemTime(new Date(openedAt));
+      const participant = freshParticipant();
+      serveNote(participant, json(template()), noteDate);
+      serveSave(paths(participant, noteDate).draft, refusal);
+      renderApp(paths(participant, noteDate).page, me);
+      await settle();
+      const region = assertive();
+      expect(region).toBeEmptyDOMElement();
+      await wait(waited);
+
+      fireEvent.click(within(main()).getByText(bus.text));
+      type('Jane made toast.');
+      await wait(2_000);
+      await settle();
+
+      expect(saves()).toHaveLength(1);
+      const banner = within(pageBar()).getByRole('region', { name: sentence });
+      expect(banner.tagName).toBe('SECTION');
+      expect(banner.textContent).toBe(sentence);
+      expect(follows(banner, saveStatus())).toBe(true);
+      expect(within(banner).queryByRole('status')).toBeNull();
+      // The region there from the first render, which says the sentence once.
+      expect(assertive()).toBe(region);
+      expect(region.textContent).toBe(sentence);
+      expect(region).toHaveClass('visually-hidden');
+      expect(shownSaveStatus()).toBe('Not saved');
+      expect(guidedNotes()).toHaveValue('Jane made toast.');
+      expect(within(main()).getByRole('checkbox', { name: bus.text })).toBeChecked();
+    },
+  );
+
+  it('stops autosave, keeping every tick and the text to change, and never stops the person leaving', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, problem(422, { code: 'note.past_date_manager_only' }));
+    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+    const { router } = renderApp(paths(participant).page);
+    await settle();
+    guidedNotes().focus();
+    type('Jane made toast.');
+    guidedNotes().blur();
+    await wait(0);
+    await settle();
+    expect(shownSaveStatus()).toBe('Not saved');
+
+    guidedNotes().focus();
+    type('Jane made toast. Then a walk to the shops.');
+    fireEvent.click(within(main()).getByText(sister.text));
+    guidedNotes().blur();
+    await wait(30_000);
+
+    expect(saves()).toHaveLength(1);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a walk to the shops.');
+    expect(guidedNotes()).not.toHaveAttribute('readonly');
+    expect(within(main()).getByRole('checkbox', { name: sister.text })).toBeChecked();
+    expect(within(main()).getByRole('checkbox', { name: sister.text })).toBeEnabled();
+
+    await press(within(pageBar()).getByRole('link', { name: 'Today' }));
+    await settle();
+    expect(router.state.location.pathname).toBe('/');
+  });
+});
+
+describe('Lists changed before the first save', () => {
+  /**
+   * Opens a new note for a participant of its own, whose first save is answered `409 note.lists_changed`, and the
+   * saves after it `201`, held back until the test lets them go; and holds back the form as it is read again.
+   */
+  async function openWithListsChanging() {
+    const participant = freshParticipant();
+    serveNote(participant);
+    const resaved = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, inTurn(problem(409, { code: 'note.lists_changed' }), resaved.answer));
+    renderApp(paths(participant).page);
+    await settle();
+    // As the form is now, with Phones her sister archived and Waters the garden added since the form opened.
+    const reload = held(json({ ...template([breakfast, garden, bus]), listsVersion: 'lists-2' }));
+    serve(paths(participant).draft, reload.answer);
+    return { participant, reload, resaved };
+  }
+
+  it(
+    "shows the lists as they are now, keeping the text and a listed goal's tick, and saves again with their version",
+    async () => {
+      const { participant, reload, resaved } = await openWithListsChanging();
+      const notice = listsNotice();
+      expect(notice).toBeEmptyDOMElement();
+      fireEvent.click(within(main()).getByText(breakfast.text));
+      fireEvent.click(within(main()).getByText(sister.text));
+      type('Jane made toast.');
+
+      await wait(2_000);
+      const sent = sentRequests();
+      const { draft } = paths(participant);
+      expect(sent.slice(sent.indexOf(`PUT ${draft}`))).toEqual([`PUT ${draft}`, `GET ${draft}`]);
+      expect(shownSaveStatus()).toBe('Saving…');
+      expect(notice).toBeEmptyDOMElement();
+      reload.release();
+      await settle();
+
+      expect(shownSaveStatus()).toBe('Saving…');
+      expect(listsNotice()).toBe(notice);
+      expect(notice.textContent).toBe('The goal or common-item list was just changed. Please check your ticks.');
+      expect(follows(within(main()).getByRole('group', { name: '1. Goals' }), notice)).toBe(true);
+      const boxes = within(main()).getAllByRole<HTMLInputElement>('checkbox');
+      expect(boxes.map((box) => [box.labels?.[0].textContent, box.checked])).toEqual([
+        [breakfast.text, true],
+        [garden.text, false],
+        [bus.text, false],
+      ]);
+      expect(guidedNotes()).toHaveValue('Jane made toast.');
+      expect(saves().map(({ body }) => [body.listsVersion, body.tickedGoalIds, body.narrative])).toEqual([
+        ['lists-1', [breakfast.id, sister.id], 'Jane made toast.'],
+        ['lists-2', [breakfast.id], 'Jane made toast.'],
+      ]);
+      resaved.release();
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+
+      type('Jane made toast. Then a walk.');
+      await wait(2_000);
+      await settle();
+      expect(saves()[2].body).not.toHaveProperty('listsVersion');
+      expect(notice).toHaveTextContent('Please check your ticks.');
+    },
+  );
+
+  it.each([
+    {
+      focused: 'a tick box whose goal is still listed',
+      box: () => within(main()).getByRole('checkbox', { name: bus.text }),
+    },
+    { focused: 'the Guided notes box', box: () => guidedNotes() },
+  ])('keeps focus in $focused', async ({ box }) => {
+    const { reload } = await openWithListsChanging();
+    const focused = box();
+    focused.focus();
+    if (focused instanceof HTMLTextAreaElement) {
+      type('Jane made toast.');
+    } else {
+      fireEvent.click(focused);
+    }
+
+    await wait(2_000);
+    reload.release();
+    await settle();
+
+    expect(listsNotice()).toHaveTextContent('Please check your ticks.');
+    expect(focused).toHaveFocus();
+  });
+
+  // Another user's first save came between this one and the form read again (design.md §5.5 item 3).
+  it("shows the in-progress dead end when the form read again is someone else's draft", async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, problem(409, { code: 'note.lists_changed' }));
+    renderApp(paths(participant).page);
+    await settle();
+    serve(paths(participant).draft, startedBy('2026-09-30T23:14:00Z'));
+
+    type('Jane made toast.');
+    await wait(2_000);
+    await settle();
+
+    const sentence = `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`;
+    expect(within(pageBar()).getByRole('region', { name: sentence })).toBeInTheDocument();
+    expect(assertive().textContent).toBe(sentence);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saves()).toHaveLength(1);
+    expect(listsNotice()).toBeEmptyDOMElement();
+    expect(guidedNotes()).toHaveValue('Jane made toast.');
+  });
+
+  it('moves focus to the notice when the tick box that had it has gone', async () => {
+    const { reload } = await openWithListsChanging();
+    const box = within(main()).getByRole('checkbox', { name: sister.text });
+    box.focus();
+    fireEvent.click(box);
+
+    await wait(2_000);
+    reload.release();
+    await settle();
+
+    expect(box).not.toBeInTheDocument();
+    expect(listsNotice()).toHaveFocus();
+    expect(listsNotice()).toHaveAttribute('tabindex', '-1');
   });
 });
 
