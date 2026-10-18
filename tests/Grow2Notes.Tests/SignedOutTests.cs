@@ -12,11 +12,11 @@ namespace Grow2Notes.Tests;
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
-/// behind the fallback policy, the app's own <c>/api/auth/me</c>, its admin lists, its <c>/api/admin/users</c> posted
-/// to, and a user's edit, setup link, deactivation and reactivation show; so the others show that the page, its files
-/// and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers
-/// still matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with
-/// no cookie never reaches one.
+/// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, its admin lists, its
+/// <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation and reactivation show; so the others
+/// show that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file,
+/// page or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database here, so they run
+/// without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -38,10 +38,12 @@ public sealed class SignedOutTests : IAsyncDisposable
     // The cookie challenges with a bare 401, which the status code pages make problem details, rather than redirecting
     // to a login page, which the app does not have (design.md §7.2). Without the app's OnRedirectToLogin, the cookie
     // handler still answers 401, but with a Location naming /Account/Login, so the Location is the check. The session's
-    // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user.
+    // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user, and Today's list
+    // (§6.3), which would need the database that is not here, another.
     [Theory]
     [InlineData(FallbackPolicyPath)]
     [InlineData("/api/auth/me")]
+    [InlineData("/api/today")]
     public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored(string path)
     {
         await using var withEndpoint = app.WithWebHostBuilder(builder => builder.ConfigureServices(

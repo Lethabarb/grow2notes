@@ -179,7 +179,9 @@ test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `s
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
 it before `page.goto`. To change who is signed in, call it again with the other person, whose answer then wins, and load
-the page again, so that the SPA starts with them. Everything else the page loads is the published app's, under its
+the page again, so that the SPA starts with them. It answers Today's list, `GET /api/today`, too, with no participants
+on `me`'s day: Today, where the made-up person lands, asks for it, and the app, which holds no session for them, would
+answer `401`, ending the session in place. Everything else the page loads is the published app's, under its
 policy. A test that does not call it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`);
 `e2e/shell.spec.ts` is the example of one that does. A test of signing out answers it only until the page sends the
 logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets the request through to the app from then on,
@@ -201,7 +203,7 @@ and each overriding the answer before it, as `serveMe` does. `e2e/start-up.spec.
   the start-up message shows about 1 s after the page loads, and the "still" sentence about 1 s after Try again. For
   the next Try again to bring the screen, the test then calls `serveMe`.
 - `holdMe(page, me, ms)` answers each with `me`, `ms` after the page sent it, for the start-up's "Loading…", which
-  shows from 1 s.
+  shows from 1 s, and Today's list as `serveMe` does, at once.
 - `answerMe(page, body)` answers each with JSON that is not a `Me`, so that the page throws as it renders. The worker
   with a number for `today`, which Today's heading cannot read, crashes the screen, which shows the crash page under
   the nav; `null`, which the header cannot read, crashes the shell, which shows its own crash page. React writes each

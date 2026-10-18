@@ -115,6 +115,13 @@ internal static class EndpointMatrix
         new(Post,      "/api/auth/login/totp",   Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login/totp", new { code = "123456" })),
 
+        // The Today list (§6.3), for every signed-in user, each of whom gets their own organisation's active
+        // participants: its participants hold the caller's own organisation's seeded participant and not the other's
+        // (§5.9 item 7).
+        new(Get,       "/api/today",             Unauthorized, OK,     OK,         OK,
+            Answer: HoldsTheCallersOwnSeeded(
+                "participant", organisation => [organisation.ParticipantId], listedIn: "participants")),
+
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
@@ -494,12 +501,12 @@ internal static class EndpointMatrix
             authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
     }
 
-    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id,
-    // that holds every one of the caller's own organisation's seeded rows that `seededIds` gives and none of the
-    // other's, each named in a difference as `what`. Tests add rows to the seeded organisations, so it may hold others
-    // of the caller's own.
+    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id, as
+    // the answer or as its property `listedIn`, that holds every one of the caller's own organisation's seeded rows
+    // that `seededIds` gives and none of the other's, each named in a difference as `what`. Tests add rows to the
+    // seeded organisations, so it may hold others of the caller's own.
     private static Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>
-        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds) =>
+        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds, string? listedIn = null) =>
         async (response, caller, seeded) =>
         {
             var (own, other) = caller switch
@@ -509,7 +516,8 @@ internal static class EndpointMatrix
                 _ => throw new ArgumentOutOfRangeException(
                     nameof(caller), caller, $"A signed-out caller has no {what}s."),
             };
-            var rows = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var rows = listedIn is null ? answer : answer.GetProperty(listedIn);
             var ids = rows.EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ToHashSet();
             return
             [

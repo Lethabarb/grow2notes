@@ -4,6 +4,7 @@ import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
+import { TodayPage } from '../features/today/TodayPage.tsx';
 import { EditUserPage } from '../features/users/EditUserPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
 import { UserPage } from '../features/users/UserPage.tsx';
@@ -18,7 +19,6 @@ import { AuthenticatorSetup } from './setup/AuthenticatorSetup.tsx';
 import { CreatePassword } from './setup/CreatePassword.tsx';
 import { SetupLayout } from './setup/SetupLayout.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
-import { TodayPage } from './TodayPage.tsx';
 
 /**
  * The name that a screen gives itself as the opener of the screens that it opens, which the shell records on each of
@@ -85,7 +85,11 @@ export const routes: AppRoute[] = [
               { path: 'app', element: <AuthenticatorSetup />, handle: setupHandle },
             ],
           },
-          { index: true, element: <TodayPage />, handle: { pageName: pageName.today } },
+          {
+            index: true,
+            element: <TodayPage />,
+            handle: { pageName: pageName.today, returnFocus: {}, backKey: 'today' },
+          },
           // Every manager screen goes in here.
           {
             element: <ManagerOnly />,

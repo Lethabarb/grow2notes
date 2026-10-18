@@ -13,6 +13,7 @@ import { routes, type AppRoute } from './routes.tsx';
 const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
 const optionsPath = '/api/auth/passkey/options';
+const todayPath = '/api/today';
 
 const hint = 'Sign in the way you chose when you set up your account.';
 const help = 'If you cannot sign in, ask a manager to reset your sign-in.';
@@ -47,13 +48,17 @@ const madeUp: AppRoute[] = [
 const fetchMock = vi.fn<typeof fetch>();
 
 /**
- * Stubs `fetch` as the server, which answers each request to `GET /api/auth/me` with a new answer from `answer`, and
- * the sign-in view's request for passkey options with options, after a token.
+ * Stubs `fetch` as the server, which answers each request to `GET /api/auth/me` with a new answer from `answer`,
+ * Today's list with no participants, and the sign-in view's request for passkey options with options, after a token.
  */
 function serveMe(answer: (init?: RequestInit) => Promise<Response>) {
   fetchMock.mockImplementation((path, init) => {
     if (path === antiforgeryPath) {
       return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } }));
+    }
+
+    if (path === todayPath) {
+      return json({ date: worker.today, participants: [] });
     }
 
     return path === optionsPath ? json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }) : answer(init);

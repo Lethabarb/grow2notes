@@ -348,7 +348,8 @@ export const strings = {
    * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and
    * the participant page's loading lines, and what did not load, as each failure sentence starts
    * (empty-loading-error.md); the list's empty sentences, in place of its rows, for no participants at all and for a
-   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md).
+   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md). Today's list loads,
+   * fails and is empty in the list's words (today.md components 4 and 9).
    */
   participants: {
     listLoading: 'Loading participants…',
@@ -361,6 +362,11 @@ export const strings = {
     active: 'Active',
     archived: 'Archived',
   },
+  /**
+   * Today (today.md): the visually hidden `<h2>` before its list of participants (component 6), so that a screen
+   * reader moving by headings hears where the list starts.
+   */
+  today: { participantsHeading: 'Participants' },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
    * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above

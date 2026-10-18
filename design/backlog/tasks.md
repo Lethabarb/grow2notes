@@ -2365,6 +2365,24 @@ lets workers write only today's note, using the Melbourne date.
   `NoteVersionItem.Section` will). EF Core writes the check constraint's SQL, the included columns and the two JSON
   collections on lines longer than 120 characters, which are wrapped in `AddNote`, its designer file and the model
   snapshot; the next migration writes the snapshot again.
+- Today's refresh (step 2), as today.md *Refresh* and notification-badge.md have it: Today's query opts in to
+  TanStack's `refetchOnWindowFocus`, as app-shell.md's list of opt-ins has it, for the page becoming visible, the one
+  event that TanStack Query 5 listens for, and Today listens for the window's `focus` too, which a click back into a
+  window left visible beside another fires alone. That refetch shares a request already out (`cancelRefetch: false`),
+  so the two events of a return to the tab send one `GET /api/today`; a window focus while the signed-out view hides
+  Today sends it beside `/api/auth/me`, as `visibilitychange` already did.
+- Where design.md is silent (step 2), the simplest options: Today's loading line, failure sentences and empty sentence
+  are the participant list's strings, the same words. A correction, an archive or a restore marks Today's query stale
+  whenever its request is answered, a stale `412` included, as the page then reads the participant list again too. The
+  end-to-end `serveMe` and `holdMe` answer Today's list with no participants, as the app, holding no session for a
+  made-up person, would answer `401` and end the session in place; step 7's `tests/e2e/today.ts` answers it with rows
+  over that.
+- today.md's DOM order, as step 2 builds it: once the list is ready, the shared `LoadRegion`'s status line, rendered
+  from the first render so that it is in the page before any words are written into it, stays after the rows, where
+  the criterion puts status/Try again before the hidden "Participants". It is empty from then on, as a failed
+  background refresh says nothing (today.md *Background refresh failed*), so nothing shown, read or reached by Tab is
+  out of order; `LoadRegion`, which every loading screen shares, keeps that order, and step 7 writes it into today.md's
+  DOM-order criterion beside the parts that T09 and T12 bring.
 
 ### Steps
 
@@ -2387,7 +2405,7 @@ lets workers write only today's note, using the Melbourne date.
       beside a live one saved, a row breaking each arm of the check constraint refused, and a working copy's `Items`
       and `Groups` read back as written; the interceptor refusing each of the three changes and saving a change of
       `Status`; and the tenancy and model-convention tests passing for both entities.
-- [ ] Today lists every active participant (S02.01.01; design.md §4.2 items 1 and 4 and *No participants*, §6.3;
+- [x] Today lists every active participant (S02.01.01; design.md §4.2 items 1 and 4 and *No participants*, §6.3;
       today.md components 3, 4, 6, 8 and 9, and the criteria of its *Content and copy*, *Order and layout*, *Loading,
       empty and error*, *Focus and navigation* and *Refresh* that S02.01.01 links): `GET /api/today` in the `/api`
       group for any signed-in user, its handler in `Features/Today`, giving `{date, participants: [{id, givenName,

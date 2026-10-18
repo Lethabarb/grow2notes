@@ -37,6 +37,7 @@ const passwordPath = '/api/auth/login';
 const codePath = '/api/auth/login/totp';
 const logoutPath = '/api/auth/logout';
 const usersPath = '/api/admin/users';
+const todayPath = '/api/today';
 
 // users.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts, and Alex
 // Park, Invited.
@@ -263,6 +264,7 @@ beforeEach(() => {
   serve('POST', optionsPath, json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
   serve('POST', passwordPath, json({ next: 'totp' }));
   serve('GET', usersPath, json([alex]));
+  serve('GET', todayPath, json({ date: manager.today, participants: [] }));
   ceremony.mockResolvedValue(credential);
   // Emptied, so that a title a test finds is one the app set.
   document.title = '';
@@ -556,11 +558,12 @@ describe('the signed-out-in-place view', () => {
     expect(document.title).toBe('Grow2Notes – Sign in');
     const requests = fetchMock.mock.calls.length;
 
-    // Another tab kept the session alive: the window's refresh finds it, and the screen comes back as it was.
+    // Another tab kept the session alive: the window's refresh finds it, and the screen comes back as it was. The
+    // hidden Today fetches its list again with it, in either order (today.md *Refresh*).
     focusWindow();
     await settle();
 
-    expect(fetchMock.mock.calls.slice(requests).map(([path]) => path)).toEqual([mePath]);
+    expect(fetchMock.mock.calls.slice(requests).map(([path]) => path).sort()).toEqual([mePath, todayPath]);
     expect(shownHeading()).toBe(today);
     expect(today).toHaveFocus();
     expect(document.title).toBe('Grow2Notes – Today');

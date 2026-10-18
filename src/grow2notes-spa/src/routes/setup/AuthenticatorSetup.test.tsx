@@ -15,6 +15,7 @@ const mePath = '/api/auth/me';
 const startPath = '/api/auth/setup/start';
 const keyPath = '/api/auth/setup/authenticator';
 const passwordPath = '/api/auth/setup/password';
+const todayPath = '/api/today';
 const title = 'Grow2Notes – Set up your account';
 const intro =
   'An authenticator app is a free app on your phone. It shows a new 6-digit code every 30 seconds. You enter the code '
@@ -328,6 +329,8 @@ beforeEach(() => {
   serve(startPath, () => json(account));
   // As the server answers it, with the URI that no screen shows.
   serve(keyPath, () => json({ sharedKey, authenticatorUri: 'otpauth://totp/made-up' }));
+  // Today, where setup ends, with no participants.
+  serve(todayPath, () => json({ date: me.today, participants: [] }));
   // `api()` sends each request to a path, as a string.
   fetchMock.mockImplementation((path, init) => {
     const answer = typeof path === 'string' ? answers.get(path) : undefined;
@@ -877,8 +880,11 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(shown.some((element) => element.textContent?.includes('Tuesday 13'))).toBe(true);
     expect(shown.filter((element) => element.textContent?.includes(chooseMethod))).toEqual([]);
     await wait(10 * 60_000);
-    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more.
-    expect(sentAfter(requests)).toEqual([passwordPath, mePath]);
+    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more but Today's list.
+    const sentSince = sentAfter(requests);
+    expect(sentSince[0]).toBe(passwordPath);
+    expect(sentSince.filter((path) => path === mePath)).toHaveLength(1);
+    expect(new Set(sentSince)).toEqual(new Set([passwordPath, mePath, todayPath]));
 
     // The two entries after Today's are Forward's, where setup's memory has gone.
     await act(() => router.navigate(1));

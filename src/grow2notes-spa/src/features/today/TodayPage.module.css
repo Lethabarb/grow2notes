@@ -1,0 +1,6 @@
+/* Add participant in the empty state (empty-loading-error.md), a plain link on a hit area at least 44 px tall (A32). */
+.add {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--target-min);
+}

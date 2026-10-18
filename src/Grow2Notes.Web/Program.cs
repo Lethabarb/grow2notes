@@ -3,6 +3,7 @@ using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Features.Participants;
+using Grow2Notes.Web.Features.Today;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
@@ -352,7 +353,8 @@ var api = app.MapApiGroup()
     .MapPasskeyOptionsEndpoint()
     .MapPasskeySignInEndpoint()
     .MapPasswordSignInEndpoint()
-    .MapTotpSignInEndpoint();
+    .MapTotpSignInEndpoint()
+    .MapTodayEndpoint();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()
