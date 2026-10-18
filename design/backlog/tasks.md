@@ -1895,6 +1895,38 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
   7); and with NVDA and Chrome, and VoiceOver and iOS Safari, the item rows' names, "dimmed" or "unavailable", heading
   and region navigation by group, each item announcement in common-items.md's table, and focus after each item action
   (its *Accessibility runs*' manual pass; T07 adds the group parts).
+- Step 7 (18 October 2026): `tests/e2e/commonItems.ts`'s `serveCommonItems` answers the groups list and each item
+  write from a list in memory, each group's items in a `HeldRows` (`tests/e2e/rows.ts`), which `serveGoals` now keeps
+  too, so that the two fakes share one copy of the API's ordered-list rules. `common-items.spec.ts` signs in for real
+  as the manager that `admin bootstrap` invited, adds five items to the bootstrapped Every note at 375 px, then
+  rewords, moves, archives and restores one, on the app's own answers, and does the same with the keyboard alone at
+  375 px and 1280 px; with made-up groups it then checks the eleven axe states, the item rows' layout, reflow at
+  320 px and forced colours. The by-hand checks are steps 42 to 45 of ops/first-use-in-test.md, after T05's. Where
+  the design is silent, the simplest option is taken:
+  - The helpers that the Participants and Common items specs share move out of `participants.spec.ts`, so that there
+    is one copy of each: `expectStops` and `ring` to `focus.ts`, the layout and forced-colour helpers to `layout.ts`,
+    the live-region watcher to `liveRegions.ts` and `signInThroughSetup` to `setupSignIn.ts`.
+  - The watcher also reports a region in `<main>` with `aria-live`, such as a character count's polite twin, put in
+    with its words, as common-items.md's checklist names those twins; the session warning's `aria-live` heading,
+    written while its dialog is closed, is outside `<main>`.
+  - `expectNothingKept` (`kept.ts`) also accepts the history entry that `page.goto` loads, whose state is React
+    Router's index alone, and leaves out a key whose value is `undefined`, such as React Router's `masked`, as its
+    `toEqual` did.
+  - Under forced colours Chromium gives a `<summary>` `LinkText`, so the check is that its marker is drawn in the
+    summary's own colour, not the background's, with the closed and the open disclosure shape.
+  - At 200% text, "no overlap or clipping" is checked as no two of a row's buttons overlapping, each inside its row,
+    and no text or button in the row whose content is wider or taller than it.
+- Step 7's run: the 8 tests of `common-items.spec.ts` and the 18 of `participants.spec.ts` passed locally against the
+  published app. Of the whole end-to-end suite's 218, run there with 12 workers, all passed but T02's first
+  participants test, whose wait for the list read after Archive met a read already out; it passed in four runs of its
+  own, and nothing it runs changed but where its helpers live. `migrate.sql`, scripted locally with the command CI
+  scripts its artifact's copy with, gives `AddCommonItems` only additions: `CREATE TABLE [CommonItemGroup]`, with its
+  primary key, the `(OrganisationId, Id)` alternate key, `CK_CommonItemGroup_EveryNoteActive` and the foreign key to
+  `Organisation`; `CREATE TABLE [CommonItem]`, with its primary key, alternate key and the composite foreign key to
+  its group's; the two indexes and the unique index on `OrganisationId` filtered `[IsEveryNote] = 1`; the `INSERT`
+  of each organisation's Every note; and `DENY DELETE` on both tables to `grow2notes_runtime`. The artifact's own copy
+  is read in the pull request, and CI's run on it recorded, once the branch is pushed, so step 7 stays unticked until
+  then, as T05's step 6 did.
 
 ### Steps
 
@@ -2118,6 +2150,10 @@ group; Every note stays first and fixed.
   - `groupId` on `PUT /api/admin/common-items/{id}`, which T06 ships taking `{text}` alone, a reword in the item's own
     group; this task adds it with the move (design.md §6.6, S01.03.08).
   - The group parts of common-items.md's by-hand screen-reader pass, beside T06's on ops/first-use-in-test.md.
+  - The group writes in `tests/e2e/commonItems.ts`'s `serveCommonItems`, which T06 ships answering the list and the
+    item writes alone, and the group parts of `common-items.spec.ts`: each other group's stops in its keyboard and
+    forced-colours tests, and its group buttons in the layout test (common-items.md *Layout*, its first bullet's
+    group part and the laptop bullet's group heading row).
 
 ### Steps
 

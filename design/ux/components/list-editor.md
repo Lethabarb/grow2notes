@@ -273,7 +273,8 @@ be narrower than 16rem (common-items.md):
 
 Order of parts: help text, then the conflict slot, then the active list (or the empty message), then the add form,
 then the archived section. This follows design 4.8 and 4.9: list, then "Add goal" / "Add item", then the archived
-rows.
+rows. The help text and the conflict slot belong to the page's shared list wrapper (Implementation notes), so on 4.9
+they come once, at the top of the page, above every group's list.
 
 Button order in each row, in the DOM and on screen: **Move up, Move down, Edit, Archive**. Move up and Move down
 stay together as a pair. Archive comes last, after Edit, so it is the furthest from the text. Every button is in the
@@ -429,15 +430,26 @@ Role, Value · 4.1.3 Status Messages (results that don't move focus go to the st
 
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
-- **One component for both lists:** `ListEditor` with `kind: 'goal' | 'item'`, an API adapter and `readOnly`. The
-  page renders the heading (`<h2>Goals</h2>` on 4.8; on 4.9 the page `<h1>Common items</h1>` once and an `<h2>` per
-  group). Native elements cover everything, so there is no React Aria.
-- **Groups (4.9):** one `ListEditor` per active group. Its adapter carries the `groupId` (add and reorder are scoped
-  to it; the order request holds only that group's active IDs), its `query` reads the group's rows from the page's
-  one grouped query `['admin', 'common-item-groups']` with `select`, and its `scopeId` is `'common-items'` for every group,
-  so item and group writes on the page run one at a time. The edit form renders the Group radios from the page's
-  list of active groups when there are two or more; a Save that changes the group sends `{text, groupId}` and
-  focuses the item's **Edit** in its new group's list after the re-read (the focus map is shared by the page).
+- **One component for both lists:** `ListEditor` with `kind: 'goal' | 'item'`, an API adapter and `readOnly`. Each
+  kind's words are in `strings.listEditor` (`goal` and `item`), and the words every kind shares in
+  `strings.listRows`. The page renders the heading (`<h2>Goals</h2>` on 4.8; on 4.9 the page `<h1>Common items</h1>`
+  once and an `<h2>` per group). Native elements cover everything, so there is no React Aria.
+- **The shared list wrapper:** every `ListEditor` on a page sits in the page's one `ListFrame`, which holds what the
+  page's lists share: the help text, once, above them, whose id each list's text fields name in their description;
+  the focus map, so that focus follows a write into whichever list it lands in; and the list conflict, which
+  `ListConflict` shows where the page puts it, above the lists, which a write in any of them shows and focuses, and
+  the next write that succeeds in any of them takes away. A participant's Goals section has its one list in a frame
+  of its own, without the help text while the participant is archived; Common items has every group's list in one.
+- **Groups (4.9):** one `ListEditor` per active group, with the group's `name`, after which its add field's label
+  and its archived summary's hidden text say " in [group name]", and the page's field ids, `item-new-{groupId}` for
+  the add field and `item-{id}-text` for a row's edit field (common-items.md components 5 and 6). Its adapter,
+  `commonItemsApi(groupId)`, carries the `groupId` (add and reorder are scoped to it; the order request holds only
+  that group's active IDs); its `query` is the page's one grouped query `['admin', 'common-item-groups']`, from which
+  its `rowsOf` picks the group's rows, as `select`, and from which each write reads the rows as it runs; and its
+  `scopeId` is `'common-items'` for every group, so item and group writes on the page run one at a time. The edit
+  form renders the Group radios from the page's list of active groups when there are two or more; a Save that changes
+  the group sends `{text, groupId}` and focuses the item's **Edit** in its new group's list after the re-read (the
+  focus map is shared by the page). The radios and the move are T07's; T06's item `PUT` sends `{text}`.
 - **Reuse the shared pieces:** the button with `unavailable`, `onUnavailablePress`, `busy` and `busyLabel`
   (`primary-actions.md`; imported as `ActionButton` in `review-panel.md`), `CharacterCount`
   (`conditional-reveal.md`), the page status region (`PageStatus`, app-shell.md; `primary-actions.md`),
@@ -484,6 +496,10 @@ Role, Value · 4.1.3 Status Messages (results that don't move focus go to the st
   - A `412` keeps the typed text.
   - Playwright with axe on both screens. A manual pass with NVDA + Chrome and VoiceOver on iOS.
   - The M1 check that a manager sets up five goals on a phone without help.
+
+The sketch below is the starting point that the build followed. As built, the help text, the conflict message and
+the focus map live in `ListFrame` instead (the shared list wrapper, above), the editor reads its rows with the
+adapter's `rowsOf` as `select`, and its `.help` and `.conflict` rules are in `ListFrame.module.css`.
 
 ```tsx
 // ListEditor.tsx: Goals (design.md 4.8) and Common items (4.9)

@@ -1305,10 +1305,10 @@ Every `PUT` (except the reorder endpoints, which check the set of IDs instead), 
 | PUT | /api/admin/common-item-groups/{groupId} | Rename a group; notes keep their snapshot. Refused for Every note. | `{name}` → `200`; `422 config.every_note_fixed` |
 | POST | /api/admin/common-item-groups/{groupId}/archive · /restore | Archive or restore a group; a restored group goes to the end. Refused for Every note. | → `204`; `422 config.every_note_fixed` |
 | PUT | /api/admin/common-item-groups/order | Reorder the active groups other than Every note, which always stays first; the ID set must equal that set. | `{groupIds: [...]}` → `204`; `422 config.order_mismatch` |
-| POST | /api/admin/common-item-groups/{groupId}/items | Add a common item at the end of an active group. Refused if the group is archived. | `{text}` → `201`; `409 config.group_archived` |
-| PUT | /api/admin/common-items/{id} | Reword a common item, or move it to another active group, where it goes to the end (A42). Refused if the item's own group or the chosen group is archived (restore the group first). | `{text, groupId}` → `200`; `409 config.group_archived` |
-| POST | /api/admin/common-items/{id}/archive · /restore | Archive or restore; a restored item goes to the end of its group. | → `204` |
-| PUT | /api/admin/common-item-groups/{groupId}/items/order | Reorder the active items in one group. | `{commonItemIds: [...]}` → `204`; `422 config.order_mismatch` |
+| POST | /api/admin/common-item-groups/{groupId}/items | Add a common item at the end of an active group. Refused if the group is archived. | `{text}` → `201`; `409 config.group_archived`; `404` for a group not in the organisation |
+| PUT | /api/admin/common-items/{id} | Reword a common item, or move it to another active group, where it goes to the end (A42). Refused if the item's own group or the chosen group is archived (restore the group first). | `{text, groupId}` → `200`; `409 config.group_archived`; `404` for an item not in the organisation |
+| POST | /api/admin/common-items/{id}/archive · /restore | Archive or restore; a restored item goes to the end of its group. | → `204`; `404` for an item not in the organisation |
+| PUT | /api/admin/common-item-groups/{groupId}/items/order | Reorder the active items in one group. | `{commonItemIds: [...]}` → `204`; `422 config.order_mismatch`; `404` for a group not in the organisation |
 | GET · PUT | /api/admin/guide-prompts | The guide prompts for Guided notes. The `PUT`'s `200` carries the new `ETag`, so the next `If-Match` needs no refetch. A `PUT` of the text already stored changes nothing and writes no `guide_prompts.updated`, and answers `200` with the same `ETag` (D84). | `{text}` → `200` |
 
 ### 6.7 Concurrency summary

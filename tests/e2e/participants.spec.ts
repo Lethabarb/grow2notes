@@ -1,7 +1,7 @@
-import type { Locator, Page, Response } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
-import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
-import { whereFocusIs } from './focus.ts';
+import { expect, test } from './fixtures.ts';
+import { expectStops, ring, whereFocusIs } from './focus.ts';
 import {
   breakfast,
   bus,
@@ -14,7 +14,15 @@ import {
   washing,
   type AdminGoal,
 } from './goals.ts';
-import { boxOf } from './layout.ts';
+import {
+  boxOf,
+  expectAtLeast,
+  expectLabelWidth,
+  scrollsSideways,
+  setTextTo200Percent,
+  systemColour,
+} from './layout.ts';
+import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
 import { manager, serveMe, worker } from './me.ts';
 import {
   ben,
@@ -27,6 +35,7 @@ import {
   type AdminParticipant,
 } from './participants.ts';
 import { holdNext } from './requests.ts';
+import { signInThroughSetup } from './setupSignIn.ts';
 
 // The Participants screens and a participant's goals in the published app (S01.02.01 to S01.02.08), against
 // participants.md's criteria. The first four tests sign in for real, through setup with a passkey on the virtual
@@ -174,57 +183,12 @@ async function answerChanges(
   });
 }
 
-/**
- * Reports, through `added`, each live region, an element whose role is `status` or `alert`, that the Participants
- * screens put into the document with words already in it, as a screen reader may not announce them (participants.md
- * *Cross-cutting*). The app puts its elements in with `appendChild` and `insertBefore`, which the script wraps before
- * the app's own runs, so that each subtree is looked at as it joins the document.
- */
-async function watchLiveRegions(page: Page): Promise<string[]> {
-  const added: string[] = [];
-  await page.exposeFunction('liveRegionAddedWithWords', (region: string) => {
-    added.push(region);
-  });
-  await page.addInitScript(() => {
-    const regions = '[role="status"], [role="alert"]';
-    function check(parent: Node, node: Node) {
-      if (!parent.isConnected || !(node instanceof Element) || !location.pathname.startsWith('/manage/participants')) {
-        return;
-      }
-
-      for (const region of [node, ...node.querySelectorAll(regions)].filter((element) => element.matches(regions))) {
-        if ((region.textContent ?? '').trim() !== '') {
-          void (window as unknown as { liveRegionAddedWithWords: (region: string) => Promise<void> })
-            .liveRegionAddedWithWords(region.outerHTML);
-        }
-      }
-    }
-
-    const { appendChild, insertBefore } = Node.prototype;
-    Node.prototype.appendChild = function <T extends Node>(this: Node, node: T): T {
-      check(this, node);
-      return appendChild.call(this, node) as T;
-    };
-    Node.prototype.insertBefore = function <T extends Node>(this: Node, node: T, child: Node | null): T {
-      check(this, node);
-      return insertBefore.call(this, node, child) as T;
-    };
-  });
-  return added;
-}
-
-/** Each live region in the page whose own display is `none`, which would stop it announcing anything. */
-const hiddenLiveRegions = (page: Page) =>
-  page.evaluate(() =>
-    [...document.querySelectorAll('[role="status"], [role="alert"]')]
-      .filter((region) => getComputedStyle(region).display === 'none')
-      .map((region) => region.outerHTML),
-  );
-
+// Each live region that the Participants screens put into the document with words already in it (participants.md
+// *Cross-cutting*).
 let liveRegionsAddedWithWords: string[] = [];
 
 test.beforeEach(async ({ page }) => {
-  liveRegionsAddedWithWords = await watchLiveRegions(page);
+  liveRegionsAddedWithWords = await watchLiveRegions(page, '/manage/participants');
 });
 
 test.afterEach(async ({ page }) => {
@@ -250,64 +214,6 @@ test.fail('a live region put into a Participants screen with its words fails the
     element.appendChild(region);
   });
 });
-
-/** The focus ring as it shows (foundations.md): whether the element matches `:focus-visible`, and its outline. */
-type Ring = { focusVisible: boolean; style: string; width: string; colour: string; inViewport: boolean };
-
-// base.css's ring, 3 px of --colour-focus, on an element on screen.
-const ring: Ring = { focusVisible: true, style: 'solid', width: '3px', colour: 'rgb(11, 12, 12)', inViewport: true };
-
-/**
- * Where focus is, as `whereFocusIs` says, but by the text that shows, so that a button's busy label, hidden until it is
- * busy, is left out, and naming a field, a text box included, by its label; with the ring that shows on the element or,
- * for a row's link, on the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
- */
-function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
-  return page.evaluate(() => {
-    const element = document.activeElement;
-    if (!document.hasFocus()) {
-      return { name: 'outside the page' };
-    }
-
-    if (!(element instanceof HTMLElement) || element === document.body) {
-      return { name: 'the page itself' };
-    }
-
-    const text =
-      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
-        ? element.labels?.[0]?.innerText
-        : element.innerText;
-    const own = getComputedStyle(element);
-    const drawn = own.outlineStyle === 'none' ? getComputedStyle(element, '::after') : own;
-    const box = element.getBoundingClientRect();
-    return {
-      name: (text ?? '').replace(/\s+/g, ' ').trim(),
-      ring: {
-        focusVisible: element.matches(':focus-visible'),
-        style: drawn.outlineStyle,
-        width: drawn.outlineWidth,
-        colour: drawn.outlineColor,
-        inViewport: box.bottom > 0 && box.top < innerHeight && box.right > 0 && box.left < innerWidth,
-      },
-    };
-  });
-}
-
-/**
- * Presses `key` once for each of `stops`, expecting focus to land on each in turn with `expected`'s ring showing
- * (backlog README §9's keyboard-only check). Past the page's last stop, Tab takes focus out of the page, to the
- * browser, and the next Shift+Tab brings it back to that stop.
- */
-async function expectStops(page: Page, key: 'Tab' | 'Shift+Tab', stops: readonly string[], expected = ring) {
-  for (const [index, stop] of stops.entries()) {
-    await page.keyboard.press(key);
-    const reached = await focusStop(page);
-    expect(reached.name, `${key} number ${index + 1}, to ${stop}`).toBe(stop);
-    if (reached.ring !== undefined) {
-      expect(reached.ring, `the focus ring on ${stop}`).toEqual(expected);
-    }
-  }
-}
 
 /**
  * Expects nothing of a participant's, nor what was typed to find one, to be kept where it could outlive the screen
@@ -337,74 +243,6 @@ async function expectNothingKept(page: Page, held: readonly string[]) {
       expect(text, `${place} holds no "${value}"`).not.toContain(value);
     }
   }
-}
-
-/**
- * Text at 200%: Chromium's default text size at 32 px, where it is 16, which makes the body's 18 px 36 (S00.05.01's
- * Notes).
- */
-async function setTextTo200Percent(page: Page) {
-  const devTools = await page.context().newCDPSession(page);
-  await devTools.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
-}
-
-/** Whether the page scrolls sideways. */
-const scrollsSideways = (page: Page) =>
-  page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
-
-/** Expects each element that the locator finds, once one shows, to be at least `width` by `height` CSS pixels. */
-async function expectAtLeast(locator: Locator, width: number, height: number) {
-  await expect(locator.first()).toBeVisible();
-  for (const target of await locator.all()) {
-    const box = await boxOf(target);
-    const name = `${(await target.textContent()) ?? ''} ${await target.evaluate((element) => element.localName)}`;
-    expect(Math.round(box.width), `the width of ${name}`).toBeGreaterThanOrEqual(width);
-    expect(Math.round(box.height), `the height of ${name}`).toBeGreaterThanOrEqual(height);
-  }
-}
-
-/**
- * Expects each button that the locator finds, once one shows, to take its label's width, at least 44 px wide and 48 px
- * high (common-items.md *Conflicts resolved* 6): as wide as it is when sized to what it holds, with the 44 px minimum
- * alone, so that it is neither stretched across its row, as the shared button is on a phone, nor held to the shared
- * button's 8rem minimum on a laptop.
- */
-async function expectLabelWidth(buttons: Locator) {
-  await expectAtLeast(buttons, 44, 48);
-  for (const button of await buttons.all()) {
-    const [laidOut, sizedToLabel] = await button.evaluate((element: HTMLElement) => {
-      const width = () => element.getBoundingClientRect().width;
-      const asLaidOut = width();
-      element.style.inlineSize = 'max-content';
-      element.style.minInlineSize = 'var(--target-min)';
-      const asLabel = width();
-      element.style.removeProperty('inline-size');
-      element.style.removeProperty('min-inline-size');
-      return [asLaidOut, asLabel];
-    });
-    expect(Math.round(laidOut), `the width of ${(await button.textContent()) ?? ''}`).toBe(Math.round(sizedToLabel));
-  }
-}
-
-/** The colour that a system colour, such as `Highlight`, takes under the forced colours that the page emulates. */
-function systemColour(page: Page, keyword: string): Promise<string> {
-  return page.evaluate((colour) => {
-    const probe = document.createElement('span');
-    probe.style.color = colour;
-    document.body.append(probe);
-    const { color } = getComputedStyle(probe);
-    probe.remove();
-    return color;
-  }, keyword);
-}
-
-/** Sets up the invited manager's account through setup with a passkey on the virtual authenticator, ending on Today. */
-async function signInThroughSetup(page: Page, invite: Invite, authenticator: VirtualAuthenticator) {
-  await page.goto(invite.setupLink);
-  await main(page).getByRole('button', { name: 'Use a passkey (recommended)' }).click();
-  await expect(heading(page)).toContainText('Today');
-  expect(await authenticator.credentials()).toHaveLength(1);
 }
 
 /** Fills in the Details, the date of birth as three parts. */

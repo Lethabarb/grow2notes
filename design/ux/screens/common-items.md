@@ -265,10 +265,14 @@ would take about 311 px, and the pair would split.
 .list     { margin: 0; padding-inline-start: 2.25rem; }
 .list > li::marker { font-weight: 700; font-variant-numeric: tabular-nums; }
 
-/* CommonItemsPage.module.css: the group heading row reuses the same wrapping technique */
+/* CommonItemsPage.module.css, as T06 builds it: the sections a section's gap apart, a long group name wrapping, and
+   Every note's line in the secondary colour, in the reading column */
+.group + .group { margin-block-start: var(--section-gap); }
+.heading   { overflow-wrap: anywhere; }
+.everyNote { max-inline-size: var(--measure); color: var(--colour-text-secondary); }
+/* T07, with the group buttons: the group heading row reuses the same wrapping technique */
 .groupHead { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-2) var(--space-4); }
 .groupHead > h2 { flex: 1 1 16rem; min-inline-size: 0; margin: 0; overflow-wrap: anywhere; }
-.group + .group { margin-block-start: var(--section-gap); }
 ```
 
 [Standard/Convention] A flex item with a `flex-basis` wraps onto a new line "once there is not enough space to place
@@ -298,7 +302,9 @@ DOM order is reading order is visual order.
   to notes started from now on."** **(V, design.md 4.9)**. It replaces the earlier 4.9 string ("Shown on every
   participant's note, in this order…"), which stopped being true with D44.
 - `<p id="items-help">`, body size (18 px), `--colour-text-secondary` (9.0:1), `max-inline-size: var(--measure)`.
-  Shown at once, before the list loads, because it is static.
+  Shown at once, before the list loads, because it is static. The page's one shared list wrapper, `ListFrame`
+  (list-editor.md *Implementation notes*), which holds the load region and so every group's list, renders it once,
+  above them, and gives its id to each list's item fields.
 - Linked to every **New item in [group name]** and **Edit item** textarea through `aria-describedby`, because it
   states the consequence of adding or rewording (list-editor). Not linked to the group name fields: three sentences
   heard on every group field would bury the count [Opinion].
@@ -331,7 +337,9 @@ DOM order is reading order is visual order.
   body text and a 4 px `--colour-error` left bar. It takes focus.
 - **"Someone else changed this list just now. Check it, then try again."** (P, list-editor). One message for item and
   group conflicts.
-- It stays until the next successful change on this screen.
+- It stays until the next successful change on this screen. It is the shared list wrapper's `ListConflict`, which the
+  page puts first in the load region: a write in any group's list shows it, and focuses it, through the wrapper, and
+  the next write that succeeds in any of them takes it away.
 
 ### 5. Group sections: [group-picker](../components/group-picker.md) Manager side
 - One `<section aria-labelledby="group-{id}-heading">` per **active** group, in configured order, **Every note
@@ -360,7 +368,12 @@ DOM order is reading order is visual order.
   restarts at 1 in each group (so "number 2 of 5" stays true), row buttons **Move up, Move down, Edit, Archive**, the
   row alert slot, busy labels and hidden context `, [item text]` (list-editor; Conflicts resolved, 4 and 14). Items
   move up and down **within their group only**; Move up on a group's first row and Move down on its last row are
-  unavailable. Moving to another group is done through Edit (component 6).
+  unavailable. Moving to another group is done through Edit (component 6). As built: `ListEditor` with
+  `kind="item"`, whose words are `strings.listEditor.item`; the group's adapter `commonItemsApi(groupId)`, which picks
+  the group's items from the page's one query; the group's `name`, after which the add field's label and the archived
+  summary's hidden text say " in [group name]"; and the field ids `addFieldId` `item-new-{groupId}` and `editFieldId`
+  `item-{id}-text`. Every group's list sits in the page's one `ListFrame`, so focus after a write, the help text and
+  the list conflict are the page's (list-editor.md *Implementation notes*).
 - **Empty group** (no active items): instead of the `<ol>`, a plain `<p>` **"No items in this group. It does not show
   on notes until it has one."** **(V)** in `--colour-text`, not a live region, shown only after the data arrives.
   The same line serves Every note (an empty Every note is not shown on notes either, A43).

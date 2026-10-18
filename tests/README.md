@@ -5,8 +5,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
-  the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals and Guide
-  prompts, with axe accessibility checks, run against the published app.
+  the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
+  items and Guide prompts, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -114,8 +114,9 @@ tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own l
 Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
 app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
-Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the two tests of a user's actions
-that meet the app's own (`e2e/user-actions.spec.ts`) and the Edit user test that meets the app's own save
+Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
+app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
+(`e2e/user-actions.spec.ts`) and the Edit user test that meets the app's own save
 (`e2e/edit-user.spec.ts`) get their setup links from the published app's own `admin bootstrap` and
 `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the second terminal gives
 them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the app's connection
@@ -381,20 +382,24 @@ The tests that meet the app's own answers sign in for real, through the `invite`
 the `authenticator` fixture, so that the organisation that `admin bootstrap` made starts with no participants: one adds,
 corrects, archives and restores a participant at 375 px; one adds a participant and five goals at 375 px, then
 rewords, moves, archives and restores one of them; and two more add, correct, archive and restore a participant, and
-add two goals and archive one, with the keyboard alone, at 375 px and at a laptop's width. `expectStops` there presses
-Tab or Shift+Tab and reads each stop: the focused element by the text that shows, so that a button's busy label, hidden
-until it is busy, is left out, a field by its label, and "outside the page" past the last stop, from where the next
-Shift+Tab comes back to it; and its focus ring as it is drawn, on a row's link on the `::after` that covers the row. A
-goal row's button reads as its label, then its goal's hidden text after a space and a comma, "Move up , Makes own
-breakfast", as its accessible name does too: the hidden text is a block of its own to both, and screen readers do not
-voice the space.
+add two goals and archive one, with the keyboard alone, at 375 px and at a laptop's width.
+`signInThroughSetup(page, invite, authenticator)` from `e2e/setupSignIn.ts` sets the account up and ends on Today.
+`expectStops(page, key, stops)` from `e2e/focus.ts` presses Tab or Shift+Tab and reads each stop: the focused element
+by the text that shows, so that a button's busy label, hidden until it is busy, is left out, a field by its label, and
+"outside the page" past the last stop, from where the next Shift+Tab comes back to it; and its focus ring as it is
+drawn, on a row's link on the `::after` that covers the row, which it expects to be `ring`, or the ring given, such as
+one in `Highlight` under forced colours. A goal row's button reads as its label, then its goal's hidden text after a
+space and a comma, "Move up , Makes own breakfast", as its accessible name does too: the hidden text is a block of its
+own to both, and screen readers do not voice the space.
 
-Every test in `e2e/participants.spec.ts` also watches the live regions, the elements whose role is `status` or `alert`:
-an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and reports, through
-`page.exposeFunction`, each region that the Participants screens put into the document with words already in it, which a
-screen reader may not announce. After the test, any region so reported fails it, as does any whose `display` is `none`.
-A test marked `test.fail()`, as the one in `e2e/fixtures.spec.ts` is, puts a status region with words into the list's
-`<main>`, which shows that the watcher sees it and fails a test.
+Every test in `e2e/participants.spec.ts` also watches the live regions, through `watchLiveRegions(page, path)` from
+`e2e/liveRegions.ts`: an init script wraps `appendChild` and `insertBefore`, before the app's own script runs, and
+reports, through `page.exposeFunction`, each element whose role is `status` or `alert`, or each in `<main>` with
+`aria-live`, such as a character count's polite twin, that a screen at an address starting `path` puts into the
+document with words already in it, which a screen reader may not announce. After the test, any region so reported
+fails it, as does any whose `display` is `none`, which `hiddenLiveRegions(page)` lists. A test marked `test.fail()`, as
+the one in `e2e/fixtures.spec.ts` is, puts a status region with words into the list's `<main>`, which shows that the
+watcher sees it and fails a test.
 
 ### Answering a participant's goals
 
@@ -413,8 +418,10 @@ that no goal request reaches the app: the list in its order; an add at the end, 
 restore, each with the goal's version as `If-Match`, `428` without one and `412` with an old one, the reword then `200`
 with the goal's `ETag`, and the others `204`, a restored goal going to the end; and a reorder `204` when it names the
 active goals, each once, and `422 config.order_mismatch` otherwise. A goal whose words or place change takes a new
-version, as its `RowVersion` would, so that the page meets what the API would say to its next write. Call it before
-`page.goto`, with `[]` for no goals; a later call overrides it, as Playwright tries the latest route first.
+version, as its `RowVersion` would, so that the page meets what the API would say to its next write; a change that
+leaves it as it was saves nothing, as the API's does (D84). The list itself is a `HeldRows` from `e2e/rows.ts`, which
+`serveCommonItems` keeps for each group's items too. Call it before `page.goto`, with `[]` for no goals; a later call
+overrides it, as Playwright tries the latest route first.
 
 It gives the list's `changeElsewhere(id, change)`, which rewords a goal, `{ text }`, or archives it,
 `{ archived: true }`, with a new version, as another manager would: a Save then meets the edit conflict, and a move or
@@ -435,7 +442,51 @@ The goal tests check every state with axe; at 375 px, each row's two pairs of bu
 button as wide as its label, as when sized to what it holds (`expectLabelWidth`, which sizes it so for a moment through
 its `style`, which the policy allows); at 1280 px the buttons on the text's line, and under it at 200% text; nothing
 scrolling sideways at 320 px with 200% text; and, under forced colours, the focus ring in `Highlight` and the
-unavailable buttons in `GrayText`.
+unavailable buttons in `GrayText`. `e2e/layout.ts` has the helpers for those: `boxOf`, `expectAtLeast`,
+`expectLabelWidth`, `setTextTo200Percent`, `scrollsSideways`, and `systemColour(page, keyword)`, the colour that forced
+colours give a system colour such as `Highlight`.
+
+### Answering `/api/admin/common-item-groups`
+
+Common items reads every group, with its items, active and archived, with
+`GET /api/admin/common-item-groups?includeArchived=true`, its one read, and shows no group until it has loaded.
+`e2e/commonItems.ts` has made-up groups and items (A35), in the JSON that `CommonItemGroupListEndpointTests` asserts and
+as `CommonItemsPage.test.tsx` has them: `everyNote`, the built-in group as `admin bootstrap` leaves it, with no items;
+and `threeGroups`, common-items.md's sketch, Every note with Medication prompted and Meal prepared, and Laundry done and
+Bed made archived, Community outing with Travelled by bus or train, Paid for a ticket at the counter and Bought lunch,
+Personal care with none, and Overnight respite, archived, which the page leaves out, in the API's order.
+`madeUpItem` and `madeUpGroup` make others, such as an item of a long word or a group of a long name.
+
+`serveCommonItems(page, groups)`, beside `serveGoals`, answers the read and each item write in the browser, through
+`page.route`, from a copy of `groups` that it keeps in memory as the API keeps them, with a `HeldRows` for each group's
+items, so that no request reaches the app: the list, Every note first; an add at the end of the group, `201` with no
+body, or `409 config.group_archived` for an archived group; an item's reword, archive and restore, each with its version
+as `If-Match`, `428` without one and `412` with an old one, the reword then `200` with no body and no `ETag`, or `409`
+while its group is archived, and the others `204`, a restored item going to the end of its group; a reorder of a
+group's active items `204`, or `422 config.order_mismatch`; and `404` for a group or an item that it does not hold. It
+gives `changeElsewhere(id, change)`, as `serveGoals` does, for an item. `failCommonItems(page)` aborts each read, as
+`failParticipants` does; `listRead` is the read's address, for `holdNext`, so that a test holds it for the loading line;
+and `itemWrites` names a move's and an Archive's addresses, as `goalWrites` does. `e2e/shell.spec.ts`'s walk, whose
+Common items link opens the screen, answers the read with `[everyNote]`.
+
+```ts
+await serveMe(page, manager);
+const store = await serveCommonItems(page, threeGroups);
+await page.goto('/manage/common-items');
+```
+
+The tests that meet the app's own answers, in `e2e/common-items.spec.ts`, sign in for real, through the `invite`
+fixture and setup with a passkey on the `authenticator` fixture, so that the organisation that `admin bootstrap` made
+has its Every note group, empty, as the bootstrap creates it with the organisation: one adds five items at 375 px, with
+focus in New item in Every note after each, then rewords, moves, archives and restores one; and two more add three with
+the keyboard alone, at 375 px and at a laptop's width, and reword, move, archive and restore one. The integration tests'
+seeded organisations have their Every note group too (*The seeded organisations and the tenant*, below). The other
+tests check each state with axe; the item rows' layout at 375 px and at 1280 px, and at 200% text with no button over
+another or cut off; nothing scrolling sideways at 320 px with 200% text; under forced colours, every stop's ring in
+`Highlight`, the unavailable buttons dashed in `GrayText`, the summary markers and the row dividers; and every test
+watches the live regions, as `e2e/participants.spec.ts` does. `expectNothingKept(page, ...values)` from `e2e/kept.ts`
+then checks that no item's words are kept where the page could keep them: on a page that `page.goto` loaded, the
+history entry holds React Router's index alone.
 
 ### Signing in with a passkey, end to end
 
@@ -623,6 +674,16 @@ acts in A and checks that nothing of B's reaches it.
   (`Grow2Notes.Tests/Fixtures/TestParticipants.cs`), active, or archived with `archived: true`, which gives their ID
   and their ETag, the `If-Match` of a change to them, as
   `Grow2Notes.Tests/Features/Participants/UpdateParticipantEndpointTests.cs` does.
+- No test changes a seeded Every note group either, which the groups list's tests and its matrix row read as
+  bootstrap leaves it (*The endpoint matrix*). A test adds groups and items of its own straight through the app's
+  context, as no endpoint adds a group until T07, with `TestCommonItems`
+  (`Grow2Notes.Tests/Fixtures/TestCommonItems.cs`):
+  `services.AddGroupsAsync(organisationId, groups)` adds groups other than Every note, and
+  `services.AddItemsAsync(organisationId, groupId, items)` adds items to a group, each with its `SortOrder`, its
+  `CreatedAtUtc` and ID when the test needs them, such as fixed IDs that SQL Server orders the other way round from
+  their times, and its archive time, if any, and gives their IDs in the order given; and
+  `services.AddItemAsync(organisationId, groupId, item)` adds one and gives its ID and its ETag, the `If-Match` of a
+  change to it, as `Grow2Notes.Tests/Features/CommonItems/UpdateCommonItemEndpointTests.cs` does.
 - The users are created through `UserManager`, as the app creates accounts, and are as setup leaves them except that
   they have no passkey or password, so a test calls as them with the test-only sign-in.
 - A test that adds a participant gives it the organisation's ID itself, under a `Use` block for that organisation
