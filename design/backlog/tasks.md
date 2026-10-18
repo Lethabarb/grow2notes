@@ -3476,7 +3476,7 @@ past notes.
 
 ```yaml
 id: T10
-status: new
+status: doing
 release: R1
 lane: C
 size: M
@@ -3514,10 +3514,235 @@ older page is told the note has moved on, and nothing is overwritten without ask
   `DbUpdateConcurrencyException`, a `500`: this task answers it `409 note.version_conflict`, as `PUT {base}/draft`
   answers a submitted note on which the caller has no working copy. Submit's `checkSave()`, `stop()`, `resume()` and
   `end()` are in `useAutosave` (autosave-status.md).
+- Planned on 19 October 2026 from `origin/main` at `3b52fd2`, with T01 (#56) and T09 (#63) merged. No owner question
+  holds it: note-form.md open question 7, staying on the form with no dialog after a failed save, is built as the
+  spec says ([Open owner questions](#open-owner-questions)), and the one new sentence, Sign out's "Not signed out:
+  your note is not saved yet. Keep this page open; retrying.", is app-shell.md's (P), approved by D67. Where the
+  design is silent, the simplest option is taken:
+  - The stale `seq`'s answer (step 1) is `200 {savedAtUtc}` with the working copy's stored `UpdatedAtUtc`, §6.3's one
+    shape for a save. A save of an existing working copy reads it under an update lock (`UPDLOCK`) in the transaction
+    that saves it, so that two saves of one working copy at once, such as a page-hidden save beside the save in
+    flight, are decided one after the other and the higher `seq` wins whichever comes first (autosave-status.md
+    *Behaviour* 1), with no change to the model and no migration; an autosave that a submit beat then finds no
+    working copy and answers `409 note.version_conflict`, never T09's `500`. A takeover, like any later save, writes
+    no audit event (A28).
+  - Each attempt of a save is a new `seq`, as T08's identity gives it: a retry reads the form and takes the next
+    number as it is sent, so that newer text never goes under a number that the server has applied. So a page's first
+    save of a draft that another page saved last, lost before it reached the server and retried as `seq` 2, meets the
+    takeover banner, whose Keep loses nothing.
+  - Transient (step 2) means no whole answer (status `0`, `api()`'s 10 s timeout included), `408`, `429`, `500`,
+    `502`, `503` or `504`. A `Retry-After` on a `429` or `503`, in seconds or as an HTTP date, is the next delay in
+    place of the back-off's, `ApiError` carrying it from `api()`. Any other refusal is not retried, and one that is
+    not a dead end, a takeover or a `401` leaves the change for the next change or blur, as T08's does. `api()` takes
+    a `keepalive` option for the page-hidden save, which sends the antiforgery token already held.
+  - `flushNow()` gives `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying
+    the newest change is answered; `checkSave()` gives the content once its own `PUT` is answered carrying the newest
+    change. Every other outcome gives `false`, or nothing, as it comes: "Not saved" shown, a takeover, a `401`, a dead
+    end that `checkSave()` meets, any refusal that is not retried (a `403`, `404`, `412` or `422`, or a `400` that
+    `api()`'s antiforgery retry does not clear), and, for `checkSave()`, a change made while its `PUT` was out, as
+    T09 built it, so that no confirmation opens seconds later (note-form.md *Pressing Submit note* 4: the press is
+    never remembered and acted on later). The retries go on behind them, so that no press, leave or Sign out waits on
+    a save that retries for ever, and none is acted on later; the session clock's hold and Sign out's busy label
+    always end.
+  - The shell tells its screen whether the signed-out-in-place view hides it, in a context beside
+    `WholePageMessageContext`; autosave pauses while it does, and sends at once when it stops, which the shell does
+    only for the same person (T01). The session clock's phase cannot tell it, as view C's passkey options and a
+    different person's sign-in, before its reload, are accepted requests too.
+  - A mounted note form registers its `flushNow()` once, in `session.ts` beside `holdWhile`: the clock calls it at the
+    28:00 mark, once per idle period, while a change is unsaved, and holds on it; and Sign out awaits it after
+    `confirmLeave()` and the busy label, as app-shell.md's *Press Sign out* step 2. The note form calls no
+    `setLeaveGuard()`, whose Stay says nothing: it reuses T03's leave guard for what fits, `useBlocker` for in-app
+    links as `LeaveWarning` has it, and `unloadGuardArmed()` in its `beforeunload` listener.
+  - Sign out while the takeover banner shows is refused with the not-saved sentence, the only words the design has
+    for it, as an in-app link stays then; after a dead end it goes on, as leaving is never blocked then. A link pressed
+    while the banner shows stays and says its sentence in the polite region, as a press of Submit does (note-form.md
+    *Pressing Submit note* 2), so that the press is not silent. The sentence's closing "retrying" is untrue during
+    the takeover, and after a refusal that is not retried, as autosave then sends nothing until the banner's choice
+    or the next change; a new sentence would need the owner's approval, so app-shell.md's "As built (T10)" note
+    records the mismatch for the owner to reword in the copy module (D67).
+  - Load the other version reads `GET {base}/draft` outside the draft's query, as the lists-changed reload does. A read
+    that fails keeps the banner, its buttons ready, and says the form's own "The note did not load: …" in the polite
+    region; a `404`, the note submitted meanwhile (until T14), is the version-conflict dead end. Typing while the
+    banner shows is counted and kept, not sent, and Keep sends it.
+  - The form calls the existing `invalidateToday()` as it unmounts, whichever way it is left (note-form.md *Leaving
+    the form*; autosave-status.md *Where it's used*, Today row), so that Today's row matches without leaning on
+    `todayQuery`'s `staleTime: 0`; `['me', 'drafts']` comes with T12.
+- Hand-offs, which step 6 writes into the receiving tasks' Notes and, dated, into the stories' Notes: Load the other
+  version replacing the picks, and the picks in every save that this task sends, with section 2 (T13; S02.02.06's
+  second criterion); the takeover banner on a pending edit, as for a draft (T14; autosave-status.md *Per-screen
+  notes*); the never-replayed rule for Discard and Save changes (T12, T14), as T01's Notes say; and the form's own
+  navigation after Discard's `204` (T12) and after Save changes' or Cancel's success (T14) passing the leave guard's
+  `useBlocker`, as Submit's does after its `201` (step 4), so that no later task works around the shared guard.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T09's: S02.02.05's and S02.02.06's
+  manual checks as they are worded, each criterion staying unticked with a dated Note naming its step (README §9); on
+  the iPhone in Safari and the Android phone in Chrome, a sentence typed and another app opened at once, then the note
+  opened on the laptop showing it (the page-hidden save on a real phone); on the laptop, a change left unsaved through
+  the app's own 30 idle minutes, then the same person signing in again with the text intact and no takeover banner
+  (§14 M2); and, with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome, note-form.md's
+  *Announcements* for what this task builds: "Not saved: no connection. Keep this page open; retrying." once as the
+  connection drops, then "Saved …"; the takeover sentence once as a second tab saves, with Keep and Load next after
+  the back link; a press of Submit during "Not saved" saying the sentence; and Sign out with no connection after a
+  change saying the panel's sentence.
 
 ### Steps
 
-Planned when the lane starts it.
+- [ ] A page's saves on the server, as §5.6 numbers them (S02.02.04's first and second criteria; S02.02.06's first;
+      design.md §5.6 *Autosave is idempotent under retries*, §6.7's working-copy row and §6.9's `draft.taken_over`;
+      §14 M2's "a save whose response is lost and is retried does not raise a conflict"; T09's hand-off of the
+      `500`): `PUT {base}/draft` reads the caller's working copy under an update lock in the transaction that saves
+      it (Notes); the same `clientId` as `LastClientId` with a `seq` at or below `LastSeq` changes nothing and answers
+      `200 {savedAtUtc}` with the stored time, and a higher `seq` is applied; a different `clientId` with `seq` 1
+      takes the working copy over, and with a higher `seq` gets `409 draft.taken_over`, added to `ErrorCode`
+      (`ErrorCodeTests`), writing nothing; and a creating `PUT` sent again after its answer was lost finds the
+      caller's own draft with that `clientId` and is taken as an update, never a conflict. Integration tests on SQL
+      Server: from `X` and 5, `seq` 5 and `seq` 4 each `200` with the stored `savedAtUtc` and the narrative, ticks,
+      flag and `UpdatedAtUtc` unchanged, then `seq` 6 applied; a first save that committed, sent again unchanged as
+      `seq` 1, `200` with one note, one working copy and one `note.draft_started`; the same committed first save
+      retried as the client retries it, with that `clientId` and `seq` 2 (Notes), `200` and applied, leaving one
+      note, one working copy and one `note.draft_started` (§14 M2); page A at `seq` 4, page B's new `clientId` at
+      `seq` 1 applied, then A's `seq` 5 `409 draft.taken_over` with B's content kept, and B's `seq` 2 applied; one
+      page's `seq` 7 held after its read by an interceptor, as `HoldsTheFirstSaveOfTheUser` holds a save, and its
+      `seq` 6 sent meanwhile, ending with `seq` 7's content; a submit held after deleting the working copy, with an
+      autosave sent meanwhile that answers `409 note.version_conflict` once the submit commits, recreating nothing,
+      and an autosave held after its read while a submit is sent, both then succeeding; and no audit event from any
+      save but a first.
+- [ ] Autosave keeps trying, and saves as the page is hidden (S02.02.04's third and fourth criteria and its links to
+      design.md §3.4 *Autosave*, §4.3's save indicator, §5.6 *Client behaviour* and note-form.md items 9, 11, 12 and
+      13; autosave-status.md *Behaviour* 1, 2 and 4; T09's hand-off of item 25's press during "Not saved"): in
+      `useAutosave`, a save that fails for a transient reason (Notes) is retried for as long as the form is open,
+      after 1, 2, 4 and 8 s and then every 10 s, or after a `Retry-After`, and after `401`, `403`, `409`, `412` and
+      `422` never; its mutation has `networkMode: 'online'`, so that the browser going offline pauses it and coming
+      online sends it; each attempt reads the form and takes the next `seq` as it is sent (Notes); "Saving…" shows
+      through the first failure, then the indicator's new failed state, "Not saved: no connection. Keep this page
+      open; retrying." (V, in `src/copy`), once the first retry has failed too, or at once while offline:
+      `#save-status` across the top bar's full width in the attention colours, with a 2 px border (`CanvasText` under
+      forced colours) and an `aria-hidden` warning icon, its words written once per episode, so said once; and
+      "Saved 9:44 am" once a save carrying the newest change is answered. When the page is hidden with a change
+      unsaved, the newest state is sent at once, not waiting for the save in flight, through `api()` with `keepalive`
+      while the JSON body is under 60,000 bytes by `TextEncoder` and a normal `fetch` from there; its answer counts as
+      any save's, and its failure is left to the retries. When the page is visible again with a change unsaved, it is
+      sent at once, the back-off's wait cut short. Neither sends anything from `stop()` to `resume()`, after `end()` or
+      a dead end, while the takeover banner shows (step 3) or while signed out (step 5), so that no late `PUT` lands
+      after Submit's `POST`, Discard or Cancel (autosave-status.md *Behaviour* 1 and 6; note-form.md *Autosave*'s
+      Paused row), and `stop()` waits for a page-hidden save out as for any save out. `flushNow()` and `checkSave()`
+      settle as Notes say. Submit note is unavailable while "Not saved" shows, and a press opens nothing and says the
+      indicator's sentence in the page's polite region (note-form.md item 25). Vitest, on fake timers: the retries'
+      delays, 1, 2, 4, 8, 10 and 10 s; a `Retry-After: 3` waiting 3 s; `401`, `403`, `409`, `412` and `422` each sent
+      once; "Not saved: …" after the second failure, at once on the `offline` event, written once through further
+      failures, and "Saved …" after recovery with no action; a retry carrying text typed during the outage under the
+      next `seq`; the page hidden sending one `PUT` with `keepalive` at 59,999 bytes and without it at 60,000, beside a
+      save already out, and nothing with no change unsaved; the page visible sending at once; after `stop()`, the page
+      hidden sending no `PUT`, and after `resume()` the unsaved change going at once; after `end()`, the page hidden
+      or visible sending nothing; `flushNow()` and `checkSave()` giving `false` and nothing as "Not saved" shows, while
+      the retries go on, and a later success opening no confirmation; `flushNow()` giving `false`, and `checkSave()`
+      nothing, on a `422` and on a `403`; a change typed while the check save is out opening no confirmation, even
+      after a later save succeeds; Submit pressed during "Not saved" opening nothing and saying the sentence; and a
+      form left and opened again in the same page load going on from the next `seq` (item 13).
+- [ ] Changed on another device or tab (S02.02.06's second criterion; its links to design.md §4.3's state "Changed on
+      another device or tab", §5.6's takeover and note-form.md items 15 and 16; note-form.md component 1's blocking
+      banner, *Conflicts and refusals* and *Changed on another device or tab*; autosave-status.md *Behaviour* 5 and
+      9): a `409 draft.taken_over`, from a save or Submit's check save, pauses autosave, which is not a dead end; the
+      indicator says "Not saved"; and the top bar's second row, in place of the failed-save row, holds the takeover
+      banner, a `<section aria-labelledby>` in the dead ends' attention colours with "This note was changed on
+      another device or tab." (V, `draft.taken_over` in `apiErrors.ts`), then **Keep the text on this screen** (V,
+      primary) and **Load the other version** (V, secondary), stacked full width at 44 px or more on a phone and side
+      by side, wrapping, on a laptop; its sentence is said once through the form's assertive region, focus stays
+      where it is, typing is kept and counted but not sent (Notes), Submit is unavailable, a press of it says the
+      sentence politely, and `beforeunload` is listened for while it shows. Keep forgets the note's `{clientId, seq}`,
+      sends everything on screen now under a new `clientId` with `seq` 1, removes the banner and gives focus back to
+      the element that had it when the conflict came, else the `<h1>`. Load reads the draft again (Notes), replaces
+      the ticks, the Guided notes text in its uncontrolled box, the flag and the reason, forgets the `{clientId,
+      seq}`, removes the banner, shows "Saved" with the other version's `savedAtUtc` and focuses the `<h1>`. Vitest:
+      the banner in the DOM and Tab order after the back link, with "Not saved"; the sentence said once, focus kept,
+      and a sentence typed meanwhile kept and not sent; Keep's `PUT` with a new `clientId` and `seq` 1 carrying that
+      sentence, the ticks and the flag, focus back where it was, then "Saved …"; Load showing the other version's
+      ticks, text, flag and reason with focus on the `<h1>`, and its next save under a new `clientId` with `seq` 1;
+      nothing on screen replaced by anything but Load (item 16); a check save meeting the takeover opening no
+      confirmation; and Load's read failing, or answering `404`, as Notes say.
+- [ ] Leaving the form (S02.02.05's links to note-form.md items 34 and 35 and *Interactions* › *Leaving the form*;
+      T08's hand-off of the leave guard, and T09's of the Past notes link; autosave-status.md *Behaviour* 7): the
+      note form blocks an in-app navigation with React Router's `useBlocker`, as T03's `LeaveWarning` does, whether
+      by the back link, the Past notes link, the nav or the browser's Back and Forward: with nothing unsaved it goes;
+      with a change waiting or a save out, `flushNow()` sends it and the navigation goes once it is answered, after
+      "Saving…"; with "Not saved" shown, or `flushNow()` giving `false` (Notes), it stays and says the indicator's
+      words in the polite region; with the takeover banner it stays and says the banner's (Notes); and after a dead
+      end it is never blocked. No dialog. `beforeunload` is listened for only while a change is unsaved or the
+      takeover banner shows, and asks only while `unloadGuardArmed()`. Submit's navigation to Today after its `201` is
+      never blocked. As the form unmounts it calls `invalidateToday()` (Notes). Vitest: the back link, the Past notes
+      link and Back with a change waiting each sending the `PUT`, then leaving; each staying, with the sentence said
+      once, while "Not saved" or the banner shows, and after its `flushNow()` met a `422` or a `403`; leaving at once
+      with nothing unsaved and after each dead end; the listener added at the first unsaved change and removed once it
+      is saved (item 35); no ask after `disarmUnloadGuard()`; Today's lists marked stale as the form is left; and
+      Submit landing on Today.
+- [ ] An idle sign-out, signing in again and Sign out (S02.02.05's first and second criteria; its links to design.md
+      §4.0 *Sessions*, §8.5, note-form.md item 36 and *Interactions* › *Session*, app-shell.md's Sign out bullet on
+      a waiting autosave, its Session bullet on a waiting autosave at 28:00 and its *28:00 idle on a visible page*, and
+      session-timeout.md's clock step 3; T01's hand-offs of app-shell.md's Session bullets "After timing out
+      mid-note…", "Signing in as a different person…" and, for Submit, "A `401` … is never replayed"): the form's
+      `flushNow()` registered with the session clock (Notes), which at the 28:00 mark of an idle period with a change
+      unsaved calls it before the phase leaves `active` and holds on it, so that an accepted save resets the clock
+      with no warning and a failed one lets the warning open as the hold settles. A `401` pauses autosave, its timers
+      and the page-hidden save stopped and everything kept in memory, while the signed-out-in-place view hides the
+      form (Notes); as the same person's screen shows again, the change goes at once under the same `clientId` and
+      the next `seq`, with no takeover banner; a different person's sign-in reloads to Today (T01) with nothing sent
+      first; and Submit, its check save included, is never replayed. Sign out, after `confirmLeave()` and its busy
+      label, awaits the registered `flushNow()`: `false` sends no logout, writes "Not signed out: your note is not
+      saved yet. Keep this page open; retrying." (P, D67, in `src/copy`) into the panel's status line and leaves the
+      button ready; and the comment over `signOut()` drops this step. Vitest, with fake timers and a fake system
+      time, as `session.test.ts` has them: a change at 27:59 sent at 28:00 and no warning once it is answered; a save
+      failing at 28:00 letting the warning open, with no second flush in that idle period; nothing called with
+      nothing unsaved; a `401`, then nothing sent on a change, a blur or the page hidden while signed out, then the
+      same person's sign-in sending one `PUT` with the same `clientId` and the next `seq`, the text, ticks and reason
+      as they were, no banner and focus on the `<h1>`; a different person's sign-in loading the page afresh with no
+      `PUT`; a `401` on Submit's `POST` not sent again after signing in; Sign out with a change waiting sending the
+      `PUT` before `POST /api/auth/logout`; Sign out with that save failing, or meeting a `422` or a `403`, sending no
+      logout, with the sentence and the button ready; Sign out after a dead end signing out; and Sign out during the
+      takeover refused (Notes).
+- [ ] Prove the resilience end to end and bring the documents into line: `tests/e2e/notes.ts`'s store applies §5.6's
+      `clientId` and `seq` rules as the server does, described in tests/README.md; and `note-form.spec.ts`, with
+      `sign-out.spec.ts` and `session-warning.spec.ts` where their flows are. Signed in for real (T08's Notes) at
+      375 px, on the app's own answers: offline (`context.setOffline`) after typing, the indicator's exact sentence
+      within about 1 s with Submit `aria-disabled`, and back online "Saved …" with no action, the reopened draft
+      holding what was typed offline (item 11); a `PUT` let through to the server and its answer aborted, then
+      "Saved" with no banner and the text saved once (item 12, §14 M2); two tabs on one draft, the older tab's next
+      save showing the banner, Keep winning and the other tab then meeting it, and Load replacing the ticks, text,
+      flag and reason with focus on the `<h1>` (items 15 and 16); a tab closed mid-sentence, then the note opened in
+      a new page holding the text up to the last few seconds (§14 M2's closed browser; the automated half of
+      S02.02.06's manual check); the form left and opened again in the same page load, its next save applied (item
+      13); the back link and the Past notes link with a change waiting sending it, then leaving, and staying while
+      "Not saved" shows (item 34); Sign out with a change waiting sending the `PUT` before the logout, then reloading
+      `/`, with Back not showing the signed-in screen; on `page.clock`, a change at 27:59 sent at 28:00 with no
+      warning; and a session ended in place mid-note, then the same person signing in again, with the text, ticks
+      and reason intact, one `PUT` under the same `clientId` and the next `seq`, no banner and the URL unchanged
+      (item 36, §14 M2), and a different person landing on Today with no `PUT` sent. With the API answered in the
+      browser: the page made hidden sending the `PUT` at once (item 9); axe in "Not saved" and the takeover banner at
+      both widths; no sideways scroll at 320 px with 200% text in both; the banner's buttons at 44 px or more; the
+      failed row's and the banner's borders under forced colours; live regions in the DOM before their words; the
+      keyboard-only check (README §9) at both widths, in note-form.md's Tab order with Keep and Load; and no name,
+      note text or message in `location`, `document.title`, `history.state`, `localStorage`, `sessionStorage`,
+      IndexedDB or Cache Storage after each flow (item 14, §14 M2). Every new string is in `src/copy` and the copy
+      test passes, and the diff holds no trace of the parent company's name (D72). Docs: design.md §5.6 and §6.3 keep
+      their design and gain only the new facts (the stale `seq`'s answer and the update lock); autosave-status.md,
+      note-form.md, session-timeout.md and app-shell.md gain only what the build settles, as "As built (T10)" notes,
+      app-shell.md's naming the Sign out sentence's untrue "retrying" (Notes);
+      the hand-offs (Notes) in the receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks
+      (Notes) on ops/first-use-in-test.md; no migration; and CI's run on the pull request passing.
+- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
+      the CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready`
+      answer `200`; `/` serves this build's `index.html`, its hashed assets answering `200`; signed out,
+      `GET /api/participants/{a made-up GUID}/notes/{today}/draft` answers a `401` problem with `no-store`; then
+      headless Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker and every
+      other `/api` request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, typing
+      with the `PUT`s failing shows "Not saved: no connection. Keep this page open; retrying." after about 1 s with
+      Submit `aria-disabled`, and "Saved …" once they are answered; a `PUT` answered `409 draft.taken_over` shows the
+      banner with both buttons, Keep sending a `PUT` with a new `clientId` and `seq` 1, and Load showing the other
+      version's text; a change waiting as the back link is pressed sending its `PUT`, then Today; the console reports
+      no CSP violation or script error, and the origin's storage is empty; Application Insights shows no exception
+      and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T10's `status` here and its
+      stories' to `done` together, ticking their criteria and the parts that T08 and T09 handed to T10 in S02.02.02
+      and S02.03.01, and leaving unticked, each with its dated Note, S02.02.05's and S02.02.06's manual checks, whose
+      Notes name their ops/first-use-in-test.md steps (README §9), and any part handed to a task not yet merged
+      (Notes).
 
 ---
 
