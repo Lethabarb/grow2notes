@@ -3229,7 +3229,14 @@ past notes.
   the Past notes link at some scroll positions, as any sticky bar covers what passes under it, so the dead end's axe
   check after a press of Submit note, which scrolls the page, starts from the top. The by-hand checks are steps 53 to 55
   of ops/first-use-in-test.md, after T07's 50 to 52, which merged first, in merge order. Show older's screen-reader
-  reading waits there for a participant with more than 30 notes, as test has none yet.
+  reading waits there for a participant with more than 30 notes, as test has none yet. CI's run 39154253705 on the
+  pull request (#63), which alone runs the SQL Server tests, passed on `9847b2e`, with 1535 xUnit and 276 Playwright
+  tests. `migrate.sql`, scripted locally from that commit with the command CI scripts its artifact's copy with, gives
+  `AddNoteVersion` only additions: `CREATE TABLE [NoteVersion]` and `CREATE TABLE [NoteVersionItem]`, with their
+  primary keys, the `(OrganisationId, Id)` alternate key, the composite foreign keys and `CK_NoteVersionItem_Section`;
+  seven indexes, two of them unique; and `DENY UPDATE, DELETE` on each table to `grow2notes_runtime`, with
+  `dotnet ef migrations has-pending-model-changes` finding no change. The artifact's own copy is not yet read in the
+  pull request, so step 8 stays unticked until it is, as T05's step 6 did.
 - 19 October 2026, review: 4 findings were confirmed and are fixed here. None changes the design, so no A-number is
   added:
   - The read view's end-to-end check that its text is not fetched again as the window comes back could not fail: it
