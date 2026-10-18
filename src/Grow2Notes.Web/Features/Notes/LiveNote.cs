@@ -7,10 +7,17 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <summary>
 /// The live note of a participant and day (design.md §5.5 item 1), a draft or submitted, never a discarded draft, with
 /// its author's display name, which the note's handlers find by its natural key, so that everyone asking for the same
-/// participant and day reaches the same note.
+/// participant and day reaches the same note; and, from its submit on, its first submitted time and the number of its
+/// current version, which is <c>0</c> on a draft.
 /// </summary>
 internal sealed record LiveNote(
-    Guid Id, NoteStatus Status, Guid AuthorUserId, DateTime CreatedAtUtc, string AuthorDisplayName)
+    Guid Id,
+    NoteStatus Status,
+    Guid AuthorUserId,
+    DateTime CreatedAtUtc,
+    string AuthorDisplayName,
+    DateTime? FirstSubmittedAtUtc,
+    int CurrentVersionNumber)
 {
     /// <summary>
     /// Every live note, read without tracking, which <see cref="FindAsync"/> narrows to one participant and day, and
@@ -32,7 +39,9 @@ internal sealed record LiveNote(
             from n in All(db)
             where n.ParticipantId == participantId && n.NoteDate == noteDate
             join author in db.Users on n.AuthorUserId equals author.Id
-            select new LiveNote(n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName))
+            select new LiveNote(
+                n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName, n.FirstSubmittedAtUtc,
+                n.CurrentVersionNumber))
         .SingleOrDefaultAsync(cancellationToken);
 
     /// <summary>

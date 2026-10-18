@@ -8,7 +8,7 @@ import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
-import type { Draft, ParticipantHeader } from '../notes/noteQueries.ts';
+import type { Draft, NoteAnswer, ParticipantHeader, SubmittedNote } from '../notes/noteQueries.ts';
 import type { AdminParticipant } from '../participants/participantsQuery.ts';
 import noteStatus from './NoteStatus.module.css';
 import { todayQuery, type TodayList, type TodayNote, type TodayParticipant } from './todayQuery.ts';
@@ -134,13 +134,16 @@ function problem(status: number, includes: Record<string, unknown> = {}): Answer
 }
 
 /**
- * Answers `participant`'s header and the form of their note for 1 October 2026 (design.md §6.3), which their row
- * opens, the form with `draft`.
+ * Answers `participant`'s header and their note for 1 October 2026 (design.md §6.3), which their row opens: the note
+ * itself, `GET {base}`, with `note`, and, for one that is not submitted, its form with `draft`.
  */
-function serveNoteOf(participant: TodayParticipant, draft: Answer) {
+function serveNoteOf(participant: TodayParticipant, note: Answer, draft?: Answer) {
   const { id, givenName, familyName } = participant;
   serve(`/api/participants/${id}`, json({ id, givenName, familyName, status: 'Active' } satisfies ParticipantHeader));
-  serve(`/api/participants/${id}/notes/2026-10-01/draft`, draft);
+  serve(`/api/participants/${id}/notes/2026-10-01`, note);
+  if (draft !== undefined) {
+    serve(`/api/participants/${id}/notes/2026-10-01/draft`, draft);
+  }
 }
 
 /** A new note's template, as `GET {base}/draft` gives it, with no goals. */
@@ -153,6 +156,14 @@ const newNote: Draft = {
   narrative: '',
   isFlagged: false,
   flagReason: null,
+};
+
+/** Alex P.'s note for Jane, as `GET {base}` gives it once submitted at 4:12 pm, unflagged, with no goals. */
+const alexsSubmittedNote: SubmittedNote = {
+  status: 'Submitted',
+  author: { displayName: 'Alex P.' },
+  firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
+  current: { narrative: 'Jane made toast.', goals: [], isFlagged: false, flagReason: null },
 };
 
 /** No connection, which `fetch` rejects at once. */
@@ -713,7 +724,7 @@ describe('Today, opening a row', () => {
   // the row never opens by it, as the note's page asks the server and shows what it says then.
   it("opens the server's empty form at a row whose line says Alex P.'s draft, which was discarded since", async () => {
     const { router } = await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', alexsDraft)]));
-    serveNoteOf(jane, json(newNote));
+    serveNoteOf(jane, problem(404), json(newNote));
 
     await press(rowLink('Jane Citizen'));
     await settle();
@@ -723,10 +734,24 @@ describe('Today, opening a row', () => {
     expect(main()).not.toHaveTextContent(/started/);
   });
 
+  it("opens the server's read view at a row whose line says Alex P.'s draft, which was submitted since", async () => {
+    const { router } = await openToday(worker, listOf([madeUp(jane.id, 'Jane', 'Citizen', alexsDraft)]));
+    serveNoteOf(jane, json(alexsSubmittedNote));
+
+    await press(rowLink('Jane Citizen'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
+    expect(within(main()).getByText(/^Written by Alex P\./)).toBeInTheDocument();
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+    expect(sent(`/api/participants/${jane.id}/notes/2026-10-01/draft`)).toBe(0);
+  });
+
   it('says who started the note, as the server says, at a row with no line, as Alex P. began it since', async () => {
     const { router } = await openToday(worker, listOf([jane]));
     serveNoteOf(
       jane,
+      json({ status: 'Draft' } satisfies NoteAnswer),
       problem(409, {
         code: 'note.in_progress_by_other',
         authorDisplayName: 'Alex P.',

@@ -47,6 +47,13 @@ export const msg = {
   notSubmitted: (cause: Cause): string => msg.notDone('submitted', cause, strings.note.draftIsSaved),
   /** Today's success banner after Submit (design.md §4.3), with the participant's full name, one phrase. */
   noteSubmitted: (name: string) => `Note for ${name} submitted`,
+  /**
+   * The read view's byline before the submitted time (participant-notes.md *Read view*), with the author's display
+   * name as stored, as the daily report words it (design.md §11.3).
+   */
+  writtenBy: (displayName: string) => `Written by ${displayName}`,
+  /** The read view's flag line after the Flagged tag (design.md §4.4): the reason, after the form's label for it. */
+  flagReason: (reason: string) => `${strings.note.reason}: ${reason}`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
   notSetUp: (cause: Cause): string => msg.notDone('set up', cause),
   /** A sign-out that failed, in the Account panel's status line (app-shell.md *States*). */

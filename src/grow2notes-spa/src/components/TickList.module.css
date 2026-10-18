@@ -1,6 +1,6 @@
 /*
- * The note form's tick lists (checkbox-list.md). The base focus ring, and Highlight for it under forced colours, are
- * base.css's.
+ * The tick lists (checkbox-list.md): the note form's, and the read-only list of a note that is shown. The base focus
+ * ring, and Highlight for it under forced colours, are base.css's.
  */
 
 /* No border or padding, and no minimum width, so that a long unbroken wording cannot widen the page at 320 px. */
@@ -89,5 +89,38 @@
 /* Its first line centred on the box; the wording exactly as stored, wrapping anywhere rather than widening the page. */
 .text {
   padding-block-start: calc((2.5rem - var(--line-height-body) * 1em) / 2);
+  overflow-wrap: anywhere;
+}
+
+/*
+ * The read-only list (checkbox-list.md `TickListRead`): no bullets, no row dividers, no hover and no pointer, so that
+ * nothing about it looks tappable.
+ */
+.readList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.readItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding-block: var(--space-1);
+}
+
+/*
+ * The box, 1.5rem, in rem so that it grows with the text, its first line's centre on the wording's, drawn in the text's
+ * colour, which forced colours keep.
+ */
+.icon {
+  flex: none;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  margin-block-start: max(0px, (var(--line-height-body) * 1em - 1.5rem) / 2);
+}
+
+/* The wording exactly as stored, in the text's full colour whether ticked or not, wrapping anywhere at 320 px. */
+.readText {
   overflow-wrap: anywhere;
 }

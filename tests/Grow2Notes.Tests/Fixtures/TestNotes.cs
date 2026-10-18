@@ -21,8 +21,9 @@ internal sealed record TestDraft(
 
 /// <summary>
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
-/// they started it and when they submitted it; then its version 1's text, flag and reason; and the note's flag status,
-/// None unless the test sets another by hand, as Submit leaves it until T11 (tasks.md, T09's Notes).
+/// they started it and when they submitted it; then its version 1's text, flag and reason; the note's flag status,
+/// None unless the test sets another by hand, as Submit leaves it until T11 (tasks.md, T09's Notes); and version 1's
+/// goal rows, none by default, in their snapshot's order.
 /// </summary>
 internal sealed record TestSubmittedNote(
     Guid ParticipantId,
@@ -33,7 +34,14 @@ internal sealed record TestSubmittedNote(
     string Narrative = "Jane made toast.",
     bool IsFlagged = false,
     string? FlagReason = null,
-    FlagStatus FlagStatus = FlagStatus.None);
+    FlagStatus FlagStatus = FlagStatus.None,
+    IReadOnlyList<TestVersionGoal>? Goals = null);
+
+/// <summary>
+/// A goal row of a <see cref="TestSubmittedNote"/>'s version 1: the ID of a goal of the participant's, its wording as
+/// the version holds it, which need not be the goal's own, and whether it is ticked.
+/// </summary>
+internal sealed record TestVersionGoal(Guid GoalId, string Text, bool IsTicked);
 
 internal static class TestNotes
 {
@@ -80,7 +88,8 @@ internal static class TestNotes
     /// <summary>
     /// Adds <paramref name="submitted"/> to <paramref name="organisation"/>, through the app's context under its
     /// tenant, as Submit leaves a note (design.md §5.8): the <c>Note</c>, submitted, and its version 1, written by its
-    /// author, with a key of its own and no item rows, its working copy gone; and gives the note's ID.
+    /// author, with a key of its own and its goal rows, each in its place in the order given, its working copy gone;
+    /// and gives the note's ID.
     /// </summary>
     public static async Task<Guid> AddSubmittedAsync(
         this IServiceProvider services, SeededOrganisation organisation, TestSubmittedNote submitted)
@@ -100,7 +109,7 @@ internal static class TestNotes
             FlagStatus = submitted.FlagStatus,
         };
         db.Notes.Add(note);
-        db.NoteVersions.Add(new NoteVersion
+        var version = new NoteVersion
         {
             OrganisationId = organisation.OrganisationId,
             NoteId = note.Id,
@@ -111,7 +120,18 @@ internal static class TestNotes
             CreatedByUserId = submitted.AuthorUserId,
             CreatedAtUtc = submitted.SubmittedAtUtc,
             IdempotencyKey = Guid.NewGuid(),
-        });
+        };
+        db.NoteVersions.Add(version);
+        db.NoteVersionItems.AddRange((submitted.Goals ?? []).Select((goal, position) => new NoteVersionItem
+        {
+            NoteVersionId = version.Id,
+            Section = NoteSection.Goal,
+            Position = position,
+            OrganisationId = organisation.OrganisationId,
+            GoalId = goal.GoalId,
+            Text = goal.Text,
+            IsTicked = goal.IsTicked,
+        }));
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
         {
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);

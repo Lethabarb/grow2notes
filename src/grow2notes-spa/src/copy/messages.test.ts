@@ -41,6 +41,16 @@ describe("Submit's words", () => {
   });
 });
 
+// participant-notes.md *Read view* › Status lines, word for word.
+describe("the read view's lines", () => {
+  it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {
+    expect(msg.writtenBy('Priya Nair')).toBe('Written by Priya Nair');
+    expect(msg.flagReason('Mentioned pain in his left knee after the walk.')).toBe(
+      'Reason: Mentioned pain in his left knee after the walk.',
+    );
+  });
+});
+
 describe("a Save's failure (microcopy.md §4's Action failed)", () => {
   it('says it was not saved, and why', () => {
     expect(msg.notSaved('offline')).toBe('Not saved: no connection. Try again.');

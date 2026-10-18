@@ -38,8 +38,10 @@ export const alexStarted: StartedBy = { authorDisplayName: 'Alex P.', startedAtU
 /** 06:12 UTC on 1 October 2026, which the page shows as "Saved 4:12 pm" on that day in Melbourne. */
 const savedAtFourTwelve = '2026-10-01T06:12:00.000Z';
 
-// A participant's header, and their note for a day's working copy, which the form reads and autosave puts.
+// A participant's header, their note for a day, which the page reads first, and its working copy, which the form
+// reads and autosave puts.
 const headerPath = /^\/api\/participants\/([^/]+)$/;
+const notePath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)$/;
 const draftPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/draft$/;
 
 /** An RFC 9457 problem with the API's stable `code` and any extensions (design.md §6.9). */
@@ -77,10 +79,11 @@ type StoreOptions = {
 
 /**
  * Participants' notes as the API keeps them (design.md §5.5 to §5.7), in the browser, so that no note request reaches
- * the app, where no made-up person has a session: a participant's header; the note form, a template, the caller's own
- * draft or another user's `409`, or `404` for a date after today and, to a worker, before yesterday (design.md A65);
- * and autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's own draft.
- * `serve` answers one page's requests as one person's.
+ * the app, where no made-up person has a session: a participant's header; the note, a draft's `{status}` or `404` for
+ * none, as it holds no submitted note; the note form, a template, the caller's own draft or another user's `409`, or
+ * `404` for a date after today and, to a worker, before yesterday (design.md A65); and autosave's `PUT`, which creates
+ * the note with the creating save's checks, or updates the caller's own draft. `serve` answers one page's requests as
+ * one person's.
  */
 export function notesStore({
   today: firstToday,
@@ -202,7 +205,7 @@ export function notesStore({
      */
     serve: (page: Page, me: Me, { latencyMs = 0 } = {}) =>
       page.route(
-        ({ pathname }) => headerPath.test(pathname) || draftPath.test(pathname),
+        ({ pathname }) => headerPath.test(pathname) || notePath.test(pathname) || draftPath.test(pathname),
         async (route: Route) => {
           const request = route.request();
           const { pathname } = new URL(request.url());
@@ -211,6 +214,13 @@ export function notesStore({
           if (headerId !== undefined) {
             const header = headers.get(headerId);
             await route.fulfill(header === undefined ? { status: 404 } : { json: header });
+            return;
+          }
+
+          const [, noteOf, noteDateOf = ''] = notePath.exec(pathname) ?? [];
+          if (noteOf !== undefined) {
+            const held = headers.has(noteOf) && drafts.has(`${noteOf}/${noteDateOf}`);
+            await route.fulfill(held ? { json: { status: 'Draft' } } : { status: 404 });
             return;
           }
 
@@ -266,13 +276,13 @@ export function notesStore({
 export type NotesStore = ReturnType<typeof notesStore>;
 
 /**
- * Aborts each `GET` of a participant's header and of their note's working copy that the page sends from now on, in the
- * browser, as a phone with no signal would. The form's failure then shows about 1 s after it opens, after the query
- * client's silent retry. A later `serve` of a store overrides it.
+ * Aborts each `GET` of a participant's header, of their note and of its working copy that the page sends from now on,
+ * in the browser, as a phone with no signal would. The note's failure then shows about 1 s after it opens, after the
+ * query client's silent retry. A later `serve` of a store overrides it.
  */
 export async function failNoteReads(page: Page): Promise<void> {
   await page.route(
-    ({ pathname }) => headerPath.test(pathname) || draftPath.test(pathname),
+    ({ pathname }) => headerPath.test(pathname) || notePath.test(pathname) || draftPath.test(pathname),
     (route) => (route.request().method() === 'GET' ? route.abort('internetdisconnected') : route.fallback()),
   );
 }

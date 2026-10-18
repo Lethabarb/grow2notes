@@ -351,7 +351,7 @@ test('signed in for real, an invited worker meets the in-progress sentence, anot
   ).toBeVisible();
   await expect(main(phone).getByRole('checkbox')).toHaveCount(0);
   await expect(main(phone).getByRole('textbox')).toHaveCount(0);
-  await expect(saveStatus(phone)).toBeEmpty();
+  await expect(saveStatus(phone)).toHaveCount(0);
   await expectNothingKept(phone, janeCitizen.givenName, janeCitizen.familyName, sentence);
 
   // The other organisation's manager, signed in on the first browser, meets Page not found at the same address.
@@ -411,14 +411,15 @@ test('loading, a load that failed, Page not found and someone else’s draft, ea
   await serveToday(page, manager.today, participants);
   await store.serve(page, manager);
 
-  // Loading: the top bar and its back link at once, then "Loading note…", with no <h1>, tick box or text box.
+  // Loading: the top bar and its back link at once, then "Loading note…", with no <h1>, tick box or text box, and
+  // no save status until the form shows.
   const heldDraft = await holdNext(page, draftRequests);
   await page.goto('/');
   await row(page, 'Jane Citizen').click();
   const draft = await heldDraft();
   await expect(loadLine(page)).toHaveText('Loading note…');
   await expect(backLink(page)).toHaveAttribute('href', '/');
-  await expect(saveStatus(page)).toBeEmpty();
+  await expect(saveStatus(page)).toHaveCount(0);
   await expect(heading(page)).toHaveCount(0);
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
@@ -461,7 +462,7 @@ test('loading, a load that failed, Page not found and someone else’s draft, ea
   await expect(main(page).getByText(alexOnToday, { exact: true })).toBeVisible();
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
-  await expect(saveStatus(page)).toBeEmpty();
+  await expect(saveStatus(page)).toHaveCount(0);
   await expectAxeToPass(page);
 
   // And for an earlier day, "started the note for".

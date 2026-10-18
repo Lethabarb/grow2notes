@@ -130,6 +130,12 @@ internal static class EndpointMatrix
             call => Task.FromResult(
                 new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}"))),
 
+        // A note (§6.3), for every signed-in user. Each call reads today's note of a participant whom its request first
+        // adds to A, submitted by A's worker, so each of A's users reads it, and reading writes nothing (A28). B's
+        // manager does not find the participant (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}", Unauthorized, OK, OK,
+            NotFound, ANoteSubmittedInA),
+
         // The note form (§6.3), for every signed-in user, at A's seeded participant's note for today, which no test
         // starts (tests/README.md), so each of A's users gets the template and opening it writes nothing (§3.3). B's
         // manager does not find the participant (§9.2).
@@ -354,6 +360,27 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // Today's note of a participant whom the request first adds to A, submitted by A's worker, as Submit leaves it. Its
+    // times are made up (A35).
+    private static async Task<HttpRequestMessage> ANoteSubmittedInA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today();
+        await call.Services.AddSubmittedAsync(
+            a,
+            new(
+                participant.Id,
+                today,
+                a.WorkerId,
+                new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc),
+                new DateTime(2026, 10, 2, 6, 42, 0, DateTimeKind.Utc)));
+        return new HttpRequestMessage(
+            call.Method,
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}"));
+    }
 
     // A's seeded participant's note form for today.
     private static Task<HttpRequestMessage> TodaysNoteFormOfTheSeededParticipantOfA(EndpointCall call) =>

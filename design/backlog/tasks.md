@@ -3177,6 +3177,20 @@ past notes.
   `note: null` (tests/README.md); step 8 answers Today's notes. Step 5's stale-status Vitest opens rows whose line no
   longer holds into the screens built so far, the empty form and the in-progress sentence; step 6, which builds the
   read view, adds the row whose cached line says Draft opening the read view that the server now gives.
+- Where the design is silent (step 6), the simplest options: `GET {base}` (`NoteEndpoint`, `NoteRead`) finds the note
+  through `LiveNote.FindAsync`, which now carries the first submitted time and current version number, so another
+  organisation's participant is a `404` as no live note is, then reads the current version and its goal rows, by
+  `Position`, in one more query. On the screen, a `404` from it is no note yet, and the form's read follows it for a
+  `404` or a draft; once the form has opened it stays open whatever the note is fetched as later, as after signing in
+  again in place, and the top bar is static, with no save status, everywhere else, someone else's draft's sentence
+  included. The byline is one line, its two parts joined by `Sep`; the flag line is `Tag`, a pause and "Reason: …"
+  (`msg.flagReason`, from the form's label), which, like the Guided notes text, keeps the writer's spaces and line
+  breaks; each section follows a 1 px rule halfway through `--section-gap`. `TickListRead` draws a 1.5rem box, with
+  the tick inside when ticked, takes `TickList.module.css`'s heading, has no row dividers, hover or pointer, and says
+  "ticked" or "not ticked" after `Pause`. The note's query refetches on neither focus nor reconnecting, as the draft's
+  does not. So that the end-to-end tests already written stay true, `tests/e2e/notes.ts` answers `GET {base}`,
+  `{status: 'Draft'}` for a draft it holds or else `404` (tests/README.md), and `note-form.spec.ts` expects no save
+  status while the note loads and on someone else's draft; step 8 adds the read view's own end-to-end checks.
 
 ### Steps
 
@@ -3283,7 +3297,7 @@ past notes.
       on 1 October 2026, and the right time just after the change on 4 October; no line on a row with no note; "Alex"
       matching only a participant named Alex; and a row whose cached line says Draft opening the read view that the
       server now gives.
-- [ ] Read a submitted note (S02.04.01; S02.03.02's fourth criterion on the read view; design.md §4.4 *Read view of
+- [x] Read a submitted note (S02.04.01; S02.03.02's fourth criterion on the read view; design.md §4.4 *Read view of
       one note* and §4.2's "Submitted: opens the read view"; note-form.md *Routes*; participant-notes.md items 15 to 19,
       21, 23, 28a from Today, and 29 to 35 for the read view): `GET {base}` in `Features/Notes`, writing nothing, `404`
       with no live note or for another organisation's participant, `{status}` for a draft, and the current version for

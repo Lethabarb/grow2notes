@@ -528,7 +528,8 @@ browser, as it answers `/api/admin/participants`.
 `notesStore({ today, participants, goals, prompts })` takes the server's date in Melbourne, the made-up participants,
 each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the organisation's guide prompts. Its
 `serve(page, me)` answers the page's requests for a header and a note as `me`'s, through `page.route`: the header, or
-`404` for a participant that it does not hold; the form, a template with the goals unticked, no flag and the lists'
+`404` for a participant that it does not hold; the note, `GET {base}`, `{status: 'Draft'}` for a draft that it holds,
+or else `404`, as it holds no submitted note; the form, a template with the goals unticked, no flag and the lists'
 version, the caller's own draft with its flag, `409 note.in_progress_by_other` with the author's name and start time
 for another user's, or `404` for a date after today and, to a worker, for one before yesterday (design.md A65); and
 each save, which keeps the flag, and the reason only while flagged, as the API does, and updates the caller's own
@@ -541,8 +542,8 @@ lists the body of every save sent, `draft(participantId, noteDate)` gives a work
 someone else does while the form is open: `setToday(date)`, midnight in Melbourne;
 `setGoals(participantId, goals)`, a manager's change to the list; `archive(participantId)`; and
 `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as `alexStarted`, Alex P.'s at 9:14 am.
-`failNoteReads(page)` aborts each read of a header or a form, as `failParticipants` does, until the store serves the
-page again.
+`failNoteReads(page)` aborts each read of a header, a note or a form, as `failParticipants` does, until the store
+serves the page again.
 
 ```ts
 await serveMe(page, worker);

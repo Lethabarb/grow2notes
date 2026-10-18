@@ -420,6 +420,17 @@ export const strings = {
     draftIsSaved: 'Your draft is saved.',
   },
   /**
+   * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
+   * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals", the words for a version with no
+   * goals, each as the daily report has them (design.md §11.3).
+   */
+  readView: { submitted: 'Submitted', noGoals: 'No goals set' },
+  /**
+   * A read-only tick list's state after each item's wording, for screen readers alone (checkbox-list.md
+   * `TickListRead`), after a pause, as in "Makes own breakfast, ticked".
+   */
+  tickState: { ticked: 'ticked', notTicked: 'not ticked' },
+  /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,
    * with which their too-long messages start, and each name's message when it is left empty; then, in the alert above
    * Save, a save refused as stale (`412`), the typed details kept.
