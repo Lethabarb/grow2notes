@@ -28,6 +28,19 @@ const madeUp: AppRoute[] = [
     handle,
   },
   { path: 'without-bar', element: <h1>Without bar</h1>, handle },
+  {
+    path: 'with-top-bar',
+    element: (
+      <>
+        <PageBar sticky>
+          <BackLink to="/without-bar">Without bar</BackLink>
+          <p role="status">Saved</p>
+        </PageBar>
+        <h1>With top bar</h1>
+      </>
+    ),
+    handle,
+  },
 ];
 
 /** Renders the app's shell at `path`, with the made-up screens under it, while `/me` never answers. */
@@ -96,5 +109,78 @@ describe('PageBar', () => {
     await act(() => router.navigate('/without-bar'));
     expect(slot()).toBeEmptyDOMElement();
     expect(slot()).not.toBeVisible();
+  });
+});
+
+describe('PageBar, as the note form\'s top bar', () => {
+  /** What the stand-in ResizeObserver was given: the callback, and the elements it observes. */
+  let observed: { callback: ResizeObserverCallback; targets: Element[] } | undefined;
+
+  beforeEach(() => {
+    observed = undefined;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          observed = { callback, targets: [] };
+        }
+
+        observe(target: Element) {
+          observed?.targets.push(target);
+        }
+
+        unobserve() {}
+
+        disconnect() {
+          observed = undefined;
+        }
+      },
+    );
+  });
+
+  afterEach(() => {
+    document.documentElement.style.removeProperty('--topbar-h');
+  });
+
+  /** Reports `blockSize` as the observed bar's height, as the browser does once it has laid the bar out. */
+  function reportHeight(blockSize: number) {
+    const target = observed!.targets[0];
+    const entry = { target, borderBoxSize: [{ blockSize, inlineSize: 375 }] } as unknown as ResizeObserverEntry;
+    act(() => {
+      observed!.callback([entry], {} as ResizeObserver);
+    });
+  }
+
+  it('sticks to the top of the window, opaque across it, with its row in the page\'s column', () => {
+    renderShell('/with-top-bar');
+
+    const link = screen.getByRole('link', { name: 'Without bar' });
+    const bar = slot().firstElementChild as HTMLElement;
+    expect(bar).toContainElement(link);
+    expect(bar).toContainElement(screen.getByRole('status'));
+    expect(bar).toHaveStyle({ position: 'sticky' });
+    expect(bar.firstElementChild).toHaveClass(layout.container);
+    expect(follows(screen.getByRole('main'), bar)).toBe(true);
+  });
+
+  it('writes its height to --topbar-h as it changes, and takes it away as its screen goes', async () => {
+    const router = renderShell('/with-top-bar');
+    expect(observed?.targets).toEqual([slot().firstElementChild]);
+
+    reportHeight(57);
+    expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('57px');
+    reportHeight(93);
+    expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('93px');
+
+    await act(() => router.navigate('/without-bar'));
+    expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('');
+    expect(observed).toBeUndefined();
+  });
+
+  it('is not sticky in the slot of a screen that gives no top bar', () => {
+    renderShell('/with-bar');
+
+    expect(slot().firstElementChild).not.toHaveStyle({ position: 'sticky' });
+    expect(observed).toBeUndefined();
   });
 });

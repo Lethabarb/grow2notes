@@ -12,16 +12,19 @@ namespace Grow2Notes.Tests;
 /// A signed-out caller at each endpoint the app maps, with the app hosted as it is deployed: without the test-only
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
-/// behind the fallback policy, the app's own <c>/api/auth/me</c>, its admin lists, its <c>/api/admin/users</c> posted
-/// to, and a user's edit, setup link, deactivation and reactivation show; so the others show that the page, its files
-/// and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers
-/// still matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with
-/// no cookie never reaches one.
+/// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header and note form,
+/// a note's save, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation
+/// and reactivation show; so the others show that the page, its files and the health endpoints are
+/// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
+/// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
     // Under /api, so it gets the API's caching rule, as the app's own endpoints there do.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
+
+    // A made-up participant's ID.
+    private const string Participant = "/api/participants/5d8c2f71-0a4e-4b39-9e16-7f3a2c8b1d05";
 
     public static MatrixTheoryData<string, string> NoSuchFiles { get; } =
         new(["GET", "POST", "PUT", "DELETE"], ["/favicon.ico", "/assets/no-such-file.js"]);
@@ -38,10 +41,14 @@ public sealed class SignedOutTests : IAsyncDisposable
     // The cookie challenges with a bare 401, which the status code pages make problem details, rather than redirecting
     // to a login page, which the app does not have (design.md §7.2). Without the app's OnRedirectToLogin, the cookie
     // handler still answers 401, but with a Location naming /Account/Login, so the Location is the check. The session's
-    // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user.
+    // start-up (design.md §6.2) is the first of the app's own endpoints that needs a signed-in user, and Today's list,
+    // a participant's header and their note form (§6.3), which would need the database that is not here, others.
     [Theory]
     [InlineData(FallbackPolicyPath)]
     [InlineData("/api/auth/me")]
+    [InlineData("/api/today")]
+    [InlineData(Participant)]
+    [InlineData($"{Participant}/notes/2026-10-01/draft")]
     public async Task A_request_the_fallback_policy_refuses_gets_a_401_problem_that_is_never_stored(string path)
     {
         await using var withEndpoint = app.WithWebHostBuilder(builder => builder.ConfigureServices(
@@ -144,6 +151,30 @@ public sealed class SignedOutTests : IAsyncDisposable
         Assert.False(response.Headers.Contains("Clear-Site-Data"));
     }
 
+    // As Edit user's, with the body of a note's first save: the fallback policy refuses it first, so the endpoint,
+    // which would need the database that is not here, starts no note.
+    [Fact]
+    public async Task A_save_of_a_note_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PutAsJsonAsync(
+            $"{Participant}/notes/2026-10-01/draft",
+            new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = "made-up",
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+            },
+            TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
     // As Sign out's, over HTTPS with no antiforgery token: the fallback policy refuses it before the /api group's
     // check, and with no session cookie, none is renewed or deleted.
     [Fact]
@@ -191,6 +222,26 @@ public sealed class SignedOutTests : IAsyncDisposable
         using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.NotFound);
+    }
+
+    // A note's address names a participant's GUID and a date that exists, written yyyy-MM-dd (design.md §6.1), and any
+    // other value matches no route: the unknown path's 404 answers, where the endpoints' own route would answer 401.
+    [Theory]
+    [InlineData("/api/participants/not-a-guid")]
+    [InlineData("/api/participants/not-a-guid/notes/2026-10-01/draft")]
+    [InlineData($"{Participant}/notes/2026-02-30/draft")]
+    [InlineData($"{Participant}/notes/2026-1-1/draft")]
+    [InlineData($"{Participant}/notes/01-10-2026/draft")]
+    [InlineData($"{Participant}/notes/20261001/draft")]
+    [InlineData($"{Participant}/notes/2026-10-01T09:00/draft")]
+    [InlineData($"{Participant}/notes/today/draft")]
+    public async Task A_note_address_that_does_not_parse_gets_the_unknown_path_s_404(string path)
+    {
+        using var client = app.CreateClient();
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }

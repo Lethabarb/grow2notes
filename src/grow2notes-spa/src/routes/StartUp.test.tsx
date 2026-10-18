@@ -13,6 +13,7 @@ import { routes } from './routes.tsx';
 import { StartUp } from './StartUp.tsx';
 
 const mePath = '/api/auth/me';
+const todayPath = '/api/today';
 
 // A made-up worker (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -203,6 +204,15 @@ function pressTryAgain() {
 beforeEach(() => {
   vi.useFakeTimers();
   fetchMock.mockImplementation((path, init) => {
+    // Today, the screen that the start-up shows, has no participants.
+    if (path === todayPath) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ date: worker.today, participants: [] }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+
     if (path !== mePath) {
       throw new Error('The test gave no answer for this request.');
     }

@@ -26,8 +26,9 @@ export const ring: Ring = {
 
 /**
  * Where focus is, as `whereFocusIs` says, but by the text that shows, so that a button's busy label, hidden until it is
- * busy, is left out, and naming a field, a text box included, by its label; with the ring that shows on the element or,
- * for a row's link, on the `::after` that covers the row (LinkRow.module.css); no ring outside the page or on it.
+ * busy, is left out, and naming a field, a text box and a tick box included, by its label; with the ring that shows on
+ * the element or, for a row's link, on the `::after` that covers the row (LinkRow.module.css); no ring outside the
+ * page or on it.
  */
 function focusStop(page: Page): Promise<{ name: string; ring?: Ring }> {
   return page.evaluate(() => {

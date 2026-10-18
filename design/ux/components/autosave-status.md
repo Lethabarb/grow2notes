@@ -309,6 +309,15 @@ Formatting:
 - **No React Aria needed.** Native buttons, `<details>`, `<section>` and a `role="status"` paragraph cover everything.
 - The engine is a hook, `useAutosave`, that uses TanStack Query's `useMutation` for transport, retry and back-off (§7.5), plus refs for the change counters.
 - Its public API: `markChanged()`, `flush()`, `checkSave(): Promise<boolean>`, `flushNow(): Promise<boolean>` (used by `session-timeout.md` at 28:00 and by the navigation blocker), `pause()` and `resume()` (sign-in), `stop(): Promise<void>` and `resume()` (Submit, Discard, Cancel), and `status`, `savedAt` and `blocked`.
+- **Built** (T08, its first part): `useAutosave` in `src/features/notes/useAutosave.ts`, with `changed()` and `flush()`
+  for the form, the indicator given through an `onIndicator` callback, the lists-changed reload through
+  `onListsChanged`, and the three dead ends through `onDeadEnd`, after which it sends nothing for as long as the form is
+  open; `retry: 0`. The indicator, `#save-status` in the top bar, is in the page from its first render and goes in
+  anew, holding its first words, as the form mounts, so that a reopened draft's "Draft · saved 9:42 am" is the page's
+  own rather than announced as a change (Behaviour 8). Until T10 a save that fails leaves its change unsaved, with
+  "Saving…" shown, until the next change or blur sends it: the retries, "Not saved: no connection…", the page-hidden
+  save, the pause while signing in again, `flushNow()` and the rules for leaving are T10's, and `checkSave()` and
+  `stop()` come with Submit (T09).
 - **Shared fetch wrapper:** reuse the app's `api()` wrapper. It adds `X-XSRF-TOKEN` (§9.8) and records accepted requests for the session clock (`session-timeout.md`).
 - **Router:** `useBlocker` needs a data router (`createBrowserRouter`). Confirm the app uses one.
 - **Tests:**

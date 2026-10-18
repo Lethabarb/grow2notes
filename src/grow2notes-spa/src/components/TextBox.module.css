@@ -13,19 +13,23 @@
 /*
  * The box grows with its text, and the page scrolls rather than the box. Where the browser has field-sizing, the box
  * sizes itself; elsewhere, a hidden copy of the text after it, in the same grid cell, makes the cell as tall as the
- * text needs, from the wrapper's data-value, which the box's component keeps in step with the text.
+ * text needs, from the wrapper's data-value, which the box's component keeps in step with the text. A hidden copy of
+ * the Guided notes box's prompts, from data-prompts, keeps the box as tall as they are, so that the page does not jump
+ * as the first character typed takes them away.
  */
 .grow {
   display: grid;
 }
 
 .grow > .box,
+.grow::before,
 .grow::after {
   grid-area: 1 / 1;
 }
 
-/* The copy has the box's exact metrics, so that it wraps each line where the box does. */
+/* The copies have the box's exact metrics, so that they wrap each line where the box does. */
 .box,
+.grow::before,
 .grow::after {
   inline-size: 100%;
   padding: var(--space-3);
@@ -37,10 +41,18 @@
   overflow-wrap: anywhere;
 }
 
+.grow::before,
 .grow::after {
-  content: attr(data-value) " ";
   border-color: transparent;
   visibility: hidden;
+}
+
+.grow::before {
+  content: attr(data-prompts) " ";
+}
+
+.grow::after {
+  content: attr(data-value) " ";
 }
 
 .box {

@@ -1,0 +1,93 @@
+/*
+ * The note form's tick lists (checkbox-list.md). The base focus ring, and Highlight for it under forced colours, are
+ * base.css's.
+ */
+
+/* No border or padding, and no minimum width, so that a long unbroken wording cannot widen the page at 320 px. */
+.group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+
+.legend {
+  padding: 0;
+}
+
+.heading {
+  margin: 0 0 var(--space-1);
+}
+
+.hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+}
+
+.empty {
+  margin: 0;
+}
+
+/* The whole row is the tap target: full width and at least 56 px tall, however its wording wraps (A32). */
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-block-size: var(--target-row);
+  padding-block: var(--space-2);
+  border-block-start: var(--border-divider) solid var(--colour-divider);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row:last-of-type {
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* So that a mouse user sees which row a click on its far end toggles. */
+@media (hover: hover) {
+  .row:hover {
+    background: var(--colour-hover);
+  }
+}
+
+/*
+ * The native box, drawn 40 px, in rem so that it grows with the text, its border in the text's colour. Still the native
+ * checkbox to every screen reader and keyboard.
+ */
+.box {
+  appearance: none;
+  flex: none;
+  display: grid;
+  place-content: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  margin: 0;
+  border: var(--border-control) solid currentColor;
+  border-radius: 0;
+  background: var(--colour-surface);
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The tick, drawn with borders, which forced colours and printing keep, where they drop a background. */
+.box::before {
+  content: "";
+  inline-size: 1.45rem;
+  block-size: 0.8rem;
+  border: solid currentColor;
+  border-width: 0 0 0.3rem 0.3rem;
+  transform: translateY(-0.15rem) rotate(-45deg);
+  visibility: hidden;
+}
+
+.box:checked::before {
+  visibility: visible;
+}
+
+/* Its first line centred on the box; the wording exactly as stored, wrapping anywhere rather than widening the page. */
+.text {
+  padding-block-start: calc((2.5rem - var(--line-height-body) * 1em) / 2);
+  overflow-wrap: anywhere;
+}

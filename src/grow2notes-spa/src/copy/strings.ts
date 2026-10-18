@@ -348,7 +348,8 @@ export const strings = {
    * The Participants screens (participants.md), whose fixed `<h1>`s and Add participant are page names: the list's and
    * the participant page's loading lines, and what did not load, as each failure sentence starts
    * (empty-loading-error.md); the list's empty sentences, in place of its rows, for no participants at all and for a
-   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md).
+   * view with none; and the names of its two views, Active and Archived (tabs-segmented.md). Today's list loads,
+   * fails and is empty in the list's words (today.md components 4 and 9).
    */
   participants: {
     listLoading: 'Loading participants…',
@@ -360,6 +361,29 @@ export const strings = {
     noneArchived: 'No archived participants.',
     active: 'Active',
     archived: 'Archived',
+  },
+  /**
+   * Today (today.md): the visually hidden `<h2>` before its list of participants (component 6), so that a screen
+   * reader moving by headings hears where the list starts.
+   */
+  today: { participantsHeading: 'Participants' },
+  /**
+   * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
+   * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
+   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; and
+   * the save indicator on a draft reopened, until its first change, "Draft · saved 9:42 am" (design.md §4.3): its first
+   * word, then the word before the time; and the indicator while a dead end in the top bar says why the note cannot be
+   * saved (autosave-status.md *Exact copy*).
+   */
+  note: {
+    loading: 'Loading note…',
+    theNote: 'The note',
+    goals: '1. Goals',
+    goalsHint: 'Ticked means reached.',
+    guidedNotes: '3. Guided notes',
+    draft: 'Draft',
+    draftSaved: 'saved',
+    notSaved: 'Not saved',
   },
   /**
    * A participant's Details (participants.md B5; text-and-date-inputs.md): the section's `<h2>`, the names' labels,

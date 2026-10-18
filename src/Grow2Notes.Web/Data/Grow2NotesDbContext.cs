@@ -10,7 +10,8 @@ namespace Grow2Notes.Web.Data;
 /// <c>IdentityDbContext</c>, so Identity creates no role tables: a user's role is the <c>Role</c> column. The Identity
 /// schema version comes from <c>IdentityOptions.Stores.SchemaVersion</c>, which Program.cs sets to <c>Version3</c> to
 /// add <c>AspNetUserPasskeys</c>. A query on a tenant-owned table sees only the tenant's rows, and a save writes only
-/// the tenant's rows (design.md §5.9) and never changes or deletes an append-only one (§5.8).
+/// the tenant's rows (design.md §5.9), never changes or deletes an append-only one, and never changes a note's
+/// participant, date or author (§5.8).
 /// </summary>
 internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> options, ITenantContext tenant)
     : IdentityUserContext<ApplicationUser, Guid>(options)
@@ -26,6 +27,10 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
     public DbSet<CommonItemGroup> CommonItemGroups => Set<CommonItemGroup>();
 
     public DbSet<CommonItem> CommonItems => Set<CommonItem>();
+
+    public DbSet<Note> Notes => Set<Note>();
+
+    public DbSet<NoteDraft> NoteDrafts => Set<NoteDraft>();
 
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
     // the context and building its model, as dotnet ef does, need no tenant, and nor do Identity's queries.
@@ -171,6 +176,93 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             // Every list of items is one group's, the active ones or all, in their order. It starts with the foreign
             // key's columns, so the foreign key needs no index of its own.
             item.HasIndex(i => new { i.OrganisationId, i.GroupId, i.ArchivedAtUtc, i.SortOrder });
+        });
+
+        builder.Entity<Note>(note =>
+        {
+            // Composite, so the database keeps a note's participant, author and discarder within the note's
+            // organisation (design.md §5.1, Tenancy).
+            note.HasOne<Participant>().WithMany()
+                .HasForeignKey(n => new { n.OrganisationId, n.ParticipantId })
+                .HasPrincipalKey(p => new { p.OrganisationId, p.Id });
+            note.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(n => new { n.OrganisationId, n.AuthorUserId })
+                .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
+            note.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(n => new { n.OrganisationId, n.DiscardedByUserId })
+                .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
+
+            // The principal of the composite foreign keys from a note's working copies, versions and reviews.
+            note.HasAlternateKey(n => new { n.OrganisationId, n.Id });
+
+            // Each status with the columns that go with it, so no save can leave a submitted note without its first
+            // submitted time, or a discarded one without who discarded it and when (design.md §5.3).
+            note.ToTable(table => table.HasCheckConstraint(
+                "CK_Note_Status",
+                "([Status] = 0 AND [CurrentVersionNumber] = 0 AND [FirstSubmittedAtUtc] IS NULL"
+                + " AND [DiscardedAtUtc] IS NULL)"
+                + " OR ([Status] = 1 AND [CurrentVersionNumber] >= 1 AND [FirstSubmittedAtUtc] IS NOT NULL"
+                + " AND [DiscardedAtUtc] IS NULL)"
+                + " OR ([Status] = 2 AND [CurrentVersionNumber] = 0 AND [DiscardedAtUtc] IS NOT NULL"
+                + " AND [DiscardedByUserId] IS NOT NULL)"));
+
+            // One live note, a draft or submitted, per participant and day (D6). The app's check before a note is
+            // created can pass for two first saves at once; this refuses the second (§5.5 item 3). Discarded drafts
+            // stay beside the live note, so the day can be started again. Its columns start with the participant's
+            // foreign key, so that needs no index of its own.
+            note.HasIndex(n => new { n.OrganisationId, n.ParticipantId, n.NoteDate })
+                .IsUnique()
+                .HasFilter("[Status] IN (0, 1)");
+
+            // For Today and the daily report, which read a day's notes.
+            note.HasIndex(n => new { n.OrganisationId, n.NoteDate })
+                .IncludeProperties(n => new { n.Status, n.ParticipantId, n.AuthorUserId });
+
+            // For the Flagged list and its badge, which read the notes to review alone.
+            note.HasIndex(n => new { n.OrganisationId, n.FlagStatus }).HasFilter("[FlagStatus] = 1");
+        });
+
+        builder.Entity<NoteDraft>(draft =>
+        {
+            // One working copy per note per editor (design.md §5.3).
+            draft.HasKey(d => new { d.NoteId, d.EditorUserId });
+
+            // Composite, so the database keeps a working copy within its note's and its editor's organisation
+            // (design.md §5.1, Tenancy).
+            draft.HasOne<Note>().WithMany()
+                .HasForeignKey(d => new { d.OrganisationId, d.NoteId })
+                .HasPrincipalKey(n => new { n.OrganisationId, n.Id });
+            draft.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(d => new { d.OrganisationId, d.EditorUserId })
+                .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
+
+            // Each in a JSON column, with the property names design.md §5.3 gives: every autosave rewrites a working
+            // copy's snapshot whole, with its ticks and picks, so it needs no rows of its own, as a version's has.
+            draft.ComplexCollection(d => d.Groups, groups =>
+            {
+                groups.ToJson();
+                groups.Property(g => g.GroupId).HasJsonPropertyName("groupId");
+                groups.Property(g => g.Name).HasJsonPropertyName("name");
+                groups.Property(g => g.IsEveryNote).HasJsonPropertyName("isEveryNote");
+                groups.Property(g => g.IsPicked).HasJsonPropertyName("isPicked");
+            });
+            draft.ComplexCollection(d => d.Items, items =>
+            {
+                items.ToJson();
+                items.Property(i => i.Section).HasJsonPropertyName("section");
+                items.Property(i => i.SourceId).HasJsonPropertyName("sourceId");
+                items.Property(i => i.GroupId).HasJsonPropertyName("groupId");
+                items.Property(i => i.Text).HasJsonPropertyName("text");
+                items.Property(i => i.IsTicked).HasJsonPropertyName("isTicked");
+            });
+
+            // Longer than an nvarchar(n) can hold, so only validation enforces Limits.GuidedNotes (§5.1).
+            draft.Property(d => d.Narrative).HasColumnType("nvarchar(max)");
+            draft.Property(d => d.FlagReason).HasMaxLength(Limits.FlagReason);
+
+            // For a user's unfinished drafts. It starts with the editor's foreign key, so that needs no index of its
+            // own.
+            draft.HasIndex(d => new { d.OrganisationId, d.EditorUserId });
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).

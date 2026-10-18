@@ -24,7 +24,16 @@
   white-space: nowrap;
 }
 
-/* The before-main bar slot takes no space until a screen fills it (component 3a). */
+/*
+ * The before-main bar slot lays out no box of its own (component 3a), so that the note form's sticky top bar in it
+ * sticks for the whole page, where a box round the bar would hold it to the box's own height. Hidden, under the
+ * signed-out-in-place view, it hides what it holds.
+ */
+.pageBar:not([hidden]) {
+  display: contents;
+}
+
+/* It takes no space until a screen fills it. */
 .pageBar:empty {
   display: none;
 }

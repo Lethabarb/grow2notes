@@ -60,6 +60,30 @@ public sealed partial class ErrorCodeTests
         Assert.Equal("precondition.required", problem.RootElement.GetProperty("code").GetString());
     }
 
+    // As note.in_progress_by_other includes the author's name and start time (design.md §6.9), each as the JSON names
+    // it, beside the code, which a member of the same name cannot replace.
+    [Fact]
+    public async Task An_error_code_answers_what_it_includes_beside_its_code()
+    {
+        await using var services = new ServiceCollection().AddLogging().AddProblemDetails().BuildServiceProvider();
+        var context = new DefaultHttpContext { RequestServices = services };
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        await ErrorCode.InProgressByOther.Problem(new Dictionary<string, object?>
+        {
+            ["authorDisplayName"] = "Alex P.",
+            ["startedAtUtc"] = new DateTime(2026, 9, 30, 23, 14, 0, DateTimeKind.Utc),
+            [ErrorCode.Extension] = "made.up",
+        }).ExecuteAsync(context);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        using var problem = JsonDocument.Parse(body.ToArray());
+        Assert.Equal("note.in_progress_by_other", problem.RootElement.GetProperty("code").GetString());
+        Assert.Equal("Alex P.", problem.RootElement.GetProperty("authorDisplayName").GetString());
+        Assert.Equal("2026-09-30T23:14:00Z", problem.RootElement.GetProperty("startedAtUtc").GetString());
+    }
+
     [Fact]
     public void Reading_6_9_takes_each_code_with_its_status_and_its_table_alone()
     {

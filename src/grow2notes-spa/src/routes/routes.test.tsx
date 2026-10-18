@@ -70,8 +70,12 @@ const commonItemGroups: AdminCommonItemGroup[] = [
   },
 ];
 
-// The made-up answers of the manager screens' requests, by path.
-const managerAnswers: Readonly<Record<string, unknown>> = {
+// The made-up answers of the screens' requests, by path: Today's list and the manager screens'.
+const screenAnswers: Readonly<Record<string, unknown>> = {
+  '/api/today': {
+    date: '2026-10-01',
+    participants: participants.map(({ id, givenName, familyName }) => ({ id, givenName, familyName })),
+  },
   '/api/admin/users': users,
   '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
@@ -91,9 +95,9 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers the users', the participants' and the common item groups' lists and
- * `GET /api/admin/guide-prompts` with their made-up answers and any other request, `GET /api/auth/me`, with `me`, or,
- * for none, never answers.
+ * Stubs `fetch` as the server, which answers Today's list, the users', the participants' and the common item groups'
+ * lists and `GET /api/admin/guide-prompts` with their made-up answers and any other request, `GET /api/auth/me`, with
+ * `me`, or, for none, never answers.
  */
 function serveMe(me: Me | undefined) {
   fetchMock.mockImplementation((path, init) =>
@@ -101,7 +105,7 @@ function serveMe(me: Me | undefined) {
       ? noAnswer(init)
       : Promise.resolve(
           // `api()` sends each request to a path, as a string.
-          new Response(JSON.stringify(managerAnswers[path as string] ?? me), {
+          new Response(JSON.stringify(screenAnswers[path as string] ?? me), {
             headers: { 'Content-Type': 'application/json' },
           }),
         ),
@@ -135,15 +139,6 @@ function currentItems(): string[] {
   return Array.from(current, (element) => `${element.textContent} ${element.getAttribute('aria-current')}`);
 }
 
-/** The text that `element` shows on screen, without what only screen readers get. */
-function visibleText(element: HTMLElement): string | null {
-  const shown = element.cloneNode(true) as HTMLElement;
-  shown.querySelectorAll('.visually-hidden').forEach((hidden) => {
-    hidden.remove();
-  });
-  return shown.textContent;
-}
-
 /** Expects Page not found in `<main>`, with its own title, under the header and nav, which mark no item. */
 function expectPageNotFound() {
   const main = screen.getByRole('main');
@@ -166,28 +161,6 @@ afterEach(() => {
   fetchMock.mockReset();
   vi.unstubAllGlobals();
   vi.useRealTimers();
-});
-
-describe('Today', () => {
-  it.each([worker, manager])(
-    "shows a $role its heading alone, from the server's today, not the device's clock",
-    async (me) => {
-      // Two days after the server's today, in Melbourne.
-      vi.setSystemTime(new Date('2026-10-03T09:00:00+10:00'));
-      serveMe(me);
-      renderApp('/');
-      await settle();
-      const heading = pageHeading();
-
-      expect(visibleText(heading)).toBe(`Today · Thursday 1${nbsp}October`);
-      expect(heading).toHaveAccessibleName(`Today, Thursday 1${nbsp}October`);
-      expect(heading.querySelector('time')).toHaveAttribute('datetime', '2026-10-01');
-      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-      // Nothing else on the page until E02 builds the list.
-      expect(screen.getByRole('main').textContent).toBe(heading.textContent);
-      expect(document.title).toBe('Grow2Notes – Today');
-    },
-  );
 });
 
 describe('Manage', () => {
@@ -332,7 +305,7 @@ describe('every page', () => {
     { page: 'Manage', me: manager, path: '/manage' },
     { page: 'Page not found', me: manager, path: '/no-such-page' },
     { page: 'Page not found', me: worker, path: '/manage' },
-  ])('has one <h1> and one status region, both in <main>: $page at $path', async ({ me, path }) => {
+  ])('has one <h1> and one page status region, both in <main>: $page at $path', async ({ me, path }) => {
     serveMe(me);
     renderApp(path);
     await settle();
@@ -341,7 +314,11 @@ describe('every page', () => {
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
     expect(main).toContainElement(headings[0]);
-    const regions = screen.getAllByRole('status');
+    // The page's own, visually hidden; a screen's region that loads has a line of its own, which shows, and Find a
+    // participant a hidden one of its own, in its landmark.
+    const regions = screen
+      .getAllByRole('status')
+      .filter((region) => region.classList.contains('visually-hidden') && region.closest('search') === null);
     expect(regions).toHaveLength(1);
     expect(main).toContainElement(regions[0]);
   });

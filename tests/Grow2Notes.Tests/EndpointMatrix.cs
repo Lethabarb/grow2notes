@@ -1,4 +1,5 @@
 using System.Buffers.Text;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -6,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Http;
@@ -114,6 +116,31 @@ internal static class EndpointMatrix
         // has, so a made-up code is refused, whoever sends it, with nothing checked or written (§8.2).
         new(Post,      "/api/auth/login/totp",   Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login/totp", new { code = "123456" })),
+
+        // The Today list (§6.3), for every signed-in user, each of whom gets their own organisation's active
+        // participants: its participants hold the caller's own organisation's seeded participant and not the other's
+        // (§5.9 item 7).
+        new(Get,       "/api/today",             Unauthorized, OK,     OK,         OK,
+            Answer: HoldsTheCallersOwnSeeded(
+                "participant", organisation => [organisation.ParticipantId], listedIn: "participants")),
+
+        // A participant's header (§6.3), for every signed-in user, at A's seeded participant, whom B's manager does not
+        // find (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}", Unauthorized, OK, OK, NotFound,
+            call => Task.FromResult(
+                new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}"))),
+
+        // The note form (§6.3), for every signed-in user, at A's seeded participant's note for today, which no test
+        // starts (tests/README.md), so each of A's users gets the template and opening it writes nothing (§3.3). B's
+        // manager does not find the participant (§9.2).
+        new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, OK, OK,
+            NotFound, TodaysNoteFormOfTheSeededParticipantOfA),
+
+        // The note's autosave (§6.3), for every signed-in user. Each call is the first save of today's note of a
+        // participant whom its request first adds to A, as a call commits (tests/README.md), so each of A's users
+        // starts a note of their own and gets 201. B's manager does not find the participant (§9.2).
+        new(Put,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, Created,
+            Created, NotFound, StartingTodaysNoteOfAParticipantOfItsOwn),
 
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
@@ -292,6 +319,37 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // A's seeded participant's note form for today.
+    private static Task<HttpRequestMessage> TodaysNoteFormOfTheSeededParticipantOfA(EndpointCall call) =>
+        Task.FromResult(new HttpRequestMessage(call.Method, TodaysDraftPath(call, call.Seeded.A.ParticipantId)));
+
+    // The first save of today's note of a participant whom the request first adds to A, with no goals, as the form
+    // sends it: from a page that has not saved the note before, with the template's lists' version, and nothing ticked
+    // or written yet.
+    private static async Task<HttpRequestMessage> StartingTodaysNoteOfAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        return new HttpRequestMessage(call.Method, TodaysDraftPath(call, participant.Id))
+        {
+            Content = JsonContent.Create(new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = ListsVersion.Of([]),
+                narrative = "",
+                tickedGoalIds = Array.Empty<Guid>(),
+            }),
+        };
+    }
+
+    // The draft's path of the participant's note for today in Melbourne, by the app's own clock.
+    private static string TodaysDraftPath(EndpointCall call, Guid participantId)
+    {
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today()
+            .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        return $"/api/participants/{participantId}/notes/{today}/draft";
+    }
 
     // An invite of a worker with a made-up address (A35) that no other call or test uses.
     private static Task<HttpRequestMessage> AnInviteOfANewAddress(EndpointCall call) =>
@@ -494,12 +552,12 @@ internal static class EndpointMatrix
             authenticator.GetAssertion(Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32)))));
     }
 
-    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id,
-    // that holds every one of the caller's own organisation's seeded rows that `seededIds` gives and none of the
-    // other's, each named in a difference as `what`. Tests add rows to the seeded organisations, so it may hold others
-    // of the caller's own.
+    // For an endpoint that lists an organisation's rows, such as its users: a JSON array of rows, each with its id, as
+    // the answer or as its property `listedIn`, that holds every one of the caller's own organisation's seeded rows
+    // that `seededIds` gives and none of the other's, each named in a difference as `what`. Tests add rows to the
+    // seeded organisations, so it may hold others of the caller's own.
     private static Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>
-        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds) =>
+        HoldsTheCallersOwnSeeded(string what, Func<SeededOrganisation, Guid[]> seededIds, string? listedIn = null) =>
         async (response, caller, seeded) =>
         {
             var (own, other) = caller switch
@@ -509,7 +567,8 @@ internal static class EndpointMatrix
                 _ => throw new ArgumentOutOfRangeException(
                     nameof(caller), caller, $"A signed-out caller has no {what}s."),
             };
-            var rows = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+            var rows = listedIn is null ? answer : answer.GetProperty(listedIn);
             var ids = rows.EnumerateArray().Select(row => row.GetProperty("id").GetGuid()).ToHashSet();
             return
             [

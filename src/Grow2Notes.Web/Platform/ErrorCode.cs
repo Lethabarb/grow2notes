@@ -13,6 +13,19 @@ internal sealed class ErrorCode
     /// <summary>The problem details extension member that holds the code (design.md §6.1).</summary>
     public const string Extension = "code";
 
+    /// <summary>
+    /// Another user started this participant's note for that day (§3.2), and only they can open or save its draft
+    /// (§6.3). It includes <c>{authorDisplayName, startedAtUtc}</c>.
+    /// </summary>
+    public static readonly ErrorCode InProgressByOther =
+        new(StatusCodes.Status409Conflict, "note.in_progress_by_other");
+
+    /// <summary>
+    /// The participant's goals changed between the form opening and the note's first save (§5.7), which would store
+    /// other lists than the form showed, and so creates nothing. A first save with no lists' version is refused alike.
+    /// </summary>
+    public static readonly ErrorCode ListsChanged = new(StatusCodes.Status409Conflict, "note.lists_changed");
+
     /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 
@@ -43,6 +56,22 @@ internal sealed class ErrorCode
         new(StatusCodes.Status412PreconditionFailed, "precondition.failed");
 
     /// <summary>
+    /// A note's first save for a date after today in Melbourne, for which nobody may start a note (§5.5 item 4).
+    /// </summary>
+    public static readonly ErrorCode FutureDate = new(StatusCodes.Status422UnprocessableEntity, "note.future_date");
+
+    /// <summary>
+    /// A worker's first save of a note for a day before today in Melbourne, which only a manager may start (§5.5 item
+    /// 4, D35), as when a form opened before midnight makes its first change after it (§3.3).
+    /// </summary>
+    public static readonly ErrorCode PastDateManagerOnly =
+        new(StatusCodes.Status422UnprocessableEntity, "note.past_date_manager_only");
+
+    /// <summary>A note's first save for an archived participant, who gets no new notes (§3.7, §5.5 item 4).</summary>
+    public static readonly ErrorCode ParticipantArchived =
+        new(StatusCodes.Status422UnprocessableEntity, "note.participant_archived");
+
+    /// <summary>
     /// A reorder's IDs are not the list's active rows, each exactly once
     /// (<see cref="Configuration.ListOrder.Reorder"/>), or a row of the list changed while it was being reordered.
     /// </summary>
@@ -68,6 +97,13 @@ internal sealed class ErrorCode
     public string Code { get; }
 
     /// <summary>Answers this code: problem details with its status, and the code in their <c>code</c> member.</summary>
-    public ProblemHttpResult Problem() =>
-        TypedResults.Problem(statusCode: Status, extensions: new Dictionary<string, object?> { [Extension] = Code });
+    public ProblemHttpResult Problem() => Problem(new Dictionary<string, object?>());
+
+    /// <summary>
+    /// Answers this code with the members that design.md §6.9 says it includes beside the code, such as
+    /// <see cref="InProgressByOther"/>'s author and start time, each named as the API's JSON names it.
+    /// </summary>
+    public ProblemHttpResult Problem(IReadOnlyDictionary<string, object?> includes) =>
+        TypedResults.Problem(
+            statusCode: Status, extensions: new Dictionary<string, object?>(includes) { [Extension] = Code });
 }

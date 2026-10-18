@@ -189,10 +189,28 @@ describe('api', () => {
     );
   });
 
+  it('throws ApiError with who started the draft and when, for a 409 note.in_progress_by_other', async () => {
+    const startedBy = { authorDisplayName: 'Alex P.', startedAtUtc: '2026-09-30T23:14:00Z' };
+    serve(problem(409, { code: 'note.in_progress_by_other', ...startedBy }));
+
+    await expect(api('/api/participants/3e8b/notes/2026-10-01/draft')).rejects.toStrictEqual(
+      new ApiError(409, 'note.in_progress_by_other', undefined, startedBy),
+    );
+  });
+
+  it('leaves out who started the draft when the problem does not give both as text', async () => {
+    serve(problem(409, { code: 'note.in_progress_by_other', authorDisplayName: 'Alex P.', startedAtUtc: 1 }));
+
+    await expect(api('/api/participants/3e8b/notes/2026-10-01/draft')).rejects.toStrictEqual(
+      new ApiError(409, 'note.in_progress_by_other'),
+    );
+  });
+
   it.each([
     ['a code that is not a string', problem(409, { code: 409 })],
     ['field errors on a status other than 422', problem(409, { errors: { email: ['Wrong'] } })],
     ['field errors that are not lists of messages', problem(422, { errors: { email: 'Wrong' } })],
+    ['an author and start time with no code', problem(409, { authorDisplayName: 'Alex P.', startedAtUtc: 'x' })],
   ])('leaves out %s', async (_case, answer) => {
     serve(answer);
 

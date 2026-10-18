@@ -1,0 +1,85 @@
+/*
+ * The save status at the end of the top bar (note-form.md component 1): small, in the secondary colour, its figures one
+ * width, and wrapping rather than cut short.
+ */
+.saveStatus {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--colour-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* The name as stored, never upper-cased or cut short, wrapping however long, and never hyphenated (component 3). */
+.name {
+  display: block;
+  overflow-wrap: break-word;
+  hyphens: manual;
+  text-wrap: balance;
+}
+
+/* The heading's last line, in body type and the text's own colour, as the date is part of the right-day check. */
+.date {
+  display: block;
+  margin-block-start: var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: 400;
+}
+
+/* Before each section of the form (note-form.md *Layout - phone*). */
+.section {
+  margin-block-start: var(--section-gap);
+}
+
+/* The lists-changed notice's region above Goals (component 7): no space while empty, a section's gap once filled. */
+.listsChanged:not(:empty) {
+  margin-block-start: var(--section-gap);
+}
+
+/*
+ * A dead end, the top bar's second row (component 1): the whole width of the bar's row, under the back link and the
+ * save status, in the attention colours, with the words in the body's colour. Its border is a real one, so that forced
+ * colours keep it.
+ */
+.deadEnd {
+  display: flex;
+  flex: 1 0 100%;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin-block-end: var(--space-3);
+  padding: var(--space-3);
+  border: 2px solid var(--colour-attention-edge);
+  border-radius: var(--radius-s);
+  background: var(--colour-attention-tint);
+  color: var(--colour-text);
+}
+
+/* Beside the first line of the words, whatever their size. */
+.deadEndIcon {
+  flex: none;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  margin-block-start: calc((var(--line-height-body) * 1em - 1.25em) / 2);
+  color: var(--colour-attention-edge);
+}
+
+/*
+ * A long unbroken name in the sentence wraps anywhere, as the banner, a flex item of the bar's row, is never narrower
+ * than its widest word, which would otherwise make the page scroll sideways at 320 px (SC 1.4.10).
+ */
+.deadEndText {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (forced-colors: active) {
+  .deadEnd {
+    border-color: CanvasText;
+  }
+
+  .deadEndIcon {
+    color: CanvasText;
+  }
+}

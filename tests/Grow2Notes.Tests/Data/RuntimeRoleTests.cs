@@ -43,6 +43,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 "DENY DELETE ON dbo.CommonItem",
                 "DENY DELETE ON dbo.CommonItemGroup",
                 "DENY DELETE ON dbo.Goal",
+                "DENY DELETE ON dbo.Note",
                 "DENY DELETE ON dbo.Organisation",
                 "DENY DELETE ON dbo.Participant",
                 "DENY UPDATE ON dbo.AuditEvent",
@@ -58,6 +59,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     [InlineData("Goal")]
     [InlineData("CommonItemGroup")]
     [InlineData("CommonItem")]
+    [InlineData("Note")]
     public async Task A_member_of_the_role_gets_error_229_for_a_delete(string table)
     {
         await AsMemberOfTheRoleAsync(async session =>
@@ -107,16 +109,18 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     }
 
     [Fact]
-    public async Task A_member_of_the_role_can_read_add_and_change_rows_and_delete_an_authenticator_key()
+    public async Task A_member_of_the_role_can_read_add_and_change_rows_and_delete_an_authenticator_key_and_a_draft()
     {
         await AsMemberOfTheRoleAsync(async session =>
         {
             // A denied statement fails the whole call with error 229, naming the permission and the table. The
-            // authenticator key is one of the rows the app does delete, in a sign-in reset (design.md §5.1, Deletes).
+            // authenticator key and the draft are among the rows the app does delete: in a sign-in reset, and as the
+            // note's first version is saved, as here (design.md §5.1, Deletes; §5.8).
             var row = await session.ReadRowAsync("""
                 DECLARE @organisationId uniqueidentifier = NEWID(), @userId uniqueidentifier = NEWID(),
                         @participantId uniqueidentifier = NEWID(), @goalId uniqueidentifier = NEWID(),
-                        @groupId uniqueidentifier = NEWID(), @itemId uniqueidentifier = NEWID();
+                        @groupId uniqueidentifier = NEWID(), @itemId uniqueidentifier = NEWID(),
+                        @noteId uniqueidentifier = NEWID();
 
                 INSERT INTO [dbo].[Organisation] ([Id], [Name], [CreatedAtUtc])
                 VALUES (@organisationId, N'Added', SYSUTCDATETIME());
@@ -136,6 +140,15 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 VALUES (@groupId, @organisationId, N'Added', 0, 0, SYSUTCDATETIME());
                 INSERT INTO [dbo].[CommonItem] ([Id], [OrganisationId], [GroupId], [Text], [SortOrder], [CreatedAtUtc])
                 VALUES (@itemId, @organisationId, @groupId, N'Added', 0, SYSUTCDATETIME());
+                INSERT INTO [dbo].[Note]
+                    ([Id], [OrganisationId], [ParticipantId], [NoteDate], [AuthorUserId], [Status], [CreatedAtUtc],
+                     [CurrentVersionNumber], [FlagStatus])
+                VALUES (@noteId, @organisationId, @participantId, '2026-10-04', @userId, 0, SYSUTCDATETIME(), 0, 0);
+                INSERT INTO [dbo].[NoteDraft]
+                    ([NoteId], [EditorUserId], [OrganisationId], [BaseVersionNumber], [Groups], [Items], [Narrative],
+                     [IsFlagged], [LastClientId], [LastSeq], [CreatedAtUtc], [UpdatedAtUtc])
+                VALUES (@noteId, @userId, @organisationId, 0, N'[]', N'[]', N'Added', 0, NEWID(), 1, SYSUTCDATETIME(),
+                        SYSUTCDATETIME());
 
                 UPDATE [dbo].[Organisation] SET [Name] = N'Changed' WHERE [Id] = @organisationId;
                 UPDATE [dbo].[AspNetUsers] SET [DisplayName] = N'Changed' WHERE [Id] = @userId;
@@ -143,20 +156,27 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 UPDATE [dbo].[Goal] SET [Text] = N'Changed' WHERE [Id] = @goalId;
                 UPDATE [dbo].[CommonItemGroup] SET [Name] = N'Changed' WHERE [Id] = @groupId;
                 UPDATE [dbo].[CommonItem] SET [Text] = N'Changed' WHERE [Id] = @itemId;
+                UPDATE [dbo].[NoteDraft] SET [Narrative] = N'Changed' WHERE [NoteId] = @noteId;
+                UPDATE [dbo].[Note]
+                SET [Status] = 1, [CurrentVersionNumber] = 1, [FirstSubmittedAtUtc] = SYSUTCDATETIME()
+                WHERE [Id] = @noteId;
                 DELETE FROM [dbo].[AspNetUserTokens] WHERE [UserId] = @userId;
+                DELETE FROM [dbo].[NoteDraft] WHERE [NoteId] = @noteId;
 
                 SELECT o.[Name], u.[DisplayName],
                        (SELECT COUNT(*) FROM [dbo].[AspNetUserTokens] AS t WHERE t.[UserId] = u.[Id]),
                        (SELECT p.[FamilyName] FROM [dbo].[Participant] AS p WHERE p.[Id] = @participantId),
                        (SELECT g.[Text] FROM [dbo].[Goal] AS g WHERE g.[Id] = @goalId),
                        (SELECT cg.[Name] FROM [dbo].[CommonItemGroup] AS cg WHERE cg.[Id] = @groupId),
-                       (SELECT ci.[Text] FROM [dbo].[CommonItem] AS ci WHERE ci.[Id] = @itemId)
+                       (SELECT ci.[Text] FROM [dbo].[CommonItem] AS ci WHERE ci.[Id] = @itemId),
+                       (SELECT n.[Status] FROM [dbo].[Note] AS n WHERE n.[Id] = @noteId),
+                       (SELECT COUNT(*) FROM [dbo].[NoteDraft] AS d WHERE d.[NoteId] = @noteId)
                 FROM [dbo].[AspNetUsers] AS u
                 JOIN [dbo].[Organisation] AS o ON o.[Id] = u.[OrganisationId]
                 WHERE u.[Id] = @userId;
                 """);
 
-            Assert.Equal(["Changed", "Changed", 0, "Changed", "Changed", "Changed", "Changed"], row);
+            Assert.Equal(["Changed", "Changed", 0, "Changed", "Changed", "Changed", "Changed", (byte)1, 0], row);
         });
     }
 

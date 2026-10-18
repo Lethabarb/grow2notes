@@ -28,6 +28,7 @@ import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { limits } from '../../limits.ts';
 import { PageNotFound } from '../../routes/PageNotFound.tsx';
+import { invalidateToday } from '../today/todayQuery.ts';
 import { goalsApi, goalsQuery } from './goalsQuery.ts';
 import styles from './ParticipantPage.module.css';
 import { fullName, participantsQuery, type AdminParticipant, type ParticipantStatus } from './participantsQuery.ts';
@@ -355,24 +356,32 @@ function Participant({ participant, onAdded }: ParticipantProps) {
     // The add has no idempotency key (design.md §6.6), so one sent again after its answer was lost could add the
     // participant twice: the person presses Save again instead.
     retry: 0,
-    // Even once the page has gone, so that the list shows them.
+    // Even once the page has gone, so that the list and Today show them.
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: participantsQuery.queryKey });
+      void invalidateToday(queryClient);
     },
   });
   // Each sent once, as the query client's mutations are: one sent again after a lost answer would meet its own change
-  // as a `412`.
+  // as a `412`. Each reads the list again itself, and leaves Today to fetch its list again too, as it shows the
+  // participant's name, and only while they are active (participants.md *Interactions*).
   const correct = useMutation({
     mutationFn: ({ id, details, version }: Correction): Promise<Outcome<WithHeaders<undefined>>> =>
       changeAndReread(queryClient, id, version, (ifMatch) =>
         apiWithHeaders<undefined>(`${participantsPath}/${id}`, { method: 'PUT', body: details, ifMatch }),
       ),
+    onSuccess: () => {
+      void invalidateToday(queryClient);
+    },
   });
   const statusChange = useMutation({
     mutationFn: ({ id, action, version }: StatusChange): Promise<Outcome<undefined>> =>
       changeAndReread(queryClient, id, version, (ifMatch) =>
         api<undefined>(`${participantsPath}/${id}/${action}`, { method: 'POST', ifMatch }),
       ),
+    onSuccess: () => {
+      void invalidateToday(queryClient);
+    },
   });
 
   // Each edit empties the save status, so that it never says "Saved" over changes that are not, and checks its own

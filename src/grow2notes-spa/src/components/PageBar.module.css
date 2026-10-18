@@ -5,3 +5,45 @@
 .bar {
   padding-block-start: var(--space-2);
 }
+
+/*
+ * The note form's top bar (note-form.md component 1): sticky, opaque, with a 1 px divider under it, and never animated.
+ * The slot lays out no box of its own, so the bar sticks for the whole page, not just the slot's height.
+ */
+.topBar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background: var(--colour-surface);
+  border-block-end: var(--border-divider) solid var(--colour-divider);
+}
+
+/* The back link at the start of one row and the save status at its end, wrapping under it when the row runs out. */
+.topBarRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: var(--space-4);
+  min-block-size: var(--target-row);
+  max-inline-size: var(--measure);
+}
+
+/* So that Tab never leaves a focused field under the bar. */
+:global(:root):has(.topBar) {
+  scroll-padding-block-start: calc(var(--topbar-h, 0px) + var(--space-2));
+}
+
+/*
+ * On a short window, such as a phone held sideways or a laptop at 200% zoom, the bar scrolls away with the page, as a
+ * sticky one would cover too much of it (SC 1.4.10).
+ */
+@media (max-height: 30rem) {
+  .topBar {
+    position: static;
+  }
+
+  :global(:root):has(.topBar) {
+    scroll-padding-block-start: 0;
+  }
+}

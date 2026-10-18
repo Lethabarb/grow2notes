@@ -41,6 +41,17 @@ if ('window' in globalThis) {
   };
 }
 
+// jsdom has no ResizeObserver, as it lays nothing out, so this stands in for it, observing nothing, for the note form's
+// top bar, which measures its own height. A test that needs a size reported stubs one of its own; what the bar's
+// height does on the page is checked end to end.
+if ('window' in globalThis) {
+  window.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
 // jsdom has no <search> element, which every browser the app supports has had since 2023, so React warns in tests
 // alone that Find a participant's landmark is unrecognised. Only that warning is let go: every other one still shows.
 const consoleError = console.error;

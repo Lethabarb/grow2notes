@@ -15,6 +15,8 @@ type FindParticipantProps = {
   onChange: (value: string) => void;
   /** Nothing in the list shown matches what is typed, so the screen shows the no-match sentence in its place. */
   noMatch: boolean;
+  /** The screen's own class for the landmark, such as the space between it and the list under it. */
+  className?: string;
 };
 
 /**
@@ -23,7 +25,7 @@ type FindParticipantProps = {
  * does with `matchesName`. Its own status region, in the page from the first render, says only the no-match sentence,
  * once the typing has paused, the same words as the screen shows in place of the list.
  */
-export function FindParticipant({ value, onChange, noMatch }: FindParticipantProps) {
+export function FindParticipant({ value, onChange, noMatch, className }: FindParticipantProps) {
   const inputId = useId();
   const descriptionId = useId();
   const input = useRef<HTMLInputElement>(null);
@@ -38,7 +40,7 @@ export function FindParticipant({ value, onChange, noMatch }: FindParticipantPro
   }, [noMatch, typed]);
 
   return (
-    <search className={styles.search}>
+    <search className={className === undefined ? styles.search : `${styles.search} ${className}`}>
       <label htmlFor={inputId} className={styles.label}>
         {strings.findParticipant.label}
       </label>

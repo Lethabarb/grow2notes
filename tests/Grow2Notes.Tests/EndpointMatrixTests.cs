@@ -104,6 +104,29 @@ public sealed class EndpointMatrixTests(Grow2NotesFactory factory, SqlServerFixt
             differences);
     }
 
+    // As above, for A's worker, with the participants in the Today list's own property: B's participant alone.
+    [Fact]
+    public async Task A_Today_list_that_lacks_the_caller_s_participant_or_holds_another_s_fails_the_run()
+    {
+        var (a, b) = sqlServer.Seeded;
+        var check = Assert.Single(EndpointMatrix.Rows, row => EndpointMatrix.NameOf(row) == "GET /api/today").Answer;
+        Assert.NotNull(check);
+        using var answer = new HttpResponseMessage
+        {
+            Content = JsonContent.Create(
+                new { date = "2026-10-01", participants = new[] { new { id = b.ParticipantId } } }),
+        };
+
+        var differences = await check(answer, Caller.WorkerOfA, sqlServer.Seeded);
+
+        Assert.Equal(
+            [
+                $"lacks the caller's own organisation's participant {a.ParticipantId}",
+                $"holds the other organisation's participant {b.ParticipantId}",
+            ],
+            differences);
+    }
+
     [Theory]
     [MemberData(nameof(Callers))]
     public async Task Every_endpoint_answers_the_caller_with_the_status_in_its_row(Caller caller)

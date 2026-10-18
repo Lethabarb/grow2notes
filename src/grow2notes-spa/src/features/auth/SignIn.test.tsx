@@ -31,6 +31,7 @@ const optionsPath = '/api/auth/passkey/options';
 const passkeyPath = '/api/auth/passkey';
 const passwordPath = '/api/auth/login';
 const codePath = '/api/auth/login/totp';
+const todayPath = '/api/today';
 
 // A made-up worker (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -138,7 +139,10 @@ type Server = {
   code?: () => Promise<Response>;
 };
 
-/** Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, and the rest answer so. */
+/**
+ * Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, the rest answer so, and
+ * Today, where a sign-in lands, has no participants.
+ */
 function serve({
   me = () => problem(401),
   passkey = () => json(worker),
@@ -162,6 +166,8 @@ function serve({
         return password();
       case codePath:
         return code();
+      case todayPath:
+        return json({ date: worker.today, participants: [] });
       default:
         throw new Error('The test gave no answer for this request.');
     }
@@ -749,7 +755,7 @@ describe('signing in with a passkey', () => {
     });
   });
 
-  it('leaves nothing in localStorage, sessionStorage or the query client but the me query', async () => {
+  it("leaves nothing in localStorage, sessionStorage or the query client but the me query and Today's", async () => {
     serve({
       passkey: vi
         .fn<() => Promise<Response>>()
@@ -768,7 +774,10 @@ describe('signing in with a passkey', () => {
     expect(localStorage).toHaveLength(0);
     expect(sessionStorage).toHaveLength(0);
     expect(queryClient.getMutationCache().getAll()).toEqual([]);
-    expect(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey)).toEqual([['me']]);
+    expect(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey)).toEqual([
+      ['me'],
+      ['today', worker.today],
+    ]);
   });
 });
 

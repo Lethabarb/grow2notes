@@ -43,14 +43,20 @@ const madeUp: AppRoute[] = [
 
 const fetchMock = vi.fn<typeof fetch>();
 
-/** `GET /api/auth/me`'s answer for `me`. */
-function meAnswer(me: Me): Response {
-  return new Response(JSON.stringify(me), { headers: { 'Content-Type': 'application/json' } });
+const todayPath = '/api/today';
+
+/**
+ * `GET /api/auth/me`'s answer for `me`, or, for a request for Today's list, which Today asks for under the header,
+ * the list for `me`'s day, with no participants.
+ */
+function meAnswer(me: Me, path: unknown): Response {
+  const body = path === todayPath ? { date: me.today, participants: [] } : me;
+  return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 }
 
 /** Stubs `fetch` as the server, which answers `GET /api/auth/me` with `me()` each time it is asked. */
 function serveMe(me: () => Me) {
-  fetchMock.mockImplementation(() => Promise.resolve(meAnswer(me())));
+  fetchMock.mockImplementation((path) => Promise.resolve(meAnswer(me(), path)));
 }
 
 const mePath = '/api/auth/me';
@@ -79,7 +85,7 @@ function serveSignOut(me: Me, ...logouts: Logout[]) {
       return logout(init);
     }
 
-    return Promise.resolve(meAnswer(me));
+    return Promise.resolve(meAnswer(me, path));
   });
 }
 
@@ -123,9 +129,12 @@ function logoutsSent() {
     .map(([, init]) => ({ method: init?.method, token: new Headers(init?.headers).get('X-XSRF-TOKEN') }));
 }
 
-/** The address of each request sent but `GET /api/auth/me`: the antiforgery token's and the logout's. */
-function requestsBesidesMe() {
-  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath);
+/**
+ * The address of each request sent but `GET /api/auth/me` and Today's list, which the screen under the header asks
+ * for: the antiforgery token's and the logout's.
+ */
+function signOutRequests() {
+  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath && path !== todayPath);
 }
 
 /**
@@ -290,7 +299,7 @@ describe('Header', () => {
     await act(() => refreshMe(client));
     await settle();
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.filter(([path]) => path === mePath)).toHaveLength(2);
     // The same element on the same location: the header was neither reloaded nor mounted again.
     expect(screen.getByRole('link', { name: 'Report' })).toBe(report);
     expect(report).toHaveAttribute('href', '/reports/daily/2026-10-02');
@@ -588,14 +597,14 @@ describe('Sign out', () => {
     await act(() => vi.advanceTimersByTimeAsync(1_000));
 
     expect(guard.ask).toHaveBeenCalledOnce();
-    expect(requestsBesidesMe()).toEqual([]);
+    expect(signOutRequests()).toEqual([]);
     expect(signOut).not.toHaveAttribute('aria-disabled');
     expect(signOut).toHaveAccessibleName('Sign out');
 
     await guard.answer(false);
     await act(() => vi.advanceTimersByTimeAsync(1_000));
 
-    expect(requestsBesidesMe()).toEqual([]);
+    expect(signOutRequests()).toEqual([]);
     expect(signOut).not.toHaveAttribute('aria-disabled');
     expect(signOut).toHaveAccessibleName('Sign out');
     expect(signOut).toHaveFocus();
@@ -629,7 +638,7 @@ describe('Sign out', () => {
     const { signOut } = await openPanel();
     fireEvent.click(signOut);
     await settle();
-    expect(requestsBesidesMe()).toEqual([]);
+    expect(signOutRequests()).toEqual([]);
 
     await guard.answer(true);
 

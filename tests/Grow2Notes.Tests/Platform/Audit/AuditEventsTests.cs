@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Hosting;
@@ -57,6 +59,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItem.Archived] = test => test.ArchiveCommonItemAsync(),
         [AuditEventTypes.CommonItem.Restored] = test => test.RestoreCommonItemAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
+        [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
@@ -736,6 +739,43 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
+    /// <c>note.draft_started</c>: A's worker makes the first change to today's note of a participant added for the row,
+    /// a goal ticked and a sentence written, with <c>PUT {base}/draft</c> and the template's lists' version, which
+    /// records the new note as the entity and its participant as the participant, and no <c>Details</c>, so no note
+    /// text or goal wording (design.md §5.3, §9.5).
+    /// </summary>
+    private async Task<WrittenEvent> StartDraftAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var goal = await factory.Services.AddGoalAsync(a, participant.Id, new("Makes own breakfast", 0));
+        var today = factory.Services.GetRequiredService<MelbourneClock>().Today();
+        using var client = factory.CreateHttpsClient().SignInAs(a.WorkerId);
+        using var response = await client.PutWithTokenAsync(
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/draft"),
+            await client.FetchTokenAsync(),
+            new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = ListsVersion.Of([new(goal.Id, "Makes own breakfast", IsTicked: false)]),
+                narrative = "Jane made toast.",
+                tickedGoalIds = new[] { goal.Id },
+            },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return new(
+            AuditEventTypes.Note.DraftStarted,
+            a.OrganisationId,
+            a.WorkerId,
+            AuditEntityTypes.Note,
+            await StoredNoteIdAsync(participant.Id),
+            participant.Id,
+            null);
+    }
+
+    /// <summary>
     /// <c>admin.signin_reset</c>: the operator runs <c>admin reset-signin</c> with the address of an Active worker
     /// added for the row, which records the worker as the entity, with no actor, as the operator is no user, no
     /// participant and no <c>Details</c>, so no address (A28).
@@ -871,6 +911,19 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         {
             return await db.Goals.Where(g => g.Id == goalId)
                 .Select(g => g.ArchivedAtUtc)
+                .SingleAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    // The ID of the one note of a participant added for a row, through the app's context under A's tenant.
+    private async Task<Guid> StoredNoteIdAsync(Guid participantId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            return await db.Notes.Where(n => n.ParticipantId == participantId)
+                .Select(n => n.Id)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
     }
