@@ -372,7 +372,8 @@ api.MapAdminGroup()
     .MapArchiveGoalEndpoints()
     .MapCommonItemGroupListEndpoint()
     .MapAddCommonItemEndpoint()
-    .MapUpdateCommonItemEndpoint();
+    .MapUpdateCommonItemEndpoint()
+    .MapReorderCommonItemsEndpoint();
 
 // Real API endpoints are more specific, so routing prefers them; any other /api path, and /api itself, is a 404 for
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's

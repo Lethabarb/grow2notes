@@ -10,10 +10,10 @@ namespace Grow2Notes.Web.Features.CommonItems;
 
 /// <summary>
 /// The handler that changes a group's common items (design.md §6.6), as a handler class that takes the
-/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>
-/// and <c>PUT /api/admin/common-items/{id}</c> call it with <see cref="Actor.InApp"/>, and Release 2's tools will call
-/// it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
-/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>,
+/// <c>PUT /api/admin/common-items/{id}</c> and <c>PUT /api/admin/common-item-groups/{groupId}/items/order</c> call it
+/// with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is
+/// saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemChanges(
     Grow2NotesDbContext db,
@@ -156,6 +156,63 @@ internal sealed class CommonItemChanges(
             TextValues(item),
             cancellationToken: cancellationToken);
         return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
+    }
+
+    /// <summary>
+    /// Puts the active items of a group of the tenant's organisation, found through the tenant filter, so that another
+    /// organisation's is not found (design.md §9.2), in the order of <paramref name="commonItemIds"/> (S01.03.03):
+    /// reads them in the list's order (<see cref="CommonItemGroupList.InListOrder(IQueryable{CommonItem})"/>), the
+    /// archived ones left out, so that <see cref="ListOrder.Reorder"/> refuses an archived ID as one it was not given;
+    /// then saves the new order with <c>common_item.reordered</c>, which names no item as its entity and no
+    /// participant, and whose <c>Details</c> hold the old and new order with the <c>groupId</c> beside them
+    /// (S01.03.03's Note); or, for the order already stored, saves nothing and writes no event (D84). An archived
+    /// group's items are reordered as an active one's are, as design.md §6.6 gives the reorder no
+    /// <c>config.group_archived</c> (T06's Notes).
+    /// </summary>
+    /// <param name="actor">Who reorders them.</param>
+    /// <param name="groupId">The group.</param>
+    /// <param name="commonItemIds">The IDs of the group's active items, in their new order.</param>
+    /// <param name="cancellationToken">Cancels the reorder.</param>
+    /// <returns>
+    /// <see cref="CommonItemChangeResult.Saved"/>, whether the order changed or not;
+    /// <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the organisation; or
+    /// <see cref="ErrorCode.OrderMismatch"/>, with nothing written, when the IDs are not the group's active items, each
+    /// once, or when an item changed after the list was read, which the save finds as
+    /// <see cref="ErrorCode.PreconditionFailed"/>: a reorder sends no <c>If-Match</c>, and the screen reads the list
+    /// again for either (list-editor.md <i>Request errors</i>), so both are the one code.
+    /// </returns>
+    public async Task<CommonItemChangeResult> ReorderAsync(
+        Actor actor, Guid groupId, IReadOnlyList<Guid> commonItemIds, CancellationToken cancellationToken)
+    {
+        if (!await db.CommonItemGroups.AnyAsync(group => group.Id == groupId, cancellationToken))
+        {
+            return CommonItemChangeResult.NotFound;
+        }
+
+        // Tracked, so that the save writes the SortOrder that each moved item is given, checking the version it was
+        // read at.
+        var activeItems = await CommonItemGroupList.InListOrder(
+                db.CommonItems.Where(item => item.GroupId == groupId && item.ArchivedAtUtc == null))
+            .ToListAsync(cancellationToken);
+        var reordered = ListOrder.Reorder(activeItems, commonItemIds);
+        if (reordered.Error is { } refused)
+        {
+            return CommonItemChangeResult.Refused(refused);
+        }
+
+        var saved = await changes.SaveAsync(
+            actor,
+            AuditEventTypes.CommonItem.Reordered,
+            AuditEntityTypes.CommonItem,
+            entityId: null,
+            participantId: null,
+            reordered.Before,
+            reordered.After,
+            new JsonObject { ["groupId"] = groupId },
+            cancellationToken);
+        return saved.Error is null
+            ? CommonItemChangeResult.Saved
+            : CommonItemChangeResult.Refused(ErrorCode.OrderMismatch);
     }
 
     /// <summary>

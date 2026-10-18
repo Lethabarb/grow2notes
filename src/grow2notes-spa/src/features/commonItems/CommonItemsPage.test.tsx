@@ -669,17 +669,31 @@ function itemPath(itemId: string): string {
 /** A `200` with no body and no `ETag`, as a reword answers (design.md §6.6). */
 const reworded: Answer = () => Promise.resolve(new Response(null, { status: 200 }));
 
+/** The path that the order of the items of the group of `groupId` is put to (design.md §6.6). */
+function orderPath(groupId: string): string {
+  return `${itemsPath(groupId)}/order`;
+}
+
+/** A `204` with no body, as a reorder answers (design.md §6.6). */
+const reordered: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
 /**
- * Has the groups list, each group's adds and each item's rewords answered by a server that holds `list`, and gives
- * what it holds, which a test may change as another manager would: an add puts an item, with an ID and a version of
- * its own, at the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a
+ * Has the groups list, each group's adds, reorders and each item's rewords answered by a server that holds `list`, and
+ * gives what it holds, which a test may change as another manager would: an add puts an item, with an ID and a version
+ * of its own, at the end of its group, one after the highest active `sortOrder` (A2), and answers `201` with no body; a
  * reword refuses an `If-Match` that is not the item's version (`412`), then an item of an archived group (`409
- * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; and a
- * read gives what it holds.
+ * config.group_archived`), or else gives the item its text and a new version, and answers `200` with no body; a
+ * reorder refuses IDs that are not the group's active items, each once (`422 config.order_mismatch`), or else gives
+ * them `sortOrder` 0 to n-1, with a new version for each item whose `sortOrder` changed, and answers `204` with no
+ * body; and a read gives what it holds.
  */
 function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGroup[] {
   const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
   let versions = 0;
+  const nextVersion = () => {
+    versions += 1;
+    return `AAAAAAAAE${String(versions).padStart(3, '0')}=`;
+  };
   const serveReword = (heldGroup: AdminCommonItemGroup, itemId: string) => {
     serve('PUT', itemPath(itemId), (init) => {
       const at = heldGroup.items.findIndex((listed) => listed.id === itemId);
@@ -692,14 +706,31 @@ function serveGroups(list: readonly AdminCommonItemGroup[]): AdminCommonItemGrou
       }
 
       const { text } = JSON.parse(init?.body as string) as { text: string };
-      versions += 1;
-      const rowVersion = `AAAAAAAAE${String(versions).padStart(3, '0')}=`;
-      heldGroup.items[at] = { ...heldGroup.items[at], text, rowVersion };
+      heldGroup.items[at] = { ...heldGroup.items[at], text, rowVersion: nextVersion() };
       return reworded();
     });
   };
   serve('GET', listPath, json(held));
   for (const heldGroup of held) {
+    serve('PUT', orderPath(heldGroup.id), (init) => {
+      const { commonItemIds } = JSON.parse(init?.body as string) as { commonItemIds: string[] };
+      const active = heldGroup.items.filter((listed) => listed.archivedAtUtc === null);
+      const archived = heldGroup.items.filter((listed) => listed.archivedAtUtc !== null);
+      if (
+        new Set(commonItemIds).size !== commonItemIds.length
+        || commonItemIds.length !== active.length
+        || !active.every(({ id }) => commonItemIds.includes(id))
+      ) {
+        return problem(422, 'config.order_mismatch')();
+      }
+
+      const moved = commonItemIds.map((id, sortOrder) => {
+        const listed = active.find((row) => row.id === id)!;
+        return listed.sortOrder === sortOrder ? listed : { ...listed, sortOrder, rowVersion: nextVersion() };
+      });
+      heldGroup.items.splice(0, heldGroup.items.length, ...moved, ...archived);
+      return reordered();
+    });
     serve('POST', itemsPath(heldGroup.id), (init) => {
       const { text } = JSON.parse(init?.body as string) as { text: string };
       const active = heldGroup.items.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
@@ -1426,5 +1457,276 @@ describe('Common items, rewording an item', () => {
     expect(editField(paid.id)).toHaveValue('Paid at the machine');
     expect(editAlert(paid.id)).toBeEmptyDOMElement();
     expect(rewordsOf(paid.id)).toHaveLength(1);
+  });
+});
+
+/** The reorders sent for the group of `groupId`, each as its `If-Match` and the JSON of its body, in the order sent. */
+function reordersOf(groupId: string): { ifMatch: string | null; body: unknown }[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === orderPath(groupId) && init?.method === 'PUT'
+      ? [{ ifMatch: new Headers(init.headers).get('If-Match'), body: JSON.parse(init.body as string) as unknown }]
+      : [],
+  );
+}
+
+/** The path of each reorder sent, of any group, in the order sent. */
+function reorderPaths(): string[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    typeof path === 'string' && path.endsWith('/items/order') && init?.method === 'PUT' ? [path] : [],
+  );
+}
+
+/** The active row whose text is `text` in the group named `name`. */
+function rowOf(name: string, text: string): HTMLLIElement {
+  const row = activeItems(sectionOf(name)).find((listed) => textOf(listed) === text);
+  expect(row).toBeDefined();
+  return row!;
+}
+
+/** The row's Move up or Move down, by its name, which ends with the row's text. */
+function moveButton(name: string, direction: 'up' | 'down', text: string): HTMLElement {
+  return within(rowOf(name, text)).getByRole('button', { name: `Move ${direction}, ${text}` });
+}
+
+/** The alert in the row whose text is `text` in the group named `name`, above its buttons. */
+function rowAlert(name: string, text: string): HTMLElement {
+  return within(rowOf(name, text)).getByRole('alert');
+}
+
+/** Records each text that the page's status region says from now on, in order, as a screen reader would hear it. */
+function recordAnnouncements(): () => string[] {
+  const region = pageStatus();
+  const written: string[] = [];
+  new MutationObserver(() => {
+    if (region.textContent !== '') {
+      written.push(region.textContent ?? '');
+    }
+  }).observe(region, { childList: true, characterData: true, subtree: true });
+  return () => written;
+}
+
+/**
+ * Holds back the answer to each reorder of the group of `groupId`, as `serveGroups` gives it, until the test lets it
+ * go, as a slow server would; the request is sent at once.
+ */
+function holdReorders(groupId: string): () => void {
+  const answer = answers.get(`PUT ${orderPath(groupId)}`)!;
+  let release: () => void = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  serve('PUT', orderPath(groupId), async (init) => {
+    await released;
+    return answer(init);
+  });
+  return release;
+}
+
+// Community outing with five active items, so that a move's announcement counts the five of its group, not the two of
+// Every note or its archived ones as well.
+const library = item('9cc4f018-adb5-4b09-9ebe-6a8cafc13f29', 'Visited the library', 3);
+const swim = item('0dd5a129-bec6-4c1a-8fcf-7b9db0d24a3a', 'Went for a swim', 4);
+const longOuting = { ...outing, items: [busOrTrain, paid, lunch, library, swim] };
+
+describe('Common items, moving an item', () => {
+  it("on Move up on row 2, sends its group's active IDs, rows 1 and 2 swapped, focus on its Move up", async () => {
+    await openPage();
+    serveGroups(groups);
+    const reads = listReads();
+
+    await press(moveButton('Every note', 'up', meal.text));
+
+    // Every note's two active items alone: not its archived ones, and nothing of another group; with no If-Match, as
+    // the set of IDs is the check (design.md §6.7).
+    expect(reordersOf(everyNote.id)).toEqual([{ ifMatch: null, body: { commonItemIds: [meal.id, medication.id] } }]);
+    expect(reorderPaths()).toEqual([orderPath(everyNote.id)]);
+    expect(listReads()).toBe(reads + 1);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([meal.text, medication.text]);
+    expect(archivedItems(sectionOf('Every note')).map(textOf)).toEqual([bed.text, laundry.text]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(document.activeElement).toBe(moveButton('Every note', 'up', meal.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved up to number 1 of 2');
+  });
+
+  // Move down on row 1 is the case in which React moves the focused button's row (common-items.md Interactions).
+  it("after Move down on row 1, leaves focus on the moved item's Move down, never on <body>", async () => {
+    await openPage();
+    serveGroups(groups);
+
+    await press(moveButton('Community outing', 'down', busOrTrain.text));
+
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [paid.id, busOrTrain.id, lunch.id] },
+    ]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([paid.text, busOrTrain.text, lunch.text]);
+    expect(document.activeElement).toBe(moveButton('Community outing', 'down', busOrTrain.text));
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Moved down to number 2 of 3');
+  });
+
+  it('says where the item went, counted within its group: "Moved up to number 2 of 5", and down', async () => {
+    await openPage([everyNote, longOuting, care]);
+    serveGroups([everyNote, longOuting, care]);
+    const announced = recordAnnouncements();
+
+    await press(moveButton('Community outing', 'up', lunch.text));
+    await wait(16);
+    await press(moveButton('Community outing', 'down', paid.text));
+    await wait(16);
+
+    expect(announced()).toEqual(['Moved up to number 2 of 5', 'Moved down to number 4 of 5']);
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [busOrTrain.id, lunch.id, paid.id, library.id, swim.id] },
+      { commonItemIds: [busOrTrain.id, lunch.id, library.id, paid.id, swim.id] },
+    ]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      lunch.text,
+      library.text,
+      paid.text,
+      swim.text,
+    ]);
+    expect(document.activeElement).toBe(moveButton('Community outing', 'down', paid.text));
+  });
+
+  it('keeps the order on screen while the PUT is out, busy at once and "Moving…" after 400 ms', async () => {
+    await openPage();
+    serveGroups(groups);
+    const release = holdReorders(outing.id);
+    const down = moveButton('Community outing', 'down', busOrTrain.text);
+
+    down.focus();
+    fireEvent.click(down);
+    await settle();
+    expect(reordersOf(outing.id)).toHaveLength(1);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(down).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(down).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(down).toHaveAttribute('data-busy');
+    expect(within(down).getByText('Moving…')).toBeInTheDocument();
+    await press(down);
+    expect(reordersOf(outing.id)).toHaveLength(1);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+
+    release();
+    await settle();
+    await settle();
+
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([paid.text, busOrTrain.text, lunch.text]);
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(down).toHaveFocus();
+  });
+
+  it("makes each group's end buttons unavailable in place; a press sends nothing and says why, once", async () => {
+    await openPage();
+    const announced = recordAnnouncements();
+
+    for (const [name, first, last] of [
+      ['Every note', medication, meal],
+      ['Community outing', busOrTrain, lunch],
+    ] as const) {
+      for (const end of [moveButton(name, 'up', first.text), moveButton(name, 'down', last.text)]) {
+        expect(end).toHaveAttribute('aria-disabled', 'true');
+        expect(end).toHaveAttribute('data-unavailable');
+        expect(end).toBeEnabled();
+        expect(getComputedStyle(end).display).not.toBe('none');
+      }
+
+      for (const free of [moveButton(name, 'down', first.text), moveButton(name, 'up', last.text)]) {
+        expect(free).not.toHaveAttribute('aria-disabled');
+      }
+    }
+
+    await press(moveButton('Community outing', 'up', busOrTrain.text));
+    await wait(16);
+    expect(announced()).toEqual(['Already at the top']);
+    expect(moveButton('Community outing', 'up', busOrTrain.text)).toHaveFocus();
+    await press(moveButton('Every note', 'down', meal.text));
+    await wait(16);
+
+    expect(announced()).toEqual(['Already at the top', 'Already at the bottom']);
+    expect(moveButton('Every note', 'down', meal.text)).toHaveFocus();
+    expect(reorderPaths()).toEqual([]);
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
+  it("runs two quick presses in two groups one after the other, the second from the first's re-read", async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    const release = holdReorders(everyNote.id);
+    const reads = listReads();
+
+    await press(moveButton('Every note', 'down', medication.text));
+    await press(moveButton('Community outing', 'up', lunch.text));
+    expect(reorderPaths()).toEqual([orderPath(everyNote.id)]);
+    // Another manager adds an item to Community outing meanwhile, which the first move's re-read brings.
+    held[1].items.push(library);
+    release();
+    await settle();
+    await settle();
+    await settle();
+
+    expect(reorderPaths()).toEqual([orderPath(everyNote.id), orderPath(outing.id)]);
+    expect(reordersOf(everyNote.id).map(({ body }) => body)).toEqual([{ commonItemIds: [meal.id, medication.id] }]);
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [busOrTrain.id, lunch.id, paid.id, library.id] },
+    ]);
+    expect(listReads()).toBe(reads + 2);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([meal.text, medication.text]);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      lunch.text,
+      paid.text,
+      library.text,
+    ]);
+    expect(moveButton('Community outing', 'up', lunch.text)).toHaveFocus();
+  });
+
+  it('on a 422, reads the list again and focuses the list conflict, until a write succeeds', async () => {
+    await openPage();
+    const held = serveGroups(groups);
+    // Another manager archives an item of the group meanwhile.
+    held[1].items[2] = { ...lunch, archivedAtUtc: '2026-10-01T06:00:00Z', rowVersion: 'AAAAAAAAE999=' };
+    const reads = listReads();
+
+    await press(moveButton('Community outing', 'down', busOrTrain.text));
+
+    expect(reordersOf(outing.id).map(({ body }) => body)).toEqual([
+      { commonItemIds: [paid.id, busOrTrain.id, lunch.id] },
+    ]);
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text]);
+    expect(archivedItems(sectionOf('Community outing')).map(textOf)).toEqual([lunch.text]);
+    expect(rowAlert('Community outing', busOrTrain.text)).toBeEmptyDOMElement();
+
+    await press(moveButton('Community outing', 'down', busOrTrain.text));
+
+    expect(listConflict()).toBeNull();
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([paid.text, busOrTrain.text]);
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not moved: no connection. Try again.'],
+    ['a 503', problem(503), 'Not moved: something went wrong. Try again.'],
+  ])("on %s, says so in the row's alert, keeping the order and focus, and reads nothing", async (_, answer, words) => {
+    await openPage();
+    serve('PUT', orderPath(outing.id), answer);
+    const down = moveButton('Community outing', 'down', busOrTrain.text);
+    const reads = listReads();
+
+    await press(down);
+
+    expect(rowAlert('Community outing', busOrTrain.text)).toHaveTextContent(words);
+    expect(down).toHaveFocus();
+    expect(down).not.toHaveAttribute('aria-disabled');
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([busOrTrain.text, paid.text, lunch.text]);
+    expect(reordersOf(outing.id)).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(listConflict()).toBeNull();
+    expect(rowAlert('Every note', medication.text)).toBeEmptyDOMElement();
   });
 });

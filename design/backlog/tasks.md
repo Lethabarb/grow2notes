@@ -1999,7 +1999,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       succeeding; one that finds it archived, or a `409`, showing the list conflict; and "Not saved: …" in the form's
       alert slot. Vitest: those; Save's two messages, each sending nothing; rows of two groups edited at once, each
       kept as typed; and a `401` on Save keeping the text.
-- [ ] Reorder items within a group (S01.03.03; common-items.md *Reordering*' item-row bullets, "Move up on row 2 of a
+- [x] Reorder items within a group (S01.03.03; common-items.md *Reordering*' item-row bullets, "Move up on row 2 of a
       group…", "Move down on row 1…", "End buttons…", "Two quick presses…" and "The screen never shows a new
       order…", and *Failures and conflicts*' order part; its *Layout* item-row bullets are step 7's):
       `PUT /api/admin/common-item-groups/{groupId}/items/order` with `{commonItemIds}`, finding the group first,

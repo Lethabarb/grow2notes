@@ -213,6 +213,12 @@ internal static class EndpointMatrix
         // first adds to a group that it adds to A, so B's manager, to whom A's items are not found, gets 404 (§9.2).
         new(Put,       "/api/admin/common-items/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
             RewordingAnItemOfItsOwn),
+
+        // Reordering a group's common items (§6.6), in the same group. Each call reorders the active items of a group
+        // of its own, which its request first adds to A, so B's manager, to whom A's groups are not found, gets 404
+        // (§9.2).
+        new(Put,       "/api/admin/common-item-groups/{groupId:guid}/items/order", Unauthorized, Forbidden, NoContent,
+            NotFound, ReorderingTheItemsOfAGroupOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -432,6 +438,25 @@ internal static class EndpointMatrix
         };
         request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(item.ETag));
         return request;
+    }
+
+    // A reorder of the active items of a group that the request first adds to A with two active items and an archived
+    // one, sending the active ones' IDs the other way round, so that each call changes items of its own, never those of
+    // the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> ReorderingTheItemsOfAGroupOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        var items = await call.Services.AddItemsAsync(
+            call.Seeded.A.OrganisationId,
+            groupId,
+            new("Travelled by bus or train", 0),
+            new("Packed a day bag", 1, ArchivedAtUtc: TestCommonItems.AddedAtUtc),
+            new("Bought lunch", 2));
+        return new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{groupId}/items/order")
+        {
+            Content = JsonContent.Create(new { commonItemIds = new[] { items[2], items[0] } }),
+        };
     }
 
     // A new authenticator's passkey, which no account holds. The endpoint looks for the account before anything reads
