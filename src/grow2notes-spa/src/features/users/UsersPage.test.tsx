@@ -14,6 +14,9 @@ import type { AdminUser, UserStatus } from './usersQuery.ts';
 const mePath = '/api/auth/me';
 const usersPath = '/api/admin/users';
 
+// Before the dot between two parts of a line, which holds the dot to the part before it (microcopy.md §7).
+const nbsp = ' ';
+
 // users.md's made-up people (A35): Sam Lee, the manager signed in, in the JSON that MeEndpointTests asserts, and a
 // worker who is not on the list.
 const manager: Me = {
@@ -278,22 +281,22 @@ describe('Users', () => {
   it.each([
     {
       user: alex,
-      lines: ['alex.park@example.org', 'Invited · Worker'],
+      lines: ['alex.park@example.org', `Invited${nbsp}· Worker`],
       description: 'alex.park@example.org, Invited, Worker',
     },
     {
       user: jo,
-      lines: ['jo.smith@example.org', 'Active · Worker'],
+      lines: ['jo.smith@example.org', `Active${nbsp}· Worker`],
       description: 'jo.smith@example.org, Active, Worker',
     },
     {
       user: sam,
-      lines: ['sam.lee@example.org', 'Active · Manager'],
+      lines: ['sam.lee@example.org', `Active${nbsp}· Manager`],
       description: 'sam.lee@example.org, Active, Manager',
     },
     {
       user: chris,
-      lines: ['chris.ng@example.org', 'Deactivated · Worker'],
+      lines: ['chris.ng@example.org', `Deactivated${nbsp}· Worker`],
       description: 'chris.ng@example.org, Deactivated, Worker',
     },
   ])(
@@ -516,7 +519,7 @@ describe('Users on window focus', () => {
 
     expect(listedNames()).toEqual([['Alex Park', 'Chris Ng', 'Jo Smith', 'Sam Lee']]);
     const link = within(main()).getByRole('link', { name: 'Alex Park' });
-    expect(shownLines(link)).toEqual(['alex.park@example.org', 'Active · Worker']);
+    expect(shownLines(link)).toEqual(['alex.park@example.org', `Active${nbsp}· Worker`]);
   });
 });
 

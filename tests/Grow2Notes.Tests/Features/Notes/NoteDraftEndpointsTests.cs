@@ -312,7 +312,7 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
         var noteId = await factory.Services.AddDraftAsync(
             seeded.A, new(participant.Id, Today, author, StartedAtUtc, Narrative: "Jane made toast."));
-        await DiscardAsync(noteId);
+        await factory.Services.DiscardAsync(seeded.A, noteId, SavedAtUtc);
 
         var form = await ReadFormAsync(Caller.WorkerOfA, participant.Id, Today);
 
@@ -1207,22 +1207,6 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         {
             var stored = await db.Goals.Where(goal => goalIds.Contains(goal.Id)).ToListAsync(cancellationToken);
             change([.. goalIds.Select(id => stored.Single(goal => goal.Id == id))]);
-            await db.SaveChangesAsync(cancellationToken);
-        }
-    }
-
-    // As Discard draft leaves the note (design.md §5.5 item 5), by A's manager.
-    private async Task DiscardAsync(Guid noteId)
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var scope = factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
-        {
-            var note = await db.Notes.SingleAsync(n => n.Id == noteId, cancellationToken);
-            note.Status = NoteStatus.Discarded;
-            note.DiscardedAtUtc = SavedAtUtc;
-            note.DiscardedByUserId = seeded.A.ManagerId;
             await db.SaveChangesAsync(cancellationToken);
         }
     }

@@ -37,9 +37,9 @@ export function SaveIndicatorText({ indicator }: { indicator: SaveIndicator }) {
     case 'draft':
       return (
         <>
-          {strings.note.draft}
+          {strings.noteStatus.Draft}
           <Sep />
-          {strings.note.draftSaved} <SavedAt atUtc={indicator.savedAtUtc} />
+          {strings.statusLine.saved} <SavedAt atUtc={indicator.savedAtUtc} />
         </>
       );
   }

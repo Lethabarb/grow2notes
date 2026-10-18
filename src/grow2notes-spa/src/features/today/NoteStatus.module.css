@@ -1,0 +1,18 @@
+/*
+ * A part of the status line with the dot after it, kept on one line where it fits, so that the line breaks between
+ * parts, never before a dot (participant-list-rows.md *Phone vs laptop*); a part longer than the whole line, such as a
+ * long name at 200% text on a 320 px screen, wraps inside itself rather than make the page scroll sideways (SC 1.4.10).
+ */
+.part {
+  display: inline-block;
+  max-inline-size: 100%;
+}
+
+/*
+ * The status word, bold and in the text colour, where the rest of the line is secondary (today.md *Conflicts
+ * resolved* 9).
+ */
+.status {
+  font-weight: 700;
+  color: var(--colour-text);
+}

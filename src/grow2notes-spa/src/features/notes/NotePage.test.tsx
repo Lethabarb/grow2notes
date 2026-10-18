@@ -8,7 +8,7 @@ import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import tickList from '../../components/TickList.module.css';
 import { routes } from '../../routes/routes.tsx';
-import type { TodayList, TodayParticipant } from '../today/todayQuery.ts';
+import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { Draft, DraftGoal, ParticipantHeader } from './noteQueries.ts';
 
 // A memory router of the app's routes.
@@ -107,9 +107,9 @@ function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
   };
 }
 
-/** A participant on the Today list. */
+/** A participant on the Today list, with no note today. */
 function onToday({ id, givenName, familyName }: ParticipantHeader): TodayParticipant {
-  return { id, givenName, familyName };
+  return { id, givenName, familyName, note: null };
 }
 
 /** How the server meets a request: an answer, or a failure as `fetch` has one. */
@@ -957,8 +957,8 @@ describe('Autosave', () => {
       draft.release();
       await settle();
 
-      expect(shownSaveStatus()).toBe(`Draft · saved 9:42${nbsp}am`);
-      expect(saveStatus().textContent).toBe(`Draft ·, saved 9:42${nbsp}am`);
+      expect(shownSaveStatus()).toBe(`Draft${nbsp}· saved 9:42${nbsp}am`);
+      expect(saveStatus().textContent).toBe(`Draft${nbsp}·, saved 9:42${nbsp}am`);
       // A new element, put in the page with its words, rather than words written into the one there while loading.
       expect(saveStatus()).not.toBe(whileLoading);
       expect(guidedNotes()).toHaveValue('Jane made toast.\nThen a walk to the shops.');
@@ -985,7 +985,7 @@ describe('Autosave', () => {
     renderApp(paths(participant).page);
     await settle();
 
-    expect(shownSaveStatus()).toBe(`Draft · saved Wed 30${nbsp}Sep 2026, 9:42${nbsp}am`);
+    expect(shownSaveStatus()).toBe(`Draft${nbsp}· saved Wed 30${nbsp}Sep 2026, 9:42${nbsp}am`);
   });
 
   it('carries on numbering its saves when the form is left and opened again in the same page load', async () => {
@@ -2549,20 +2549,30 @@ describe('The Submit confirmation', () => {
 });
 
 describe('After Submit', () => {
-  it('pops back to Today, the banner focused before its <h1>, and fetches the list afresh', async () => {
+  it('pops back to Today, the banner focused before its <h1>, then the row Submitted, never Draft', async () => {
     const participant = freshParticipant();
-    serveNote(participant);
-    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    serveNote(participant, json(savedDraft()));
+    serveSave(paths(participant).draft, saved('2026-10-01T06:10:00Z'));
     serveSubmit(paths(participant).versions, versionSaved());
-    const list = { date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList;
-    serve(todayPath, json(list));
+    // The worker's own draft, last saved at 9:42 am, then submitted at 4:12 pm.
+    const started = { authorDisplayName: 'Casey Nguyen', startedAtUtc: '2026-09-30T23:05:00Z', isFlagged: false };
+    const drafted: TodayNote = { ...started, status: 'Draft', isMine: true, savedAtUtc: '2026-09-30T23:42:00Z' };
+    const submitted: TodayNote = {
+      ...started,
+      status: 'Submitted',
+      isMine: true,
+      firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
+    };
+    const row = onToday(participant);
+    serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
     const { router } = renderApp('/');
     await settle();
+    expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Draft, You, saved 9:42${nbsp}am`);
     await press(rowLink('Jane Citizen'));
     await settle();
     await write();
     await press(submitButton());
-    const fresh = held(json(list));
+    const fresh = held(json({ date: '2026-10-01', participants: [{ ...row, note: submitted }] } satisfies TodayList));
     serve(todayPath, fresh.answer);
 
     await confirmSubmit();
@@ -2578,11 +2588,13 @@ describe('After Submit', () => {
     }
     // No row kept from before the Submit: the rows come with the list that the server gives now.
     expect(within(main()).queryByRole('list')).toBeNull();
+    expect(main()).not.toHaveTextContent('Draft');
     const sent = sentRequests();
     expect(sent.lastIndexOf(`GET ${todayPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
     fresh.release();
     await settle();
-    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Submitted, You, 4:12${nbsp}pm`);
+    expect(main()).not.toHaveTextContent('Draft');
     expect(banner()).toHaveFocus();
   });
 

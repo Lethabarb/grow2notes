@@ -519,7 +519,8 @@ browser, as it answers `/api/admin/participants`.
 `serveMe`:
 
 - `serveToday(page, date, participants)` answers each with `todayList(date, participants)`: the date, and the active
-  ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, in the order given.
+  ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, with no note, in the order
+  given.
 - `failToday(page, failure)` aborts each, for `'no connection'`, or answers it with a status, such as `503`. The failure
   shows about 1 s after the request, after the query client's silent retry.
 

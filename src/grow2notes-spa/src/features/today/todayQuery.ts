@@ -1,12 +1,25 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
 import { api } from '../../api/api.ts';
 
-/** A participant on the Today list (design.md §6.3): their ID and their names as stored. T09 adds today's note. */
+/**
+ * A participant's live note for the list's date, as their row shows it (design.md §4.2 item 4, §6.3): its author's
+ * display name as stored, and whether the signed-in user is its author; when it was started; on their own draft alone,
+ * when they last saved it; on a submitted note, when it was first submitted; and whether its current version is
+ * flagged, which a draft never is. Each time is in UTC, written with `Z`.
+ */
+export type TodayNote = { authorDisplayName: string; startedAtUtc: string; isFlagged: boolean } & (
+  | { status: 'Draft'; isMine: true; savedAtUtc: string }
+  | { status: 'Draft'; isMine: false }
+  | { status: 'Submitted'; isMine: boolean; firstSubmittedAtUtc: string }
+);
+
+/** A participant on the Today list (design.md §6.3): their ID, their names as stored, and their note, if any. */
 export type TodayParticipant = {
   id: string;
   /** As typed, with only its ends trimmed, never re-cased (A5). */
   givenName: string;
   familyName: string;
+  note: TodayNote | null;
 };
 
 /** The Today list, as `GET /api/today` answers it (design.md §6.3). */

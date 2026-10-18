@@ -3159,6 +3159,24 @@ past notes.
   *After Submit* Vitest to show the row reading "Submitted · You · …" from the fresh answer, never "Draft". So that the
   end-to-end tests already written stay true, `note-form.spec.ts`'s Tab orders include Submit note and its assertive
   region is found among the page's two alerts; step 8 adds Submit's own end-to-end checks.
+- Where the design is silent (step 5), the simplest options: `GET /api/today` reads the day's live notes in one query
+  beside the participants', on the `(OrganisationId, NoteDate)` index, through `LiveNote.All`, which `FindAsync` now
+  narrows too and step 7 reuses; a row with no note is written `"note": null`; and `savedAtUtc` comes with the caller's
+  own draft alone, never with their working copy of a submitted note, a pending edit (T14), which its test adds by
+  hand. The status line is `NoteStatus` (`src/features/today`), in `strings.noteStatus` and `strings.statusLine`, which
+  the save indicator's "Draft · saved 9:42 am" now shares. Each of its parts, with the dot after it, is an
+  inline-block, kept on one line where it fits and wrapping inside itself only when longer than the line, as a display
+  name of up to 100 characters must not make the page scroll sideways at 320 px and 200% text (participant-list-rows.md
+  *Phone vs laptop*); and `Sep` holds its dot to the part before it with a no-break space (participant-list-rows.md
+  *Visual specification*), on every line that has one, Today's `<h1>`, the save indicator and the Users rows among
+  them, whose tests now expect it. `Tag` (`src/components`) takes its words from `strings.tag` and its tone from its
+  own map, with `--radius-s` corners (today.md component 8, over status-tags.md's 2 px) and no forced-colours rule, as
+  the browser draws its border in the text colour there (status-tags.md). `TestNotes` gains `AddSubmittedAsync`, a
+  submitted note with its version 1 and any flag status set by hand, and `DiscardAsync`, in place of two copies, which
+  steps 6 and 7 reuse. So that the end-to-end tests already written stay true, `tests/e2e/today.ts` gives each row
+  `note: null` (tests/README.md); step 8 answers Today's notes. Step 5's stale-status Vitest opens rows whose line no
+  longer holds into the screens built so far, the empty form and the in-progress sentence; step 6, which builds the
+  read view, adds the row whose cached line says Draft opening the read view that the server now gives.
 
 ### Steps
 
@@ -3247,7 +3265,7 @@ past notes.
       the session warning closing the confirmation with nothing sent, and focus on Submit note after Stay signed in's
       `204`; and on Today the banner focused, also after a pop, gone after leaving and coming back, and the row
       Submitted from the fresh list, never "Draft".
-- [ ] Today's note status on each row (S02.01.03; S02.03.02's fourth criterion on Today; design.md §4.2 item 4 and
+- [x] Today's note status on each row (S02.01.03; S02.03.02's fourth criterion on Today; design.md §4.2 item 4 and
       A17, §6.3's `note`; today.md *Content and copy*'s status, Flagged and times bullets and *Focus and navigation*'s
       stale-status bullet; T08's hand-offs of the Flagged tag on its own line at 320 px and Search's "'Alex' does not
       match…"): `GET /api/today` gives each row today's live note or `null`, as `{status, authorDisplayName, isMine,

@@ -13,20 +13,24 @@ internal sealed record LiveNote(
     Guid Id, NoteStatus Status, Guid AuthorUserId, DateTime CreatedAtUtc, string AuthorDisplayName)
 {
     /// <summary>
-    /// <paramref name="participantId"/>'s live note for <paramref name="noteDate"/>, or <see langword="null"/>. The
-    /// tenant query filter keeps it to the tenant's organisation (§5.9 item 2).
+    /// Every live note, read without tracking, which <see cref="FindAsync"/> narrows to one participant and day, and
+    /// Today to one day. The tenant query filter keeps it to the tenant's organisation (§5.9 item 2).
     /// </summary>
     /// <remarks>
     /// The status is written as the one-live-note index's filter, <c>[Status] IN (0, 1)</c>, so that SQL Server reads
-    /// the note there.
+    /// a participant's note for a day there.
     /// </remarks>
+    public static IQueryable<Note> All(Grow2NotesDbContext db) =>
+        db.Notes.AsNoTracking().Where(n => n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted);
+
+    /// <summary>
+    /// <paramref name="participantId"/>'s live note for <paramref name="noteDate"/>, or <see langword="null"/>.
+    /// </summary>
     public static Task<LiveNote?> FindAsync(
         Grow2NotesDbContext db, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
         (
-            from n in db.Notes.AsNoTracking()
-            where n.ParticipantId == participantId
-                && n.NoteDate == noteDate
-                && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted)
+            from n in All(db)
+            where n.ParticipantId == participantId && n.NoteDate == noteDate
             join author in db.Users on n.AuthorUserId equals author.Id
             select new LiveNote(n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName))
         .SingleOrDefaultAsync(cancellationToken);

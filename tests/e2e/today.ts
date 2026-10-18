@@ -1,8 +1,11 @@
 import type { Page } from '@playwright/test';
 import type { AdminParticipant } from './participants.ts';
 
-/** A participant on Today, as `GET /api/today` lists them (design.md §6.3): their ID and their names as stored. */
-export type TodayParticipant = Pick<AdminParticipant, 'id' | 'givenName' | 'familyName'>;
+/**
+ * A participant on Today, as `GET /api/today` lists them (design.md §6.3): their ID and their names as stored, and no
+ * note today.
+ */
+export type TodayParticipant = Pick<AdminParticipant, 'id' | 'givenName' | 'familyName'> & { note: null };
 
 /** The Today list, as `GET /api/today` answers it: the server's date in Melbourne, and the participants on it. */
 export type TodayList = { date: string; participants: TodayParticipant[] };
@@ -12,13 +15,14 @@ const todayRequest = '**/api/today';
 
 /**
  * The list for `date` as the API gives it: the active ones of `participants`, made-up people such as participants.ts's,
- * each as their ID and names, in the order given, which the API's is, by family name, then given name, then ID.
+ * each as their ID and names, with no note, in the order given, which the API's is, by family name, then given name,
+ * then ID.
  */
 export const todayList = (date: string, participants: readonly AdminParticipant[]): TodayList => ({
   date,
   participants: participants
     .filter((participant) => participant.status === 'Active')
-    .map(({ id, givenName, familyName }) => ({ id, givenName, familyName })),
+    .map(({ id, givenName, familyName }) => ({ id, givenName, familyName, note: null })),
 });
 
 /**
