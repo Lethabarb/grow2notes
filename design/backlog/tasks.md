@@ -2430,8 +2430,8 @@ lets workers write only today's note, using the Melbourne date.
   `note.future_date` has no words, as it never reaches the form, whose `GET` answers `404` for a date after today. A
   dead end stops autosave for as long as the form is open, which T10's leave guard reads to let the person leave.
 - Where the design is silent (step 7), the simplest options: the end-to-end helpers that more than one spec needs live
-  in shared files, `expectStops`, `ring` and `systemColour` in `e2e/focus.ts`, `setTextTo200Percent`,
-  `scrollsSideways`, `expectAtLeast` and `shownText` in `e2e/layout.ts`, and the live-region watcher in
+  in shared files, `expectStops` and `ring` in `e2e/focus.ts`, `setTextTo200Percent`, `scrollsSideways`,
+  `expectAtLeast`, `systemColour` and `shownText` in `e2e/layout.ts`, and the live-region watcher in
   `e2e/liveRegions.ts`, which participants.spec.ts imports in place of its own copies; `expectNothingKept`
   (`e2e/kept.ts`) also takes the entry that the page loaded on, to which React Router gives its index alone; Today's
   Waiting state is held for axe by holding the page's timers of 1 s, as axe settles each rule on a timer and never
@@ -2481,6 +2481,18 @@ lets workers write only today's note, using the Melbourne date.
     announcements were checked with NVDA alone, where the by-hand Note above names all three screen readers. Each
     phone now does the whole step, with three participants of its own, while the laptop adds the goal, archives and
     restores.
+- 18 October 2026, the rebase onto `main` at `9c64b27`, after T06 (#60): T06 had made the same end-to-end helpers
+  shared, so the branch keeps `main`'s one copy of each and adds only what it needs. `systemColour` stays in
+  `e2e/layout.ts`, beside T06's `expectLabelWidth`, and `shownText` joins them; `watchLiveRegions(page, path)` keeps
+  `main`'s one path and its `aria-live` regions in `<main>`, Today's and the note form's specs watching `'/'`;
+  `expectNothingKept` keeps `main`'s check of `history.state`, which takes the loaded entry's index alone too; and the
+  note form's real sign-ins use `signInThroughSetup` from `e2e/setupSignIn.ts`, which now expects one passkey more on
+  the authenticator than before, so that the other organisation's manager can set up on the same one. `AddNote` keeps
+  its ID, after `AddCommonItems`'; its designer file is made again on that model, the model snapshot matches what
+  `dotnet ef migrations add` writes on it, `has-pending-model-changes` passes, and the snapshot's and the designer's
+  `CK_CommonItemGroup_EveryNoteActive` line is wrapped at 120 characters as `CK_Note_Status`'s is.
+  `infra/sql/check-database.sql` lists both branches' tables, migrations and denies, with B7 15, B8 6 and D3 9, which
+  `CheckDatabaseScriptTests` passes, and T08's by-hand steps are 46 to 49.
 
 ### Steps
 

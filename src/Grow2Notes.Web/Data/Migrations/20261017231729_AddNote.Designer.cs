@@ -263,7 +263,8 @@ namespace Grow2Notes.Web.Data.Migrations
 
                     b.ToTable("CommonItemGroup", t =>
                         {
-                            t.HasCheckConstraint("CK_CommonItemGroup_EveryNoteActive", "[IsEveryNote] = 0 OR [ArchivedAtUtc] IS NULL");
+                            t.HasCheckConstraint(
+                                "CK_CommonItemGroup_EveryNoteActive", "[IsEveryNote] = 0 OR [ArchivedAtUtc] IS NULL");
                         });
                 });
 
