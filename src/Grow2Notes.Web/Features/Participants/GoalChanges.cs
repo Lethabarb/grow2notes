@@ -24,7 +24,7 @@ internal sealed class GoalChanges(
 {
     /// <summary>
     /// Adds a goal to a participant of the tenant's organisation, found through the tenant filter, so that another
-    /// organisation's is not found (design.md §9.2), with the text that <see cref="GoalText.TryRead"/> reads from
+    /// organisation's is not found (design.md §9.2), with the text that <see cref="ItemText.Goal"/> reads from
     /// <paramref name="request"/>, at the end of the participant's goals (<see cref="ListOrder.End"/>), and saves it
     /// with <c>goal.created</c>, whose entity is the new goal and whose participant is theirs, and whose
     /// <c>Details</c> hold its values as <c>new</c> alone (S01.02.05's Notes); or, when the text is refused, adds
@@ -38,7 +38,7 @@ internal sealed class GoalChanges(
             return GoalChangeResult.NotFound;
         }
 
-        if (!GoalText.TryRead(request, out var text, out var errors))
+        if (!ItemText.Goal.TryRead(request.Text, out var text, out var errors))
         {
             return GoalChangeResult.Invalid(errors);
         }
@@ -74,7 +74,7 @@ internal sealed class GoalChanges(
     /// <summary>
     /// Rewords a goal of the tenant's organisation (S01.02.06): loads it through the tenant filter, so another
     /// organisation's is not found; checks <paramref name="ifMatch"/> against its version; reads the text from
-    /// <paramref name="request"/> by the add's rules (<see cref="GoalText.TryRead"/>); then saves it with
+    /// <paramref name="request"/> by the add's rules (<see cref="ItemText.Goal"/>); then saves it with
     /// <c>goal.updated</c>, whose <c>Details</c> hold the old and new <c>text</c>, and whose participant is the goal's;
     /// or, when the text is already stored, saves nothing and writes no event, and answers as a save does (D84). An
     /// archived goal is reworded too, as design.md §6.6 names no refusal, though the screen offers Edit on active goals
@@ -100,7 +100,7 @@ internal sealed class GoalChanges(
             ifMatch,
             async goal =>
             {
-                if (!GoalText.TryRead(request, out var text, out var errors))
+                if (!ItemText.Goal.TryRead(request.Text, out var text, out var errors))
                 {
                     return GoalChangeResult.Invalid(errors);
                 }

@@ -90,12 +90,15 @@ function json(body: unknown): Answer {
     Promise.resolve(new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } }));
 }
 
-/** An RFC 9457 problem, as the API answers a failure (design.md §6.1). */
-function problem(status: number): Answer {
-  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status });
+/** An RFC 9457 problem, as the API answers a failure (design.md §6.1), with its §6.9 code, if it has one. */
+function problem(status: number, code?: string): Answer {
+  const body = JSON.stringify({ type: 'about:blank', title: 'Problem', status, code });
   return () =>
     Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/problem+json' } }));
 }
+
+/** A `201` with no body, as an add answers (design.md §6.6). */
+const created: Answer = () => Promise.resolve(new Response(null, { status: 201 }));
 
 /** No connection, which `fetch` rejects at once. */
 const noConnection: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
@@ -638,5 +641,377 @@ describe('Common items that cannot be shown', () => {
 
     expectPageNotFound();
     expect(listReads()).toBe(0);
+  });
+});
+
+const hint = 'You can enter up to 200 characters';
+const enterTheItem = 'Enter the common item';
+const tooLong = 'Common item must be 200 characters or less';
+const added = 'Item added to the end of the list';
+
+/** The path that an add to the group of `groupId` posts to (design.md §6.6). */
+function itemsPath(groupId: string): string {
+  return `/api/admin/common-item-groups/${groupId}/items`;
+}
+
+/** The bodies of the adds sent to the group of `groupId`, in the order sent. */
+function addsTo(groupId: string): unknown[] {
+  return fetchMock.mock.calls.flatMap(([path, init]) =>
+    path === itemsPath(groupId) && init?.method === 'POST' ? [JSON.parse(init.body as string) as unknown] : [],
+  );
+}
+
+/**
+ * Has the groups list and each group's adds answered by a server that holds `list`: an add puts an item, with an ID
+ * and a version of its own, at the end of its group, one after the highest active `sortOrder` (A2), and answers `201`
+ * with no body; and a read gives what it holds.
+ */
+function serveGroups(list: readonly AdminCommonItemGroup[]) {
+  const held = list.map((listed) => ({ ...listed, items: [...listed.items] }));
+  serve('GET', listPath, json(held));
+  for (const heldGroup of held) {
+    serve('POST', itemsPath(heldGroup.id), (init) => {
+      const { text } = JSON.parse(init?.body as string) as { text: string };
+      const active = heldGroup.items.flatMap((listed) => (listed.archivedAtUtc === null ? [listed.sortOrder] : []));
+      const id = `9e8d7c6b-5a49-4382-a1b0-${String(heldGroup.items.length).padStart(12, '0')}`;
+      heldGroup.items.push(item(id, text, Math.max(-1, ...active) + 1));
+      return created();
+    });
+  }
+}
+
+/** The group's New item field, by its label, which names the group. */
+function newItem(name: string): HTMLTextAreaElement {
+  return within(sectionOf(name)).getByRole('textbox', { name: `New item in ${name}` });
+}
+
+/** The group's add form. */
+function addForm(name: string): HTMLFormElement {
+  return newItem(name).closest('form')!;
+}
+
+/** The group's Add item, by its name, which its busy label leaves as it is. */
+function addItemButton(name: string): HTMLElement {
+  return within(addForm(name)).getByRole('button', { name: 'Add item' });
+}
+
+/** The alert above the group's Add item. */
+function addAlert(name: string): HTMLElement {
+  return within(addForm(name)).getByRole('alert');
+}
+
+/** The count under the group's New item field. */
+function shownCount(name: string): HTMLElement | null {
+  return addForm(name).querySelector('p[aria-hidden="true"]');
+}
+
+/** The message on the group's New item field, without its hidden "Error: ", or `null` while it shows none. */
+function fieldMessage(name: string): string | null {
+  const message = addForm(name).querySelector('[id$="-error"]');
+  return message === null ? null : (message.textContent ?? '').replace(/^Error: /, '');
+}
+
+/** The list conflict above the groups, or `null` while it is not shown. */
+function listConflict(): HTMLElement | null {
+  return within(main()).queryByText(listChanged);
+}
+
+/** Puts `text` in `field`, as typing or pasting it does. */
+function type(field: HTMLElement, text: string) {
+  fireEvent.change(field, { target: { value: text } });
+}
+
+/** Focuses `button` and presses it, as a person does, and lets the write it starts, and the read after it, run. */
+async function press(button: HTMLElement) {
+  button.focus();
+  fireEvent.click(button);
+  await settle();
+  await settle();
+}
+
+describe('Common items, adding an item', () => {
+  it("gives each group's add form its own field, labelled by its group, then the count and Add item", async () => {
+    await openPage();
+
+    for (const { id, name } of [everyNote, outing, care]) {
+      const field = newItem(name);
+      expect(field.id).toBe(`item-new-${id}`);
+      expect(document.querySelector(`label[for="item-new-${id}"]`)?.textContent).toBe(`New item in ${name}`);
+      expect(field.tagName).toBe('TEXTAREA');
+      expect(field).toHaveAttribute('rows', '3');
+      expect(field).toHaveValue('');
+      for (const attribute of ['maxlength', 'required', 'aria-invalid']) {
+        expect(field).not.toHaveAttribute(attribute);
+      }
+
+      // The hidden hint, then the page's help text, never the count.
+      expect(field.getAttribute('aria-describedby')).toBe(`item-new-${id}-hint items-help`);
+      expect(field).toHaveAccessibleDescription(`${hint} ${help}`);
+      expect(addForm(name)).toHaveAttribute('novalidate');
+      expect(shownCount(name)?.textContent).toBe(hint);
+      expect(addAlert(name)).toBeEmptyDOMElement();
+      const button = addItemButton(name);
+      expect(button).toHaveAttribute('type', 'submit');
+      expect(button.className).toMatch(/primary/);
+      expect(follows(field, shownCount(name)!)).toBe(true);
+      expect(follows(shownCount(name)!, addAlert(name))).toBe(true);
+      expect(follows(addAlert(name), button)).toBe(true);
+    }
+  });
+
+  it('on Add item with nothing typed, says "Enter the common item", focusing the field, sending nothing', async () => {
+    await openPage();
+    const field = newItem('Community outing');
+
+    await press(addItemButton('Community outing'));
+
+    expect(fieldMessage('Community outing')).toBe(enterTheItem);
+    expect(field).toHaveFocus();
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    expect(field.getAttribute('aria-describedby')).toBe(
+      `item-new-${outing.id}-error item-new-${outing.id}-hint items-help`,
+    );
+    expect(field).toHaveAccessibleDescription(`Error: ${enterTheItem} ${hint} ${help}`);
+    expect(addsTo(outing.id)).toEqual([]);
+    expect(addAlert('Community outing')).toBeEmptyDOMElement();
+    // A one-field form: no error summary, and nothing in front of the page's title (form-validation.md rule 6).
+    expect(screen.queryByRole('heading', { name: 'There is a problem' })).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Common items');
+  });
+
+  it.each([
+    ['only spaces and line breaks', ' \n\t \n ', enterTheItem],
+    ['201 characters once its line break is a space', `${'a'.repeat(100)}\n${'b'.repeat(100)}`, tooLong],
+  ])('on Add item with %s, shows its message, focused, and sends nothing', async (_, text, message) => {
+    await openPage();
+    type(newItem('Every note'), text);
+
+    await press(addItemButton('Every note'));
+
+    expect(fieldMessage('Every note')).toBe(message);
+    expect(newItem('Every note')).toHaveFocus();
+    expect(newItem('Every note')).toHaveAttribute('aria-invalid', 'true');
+    expect(newItem('Every note')).toHaveValue(text);
+    expect(addsTo(everyNote.id)).toEqual([]);
+  });
+
+  it('keeps 210 characters typed whole, counting 10 too many, and refuses them on Add item', async () => {
+    await openPage();
+    const typed = 'x'.repeat(210);
+
+    type(newItem('Personal care'), typed);
+    expect(newItem('Personal care')).toHaveValue(typed);
+    expect(shownCount('Personal care')?.textContent).toBe('You have 10 characters too many');
+    expect(fieldMessage('Personal care')).toBeNull();
+    await press(addItemButton('Personal care'));
+
+    expect(newItem('Personal care')).toHaveValue(typed);
+    expect(fieldMessage('Personal care')).toBe(tooLong);
+    expect(addsTo(care.id)).toEqual([]);
+  });
+
+  it('once the message shows, checks the text at each input, and takes it away silently once it passes', async () => {
+    await openPage();
+    await press(addItemButton('Community outing'));
+    const field = newItem('Community outing');
+
+    type(field, 'a'.repeat(201));
+    expect(fieldMessage('Community outing')).toBe(tooLong);
+    type(field, 'Visited the library');
+
+    expect(fieldMessage('Community outing')).toBeNull();
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field).toHaveAccessibleDescription(`${hint} ${help}`);
+    expect(addForm('Community outing').querySelector('[data-invalid]')).toBeNull();
+    expect(pageStatus()).toBeEmptyDOMElement();
+  });
+
+  it('adds the item to the end of its own group alone, empties the field, keeps focus in it, says so', async () => {
+    const router = await openPage();
+    serveGroups(groups);
+    type(newItem('Community outing'), 'Visited the library');
+    const reads = listReads();
+
+    await press(addItemButton('Community outing'));
+
+    expect(addsTo(outing.id)).toEqual([{ text: 'Visited the library' }]);
+    expect(listReads()).toBe(reads + 1);
+    expect(activeItems(sectionOf('Community outing')).map(textOf)).toEqual([
+      busOrTrain.text,
+      paid.text,
+      lunch.text,
+      'Visited the library',
+    ]);
+    expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual([medication.text, meal.text]);
+    expect(activeItems(sectionOf('Personal care'))).toEqual([]);
+    expect(newItem('Community outing')).toHaveValue('');
+    expect(newItem('Community outing')).toHaveFocus();
+    expect(addAlert('Community outing')).toBeEmptyDOMElement();
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent(added);
+    // Nothing the manager typed is kept where it could outlive the page (D22).
+    expect(`${router.state.location.pathname}${router.state.location.search}`).toBe('/manage/common-items');
+    expect(document.title).toBe('Grow2Notes – Common items');
+    expect(JSON.stringify(router.state.location.state ?? null)).toBe('null');
+    expect(JSON.stringify(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey))).toBe(
+      JSON.stringify([['me'], ['admin', 'common-item-groups']]),
+    );
+    expect(localStorage).toHaveLength(0);
+    expect(sessionStorage).toHaveLength(0);
+  });
+
+  it('adds five items to Every note in a row, with focus in its field after each (design.md §14 M1)', async () => {
+    await openPage([{ ...everyNote, items: [] }]);
+    serveGroups([{ ...everyNote, items: [] }]);
+    const texts = ['Medication prompted', 'Meal prepared', 'Laundry done', 'Bed made', 'Showered'];
+
+    for (const [index, text] of texts.entries()) {
+      type(newItem('Every note'), text);
+      await press(addItemButton('Every note'));
+
+      expect(newItem('Every note')).toHaveFocus();
+      expect(newItem('Every note')).toHaveValue('');
+      expect(activeItems(sectionOf('Every note')).map(textOf)).toEqual(texts.slice(0, index + 1));
+    }
+
+    expect(addsTo(everyNote.id)).toEqual(texts.map((text) => ({ text })));
+  });
+
+  it('sends a pasted line break as one space, with the ends trimmed', async () => {
+    await openPage();
+    serveGroups(groups);
+
+    fireEvent.paste(newItem('Personal care'));
+    type(newItem('Personal care'), '  Showered\r\n  and dressed ');
+    await press(addItemButton('Personal care'));
+
+    expect(addsTo(care.id)).toEqual([{ text: 'Showered and dressed' }]);
+    expect(activeItems(sectionOf('Personal care')).map(textOf)).toEqual(['Showered and dressed']);
+  });
+
+  it('shows Add item busy at once, "Adding…" after 400 ms, and a press while it is sends nothing more', async () => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), noAnswer);
+    type(newItem('Community outing'), 'Visited the library');
+    const button = addItemButton('Community outing');
+
+    button.focus();
+    fireEvent.click(button);
+    await settle();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    await wait(398);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(1);
+    expect(button).toHaveAttribute('data-busy');
+    expect(within(button).getByText('Adding…')).toBeInTheDocument();
+    fireEvent.click(button);
+    await settle();
+
+    expect(addsTo(outing.id)).toHaveLength(1);
+    expect(newItem('Community outing')).toHaveValue('Visited the library');
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not added: no connection. Try again.'],
+    ['a 503', problem(503), 'Not added: something went wrong. Try again.'],
+  ])('on %s, says so above Add item, keeping the text and focus on Add item, and reads nothing', async (
+    _,
+    answer,
+    words,
+  ) => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), answer);
+    type(newItem('Community outing'), 'Visited the library');
+    const button = addItemButton('Community outing');
+    const reads = listReads();
+
+    await press(button);
+
+    expect(addAlert('Community outing')).toHaveTextContent(words);
+    expect(button).toHaveFocus();
+    expect(newItem('Community outing')).toHaveValue('Visited the library');
+    expect(newItem('Community outing')).not.toHaveAttribute('aria-invalid');
+    expect(addsTo(outing.id)).toHaveLength(1);
+    expect(listReads()).toBe(reads);
+    expect(pageStatus()).not.toHaveTextContent(added);
+  });
+
+  // The add has no idempotency key (design.md §6.6), so one sent again after a lost answer could add the item twice.
+  it('sends one add for an answer that never comes, saying "no connection" after 10 s, and never again', async () => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), noAnswer);
+    type(newItem('Community outing'), 'Visited the library');
+
+    await press(addItemButton('Community outing'));
+    await wait(10_000);
+    await settle();
+
+    expect(addAlert('Community outing')).toHaveTextContent('Not added: no connection. Try again.');
+    expect(addItemButton('Community outing')).toHaveFocus();
+    expect(newItem('Community outing')).toHaveValue('Visited the library');
+    await wait(60_000);
+    expect(addsTo(outing.id)).toHaveLength(1);
+  });
+
+  it('on a 409 for a group archived meanwhile, reads the list again and focuses the list conflict', async () => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), problem(409, 'config.group_archived'));
+    serve('GET', listPath, json([everyNote, { ...outing, archivedAtUtc: '2026-10-01T06:00:00Z' }, care]));
+    type(newItem('Community outing'), 'Visited the library');
+    const reads = listReads();
+
+    await press(addItemButton('Community outing'));
+
+    expect(listReads()).toBe(reads + 1);
+    expect(listConflict()).toHaveFocus();
+    expect(sections()).toEqual([sectionOf('Every note'), sectionOf('Personal care')]);
+    expect(addsTo(outing.id)).toHaveLength(1);
+  });
+
+  it('keeps the text, with the list conflict focused, for a 409 whose re-read still lists the group', async () => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), problem(409, 'config.group_archived'));
+    type(newItem('Community outing'), 'Visited the library');
+
+    await press(addItemButton('Community outing'));
+
+    expect(listConflict()).toHaveFocus();
+    expect(newItem('Community outing')).toHaveValue('Visited the library');
+    expect(addAlert('Community outing')).toBeEmptyDOMElement();
+  });
+
+  it('hands a 401 to sign-in in place, keeping the text, and reads the list again once signed in', async () => {
+    await openPage();
+    serve('POST', itemsPath(outing.id), problem(401));
+    serve('POST', '/api/auth/passkey/options', json({ challenge: 'Y2hhbGxlbmdl', userVerification: 'required' }));
+    serve('POST', '/api/auth/login', json({ next: 'totp' }));
+    serve('POST', '/api/auth/login/totp', json(manager));
+    type(newItem('Community outing'), 'Visited the library');
+    // Found now, as the page leaves the accessibility tree once the shell's sign-in in place hides it.
+    const page = { field: newItem('Community outing'), alert: addAlert('Community outing') };
+
+    await press(addItemButton('Community outing'));
+
+    expect(pageHeading()).toHaveAccessibleName('You’ve been signed out');
+    expect(page.field).not.toBeVisible();
+    expect(page.field).toHaveValue('Visited the library');
+    expect(page.alert).toBeEmptyDOMElement();
+    const reads = listReads();
+
+    type(screen.getByRole('textbox', { name: 'Email address' }), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    await settle();
+    type(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('Common items');
+    expect(listReads()).toBe(reads + 1);
+    expect(newItem('Community outing')).toHaveValue('Visited the library');
+    expect(addAlert('Community outing')).toBeEmptyDOMElement();
+    expect(addsTo(outing.id)).toHaveLength(1);
   });
 });

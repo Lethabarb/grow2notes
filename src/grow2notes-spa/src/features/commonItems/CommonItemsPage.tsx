@@ -46,7 +46,8 @@ export function CommonItemsPage() {
  * An active group's section (common-items.md component 5), a region named by its `<h2>`, the group's name as stored,
  * which wraps anywhere and is never cut short: Every note's with the line that says why it has no group buttons, as
  * it can never be renamed, moved or archived (A43); then the group's items, in a list of their own whose words say
- * " in [group name]" where the page's lists would otherwise read alike.
+ * " in [group name]" where the page's lists would otherwise read alike, and its add form, whose field is
+ * `item-new-{groupId}`, which adds to the end of this group alone.
  */
 function GroupSection({ group }: { group: AdminCommonItemGroup }) {
   const headingId = `group-${group.id}-heading`;
@@ -57,7 +58,7 @@ function GroupSection({ group }: { group: AdminCommonItemGroup }) {
         {group.name}
       </h2>
       {group.isEveryNote && <p className={styles.everyNote}>{strings.commonItems.everyNote}</p>}
-      <ListEditor kind="item" api={commonItemsApi(group.id)} name={group.name} />
+      <ListEditor kind="item" api={commonItemsApi(group.id)} name={group.name} addFieldId={`item-new-${group.id}`} />
     </section>
   );
 }

@@ -28,6 +28,12 @@ internal sealed class ErrorCode
     /// </summary>
     public static readonly ErrorCode UserNotActive = new(StatusCodes.Status409Conflict, "user.not_active");
 
+    /// <summary>
+    /// A common item was to be added to a group that is archived, which is restored first. Archiving a group leaves its
+    /// items' versions as they were, so no <c>If-Match</c> could catch it.
+    /// </summary>
+    public static readonly ErrorCode GroupArchived = new(StatusCodes.Status409Conflict, "config.group_archived");
+
     /// <summary>The setup link is expired, used or replaced.</summary>
     public static readonly ErrorCode SetupLinkInvalid = new(StatusCodes.Status410Gone, "auth.setup_link_invalid");
 

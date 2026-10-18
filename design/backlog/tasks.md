@@ -1954,7 +1954,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       `503`'s "something went wrong" line; a failed re-read leaving the page as it was; a worker, and a `403` or `404`
       on the list, getting Page not found; no item text in a query key; the new strings in `copy.test.ts`; and the
       Goals section's tests passing as they are.
-- [ ] Add items to a group (S01.03.02's first and third criteria; design.md §4.9 item 4's add form, A2, A6;
+- [x] Add items to a group (S01.03.02's first and third criteria; design.md §4.9 item 4's add form, A2, A6;
       common-items.md *Add, edit, rename, move*' "Add item in a group with an empty or spaces-only field…", "A
       successful Add item…" and "Line breaks typed or pasted…", and *Failures and conflicts*' "With the network
       cut…" and "A `401` during any write…" for Add): `POST /api/admin/common-item-groups/{groupId}/items` with

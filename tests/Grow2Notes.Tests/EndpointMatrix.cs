@@ -203,6 +203,11 @@ internal static class EndpointMatrix
         // seeded organisations, so the seeded Every note groups alone are looked for.
         new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
             Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
+
+        // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
+        // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
+            AddingAnItemToAGroupOfItsOwn),
     ];
 
     // Two rows for one endpoint stop the type initializer here, naming the endpoint.
@@ -393,6 +398,18 @@ internal static class EndpointMatrix
         return new HttpRequestMessage(call.Method, $"/api/admin/participants/{participant.Id}/goals/order")
         {
             Content = JsonContent.Create(new { goalIds = new[] { goals[2], goals[0] } }),
+        };
+    }
+
+    // An item added to a group that the request first adds to A, so that each call adds to a group of its own, never
+    // the seeded Every note (tests/README.md).
+    private static async Task<HttpRequestMessage> AddingAnItemToAGroupOfItsOwn(EndpointCall call)
+    {
+        var groupId = Assert.Single(await call.Services.AddGroupsAsync(
+            call.Seeded.A.OrganisationId, new TestCommonItemGroup("Community outing", 0)));
+        return new HttpRequestMessage(call.Method, $"/api/admin/common-item-groups/{groupId}/items")
+        {
+            Content = JsonContent.Create(new { text = "Travelled by bus or train" }),
         };
     }
 

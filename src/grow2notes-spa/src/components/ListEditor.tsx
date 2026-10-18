@@ -78,6 +78,11 @@ type ListEditorProps<TData> = {
    * others' (common-items.md component 5).
    */
   name?: string;
+  /**
+   * The add field's id where its page names it, such as a group's `item-new-{groupId}` on Common items
+   * (common-items.md component 5); otherwise one of React's own.
+   */
+  addFieldId?: string;
   /** For an archived participant's goals (participants.md B6): the rows' text alone, with no controls. */
   readOnly?: boolean;
 };
@@ -159,9 +164,10 @@ class RowChanged extends Error {
 
 /**
  * Sends a write that the server refuses with `status` when the list has changed since it was read (list-editor.md
- * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), or an archive's or a restore's `412`.
- * That refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what the server
- * now holds; any other failure fails as it is.
+ * *Request errors*): a reorder's `422 config.order_mismatch` (design.md §6.7), an archive's or a restore's `412`, or
+ * an add's `409 config.group_archived`, as the list's group was archived meanwhile (common-items.md *Failures*). That
+ * refusal reads the list again and fails as `ListChanged`, so that the list conflict shows over what the server now
+ * holds; any other failure fails as it is.
  */
 async function sendUnlessListChanged(list: ListContext, status: number, send: () => Promise<unknown>): Promise<void> {
   try {
@@ -244,7 +250,7 @@ function focusStayedIn(origin: HTMLElement | null): boolean {
  * participant does with a new participant's empty one, so the editor reads it from the query and never fetches it as
  * it mounts.
  */
-export function ListEditor<TData>({ kind, api, name, readOnly = false }: ListEditorProps<TData>) {
+export function ListEditor<TData>({ kind, api, name, addFieldId, readOnly = false }: ListEditorProps<TData>) {
   const copy = strings.listEditor[kind];
   const frame = useListFrame();
   // The archived section's key in the frame's focus map, which an Archive opens before its row's Restore takes focus.
@@ -303,7 +309,7 @@ export function ListEditor<TData>({ kind, api, name, readOnly = false }: ListEdi
           )}
         </ol>
       )}
-      {!readOnly && <AddForm list={list} />}
+      {!readOnly && <AddForm list={list} fieldId={addFieldId} />}
       {archived.length > 0 && (
         <details ref={frame.focusTarget(archivedKey)} className={styles.archived}>
           <summary className={styles.summary}>
@@ -807,18 +813,19 @@ function EditForm({ row, list, field, onClose }: EditFormProps) {
  * title. Sent, the row goes to the end of the list, which is read again before Add is free, then the field is emptied
  * if it still holds the text sent, with focus kept in it for the next one, and the page's status region says so; text
  * typed while the add was out stays. A failure keeps the text and says so in the alert, focus staying on Add, but for
- * the server's refusal of the text, which shows on the field as Add's own does.
+ * the server's refusal of the text, which shows on the field as Add's own does, and for an add refused as the list's
+ * group was archived meanwhile, which shows the list conflict over the list read again.
  */
-function AddForm({ list }: { list: ListContext }) {
+function AddForm({ list, fieldId }: { list: ListContext; fieldId: string | undefined }) {
   const copy = strings.listEditor[list.kind];
   const announce = useAnnounce();
-  const fieldId = useId();
+  const ownId = useId();
   const form = useRef<HTMLFormElement>(null);
   const field = useRef<HTMLTextAreaElement>(null);
   const box = useItemText(list.kind, '', field);
   // The alert's words while it holds a request's failure, which the next press clears.
   const [failure, setFailure] = useState<string>();
-  const add = useListWrite(list, list.api.add);
+  const add = useListWrite(list, (text: string) => sendUnlessListChanged(list, 409, () => list.api.add(text)));
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -850,7 +857,7 @@ function AddForm({ list }: { list: ListContext }) {
   return (
     <form ref={form} noValidate className={`${textBox.column} ${styles.addForm}`} onSubmit={submit}>
       <ItemTextField
-        fieldId={fieldId}
+        fieldId={fieldId ?? ownId}
         label={list.name === undefined ? copy.newLabel : `${copy.newLabel}${msg.inList(list.name)}`}
         helpId={list.helpId}
         text={box.text}

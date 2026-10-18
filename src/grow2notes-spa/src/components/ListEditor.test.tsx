@@ -733,6 +733,23 @@ describe('ListEditor, adding', () => {
     expect(newGoal()).toHaveValue('Makes own breakfast');
   });
 
+  // As Common items' add answers for a group archived meanwhile (design.md §6.9).
+  it('on a 409, shows the list read again and the list conflict, focused, keeping the text', async () => {
+    const rendered = renderEditor([breakfast]);
+    vi.mocked(rendered.add).mockRejectedValue(new ApiError(409, 'config.group_archived'));
+    vi.mocked(rendered.queryFn).mockResolvedValue([breakfast, sister]);
+    type('Catches the bus');
+
+    await press(addButton());
+
+    expect(rendered.add).toHaveBeenCalledOnce();
+    expect(rendered.queryFn).toHaveBeenCalledOnce();
+    expect(activeTexts()).toEqual([breakfast.text, sister.text]);
+    expect(conflict()).toHaveFocus();
+    expect(addAlert()).toBeEmptyDOMElement();
+    expect(newGoal()).toHaveValue('Catches the bus');
+  });
+
   it("sends each write in the list's one scope, with no retry, and keys nothing by a goal's words", async () => {
     const rendered = renderEditor([]);
     serveList(rendered, []);
