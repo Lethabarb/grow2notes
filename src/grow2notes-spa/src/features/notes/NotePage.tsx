@@ -77,11 +77,7 @@ function Note({ participantId, noteDate }: NoteProps) {
         <BackLink to={back.to}>{back.label}</BackLink>
         {/* A new element as the form mounts, holding its first words, such as "Draft · saved 9:42 am", which a screen
             reader takes as the page's own rather than announcing a change (autosave-status.md *Behaviour* 8). */}
-        {formOpen && (
-          <p id="save-status" role="status" aria-live="polite" aria-atomic="true" className={styles.saveStatus}>
-            <SaveIndicatorText indicator={indicator} />
-          </p>
-        )}
+        {formOpen && <SaveIndicatorRegion indicator={indicator} />}
         {deadEnd !== undefined && <DeadEndBanner sentence={deadEnd} />}
       </PageBar>
       <div className={textBox.column}>
@@ -122,22 +118,58 @@ function Note({ participantId, noteDate }: NoteProps) {
 }
 
 /**
+ * The save indicator (note-form.md component 1), at the end of the top bar's first row: its words in one live region,
+ * read whole as they change. A failed save that is being retried makes it the bar's second row, full width under the
+ * back link, in the attention colours with the warning icon, so that its sentence shows, and is said, once.
+ */
+function SaveIndicatorRegion({ indicator }: { indicator: SaveIndicator }) {
+  const failed = indicator.kind === 'failed';
+  return (
+    <p
+      id="save-status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+      className={failed ? `${styles.saveStatus} ${styles.attentionRow}` : styles.saveStatus}
+    >
+      {failed ? (
+        <>
+          <WarningIcon />
+          <span className={styles.attentionText}>
+            <SaveIndicatorText indicator={indicator} />
+          </span>
+        </>
+      ) : (
+        <SaveIndicatorText indicator={indicator} />
+      )}
+    </p>
+  );
+}
+
+/**
  * A dead end's banner, the top bar's second row (note-form.md component 1), full width under the back link and the
  * save status, in the attention colours: a region named by its sentence, which says why the note cannot be saved
- * here, and is not itself a live region. Its border is a real one, so that forced colours keep it.
+ * here, and is not itself a live region.
  */
 function DeadEndBanner({ sentence }: { sentence: string }) {
   return (
-    <section className={styles.deadEnd} aria-labelledby="dead-end">
-      <svg className={styles.deadEndIcon} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-        <circle cx="10" cy="10" r="8.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M10 5v6.5" fill="none" stroke="currentColor" strokeWidth="2" />
-        <circle cx="10" cy="14.5" r="1.25" fill="currentColor" />
-      </svg>
-      <p id="dead-end" className={styles.deadEndText}>
+    <section className={styles.attentionRow} aria-labelledby="dead-end">
+      <WarningIcon />
+      <p id="dead-end" className={styles.attentionText}>
         {sentence}
       </p>
     </section>
+  );
+}
+
+/** The warning icon of the top bar's second row, beside the first line of its words, which carry the meaning. */
+function WarningIcon() {
+  return (
+    <svg className={styles.attentionIcon} viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <circle cx="10" cy="10" r="8.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10 5v6.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <circle cx="10" cy="14.5" r="1.25" fill="currentColor" />
+    </svg>
   );
 }
 

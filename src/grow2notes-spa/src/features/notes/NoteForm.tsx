@@ -83,14 +83,14 @@ type NoteFormProps = {
  * every tick and the text stay as they are, to change and copy, though nothing more is saved (note-form.md *Conflicts
  * and refusals*).
  *
- * Submit note is never disabled: while "Saving…" shows, or a dead end has stopped autosave, it is `aria-disabled`, and
- * it is described by the save indicator, and by the dead end's sentence while one shows. A press, or Enter's implicit
- * submission, which comes as a click on it, runs Submit's checks first; during a dead end it then says the sentence
- * again in the page's polite region and opens nothing; otherwise a check save runs, the button busy, and the
- * confirmation opens once it has saved the newest change, with the content that it saved, checked again, as a change
- * made while an earlier save was out goes with it (note-form.md *Pressing Submit note*). The button stays busy while
- * Submit's request is out, though a browser closes the confirmation meanwhile, so that no press sends a save or opens
- * another confirmation until the request ends.
+ * Submit note is never disabled: while "Saving…" or "Not saved: no connection…" shows, or a dead end has stopped
+ * autosave, it is `aria-disabled`, and it is described by the save indicator, and by the dead end's sentence while one
+ * shows. A press, or Enter's implicit submission, which comes as a click on it, runs Submit's checks first; during
+ * "Not saved: no connection…" or a dead end it then says that sentence again in the page's polite region and opens
+ * nothing; otherwise a check save runs, the button busy, and the confirmation opens once it has saved the newest
+ * change, with the content that it saved, checked again, as a change made while an earlier save was out goes with it
+ * (note-form.md *Pressing Submit note*). The button stays busy while Submit's request is out, though a browser closes
+ * the confirmation meanwhile, so that no press sends a save or opens another confirmation until the request ends.
  */
 export function NoteForm({
   participantId,
@@ -224,6 +224,11 @@ export function NoteForm({
 
     if (deadEnd !== undefined) {
       announce?.(deadEnd);
+      return;
+    }
+
+    if (indicator?.kind === 'failed') {
+      announce?.(strings.note.notSavedRetrying);
       return;
     }
 
@@ -394,7 +399,7 @@ export function NoteForm({
             type="submit"
             variant="primary"
             busy={busy}
-            unavailable={indicator?.kind === 'saving' || deadEnd !== undefined}
+            unavailable={indicator?.kind === 'saving' || indicator?.kind === 'failed' || deadEnd !== undefined}
             onUnavailablePress={() => void pressSubmit()}
             aria-describedby={deadEnd === undefined ? 'save-status' : 'save-status dead-end'}
           >

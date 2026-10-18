@@ -389,14 +389,14 @@ export const strings = {
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
    * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; the
    * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
-   * the save indicator while a dead end in the top bar says why the note cannot be saved (autosave-status.md *Exact
-   * copy*). Then Submit note (component 12) and Submit's checks (*Validation*),
-   * inline and in the error summary: Guided notes left blank, with the second sentence only while guide prompts are
-   * set, as they are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with
-   * `reason`; and Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead,
-   * for a note dated `me.today` and for any other, before the name on its own line; its flag line, from the values
-   * that Submit sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not
-   * submitted: no connection. Your draft is saved. Try again." (microcopy.md §9).
+   * the save indicator once a failed save is being retried, as the top bar's second row, and while a dead end in the
+   * top bar says why the note cannot be saved (autosave-status.md *Exact copy*). Then Submit note (component 12) and
+   * Submit's checks (*Validation*), inline and in the error summary: Guided notes left blank, with the second sentence
+   * only while guide prompts are set, as they are the grey text; the name that Guided notes' too-long message starts
+   * with, as Reason's starts with `reason`; and Reason left blank while the flag is ticked. Then the confirmation
+   * (component 14): its title's lead, for a note dated `me.today` and for any other, before the name on its own line;
+   * its flag line, from the values that Submit sends; its status line once the request has taken 1 s; and what a
+   * failure says is safe, as in "Not submitted: no connection. Your draft is saved. Try again." (microcopy.md §9).
    */
   note: {
     loading: 'Loading note…',
@@ -406,6 +406,7 @@ export const strings = {
     guidedNotes: '3. Guided notes',
     flagForManager: 'Flag for manager',
     reason: 'Reason',
+    notSavedRetrying: 'Not saved: no connection. Keep this page open; retrying.',
     notSaved: 'Not saved',
     submit: 'Submit note',
     writeYourNotes: 'Write your notes in the Guided notes box',

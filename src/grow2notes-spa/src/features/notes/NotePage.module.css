@@ -42,25 +42,26 @@
 }
 
 /*
- * A dead end, the top bar's second row (component 1): the whole width of the bar's row, under the back link and the
- * save status, in the attention colours, with the words in the body's colour. Its border is a real one, so that forced
- * colours keep it.
+ * The top bar's second row (component 1), a failed save's indicator or a dead end's banner: the whole width of the
+ * bar's row, under the back link, in the attention colours, with the words in the body's colour from its start. Its
+ * border is a real one, so that forced colours keep it.
  */
-.deadEnd {
+.attentionRow {
   display: flex;
   flex: 1 0 100%;
   gap: var(--space-3);
   align-items: flex-start;
-  margin-block-end: var(--space-3);
+  margin: 0 0 var(--space-3);
   padding: var(--space-3);
   border: 2px solid var(--colour-attention-edge);
   border-radius: var(--radius-s);
   background: var(--colour-attention-tint);
   color: var(--colour-text);
+  text-align: start;
 }
 
 /* Beside the first line of the words, whatever their size. */
-.deadEndIcon {
+.attentionIcon {
   flex: none;
   inline-size: 1.25em;
   block-size: 1.25em;
@@ -69,10 +70,10 @@
 }
 
 /*
- * A long unbroken name in the sentence wraps anywhere, as the banner, a flex item of the bar's row, is never narrower
+ * A long unbroken name in the sentence wraps anywhere, as the row, a flex item of the bar's row, is never narrower
  * than its widest word, which would otherwise make the page scroll sideways at 320 px (SC 1.4.10).
  */
-.deadEndText {
+.attentionText {
   flex: 1 1 0;
   min-inline-size: 0;
   margin: 0;
@@ -80,11 +81,11 @@
 }
 
 @media (forced-colors: active) {
-  .deadEnd {
+  .attentionRow {
     border-color: CanvasText;
   }
 
-  .deadEndIcon {
+  .attentionIcon {
     color: CanvasText;
   }
 }

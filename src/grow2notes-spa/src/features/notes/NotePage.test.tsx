@@ -1,4 +1,4 @@
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter, parsePath } from 'react-router';
@@ -489,6 +489,26 @@ function follows(later: Node, earlier: Node): boolean {
   return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
+/** The save indicator's sentence once a failed save is being retried (design.md §4.3). */
+const notSavedRetrying = 'Not saved: no connection. Keep this page open; retrying.';
+
+/** The browser going offline or online, with the event that it fires. */
+function goOnline(online: boolean) {
+  act(() => {
+    window.dispatchEvent(new Event(online ? 'online' : 'offline'));
+  });
+}
+
+/** Counts the changes to `element` and what it holds from now on, as its words being written again would be one. */
+function watchChanges(element: HTMLElement): () => number {
+  let changes = 0;
+  const observer = new MutationObserver((records) => {
+    changes += records.length;
+  });
+  observer.observe(element, { attributes: true, characterData: true, childList: true, subtree: true });
+  return () => changes + observer.takeRecords().length;
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string, with its method.
@@ -511,6 +531,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   answers.clear();
   fetchMock.mockReset();
   vi.unstubAllGlobals();
@@ -1013,33 +1034,6 @@ describe('Autosave', () => {
     ]);
   });
 
-  it('keeps "Saving…" after a save that failed, sending nothing more until the next change or a blur', async () => {
-    const participant = freshParticipant();
-    serveNote(participant);
-    serveSave(paths(participant).draft, problem(503));
-    renderApp(paths(participant).page);
-    await settle();
-
-    guidedNotes().focus();
-    type('Jane made toast.');
-    await wait(2_000);
-    await settle();
-    expect(saves()).toHaveLength(1);
-    await wait(30_000);
-    expect(saves()).toHaveLength(1);
-    expect(shownSaveStatus()).toBe('Saving…');
-
-    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
-    guidedNotes().blur();
-    await wait(0);
-    expect(saves().map(({ body }) => [body.seq, body.listsVersion])).toEqual([
-      [1, 'lists-1'],
-      [2, 'lists-1'],
-    ]);
-    await settle();
-    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
-  });
-
   it('keeps all of 20,050 characters on screen, with "You have 50 characters too many", and sends 20,000', async () => {
     const participant = freshParticipant();
     serveNote(participant);
@@ -1128,6 +1122,64 @@ describe('Autosave', () => {
       isFlagged: false,
       flagReason: null,
     });
+  });
+});
+
+describe('A save that fails', () => {
+  it('keeps "Saving…" through one failure, then says "Not saved: …" once in the top bar, until saved', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, noConnection);
+    renderApp(paths(participant).page);
+    await settle();
+
+    type('Jane made toast.');
+    await wait(2_000);
+    expect(saves()).toHaveLength(1);
+    await wait(999);
+    expect(shownSaveStatus()).toBe('Saving…');
+
+    await wait(1);
+    expect(saves()).toHaveLength(2);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    // The indicator itself, the top bar's live region after the back link, with an icon that screen readers skip.
+    expect(saveStatus()).toHaveAttribute('role', 'status');
+    expect(saveStatus().textContent).toBe(notSavedRetrying);
+    expect(saveStatus().querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(follows(saveStatus(), within(topBar()).getByRole('link', { name: 'Today' }))).toBe(true);
+
+    const changes = watchChanges(saveStatus());
+    await wait(2_000 + 4_000 + 8_000);
+    expect(saves()).toHaveLength(5);
+    expect(changes()).toBe(0);
+
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    await wait(10_000);
+    await settle();
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual(
+      [1, 2, 3, 4, 5, 6].map((seq) => [seq, 'Jane made toast.']),
+    );
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(saveStatus().querySelector('svg')).toBeNull();
+  });
+
+  it('says "Not saved: …" at once as the browser goes offline, sending nothing, then "Saved …" online', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+    type('Jane made toast.');
+
+    goOnline(false);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    await wait(30_000);
+    expect(saves()).toEqual([]);
+
+    goOnline(true);
+    await settle();
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
   });
 });
 
@@ -1975,6 +2027,17 @@ describe('Submit note', () => {
     expect(submitButton()).toHaveAccessibleDescription('Saving…');
   });
 
+  it('is aria-disabled while "Not saved: …" shows, described by it', async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, noConnection);
+
+    type('Jane made toast.');
+    await wait(3_000);
+
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAccessibleDescription(notSavedRetrying);
+  });
+
   it("is aria-disabled after a dead end, described by the indicator and the dead end's sentence", async () => {
     const { participant } = await openToSubmit();
     serveSave(paths(participant).draft, problem(422, { code: 'note.participant_archived' }));
@@ -2259,17 +2322,49 @@ describe('Pressing Submit note', () => {
     expect(summaryItems()).toEqual([['Enter a reason for the flag', '#flag-reason']]);
   });
 
-  it('opens nothing when the check save fails, then or later', async () => {
+  it('opens nothing when its check save fails into "Not saved: …", nor once a later save is answered', async () => {
     const { participant } = await openToSubmit();
     await write();
-    serveSave(paths(participant).draft, problem(503));
+    serveSave(paths(participant).draft, noConnection);
 
     await press(submitButton());
-    await wait(30_000);
-
     expect(saves()).toHaveLength(2);
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(1_000);
+    expect(saves()).toHaveLength(3);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
     expect(confirmation()).toBeNull();
-    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    await wait(2_000);
+    await settle();
+    expect(saves()).toHaveLength(4);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(confirmation()).toBeNull();
+  });
+
+  it('opens nothing for a change typed while its check save is out, nor once a later save is answered', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    const check = held(saved('2026-09-30T23:43:00Z'));
+    serveSave(paths(participant).draft, check.answer);
+
+    await press(submitButton());
+    type('Jane made toast. Then a walk.');
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    check.release();
+    await settle();
+    expect(confirmation()).toBeNull();
+
+    await wait(2_000);
+    await settle();
+    expect(saves().map(({ body }) => body.narrative)).toEqual([
+      'Jane made toast.',
+      'Jane made toast.',
+      'Jane made toast. Then a walk.',
+    ]);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(confirmation()).toBeNull();
   });
 
   it('ends at the dead end, opening nothing, when the check save finds the note submitted elsewhere', async () => {
@@ -2298,6 +2393,22 @@ describe('Pressing Submit note', () => {
 
     expect(pageStatus().textContent).toBe('Jane Citizen is archived, so this note cannot be started. Ask a manager.');
     expect(saves()).toHaveLength(1);
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toBeNull();
+  });
+
+  it("opens nothing while \"Not saved: …\" shows, saying its sentence again in the page's polite region", async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, noConnection);
+    type('Jane made toast.');
+    await wait(3_000);
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(submitButton());
+    await wait(16);
+
+    expect(pageStatus().textContent).toBe(notSavedRetrying);
+    expect(saves()).toHaveLength(2);
     expect(confirmation()).toBeNull();
     expect(errorSummary()).toBeNull();
   });

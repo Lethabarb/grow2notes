@@ -3536,6 +3536,19 @@ older page is told the note has moved on, and nothing is overwritten without ask
     place of the back-off's, `ApiError` carrying it from `api()`. Any other refusal is not retried, and one that is
     not a dead end, a takeover or a `401` leaves the change for the next change or blur, as T08's does. `api()` takes
     a `keepalive` option for the page-hidden save, which sends the antiforgery token already held.
+  - The retries as built (step 2): a change typed while the browser reports offline shows "Not saved: …" at once,
+    before any save is due. During a retry's wait, a blur or the 2 s or 5 s timer sends nothing, as the retry carries
+    the change; only the page shown again, `checkSave()`, `flushNow()` and `resume()` cut the wait short, and the
+    `online` event does not, a back-off's wait being 10 s at most. A `Retry-After` takes the back-off's place for that
+    one wait while the count of failures still rises, a date already past giving 0, and one longer than the first
+    retry's 1 s shows "Not saved: …" at once, so that "Saving…", and a press of Submit waiting on it, never lasts
+    through a longer wait (note-form.md *Pressing Submit note* 4). After "Not saved: …", a save answered that did not
+    carry the newest change shows "Saving…" again, and an older save answered after a newer one leaves "Saved" as it
+    is. A lists-changed reload that fails for a transient reason is retried as a failure of the save, where T08 left
+    it for the next change or blur. TanStack resumes a save that waited offline only once the page is shown (its
+    `focusManager`), so the browser coming online while the page is hidden sends the newest state at once, as the
+    page-hidden save does. With no antiforgery token held, the page-hidden save's token request goes first, as a
+    normal `fetch`.
   - `flushNow()` gives `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying
     the newest change is answered; `checkSave()` gives the content once its own `PUT` is answered carrying the newest
     change. Every other outcome gives `false`, or nothing, as it comes: "Not saved" shown, a takeover, a `401`, a dead
@@ -3607,7 +3620,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       autosave sent meanwhile that answers `409 note.version_conflict` once the submit commits, recreating nothing,
       and an autosave held after its read while a submit is sent, both then succeeding; and no audit event from any
       save but a first.
-- [ ] Autosave keeps trying, and saves as the page is hidden (S02.02.04's third and fourth criteria and its links to
+- [x] Autosave keeps trying, and saves as the page is hidden (S02.02.04's third and fourth criteria and its links to
       design.md §3.4 *Autosave*, §4.3's save indicator, §5.6 *Client behaviour* and note-form.md items 9, 11, 12 and
       13; autosave-status.md *Behaviour* 1, 2 and 4; T09's hand-off of item 25's press during "Not saved"): in
       `useAutosave`, a save that fails for a transient reason (Notes) is retried for as long as the form is open,
