@@ -69,6 +69,16 @@
   display: block;
 }
 
+/*
+ * A plain line after the detail, such as a flag's reason, in the row's body text, wrapping and never clipped; not
+ * positioned, so that the link's ::after stays over it and a tap on it opens the row (chronological-list.md *Anatomy*
+ * 3, flagged.md item 4).
+ */
+.extra {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}
+
 .chevron {
   flex: none;
   inline-size: 1.25rem;

@@ -3656,7 +3656,7 @@ the reason and when it was flagged. Only submitted flags count.
       `FlaggedVersionNumber` is 2; three notes flagged at 9:01 am, 11:20 am and 4:12 pm, their note dates in another
       order, listed by flag time; an archived participant's note listed, and a deactivated author's name kept; a missing
       and an unknown `status` `400`; and no audit event written.
-- [ ] The shared list pieces (chronological-list.md *Implementation notes*; flagged.md item 4's *Extra lines* and
+- [x] The shared list pieces (chronological-list.md *Implementation notes*; flagged.md item 4's *Extra lines* and
       *Cross-cutting*; status-tags.md *Built*; Notes): `ChronoList`'s whole mode, with `older` left out: the `<ol>` of
       rows in the order given, or the empty sentence with no list, and no Show older or its status line; `LinkRow`'s
       plain lines after its description, each a `<p>` in reading order, outside the link's `aria-describedby` and

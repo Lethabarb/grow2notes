@@ -19,7 +19,7 @@ type Older = {
 };
 
 type ChronoListProps<T> = {
-  /** The rows loaded so far, in the API's order, which the list never sorts again. */
+  /** The rows, all of them or those loaded so far, in the API's order, which the list never sorts again. */
   items: readonly T[];
   /** A row's stable key, such as a note's date. */
   getKey: (item: T) => string;
@@ -27,16 +27,51 @@ type ChronoListProps<T> = {
   renderRow: (item: T) => ReactNode;
   /** The screen's sentence for a list with no rows, such as "No notes yet for Jane Citizen.". */
   emptyText: string;
-  older: Older;
+  /** A paged list's next page, such as Past notes'; left out for a list that one answer returns whole, as To review. */
+  older?: Older;
 };
 
 /** Why the last Show older failed, and whether the one before it failed too, which says "still". */
 type Failed = { cause: Cause; again: boolean };
 
 /**
- * A paged list of notes by date (chronological-list.md), such as Past notes: an `<ol>` of `LinkRow`s, then Show older
- * while the last page said there are more, and its status line, there and empty from the first render; or the
- * screen's empty sentence alone, with no list or button. Nothing loads as the page scrolls, and nothing is counted.
+ * A list of notes, flags or versions by date (chronological-list.md): an `<ol>` of `LinkRow`s in the order given, or
+ * the screen's empty sentence alone, with no list. A whole list, such as To review, is that alone, with no Show older
+ * or status line; a paged list, such as Past notes, adds them (`PagedList`). Nothing loads as the page scrolls, and
+ * nothing is counted.
+ */
+export function ChronoList<T>({ items, getKey, renderRow, emptyText, older }: ChronoListProps<T>) {
+  if (items.length === 0) {
+    return <p className={styles.empty}>{emptyText}</p>;
+  }
+
+  const rows = (
+    <LinkRowList ordered>
+      {items.map((item) => (
+        <Fragment key={getKey(item)}>{renderRow(item)}</Fragment>
+      ))}
+    </LinkRowList>
+  );
+  if (older === undefined) {
+    return rows;
+  }
+
+  return (
+    <PagedList items={items} getKey={getKey} older={older}>
+      {rows}
+    </PagedList>
+  );
+}
+
+type PagedListProps<T> = Pick<ChronoListProps<T>, 'items' | 'getKey'> & {
+  older: Older;
+  /** The list of the rows loaded so far. */
+  children: ReactNode;
+};
+
+/**
+ * A paged list's rows, then Show older while the last page said there are more, and its status line, there and empty
+ * from the first render.
  *
  * Show older adds the next page below the rows, which never move, and focuses the first new row's link, or, when no
  * row came and the button has gone, the last row's, so that focus never falls to the page. While it loads, the
@@ -45,7 +80,7 @@ type Failed = { cause: Cause; again: boolean };
  * failed too, words that a screen reader announces again; the next press clears it. A `401` says nothing, as the
  * session flow has it.
  */
-export function ChronoList<T>({ items, getKey, renderRow, emptyText, older }: ChronoListProps<T>) {
+function PagedList<T>({ items, getKey, older, children }: PagedListProps<T>) {
   const list = useRef<HTMLDivElement>(null);
   // The key of the last row as Show older was pressed, until the rows after it are in the page.
   const focusAfter = useRef<string>(undefined);
@@ -97,10 +132,6 @@ export function ChronoList<T>({ items, getKey, renderRow, emptyText, older }: Ch
     failedLast.current = true;
   }
 
-  if (items.length === 0) {
-    return <p className={styles.empty}>{emptyText}</p>;
-  }
-
   let line = slow ? strings.showOlder.loading : '';
   if (failed !== undefined) {
     line = msg.loadFailed(strings.showOlder.olderNotes, failed.cause, failed.again);
@@ -108,11 +139,7 @@ export function ChronoList<T>({ items, getKey, renderRow, emptyText, older }: Ch
 
   return (
     <div ref={list}>
-      <LinkRowList ordered>
-        {items.map((item) => (
-          <Fragment key={getKey(item)}>{renderRow(item)}</Fragment>
-        ))}
-      </LinkRowList>
+      {children}
       {older.hasNextPage && (
         <Button className={styles.older} busy={busy} onClick={() => void showOlder()}>
           {strings.showOlder.button}
