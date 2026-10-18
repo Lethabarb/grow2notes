@@ -7,25 +7,30 @@ using Microsoft.Extensions.Options;
 namespace Grow2Notes.Web.Features.Notes;
 
 /// <summary>
-/// <c>GET /api/participants/{participantId}/notes/{noteDate}/draft</c> (design.md §6.3): the note form with the
-/// signed-in user's working copy, as <see cref="NoteDrafts.ReadAsync"/> reads it, as a <see cref="DraftForm"/>;
-/// <c>409 note.in_progress_by_other</c>, with the author's name and start time, for another user's draft; or
-/// <c>404</c> for a participant not in the organisation, or a date after today with no note.
+/// <c>GET</c> and <c>PUT /api/participants/{participantId}/notes/{noteDate}/draft</c> (design.md §6.3), each through
+/// <see cref="NoteDrafts"/>. The <c>GET</c> gives the note form with the signed-in user's working copy, as a
+/// <see cref="DraftForm"/>; or <c>404</c> for a date after today with no note. The <c>PUT</c>, the autosave, saves
+/// their working copy from a <see cref="DraftSaveRequest"/>, and answers <c>{savedAtUtc}</c>: <c>201</c> when it
+/// created the note, at its first save, and <c>200</c> after; or <c>422 validation.failed</c> for a field it refuses.
+/// Both answer <c>409 note.in_progress_by_other</c>, with the author's name and start time, for another user's draft,
+/// and <c>404</c> for a participant not in the organisation.
 /// </summary>
 /// <remarks>
-/// It has no policy of its own, so the fallback policy admits any signed-in Worker or Manager, and a request with no
-/// session gets the session cookie's <c>401</c>. Opening the form writes nothing (§3.3).
+/// They have no policy of their own, so the fallback policy admits any signed-in Worker or Manager, and a request with
+/// no session gets the session cookie's <c>401</c>. Opening the form writes nothing (§3.3).
 /// </remarks>
 internal static class NoteDraftEndpoints
 {
     /// <summary>
-    /// Maps the endpoint in the <c>/api</c> group, which <see cref="ApiGroup.MapApiGroup"/> returns. An ID that is not
-    /// a GUID, or a date that is not a date written <c>yyyy-MM-dd</c> (<see cref="IsoDateRouteConstraint"/>), matches
-    /// no route, so it gets the unknown path's <c>404</c>.
+    /// Maps both in the <c>/api</c> group, which <see cref="ApiGroup.MapApiGroup"/> returns. An ID that is not a GUID,
+    /// or a date that is not a date written <c>yyyy-MM-dd</c> (<see cref="IsoDateRouteConstraint"/>), matches no route,
+    /// so it gets the unknown path's <c>404</c>.
     /// </summary>
     public static RouteGroupBuilder MapNoteDraftEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", GetAsync);
+        const string route = "/participants/{participantId:guid}/notes/{noteDate:isodate}/draft";
+        api.MapGet(route, GetAsync);
+        api.MapPut(route, PutAsync);
         return api;
     }
 
@@ -45,5 +50,30 @@ internal static class NoteDraftEndpoints
         }
 
         return read.InProgress is { } inProgress ? inProgress.Problem() : TypedResults.NotFound();
+    }
+
+    // The note's address is the draft's own, so a 201 names no Location.
+    private static async Task<Results<Created<DraftSaved>, Ok<DraftSaved>, NotFound, ProblemHttpResult>> PutAsync(
+        Guid participantId,
+        DateOnly noteDate,
+        DraftSaveRequest request,
+        ClaimsPrincipal user,
+        IOptions<IdentityOptions> identityOptions,
+        NoteDrafts drafts,
+        CancellationToken cancellationToken)
+    {
+        var result = await drafts.SaveAsync(
+            Actor.InApp(user, identityOptions.Value), participantId, noteDate, request, cancellationToken);
+        if (result.Saved is { } saved)
+        {
+            return result.Created ? TypedResults.Created((string?)null, saved) : TypedResults.Ok(saved);
+        }
+
+        if (result.InProgress is { } inProgress)
+        {
+            return inProgress.Problem();
+        }
+
+        return result.Errors is { } errors ? ValidationProblems.Fields(errors) : TypedResults.NotFound();
     }
 }

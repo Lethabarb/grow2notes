@@ -15,6 +15,7 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const antiforgeryPath = '/api/auth/antiforgery';
 
 // note-form.md's made-up people (A35): Casey Nguyen, a worker, signed in, and the participants. Today in Melbourne is
 // Thursday 1 October 2026.
@@ -141,6 +142,34 @@ function serve(path: string, answer: Answer) {
   answers.set(`GET ${path}`, answer);
 }
 
+/** Answers each save of the note's draft at `path`, a `PUT`, with `answer` from now on. */
+function serveSave(path: string, answer: Answer) {
+  answers.set(`PUT ${path}`, answer);
+}
+
+/** A save's answer: when it was saved. */
+function saved(savedAtUtc: string): Answer {
+  return json({ savedAtUtc });
+}
+
+/** A save as it was sent: its path, and its body as JSON. */
+type SentSave = { path: string; body: Record<string, unknown> };
+
+/** Every save sent, in order. */
+function saves(): SentSave[] {
+  return fetchMock.mock.calls
+    .filter(([, init]) => init?.method === 'PUT')
+    .map(([path, init]) => ({
+      path: path as string,
+      body: JSON.parse(init!.body as string) as Record<string, unknown>,
+    }));
+}
+
+/** A participant of their own for a test that saves, whose saves no other test's numbering has reached. */
+function freshParticipant(): ParticipantHeader {
+  return { ...jane, id: crypto.randomUUID() };
+}
+
 /** Answers `participant`'s header and their note's form for `noteDate`. */
 function serveNote(participant: ParticipantHeader, draft: Answer = json(template()), noteDate = '2026-10-01') {
   const { header, draft: draftPath } = paths(participant, noteDate);
@@ -252,6 +281,30 @@ function guidedNotes(): HTMLTextAreaElement {
   return within(main()).getByRole('textbox', { name: '3. Guided notes' });
 }
 
+/** Types `value` into the Guided notes box, as one input. */
+function type(value: string) {
+  fireEvent.input(guidedNotes(), { target: { value } });
+}
+
+/** The save indicator in the top bar. */
+function saveStatus(): HTMLElement {
+  const status = pageBar().querySelector<HTMLElement>('#save-status');
+  if (status === null) {
+    throw new Error('The top bar has no #save-status.');
+  }
+
+  return status;
+}
+
+/** The save indicator's words as they show, without the comma that only screen readers get. */
+function shownSaveStatus(): string {
+  const shown = saveStatus().cloneNode(true) as HTMLElement;
+  shown.querySelectorAll('.visually-hidden').forEach((hidden) => {
+    hidden.remove();
+  });
+  return shown.textContent;
+}
+
 /** Today's row link named `name`. */
 function rowLink(name: string): HTMLElement {
   return within(within(main()).getByRole('list')).getByRole('link', { name });
@@ -284,6 +337,9 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  serve(antiforgeryPath, () =>
+    Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
+  );
   // Emptied, so that a title a test finds is one the app set.
   document.title = '';
   scrollPage(0);
@@ -552,20 +608,317 @@ describe("Someone else's draft", () => {
 });
 
 describe('Ticking a goal', () => {
-  it('ticks and unticks a goal when its words are clicked, sending nothing', async () => {
+  it('ticks and unticks a goal when its words are clicked', async () => {
     serveNote(jane);
     renderApp(paths(jane).page);
     await settle();
-    const sent = sentRequests().length;
     const box = within(main()).getByRole('checkbox', { name: bus.text });
 
     fireEvent.click(within(main()).getByText(bus.text));
     expect(box).toBeChecked();
     fireEvent.click(within(main()).getByText(bus.text));
     expect(box).not.toBeChecked();
+  });
+});
+
+describe('Autosave', () => {
+  it.each([
+    {
+      change: 'tick',
+      make: () => {
+        fireEvent.click(within(main()).getByText(bus.text));
+      },
+      narrative: '',
+      tickedGoalIds: [bus.id],
+    },
+    {
+      change: 'keystroke',
+      make: () => {
+        type('J');
+      },
+      narrative: 'J',
+      tickedGoalIds: [],
+    },
+  ])(
+    "sends the first $change in a PUT 2 s later, with the template's lists' version, then says \"Saved 9:42 am\"",
+    async ({ make, narrative, tickedGoalIds }) => {
+      const participant = freshParticipant();
+      serveNote(participant);
+      serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+      renderApp(paths(participant).page);
+      await settle();
+      expect(saveStatus()).toBeEmptyDOMElement();
+
+      make();
+      expect(shownSaveStatus()).toBe('Saving…');
+      await wait(1_999);
+      expect(saves()).toEqual([]);
+      await wait(1);
+
+      expect(saves()).toEqual([
+        {
+          path: paths(participant).draft,
+          body: { clientId: expect.any(String) as string, seq: 1, listsVersion: 'lists-1', narrative, tickedGoalIds },
+        },
+      ]);
+      expect(saves()[0].body.clientId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+      expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-30T23:42:00Z');
+    },
+  );
+
+  // design.md §4.3 *No goals set up*: the note can still be written.
+  it('saves the note of a participant with no goals, with no ticks', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template([])));
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
     await settle();
 
-    expect(sentRequests()).toHaveLength(sent);
+    type('Jane made toast.');
+    await wait(2_000);
+    await settle();
+
+    expect(saves().map(({ body }) => [body.narrative, body.tickedGoalIds])).toEqual([['Jane made toast.', []]]);
+    expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+  });
+
+  it('sends nothing more once the newest change is saved, on a blur or with time', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+
+    type('Jane made toast.');
+    await wait(2_000);
+    await settle();
+    guidedNotes().focus();
+    guidedNotes().blur();
+    await wait(30_000);
+
+    expect(saves()).toHaveLength(1);
+  });
+
+  it("saves at least twice in 12 s of non-stop typing, numbered, with no lists' version after the first", async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+
+    let typed = '';
+    for (let ms = 0; ms < 12_000; ms += 250) {
+      typed += 'x';
+      type(typed);
+      await wait(250);
+    }
+
+    const sent = saves().map(({ body }) => body);
+    expect(sent.length).toBeGreaterThanOrEqual(2);
+    expect(sent.map((body) => body.seq)).toEqual(sent.map((_, index) => index + 1));
+    expect(new Set(sent.map((body) => body.clientId)).size).toBe(1);
+    expect(sent.map((body) => 'listsVersion' in body)).toEqual(sent.map((_, index) => index === 0));
+    const lengths = sent.map((body) => (body.narrative as string).length);
+    expect(lengths).toEqual([...lengths].sort((a, b) => a - b));
+  });
+
+  it('sends a change at once when the box loses focus, with no wait', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+
+    guidedNotes().focus();
+    type('Jane made toast.');
+    guidedNotes().blur();
+    await wait(0);
+
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+  });
+
+  it('sends a tick at once when its box loses focus, with no wait', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+    const box = within(main()).getByRole('checkbox', { name: sister.text });
+
+    box.focus();
+    fireEvent.click(box);
+    box.blur();
+    await wait(0);
+
+    expect(saves().map(({ body }) => body.tickedGoalIds)).toEqual([[sister.id]]);
+  });
+
+  it('keeps "Saving…" through the answer to a save that a change made since missed, until the next', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    const first = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, first.answer);
+    renderApp(paths(participant).page);
+    await settle();
+    type('Jane');
+    await wait(2_000);
+    expect(saves()).toHaveLength(1);
+
+    type('Jane made toast.');
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    first.release();
+    await settle();
+    expect(shownSaveStatus()).toBe('Saving…');
+    expect(saves()).toHaveLength(1);
+
+    await wait(2_000);
+    await settle();
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane', 'Jane made toast.']);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+  });
+
+  it('sends a save that falls due while one is out as that one is answered, with what the form holds', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    const first = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, first.answer);
+    renderApp(paths(participant).page);
+    await settle();
+    guidedNotes().focus();
+    type('Jane');
+    guidedNotes().blur();
+    await wait(0);
+
+    guidedNotes().focus();
+    type('Jane made toast.');
+    fireEvent.click(within(main()).getByText(bus.text));
+    guidedNotes().blur();
+    await wait(0);
+    expect(saves()).toHaveLength(1);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    first.release();
+    await wait(0);
+
+    expect(saves().map(({ body }) => [body.seq, body.narrative, body.tickedGoalIds])).toEqual([
+      [1, 'Jane', []],
+      [2, 'Jane made toast.', [bus.id]],
+    ]);
+  });
+
+  it('keeps "Saving…" after a save that failed, sending nothing more until the next change or a blur', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, problem(503));
+    renderApp(paths(participant).page);
+    await settle();
+
+    guidedNotes().focus();
+    type('Jane made toast.');
+    await wait(2_000);
+    await settle();
+    expect(saves()).toHaveLength(1);
+    await wait(30_000);
+    expect(saves()).toHaveLength(1);
+    expect(shownSaveStatus()).toBe('Saving…');
+
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    guidedNotes().blur();
+    await wait(0);
+    expect(saves().map(({ body }) => [body.seq, body.listsVersion])).toEqual([
+      [1, 'lists-1'],
+      [2, 'lists-1'],
+    ]);
+    await settle();
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+  });
+
+  it('keeps all of 20,050 characters on screen, with "You have 50 characters too many", and sends 20,000', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+
+    type('x'.repeat(20_050));
+    expect(within(main()).getByText('You have 50 characters too many')).toHaveAttribute('aria-hidden', 'true');
+    await wait(2_000);
+
+    expect(guidedNotes()).toHaveValue('x'.repeat(20_050));
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['x'.repeat(20_000)]);
+  });
+
+  it(
+    'shows a reopened draft with "Draft · saved 9:42 am", its text and its ticks, and saves it with no lists\' version',
+    async () => {
+      const participant = freshParticipant();
+      const draft = held(json(savedDraft()));
+      serveNote(participant, draft.answer);
+      serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+      renderApp(paths(participant).page);
+      await settle();
+      const whileLoading = saveStatus();
+
+      draft.release();
+      await settle();
+
+      expect(shownSaveStatus()).toBe(`Draft · saved 9:42${nbsp}am`);
+      expect(saveStatus().textContent).toBe(`Draft ·, saved 9:42${nbsp}am`);
+      // A new element, put in the page with its words, rather than words written into the one there while loading.
+      expect(saveStatus()).not.toBe(whileLoading);
+      expect(guidedNotes()).toHaveValue('Jane made toast.\nThen a walk to the shops.');
+      const boxes = within(main()).getAllByRole('checkbox');
+      expect(boxes.map((box) => (box as HTMLInputElement).checked)).toEqual([true, false, true]);
+
+      fireEvent.click(within(main()).getByText(sister.text));
+      await wait(2_000);
+      expect(saves().map(({ body }) => body)).toEqual([
+        {
+          clientId: expect.any(String) as string,
+          seq: 1,
+          narrative: 'Jane made toast.\nThen a walk to the shops.',
+          tickedGoalIds: [breakfast.id],
+        },
+      ]);
+    },
+  );
+
+  it('gives the date with the time of a reopened draft last saved on a day before today', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json({ ...savedDraft(), savedAtUtc: '2026-09-29T23:42:00Z' }));
+    renderApp(paths(participant).page);
+    await settle();
+
+    expect(shownSaveStatus()).toBe(`Draft · saved Wed 30${nbsp}Sep 2026, 9:42${nbsp}am`);
+  });
+
+  it('carries on numbering its saves when the form is left and opened again in the same page load', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:42:00Z'));
+    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+    const { router } = renderApp(paths(participant).page);
+    await settle();
+    type('Jane');
+    await wait(2_000);
+    await settle();
+
+    await act(() => router.navigate('/'));
+    await settle();
+    serve(paths(participant).draft, json(savedDraft('Jane')));
+    await act(() => router.navigate(paths(participant).page));
+    await settle();
+    type('Jane made toast.');
+    await wait(2_000);
+
+    const [firstSave, laterSave] = saves().map(({ body }) => body);
+    expect(laterSave).toEqual({
+      clientId: firstSave.clientId,
+      seq: 2,
+      narrative: 'Jane made toast.',
+      tickedGoalIds: [breakfast.id, sister.id],
+    });
   });
 });
 

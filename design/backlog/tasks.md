@@ -2400,6 +2400,18 @@ lets workers write only today's note, using the Melbourne date.
   reference day (microcopy.md §3), so that a draft started on its own date reads "at 9:14 am" and a manager's
   past-day draft started later reads its date too; and `GET {base}/draft` answers `404` for a submitted note on which
   the caller has no working copy, which T14 gives from the current version instead, as no note is submitted before T09.
+- Where the design is silent (step 5), the simplest options: the first save's `201` names no `Location`, as the
+  note's address is the draft's own, and `PUT {base}/draft` answers `404` for a submitted note on which the caller has
+  no working copy, as its `GET` does, until T14; `savedAtUtc` is the server's time to the millisecond, as the
+  `datetime2(3)` columns keep it, so that the time answered is the time stored; the server reads the request's
+  `listsVersion` once step 6 checks it, and the form sends it with every save until one of its saves is answered, as it
+  cannot tell a first save that failed from one whose answer was lost; any field of the form losing focus with a change
+  unsaved sends it at once, a move from one tick box to the next included; a save that falls due while one is out
+  goes as that one settles, answered or failed, while one that the timers have not yet called waits for them, so that
+  non-stop typing saves about every 5 s rather than after every answer; the page's `{clientId, seq}` for a note is
+  keyed by the header's participant ID and the note date; and the save indicator, there and empty from the first
+  render, is put in the page anew, with its first words, as the form mounts, so that a reopened draft's "Draft · saved
+  9:42 am" is the page's own rather than announced as a change (autosave-status.md *Behaviour* 8).
 
 ### Steps
 
@@ -2510,7 +2522,7 @@ lets workers write only today's note, using the Melbourne date.
       17,999 characters and "You have 2,000 characters remaining" at 18,000; and a row opened from Today, then the
       back link or browser Back, focusing that row with the list's position kept, also when the list is fetched again,
       and the `<h1>` when the row has gone.
-- [ ] Start the note at the first change and autosave it (S02.02.02's second, third and seventh criteria, the `PUT`'s
+- [x] Start the note at the first change and autosave it (S02.02.02's second, third and seventh criteria, the `PUT`'s
       matrix row of its sixth, and its autosave items 7, 8 and 10; S02.02.03's third and fourth criteria, and its last
       one's save; design.md §3.3, §3.4 *Autosave*, §4.3's save indicator and *New*, §5.5 items 1 and 2, §5.6; T03's
       hand-off (2)):

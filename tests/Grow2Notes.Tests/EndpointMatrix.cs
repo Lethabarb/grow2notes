@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Http;
@@ -134,6 +135,12 @@ internal static class EndpointMatrix
         // manager does not find the participant (§9.2).
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, OK, OK,
             NotFound, TodaysNoteFormOfTheSeededParticipantOfA),
+
+        // The note's autosave (§6.3), for every signed-in user. Each call is the first save of today's note of a
+        // participant whom its request first adds to A, as a call commits (tests/README.md), so each of A's users
+        // starts a note of their own and gets 201. B's manager does not find the participant (§9.2).
+        new(Put,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, Created,
+            Created, NotFound, StartingTodaysNoteOfAParticipantOfItsOwn),
 
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
@@ -313,13 +320,35 @@ internal static class EndpointMatrix
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
 
-    // A's seeded participant's note form for today in Melbourne, by the app's own clock.
-    private static Task<HttpRequestMessage> TodaysNoteFormOfTheSeededParticipantOfA(EndpointCall call)
+    // A's seeded participant's note form for today.
+    private static Task<HttpRequestMessage> TodaysNoteFormOfTheSeededParticipantOfA(EndpointCall call) =>
+        Task.FromResult(new HttpRequestMessage(call.Method, TodaysDraftPath(call, call.Seeded.A.ParticipantId)));
+
+    // The first save of today's note of a participant whom the request first adds to A, with no goals, as the form
+    // sends it: from a page that has not saved the note before, with the template's lists' version, and nothing ticked
+    // or written yet.
+    private static async Task<HttpRequestMessage> StartingTodaysNoteOfAParticipantOfItsOwn(EndpointCall call)
+    {
+        var participant = await call.Services.AddParticipantAsync(call.Seeded.A);
+        return new HttpRequestMessage(call.Method, TodaysDraftPath(call, participant.Id))
+        {
+            Content = JsonContent.Create(new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = ListsVersion.Of([]),
+                narrative = "",
+                tickedGoalIds = Array.Empty<Guid>(),
+            }),
+        };
+    }
+
+    // The draft's path of the participant's note for today in Melbourne, by the app's own clock.
+    private static string TodaysDraftPath(EndpointCall call, Guid participantId)
     {
         var today = call.Services.GetRequiredService<MelbourneClock>().Today()
             .ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        return Task.FromResult(new HttpRequestMessage(
-            call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}/notes/{today}/draft"));
+        return $"/api/participants/{participantId}/notes/{today}/draft";
     }
 
     // An invite of a worker with a made-up address (A35) that no other call or test uses.

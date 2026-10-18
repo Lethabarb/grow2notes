@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
@@ -19,6 +19,8 @@ import { fullName } from '../participants/participantsQuery.ts';
 import { GuidedNotes } from './GuidedNotes.tsx';
 import { draftQuery, participantQuery, type Draft, type DraftAnswer, type ParticipantHeader } from './noteQueries.ts';
 import styles from './NotePage.module.css';
+import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
+import { useAutosave } from './useAutosave.ts';
 
 /**
  * A participant's note for a day at `/participants/{participantId}/notes/{noteDate}` (note-form.md *Routes*), keyed by
@@ -37,18 +39,31 @@ type NoteProps = { participantId: string; noteDate: string };
  * together, which shows nothing of either until both have loaded, as an empty box or unticked rows could be tapped
  * before the name above them is known, then "Loading note…" after 1 s; or, when either did not load, the fallback
  * `<h1>` "Note" with the failure sentence and Try again; or Page not found in place of the whole screen for a `404`,
- * such as another organisation's participant or a date after today. Nothing is sent but those two requests: opening,
- * scrolling, focusing or tapping into the form saves nothing (design.md §3.3).
+ * such as another organisation's participant or a date after today. Nothing is sent but those two requests until the
+ * first change: opening, scrolling, focusing or tapping into the form saves nothing (design.md §3.3).
  */
 function Note({ participantId, noteDate }: NoteProps) {
   const participant = useQuery(participantQuery(participantId));
   const draft = useQuery(draftQuery(participantId, noteDate));
+  // None until the form mounts and gives the words it opens with.
+  const [indicator, setIndicator] = useState<SaveIndicator>();
 
   return (
     <PageStatus>
       <PageBar sticky>
         <BackLink to="/">{pageName.today}</BackLink>
-        <p id="save-status" role="status" aria-live="polite" aria-atomic="true" className={styles.saveStatus} />
+        {/* A new element as the form mounts, holding its first words, such as "Draft · saved 9:42 am", which a screen
+            reader takes as the page's own rather than announcing a change (autosave-status.md *Behaviour* 8). */}
+        <p
+          key={indicator === undefined ? 'page' : 'form'}
+          id="save-status"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={styles.saveStatus}
+        >
+          {indicator !== undefined && <SaveIndicatorText indicator={indicator} />}
+        </p>
       </PageBar>
       <div className={textBox.column}>
         <LoadRegion
@@ -58,14 +73,26 @@ function Note({ participantId, noteDate }: NoteProps) {
           fallbackHeading={pageName.note}
         >
           {/* Called only once both queries have data. */}
-          {() => <Loaded participant={participant.data!} answer={draft.data!} noteDate={noteDate} />}
+          {() => (
+            <Loaded
+              participant={participant.data!}
+              answer={draft.data!}
+              noteDate={noteDate}
+              onIndicator={setIndicator}
+            />
+          )}
         </LoadRegion>
       </div>
     </PageStatus>
   );
 }
 
-type LoadedProps = { participant: ParticipantHeader; answer: DraftAnswer; noteDate: string };
+type LoadedProps = {
+  participant: ParticipantHeader;
+  answer: DraftAnswer;
+  noteDate: string;
+  onIndicator: (indicator: SaveIndicator) => void;
+};
 
 /**
  * The note once loaded: the identity `<h1>` (note-identity-header.md), which takes the focus left pending for it on
@@ -75,7 +102,7 @@ type LoadedProps = { participant: ParticipantHeader; answer: DraftAnswer; noteDa
  * first loaded, so that nothing fetched later, as after signing in again in place, replaces what is on screen
  * (note-form.md *Autosave*).
  */
-function Loaded({ participant, answer, noteDate }: LoadedProps) {
+function Loaded({ participant, answer, noteDate, onIndicator }: LoadedProps) {
   const me = useMe();
   const [opened] = useState(answer);
   const name = fullName(participant);
@@ -101,22 +128,45 @@ function Loaded({ participant, answer, noteDate }: LoadedProps) {
           })}
         </Notice>
       ) : (
-        <NoteForm givenName={participant.givenName} draft={opened.draft} />
+        <NoteForm
+          participantId={participant.id}
+          noteDate={noteDate}
+          givenName={participant.givenName}
+          draft={opened.draft}
+          onIndicator={onIndicator}
+        />
       )}
     </>
   );
 }
 
+type NoteFormProps = {
+  participantId: string;
+  noteDate: string;
+  givenName: string;
+  draft: Draft;
+  onIndicator: (indicator: SaveIndicator) => void;
+};
+
 /**
  * The note form (note-form.md components 7, 8 and 10): the lists-changed notice's live region, there and empty from
  * the first render, as a screen reader may not announce words written into one added with them; then Goals, its
  * ticks in this page's state, from the draft's; then Guided notes. Until T13 adds "2. Common items", the sections go
- * from 1 to 3, keeping design.md's numbers.
+ * from 1 to 3, keeping design.md's numbers. Each tick and each input is a change that autosave saves, and a field
+ * that loses focus sends one at once (design.md §3.4).
  */
-function NoteForm({ givenName, draft }: { givenName: string; draft: Draft }) {
+function NoteForm({ participantId, noteDate, givenName, draft, onIndicator }: NoteFormProps) {
+  const box = useRef<HTMLTextAreaElement>(null);
   const [ticked, setTicked] = useState(
     () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
   );
+  const autosave = useAutosave({
+    participantId,
+    noteDate,
+    opened: draft,
+    read: () => ({ narrative: box.current!.value, tickedGoalIds: [...ticked] }),
+    onIndicator,
+  });
 
   function toggle(goalId: string, isTicked: boolean) {
     setTicked((current) => {
@@ -129,10 +179,12 @@ function NoteForm({ givenName, draft }: { givenName: string; draft: Draft }) {
 
       return next;
     });
+    autosave.changed();
   }
 
   return (
-    <>
+    // React's onBlur bubbles, as focusout does, so it hears every field of the form.
+    <div onBlur={autosave.flush}>
       <div role="status" />
       <TickListField
         idPrefix="goal"
@@ -144,7 +196,12 @@ function NoteForm({ givenName, draft }: { givenName: string; draft: Draft }) {
         ticked={ticked}
         onToggle={toggle}
       />
-      <GuidedNotes initialText={draft.narrative} prompts={draft.guidePrompts} />
-    </>
+      <GuidedNotes
+        boxRef={box}
+        initialText={draft.narrative}
+        prompts={draft.guidePrompts}
+        onChange={autosave.changed}
+      />
+    </div>
   );
 }

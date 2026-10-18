@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type FormEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { CharacterCount } from '../../components/CharacterCount.tsx';
 import textBox from '../../components/TextBox.module.css';
 import { strings } from '../../copy/strings.ts';
@@ -15,6 +15,10 @@ type GuidedNotesProps = {
   initialText: string;
   /** The organisation's guide prompts, as saved, line breaks and all; `""` for none. */
   prompts: string;
+  /** The box, whose value the form reads as each save is sent (note-form.md component 10). */
+  boxRef: RefObject<HTMLTextAreaElement | null>;
+  /** Each input into the box, a change for autosave. */
+  onChange: () => void;
 };
 
 /**
@@ -25,8 +29,7 @@ type GuidedNotesProps = {
  * scrolls rather than the box. Nothing stops the typing: there is no `maxlength`, and the count shows from 18,000
  * characters, counted as the server counts them.
  */
-export function GuidedNotes({ initialText, prompts }: GuidedNotesProps) {
-  const box = useRef<HTMLTextAreaElement>(null);
+export function GuidedNotes({ initialText, prompts, boxRef, onChange }: GuidedNotesProps) {
   const grow = useRef<HTMLDivElement>(null);
   const [length, setLength] = useState(initialText.length);
   // The box's inputs, after which the count's twin speaks once typing has stopped.
@@ -34,14 +37,15 @@ export function GuidedNotes({ initialText, prompts }: GuidedNotesProps) {
 
   useLayoutEffect(() => {
     // Leaves the browser's own completions out of the record of what happened (D31); React has no prop for it yet.
-    box.current?.setAttribute('writingsuggestions', 'false');
-  }, []);
+    boxRef.current?.setAttribute('writingsuggestions', 'false');
+  }, [boxRef]);
 
   function onInput(event: FormEvent<HTMLTextAreaElement>) {
     const { value } = event.currentTarget;
     grow.current?.setAttribute('data-value', value);
     setLength(value.length);
     setInputs((count) => count + 1);
+    onChange();
   }
 
   return (
@@ -52,7 +56,7 @@ export function GuidedNotes({ initialText, prompts }: GuidedNotesProps) {
       {/* The copies behind the box, from data-prompts and data-value, size it (TextBox.module.css). */}
       <div ref={grow} className={textBox.grow} data-prompts={prompts} data-value={initialText}>
         <textarea
-          ref={box}
+          ref={boxRef}
           id={boxId}
           name="narrative"
           className={textBox.box}

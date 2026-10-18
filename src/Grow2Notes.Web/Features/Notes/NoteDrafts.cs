@@ -1,23 +1,37 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Platform.Audit;
 using Microsoft.EntityFrameworkCore;
 
 namespace Grow2Notes.Web.Features.Notes;
 
 /// <summary>
-/// The handler of a participant's note for a day as its form opens it (design.md §5.5 to §5.7, §6.3), found by its
-/// natural key, the participant and the note date, so that everyone asking for the same participant and day reaches
-/// the same note, as a handler class that takes the <see cref="Actor"/> (mcp-server.md §3.5, convention 1):
-/// <c>GET {base}/draft</c> calls it with <see cref="Actor.InApp"/>.
+/// The handler of a participant's note for a day as its form opens and autosaves it (design.md §5.5 to §5.7, §6.3),
+/// found by its natural key, the participant and the note date, so that everyone asking for the same participant and
+/// day reaches the same note, as a handler class that takes the <see cref="Actor"/> (mcp-server.md §3.5, convention 1):
+/// <c>GET</c> and <c>PUT {base}/draft</c> call it with <see cref="Actor.InApp"/>.
 /// </summary>
 /// <remarks>
-/// It reads the live note alone, a draft or a submitted note, never a discarded draft (§5.5 item 1). The tenant query
-/// filter keeps every query to the tenant's organisation (§5.9 item 2), and reading writes nothing, not even an audit
-/// event (§5.4, A28): the first change creates the note (§3.3).
+/// It reaches the live note alone, a draft or a submitted note, never a discarded draft (§5.5 item 1). The tenant query
+/// filter keeps every query to the tenant's organisation (§5.9 item 2). Reading writes nothing, not even an audit
+/// event (§5.4, A28): the first save creates the note (§3.3), with <c>note.draft_started</c>, and later saves are not
+/// audited (§5.3).
 /// </remarks>
-internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, MelbourneClock clock)
+internal sealed class NoteDrafts(
+    Grow2NotesDbContext db,
+    ITenantContext tenant,
+    MelbourneClock clock,
+    IAuditWriter audit,
+    TimeProvider timeProvider)
 {
+    // The screen sends only the IDs of the goals it shows, so this answers only a request made some other way.
+    private static readonly IReadOnlyDictionary<string, string[]> TickedOutsideTheGoals =
+        new Dictionary<string, string[]>
+        {
+            [nameof(DraftSaveRequest.TickedGoalIds)] = ["Each ticked goal must be one of the note's goals."],
+        };
+
     /// <summary>
     /// The note form for <paramref name="actor"/> on <paramref name="participantId"/>'s note for
     /// <paramref name="noteDate"/>: with no live note, the template of a new note, unless the date is after today in
@@ -27,20 +41,12 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
     public async Task<DraftRead> ReadAsync(
         Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken)
     {
-        if (!await db.Participants.AnyAsync(participant => participant.Id == participantId, cancellationToken))
+        if (!await ParticipantExistsAsync(participantId, cancellationToken))
         {
             return DraftRead.NotFound;
         }
 
-        // Written as the one-live-note index's filter, [Status] IN (0, 1), so that SQL Server reads it there.
-        var note = await (
-                from n in db.Notes.AsNoTracking()
-                where n.ParticipantId == participantId
-                    && n.NoteDate == noteDate
-                    && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted)
-                join author in db.Users on n.AuthorUserId equals author.Id
-                select new { n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, AuthorDisplayName = author.DisplayName })
-            .SingleOrDefaultAsync(cancellationToken);
+        var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
         if (note is null)
         {
             return noteDate > clock.Today()
@@ -48,9 +54,9 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
                 : DraftRead.Of(await TemplateAsync(participantId, cancellationToken));
         }
 
-        if (note.Status == NoteStatus.Draft && note.AuthorUserId != actor.UserId)
+        if (note.StartedByOtherThan(actor) is { } inProgress)
         {
-            return DraftRead.StartedByOther(new(note.AuthorDisplayName, note.CreatedAtUtc));
+            return DraftRead.StartedByOther(inProgress);
         }
 
         var draft = await db.NoteDrafts
@@ -61,15 +67,146 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
             : DraftRead.Of(Saved(draft, await GuidePromptsAsync(cancellationToken)));
     }
 
-    // The participant's active goals in the order of the manager's list (GoalList.InListOrder), unticked, as a new
-    // draft's snapshot will hold them (§5.7), with the lists' version.
+    /// <summary>
+    /// Saves <paramref name="request"/> as <paramref name="actor"/>'s working copy of
+    /// <paramref name="participantId"/>'s note for <paramref name="noteDate"/> (§5.6): with no live note, creates the
+    /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
+    /// <c>note.draft_started</c> (§5.5 item 2); with the actor's own draft, replaces its ticks and text; with anyone
+    /// else's draft, saves nothing, as only its author may save it (§6.3), and says who started it and when. A save
+    /// sent again after its answer was lost finds the actor's own draft, and updates it.
+    /// </summary>
+    /// <returns>
+    /// The time saved; or who started another user's draft; or the refusal of a ticked ID that is not one of the
+    /// note's goals, the template's for a new note and the snapshot's for a draft (§5.7), the ticks a set, so that an
+    /// ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
+    /// </returns>
+    public async Task<DraftSaveResult> SaveAsync(
+        Actor actor,
+        Guid participantId,
+        DateOnly noteDate,
+        DraftSaveRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!await ParticipantExistsAsync(participantId, cancellationToken))
+        {
+            return DraftSaveResult.NotFound;
+        }
+
+        var note = await LiveNoteAsync(participantId, noteDate, cancellationToken);
+        if (note is null)
+        {
+            return await StartAsync(actor, participantId, noteDate, request, cancellationToken);
+        }
+
+        if (note.StartedByOtherThan(actor) is { } inProgress)
+        {
+            return DraftSaveResult.StartedByOther(inProgress);
+        }
+
+        var draft = await db.NoteDrafts
+            .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == actor.UserId, cancellationToken);
+        return draft is null ? DraftSaveResult.NotFound : await UpdateAsync(draft, request, cancellationToken);
+    }
+
+    // The note and the working copy go in one save, and the event in the audit writer's, so the transaction is what
+    // keeps them together: an event that fails to save leaves neither row.
+    private async Task<DraftSaveResult> StartAsync(
+        Actor actor,
+        Guid participantId,
+        DateOnly noteDate,
+        DraftSaveRequest request,
+        CancellationToken cancellationToken)
+    {
+        var goals = await TemplateGoalsAsync(participantId, cancellationToken);
+        var ticked = request.TickedGoalIds.ToHashSet();
+        if (!ticked.IsSubsetOf(goals.Select(goal => goal.Id)))
+        {
+            return DraftSaveResult.Invalid(TickedOutsideTheGoals);
+        }
+
+        var now = Now();
+        var organisationId = tenant.OrganisationId;
+        await db.InTransactionAsync(async ct =>
+        {
+            var note = new Note
+            {
+                OrganisationId = organisationId,
+                ParticipantId = participantId,
+                NoteDate = noteDate,
+                AuthorUserId = actor.UserId,
+                Status = NoteStatus.Draft,
+                CreatedAtUtc = now,
+            };
+            db.Notes.Add(note);
+            db.NoteDrafts.Add(new NoteDraft
+            {
+                NoteId = note.Id,
+                EditorUserId = actor.UserId,
+                OrganisationId = organisationId,
+                Items =
+                [
+                    .. goals.Select(goal =>
+                        new DraftItem(NoteSection.Goal, goal.Id, GroupId: null, goal.Text, ticked.Contains(goal.Id))),
+                ],
+                Narrative = request.Narrative,
+                LastClientId = request.ClientId,
+                LastSeq = request.Seq,
+                CreatedAtUtc = now,
+                UpdatedAtUtc = now,
+            });
+            await db.SaveChangesAsync(ct);
+
+            // IDs alone, as the note row holds its date and author, and a draft has no version number (§5.3).
+            await audit.WriteAsync(
+                organisationId, actor.UserId, AuditEventTypes.Note.DraftStarted, AuditEntityTypes.Note, note.Id,
+                participantId, details: null, ct);
+        }, cancellationToken);
+        return DraftSaveResult.Started(new(now));
+    }
+
+    // The ticks are checked against the snapshot, which keeps the goals' wording as the draft started with it (A3).
+    private async Task<DraftSaveResult> UpdateAsync(
+        NoteDraft draft, DraftSaveRequest request, CancellationToken cancellationToken)
+    {
+        var ticked = request.TickedGoalIds.ToHashSet();
+        if (!ticked.IsSubsetOf(draft.Items.Where(IsGoal).Select(item => item.SourceId)))
+        {
+            return DraftSaveResult.Invalid(TickedOutsideTheGoals);
+        }
+
+        var now = Now();
+        draft.Items =
+        [
+            .. draft.Items.Select(item =>
+                IsGoal(item) ? item with { IsTicked = ticked.Contains(item.SourceId) } : item),
+        ];
+        draft.Narrative = request.Narrative;
+        draft.LastClientId = request.ClientId;
+        draft.LastSeq = request.Seq;
+        draft.UpdatedAtUtc = now;
+        await db.SaveChangesAsync(cancellationToken);
+        return DraftSaveResult.Updated(new(now));
+    }
+
+    private Task<bool> ParticipantExistsAsync(Guid participantId, CancellationToken cancellationToken) =>
+        db.Participants.AnyAsync(participant => participant.Id == participantId, cancellationToken);
+
+    // Written as the one-live-note index's filter, [Status] IN (0, 1), so that SQL Server reads it there.
+    private Task<LiveNote?> LiveNoteAsync(Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
+        (
+            from n in db.Notes.AsNoTracking()
+            where n.ParticipantId == participantId
+                && n.NoteDate == noteDate
+                && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted)
+            join author in db.Users on n.AuthorUserId equals author.Id
+            select new LiveNote(n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName))
+        .SingleOrDefaultAsync(cancellationToken);
+
+    // The template of a new note: the participant's goals as a new draft's snapshot will hold them (§5.7), unticked,
+    // with the lists' version.
     private async Task<DraftForm> TemplateAsync(Guid participantId, CancellationToken cancellationToken)
     {
-        List<DraftFormGoal> goals = await GoalList
-            .InListOrder(db.Goals.AsNoTracking()
-                .Where(goal => goal.ParticipantId == participantId && goal.ArchivedAtUtc == null))
-            .Select(goal => new DraftFormGoal(goal.Id, goal.Text, false))
-            .ToListAsync(cancellationToken);
+        var goals = await TemplateGoalsAsync(participantId, cancellationToken);
         return new(
             BaseVersion: 0,
             IsSaved: false,
@@ -80,6 +217,14 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
             SavedAtUtc: null);
     }
 
+    // The participant's active goals in the order of the manager's list (GoalList.InListOrder), unticked.
+    private Task<List<DraftFormGoal>> TemplateGoalsAsync(Guid participantId, CancellationToken cancellationToken) =>
+        GoalList
+            .InListOrder(db.Goals.AsNoTracking()
+                .Where(goal => goal.ParticipantId == participantId && goal.ArchivedAtUtc == null))
+            .Select(goal => new DraftFormGoal(goal.Id, goal.Text, false))
+            .ToListAsync(cancellationToken);
+
     // The goals of the working copy's snapshot, with the wording it was started with (A3), however the participant's
     // goals have changed since.
     private static DraftForm Saved(NoteDraft draft, string guidePrompts) =>
@@ -88,13 +233,11 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
             IsSaved: true,
             ListsVersion: null,
             guidePrompts,
-            [
-                .. draft.Items
-                    .Where(item => item.Section == NoteSection.Goal)
-                    .Select(item => new DraftFormGoal(item.SourceId, item.Text, item.IsTicked)),
-            ],
+            [.. draft.Items.Where(IsGoal).Select(item => new DraftFormGoal(item.SourceId, item.Text, item.IsTicked))],
             draft.Narrative,
             draft.UpdatedAtUtc);
+
+    private static bool IsGoal(DraftItem item) => item.Section == NoteSection.Goal;
 
     private Task<string> GuidePromptsAsync(CancellationToken cancellationToken) =>
         db.Organisations
@@ -102,4 +245,24 @@ internal sealed class NoteDrafts(Grow2NotesDbContext db, ITenantContext tenant, 
             .Where(organisation => organisation.Id == tenant.OrganisationId)
             .Select(organisation => organisation.GuidePrompts)
             .SingleAsync(cancellationToken);
+
+    // To the millisecond, as the datetime2(3) columns keep it, so that the savedAtUtc answered is the time stored, not
+    // one that SQL Server rounds.
+    private DateTime Now()
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMillisecond));
+    }
+
+    /// <summary>The live note of a participant and day, with its author's display name.</summary>
+    private sealed record LiveNote(
+        Guid Id, NoteStatus Status, Guid AuthorUserId, DateTime CreatedAtUtc, string AuthorDisplayName)
+    {
+        /// <summary>
+        /// Who started the note and when, when it is a draft that another user than <paramref name="actor"/> started,
+        /// which only its author may open or save (§6.3); otherwise <see langword="null"/>.
+        /// </summary>
+        public DraftInProgress? StartedByOtherThan(Actor actor) =>
+            Status == NoteStatus.Draft && AuthorUserId != actor.UserId ? new(AuthorDisplayName, CreatedAtUtc) : null;
+    }
 }

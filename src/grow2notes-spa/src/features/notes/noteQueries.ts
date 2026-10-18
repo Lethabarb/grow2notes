@@ -36,7 +36,7 @@ export type Draft = {
 export type DraftAnswer = { draft: Draft } | { startedBy: StartedBy };
 
 /** `{base}`, the address of a participant's note for a day (design.md §5.5 item 1, §6.3). */
-function noteBase(participantId: string, noteDate: string): string {
+export function noteBase(participantId: string, noteDate: string): string {
   return `/api/participants/${encodeURIComponent(participantId)}/notes/${encodeURIComponent(noteDate)}`;
 }
 

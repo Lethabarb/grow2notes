@@ -13,10 +13,10 @@ namespace Grow2Notes.Tests;
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
 /// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header and note form,
-/// its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation and reactivation
-/// show; so the others show that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a
-/// request that no file, page or API endpoint answers still matches one, and gets a <c>404</c>. The app has no
-/// database here, so they run without Docker: a request with no cookie never reaches one.
+/// a note's save, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation
+/// and reactivation show; so the others show that the page, its files and the health endpoints are
+/// <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches one, and gets a
+/// <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -149,6 +149,30 @@ public sealed class SignedOutTests : IAsyncDisposable
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Empty(response.SetCookies());
         Assert.False(response.Headers.Contains("Clear-Site-Data"));
+    }
+
+    // As Edit user's, with the body of a note's first save: the fallback policy refuses it first, so the endpoint,
+    // which would need the database that is not here, starts no note.
+    [Fact]
+    public async Task A_save_of_a_note_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PutAsJsonAsync(
+            $"{Participant}/notes/2026-10-01/draft",
+            new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = "made-up",
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+            },
+            TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
     }
 
     // As Sign out's, over HTTPS with no antiforgery token: the fallback policy refuses it before the /api group's
