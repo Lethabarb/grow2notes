@@ -359,7 +359,9 @@ DOM order equals visual order everywhere. Sizes and colours are foundations.md t
     follow the `href`. So the back link and browser Back land the same way, with the list's return point.
   - Where a screen can be opened from several places (note screens, the past-day page), the label and `href` come
     from the opened-from memory; after a reload, a pasted URL or a new tab, the route's default (Today for note
-    screens).
+    screens). As built (T11), `useBackTo` (`src/routes/routeChange.ts`) takes each opener's label by its `backKey`: a
+    page name, or the nav item's word where the nav names the destination otherwise, so a note opened from Flagged
+    reads "Flagged", not "Flagged notes".
 
 ### 4. Shell loading and whole-page messages → [empty-loading-error.md](../components/empty-loading-error.md)
 
@@ -609,14 +611,14 @@ which shares a request already in flight, and returns the request's promise. It 
 caller, which has it from `useQueryClient()`, as there is no query client at module level (the app and each test make
 their own). It runs on: start-up; every `location.key` change; window `focus`; `visibilitychange` to visible (through
 the session clock's hold); the start-up message's Try again; and where a screen knows that `/me` has changed: after
-Mark reviewed (review-panel.md), a Submit that flags a note and Save changes (note-form.md), an action on the
-signed-in manager's own user (user-management.md), and Today's list answering for another date than `me.today`
-(today.md). The `['me']` observer (`meQuery`) has `enabled: false`, as one that mounts while `['me']` holds no answer
-would otherwise fetch by itself, and `staleTime: Infinity`, so nothing else triggers it; `fetchQuery` ignores
-`enabled`. So a refresh is always `refreshMe()`, never `invalidateQueries`, which refetches no query whose observers
-are all disabled. A sign-in or a setup puts its `Me` in `['me']` through `setMe()`, which cancels a refresh in flight
-first (sign-in.md *Interactions* 5), as that request went with the cookie from before and its answer could land after
-the new person's. **No timer, no `refetchInterval`, no push** (§6.8). The `QueryClient` default is
+Mark reviewed (review-panel.md), a Submit that flags a note (as built, T11: one whose answer says `ToReview`) and Save
+changes (note-form.md), an action on the signed-in manager's own user (user-management.md), and Today's list answering
+for another date than `me.today` (today.md). The `['me']` observer (`meQuery`) has `enabled: false`, as one that mounts
+while `['me']` holds no answer would otherwise fetch by itself, and `staleTime: Infinity`, so nothing else triggers it;
+`fetchQuery` ignores `enabled`. So a refresh is always `refreshMe()`, never `invalidateQueries`, which refetches no
+query whose observers are all disabled. A sign-in or a setup puts its `Me` in `['me']` through `setMe()`, which cancels
+a refresh in flight first (sign-in.md *Interactions* 5), as that request went with the cookie from before and its answer
+could land after the new person's. **No timer, no `refetchInterval`, no push** (§6.8). The `QueryClient` default is
 `refetchOnWindowFocus: false`, so a draft is never refetched over the text on screen.
 
 **Queries that opt in to `refetchOnWindowFocus: true`** (the complete list; a screen that needs it adds itself here):

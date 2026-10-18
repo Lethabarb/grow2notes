@@ -186,6 +186,8 @@ follows the component spec as written, except where "Conflicts resolved" says ot
   survives forced colours). Other item: link colour, underlined. Equal widths. Never disabled, never sticky, no
   animation. 48 px tall. At 200% text the two items wrap onto two rows rather than scroll sideways.
 - Focus stays on the activated link after switching. No live announcement.
+- As built (T11), not yet: the screen is the `<h1>` and the To review list until T19 adds the view switch and
+  Reviewed, so `/flagged?view=reviewed`, like any `view`, shows To review, with Flagged current.
 
 ### 4. To review list
 
@@ -213,6 +215,12 @@ follows the component spec as written, except where "Conflicts resolved" says ot
 - **No tags** on these rows: the current view link already names the state (`status-tags.md`). No actions inside
   rows, no swipe, no colour-only marking.
 - No Show older: the list is returned whole (6.1).
+- As built (T11): `ChronoList` in its whole mode, each row a `LinkRow` with `look: 'date'`, the link in the link colour,
+  underlined, with no chevron (chronological-list.md *Anatomy* 1); the meta line a `MetaLine` with `statusFirst` false,
+  so no part of it is bold or in the text colour; the Reason and Flag removed lines `LinkRow`'s `extra`, which the
+  link's `::after` covers, so a click on them or on the row's empty side opens the note. The query is `toReviewQuery`
+  (`src/features/flagged`), which keeps its rows for 30 minutes (`gcTime`), as Past notes keeps its pages, so that Back
+  shows them at once, and which the page fetches again on the window's `focus` as well as on `visibilitychange`.
 
 ### 5. Reviewed list
 
@@ -278,6 +286,8 @@ follows the component spec as written, except where "Conflicts resolved" says ot
   `/flagged`. Opened from outside the app (reload, pasted URL), it reads "Today" and goes to Today.
 - Edit replaces the read view with the form, and Save changes or Cancel replace it back, so the entry before is still
   the Flagged list and the label stays "Flagged" (the shell copies the record across each replace).
+- As built (T11): the label is the nav item's word, which `useBackTo` takes beside the page names (app-shell.md
+  component 3a); the route declares `backKey: 'flagged'`. The read view opens without its review panel until T16.
 
 ### 8. Read view and 9. Review panel
 

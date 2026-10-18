@@ -1265,7 +1265,7 @@ When two people edit after submit, each has their own working copy, so autosaves
 
 | Method | Path | Role | Purpose | Request → response |
 |---|---|---|---|---|
-| GET | /api/reviews?status=toReview | Manager | The To review list, oldest first. Reason and time come from the version in `FlaggedVersionNumber`. | → `[{participantId, givenName, familyName, noteDate, authorDisplayName, flagReason, flaggedAtUtc, currentVersionNumber, flagRemovedLater}]` |
+| GET | /api/reviews?status=toReview | Manager | The To review list, oldest first: by the time of the flagged version, then by note ID, so that two flags of the same millisecond keep their order. Reason and time come from the version in `FlaggedVersionNumber`. | → `[{participantId, givenName, familyName, noteDate, authorDisplayName, flagReason, flaggedAtUtc, currentVersionNumber, flagRemovedLater}]`; `400` for a `status` that is missing or unknown |
 | GET | /api/reviews?status=reviewed&before= | Manager | The Reviewed tab, newest first, 30 at a time. | → `{items: [{participantId, givenName, familyName, noteDate, authorDisplayName, flagReason, reviewedBy, reviewedAtUtc, comment}], hasMore}` |
 | POST | {base}/reviews | Manager | Mark Reviewed. `versionNumber` must be the current version, so the manager has seen what is current. | `{versionNumber, comment?}` → `201 {reviewedAtUtc}`; `409 review.not_current` |
 

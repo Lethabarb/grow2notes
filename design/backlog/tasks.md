@@ -3697,7 +3697,7 @@ the reason and when it was flagged. Only submitted flags count.
       link "Flagged", which goes back one entry to `/flagged`, the rows shown at once from memory and focus back on the
       row opened; the same read view as from Today but for the label; after a reload, "Today"; `history.state` holding
       no back object; and no `aria-current` in the nav on the note.
-- [ ] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
+- [x] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
       `GET /api/reviews?status=toReview` in the browser from `notesStore`'s notes, whose Submit now sets and answers
       `flagStatus`, described in tests/README.md; and a new `flagged.spec.ts`. Signed in for real at 375 px, on the
       app's own answers: a manager adds a participant and invites a worker and a second manager, each set up on a device
@@ -3975,6 +3975,13 @@ or changes its reason sends the note back to To review; removing the tick never 
 - From T09 (19 October 2026): `GET {base}` gains a manager's `flagStatus` and `reviews`. A manager's Past notes rows
   carry `flagStatus` already, which `PastNote` (pastNotesQuery.ts) leaves out until this task reads it for the To review
   and Reviewed kinds of `Tag` (participant-notes.md item 10).
+- From T11 (19 October 2026): a To review row opens the read view with the back link "Flagged" but without design.md
+  §4.6 item 3's review panel, its comment and Mark reviewed, which are this task's (S03.02.01). So is flagged.md
+  component 7's second bullet, the label staying "Flagged" across Edit, Save changes and Cancel, as it needs both T11
+  and T14's Edit; the shell already copies the opener's record across a replace. After Mark reviewed and after Save
+  changes, `['reviews']` is fetched again and `refreshMe()` called, so that To review and the badge lose or gain the
+  note. `FlagRulesTests` holds version 1's two rows, from `None`; this task adds versions 2 and later from each start,
+  and `notesStore`'s `firstFlagReason` (tests/e2e) stands in for a version 2 until Save changes saves one.
 
 ### Steps
 
@@ -4065,6 +4072,9 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   notes in its action row, and the Past-day note kind of `Tag`; the form's back link gains "Participant" through
   `useBackTo`. The `201` of `POST {base}/versions` names no `Location`, as a version's own address, a manager's, comes
   with this task.
+- From T11 (19 October 2026): the version rows reuse what T11 built for To review, with its tests: `ChronoList`'s
+  whole mode, with `older` left out, and `MetaLine` with no status word (`statusFirst` false), as only version 1's meta
+  line starts with one (status-tags.md *Where it's used*).
 
 ### Steps
 
@@ -4108,6 +4118,14 @@ each screen change or window focus with no polling, and the badge and the (n) bo
 - Reuses T02's focus and scroll map.
 - From T09 (19 October 2026): the paged list with Show older is `ChronoList` (src/components), built in its paged mode
   with its tests; the Reviewed list reuses it.
+- From T11 (19 October 2026): `/flagged` is the `<h1>` and the To review list (`src/features/flagged`,
+  `toReviewQuery` on `['reviews', 'toReview']`), with no view switch, so `/flagged?view=reviewed` shows To review until
+  this task adds the switch, "To review (n)" and Reviewed (S03.03.02). The Reviewed rows reuse `LinkRow`'s plain lines
+  after its description (`extra`) for their Reason and Comment lines, and `MetaLine` with no status word
+  (`statusFirst` false) for "{author} · reviewed by …". Left here, each with a dated Note on its story: the badge half
+  of flagged.md *To review list*'s last bullet (S03.03.03); *The note*'s "either Flagged list", from Reviewed
+  (S03.03.02); and flagged.md *Loading and errors* and *Back and place* (S03.03.05), as T11 wires the region with its
+  words and declares the route's return point (`returnFocus: { fallback: 'sameIndex' }`, `backKey: 'flagged'`).
 
 ### Steps
 

@@ -4,7 +4,9 @@ import { everyNote, serveCommonItems } from './commonItems.ts';
 import { expect, test } from './fixtures.ts';
 import { savedPrompts, servePrompts } from './guidePrompts.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
+import { notesStore } from './notes.ts';
 import { participants, serveParticipants } from './participants.ts';
+import { serveReviews } from './reviews.ts';
 import { people, serveUsers } from './users.ts';
 
 // The shell of the published app, signed in as a made-up worker and manager, whose GET /api/auth/me the tests answer
@@ -214,7 +216,7 @@ test('the walks mark the nav, name no one in titles, and keep no app state in hi
   // The To review list's, the participants', the common item groups', the guide prompts' and the Users list's
   // requests, answered in the browser with no flags and made-up people, groups and prompts, as no made-up manager has a
   // session.
-  await page.route('**/api/reviews?status=toReview', (route) => route.fulfill({ json: [] }));
+  await serveReviews(page, notesStore({ today: manager.today, participants }));
   await serveParticipants(page, participants);
   await serveCommonItems(page, [everyNote]);
   await servePrompts(page, savedPrompts);

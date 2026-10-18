@@ -860,7 +860,10 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
    (`status-messages.md`).
 
 As built (T09): step 2 removes `['today']` alone, as Today has no drafts section until T12, which removes
-`['me', 'drafts']` too, and the `201` has no `flagStatus` until T11, which adds it and the `refreshMe()` after it.
+`['me', 'drafts']` too. As built (T11): the `201`, and a retry's `200`, carry `flagStatus` to every caller, the retry's
+as the note stands now, so "when the `201` carries a `flagStatus`" is read as when it says `ToReview`; the
+`refreshMe()` then shares its request with the shell's own refresh on the move to Today, and a failure of it leaves
+`me` as it was.
 
 ### Edit mode: Save changes and Cancel
 

@@ -202,7 +202,9 @@ the Flagged kind alone (T14 adds Edited, T16 To review and Reviewed, and T18 Pas
 browser draws its border in the text colour there. The meta line is `MetaLine` in `src/components/MetaLine.tsx`,
 through which Today's status line and Past notes' rows render: the status word bold, each part, with the dot after it,
 an inline-block that wraps inside itself only when it is longer than the line, joined to the next by `Sep`, then each
-tag after a `Pause`, so that a row's description reads "Submitted, Alex P., Flagged".
+tag after a `Pause`, so that a row's description reads "Submitted, Alex P., Flagged". `MetaLine` takes `statusFirst`
+(T11), true by default; false, for a line with no status word, renders every part secondary and none bold, as a To
+review row's "Priya Nair · flagged 4:42 pm", which T19's Reviewed rows and T18's later versions reuse.
 
 ```ts
 // src/components/status/statusWords.ts — the only place these words and tones live
@@ -332,6 +334,8 @@ function TodayRow({ p, href }: { p: TodayParticipant; href: string }) {
 **Participant notes history, list (4.4)**
 - Meta line: `Submitted · Alex P.` then the tags in order, for example `[Flagged] [To review] [Edited]`. A Draft row shows `Draft · Alex P.` and never a tag.
 - Workers never get To review or Reviewed, because the API doesn't send `flagStatus` to them.
+- Submit's answer (`POST {base}/versions`) carries `flagStatus` to every caller, a worker included (T11); the form reads
+  it only to refresh `me` after a flag, and shows no tag from it.
 - **Show older** loads more rows below. New rows use the same component and need no announcement beyond the button's own behaviour.
 
 **Read view (4.4)**

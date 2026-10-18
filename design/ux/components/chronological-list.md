@@ -274,6 +274,17 @@ as the session flow has it. Past notes' query is `pastNotesQuery` (`src/features
 read under `['pastNotes', participantId, 'participant']` with the pages; a push or a replace drops both as the page
 mounts, and a pop keeps both.
 
+**Built** (T11, for To review): the whole mode, `ChronoList` with `older` left out, which T18's version history
+reuses: the `<ol>` of the rows in the order given, or the empty sentence with no list, and no Show older and no status
+line of its own, as the screen's `LoadRegion` has the loading and failure lines. `LinkRow` gained `extra`, plain lines
+after its description, each a `<p>` in reading order, outside the link's `aria-describedby` and inside the row, so
+that the link's `::after` covers them too: To review's "Reason: …" and "Flag removed in a later edit", and T19's
+Reviewed rows' Reason and Comment. A To review row's link holds the full name and, after a visually hidden comma, the
+note date in a `<time>` on a line of its own, with `look: 'date'`. To review's query is `toReviewQuery`
+(`src/features/flagged`): a plain `useQuery` on `['reviews', 'toReview']`, `staleTime: 0`, `refetchOnWindowFocus: true`
+and `gcTime` 30 minutes, which the page fetches again on the window's `focus` too, as TanStack Query 5 fetches on
+`visibilitychange` alone.
+
 **Data: one infinite query per paged list, a plain query per whole list.**
 
 ```ts
