@@ -4241,7 +4241,7 @@ manager can read it.
 
 ### Steps
 
-- [ ] Discard on the server, one endpoint for the writer and a manager (S02.02.08's four criteria; S02.04.03's second
+- [x] Discard on the server, one endpoint for the writer and a manager (S02.02.08's four criteria; S02.04.03's second
       criterion's refusal and its third; design.md §3.4 *Discard*, §3.7's deactivated user's drafts, §3.8, §3.9, §5.5
       item 5, §5.8 *Discard*, §6.3 `POST {base}/discard`, §6.7's Discard row and §14 M2's "after a discard, a new note
       can"): `POST {base}/discard` in `Features/Notes`, its handler taking the `Actor` as `NoteDrafts` does, in one

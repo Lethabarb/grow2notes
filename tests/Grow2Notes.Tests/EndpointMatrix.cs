@@ -168,6 +168,12 @@ internal static class EndpointMatrix
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
             Created, Conflict, NotFound, SubmittingADraftOfTheWorkerOfA),
 
+        // Discard draft (§6.3), for every signed-in user. Each call discards a draft that A's worker started for today,
+        // of a participant whom its request first adds to A, as a call commits (tests/README.md), so A's worker, its
+        // author, and A's manager each get 204 (§3.4). B's manager does not find the participant (§9.2).
+        new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/discard", Unauthorized,
+            NoContent, NoContent, NotFound, DiscardingADraftOfTheWorkerOfA),
+
         // The To review list (§6.4), outside /api/admin with the Manager policy of its own, so for managers alone. The
         // seeded organisations have no flagged note, so each call first flags one in A, and A's manager's list holds
         // it and B's manager's does not (§5.9 item 7); reading writes nothing (A28).
@@ -450,6 +456,21 @@ internal static class EndpointMatrix
         };
         request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
         return request;
+    }
+
+    // Discard draft of today's note of a participant whom the request first adds to A, a draft of A's worker's, as its
+    // first save leaves it. The draft's start time is made up (A35).
+    private static async Task<HttpRequestMessage> DiscardingADraftOfTheWorkerOfA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today();
+        await call.Services.AddDraftAsync(
+            a, new(participant.Id, today, a.WorkerId, new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc)));
+        return new HttpRequestMessage(
+            call.Method,
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/discard"));
     }
 
     // The To review list, asked for once the request has added to A a participant of its own, whom its FlaggedInA
