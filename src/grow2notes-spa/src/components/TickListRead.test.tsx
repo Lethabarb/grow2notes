@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import styles from './TickList.module.css';
-import { TickListRead, type TickedItem } from './TickListRead.tsx';
+import { TickListRead, TickRowRead, type TickedItem } from './TickListRead.tsx';
 
 // note-form.md's made-up goals, as a submitted version holds them, with one of A6's 200 characters, unbroken.
 const breakfast = { text: 'Makes own breakfast', isTicked: true };
@@ -61,5 +61,24 @@ describe('TickListRead', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('1. Goals');
     expect(screen.getByText('No goals set').tagName).toBe('P');
     expect(screen.queryByRole('list')).toBeNull();
+  });
+});
+
+// A draft's flag as a manager reads it (participant-notes.md *Someone else's draft, manager*).
+describe('TickRowRead', () => {
+  it.each([
+    { isTicked: true, read: 'Flag for manager, ticked', ticks: 1 },
+    { isTicked: false, read: 'Flag for manager, not ticked', ticks: 0 },
+  ])('is one line, read as its wording, then "$read", with no list or control', ({ isTicked, read, ticks }) => {
+    const { container } = render(<TickRowRead text="Flag for manager" isTicked={isTicked} />);
+
+    const row = container.firstElementChild!;
+    expect(row.tagName).toBe('P');
+    expect(row).toHaveClass(styles.readItem, styles.readRow);
+    expect(row.textContent).toBe(read);
+    expect(row.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(row.querySelectorAll('svg path')).toHaveLength(ticks);
+    expect(screen.queryByRole('list')).toBeNull();
+    expect(container.querySelector('input, button, [tabindex], [aria-checked], [aria-readonly]')).toBeNull();
   });
 });

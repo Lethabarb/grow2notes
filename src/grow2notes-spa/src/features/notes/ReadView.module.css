@@ -29,3 +29,8 @@
   padding-block-start: calc(var(--section-gap) / 2);
   border-block-start: var(--border-divider) solid var(--colour-divider);
 }
+
+/* "Nothing written yet." in place of a draft's empty text (component 7), with no margin that the text has not. */
+.empty {
+  margin: 0;
+}

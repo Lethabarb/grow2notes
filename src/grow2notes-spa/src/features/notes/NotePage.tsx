@@ -7,7 +7,6 @@ import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
-import { Notice } from '../../components/Notice.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
@@ -23,12 +22,14 @@ import {
   noteQuery,
   participantQuery,
   type DraftAnswer,
+  type NoteAnswer,
   type ParticipantHeader,
 } from './noteQueries.ts';
 import { NoteForm, type NoteFormHandle } from './NoteForm.tsx';
 import styles from './NotePage.module.css';
 import { ReadView } from './ReadView.tsx';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
+import { SomeoneElsesDraft } from './SomeoneElsesDraft.tsx';
 import type { DeadEnd } from './useAutosave.ts';
 
 /**
@@ -109,6 +110,7 @@ function Note({ participantId, noteDate }: NoteProps) {
               <Loaded
                 formRef={form}
                 participant={participant.data!}
+                note={note.data ?? null}
                 answer={draft.data!}
                 noteDate={noteDate}
                 indicator={indicator}
@@ -257,6 +259,8 @@ type LoadedProps = {
   /** The form's, for the takeover banner in the top bar. */
   formRef: Ref<NoteFormHandle>;
   participant: ParticipantHeader;
+  /** What `GET {base}` found, which holds another user's draft's working copy for a manager. */
+  note: NoteAnswer;
   answer: DraftAnswer;
   noteDate: string;
   /** What the save indicator says, none until the form first says it. */
@@ -270,13 +274,25 @@ type LoadedProps = {
 
 /**
  * A note that is not submitted, once loaded: the form, which puts its error summary above the `<h1>`, or, for another
- * user's draft, the `<h1>` and who started it and when, in a notice, and no form (note-form.md *Loading and load
- * errors*), worded for today's note, or for an earlier day's, as the first save's dead end words it too. It keeps the
- * note as it first loaded, so that nothing fetched later, as after signing in again in place, replaces what is on
- * screen (note-form.md *Autosave*).
+ * user's draft, which the form's read refuses, the `<h1>` and who started it and when, worded for today's note, or
+ * for an earlier day's, as the first save's dead end words it too, and no form (note-form.md *Loading and load
+ * errors*), with the draft read-only for a manager, from `GET {base}`'s working copy. A note started between the two
+ * reads has none, and shows as it does to a worker. It keeps the note as it first loaded, so that nothing fetched
+ * later, as after signing in again in place, replaces what is on screen (note-form.md *Autosave*).
  */
-function Loaded({ formRef, participant, answer, noteDate, indicator, deadEnd, onIndicator, onDeadEnd }: LoadedProps) {
+function Loaded({
+  formRef,
+  participant,
+  note,
+  answer,
+  noteDate,
+  indicator,
+  deadEnd,
+  onIndicator,
+  onDeadEnd,
+}: LoadedProps) {
   const me = useMe();
+  const [found] = useState(note);
   const [opened] = useState(answer);
   const name = fullName(participant);
   const date = parseDateOnly(noteDate);
@@ -306,10 +322,15 @@ function Loaded({ formRef, participant, answer, noteDate, indicator, deadEnd, on
   const heading = <NoteHeading name={name} noteDate={noteDate} />;
 
   return 'startedBy' in opened ? (
-    <>
-      {heading}
-      <Notice>{startedBySentence(opened.startedBy)}</Notice>
-    </>
+    <SomeoneElsesDraft
+      heading={heading}
+      participantId={participant.id}
+      noteDate={noteDate}
+      name={name}
+      startedBy={opened.startedBy}
+      sentence={startedBySentence(opened.startedBy)}
+      content={found?.status === 'Draft' ? found.current : undefined}
+    />
   ) : (
     <NoteForm
       ref={formRef}

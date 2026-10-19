@@ -403,8 +403,9 @@ export const strings = {
    * dated `me.today` and for any other, before the name on its own line; its flag line, from the values that Submit
    * sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not submitted: no
    * connection. Your draft is saved. Try again." (microcopy.md §9). Then More actions, the disclosure under Submit
-   * note, and Discard draft in its panel (component 13); and the Discard dialog's line that always ends its body, and
-   * its status line once the request has taken 1 s (component 15, confirm-dialog.md's dialog 2).
+   * note, and Discard draft in its panel (component 13), as on a manager's read-only draft (participant-notes.md
+   * component 9); and the Discard dialog's line that always ends its body, and its status line once the request has
+   * taken 1 s (component 15, confirm-dialog.md's dialog 2).
    */
   note: {
     loading: 'Loading note…',
@@ -437,9 +438,10 @@ export const strings = {
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
    * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals", the words for a version with no
-   * goals, each as the daily report has them (design.md §11.3).
+   * goals, each as the daily report has them (design.md §11.3); and, under "3. Guided notes", the words for a draft
+   * with no text yet, which a manager reads (*Someone else's draft, manager*).
    */
-  readView: { submitted: 'Submitted', noGoals: 'No goals set' },
+  readView: { submitted: 'Submitted', noGoals: 'No goals set', nothingWrittenYet: 'Nothing written yet.' },
   /**
    * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the
    * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).

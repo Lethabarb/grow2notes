@@ -15,7 +15,15 @@ import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts'
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
-import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
+import type {
+  Draft,
+  DraftGoal,
+  DraftNote,
+  DraftRead,
+  NoteAnswer,
+  ParticipantHeader,
+  SubmittedNote,
+} from './noteQueries.ts';
 import notePage from './NotePage.module.css';
 import readView from './ReadView.module.css';
 
@@ -218,8 +226,23 @@ function freshParticipant(): ParticipantHeader {
 /** `GET {base}`'s `404` for no live note, which the page opens the form's read for, as it does for a draft. */
 const noNote = problem(404);
 
-/** `GET {base}`'s answer for a draft, whose form, or who started it, the form's own read gives. */
-const aDraft = json({ status: 'Draft' } satisfies NoteAnswer);
+/** `GET {base}`'s answer for the worker's own draft, started at 9:05 am, whose form the form's own read gives. */
+const aDraft = json({
+  status: 'Draft',
+  authorDisplayName: 'Casey Nguyen',
+  startedAtUtc: '2026-09-30T23:05:00Z',
+} satisfies NoteAnswer);
+
+/**
+ * Answers Jane's header and Alex P.'s draft of her note for `noteDate`, started at `startedAtUtc`: `GET {base}` with
+ * its header, and with `current`, the working copy that a manager alone gets, if given; and the form's read refused,
+ * as only its author may open it.
+ */
+function serveAlexsDraft(startedAtUtc: string, noteDate = '2026-10-01', current?: DraftRead) {
+  serveNote(jane, startedBy(startedAtUtc), noteDate);
+  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc };
+  serve(paths(jane, noteDate).note, json(current === undefined ? header : { ...header, current }));
+}
 
 /**
  * Answers `participant`'s header, their note for `noteDate` as having none yet, which opens the form's read for a
@@ -822,11 +845,83 @@ describe('The note form when it did not load', () => {
   });
 });
 
+// Someone else's draft at the shared note address (design.md §4.2, §4.4; participant-notes.md view C, items 27 and 28,
+// *Someone else's draft, worker*, *Someone else's draft, manager* and *Discard dialog*, and *Focus order*).
+
+/** Alex P.'s working copy of Jane's note, as a manager reads it: Breakfast and Sister ticked, flagged with a reason. */
+function alexsWorkingCopy(change: Partial<DraftRead> = {}): DraftRead {
+  return {
+    narrative: 'Jane made toast.\nThen a walk to the shops.',
+    goals: [
+      { text: breakfast.text, isTicked: true },
+      { text: bus.text, isTicked: false },
+      { text: sister.text, isTicked: true },
+    ],
+    isFlagged: true,
+    flagReason: 'Mentioned pain in her left knee\nafter the walk.',
+    ...change,
+  };
+}
+
+type AlexsDraftOptions = {
+  noteDate?: string;
+  /** 9:14 am in Melbourne on 1 October unless given. */
+  startedAtUtc?: string;
+  /** How `POST {base}/discard` is answered. */
+  discard?: Answer;
+};
+
+/**
+ * Opens Alex P.'s draft of Jane's note for `noteDate` from Today, as `me`, `GET {base}` holding `current` if it is
+ * given, as for a manager, and gives the router and the query client.
+ */
+async function openAlexsDraft(
+  me: Me,
+  current?: DraftRead,
+  { noteDate = '2026-10-01', startedAtUtc = '2026-09-30T23:14:00Z', discard = discarded }: AlexsDraftOptions = {},
+) {
+  serveAlexsDraft(startedAtUtc, noteDate, current);
+  answers.set(`POST ${paths(jane, noteDate).discard}`, discard);
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
+  const opened = renderApp('/', me);
+  await settle();
+  await act(() => opened.router.navigate(paths(jane, noteDate).page));
+  await settle();
+  return opened;
+}
+
+/** The sentence that says who started the draft and when. */
+function startedSentence(): HTMLElement {
+  return within(main()).getByText(/started/);
+}
+
+/** A manager's Discard draft, on someone else's draft. */
+function managersDiscard(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Discard draft' });
+}
+
+/** The read-only flag row of a draft that a manager reads. */
+function flagRow(): HTMLElement {
+  const row = main().querySelector<HTMLElement>(`p.${tickList.readRow}`);
+  if (row === null) {
+    throw new Error('The page has no read-only flag row.');
+  }
+
+  return row;
+}
+
+/** The elements that Tab stops on in the top bar and `<main>`, in the document's order. */
+function tabStops(): HTMLElement[] {
+  const focusable = 'a[href], button, input, select, textarea, [tabindex]';
+  return [pageBar(), main()]
+    .flatMap((part) => [...part.querySelectorAll<HTMLElement>(focusable)])
+    .filter((element) => element.tabIndex >= 0 && element.closest('[hidden]') === null);
+}
+
 describe("Someone else's draft", () => {
   it("says who started today's note and when, focusing the <h1>, with no form", async () => {
     // 9:14 am in Melbourne on 1 October.
-    serveNote(jane, startedBy('2026-09-30T23:14:00Z'));
-    serve(paths(jane).note, aDraft);
+    serveAlexsDraft('2026-09-30T23:14:00Z');
     await openFromToday();
 
     expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
@@ -844,22 +939,290 @@ describe("Someone else's draft", () => {
 
   it('says who started the note for an earlier day, and when, focusing the <h1>, with no form', async () => {
     // 9:14 am in Melbourne on 30 September.
-    serveNote(jane, startedBy('2026-09-29T23:14:00Z'), '2026-09-30');
-    serve(paths(jane, '2026-09-30').note, aDraft);
-    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
-    const { router } = renderApp('/');
-    await settle();
-
-    await act(() => router.navigate(paths(jane, '2026-09-30').page));
-    await settle();
+    await openAlexsDraft(worker, undefined, { noteDate: '2026-09-30', startedAtUtc: '2026-09-29T23:14:00Z' });
 
     expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Wednesday 30${nbsp}September 2026`);
     expect(pageHeading()).toHaveFocus();
-    expect(within(main()).getByText(/started/).textContent).toBe(
+    expect(startedSentence().textContent).toBe(
       `Alex P. started the note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
     );
     expect(within(main()).queryByRole('checkbox')).toBeNull();
     expect(within(main()).queryByRole('textbox')).toBeNull();
+  });
+
+  it('gives a worker the <h1>, the sentence and Past notes alone: no Discard draft, text, goal or flag', async () => {
+    await openAlexsDraft(worker);
+
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
+    expect(follows(link, startedSentence())).toBe(true);
+    expect(within(main()).getAllByRole('link').map((each) => each.textContent)).toEqual(['Past notes']);
+    expect(within(main()).queryAllByRole('button')).toEqual([]);
+    expect(within(main()).queryAllByRole('heading', { level: 2 })).toEqual([]);
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(main().querySelector(`form, input, textarea, .${tickList.icon}`)).toBeNull();
+    expect(main()).not.toHaveTextContent(/Discard|Goals|Guided notes|Flag|Reason|toast|Nothing written/);
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Past notes']);
+  });
+});
+
+describe("Someone else's draft, read by a manager", () => {
+  it('shows the sentence, Discard draft, Past notes, the goals ticked in order, the text, then the flag', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(pageHeading()).toHaveFocus();
+    expect(startedSentence().textContent).toBe(
+      `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    );
+    const discard = managersDiscard();
+    expect(discard).toHaveAttribute('type', 'button');
+    expect(discard).toHaveClass(buttonStyles.secondary);
+    expect(follows(discard, startedSentence())).toBe(true);
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(follows(link, discard)).toBe(true);
+    const goals = section('1. Goals');
+    expect(follows(goals, link)).toBe(true);
+    expect(within(goals).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Makes own breakfast, ticked',
+      'Catches bus to day program, not ticked',
+      'Phones her sister, ticked',
+    ]);
+    expect(narrative().textContent).toBe('Jane made toast.\nThen a walk to the shops.');
+    expect(follows(narrative(), goals)).toBe(true);
+    expect(within(main()).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      '1. Goals',
+      '3. Guided notes',
+    ]);
+    expect(main().querySelector('form, input, textarea')).toBeNull();
+  });
+
+  it('shows a ticked flag as the read-only "Flag for manager" row with its reason, never the Flagged tag', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    const row = flagRow();
+    expect(row.textContent).toBe('Flag for manager, ticked');
+    expect(shown(row)).toBe('Flag for manager');
+    expect(row.querySelector('svg path')).not.toBeNull();
+    expect(row.closest(`.${readView.section}`)).not.toBeNull();
+    expect(follows(row, narrative())).toBe(true);
+    const reason = within(main()).getByText(/^Reason:/);
+    expect(reason.textContent).toBe('Reason: Mentioned pain in her left knee\nafter the walk.');
+    expect(reason).toHaveClass(readView.written);
+    expect(follows(reason, row)).toBe(true);
+    expect(main().querySelector(`.${tagStyles.tag}`)).toBeNull();
+    expect(main()).not.toHaveTextContent('Flagged');
+    expect(within(main()).queryByRole('checkbox')).toBeNull();
+  });
+
+  it('shows an unflagged draft\'s flag row as not ticked, with no Reason', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy({ isFlagged: false, flagReason: null }));
+
+    expect(flagRow().textContent).toBe('Flag for manager, not ticked');
+    expect(flagRow().querySelector('svg path')).toBeNull();
+    expect(main()).not.toHaveTextContent(/Reason|Flagged/);
+  });
+
+  it.each(['', ' \n '])('says "Nothing written yet." under Guided notes for a text of %j', async (text) => {
+    await openAlexsDraft(manager, alexsWorkingCopy({ narrative: text }));
+
+    const guided = section('3. Guided notes');
+    expect(within(guided).getByText('Nothing written yet.').tagName).toBe('P');
+    expect(guided.querySelector(`div.${readView.written}`)).toBeNull();
+  });
+
+  it('shows the sentence and Past notes alone for a draft started between the note and form reads', async () => {
+    serveNote(jane, startedBy('2026-09-30T23:14:00Z'));
+    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
+    const { router } = renderApp('/', manager);
+    await settle();
+
+    await act(() => router.navigate(paths(jane).page));
+    await settle();
+
+    expect(startedSentence()).toBeInTheDocument();
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Past notes']);
+    expect(within(main()).queryAllByRole('heading', { level: 2 })).toEqual([]);
+  });
+
+  it('has the back link, Discard draft and Past notes as its Tab stops, in that order', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Discard draft', 'Past notes']);
+  });
+
+  it('is "Grow2Notes – Note", with no name or text in the address or history.state', async () => {
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(document.title).toBe('Grow2Notes – Note');
+    const kept = /Jane|Citizen|Alex|toast|knee/;
+    expect(JSON.stringify(router.state.location)).not.toMatch(kept);
+    expect(JSON.stringify(window.history.state)).not.toMatch(kept);
+    expect(window.location.href).not.toMatch(kept);
+  });
+});
+
+describe("A manager's Discard of someone else's draft", () => {
+  it("opens the dialog on its title, saying who started today's draft and at what time", async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    await press(managersDiscard());
+
+    const dialog = openConfirmation();
+    expect(dialog).toHaveAccessibleName('Discard the draft note for Jane Citizen?');
+    expect(within(dialog).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(dialog).toHaveAccessibleDescription(
+      `Alex P. started it at 9:14${nbsp}am. Nobody will be able to open this draft again.`,
+    );
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    expect(dialogButton('Discard draft for Jane Citizen')).toHaveClass(buttonStyles.warning);
+    expect(dialogButton('Go back')).toHaveClass(buttonStyles.secondary);
+    expect(discards()).toEqual([]);
+  });
+
+  it("says an earlier day's date first, then who started it and at what time", async () => {
+    // 9:14 am in Melbourne on 30 September.
+    await openAlexsDraft(manager, alexsWorkingCopy(), {
+      noteDate: '2026-09-30',
+      startedAtUtc: '2026-09-29T23:14:00Z',
+    });
+
+    await press(managersDiscard());
+
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `This draft is for Wednesday 30${nbsp}September 2026. Alex P. started it at 9:14${nbsp}am. `
+        + 'Nobody will be able to open this draft again.',
+    );
+  });
+
+  it.each([
+    { how: 'Go back', close: () => press(dialogButton('Go back')) },
+    {
+      how: 'a plain close(), as Escape and Back give',
+      close: async () => {
+        openConfirmation().closest('dialog')!.close();
+        await settle();
+      },
+    },
+  ])('closes on $how with nothing sent, focus back on Discard draft', async ({ close }) => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+    await press(managersDiscard());
+
+    await close();
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(managersDiscard()).toHaveFocus();
+    expect(discards()).toEqual([]);
+  });
+
+  it("puts Today in the draft's place, its <h1> focused, with its lists fetched afresh", async () => {
+    const drafted: TodayNote = {
+      authorDisplayName: 'Alex P.',
+      startedAtUtc: '2026-09-30T23:14:00Z',
+      isFlagged: false,
+      status: 'Draft',
+      isMine: false,
+    };
+    serveAlexsDraft('2026-09-30T23:14:00Z', '2026-10-01', alexsWorkingCopy());
+    answers.set(`POST ${paths(jane).discard}`, discarded);
+    const row = onToday(jane);
+    serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
+    const { router, client } = renderApp('/', manager);
+    await settle();
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    // Kept from earlier visits: the manager's unfinished drafts, and the participant's Past notes.
+    client.setQueryData(['me', 'drafts'], []);
+    client.setQueryData(['pastNotes', jane.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
+    await press(managersDiscard());
+    const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    serve(todayPath, fresh.answer);
+
+    await confirmDiscard();
+    await settle();
+
+    expect(discards()).toEqual([`POST ${paths(jane).discard}`]);
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(document.title).toBe('Grow2Notes – Today');
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    expect(client.getQueryState(['pastNotes', jane.id])?.isInvalidated).toBe(true);
+    fresh.release();
+    await settle();
+    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(main()).not.toHaveTextContent(/Draft|Alex P\./);
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('takes its confirming button away for a draft no longer a draft, Go back then going to Today', async () => {
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy(), {
+      discard: problem(409, { code: 'note.not_a_draft' }),
+    });
+    await press(managersDiscard());
+
+    await confirmDiscard();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(
+      'This draft has already been submitted or discarded.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(discards()).toHaveLength(1);
+  });
+
+  it('says why above Discard draft when its request fails after a browser closed the dialog', async () => {
+    const post = held(noConnection);
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy(), { discard: post.answer });
+    const alert = managersDiscard().previousElementSibling;
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(alert).toBeEmptyDOMElement();
+    await press(managersDiscard());
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+
+    post.release();
+    await settle();
+
+    expect(alert?.textContent).toBe('Not discarded: no connection. Try again.');
+    expect(managersDiscard()).toHaveFocus();
+    expect(router.state.location.pathname).toBe(paths(jane).page);
+
+    await press(managersDiscard());
+
+    expect(alert).toBeEmptyDOMElement();
+    expect(openConfirmation()).toBeInTheDocument();
+  });
+
+  it('closes as Go back as the 28-minute warning opens, nothing sent, focus on Discard draft after Stay', async () => {
+    const { opened } = focusLikeABrowser();
+    await openAlexsDraft(manager, alexsWorkingCopy());
+    await press(managersDiscard());
+    const dialog = openConfirmation();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(opened.mock.contexts.at(-1)).toBe(warning);
+    expect(dialog).not.toHaveAttribute('open');
+    expect(confirmation()).toBeNull();
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(managersDiscard()).toHaveFocus();
+    expect(discards()).toEqual([]);
   });
 });
 

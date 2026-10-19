@@ -4219,6 +4219,11 @@ manager can read it.
     back. So note-form.md *Session*'s "focus returns to **Submit note**" is read as the Submit confirmation's alone,
     as session-timeout.md *The warning* step 3's "the element focused before" and the shared `closeOpenDialogs()` have
     it, which step 7 records as an "As built (T12)" note.
+  - A manager's read-only draft (step 4) comes from `GET {base}`'s `current`, so a draft started between the page's
+    read of the note and its read of the form, which then has none, shows as a worker's, the sentence and Past notes
+    alone, until the page is opened again; "Nothing written yet." stands for a text of spaces alone too, as Submit's
+    checks judge it blank; and a Discard whose dialog a browser closed while its request was out says why it failed in
+    an alert above Discard draft, as the form says it above Submit note (confirm-dialog.md *Behaviour* 7).
   - The earlier-day notice (step 6) shows on a saved draft dated before `me.today` as the form opens (note-form.md
     *Kinds of note*), never on a new note; T18's past-day notice wins over it on a manager's past-day draft
     (note-form.md component 4).
@@ -4312,7 +4317,7 @@ manager can read it.
       warning closing the dialog with nothing sent and focus on More actions after Stay signed in; and the warning
       opening with only the panel open, focus on Discard draft: the panel closed, nothing sent, and focus on More
       actions after Stay signed in.
-- [ ] Someone else's draft at the shared address (S02.04.03's second, third and fourth criteria on screen, and its
+- [x] Someone else's draft at the shared address (S02.04.03's second, third and fourth criteria on screen, and its
       links to design.md §4.2's "Someone else's draft" and §4.4's states, and to participant-notes.md items 27 and 28
       and its *Someone else's draft, worker*, *Someone else's draft, manager* and *Discard dialog* rows and *Focus
       order*; T08's hand-off of the manager's read-only draft): a worker gets the `<h1>`, the in-progress sentence,

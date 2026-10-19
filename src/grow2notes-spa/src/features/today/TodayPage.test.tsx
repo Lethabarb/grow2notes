@@ -751,7 +751,11 @@ describe('Today, opening a row', () => {
     const { router } = await openToday(worker, listOf([jane]));
     serveNoteOf(
       jane,
-      json({ status: 'Draft' } satisfies NoteAnswer),
+      json({
+        status: 'Draft',
+        authorDisplayName: 'Alex P.',
+        startedAtUtc: '2026-09-30T23:14:00Z',
+      } satisfies NoteAnswer),
       problem(409, {
         code: 'note.in_progress_by_other',
         authorDisplayName: 'Alex P.',
