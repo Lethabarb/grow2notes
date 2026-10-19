@@ -304,7 +304,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | The required flag reason | F03.01 | S02.03.02 (builds the field and the rule) | Hand-off resolved |
-| 2 | The To review list (oldest first) and badge | F03.03 | | "Oldest first" sort key to confirm (S03.03.01 Notes) |
+| 2 | The To review list (oldest first) and badge | F03.03 | | "Oldest first" is by the flagged version's time, then note ID, settled by T11 on 19 October 2026 (design.md §6.4, S03.03.01 Notes) |
 | 3 | The Reviewed tab | F03.03 | | |
 | 4 | Mark reviewed with an optional comment | F03.02 | | |
 | 5 | The re-review rule (A15) | F03.01 | | |

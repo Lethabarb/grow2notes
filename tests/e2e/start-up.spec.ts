@@ -2,10 +2,13 @@ import type { Locator, Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { answerMe, failMe, holdMe, manager, serveMe, worker } from './me.ts';
+import { notesStore } from './notes.ts';
+import { serveReviews } from './reviews.ts';
 
 // The start-up's loading line and messages, the refresh of /api/auth/me and the crash pages in the published app
 // (S00.05.03), against app-shell.md component 4 and *Refresh of `/api/auth/me`*. Each test answers, fails or holds
-// /api/auth/me in the browser (me.ts), so none of them reaches the app.
+// /api/auth/me in the browser (me.ts), and the one that opens Flagged its To review list (reviews.ts), so none of them
+// reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -198,6 +201,7 @@ test('/api/auth/me is asked once at start-up, per nav link and per focus, and ne
   // Before the page loads, so that its timers run on Playwright's clock, which runs as the real one until told.
   await page.clock.install();
   await serveMe(page, manager);
+  await serveReviews(page, notesStore({ today: manager.today, participants: [] }));
   await page.goto('/');
   await expect(heading(page)).toContainText('Today');
   await expectSent(1);
@@ -207,7 +211,7 @@ test('/api/auth/me is asked once at start-up, per nav link and per focus, and ne
   const nav = page.getByRole('navigation', { name: 'Main' });
   const steps: [link: string, pageName: string][] = [
     ['Today', 'Today'],
-    ['Flagged', 'Page not found'],
+    ['Flagged', 'Flagged notes'],
     ['Report', 'Page not found'],
     ['Manage', 'Manage'],
   ];

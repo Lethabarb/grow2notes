@@ -186,6 +186,8 @@ follows the component spec as written, except where "Conflicts resolved" says ot
   survives forced colours). Other item: link colour, underlined. Equal widths. Never disabled, never sticky, no
   animation. 48 px tall. At 200% text the two items wrap onto two rows rather than scroll sideways.
 - Focus stays on the activated link after switching. No live announcement.
+- As built (T11), not yet: the screen is the `<h1>` and the To review list until T19 adds the view switch and
+  Reviewed, so `/flagged?view=reviewed`, like any `view`, shows To review, with Flagged current.
 
 ### 4. To review list
 
@@ -213,6 +215,12 @@ follows the component spec as written, except where "Conflicts resolved" says ot
 - **No tags** on these rows: the current view link already names the state (`status-tags.md`). No actions inside
   rows, no swipe, no colour-only marking.
 - No Show older: the list is returned whole (6.1).
+- As built (T11): `ChronoList` in its whole mode, each row a `LinkRow` with `look: 'date'`, the link in the link colour,
+  underlined, with no chevron (chronological-list.md *Anatomy* 1); the meta line a `MetaLine` with `statusFirst` false,
+  so no part of it is bold or in the text colour; the Reason and Flag removed lines `LinkRow`'s `extra`, which the
+  link's `::after` covers, so a click on them or on the row's empty side opens the note. The query is `toReviewQuery`
+  (`src/features/flagged`), which keeps its rows for 30 minutes (`gcTime`), as Past notes keeps its pages, so that Back
+  shows them at once, and which the page fetches again on the window's `focus` as well as on `visibilitychange`.
 
 ### 5. Reviewed list
 
@@ -278,6 +286,8 @@ follows the component spec as written, except where "Conflicts resolved" says ot
   `/flagged`. Opened from outside the app (reload, pasted URL), it reads "Today" and goes to Today.
 - Edit replaces the read view with the form, and Save changes or Cancel replace it back, so the entry before is still
   the Flagged list and the label stays "Flagged" (the shell copies the record across each replace).
+- As built (T11): the label is the nav item's word, which `useBackTo` takes beside the page names (app-shell.md
+  component 3a); the route declares `backKey: 'flagged'`. The read view opens without its review panel until T16.
 
 ### 8. Read view and 9. Review panel
 
@@ -375,7 +385,7 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 ## Accessibility checklist
 
 **Headings**
-- [ ] List view: exactly one `<h1>` "Flagged notes"; no other headings are needed above the rows.
+- [x] List view: exactly one `<h1>` "Flagged notes"; no other headings are needed above the rows.
 - [ ] Review view: as participant-notes.md (one `<h1>` with name and date; `<h2>` "1. Goals", "2. Common items",
       "3. Guided notes", "Review"). [Research] WebAIM Screen Reader Survey #10 (n = 1,539): 71.6% navigate long pages
       by headings, https://webaim.org/projects/screenreadersurvey10/
@@ -388,7 +398,7 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 **Names and labels**
 - [ ] Badge link name "Flagged, 3 to review" (visually hidden text, no `aria-label`); "Flagged" at 0.
 - [ ] ViewLinks names are exactly the visible text ("To review (3)", "Reviewed"); `aria-current="page"` on one only.
-- [ ] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
+- [x] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
 - [ ] Every accessible name starts with its visible words (SC 2.5.3), so "click Mark reviewed", "click Reviewed",
       "click Show older" work with voice control.
 
@@ -405,8 +415,8 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
       current page, link".
 - [ ] A To review row reads as "Sam Taylor, Tuesday 29 September 2026, link, Priya Nair, flagged 4:42 pm", then the
       Reason line when reading on (description timing varies by screen reader; unverified per AT).
-- [ ] Middle dots are `aria-hidden` with a visually hidden ", " in their place.
-- [ ] Every date and time is in `<time dateTime>` (`YYYY-MM-DD` for note dates, ISO UTC for stamps).
+- [x] Middle dots are `aria-hidden` with a visually hidden ", " in their place.
+- [x] Every date and time is in `<time dateTime>` (`YYYY-MM-DD` for note dates, ISO UTC for stamps).
 - [ ] `<html lang="en-AU">`.
 
 **Visual**

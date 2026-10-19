@@ -52,7 +52,10 @@ export const msg = {
    * name as stored, as the daily report words it (design.md §11.3).
    */
   writtenBy: (displayName: string) => `Written by ${displayName}`,
-  /** The read view's flag line after the Flagged tag (design.md §4.4): the reason, after the form's label for it. */
+  /**
+   * The read view's flag line after the Flagged tag (design.md §4.4), and a To review row's line after its meta line,
+   * there with the reason up to its first line break (flagged.md item 4): the reason, after the form's label for it.
+   */
   flagReason: (reason: string) => `${strings.note.reason}: ${reason}`,
   /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
   noNotesYet: (name: string) => `No notes yet for ${name}.`,

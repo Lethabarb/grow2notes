@@ -81,18 +81,26 @@ function Participant() {
   return <PageHeading>{`Participant ${id}`}</PageHeading>;
 }
 
-// Made-up screens beside the app's: Flagged at the address of the manager's Flagged link, and a route with an ID.
+// Made-up screens beside the app's: Flagged at the address of the manager's Flagged link, in place of the app's, and a
+// route with an ID.
 const madeUp: AppRoute[] = [
   { path: 'made-up', element: <Broken />, handle: { pageName: pageName.participants } },
   { path: 'flagged', element: <Flagged />, handle: { pageName: pageName.flaggedNotes } },
   { path: 'made-up/:id', element: <Participant />, handle: { pageName: pageName.participant } },
 ];
 
-/** `table` with the made-up screens beside its `*` route, inside the screens' error boundary. */
+/**
+ * `table` with the made-up screens beside its `*` route, inside the screens' error boundary, and without its own
+ * Flagged.
+ */
 function withMadeUp(table: AppRoute[]): AppRoute[] {
   return table.flatMap((route) => {
     if (route.path === '*') {
       return [...madeUp, route];
+    }
+
+    if (route.path === 'flagged') {
+      return [];
     }
 
     return route.index || route.children === undefined ? [route] : [{ ...route, children: withMadeUp(route.children) }];

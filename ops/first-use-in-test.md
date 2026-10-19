@@ -538,3 +538,25 @@ one for step 54 and two for each screen reader in step 55, seven in all. Every w
     than 30 notes: when one does, press it and look for focus on the first new row, read as its date. (note-form.md's
     *Announcements* for the flag, the summary and the confirmation; today.md's and participant-notes.md's manual
     passes, for what T09 builds.)
+
+### Flagged's To review list, once T11 is in test
+
+These steps hold T11's by-hand checks ([tasks.md](../design/backlog/tasks.md), T11's Notes). They need account A,
+account B, the passkey worker of step 18, the kit of steps 26 to 28, and a made-up participant whose note for today
+nobody has started. Every word typed into a note is made up (A35). A note flagged before T11's deploy is not in To
+review, as T09 left every flag status as it was, so these steps flag a note of their own.
+
+56. On the laptop, as account A in Chrome, and on the Android phone, as account B in Chrome, choose Flagged and leave
+    it open. On the iPhone in Safari, sign in as the passkey worker, open the participant's note for today, type a
+    sentence or two, tick Flag for manager, type a reason and submit the note. Then, on the laptop and on the Android
+    phone, choose Today and then Flagged. Look for the row on each: the participant's full name, today's date under it,
+    the worker's name, "flagged" and the time of the submit, and "Reason:" with the reason. Open the row on each and
+    look for the note as written, the flag line with the reason, and "Flagged" as the back link; press it and look for
+    the list again, with the row still there. (design.md §14 M3 *Done when* bullet 1, the list half, on real devices;
+    S03.03.01.)
+57. On the laptop as account A with NVDA and Chrome, then on the iPhone as account B with VoiceOver and Safari, then on
+    the Android phone as account B with TalkBack and Chrome, choose Flagged while step 56's note is still there. Look
+    for: the arrival read as "Flagged notes, heading level 1"; the row read as the participant's name and the date,
+    then "link", then the worker's name and "flagged" with the time; the Reason line read when reading on; and, once
+    the row is open, the back link read as "Flagged". (flagged.md *Visual and device*, the manual pass, for what T11
+    builds.)

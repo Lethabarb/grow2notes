@@ -1,6 +1,7 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
+import { FlaggedPage } from '../features/flagged/FlaggedPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { NotePage } from '../features/notes/NotePage.tsx';
 import { PastNotesPage } from '../features/notes/PastNotesPage.tsx';
@@ -106,6 +107,13 @@ export const routes: AppRoute[] = [
           {
             element: <ManagerOnly />,
             children: [
+              // Its rows' return points: on a pop back from a note that a review has taken off the list, the row now
+              // in its place (flagged.md *Interactions and focus*).
+              {
+                path: 'flagged',
+                element: <FlaggedPage />,
+                handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
+              },
               { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
               {
                 path: 'manage/participants',

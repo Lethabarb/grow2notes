@@ -80,6 +80,20 @@ const screenAnswers: Readonly<Record<string, unknown>> = {
   '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
   '/api/admin/common-item-groups?includeArchived=true': commonItemGroups,
+  // Jane's note of today, flagged by the worker at 9:14 am in Melbourne.
+  '/api/reviews?status=toReview': [
+    {
+      participantId: participants[0].id,
+      givenName: 'Jane',
+      familyName: 'Citizen',
+      noteDate: '2026-10-01',
+      authorDisplayName: worker.displayName,
+      flagReason: 'Seemed unwell.',
+      flaggedAtUtc: '2026-09-30T23:14:00Z',
+      currentVersionNumber: 1,
+      flagRemovedLater: false,
+    },
+  ],
 };
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -95,9 +109,9 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers Today's list, the users', the participants' and the common item groups'
- * lists and `GET /api/admin/guide-prompts` with their made-up answers and any other request, `GET /api/auth/me`, with
- * `me`, or, for none, never answers.
+ * Stubs `fetch` as the server, which answers Today's list, the users', the participants', the common item groups' and
+ * the To review lists and `GET /api/admin/guide-prompts` with their made-up answers and any other request,
+ * `GET /api/auth/me`, with `me`, or, for none, never answers.
  */
 function serveMe(me: Me | undefined) {
   fetchMock.mockImplementation((path, init) =>
@@ -247,9 +261,26 @@ describe('Manage', () => {
   });
 });
 
+describe('Flagged', () => {
+  it("opens the To review list from a manager's Flagged link, not Page not found, with Flagged marked", async () => {
+    serveMe(manager);
+    const router = renderApp('/');
+    await settle();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Flagged' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/flagged');
+    expect(pageHeading()).toHaveAccessibleName('Flagged notes');
+    expect(within(screen.getByRole('main')).getByRole('link', { name: /^Jane Citizen, / })).toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Flagged notes');
+    expect(currentItems()).toEqual(['Flagged page']);
+  });
+});
+
 describe('Page not found', () => {
   it.each([
-    { me: manager, path: '/flagged' },
+    { me: worker, path: '/flagged' },
     { me: manager, path: '/reports/daily/2026-10-01' },
     { me: manager, path: '/no-such-page' },
     { me: worker, path: '/no-such-page' },
@@ -262,12 +293,12 @@ describe('Page not found', () => {
     expectPageNotFound();
   });
 
-  it.each(['Flagged', 'Report'])("opens from a manager's %s link, until its screen is built", async (name) => {
+  it("opens from a manager's Report link, until its screen is built", async () => {
     serveMe(manager);
     renderApp('/');
     await settle();
 
-    fireEvent.click(screen.getByRole('link', { name }));
+    fireEvent.click(screen.getByRole('link', { name: 'Report' }));
     await settle();
 
     expectPageNotFound();
@@ -302,6 +333,7 @@ describe('Page not found', () => {
 describe('every page', () => {
   it.each([
     { page: 'Today', me: worker, path: '/' },
+    { page: 'Flagged notes', me: manager, path: '/flagged' },
     { page: 'Manage', me: manager, path: '/manage' },
     { page: 'Page not found', me: manager, path: '/no-such-page' },
     { page: 'Page not found', me: worker, path: '/manage' },

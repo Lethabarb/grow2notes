@@ -1091,7 +1091,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
   await expect(confirmation(phone).getByText('Flagged for manager: Yes', { exact: true })).toBeVisible();
   await expect(goBack(phone)).toBeVisible();
 
-  // Confirmed: version 1 from the app, with the tick, the text and the flag, and one key.
+  // Confirmed: version 1 from the app, with the tick, the text and the flag, and one key, the note To review.
   const posted = phone.waitForResponse(isSubmit);
   await confirmButton(phone).click();
   const answer = await posted;
@@ -1104,7 +1104,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     flagReason,
   });
   expect(answer.request().headers()['idempotency-key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-/);
-  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String) });
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String), flagStatus: 'ToReview' });
 
   // Today, with the banner focused and Jane's row Submitted by "You", flagged.
   await expect(phone).toHaveURL('/');
@@ -1192,12 +1192,16 @@ test('a lost answer to Submit, tried again in the confirmation with the same key
   await expect(confirmButton(page)).toBeFocused();
   expect(store.submitted(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops.' });
 
-  // Pressed again: the same key, answered 200 with the version already made, and Today.
+  // Pressed again: the same key, answered 200 with the version already made, unflagged, and Today.
   const retried = page.waitForResponse(isSubmit);
   await confirmButton(page).click();
   const answer = await retried;
   expect(answer.status()).toBe(200);
-  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00.000Z' });
+  expect(await answer.json()).toEqual({
+    versionNumber: 1,
+    createdAtUtc: '2026-10-01T06:12:00.000Z',
+    flagStatus: 'None',
+  });
   await expect(banner(page)).toBeFocused();
   await expect(banner(page)).toHaveText('Note for Jane Citizen submitted');
   const [first, second] = store.submits;

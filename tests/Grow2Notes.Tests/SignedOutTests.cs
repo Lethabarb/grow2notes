@@ -14,11 +14,11 @@ namespace Grow2Notes.Tests;
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
 /// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, a participant's header, history, note
-/// and note form, a note's save and submit, its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit,
-/// setup link, deactivation and reactivation show; so the others show that the page, its files and the health
-/// endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers still matches
-/// one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with no cookie
-/// never reaches one.
+/// and note form, a note's save and submit, the To review list, its admin lists, its <c>/api/admin/users</c> posted
+/// to, and a user's edit, setup link, deactivation and reactivation show; so the others show that the page, its files
+/// and the health endpoints are <c>AllowAnonymous</c>, and that a request that no file, page or API endpoint answers
+/// still matches one, and gets a <c>404</c>. The app has no database here, so they run without Docker: a request with
+/// no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -79,6 +79,22 @@ public sealed class SignedOutTests : IAsyncDisposable
     [InlineData("/api/admin/common-item-groups")]
     [InlineData("/api/admin/common-item-groups?includeArchived=true")]
     public async Task An_admin_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.GetAsync(path, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
+    // The To review list's own Manager policy (design.md §6.4) challenges a request with no session as the /api/admin
+    // group's does, before the endpoint, which would need the database that is not here, so before its status is read.
+    [Theory]
+    [InlineData("/api/reviews?status=toReview")]
+    [InlineData("/api/reviews")]
+    public async Task The_To_review_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
     {
         using var client = app.CreateHttpsClient();
 

@@ -42,15 +42,15 @@ type NoteProps = { participantId: string; noteDate: string };
 
 /**
  * The note's page at the shared note address (note-form.md *Routes*), in the form's 40rem column, which decides what it
- * shows from fresh data on every visit. Its top bar shows at once, with the back link to Past notes when the list
- * opened it, else to Today, static, as nothing on the read view is sticky (participant-notes.md *Conflicts resolved*
- * 1). Under it, one region loads the participant and the note, `GET {base}`, together, then, for a note that is not
- * submitted, the form's own read. It shows nothing until all it needs have loaded, as an empty box or unticked rows
- * could be tapped, or read as nothing ticked, before the name above them is known, and "Loading note…" after 1 s; or,
- * when a read failed, the fallback `<h1>` "Note" with the failure sentence and Try again; or Page not found in place of
- * the whole screen for a `404`, such as another organisation's participant or a date after today. Then it shows the
- * read view for a submitted note, and otherwise what the form's read gives. Nothing is sent but those reads until the
- * form's first change: opening, scrolling, focusing or tapping into the form saves nothing (design.md §3.3).
+ * shows from fresh data on every visit. Its top bar shows at once, with the back link to Past notes or to Flagged when
+ * that list opened it, else to Today, static, as nothing on the read view is sticky (participant-notes.md *Conflicts
+ * resolved* 1). Under it, one region loads the participant and the note, `GET {base}`, together, then, for a note that
+ * is not submitted, the form's own read. It shows nothing until all it needs have loaded, as an empty box or unticked
+ * rows could be tapped, or read as nothing ticked, before the name above them is known, and "Loading note…" after 1 s;
+ * or, when a read failed, the fallback `<h1>` "Note" with the failure sentence and Try again; or Page not found in
+ * place of the whole screen for a `404`, such as another organisation's participant or a date after today. Then it
+ * shows the read view for a submitted note, and otherwise what the form's read gives. Nothing is sent but those reads
+ * until the form's first change: opening, scrolling, focusing or tapping into the form saves nothing (design.md §3.3).
  *
  * The form, once open, makes the top bar sticky, with the save status at its end, and stays open whatever the note is
  * fetched as later, as after signing in again in place, so that nothing on screen is replaced (note-form.md
@@ -69,7 +69,7 @@ function Note({ participantId, noteDate }: NoteProps) {
   const submitted = !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
   const formNeeded = note.data !== undefined && submitted === undefined;
   const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
-  const back = useBackTo({ pastNotes: pageName.pastNotes });
+  const back = useBackTo({ pastNotes: pageName.pastNotes, flagged: strings.navItem.flagged });
 
   return (
     <PageStatus>

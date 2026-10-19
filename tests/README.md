@@ -6,7 +6,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
   the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
-  items, Guide prompts, Today and the note form, with axe accessibility checks, run against the published app.
+  items, Guide prompts, Today and the note form, and Flagged's To review list, with axe accessibility checks, run
+  against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -116,14 +117,15 @@ app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in agai
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
 Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
 app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
-(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`) and the three
-note form tests that meet the app's own Today, notes and Submit (`e2e/note-form.spec.ts`) get their setup links from the
-published app's own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn`
-fixtures, below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder,
-in `E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
-Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
-organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
-holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`), the three note
+form tests that meet the app's own Today, notes and Submit (`e2e/note-form.spec.ts`) and the Flagged test that meets the
+app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the published app's own
+`admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
+second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
+app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
+each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
+database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
+Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -138,7 +140,7 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Five more fixtures are there for the tests that name them, and only those run them:
+Six more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
   `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
@@ -158,6 +160,8 @@ Five more fixtures are there for the tests that name them, and only those run th
 - `secondDevice` gives a second device: a `page` in a browser context of its own, with none of the test page's
   cookies, under the same options and the same check of the policy, and its own `authenticator`, for a second person
   signed in beside the first, or one person on two devices.
+- `thirdDevice` gives a third such device, for a third person beside the other two, such as a second manager beside
+  a worker and the first (`e2e/flagged.spec.ts`).
 
 A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
 key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
@@ -552,10 +556,12 @@ each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the org
   is missing or not a GUID; `422 validation.failed` under `baseVersion` for any but 0, under `narrative` for a blank
   text, U+0085 alone included, as .NET counts it, or one over 20,000 characters, and under `flagReason` for a reason
   over 200; `404` for no participant or no live note; `409 note.in_progress_by_other` for another user's draft; the
-  retry's `200` with the version for a key that this note's version has, and `422` under `idempotencyKey` for one that
-  another note's has; `409 note.version_conflict` for a submitted note; `422` under `flagReason` for a flagged body with
-  a blank reason, and under `tickedGoalIds` for a goal not in the draft's snapshot; and otherwise version 1, its goals
-  from the snapshot with the ticks sent, the draft gone, and `201 {versionNumber, createdAtUtc}`.
+  retry's `200` with the version and the note's flag status as it is now for a key that this note's version has, and
+  `422` under `idempotencyKey` for one that another note's has; `409 note.version_conflict` for a submitted note; `422`
+  under `flagReason` for a flagged body with a blank reason, and under `tickedGoalIds` for a goal not in the draft's
+  snapshot; and otherwise version 1, its goals from the snapshot with the ticks sent, the draft gone, and the note in
+  To review, with version 1 as its flagged version, when it is flagged (design.md §5.8 step 5), answered
+  `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`.
 
 Each save and Submit answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
 4:12 pm", and which a Submit makes the note's first submitted time; `serve(page, me, { latencyMs })` holds each answer
@@ -563,7 +569,9 @@ that long, as on a slow network. The store's `saves` lists the body of every sav
 of every Submit; `draft(participantId, noteDate)` gives a working copy, `submitted(participantId, noteDate)` a submitted
 note, and `todayNotes(me)` each participant's note today, for `serveToday`.
 `addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
-user ID, flagged when given a reason, and with any `flagStatus` set by hand, as later tasks will set it;
+user ID, flagged when given a reason, and then in To review, as Submit leaves it, unless its `flagStatus` is set by
+hand, as T16 will set it; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
+version 2 that T14's Save changes will save, flagged with `flagReason` or not flagged without one;
 `daysAfter(date, days)` gives the dates of a run of them. Six more do what someone else does while a page is open:
 `setToday(date)`, midnight in Melbourne; `setGoals(participantId, goals)`, a manager's change to the list;
 `archive(participantId)`; `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as
@@ -598,13 +606,52 @@ as `e2e/participants.spec.ts` does, but for the save indicator, which a reopened
 first words (autosave-status.md *Behaviour* 8). Their checks of 200% text, sideways scroll and target sizes use
 `setTextTo200Percent`, `scrollsSideways` and `expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words
 that show, without the visually hidden ones, and the forced-colours ring and the tags' borders use `systemColour` from
-there too. A row's description is checked with `toHaveAccessibleDescription`, whose reckoning in Chromium puts a space
-before each comma that a hidden `Pause` reads for a dot, so its patterns allow one. Today's Waiting state holds the
+there too. A row's description is checked with `toHaveAccessibleDescription`, and a To review row's name with
+`toHaveAccessibleName`, whose reckoning in Chromium puts a space before each comma that a hidden `Pause` reads for a
+dot or a new line, so their patterns allow one. Today's Waiting state holds the
 page's timers of 1 s with an init script rather than on Playwright's clock, as axe settles each rule on a timer and
 never finishes under a paused clock; the after-midnight refusal runs on `page.clock`. A check of what a screen does as a
 person comes back to the tab fires the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does,
 since TanStack Query listens for it on the window, not the document, and shows on a screen that opts in to
 `refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`).
+
+### Answering `/api/reviews?status=toReview`
+
+The Flagged screen reads its To review list with `GET /api/reviews?status=toReview`, which needs a manager's session,
+so a test of it answers it in the browser, from the notes that a `notesStore` holds, as it answers Today. The store's
+`toReview()` gives the list as design.md §6.4 has it, as the store stands when it is asked: each submitted note in To
+review, an archived participant's too, as `{participantId, givenName, familyName, noteDate, authorDisplayName,
+flagReason, flaggedAtUtc, currentVersionNumber, flagRemovedLater}`, the reason and time those of its flagged version,
+and `flagRemovedLater` true when its current version is not flagged; the oldest flag first, then by participant and
+date in place of the note's ID. `e2e/reviews.ts`, beside `e2e/notes.ts`, has two helpers, each routing the page's
+requests through `page.route` and overriding the answer before it, so call them before `page.goto`:
+
+- `serveReviews(page, store)` answers each with `store.toReview()`, worked out afresh for each request, so that a note
+  flagged and submitted through the store's own Submit shows on the list's next request.
+- `failReviews(page, failure)` aborts each, for `'no connection'`, or answers it with a status, such as `403`, which
+  shows Page not found, as for a manager whose role has changed. The failure of a first load shows about 1 s after the
+  request, after the query client's silent retry.
+
+A test whose made-up manager only passes through Flagged, as the shell's walks and the count of `/api/auth/me`
+requests do (`e2e/shell.spec.ts`, `e2e/start-up.spec.ts`), serves an empty store's list, as the app, which holds no
+session for them, would answer `401`, ending the session in place.
+
+```ts
+await serveMe(page, manager);
+await serveReviews(page, store);
+await store.serve(page, manager);
+await page.goto('/flagged');
+```
+
+The test that meets the app's own answers signs in for real through the `invite` fixture at a phone's width: the
+manager adds a participant and invites a worker and a second manager, set up on `secondDevice` and `thirdDevice` from
+the links that `resetSignIn` gives; the second manager opens Flagged and finds no flags; the worker flags and submits
+the participant's note; the first manager finds it on Flagged, and the second on their next page load, over the empty
+list that their page kept, which shows until the list asked for again answers (design.md §14 M3 *Done when*, the
+list half); the first opens it and comes back by its back link, "Flagged"; and the worker meets Page not found at
+`/flagged`. `e2e/flagged.spec.ts` is the example. A click on a row's line, such as its Reason, goes through
+`page.mouse` at the line's place, as the link's `::after` covers the row and Playwright's own click on the line would
+wait for the line itself to take it.
 
 ### Signing in with a passkey, end to end
 
@@ -1129,7 +1176,10 @@ endpoints, as in production, so an endpoint that a test maps for itself needs no
   from what it expects. Tests add rows to the seeded organisations, so a check looks for the seeded rows, never for a
   whole list: `GET /api/admin/users`' row, the first, checks that each caller's list holds both of their own
   organisation's seeded users and neither of the other's, and `GET /api/admin/participants`' row their own
-  organisation's seeded participant and not the other's.
+  organisation's seeded participant and not the other's. A list that no seeded row is on looks for the row its own
+  call adds: `GET /api/reviews`' builder flags a note in A for each call and names its participant in the request's
+  `EndpointMatrix.FlaggedInA` option, which the check reads from the response's `RequestMessage`, so that A's
+  manager's To review list holds that note and B's manager's does not.
 - The matrix calls `https://localhost`, as the SPA's antiforgery token needs (above), and fetches each caller's own
   token first. A call that changes something (`EndpointCall.ChangesState`: a method other than `GET`, `HEAD`, `OPTIONS`
   or `TRACE`, at an endpoint that names its methods) sends that token, and the matrix makes it twice more: without one,

@@ -39,6 +39,12 @@ internal static class EndpointMatrix
     /// </summary>
     public static readonly IReadOnlyList<string> AnyMethod = [];
 
+    /// <summary>
+    /// The option of a request to the To review list that names the participant whose note the call first flagged in
+    /// A, for the row's answer check, which is given the response, and through it the request, but not the call.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<Guid> FlaggedInA = new(nameof(FlaggedInA));
+
     private static readonly IReadOnlyList<string> Get = ["GET"];
 
     private static readonly IReadOnlyList<string> GetOrHead = ["GET", "HEAD"];
@@ -161,6 +167,12 @@ internal static class EndpointMatrix
         // version 1 (§5.8 step 2). B's manager does not find the participant (§9.2).
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
             Created, Conflict, NotFound, SubmittingADraftOfTheWorkerOfA),
+
+        // The To review list (§6.4), outside /api/admin with the Manager policy of its own, so for managers alone. The
+        // seeded organisations have no flagged note, so each call first flags one in A, and A's manager's list holds
+        // it and B's manager's does not (§5.9 item 7); reading writes nothing (A28).
+        new(Get,       "/api/reviews",           Unauthorized, Forbidden, OK,     OK,
+            ToReviewAfterANoteFlaggedInA, HoldsTheNoteFlaggedInAForAsManagerAlone),
 
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
@@ -438,6 +450,48 @@ internal static class EndpointMatrix
         };
         request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
         return request;
+    }
+
+    // The To review list, asked for once the request has added to A a participant of its own, whom its FlaggedInA
+    // option names, with a note submitted flagged by A's worker, as Submit leaves it. The note's date, times and reason
+    // are made up (A35).
+    private static async Task<HttpRequestMessage> ToReviewAfterANoteFlaggedInA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        await call.Services.AddSubmittedAsync(
+            a,
+            new(
+                participant.Id,
+                new DateOnly(2026, 10, 2),
+                a.WorkerId,
+                new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc),
+                new DateTime(2026, 10, 2, 6, 42, 0, DateTimeKind.Utc),
+                IsFlagged: true,
+                FlagReason: "Jane seemed unwell."));
+        var request = new HttpRequestMessage(call.Method, "/api/reviews?status=toReview");
+        request.Options.Set(FlaggedInA, participant.Id);
+        return request;
+    }
+
+    // For the To review list: A's manager's list holds the note that the call flagged in A, and B's manager's does not
+    // (§5.9 item 7). Tests flag other notes in A, so the check looks for the call's own, never at the whole list.
+    private static async Task<IReadOnlyList<string>> HoldsTheNoteFlaggedInAForAsManagerAlone(
+        HttpResponseMessage response, Caller caller, SeededOrganisations _)
+    {
+        if (response.RequestMessage?.Options.TryGetValue(FlaggedInA, out var participantId) is not true)
+        {
+            throw new InvalidOperationException($"The request names no note flagged in A in its {nameof(FlaggedInA)}.");
+        }
+
+        var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var listed = answer.EnumerateArray().Any(row => row.GetProperty("participantId").GetGuid() == participantId);
+        return (caller, listed) switch
+        {
+            (Caller.ManagerOfA, false) => [$"lacks the caller's own organisation's flagged note of {participantId}"],
+            (Caller.ManagerOfB, true) => [$"holds the other organisation's flagged note of {participantId}"],
+            _ => [],
+        };
     }
 
     // The draft's path of the participant's note for today in Melbourne, by the app's own clock.

@@ -3,6 +3,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import type { Page, Route } from '@playwright/test';
 import type { Me } from './me.ts';
 import type { AdminParticipant } from './participants.ts';
+import type { ToReviewRow } from './reviews.ts';
 import type { NoteOf } from './today.ts';
 
 /** A goal on the note form: its ID and its wording, as the manager's list or a draft's snapshot holds it. */
@@ -34,7 +35,7 @@ export type VersionBody = {
 /** A Submit that the page sent: its `Idempotency-Key` and its body. */
 export type VersionPost = { idempotencyKey: string | undefined; body: VersionBody };
 
-/** A note's flag status, as the API names it (design.md §5.3), which a manager's Past notes rows carry. */
+/** A note's flag status, as the API names it (design.md §5.3), which Submit's answer and a manager's history carry. */
 export type FlagStatus = 'None' | 'ToReview' | 'Reviewed';
 
 /** A submitted note to put in the store, as `addSubmitted` takes it: who wrote it, when, and its version 1. */
@@ -48,9 +49,18 @@ export type SubmittedNote = {
   goals?: { text: string; isTicked: boolean }[];
   /** The reason of a flagged version; an unflagged one has none. */
   flagReason?: string;
-  /** Set by hand, as T11 and T16 will set it; `None` by default. */
+  /**
+   * The reason of version 1, flagged, when a version 2 has been saved over it, as T14's Save changes will save one,
+   * which removed the flag or changed its reason: the note stays in To review on version 1's reason and time (A15),
+   * and reads as version 2, with `flagReason`, if any, as its own.
+   */
+  firstFlagReason?: string;
+  /** Set by hand, as T16 will set it; by default `ToReview` for a note with a flagged version, as Submit leaves it. */
   flagStatus?: FlagStatus;
 };
+
+/** The version in a note's `FlaggedVersionNumber` (design.md §5.3): its reason and when it was saved. */
+type FlaggedVersion = { flagReason: string; createdAtUtc: string };
 
 /** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks, text and flag. */
 type HeldDraft = StartedBy & {
@@ -63,17 +73,34 @@ type HeldDraft = StartedBy & {
   savedAtUtc: string;
 };
 
-/** A submitted note as the store keeps it: its header and its one version (design.md §5.3). */
+/**
+ * A submitted note as the store keeps it (design.md §5.3): its header, with its flag status and the version that
+ * flagged it, if any, and its current version, the one that it reads as.
+ */
 type HeldSubmitted = StartedBy & {
   authorUserId: string;
   firstSubmittedAtUtc: string;
   idempotencyKey: string;
+  currentVersionNumber: number;
   narrative: string;
   goals: { text: string; isTicked: boolean }[];
   isFlagged: boolean;
   flagReason: string | null;
   flagStatus: FlagStatus;
+  flaggedVersion: FlaggedVersion | null;
 };
+
+/**
+ * What Submit leaves on a note whose version 1 has `flagReason`, or none (design.md §5.8 step 5): To review, with that
+ * version as the flagged one, when it is flagged, and else no flag.
+ */
+const flagOf = (
+  flagReason: string | null,
+  createdAtUtc: string,
+): Pick<HeldSubmitted, 'flagStatus' | 'flaggedVersion'> =>
+  flagReason === null
+    ? { flagStatus: 'None', flaggedVersion: null }
+    : { flagStatus: 'ToReview', flaggedVersion: { flagReason, createdAtUtc } };
 
 /** Alex P., another worker, who started a note at 9:14 am in Melbourne on 1 October 2026 (note-form.md's sketch). */
 export const alexStarted: StartedBy = { authorDisplayName: 'Alex P.', startedAtUtc: '2026-09-30T23:14:00Z' };
@@ -141,8 +168,8 @@ type StoreOptions = {
  * current version, a draft's `{status}` or `404` for none; the note form, a template, the caller's own draft or
  * another user's `409`, or `404` for a date after today, to a worker for one before yesterday (design.md A65), and for
  * a submitted note; autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's
- * own draft; and Submit's `POST {base}/versions`, with its checks in the API's order. `serve` answers one page's
- * requests as one person's.
+ * own draft; and Submit's `POST {base}/versions`, with its checks in the API's order, which puts a flagged version 1
+ * in To review. `serve` answers one page's requests as one person's, and `toReview` gives the To review list.
  */
 export function notesStore({
   today: firstToday,
@@ -325,8 +352,10 @@ export function notesStore({
       return problem(409, 'note.in_progress_by_other', { authorDisplayName, startedAtUtc });
     }
 
+    // The note's flag status as it is now, as the key finds the version, not the status its save set.
     if (held?.idempotencyKey === idempotencyKey) {
-      return { status: 200, json: { versionNumber: 1, createdAtUtc: held.firstSubmittedAtUtc } };
+      const { firstSubmittedAtUtc, flagStatus } = held;
+      return { status: 200, json: { versionNumber: 1, createdAtUtc: firstSubmittedAtUtc, flagStatus } };
     }
 
     if ([...submitted.values()].some((other) => other.idempotencyKey === idempotencyKey)) {
@@ -346,20 +375,23 @@ export function notesStore({
       return refused('tickedGoalIds');
     }
 
+    const flagReason = sent.isFlagged ? sent.flagReason : null;
+    const flag = flagOf(flagReason, savedAtUtc);
     submitted.set(key, {
       authorUserId: draft.authorUserId,
       authorDisplayName: draft.authorDisplayName,
       startedAtUtc: draft.startedAtUtc,
       firstSubmittedAtUtc: savedAtUtc,
       idempotencyKey,
+      currentVersionNumber: 1,
       narrative: sent.narrative,
       goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: ticked.has(id) })),
       isFlagged: sent.isFlagged,
-      flagReason: sent.isFlagged ? sent.flagReason : null,
-      flagStatus: 'None',
+      flagReason,
+      ...flag,
     });
     drafts.delete(key);
-    return { status: 201, json: { versionNumber: 1, createdAtUtc: savedAtUtc } };
+    return { status: 201, json: { versionNumber: 1, createdAtUtc: savedAtUtc, flagStatus: flag.flagStatus } };
   }
 
   /**
@@ -529,30 +561,74 @@ export function notesStore({
         startedAtUtc: draft.startedAtUtc,
         firstSubmittedAtUtc: savedAtUtc,
         idempotencyKey: randomUUID(),
+        currentVersionNumber: 1,
         narrative: draft.narrative,
         goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: draft.ticked.includes(id) })),
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
-        flagStatus: 'None',
+        ...flagOf(draft.flagReason, savedAtUtc),
       });
       drafts.delete(key);
     },
-    /** Puts a submitted note of a participant's for a day in the store, as if its author had submitted it. */
+    /**
+     * Puts a submitted note of a participant's for a day in the store, as if its author had submitted it, and, with
+     * `firstFlagReason`, then saved a version 2 over it.
+     */
     addSubmitted: (participantId: string, noteDate: string, added: SubmittedNote) => {
-      const { flagReason = null } = added;
+      const { flagReason = null, firstFlagReason } = added;
+      const flag = flagOf(firstFlagReason ?? flagReason, added.firstSubmittedAtUtc);
+      const flagStatus = added.flagStatus ?? flag.flagStatus;
+      if (flagStatus === 'ToReview' && flag.flaggedVersion === null) {
+        throw new Error('A note in To review has a flagged version: give it a flagReason or a firstFlagReason.');
+      }
+
       submitted.set(`${participantId}/${noteDate}`, {
         authorDisplayName: added.authorDisplayName,
         authorUserId: added.authorUserId ?? 'another user',
         startedAtUtc: added.firstSubmittedAtUtc,
         firstSubmittedAtUtc: added.firstSubmittedAtUtc,
         idempotencyKey: randomUUID(),
+        currentVersionNumber: firstFlagReason === undefined ? 1 : 2,
         narrative: added.narrative ?? '',
         goals: added.goals ?? [],
         isFlagged: flagReason !== null,
         flagReason,
-        flagStatus: added.flagStatus ?? 'None',
+        flagStatus,
+        flaggedVersion: flag.flaggedVersion,
       });
     },
+    /**
+     * The To review list as `GET /api/reviews?status=toReview` answers it (design.md §6.4), as the store stands when
+     * it is asked, for `serveReviews`: each submitted note in To review, an archived participant's too, with its
+     * participant's ID and names, its date, its author, the reason and time of its flagged version, its current
+     * version's number and whether that version is not flagged; the oldest flag first, then by participant and date,
+     * in place of the note's ID.
+     */
+    toReview: (): ToReviewRow[] =>
+      [...submitted]
+        .flatMap(([key, held]) => {
+          const header = headers.get(key.slice(0, -11));
+          if (header === undefined || held.flagStatus !== 'ToReview' || held.flaggedVersion === null) {
+            return [];
+          }
+
+          return [{
+            participantId: header.id,
+            givenName: header.givenName,
+            familyName: header.familyName,
+            noteDate: key.slice(-10),
+            authorDisplayName: held.authorDisplayName,
+            flagReason: held.flaggedVersion.flagReason,
+            flaggedAtUtc: held.flaggedVersion.createdAtUtc,
+            currentVersionNumber: held.currentVersionNumber,
+            flagRemovedLater: !held.isFlagged,
+          }];
+        })
+        .sort(
+          (a, b) =>
+            Date.parse(a.flaggedAtUtc) - Date.parse(b.flaggedAtUtc)
+            || `${a.participantId}/${a.noteDate}`.localeCompare(`${b.participantId}/${b.noteDate}`),
+        ),
     /**
      * Keeps the version that the next Submit makes, as the server does, but aborts its answer, as a phone that loses
      * its signal while the answer is on its way.

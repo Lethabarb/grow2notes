@@ -16,9 +16,15 @@ type LinkRowProps = {
   /** The lines under the name, which describe the link, each on a line of its own; none for a row with none. */
   detail?: readonly ReactNode[];
   /**
-   * `'date'` for a row of a list of notes by date, such as Past notes (chronological-list.md), whose link is the
-   * date, in the link colour and underlined, with no chevron (participant-notes.md component 5); a person's or a
-   * user's row by default (participant-list-rows.md).
+   * Plain lines after the detail, which do not describe the link, each a paragraph of its own in reading order, such
+   * as a flagged note's "Reason: …" (chronological-list.md *Anatomy* 3); none by default.
+   */
+  extra?: readonly ReactNode[];
+  /**
+   * `'date'` for a row of a list of notes by date (chronological-list.md), such as Past notes', whose link is the
+   * date, or To review's, whose link is a name and a date, in the link colour and underlined, with no chevron
+   * (participant-notes.md component 5, flagged.md item 4); a person's or a user's row by default
+   * (participant-list-rows.md).
    */
   look?: 'name' | 'date';
 };
@@ -26,10 +32,11 @@ type LinkRowProps = {
 /**
  * A row of a `LinkRowList` (participant-list-rows.md, chronological-list.md): one link, whose text is the name alone
  * and whose `::after` covers the whole row, so that a tap anywhere in it opens the same page, then the detail, which
- * describes the link, and, but on a row of notes by date, a decorative chevron. Nothing else in the row is
- * interactive. The link is the row's return point, by its `data-return-key`.
+ * describes the link, then any extra lines, which a screen reader reads on after the row, and, but on a row of notes
+ * by date, a decorative chevron. Nothing else in the row is interactive. The link is the row's return point, by its
+ * `data-return-key`.
  */
-export function LinkRow({ to, name, returnKey, detail = [], look = 'name' }: LinkRowProps) {
+export function LinkRow({ to, name, returnKey, detail = [], extra = [], look = 'name' }: LinkRowProps) {
   const detailId = useId();
   const hasDetail = detail.length > 0;
 
@@ -58,6 +65,11 @@ export function LinkRow({ to, name, returnKey, detail = [], look = 'name' }: Lin
             ))}
           </p>
         )}
+        {extra.map((line, index) => (
+          <p key={index} className={styles.extra}>
+            {line}
+          </p>
+        ))}
       </div>
       {look === 'name' && (
         <svg className={styles.chevron} viewBox="0 0 20 20" aria-hidden="true" focusable="false">

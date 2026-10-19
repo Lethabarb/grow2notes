@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Notes;
@@ -30,7 +31,7 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
-public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
+public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     : IClassFixture<Grow2NotesFactory>
 {
     // Made up (A35): a draft for Friday 2 October 2026, started at 9:14 am and last saved at 9:30 am in Melbourne.
@@ -49,9 +50,10 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
     private DateOnly Today => factory.Services.GetRequiredService<MelbourneClock>().Today();
 
     // The goals in the snapshot's order, which a manager has changed since the draft started, the ticks the body's, a
-    // goal ID sent twice ticking it once, and the flag's reason with it. The clock's time has a part of a millisecond,
-    // which the datetime2(3) columns cannot hold, so the time answered is the time stored. The event holds the version
-    // number alone, no note text (§5.3, §9.5).
+    // goal ID sent twice ticking it once, and the flag's reason with it, which puts the note in To review with
+    // version 1 its flagged version (§5.8's flag rules), as the answer says. The clock's time has a part of a
+    // millisecond, which the datetime2(3) columns cannot hold, so the time answered is the time stored. The event holds
+    // the version number alone, no note text (§5.3, §9.5).
     [Fact]
     public async Task The_author_s_submit_makes_exactly_version_1_its_goal_rows_the_header_s_change_and_one_event()
     {
@@ -94,10 +96,10 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.Equal((1, submittedAtUtc), await AnswerAsync(response));
+        Assert.Equal((1, submittedAtUtc, "ToReview"), await AnswerAsync(response));
         Assert.Equal(
             new NoteRow(
-                (byte)NoteStatus.Submitted, 1, submittedAtUtc, (byte)FlagStatus.None, null, NoteDate, StartedAtUtc,
+                (byte)NoteStatus.Submitted, 1, submittedAtUtc, (byte)FlagStatus.ToReview, 1, NoteDate, StartedAtUtc,
                 seeded.A.WorkerId),
             await StoredNoteAsync(noteId));
         var version = Assert.Single(await StoredVersionsAsync(noteId));
@@ -125,7 +127,8 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
             (after.Notes, after.Drafts, after.Versions, after.VersionItems));
     }
 
-    // design.md §5.3: the reason is null unless the version is flagged, whatever the body holds.
+    // design.md §5.3: the reason is null unless the version is flagged, whatever the body holds. The note stays None,
+    // as the answer says.
     [Fact]
     public async Task An_unflagged_submit_stores_no_reason()
     {
@@ -136,12 +139,13 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
             client, participantId, NoteDate, Guid.NewGuid(), Body("Jane made toast.", false, "Jane seemed unwell."));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("None", (await AnswerAsync(response)).FlagStatus);
         var version = Assert.Single(await StoredVersionsAsync(noteId));
         Assert.Equal((false, null), (version.IsFlagged, version.FlagReason));
     }
 
-    // The header's change and the version are saved before the event, so only the transaction's rollback takes them
-    // away, the conditional update's included.
+    // The header's change, with the flag status and flagged version that the flagged body sets, and the version are
+    // saved before the event, so only the transaction's rollback takes them away, the conditional update's included.
     [Fact]
     public async Task A_submit_whose_event_fails_to_save_changes_nothing()
     {
@@ -162,8 +166,37 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         Assert.Equal(1, await WorkingCopiesAsync(noteId));
     }
 
+    // design.md §5.8 step 5: a flagged version's flag status and flagged version are set by the header's one
+    // conditional update, the one that moves the version on, so that they commit with it or not at all; an unflagged
+    // one's update names neither, leaving them as they are. Read from the command as sent.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_header_s_one_update_sets_the_flag_status_and_flagged_version_of_a_flagged_version_alone(
+        bool flagged)
+    {
+        var (participantId, noteId) = await AddDraftOfTheWorkerAsync();
+        var updates = new RecordsTheHeaderUpdatesOf(noteId);
+        await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(updates))));
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SubmitAsync(
+            client,
+            participantId,
+            NoteDate,
+            Guid.NewGuid(),
+            Body("Jane made toast.", flagged, flagged ? "Jane seemed unwell." : null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        string[] header = ["CurrentVersionNumber", "Status", "FirstSubmittedAtUtc"];
+        Assert.Equal(
+            flagged ? [.. header, "FlagStatus", "FlaggedVersionNumber"] : header,
+            SetColumns(Assert.Single(updates.Commands)));
+    }
+
     // A retry after a lost answer, with the key of the first try and a body changed since, which it does not save
-    // (design.md §5.8 step 3).
+    // (design.md §5.8 step 3): its flag included, so the note stays None, as the answer says.
     [Fact]
     public async Task A_retry_with_the_same_key_answers_200_with_the_version_and_changes_nothing()
     {
@@ -186,6 +219,27 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         Assert.Equal("Jane made toast.", Assert.Single(await StoredVersionsAsync(noteId)).Narrative);
     }
 
+    // The key finds the version, so a retry answers the note's flag status as it is now, not as the first try left it
+    // (T11's Notes): here after a manager's review, set by hand until T16 adds Mark reviewed.
+    [Fact]
+    public async Task A_retry_answers_the_note_s_flag_status_as_it_is_now()
+    {
+        var (participantId, noteId) = await AddDraftOfTheWorkerAsync();
+        var key = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var first = await SubmitAsync(
+            client, participantId, NoteDate, key, Body("Jane made toast.", true, "Jane seemed unwell."));
+        var saved = await AnswerAsync(first);
+        await ReviewByHandAsync(noteId);
+
+        using var retry = await SubmitAsync(
+            client, participantId, NoteDate, key, Body("Jane made toast.", true, "Jane seemed unwell."));
+
+        Assert.Equal((HttpStatusCode.Created, "ToReview"), (first.StatusCode, saved.FlagStatus));
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(saved with { FlagStatus = "Reviewed" }, await AnswerAsync(retry));
+    }
+
     // Two tries with one key at once, as when the screen sends its submit again while its first try is still on its
     // way: the first try is held just before the header's conditional update, while the second saves the version. The
     // first try's update then changes no row, and it finds the version by the key.
@@ -201,7 +255,7 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         using var secondTry = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
 
         var held = SubmitAsync(firstTry, participantId, NoteDate, key, Body("Jane made toast."));
-        (int VersionNumber, DateTime CreatedAtUtc) saved;
+        (int VersionNumber, DateTime CreatedAtUtc, string? FlagStatus) saved;
         try
         {
             await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
@@ -320,7 +374,8 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
     }
 
     // design.md §3.6: a flagged note needs a reason of 1 to 200 characters, spaces alone counting as none. The longest
-    // is refused by the validation filter, and the others by the handler, which reads the flag.
+    // is refused by the validation filter, and the others by the handler, which reads the flag. So the note never
+    // reaches To review (§14 M3 Scope: "the required flag reason").
     [Theory]
     [InlineData("none")]
     [InlineData("spaces")]
@@ -347,6 +402,8 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         await ReadValidationProblemAsync(response, "flagReason");
         Assert.Equal(before, await StoredRowsAsync());
         Assert.Equal(1, await WorkingCopiesAsync(noteId));
+        var note = await StoredNoteAsync(noteId);
+        Assert.Equal(((byte)FlagStatus.None, null), (note.FlagStatus, note.FlaggedVersionNumber));
     }
 
     [Fact]
@@ -440,7 +497,7 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var submittedAtUtc = BeforeMidnight.AddMinutes(3).UtcDateTime;
-        Assert.Equal((1, submittedAtUtc), await AnswerAsync(response));
+        Assert.Equal((1, submittedAtUtc, "None"), await AnswerAsync(response));
         var noteId = await LiveNoteIdAsync(participant.Id, NoteDate);
         var note = await StoredNoteAsync(noteId);
         Assert.Equal(
@@ -638,13 +695,37 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
-    // The answer, {versionNumber, createdAtUtc} alone.
-    private static async Task<(int VersionNumber, DateTime CreatedAtUtc)> AnswerAsync(HttpResponseMessage response)
+    // The answer, {versionNumber, createdAtUtc, flagStatus} alone.
+    private static async Task<(int VersionNumber, DateTime CreatedAtUtc, string? FlagStatus)> AnswerAsync(
+        HttpResponseMessage response)
     {
         var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        Assert.Equal(["versionNumber", "createdAtUtc"], answer.EnumerateObject().Select(property => property.Name));
-        return (answer.GetProperty("versionNumber").GetInt32(), answer.GetProperty("createdAtUtc").GetDateTime());
+        Assert.Equal(
+            ["versionNumber", "createdAtUtc", "flagStatus"],
+            answer.EnumerateObject().Select(property => property.Name));
+        return (
+            answer.GetProperty("versionNumber").GetInt32(),
+            answer.GetProperty("createdAtUtc").GetDateTime(),
+            answer.GetProperty("flagStatus").GetString());
     }
+
+    // The columns that an UPDATE's SET clause sets, in its order.
+    private static List<string> SetColumns(string update)
+    {
+        var set = update.IndexOf("SET", StringComparison.Ordinal);
+        var from = update.IndexOf("FROM", set, StringComparison.Ordinal);
+        return [.. AssignedColumn().Matches(update[set..from]).Select(match => match.Groups["column"].Value)];
+    }
+
+    [GeneratedRegex(@"\[(?<column>\w+)\] = ")]
+    private static partial Regex AssignedColumn();
+
+    // Whether a command, sent inside a transaction, updates the note whose ID it is given: of the commands that read no
+    // rows, only the header's conditional update does (design.md §5.8 step 5).
+    private static bool UpdatesTheHeaderOf(DbCommand command, Guid noteId) =>
+        command.Transaction is not null
+        && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.Ordinal)
+        && command.Parameters.Cast<DbParameter>().Any(parameter => parameter.Value is Guid id && id == noteId);
 
     // A 422 validation.failed whose errors name the field alone (design.md §6.1).
     private static async Task ReadValidationProblemAsync(HttpResponseMessage response, string field)
@@ -720,6 +801,15 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
                 WHERE [Id] = {noteId}
                 """)
             .SingleAsync(TestContext.Current.CancellationToken);
+    }
+
+    // As a manager's review leaves the note (design.md §5.8 *Review*), in SQL, as the tests read it.
+    private async Task ReviewByHandAsync(Guid noteId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database.ExecuteSqlAsync(
+            $"UPDATE [Note] SET [FlagStatus] = {(byte)FlagStatus.Reviewed} WHERE [Id] = {noteId}",
+            TestContext.Current.CancellationToken);
     }
 
     private async Task<List<VersionRow>> StoredVersionsAsync(Guid noteId)
@@ -864,6 +954,33 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
     private sealed class EventNotSavedException() : Exception("The audit event was not saved.");
 
     /// <summary>
+    /// Records the text of each command that updates the header of the note whose ID it is given, as
+    /// <see cref="HoldsTheHeaderUpdateOf"/> finds the one it holds. Every command passes.
+    /// </summary>
+    private sealed class RecordsTheHeaderUpdatesOf(Guid noteId) : DbCommandInterceptor
+    {
+        private readonly List<string> commands = [];
+
+        /// <summary>Each command's text, in the order sent.</summary>
+        public IReadOnlyList<string> Commands => commands;
+
+        // ExecuteUpdate sends its UPDATE as a command that reads no rows, where SaveChanges reads back what it saved.
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (UpdatesTheHeaderOf(command, noteId))
+            {
+                commands.Add(command.CommandText);
+            }
+
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    /// <summary>
     /// Holds back the first command, sent inside a transaction, that updates without reading the note whose ID it is
     /// given, until the test lets it go: a submit's conditional update of the header (design.md §5.8 step 5), once it
     /// has found the note, the key and the working copy, which hold no lock. As
@@ -894,10 +1011,7 @@ public sealed class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServ
             InterceptionResult<int> result,
             CancellationToken cancellationToken = default)
         {
-            if (command.Transaction is not null
-                && command.CommandText.TrimStart().StartsWith("UPDATE", StringComparison.Ordinal)
-                && command.Parameters.Cast<DbParameter>().Any(parameter => parameter.Value is Guid id && id == noteId)
-                && Interlocked.Exchange(ref held, 1) == 0)
+            if (UpdatesTheHeaderOf(command, noteId) && Interlocked.Exchange(ref held, 1) == 0)
             {
                 reached.SetResult();
                 await released.Task.WaitAsync(cancellationToken);

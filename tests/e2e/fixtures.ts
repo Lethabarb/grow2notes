@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
-import { type ConsoleMessage, type Page, expect, test as base } from '@playwright/test';
+import { type Browser, type ConsoleMessage, type Page, expect, test as base } from '@playwright/test';
 
 export { expect };
 
@@ -135,15 +135,30 @@ function watchForCspViolations(page: Page): () => void {
   };
 }
 
+/**
+ * Gives `use` a device of its own: a page in a new browser context, which takes the test's options, its base URL and
+ * headers among them, with none of the test page's cookies, under the same check of the policy, and its own phone.
+ */
+async function useDevice(browser: Browser, use: (device: Device) => Promise<void>) {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  const expectNoViolations = watchForCspViolations(page);
+  await use({ page, authenticator: await addVirtualAuthenticator(page) });
+  await context.close();
+  expectNoViolations();
+}
+
 // Every end-to-end test imports test from here, not from @playwright/test (tests/README.md), so a screen that breaks
 // design.md §9.7's policy fails its test, whatever the test checks. A test that names invite, secondInvite,
-// resetSignIn, authenticator or secondDevice gets them; the others never run a command or add an authenticator.
+// resetSignIn, authenticator, secondDevice or thirdDevice gets them; the others never run a command or add an
+// authenticator.
 export const test = base.extend<{
   invite: Invite;
   secondInvite: Invite;
   resetSignIn: (email: string) => Promise<string>;
   authenticator: VirtualAuthenticator;
   secondDevice: Device;
+  thirdDevice: Device;
 }>({
   page: async ({ page }, use) => {
     const expectNoViolations = watchForCspViolations(page);
@@ -165,13 +180,11 @@ export const test = base.extend<{
   authenticator: async ({ page }, use) => {
     await use(await addVirtualAuthenticator(page));
   },
-  // The browser's new contexts take the test's options, its base URL and headers among them.
   secondDevice: async ({ browser }, use) => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    const expectNoViolations = watchForCspViolations(page);
-    await use({ page, authenticator: await addVirtualAuthenticator(page) });
-    await context.close();
-    expectNoViolations();
+    await useDevice(browser, use);
+  },
+  // A third person's, such as a second manager beside a worker and the first.
+  thirdDevice: async ({ browser }, use) => {
+    await useDevice(browser, use);
   },
 });

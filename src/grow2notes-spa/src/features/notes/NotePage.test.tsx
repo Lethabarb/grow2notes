@@ -11,6 +11,7 @@ import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
+import type { VersionSaved } from './NoteForm.tsx';
 import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
 import readView from './ReadView.module.css';
 
@@ -1778,9 +1779,16 @@ function serveSubmit(path: string, answer: Answer) {
   answers.set(`POST ${path}`, answer);
 }
 
-/** Submit's answer, `201`, or `200` for a retry whose first answer was lost: version 1, saved at 4:12 pm. */
-function versionSaved(status: 200 | 201 = 201): Answer {
-  const body = JSON.stringify({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00Z' });
+/**
+ * Submit's answer, `201`, or `200` for a retry whose first answer was lost: version 1, saved at 4:12 pm, and the
+ * note's flag status, None unless given another.
+ */
+function versionSaved(status: 200 | 201 = 201, flagStatus: VersionSaved['flagStatus'] = 'None'): Answer {
+  const body = JSON.stringify({
+    versionNumber: 1,
+    createdAtUtc: '2026-10-01T06:12:00Z',
+    flagStatus,
+  } satisfies VersionSaved);
   return () => Promise.resolve(new Response(body, { status, headers: { 'Content-Type': 'application/json' } }));
 }
 
@@ -2741,7 +2749,59 @@ describe('After Submit', () => {
     expect(router.state.location.pathname).toBe('/');
     expect(banner()).toBeNull();
   });
+
+  // note-form.md *After a successful submit* step 2: a note now in To review changes the Flagged badge, so the form
+  // asks for `me` before it leaves, and the shell's own refresh on reaching Today shares that request, held here as a
+  // slow network holds it (app-shell.md *Refresh of `/api/auth/me`*).
+  it.each([201, 200] as const)(
+    'asks for /api/auth/me once, from the form, after a flagged Submit answered %i with To review',
+    async (status) => {
+      const { participant, router } = await openToSubmit(json(template()), versionSaved(status, 'ToReview'));
+      fireEvent.click(flagBox());
+      typeReason('Jane seemed unwell after lunch.');
+      await write();
+      await press(submitButton());
+      const me = held(json(worker));
+      const sentFrom = meRequestsFrom(router, me.answer);
+
+      await confirmSubmit();
+      await settle();
+      me.release();
+      await settle();
+
+      expect(router.state.location.pathname).toBe('/');
+      expect(sentFrom).toEqual([paths(participant).page]);
+      const sent = sentRequests();
+      expect(sent.slice(sent.indexOf(`POST ${paths(participant).versions}`))).toContain(`GET ${mePath}`);
+    },
+  );
+
+  it('asks for /api/auth/me only from the shell on reaching Today after an unflagged Submit', async () => {
+    const { router } = await openToSubmit();
+    await write();
+    await press(submitButton());
+    const sentFrom = meRequestsFrom(router);
+
+    await confirmSubmit();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(sentFrom).toEqual(['/']);
+  });
 });
+
+/**
+ * Answers each `GET /api/auth/me` from now on with `answer`, and gives where the app was, by its path, as each was
+ * sent: on the form, from the form, and on Today, from the shell's refresh on arriving.
+ */
+function meRequestsFrom(router: Router, answer: Answer = json(worker)): string[] {
+  const sentFrom: string[] = [];
+  serve(mePath, (init) => {
+    sentFrom.push(router.state.location.pathname);
+    return answer(init);
+  });
+  return sentFrom;
+}
 
 /** The read view's section under the `<h2>` named `name`. */
 function section(name: string): HTMLElement {

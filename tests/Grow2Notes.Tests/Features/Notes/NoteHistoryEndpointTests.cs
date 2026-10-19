@@ -113,8 +113,8 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
     }
 
     // The flag is the current version's (§6.3), whatever the note's flag status, which only a version and a review
-    // change (§5.8): flagged while it is None, and not flagged while it is To review over an unflagged version, each
-    // set by hand.
+    // change (§5.8): flagged while it is Reviewed, set by hand, and not flagged while it is To review over an unflagged
+    // version 2, added by hand as an edit that unticks the flag of a flagged version 1 leaves it.
     [Fact]
     public async Task Each_row_s_flag_is_its_current_version_s()
     {
@@ -127,14 +127,17 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
             SubmittedAtUtc,
             IsFlagged: true,
             FlagReason: "Jane seemed unwell.",
-            FlagStatus: FlagStatus.None));
-        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            FlagStatus: FlagStatus.Reviewed));
+        var toReview = await factory.Services.AddSubmittedAsync(seeded.A, new(
             participant.Id,
             NoteDate.AddDays(-1),
             seeded.A.WorkerId,
             StartedAtUtc.AddDays(-1),
             SubmittedAtUtc.AddDays(-1),
-            FlagStatus: FlagStatus.ToReview));
+            IsFlagged: true,
+            FlagReason: "Jane seemed unwell."));
+        await factory.Services.AddVersion2Async(
+            seeded.A, toReview, SubmittedAtUtc.AddDays(-1).AddHours(1), flagReason: null, flaggedVersionNumber: 1);
 
         var history = await HistoryAsync(Caller.WorkerOfA, participant.Id);
 
@@ -156,7 +159,7 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
     }
 
     // §6.3: flagStatus for managers, by the caller's role as stored, and no key at all for a worker (A13, A14); None
-    // for a note never flagged, and To review as set by hand, as Submit leaves it until T11.
+    // for a note never flagged, and To review for a flagged one, as Submit leaves them.
     [Fact]
     public async Task A_manager_s_rows_carry_the_flag_status_where_a_worker_s_have_no_such_key()
     {
@@ -168,8 +171,7 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
             StartedAtUtc,
             SubmittedAtUtc,
             IsFlagged: true,
-            FlagReason: "Jane seemed unwell.",
-            FlagStatus: FlagStatus.ToReview));
+            FlagReason: "Jane seemed unwell."));
         await factory.Services.AddSubmittedAsync(seeded.A, new(
             participant.Id,
             NoteDate.AddDays(-1),

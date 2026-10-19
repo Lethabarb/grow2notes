@@ -60,7 +60,35 @@ describe('LinkRow', () => {
     ]);
   });
 
-  it('has no description and no detail without one', () => {
+  // chronological-list.md *Anatomy* 3, as a To review row's Reason and "Flag removed in a later edit".
+  it('puts its plain lines after its detail, each a <p> in reading order, in the row but not its description', () => {
+    const list = renderList(
+      <LinkRow
+        look="date"
+        to="/made-up/9c1d/notes/2026-10-01"
+        name="Lee Wong"
+        returnKey="9c1d/2026-10-01"
+        detail={['Alex P. · flagged 11:20 am']}
+        extra={['Reason: Missed lunch.', 'Flag removed in a later edit']}
+      />,
+      true,
+    );
+
+    const [row] = within(list).getAllByRole('listitem');
+    const link = within(row).getByRole('link');
+    expect(link).toHaveAccessibleName('Lee Wong');
+    expect(link).toHaveAccessibleDescription('Alex P. · flagged 11:20 am');
+    const [detail, ...extra] = Array.from(row.querySelectorAll('p'));
+    expect(detail).toHaveAttribute('id', link.getAttribute('aria-describedby'));
+    expect(extra.map((line) => line.textContent)).toEqual(['Reason: Missed lunch.', 'Flag removed in a later edit']);
+    for (const line of extra) {
+      expect(line).not.toHaveAttribute('id');
+      // Not positioned, so that the link's ::after over the whole row stays over it, and a tap on it opens the row.
+      expect(line).toHaveStyle({ position: 'static', overflowWrap: 'anywhere' });
+    }
+  });
+
+  it('has no description, detail or plain lines without them', () => {
     const list = renderList(<LinkRow to="/made-up/4e7a2c1b" name="Jane Citizen" returnKey="4e7a2c1b" />);
 
     const link = within(list).getByRole('link');
