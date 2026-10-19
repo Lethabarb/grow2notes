@@ -1620,6 +1620,42 @@ describe('Today, Your unfinished drafts', () => {
     expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the library.');
   });
 
+  // design.md §3.4 *Earlier-day drafts* and §3.7: the draft keeps its date, and once submitted is unfinished no more.
+  it("submits an archived participant's draft of yesterday, then shows Today's banner and not the row", async () => {
+    const { router } = await openWithDrafts(
+      [myDraftOf(priya, yesterday)],
+      listOf(people.filter((person) => person !== priya)),
+    );
+    serveMyDraftOf(priya, yesterday, 'Archived');
+    const base = `/api/participants/${priya.id}/notes/${yesterday}`;
+    serve(`${base}/draft`, json({ savedAtUtc: '2026-09-30T23:44:00Z' }), 'PUT');
+    const version = JSON.stringify({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00Z', flagStatus: 'None' });
+    serve(
+      `${base}/versions`,
+      () => Promise.resolve(new Response(version, { status: 201, headers: { 'Content-Type': 'application/json' } })),
+      'POST',
+    );
+    await press(draftLink('Priya Kumar', yesterdayLong));
+    await settle();
+    expect(within(main()).getByText(/^This draft is for /).textContent).toBe(
+      `This draft is for ${yesterdayLong}. Submitting it now keeps that date.`,
+    );
+
+    await press(within(main()).getByRole('button', { name: 'Submit note' }));
+    const confirmation = screen.getByRole('alertdialog');
+    expect(confirmation).toHaveAccessibleName('Submit the note for Priya Kumar');
+    serve(draftsPath, json([]));
+    await press(within(confirmation).getByRole('button', { name: 'Submit note for Priya Kumar' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(within(main()).getByText('Note for Priya Kumar submitted').closest('[data-route-focus]')).toHaveFocus();
+    expect(draftsSection()).toBeNull();
+    expect(listedNames()).toEqual(names.filter((name) => name !== 'Priya Kumar'));
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').map(([path]) => path);
+    expect(posts).toEqual([`${base}/versions`]);
+  });
+
   it("leaves out the caller's draft of today for someone on the list, and lists one for someone off it", async () => {
     await openWithDrafts(
       [myDraftOf(jane, '2026-10-01'), myDraftOf(priya, '2026-10-01')],

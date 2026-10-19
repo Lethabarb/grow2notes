@@ -4224,16 +4224,20 @@ manager can read it.
     alone, until the page is opened again; "Nothing written yet." stands for a text of spaces alone too, as Submit's
     checks judge it blank; and a Discard whose dialog a browser closed while its request was out says why it failed in
     an alert above Discard draft, as the form says it above Submit note (confirm-dialog.md *Behaviour* 7).
-  - The earlier-day notice (step 6) shows on a saved draft dated before `me.today` as the form opens (note-form.md
-    *Kinds of note*), never on a new note; T18's past-day notice wins over it on a manager's past-day draft
-    (note-form.md component 4).
+  - The earlier-day notice (step 6) shows on a draft saved as the form opens (note-form.md *Kinds of note*, set when
+    the form loads), never on a new note, saved since or not, whenever its date is before `me.today`; so on today's
+    draft kept open past midnight it just appears, unannounced, once `me` gives the new day (status-messages.md
+    *Per-screen notes*), as the Submit confirmation's title and the Discard dialog's line change with it. T18's
+    past-day notice wins over it on a manager's past-day draft (note-form.md component 4).
   - Your unfinished drafts' rows (step 5) take `participantId/noteDate` as their return key, so that a pop back to
     Today focuses the row opened, never the main list's row of the same participant.
 - Hand-offs, which step 7 writes into the receiving tasks' Notes and, dated, into the stories' Notes: S02.01.04's fifth
   criterion, a pending edit's row opening its edit form end to end, to T14, which builds pending edits and the `/edit`
   route, this task building and testing the row's address; S02.03.03's first criterion's `isPastDayNote` being false,
   to T18, which adds it to `GET {base}` (T09's Notes), this task proving the note date and `FirstSubmittedAtUtc`; the
-  manager's read-only draft's common items, the `current` shape's `commonItemGroups`, to T13; and the past-day notice
+  manager's read-only draft's common items, the `current` shape's `commonItemGroups`, to T13; the earlier-day notice
+  and More actions never showing on a pending edit's form (note-form.md *Kinds of note*'s "Editing a submitted
+  note"), to T14, as both show on a note saved as the form opens, which a pending edit is too; and the past-day notice
   winning over the earlier-day one, to T18.
 - By-hand checks for ops/first-use-in-test.md, in a section of their own after T10's: on the iPhone in Safari, a worker
   discarding their own draft and landing on Today with the row's status gone, then starting the note again; on the
@@ -4354,7 +4358,7 @@ manager can read it.
       no search box; the order; search leaving the section as it is; the section and the list in one render, "Loading
       participants…" while either request is out, and the load-failed sentence when the drafts request fails; window
       focus refetching both; a row opened, then Back, focusing that row; and after Submit, Today fetching both afresh.
-- [ ] A draft from an earlier day (S02.03.03's four criteria, and its links to design.md §3.3, §3.4 *Earlier-day
+- [x] A draft from an earlier day (S02.03.03's four criteria, and its links to design.md §3.3, §3.4 *Earlier-day
       drafts*, §3.7 and §4.3's "Draft from an earlier day", and to note-form.md *Kinds of note* and component 4): on
       the form, the earlier-day notice after the date, T02's `Notice`, "This draft is for Wednesday 30 September 2026.
       Submitting it now keeps that date." (N), on a saved draft dated before `me.today` as the form opens (Notes); the

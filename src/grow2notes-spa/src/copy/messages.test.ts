@@ -60,6 +60,15 @@ describe("Discard's words", () => {
   });
 });
 
+// note-form.md *Kinds of note*, word for word.
+describe("the earlier-day notice's words", () => {
+  it("say the draft's date, then that submitting it keeps that date", () => {
+    expect(msg.earlierDayDraft('Wednesday 30 September 2026')).toBe(
+      'This draft is for Wednesday 30 September 2026. Submitting it now keeps that date.',
+    );
+  });
+});
+
 // participant-notes.md *Read view* › Status lines, word for word.
 describe("the read view's lines", () => {
   it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {

@@ -25,9 +25,10 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <c>note.submitted</c>, together or not at all, and <c>201</c>; a retry with the same key <c>200</c> with that
 /// version, changing nothing; and, changing nothing, <c>409 note.in_progress_by_other</c> for anyone else's draft,
 /// <c>409 note.version_conflict</c> for a submitted note, also at its autosave (§6.7), the body's checks, and
-/// <c>404</c> for a participant not in the caller's organisation (§9.2) or no live note. The tests add their own
-/// participants, goals, users and drafts (tests/README.md). The endpoint matrix covers who may call it, and
-/// <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// <c>404</c> for a participant not in the caller's organisation (§9.2) or no live note. There is no date or archive
+/// check, so a draft submitted on a later day keeps its date, and one for a participant archived since is submitted
+/// (§3.4, §3.7). The tests add their own participants, goals, users and drafts (tests/README.md). The endpoint matrix
+/// covers who may call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -42,6 +43,16 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
     // Two minutes before midnight on 2 October 2026 in Melbourne.
     private static readonly DateTimeOffset BeforeMidnight = new(2026, 10, 2, 13, 58, 0, TimeSpan.Zero);
+
+    // Made up (A35): a draft for Wednesday 30 September 2026, started that day at 9:14 am in Melbourne; then 9:00 am on
+    // Thursday 1 October, and 4:12 pm on Friday 2 October, all before daylight saving starts on 4 October.
+    private static readonly DateOnly EarlierDay = new(2026, 9, 30);
+
+    private static readonly DateTimeOffset On30SeptemberAt914 = new(2026, 9, 29, 23, 14, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset On1OctoberAt900 = new(2026, 9, 30, 23, 0, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset On2OctoberAt412 = new(2026, 10, 2, 6, 12, 0, TimeSpan.Zero);
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
@@ -504,6 +515,91 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
             (note.Status, note.NoteDate, note.CreatedAtUtc, note.FirstSubmittedAtUtc));
     }
 
+    // design.md §3.3 and §3.4 *Earlier-day drafts*: a worker's draft started on 30 September is still theirs to submit
+    // on 2 October. Version 1 keeps the note date, and its submitted time is the real one, which GET {base} gives for
+    // the read view to show beside the date (§4.4). Whether GET {base} calls it a past-day note is T18's.
+    [Fact]
+    public async Task A_worker_s_draft_started_on_30_September_and_submitted_on_2_October_keeps_its_date()
+    {
+        var clock = new FakeTimeProvider(On30SeptemberAt914);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        await StartNoteAsync(client, participant.Id, EarlierDay, "Jane made toast.");
+        clock.SetUtcNow(On2OctoberAt412);
+
+        using var response = await SubmitAsync(
+            client, participant.Id, EarlierDay, Guid.NewGuid(), Body("Jane made toast."));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var submittedAtUtc = On2OctoberAt412.UtcDateTime;
+        Assert.Equal((1, submittedAtUtc, "None"), await AnswerAsync(response));
+        var noteId = await LiveNoteIdAsync(participant.Id, EarlierDay);
+        var note = await StoredNoteAsync(noteId);
+        Assert.Equal(
+            ((byte)NoteStatus.Submitted, 1, EarlierDay, On30SeptemberAt914.UtcDateTime, submittedAtUtc),
+            (note.Status, note.CurrentVersionNumber, note.NoteDate, note.CreatedAtUtc, note.FirstSubmittedAtUtc));
+        Assert.Equal(submittedAtUtc, Assert.Single(await StoredVersionsAsync(noteId)).CreatedAtUtc);
+        var read = await client.GetFromJsonAsync<JsonElement>(
+            NotePath(participant.Id, EarlierDay), TestContext.Current.CancellationToken);
+        Assert.Equal(
+            ("Submitted", "2026-10-02T06:12:00Z"),
+            (read.GetProperty("status").GetString(), read.GetProperty("firstSubmittedAtUtc").GetString()));
+    }
+
+    // design.md §3.7: "A draft already started can still be submitted" once its participant is archived, and on a
+    // later day too, where nobody can start a note for them any more: its author reads it, saves it and submits it.
+    [Fact]
+    public async Task A_draft_for_a_participant_archived_since_is_read_saved_and_submitted()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var clock = new FakeTimeProvider(On30SeptemberAt914);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var clientId = Guid.NewGuid();
+        using var worker = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        await StartNoteAsync(worker, participant.Id, EarlierDay, "Jane made toast.", clientId);
+        using var manager = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        using (var archived = await manager.PostWithTokenAsync(
+                   $"/api/admin/participants/{participant.Id}/archive",
+                   await manager.FetchTokenAsync(),
+                   ifMatch: participant.ETag))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, archived.StatusCode);
+        }
+
+        clock.SetUtcNow(On1OctoberAt900);
+
+        var form = await worker.GetFromJsonAsync<JsonElement>(DraftPath(participant.Id, EarlierDay), cancellationToken);
+        using var saved = await worker.PutWithTokenAsync(
+            DraftPath(participant.Id, EarlierDay),
+            await worker.FetchTokenAsync(),
+            new
+            {
+                clientId,
+                seq = 2,
+                narrative = "Jane made toast and tea.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            },
+            ifMatch: null);
+        using var submitted = await SubmitAsync(
+            worker, participant.Id, EarlierDay, Guid.NewGuid(), Body("Jane made toast and tea."));
+
+        Assert.Equal(
+            (true, "Jane made toast."),
+            (form.GetProperty("isSaved").GetBoolean(), form.GetProperty("narrative").GetString()));
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        var noteId = await LiveNoteIdAsync(participant.Id, EarlierDay);
+        var note = await StoredNoteAsync(noteId);
+        Assert.Equal(
+            ((byte)NoteStatus.Submitted, EarlierDay, On1OctoberAt900.UtcDateTime),
+            (note.Status, note.NoteDate, note.FirstSubmittedAtUtc));
+        Assert.Equal("Jane made toast and tea.", Assert.Single(await StoredVersionsAsync(noteId)).Narrative);
+    }
+
     // The submit deleted the working copy (design.md §5.6), so the author's page saving again, and a manager's first
     // save on the note, each have a stale base, a draft's 0 (§6.7), and recreate no working copy.
     [Theory]
@@ -674,6 +770,9 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
     private static string DraftPath(Guid participantId, DateOnly noteDate) =>
         string.Create(
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/draft");
+
+    private static string NotePath(Guid participantId, DateOnly noteDate) =>
+        string.Create(CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}");
 
     // Submit's body as the screen sends it: on base 0, the content on screen, and the flag with its reason, which it
     // sends as null while the box is unticked.

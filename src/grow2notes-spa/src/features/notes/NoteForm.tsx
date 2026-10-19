@@ -91,16 +91,19 @@ type NoteFormProps = {
 };
 
 /**
- * The note form (note-form.md components 2, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note that
- * its checks refused, then the page's `<h1>` and the Past notes link; then, in a `<form noValidate>`, the lists-changed
- * notice's live region, there and empty from the first render, as a screen reader may not announce words written into
- * one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided notes; Flag for
- * manager, its tick and reason in this page's state too, the reason kept while the box is unticked; and Submit note,
- * with the alert above it; then, outside the form, More actions, with Discard draft, while the note is the viewer's own
- * saved draft, reopened or saved since: never on a new note before its first "Saved …", and through the takeover
- * banner's wait, as the draft is still theirs, until a dead end, as the note at this address may then be no draft of
- * theirs, when it goes with its panel and any Discard dialog, nothing sent, focus that was in them going to the `<h1>`
- * (T12's Notes).
+ * The note form (note-form.md components 2, 4, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note
+ * that its checks refused, then the page's `<h1>`; the earlier-day notice, on a draft saved before the form opened,
+ * never on a new note, saved since or not, as note-form.md's *Kinds of note* are set as the form loads, while it is
+ * dated before `me.today`, so that it just appears, unannounced, once `me` gives a day that has passed midnight with
+ * the form open (status-messages.md *Per-screen notes*); and the Past notes link; then, in a `<form noValidate>`, the
+ * lists-changed notice's live region, there and empty from the first render, as a screen reader may not announce
+ * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided
+ * notes; Flag for manager, its tick and reason in this page's state too, the reason kept while the box is unticked;
+ * and Submit note, with the alert above it; then, outside the form, More actions, with Discard draft, while the note
+ * is the viewer's own saved draft, reopened or saved since: never on a new note before its first "Saved …", and
+ * through the takeover banner's wait, as the draft is still theirs, until a dead end, as the note at this address may
+ * then be no draft of theirs, when it goes with its panel and any Discard dialog, nothing sent, focus that was in them
+ * going to the `<h1>` (T12's Notes).
  * Until T13 adds "2. Common items", the sections go from 1 to 3, keeping design.md's numbers. Each tick and each input
  * is a change that autosave saves, and a field that loses focus sends one at once (design.md §3.4). After a dead end,
  * every tick and the text stay as they are, to change and copy, though nothing more is saved (note-form.md *Conflicts
@@ -510,6 +513,9 @@ export function NoteForm({
     <>
       <ErrorSummary errors={summary} attempt={attempt} />
       {heading}
+      {draft.isSaved && noteDate < me.today && (
+        <Notice>{msg.earlierDayDraft(dateLong(parseDateOnly(noteDate)))}</Notice>
+      )}
       <PastNotesLink participantId={participantId} />
       <form
         noValidate

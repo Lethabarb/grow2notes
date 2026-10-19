@@ -58,6 +58,11 @@ export const msg = {
   draftIsFor: (noteDate: string) => `This draft is for ${noteDate}.`,
   startedItAt: (authorDisplayName: string, startedAt: string) => `${authorDisplayName} started it at ${startedAt}.`,
   /**
+   * The note form's notice on a draft from an earlier day (note-form.md *Kinds of note*), with the note date in
+   * `dateLong`: the Discard dialog's line for such a draft, then what Submit does with that date.
+   */
+  earlierDayDraft: (noteDate: string) => `${msg.draftIsFor(noteDate)} Submitting it now keeps that date.`,
+  /**
    * A Discard that failed (note-form.md *States* › *Discard dialog*): in the dialog's alert line, or above Submit note
    * when a browser closed the dialog while its request was out.
    */

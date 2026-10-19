@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import buttonStyles from '../../components/Button.module.css';
+import noticeStyles from '../../components/Notice.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
@@ -4219,6 +4220,145 @@ describe('The Discard dialog', () => {
     expect(confirmation()).toBeNull();
     expect(discards()).toEqual([]);
     expect(saves()).toEqual([]);
+  });
+});
+
+// A draft from an earlier day (note-form.md *Kinds of note* and component 4; design.md §3.4 *Earlier-day drafts* and
+// §4.3), opened on Thursday 1 October 2026.
+
+/** The earlier-day notice's words on a draft of Wednesday 30 September 2026. */
+const earlierDayWords = `This draft is for Wednesday 30${nbsp}September 2026. Submitting it now keeps that date.`;
+
+/** The earlier-day notice, found by its words, if it shows. */
+function earlierDayNotice(): HTMLElement | null {
+  return within(main()).queryByText(/^This draft is for /)?.closest<HTMLElement>(`.${noticeStyles.notice}`) ?? null;
+}
+
+/** The worker's own draft as `savedDraft()` has it, but last saved at 9:42 am on Wednesday 30 September 2026. */
+function savedEarlier(): Draft {
+  return { ...savedDraft(), savedAtUtc: '2026-09-29T23:42:00Z' };
+}
+
+/**
+ * Opens, for `me`, their note dated `noteDate` of a participant of their own, Jane Citizen by name, as `draft` holds
+ * it, the worker's own draft last saved on 30 September unless another, with its saves answered at 9:44 am on
+ * 1 October, its Submit `201` and Today's list to land on; and gives the participant.
+ */
+async function openOwnNote(noteDate: string, draft: Draft = savedEarlier(), me: Me = worker) {
+  const participant = freshParticipant();
+  serveNote(participant, json(draft), noteDate);
+  serveSave(paths(participant, noteDate).draft, saved('2026-09-30T23:44:00Z'));
+  serveSubmit(paths(participant, noteDate).versions, versionSaved());
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+  renderApp(paths(participant, noteDate).page, me);
+  await settle();
+  return participant;
+}
+
+describe('A draft from an earlier day', () => {
+  it('says that it is for its date, which submitting keeps, after the date and before Past notes', async () => {
+    await openOwnNote('2026-09-30');
+
+    expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Wednesday 30${nbsp}September 2026`);
+    const notice = earlierDayNotice()!;
+    expect(notice.textContent).toBe(earlierDayWords);
+    expect(follows(notice, pageHeading())).toBe(true);
+    expect(follows(within(main()).getByRole('link', { name: 'Past notes' }), notice)).toBe(true);
+    expect(notice.closest('form')).toBeNull();
+    // Plain page content, read in its place: never a live region, and never focused.
+    for (const attribute of ['role', 'aria-live', 'tabindex']) {
+      expect(notice).not.toHaveAttribute(attribute);
+    }
+  });
+
+  it.each([
+    { kind: "the worker's own draft of today", noteDate: '2026-10-01', draft: savedDraft() },
+    { kind: 'a new note of today', noteDate: '2026-10-01', draft: template() },
+    { kind: "the worker's form for yesterday, not yet started", noteDate: '2026-09-30', draft: template() },
+  ])('shows no notice on $kind', async ({ noteDate, draft }) => {
+    await openOwnNote(noteDate, draft);
+
+    expect(guidedNotes()).toBeInTheDocument();
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it("shows none on a manager's new note of an earlier day, once its first save is answered too", async () => {
+    await openOwnNote('2026-09-28', template(), manager);
+
+    await write();
+
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it('says "Draft · saved Wed 30 Sep 2026, 9:42 am" until its first change, the notice kept after it', async () => {
+    await openOwnNote('2026-09-30');
+
+    expect(shownSaveStatus()).toBe(`Draft${nbsp}· saved Wed 30${nbsp}Sep 2026, 9:42${nbsp}am`);
+    expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-29T23:42:00Z');
+
+    await write();
+
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(earlierDayNotice()?.textContent).toBe(earlierDayWords);
+  });
+
+  it.each([
+    {
+      title: 'Submit the note for',
+      noteDate: '2026-09-30',
+      draft: savedEarlier(),
+      date: `Wednesday 30${nbsp}September 2026`,
+    },
+    {
+      title: 'Submit today’s note for',
+      noteDate: '2026-10-01',
+      draft: savedDraft(),
+      date: `Thursday 1${nbsp}October 2026`,
+    },
+  ])("asks \"$title\" the name for the worker's own draft of $noteDate, with its date", async ({
+    noteDate,
+    draft,
+    title,
+    date,
+  }) => {
+    await openOwnNote(noteDate, draft);
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleName(`${title} Jane Citizen`);
+    expect(openConfirmation()).toHaveAccessibleDescription(`${date} Flagged for manager: No`);
+  });
+
+  it("sends the version to its own date's address, then lands on Today", async () => {
+    const participant = await openOwnNote('2026-09-30');
+    await press(submitButton());
+
+    await confirmSubmit();
+    await settle();
+
+    expect(submits().map(({ path }) => path)).toEqual([paths(participant, '2026-09-30').versions]);
+    expect(banner()).toHaveFocus();
+  });
+
+  it("appears on today's draft, unannounced, once `me` gives the next day with the form open", async () => {
+    await openOwnNote('2026-10-01', savedDraft());
+    guidedNotes().focus();
+    serve(mePath, json({ ...worker, today: '2026-10-02' }));
+
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+    await settle();
+
+    const notice = earlierDayNotice()!;
+    expect(notice.textContent).toBe(
+      `This draft is for Thursday 1${nbsp}October 2026. Submitting it now keeps that date.`,
+    );
+    for (const attribute of ['role', 'aria-live', 'tabindex']) {
+      expect(notice).not.toHaveAttribute(attribute);
+    }
+    expect(guidedNotes()).toHaveFocus();
   });
 });
 
