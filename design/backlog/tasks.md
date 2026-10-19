@@ -3636,6 +3636,13 @@ older page is told the note has moved on, and nothing is overwritten without ask
   connection drops, then "Saved …"; the takeover sentence once as a second tab saves, with Keep and Load next after
   the back link; a press of Submit during "Not saved" saying the sentence; and Sign out with no connection after a
   change saying the panel's sentence.
+- Step 6 (19 October 2026): tests/e2e/notes.ts's store numbers a page's saves as step 1's server does, with
+  `saveElsewhere()` for another page's takeover and `failDraftSaves()` for a lost signal, and the `secondTab` fixture
+  gives one person's draft a second tab; `addJaneWithTwoGoals()`, `setUpWithPassword()`, `endTheSession()` and
+  `signInAgainWithPasskey()` moved out of the specs that had them, for the note form's, Sign out's and the session
+  warning's tests to share (tests/README.md). The by-hand checks are ops/first-use-in-test.md steps 58 to 62,
+  S02.02.06's manual check step 59 and S02.02.05's step 61. The step stays unticked until CI's run on the pull request
+  passes and is recorded here, as T05's and T09's matching steps did, as the branch is not yet pushed.
 
 ### Steps
 
@@ -4118,6 +4125,13 @@ manager can read it.
   `LiveNote` (Features/Notes) is the live-note query and its in-progress rule, which the draft, note, version and
   history endpoints share. A draft submitted after midnight keeps its note date already (T09's test on a `TestClock`);
   S02.03.03's `isPastDayNote` comes with T18.
+- From T10 (19 October 2026): the form's own navigation to Today after Discard's `204` calls `leaveFreely()`, which
+  `useSaveBeforeLeaving()` (src/features/notes) gives the form, as Submit's does after its `201`, so that the leave
+  guard's `useBlocker` lets it go and no task works around the shared guard; Discard calls autosave's `stop()` before
+  its `POST`, and `resume()` on Go back (autosave-status.md *Behaviour* 6), and a Discard that met a `401` is never
+  sent again, as the Note above says, as autosave alone goes on after signing in again. The form calls
+  `invalidateToday()` as it unmounts, however it is left: this task adds `['me', 'drafts']` there (S02.02.05's and
+  S02.02.08's dated Notes).
 
 ### Steps
 
@@ -4180,6 +4194,11 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   `sentContent` (useAutosave.ts) as autosave's is, then sends, and `GET {base}` `current.commonItemGroups`;
   `TickListRead` gains `headingLevel`, and the read view "2. Common items" between "1. Goals" and "3. Guided notes", as
   the form does.
+- From T10 (19 October 2026): Load the other version replaces the picks too, with the ticks, text, flag and reason
+  (`showOtherVersion()` in NoteForm.tsx), and every save that T10 sends carries the picks with section 2: autosave's
+  own, its retries, the page-hidden save, Keep's and the save sent as the same person signs in again, each built by
+  `sentContent()` from the form's `read()` as it is sent (useAutosave.ts). S02.02.06's second criterion stays unticked
+  until then (its dated Note, and S02.05.02's).
 
 ### Steps
 
@@ -4227,6 +4246,13 @@ and shown the newer version, so nothing is silently overwritten.
   {base}/draft` `404`: this task builds pending edits there, checking who may edit before the base, so that a worker who
   is not the author gets `403 note.not_editable` at any base, 0 included, and decides what the form shows for that `403`
   at a save.
+- From T10 (19 October 2026): a `409 draft.taken_over` on a pending edit, the same editor on two devices, shows the
+  takeover banner exactly as for a draft (autosave-status.md *Per-screen notes*), through the same `useAutosave` and
+  the page's `TakeoverBanner`; Save changes and Cancel are never sent again after a `401`, as the Note above says; and
+  the form's own navigation after Save changes' or Cancel's success calls `leaveFreely()` from
+  `useSaveBeforeLeaving()`, as Submit's does after its `201`, so that the leave guard's `useBlocker` lets it go and no
+  task works around the shared guard. Cancel calls autosave's `stop()` before `DELETE {base}/draft`, as Submit does
+  before its `POST` (autosave-status.md *Behaviour* 6). S02.02.06's and S02.06.01's dated Notes.
 
 ### Steps
 

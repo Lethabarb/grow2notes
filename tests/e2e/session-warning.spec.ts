@@ -1,20 +1,25 @@
 import type { Page, Request, Response, Route } from '@playwright/test';
+import { addJaneWithTwoGoals, janeCitizen } from './addParticipant.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import { expectNothingKept } from './kept.ts';
 import { boxOf } from './layout.ts';
+import { isDraftSaveRequest } from './notes.ts';
 import { holdNext } from './requests.ts';
 
-// The warning before the idle sign-out in the published app (S00.04.07), against app-shell.md component 6 and its
-// Session criteria. Each test signs in for real, through setup with a passkey on the virtual authenticator, so that
-// Stay signed in's ping meets a live session. The page's timers and Date run on Playwright's clock, which runs the
-// page's 28 minutes in a moment, while the app's own clock runs in real time, so that the session that the page warns
-// of is still live in the app (tests/README.md).
+// The warning before the idle sign-out in the published app (S00.04.07, and S02.02.05 on the note form), against
+// app-shell.md component 6 and its Session criteria. Each test signs in for real, through setup with a passkey on the
+// virtual authenticator, so that Stay signed in's ping meets a live session. The page's timers and Date run on
+// Playwright's clock, which runs the page's 28 minutes in a moment, while the app's own clock runs in real time, so
+// that the session that the page warns of is still live in the app (tests/README.md).
 
 const isTo = (path: string) => (message: Request | Response) => new URL(message.url()).pathname === path;
 const isPing = isTo('/api/auth/ping');
 const isMe = isTo('/api/auth/me');
 const isHealthCheck = isTo('/healthz');
+/** Whether the response answers a save of a note's working copy, `PUT {base}/draft`. */
+const isDraftSave = (response: Response) => isDraftSaveRequest(response.request());
 
 // The heading at each step of the countdown, with the typographic apostrophe, and the status line's connection error
 // (app-shell.md component 6).
@@ -56,15 +61,9 @@ function idleTime(page: Page): IdleTime {
 /**
  * Signs the invited manager in through setup with a passkey on the virtual authenticator, as setup.spec.ts does, with
  * Playwright's clock installed before the page loads, so that the page's timers and `Date` run on it, as the real ones
- * until Today shows. The clock is then paused, so that the page's time moves only as the test runs it on, and the
- * nav's Today link sends a request that the app accepts, `GET /api/auth/me`, from which the page's idle time counts.
- * The link keeps focus, where the warning gives it back as it closes.
+ * until Today shows.
  */
-async function signInThroughSetup(
-  page: Page,
-  invite: Invite,
-  authenticator: VirtualAuthenticator,
-): Promise<IdleTime> {
+async function signInOnTheClock(page: Page, invite: Invite, authenticator: VirtualAuthenticator) {
   await page.clock.install();
   await page.goto(invite.setupLink);
   // The refresh that setup sends as it moves to /, the first 200, has its answer before the clock is paused, so that
@@ -74,9 +73,25 @@ async function signInThroughSetup(
   await refreshed;
   await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toContainText('Today');
   expect(await authenticator.credentials()).toHaveLength(1);
+}
 
-  // A second on, so that the clock is paused ahead of the real time that passes while the test reads it.
+/** Pauses the clock a second on, so that it is paused ahead of the real time that passes while the test reads it. */
+async function pauseTheClock(page: Page) {
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+}
+
+/**
+ * Signs in on the clock as `signInOnTheClock` does, then pauses it, so that the page's time moves only as the test runs
+ * it on, and the nav's Today link sends a request that the app accepts, `GET /api/auth/me`, from which the page's idle
+ * time counts. The link keeps focus, where the warning gives it back as it closes.
+ */
+async function signInThroughSetup(
+  page: Page,
+  invite: Invite,
+  authenticator: VirtualAuthenticator,
+): Promise<IdleTime> {
+  await signInOnTheClock(page, invite, authenticator);
+  await pauseTheClock(page);
   const accepted = page.waitForResponse(isMe);
   await todayLink(page).click();
   expect((await accepted).status()).toBe(200);
@@ -351,4 +366,55 @@ test('at 320 px with text at 200%, the warning wraps and scrolls inside itself, 
   });
   // Focused as the warning opens, Stay signed in is scrolled into view inside it, whole.
   await expect(staySignedIn(page)).toBeInViewport({ ratio: 1 });
+});
+
+test('on the note form, a change made at 27:59 goes at 28:00 in place of the warning, which stays closed', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInOnTheClock(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  await page.getByRole('main').locator('a[data-return-key]', { hasText: janeCitizen.name }).click();
+  const box = page.getByRole('main').getByRole('textbox', { name: '3. Guided notes' });
+  await expect(box).toBeVisible();
+
+  // On the paused clock, the note's first save goes as its 2 s pass, and the app accepts it: the idle time counts
+  // from then.
+  await pauseTheClock(page);
+  await box.pressSequentially('Went to the shops.');
+  const started = page.waitForResponse(isDraftSave);
+  await page.clock.runFor(2_000);
+  expect((await started).status()).toBe(201);
+  const idle = idleTime(page);
+  const sentSince = recordRequests(page);
+
+  // A change at 27:59, whose own save would be due at 28:01.
+  await idle.runTo('27:59');
+  await expect(warning(page)).toBeHidden();
+  await box.pressSequentially(' Bought bread.');
+  expect(await sentSince()).toEqual([]);
+
+  // At 28:00 the change goes in place of the warning, and the app's answer starts the idle time afresh, so no warning
+  // opens (app-shell.md *28:00 idle on a visible page*; session-timeout.md *The session clock* step 3).
+  const flushed = page.waitForResponse(isDraftSave);
+  await idle.runTo('28:00');
+  const answer = await flushed;
+  expect(answer.status()).toBe(200);
+  expect(answer.request().postDataJSON()).toMatchObject({ narrative: 'Went to the shops. Bought bread.' });
+  await expect(warning(page)).toBeHidden();
+  expect(await sentSince()).toEqual([`PUT ${new URL(answer.url()).pathname}`]);
+
+  // Nothing more goes when the change's own save was due, and the warning opens only 28 minutes after the save.
+  idle.restart();
+  await idle.runTo('00:02');
+  expect(await sentSince()).toEqual([]);
+  await idle.runTo('27:59');
+  await expect(warning(page)).toBeHidden();
+  await idle.runTo('28:00');
+  await expect(warning(page)).toBeVisible();
+  await expect(heading(page)).toHaveText(twoMinutes);
+  expect(await sentSince()).toEqual([]);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops');
 });

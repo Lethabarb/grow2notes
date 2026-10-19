@@ -1,11 +1,16 @@
 import type { Page, Request, Response } from '@playwright/test';
+import { addJaneWithTwoGoals, janeCitizen } from './addParticipant.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectNothingKept } from './kept.ts';
 import { boxOf } from './layout.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
+import { draftRequests, isDraftSaveRequest } from './notes.ts';
+import { holdNext } from './requests.ts';
+import { signInThroughSetup } from './setupSignIn.ts';
 import { expectViewA } from './signedOut.ts';
 
-// Sign out in the published app (S00.04.06), against app-shell.md › Account and Sign out.
+// Sign out in the published app (S00.04.06, S02.02.05), against app-shell.md › Account and Sign out.
 
 const isTo = (path: string) => (message: Request | Response) => new URL(message.url()).pathname === path;
 const isLogout = isTo('/api/auth/logout');
@@ -189,4 +194,63 @@ test('signed in through setup, Sign out clears the site, leaves no cookie and en
   expect(await page.evaluate(async () => (await fetch('/api/auth/me')).status)).toBe(401);
   // Signing out ends the session only: the passkey stays on the device, for the next sign-in.
   expect(await authenticator.credentials()).toHaveLength(1);
+});
+
+test('signed in for real, Sign out with a change waiting saves it before the logout, then / afresh, Back too', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  await page.getByRole('main').locator('a[data-return-key]', { hasText: janeCitizen.name }).click();
+  const box = page.getByRole('main').getByRole('textbox', { name: '3. Guided notes' });
+  await expect(box).toBeVisible();
+
+  // The note's save and the logout, as the page sends them and has the save answered.
+  const steps: string[] = [];
+  page.on('request', (request) => {
+    if (isDraftSaveRequest(request)) {
+      steps.push('save sent');
+    } else if (isLogout(request)) {
+      steps.push('logout sent');
+    }
+  });
+  page.on('response', (response) => {
+    if (isDraftSaveRequest(response.request())) {
+      steps.push(`save answered ${response.status()}`);
+    }
+  });
+
+  // A change waiting, its save held on its way to the app, sent at the latest as Account takes focus from the box;
+  // then Sign out, busy, with no logout while the save is out (app-shell.md *Press Sign out* step 2). The page's own
+  // request then shows that the browser has reported every request sent before it.
+  const heldSave = await holdNext(page, draftRequests);
+  await box.pressSequentially('Went to the shops.');
+  await account(page).click();
+  const save = await heldSave();
+  expect(save.request().method()).toBe('PUT');
+  await signOut(page).click();
+  await expect(signOut(page)).toHaveAccessibleName('Signing out…');
+  await page.evaluate(async () => {
+    await fetch('/healthz');
+  });
+  expect(steps).toEqual(['save sent']);
+
+  // The save answered, then the logout, then / loads afresh, signed out.
+  const logoutAnswer = page.waitForResponse(isLogout);
+  const appMe = appSaysSignedOut(page);
+  await save.continue();
+  expect((await logoutAnswer).status()).toBe(204);
+  expect(steps).toEqual(['save sent', 'save answered 201', 'logout sent']);
+  await expectSignedOut(page, appMe);
+  await expect(page).toHaveURL('/');
+
+  // The note's entry was replaced, so Back reaches Today's, which loads afresh and meets the app's 401.
+  const back = appSaysSignedOut(page);
+  await page.goBack();
+  await expect(page).toHaveURL('/');
+  await expectSignedOut(page, back);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops');
 });

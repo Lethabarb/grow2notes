@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as wait } from 'node:timers/promises';
-import type { Page, Route } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 import type { Me } from './me.ts';
 import type { AdminParticipant } from './participants.ts';
 import type { ToReviewRow } from './reviews.ts';
@@ -62,7 +62,10 @@ export type SubmittedNote = {
 /** The version in a note's `FlaggedVersionNumber` (design.md §5.3): its reason and when it was saved. */
 type FlaggedVersion = { flagReason: string; createdAtUtc: string };
 
-/** A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks, text and flag. */
+/**
+ * A working copy as the store keeps it: whose it is, its snapshot of the goals, its ticks, text and flag, and the page
+ * that saved it last, by its `clientId`, with the number of that page's last save (design.md §5.6).
+ */
 type HeldDraft = StartedBy & {
   authorUserId: string;
   snapshot: NoteGoal[];
@@ -71,6 +74,18 @@ type HeldDraft = StartedBy & {
   isFlagged: boolean;
   flagReason: string | null;
   savedAtUtc: string;
+  lastClientId: string;
+  lastSeq: number;
+};
+
+/** What another page of a draft's author holds as it saves the draft, as `saveElsewhere` takes it. */
+export type SavedElsewhere = {
+  narrative?: string;
+  tickedGoalIds?: string[];
+  isFlagged?: boolean;
+  flagReason?: string;
+  /** The time of its save, by default the store's. */
+  savedAtUtc?: string;
 };
 
 /**
@@ -168,8 +183,9 @@ type StoreOptions = {
  * current version, a draft's `{status}` or `404` for none; the note form, a template, the caller's own draft or
  * another user's `409`, or `404` for a date after today, to a worker for one before yesterday (design.md A65), and for
  * a submitted note; autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's
- * own draft; and Submit's `POST {base}/versions`, with its checks in the API's order, which puts a flagged version 1
- * in To review. `serve` answers one page's requests as one person's, and `toReview` gives the To review list.
+ * own draft as design.md §5.6 numbers a page's saves, by `clientId` and `seq`; and Submit's `POST {base}/versions`,
+ * with its checks in the API's order, which puts a flagged version 1 in To review. `serve` answers one page's requests
+ * as one person's, and `toReview` gives the To review list.
  */
 export function notesStore({
   today: firstToday,
@@ -249,7 +265,10 @@ export function notesStore({
     return { json };
   }
 
-  /** A save of `me`'s working copy, as `PUT {base}/draft` answers it: the creating save's checks in their order. */
+  /**
+   * A save of `me`'s working copy, as `PUT {base}/draft` answers it: the creating save's checks in their order, and a
+   * later save numbered as §5.6 numbers a page's saves.
+   */
   function save(me: Me, participantId: string, noteDate: string, sent: DraftSave) {
     saves.push(sent);
     const key = `${participantId}/${noteDate}`;
@@ -268,11 +287,29 @@ export function notesStore({
         return problem(409, 'note.in_progress_by_other', { authorDisplayName, startedAtUtc });
       }
 
+      if (draft.lastClientId === sent.clientId) {
+        // The page's save sent again after its answer was lost, or one that a later save of the page overtook: the
+        // time of the save that the working copy holds, and nothing changed.
+        if (sent.seq <= draft.lastSeq) {
+          return { status: 200, json: { savedAtUtc: draft.savedAtUtc } };
+        }
+      } else if (sent.seq !== 1) {
+        // Another page has saved since this one last did, and only a page's first save takes the working copy over.
+        return problem(409, 'draft.taken_over');
+      }
+
       if (!ticked.every((id) => draft.snapshot.some((goal) => goal.id === id))) {
         return refused('tickedGoalIds');
       }
 
-      Object.assign(draft, { ticked, narrative: sent.narrative, ...flag, savedAtUtc });
+      Object.assign(draft, {
+        ticked,
+        narrative: sent.narrative,
+        ...flag,
+        savedAtUtc,
+        lastClientId: sent.clientId,
+        lastSeq: sent.seq,
+      });
       return { status: 200, json: { savedAtUtc } };
     }
 
@@ -306,6 +343,8 @@ export function notesStore({
       narrative: sent.narrative,
       ...flag,
       savedAtUtc,
+      lastClientId: sent.clientId,
+      lastSeq: sent.seq,
     });
     return { status: 201, json: { savedAtUtc } };
   }
@@ -545,6 +584,31 @@ export function notesStore({
         isFlagged: false,
         flagReason: null,
         savedAtUtc: startedBy.startedAtUtc,
+        lastClientId: randomUUID(),
+        lastSeq: 1,
+      });
+    },
+    /**
+     * Saves the draft of a participant's note for a day as its author does from another tab or device, with what that
+     * page holds, the rest kept: a page's first save, under a `clientId` of its own, which takes the working copy over,
+     * so that the next save of a page that saved it before meets `409 draft.taken_over`.
+     */
+    saveElsewhere: (participantId: string, noteDate: string, elsewhere: SavedElsewhere) => {
+      const key = `${participantId}/${noteDate}`;
+      const draft = drafts.get(key);
+      if (draft === undefined) {
+        throw new Error(`No draft of ${key} is held.`);
+      }
+
+      const isFlagged = elsewhere.isFlagged ?? draft.isFlagged;
+      Object.assign(draft, {
+        ticked: elsewhere.tickedGoalIds ?? draft.ticked,
+        narrative: elsewhere.narrative ?? draft.narrative,
+        isFlagged,
+        flagReason: isFlagged ? (elsewhere.flagReason ?? draft.flagReason) : null,
+        savedAtUtc: elsewhere.savedAtUtc ?? savedAtUtc,
+        lastClientId: randomUUID(),
+        lastSeq: 1,
       });
     },
     /** Submits the draft of a participant's note for a day as its author does in another tab, with what it holds. */
@@ -641,6 +705,25 @@ export function notesStore({
 
 /** What `notesStore` gives. */
 export type NotesStore = ReturnType<typeof notesStore>;
+
+/** Whether the request is a save of a note's working copy, `PUT {base}/draft`. */
+export const isDraftSaveRequest = (request: Request) =>
+  request.method() === 'PUT' && draftPath.test(new URL(request.url()).pathname);
+
+/** A pattern for the next request for a note's working copy, its read or its save, for `holdNext`. */
+export const draftRequests = '**/api/participants/*/notes/*/draft';
+
+/**
+ * Aborts each save of a note's working copy, `PUT {base}/draft`, that the page sends from now on, in the browser, as a
+ * phone that loses its signal on the way would, so that autosave retries it; its reads go on as before. A later `serve`
+ * of a store overrides it.
+ */
+export async function failDraftSaves(page: Page): Promise<void> {
+  await page.route(
+    ({ pathname }) => draftPath.test(pathname),
+    (route) => (route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()),
+  );
+}
 
 /** Whether `pathname` is one that `failNoteReads` fails. */
 const isNoteRead = (pathname: string) =>

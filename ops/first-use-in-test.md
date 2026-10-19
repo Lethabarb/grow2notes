@@ -560,3 +560,49 @@ review, as T09 left every flag status as it was, so these steps flag a note of t
     then "link", then the worker's name and "flagged" with the time; the Reason line read when reading on; and, once
     the row is open, the back link read as "Flagged". (flagged.md *Visual and device*, the manual pass, for what T11
     builds.)
+
+### Autosave through a lost signal, another device and the session's end, once T10 is in test
+
+These steps hold T10's by-hand checks ([tasks.md](../design/backlog/tasks.md), T10's Notes). They need account A,
+signed in on the laptop in Chrome and on each phone as in step 48, and made-up participants with two goals each, such
+as `Jane Citizen` with `Makes own breakfast` and `Phones her sister`, whose notes for today nobody has started: two for
+step 58, one each for steps 59 and 60, and two for each screen reader in step 62, ten in all. Every word typed into a
+note is made up (A35).
+
+58. On the iPhone in Safari, as account A, open the first participant's note, type a sentence into Guided notes and,
+    before the status says "Saved", switch straight to another app. On the laptop, open the same note: look for the
+    sentence, whole. Do the same on the Android phone in Chrome with the second participant. (The page-hidden save on
+    a real phone: design.md §5.6 *Client behaviour*; note-form.md item 9.)
+59. On the iPhone in Safari, as account A, open the third participant's note and type a sentence, then a second one,
+    and close the browser in the middle of the second: swipe up and swipe Safari away. On the laptop, open the same
+    note: look for the text there apart from at most the last few seconds of typing. (S02.02.06's manual check: type
+    on a phone, close the browser mid-sentence, open the same note on a laptop; the text is there apart from at most
+    the last few seconds. design.md §14 M2 *Done when*.)
+60. On the laptop, in Chrome with the developer tools open on the Network panel, open the fourth participant's note,
+    type a sentence, then at once set the Network panel's throttling to Offline. Look for "Not saved: no connection.
+    Keep this page open; retrying." in the bar under Today. Leave the page untouched for 31 minutes, in front and with
+    the screen kept awake: look for the warning at 28 minutes, and at 30 "You've been signed out" in the form's place,
+    at the same address. Set the throttling back to No throttling and press Sign in with a passkey. Look for the note
+    form again with the sentence, the status "Saved" and the time, no "This note was changed on another device or
+    tab.", and one `PUT …/draft` answered `200` in the Network panel. (The app's own 30 idle minutes, then the same
+    person signing in again with the text intact and no takeover banner: S02.02.05's second criterion in test;
+    design.md §14 M2 *Done when*.)
+61. After steps 58 to 60, on the laptop, in Chrome's developer tools, open Application and look under Storage at Local
+    storage, Session storage, IndexedDB and Cache storage for the test site: look for nothing in any of them, so no
+    note text, ticks or names. Then connect the Android phone to the laptop by USB, with USB debugging on, open
+    `chrome://inspect` in the laptop's Chrome, inspect the phone's tab on the test site, and look in the same four
+    places. (S02.02.05's manual check: after writing notes on a phone and on a laptop, local storage, session storage,
+    IndexedDB and Cache Storage hold no note text, ticks or names. design.md §14 M2 *Done when*; note-form.md item 14.)
+62. On the laptop with NVDA and Chrome, then on the iPhone with VoiceOver and Safari, then on the Android phone with
+    TalkBack and Chrome, each as account A with two participants of its own: open the first participant's note, type a
+    sentence and wait for "Saved" and the time. Turn the connection off, in the Network panel on the laptop and with
+    aeroplane mode on a phone, and type another sentence: look for "Not saved: no connection. Keep this page open;
+    retrying." read once, and not again while the connection stays off. Press Submit note: look for the same sentence
+    read again, and nothing opening. Open Account and press Sign out: look for "Not signed out: your note is not saved
+    yet. Keep this page open; retrying." read, and Today and Account still there once you close the panel. Turn the
+    connection on and press nothing: look for "Saved" and the time read. Then open the second participant's note in
+    two tabs, type a word in the second tab and wait for "Saved"; go back to the first tab and type a word there: look
+    for "This note was changed on another device or tab." read once, with the cursor still in Guided notes, and Keep
+    the text on this screen, then Load the other version, as the next two stops after Today, the back link. Press Load
+    the other version and look for the participant's name and the date read as focus moves to the heading.
+    (note-form.md's *Announcements* for what T10 builds; app-shell.md's Sign out with a note not saved.)
