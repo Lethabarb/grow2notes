@@ -3668,6 +3668,9 @@ the reason and when it was flagged. Only submitted flags count.
     `flagStatus`. It gains the reading as built, when the answer says `ToReview`, as note-form.md and app-shell.md
     have it. chronological-list.md's T09 note still said that T16 and T18 bring the whole lists; it now says that the
     whole mode came with T11.
+- 19 October 2026: CI's run 39180061355 on the pull request (#64), which alone runs the SQL Server tests, passed on
+  `fd1a41b`, with 2035 Vitest, 1563 xUnit and 284 Playwright tests, so step 6 is ticked. No migration was added, so
+  there is no `migrate.sql` to read.
 
 ### Steps
 
@@ -3749,7 +3752,7 @@ the reason and when it was flagged. Only submitted flags count.
       link "Flagged", which goes back one entry to `/flagged`, the rows shown at once from memory and focus back on the
       row opened; the same read view as from Today but for the label; after a reload, "Today"; `history.state` holding
       no back object; and no `aria-current` in the nav on the note.
-- [ ] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
+- [x] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
       `GET /api/reviews?status=toReview` in the browser from `notesStore`'s notes, whose Submit now sets and answers
       `flagStatus`, described in tests/README.md; and a new `flagged.spec.ts`. Signed in for real at 375 px, on the
       app's own answers: a manager adds a participant and invites a worker and a second manager, each set up on a device
