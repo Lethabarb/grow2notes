@@ -4371,7 +4371,7 @@ manager can read it.
       words; "Submit the note for" on the earlier day's draft and "Submit today's note for" on today's; the Discard
       dialog's lines; and an archived participant's earlier-day draft submitted, landing on Today with the banner, and
       no longer under Your unfinished drafts.
-- [ ] Prove the drafts and Discard end to end and bring the documents into line: `tests/e2e/notes.ts` and
+- [x] Prove the drafts and Discard end to end and bring the documents into line: `tests/e2e/notes.ts` and
       `tests/e2e/today.ts` answer `POST {base}/discard`, `GET /api/me/drafts` and a draft's header and content in `GET
       {base}` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and
       `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: a worker starts a
@@ -4479,6 +4479,11 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   own, its retries, the page-hidden save, Keep's and the save sent as the same person signs in again, each built by
   `sentContent()` from the form's `read()` as it is sent (useAutosave.ts). S02.02.06's second criterion stays unticked
   until then (its dated Note, and S02.05.02's).
+- From T12 (19 October 2026): a manager's read-only draft (`SomeoneElsesDraft`, src/features/notes) shows `GET
+  {base}`'s `current` through the read view's own `ReadSections`, so this task gives a draft's `current` its
+  `commonItemGroups`, from the author's working copy, the Every note group if it has items and the groups picked, in
+  the snapshot's order (design.md §6.3), and "2. Common items" shows there as on the read view (S02.04.03's dated
+  Note).
 
 ### Steps
 
@@ -4533,6 +4538,12 @@ and shown the newer version, so nothing is silently overwritten.
   `useSaveBeforeLeaving()`, as Submit's does after its `201`, so that the leave guard's `useBlocker` lets it go and no
   task works around the shared guard. Cancel calls autosave's `stop()` before `DELETE {base}/draft`, as Submit does
   before its `POST` (autosave-status.md *Behaviour* 6). S02.02.06's and S02.06.01's dated Notes.
+- From T12 (19 October 2026): `GET /api/me/drafts` lists a pending edit as `kind: "pendingEdit"`, and its row under
+  Your unfinished drafts links to `/participants/{participantId}/notes/{noteDate}/edit` (TodayPage.test.tsx,
+  today.spec.ts), which this task's route opens: S02.01.04's fifth criterion waits for it (its dated Note). The
+  earlier-day notice and More actions show on a draft saved as the form opens, which a pending edit is too, so this
+  task keeps both off a pending edit's form (note-form.md *Kinds of note*'s "Editing a submitted note"; S02.02.08's
+  and S02.03.03's dated Notes).
 
 ### Steps
 
@@ -4720,6 +4731,11 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 - From T11 (19 October 2026): the version rows reuse what T11 built for To review, with its tests: `ChronoList`'s
   whole mode, with `older` left out, and `MetaLine` with no status word (`statusFirst` false), as only version 1's meta
   line starts with one (status-tags.md *Where it's used*).
+- From T12 (19 October 2026): S02.03.03's first criterion waits for this task's `isPastDayNote` on `GET {base}`, false
+  for a worker's draft submitted after midnight; T12 proves its note date and `FirstSubmittedAtUtc` on a `TestClock`
+  (NoteVersionEndpointsTests). The past-day notice wins over T12's earlier-day notice (note-form.md component 4), which
+  NoteForm.tsx shows on a saved draft dated before `me.today`, so a manager's past-day draft shows this task's alone
+  (S02.03.03's dated Note).
 
 ### Steps
 

@@ -427,6 +427,11 @@ would be new copy and a slow read shows nothing new.
 - Shown in edit mode too for a past-day note (3.8: "everywhere it appears").
 - Copy in **States**; dates normalised to `dateLong` (N) because they sit in sentences (`microcopy.md` §9;
   Style Manual "Only use abbreviations if space is limited") [Convention].
+- As built (T12): T02's `Notice`, after the `<h1>` and before Past notes, for a draft from an earlier day, until T18
+  adds the past-day notice, which wins over it. It shows on a draft saved as the form opens whose date is before
+  `me.today`, never on a new note, saved since or not, so that on today's draft kept open past midnight it appears,
+  unannounced, once `me` gives the new day (status-messages.md *Per-screen notes*). A pending edit is saved as its form
+  opens too, so T14 keeps the notice, and More actions, off its form.
 
 ### 5. Past notes link: design.md §4.4 ("the 'Past notes' link in the note form and read view")
 
@@ -569,6 +574,13 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
 - APG **disclosure**, not a menu: `<button type="button" aria-expanded aria-controls>` **More actions** (P), revealing
   an inline panel with one secondary button **Discard draft** (V). No `role="menu"`. Escape closes the panel and
   returns focus to More actions. [Standard] APG Disclosure.
+- As built (T12): `MoreActions` (src/features/notes), after the `<form>`. It shows while the form holds the viewer's
+  own saved draft, reopened or saved since, so after the first "Saved …" on a new note, and through the takeover
+  banner's wait, as the draft is still theirs; and it goes once autosave meets a dead end, with its panel and any
+  Discard dialog, nothing sent, focus that was on it, in its panel or in the dialog going to the `<h1>`, as Load's dead
+  end has it (*Changed on another device or tab*), since the note at this address may then be no draft of theirs: a
+  Discard would go to whatever draft is live there. Escape from the button or from the panel closes the panel. It is
+  the Tab stop after Submit note once the first save is answered (*Focus order (Tab)*).
 
 ### 14. Submit confirmation: [confirm-dialog.md](../components/confirm-dialog.md) and [note-identity-header.md](../components/note-identity-header.md)
 
@@ -593,6 +605,11 @@ fieldsets, no disclosure widgets, no dialog, no React Aria.
   draft is for Wednesday 30 September 2026.**, then always **Nobody will be able to open this draft again.**
 - Confirm **Discard draft for Jane Citizen** (P, canonical in `microcopy.md` §9), **warning** style (red fill, white
   bold text; one of only two warning buttons in the product). Then **Go back**.
+- As built (T12): `DiscardDialog` (src/features/notes), one for the form and for a manager's read-only draft
+  (participant-notes.md component 9), on T03's `ConfirmDialog`, opened on its title. Its body has confirm-dialog.md's
+  lines in its order, each only where it applies: the earlier-day line for a draft dated before `me.today`, a
+  manager's "Alex P. started it at 9:14 am." for someone else's draft, its time through `stamp()` with the note date
+  as its reference day (A64), then always "Nobody will be able to open this draft again.".
 
 ### 16. Form-level announcer: [autosave-status.md](../components/autosave-status.md)
 
@@ -741,6 +758,10 @@ Nothing is ever cut on screen; the error (and the Submit block) arrives only whe
 | Busy | **Discarding…** (P) after 1 s |
 | Failed | **Not discarded: no connection. Try again.** / **Not discarded: something went wrong. Try again.** (P, pattern) |
 | No longer possible (`409 note.not_a_draft`) | **This draft has already been submitted or discarded.** (P); confirm removed; focus to Go back; Go back goes to Today |
+
+As built (T12): the failure sentences are these, the screen specs' words over confirm-dialog.md's older ones. Go back,
+Escape or Back after the `409` goes to Today as a `204` does. A `401` shows nothing in the dialog, which closes before
+signing in again in place (*Session*); the Discard is not sent again after it.
 
 ### Edit-mode actions
 
@@ -907,6 +928,14 @@ as the note stands now, so "when the `201` carries a `flagStatus`" is read as wh
    rule; no success banner; the row simply loses its status). Go back, Escape or
    Back: close, focus returns to **More actions** (the panel is closed), autosave resumes.
 
+As built (T12): confirming calls autosave's `stop()`, which settles once any save out has its answer, and sends the
+`POST` only then, or none if that save met a dead end, which takes More actions and the dialog away; no save goes
+after it. The `204` removes Today's lists and `['me', 'drafts']` (`removeToday()`), as Submit's `201` does, so that
+Today never shows the old status for a moment, marks the participant's Past notes stale, so that a pop back to them
+lists the draft no more, and calls `leaveFreely()` before the replace, so that the leave guard lets it go. Go back,
+Escape or Back calls `resume()`, which sends at once a change that the pause held. No success message shows (open
+question 6, as designed).
+
 ### Changed on another device or tab
 
 - **Keep the text on this screen:** forget this note's `{clientId, seq}`, send everything on screen now (including
@@ -966,6 +995,12 @@ disarmed it. The form calls `invalidateToday()` as it unmounts, however it is le
   kept, the indicator as it was; as the same person's form shows again, **Saving…** shows and the save goes at once.
   Sign out while the takeover banner shows is refused with **Not signed out: your note is not saved yet. Keep this page
   open; retrying.**, as a link stays then; after a dead end it goes on.
+- As built (T12): the warning closes More actions' panel as it opens, whether or not the Discard dialog is open,
+  first moving focus that is in the panel to More actions, so that the warning never gives it back to a hidden Discard
+  draft; an open Discard dialog closes as Go back, nothing sent, focus going to More actions, where the warning gives
+  it back after **Stay signed in**. So "focus returns to **Submit note**" above is the Submit confirmation's alone, as
+  session-timeout.md *The warning* step 3's "the element focused before" has it. A Discard that met a `401` is never
+  sent again.
 
 ### Focus order (Tab)
 

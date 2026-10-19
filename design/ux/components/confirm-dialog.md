@@ -522,6 +522,14 @@ const name = `${p.givenName} ${p.familyName}`;
 **4.2 Today / 4.4 Past notes: manager discarding someone else's draft**
 - Same dialog. The body adds "Alex P. started it at 9:14 am." so the manager can see whose work goes. After success,
   the manager lands on Today.
+- As built (T12): one `DiscardDialog` (src/features/notes) serves the note form and a manager's read-only draft, on
+  T03's `ConfirmDialog`. Its body lines are dialog 2's, in its order, each only where it applies, the "started it at"
+  time through `stamp()` with the note date as its reference day (A64). Two of dialog 2's lines, and *Behaviour* 4's,
+  are not built as worded, as the screen specs settle them: Today shows no "Draft for Jane Citizen discarded.", focus
+  going to its `<h1>` after a `204` (note-form.md open question 6); and a failure says "Not discarded: no connection.
+  Try again." or "Not discarded: something went wrong. Try again." (note-form.md *States* › *Discard dialog*,
+  participant-notes.md *States*). Go back gives focus to More actions on the form, its panel closed, and to Discard
+  draft on a manager's draft; after `409 note.not_a_draft`, Go back goes to Today, as a `204` does.
 
 **4.8 Participants: Archive participant (no dialog)**
 - Recommendation: **no confirmation**. design.md 4.8 specifies none. Archiving is rare and fully reversible, and the

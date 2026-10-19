@@ -14,16 +14,17 @@ import {
 } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
-import { notesStore } from './notes.ts';
-import { jane, madeUpParticipant, participants, ravi } from './participants.ts';
+import { daysAfter, notesStore, type NotesStore } from './notes.ts';
+import { ben, jane, madeUpParticipant, participants, ravi } from './participants.ts';
 import { holdNext, recordRequests } from './requests.ts';
-import { failToday, serveToday, todayList, type TodayNote } from './today.ts';
+import { failToday, serveMyDrafts, serveToday, todayList, type MyDraft, type TodayNote } from './today.ts';
 
-// Today in the published app (S02.01.01, S02.01.02, S02.01.03), against today.md's criteria: its states, each row's
-// note status, the device's own clock and zone, Find a participant, the banner after Submit, reflow, targets, the
-// focus ring and the keyboard alone. Each test answers /api/auth/me and /api/today in the browser (me.ts, today.ts)
-// with made-up people (A35), and the note that a row opens from a store in memory (notes.ts), so that none of those
-// requests reaches the app; note-form.spec.ts signs in for real and meets the app's own Today.
+// Today in the published app (S02.01.01 to S02.01.04), against today.md's criteria: its states, each row's note
+// status, the device's own clock and zone, Find a participant, the banner after Submit, Your unfinished drafts,
+// reflow, targets, the focus ring and the keyboard alone. Each test answers /api/auth/me, /api/today and
+// /api/me/drafts in the browser (me.ts, today.ts) with made-up people (A35), and the note that a row opens from a store
+// in memory (notes.ts), so that none of those requests reaches the app; note-form.spec.ts signs in for real and meets
+// the app's own Today.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -121,7 +122,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-  expect(liveRegionsAddedWithWords, 'live regions put into the page with their words').toEqual([]);
+  // But the save indicator of a draft that a row of Your unfinished drafts reopens, which the form puts in anew with
+  // its first words, "Draft · saved …", so that they are the page's own rather than announced as a change
+  // (autosave-status.md *Behaviour* 8).
+  const announcedLate = liveRegionsAddedWithWords.filter((region) => !/^<p id="save-status"[^>]*>Draft</.test(region));
+  expect(announcedLate, 'live regions put into the page with their words').toEqual([]);
   expect(await hiddenLiveRegions(page), 'live regions with display: none').toEqual([]);
 });
 
@@ -637,3 +642,239 @@ test('in forced colours, the Flagged tag keeps its border, in the text colour', 
   await expect(flagged(page)).toHaveCSS('border-top-color', canvasText);
   expect(parseFloat(await flagged(page).evaluate((tag) => getComputedStyle(tag).borderTopWidth))).toBeGreaterThan(0);
 });
+
+// Your unfinished drafts (S02.01.04, today.md component 5), from the worker's own drafts in a store (notes.ts), each
+// started at 9:14 am and saved at 9:42 am on its day in Melbourne, with made-up words (A35): Jane Citizen's from
+// yesterday, Ben Archer's from the day before, Ben being archived since, and Jane's for today, which her row on the
+// list shows instead; and a pending edit of Ravi de Silva's note of 28 September, which T14 builds, given beside them.
+
+// The section's <h2>, then its rows, each a return point by its participant and date, and the list's rows, each by
+// its participant alone.
+const draftsHeading = (page: Page) =>
+  main(page).getByRole('heading', { level: 2, name: 'Your unfinished drafts', exact: true });
+const draftRows = (page: Page) => main(page).locator('a[data-return-key*="/"]');
+const draftRow = (page: Page, name: string) => draftRows(page).filter({ hasText: name });
+const draftItems = (page: Page) =>
+  main(page).getByRole('listitem').filter({ has: page.locator('a[data-return-key*="/"]') });
+const listRows = (page: Page) => main(page).locator('a[data-return-key]:not([data-return-key*="/"])');
+const listLine = (page: Page, name: string) =>
+  main(page)
+    .getByRole('listitem')
+    .filter({ has: page.locator('a[data-return-key]:not([data-return-key*="/"])', { hasText: name }) })
+    .locator('p');
+const notesBox = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
+
+/** The address of `participantId`'s note for `noteDate`. */
+const noteAddress = (participantId: string, noteDate: string) => `/participants/${participantId}/notes/${noteDate}`;
+
+/**
+ * Puts `me`'s own draft of a participant's note for `noteDate` in the store, as a page of theirs had started it at
+ * 9:14 am that day in Melbourne and saved a sentence at 9:42 am, before daylight saving starts on 4 October.
+ */
+function addOwnDraft(store: NotesStore, participantId: string, noteDate: string, me: Me = worker) {
+  const theDayBefore = daysAfter(noteDate, -1);
+  const startedBy = { authorDisplayName: me.displayName, startedAtUtc: `${theDayBefore}T23:14:00Z` };
+  store.startElsewhere(participantId, noteDate, startedBy, me.userId);
+  store.saveElsewhere(participantId, noteDate, {
+    narrative: 'Walked to the shop.',
+    savedAtUtc: `${theDayBefore}T23:42:00Z`,
+  });
+}
+
+/** The worker's pending edit of Ravi's submitted note of 28 September, saved at 4:12 pm that day. */
+const ravisEdit: MyDraft = {
+  participantId: ravi.id,
+  givenName: ravi.givenName,
+  familyName: ravi.familyName,
+  noteDate: '2026-09-28',
+  kind: 'pendingEdit',
+  savedAtUtc: '2026-09-28T06:12:00Z',
+};
+
+/** The worker's drafts of Jane's yesterday, Ben's of the day before and Jane's today, in a store of their own. */
+function ownDrafts(): NotesStore {
+  const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+  addOwnDraft(store, jane.id, '2026-09-30');
+  addOwnDraft(store, ben.id, '2026-09-29');
+  addOwnDraft(store, jane.id, worker.today);
+  return store;
+}
+
+/** Opens Today as the worker with `store`'s notes and drafts, and `more` beside them, and waits for the section. */
+async function openTodayWithDrafts(page: Page, store: NotesStore, more: readonly MyDraft[] = []) {
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, store.todayNotes(worker));
+  await serveMyDrafts(page, () => [...store.myDrafts(worker)(), ...more]);
+  await store.serve(page, worker);
+  await page.goto('/');
+  await expect(draftsHeading(page)).toBeVisible();
+}
+
+test('Your unfinished drafts: yesterday’s, an archived person’s and a pending edit’s rows above the list, axe', async ({
+  page,
+}) => {
+  const store = ownDrafts();
+  await openTodayWithDrafts(page, store, [ravisEdit]);
+
+  // After the <h1>, the section's <h2>, then a row for each draft or pending edit that the list does not show, by
+  // family name, given name, then date: each named by the participant alone and described by its date, with no status,
+  // time or tag, and nothing to say that Ben is archived. Jane's draft for today is her row's on the list.
+  await expect(draftRows(page)).toHaveText(['Ben Archer', 'Jane Citizen', 'Ravi de Silva']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['Your unfinished drafts', 'Participants']);
+  const dates = [
+    { name: 'Ben Archer', noteDate: '2026-09-29', date: 'Tuesday 29 September 2026' },
+    { name: 'Jane Citizen', noteDate: '2026-09-30', date: 'Wednesday 30 September 2026' },
+    { name: 'Ravi de Silva', noteDate: '2026-09-28', date: 'Monday 28 September 2026' },
+  ];
+  for (const { name, noteDate, date } of dates) {
+    const item = draftItems(page).filter({ hasText: name });
+    // The date with its non-breaking space, which a pattern does not count as a space.
+    const described = new RegExp(`^${date.replace(/ (\w+ 2026)$/, '\\s$1')}$`);
+    await expect(draftRow(page, name)).toHaveAccessibleDescription(described);
+    await expect(item.locator('time')).toHaveAttribute('datetime', noteDate);
+    // The link's words, then the line's, and nothing more.
+    await expect.poll(() => shownText(item)).toBe(`${name}${date}`);
+  }
+
+  // Each opens the person's own working copy: a draft at the note's address, a pending edit at its edit form.
+  await expect(draftRow(page, 'Ben Archer')).toHaveAttribute('href', noteAddress(ben.id, '2026-09-29'));
+  await expect(draftRow(page, 'Jane Citizen')).toHaveAttribute('href', noteAddress(jane.id, '2026-09-30'));
+  await expect(draftRow(page, 'Ravi de Silva')).toHaveAttribute('href', `${noteAddress(ravi.id, '2026-09-28')}/edit`);
+  await expect(listRows(page)).toHaveText(['Jane Citizen', 'Ravi de Silva']);
+  await expect.poll(() => shownText(listLine(page, 'Jane Citizen'))).toBe('Draft · You · saved 9:42 am');
+  expect(
+    await draftsHeading(page).evaluate((element) => {
+      const searchBox = document.querySelector('main search');
+      const after = Node.DOCUMENT_POSITION_FOLLOWING;
+      return searchBox !== null && (element.compareDocumentPosition(searchBox) & after) !== 0;
+    }),
+    'the section before the search box',
+  ).toBe(true);
+  await expect(page).toHaveTitle(title('Today'));
+  await expectAxeToPass(page);
+
+  // Find a participant filters the list alone: the section stays as it is, for a match and for none.
+  await findField(page).fill('ravi');
+  await expect(listRows(page)).toHaveText(['Ravi de Silva']);
+  await expect(draftRows(page)).toHaveText(['Ben Archer', 'Jane Citizen', 'Ravi de Silva']);
+  await findField(page).fill('zzz');
+  await expect(sentence(page, 'No participant matches ‘zzz’.')).toBeVisible();
+  await expect(draftRows(page)).toHaveText(['Ben Archer', 'Jane Citizen', 'Ravi de Silva']);
+  await expectAxeToPass(page);
+  await expectNothingKept(page, 'Jane', 'Ben', 'Archer', 'Ravi', 'zzz', 'Walked to the shop');
+
+  // With no participants on the list, Ben's draft shows beside "No participants yet.", with no search box.
+  await serveToday(page, worker.today, []);
+  await serveMyDrafts(page, () => store.myDrafts(worker)().filter((draft) => draft.participantId === ben.id));
+  await page.goto('/');
+  await expect(draftRows(page)).toHaveText(['Ben Archer']);
+  await expect(sentence(page, 'No participants yet.')).toBeVisible();
+  await expect(search(page)).toHaveCount(0);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['Your unfinished drafts', 'Participants']);
+  await expectAxeToPass(page);
+
+  // With nothing left once Jane's for today is dropped, no section and no <h2> of it.
+  await serveToday(page, worker.today, participants, store.todayNotes(worker));
+  await serveMyDrafts(page, () => store.myDrafts(worker)().filter((draft) => draft.noteDate === worker.today));
+  await page.goto('/');
+  await expect(listRows(page)).toHaveText(['Jane Citizen', 'Ravi de Silva']);
+  await expect(draftsHeading(page)).toHaveCount(0);
+  await expect(draftRows(page)).toHaveCount(0);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['Participants']);
+});
+
+test('a row of Your unfinished drafts opens its draft, an archived person’s too, and Back focuses that row', async ({
+  page,
+}) => {
+  await openTodayWithDrafts(page, ownDrafts());
+
+  // Yesterday's draft of Jane's, with its words, then the back link: the section's row is focused, not the list's.
+  await draftRow(page, 'Jane Citizen').click();
+  await expect(page).toHaveURL(noteAddress(jane.id, '2026-09-30'));
+  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toHaveText('Jane Citizen Wednesday 30 September 2026');
+  await expect(notesBox(page)).toHaveValue('Walked to the shop.');
+  await backLink(page).click();
+  await expect(draftRow(page, 'Jane Citizen')).toBeFocused();
+
+  // Ben's, though he is archived since: the draft's form, not the dead end that a new note of his would meet; then
+  // browser Back.
+  await draftRow(page, 'Ben Archer').click();
+  await expect(heading(page)).toHaveText('Ben Archer Tuesday 29 September 2026');
+  await expect(notesBox(page)).toHaveValue('Walked to the shop.');
+  await expect(notesBox(page)).toBeEditable();
+  await expect(page.locator('#page-bar').getByRole('region')).toHaveCount(0);
+  await page.goBack();
+  await expect(draftRow(page, 'Ben Archer')).toBeFocused();
+  await expectNothingKept(page, 'Jane', 'Ben', 'Archer', 'Walked to the shop');
+});
+
+test('at 320 px with text at 200%, Your unfinished drafts never scrolls sideways, and a long name wraps whole', async ({
+  page,
+}) => {
+  const unbroken = madeUpParticipant('7e3a9c2f-6b05-4d48-b2f7-0c5e1a8d4f63', 'A'.repeat(50), 'B'.repeat(50));
+  const store = notesStore({ today: worker.today, participants: [jane, unbroken, ravi] });
+  addOwnDraft(store, unbroken.id, '2026-09-30');
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, [jane, unbroken, ravi], store.todayNotes(worker));
+  await serveMyDrafts(page, store.myDrafts(worker));
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await setTextTo200Percent(page);
+  await expect(draftRows(page)).toHaveCount(1);
+  expect(await scrollsSideways(page), 'the section, with a name of 100 letters and no space').toBe(false);
+  for (const part of [draftRows(page), draftItems(page).locator('p')]) {
+    expect(await part.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  }
+
+  // And beside "No participants yet.".
+  await serveToday(page, worker.today, []);
+  await page.goto('/');
+  await expect(draftRows(page)).toHaveCount(1);
+  expect(await scrollsSideways(page), 'the section with no participants').toBe(false);
+});
+
+test('targets: Your unfinished drafts’ rows 56 px, and nothing pinned, on phone and laptop', async ({ page }) => {
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    await openTodayWithDrafts(page, ownDrafts(), [ravisEdit]);
+    await expectAtLeast(draftItems(page), 44, 56);
+    expect(await pinned(page), `Today with the section at ${width} px`).toEqual([]);
+  }
+});
+
+test('in forced colours, the focus ring shows in Highlight on each row of Your unfinished drafts', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await openTodayWithDrafts(page, ownDrafts(), [ravisEdit]);
+  const forcedRing = { ...ring, colour: await systemColour(page, 'Highlight') };
+  await heading(page).focus();
+  await expectStops(page, 'Tab', ['Ben Archer', 'Jane Citizen', 'Ravi de Silva', 'Find a participant'], forcedRing);
+});
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: Your unfinished drafts' rows before Find a participant, and back to one`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await openTodayWithDrafts(page, ownDrafts(), [ravisEdit]);
+
+    // today.md *Tab order*: the header's, then the section's rows, then Find a participant and the list's rows.
+    const shell = ['Skip to main content', 'Grow2Notes', 'Today', 'Account'];
+    const drafts = ['Ben Archer', 'Jane Citizen', 'Ravi de Silva'];
+    const list = ['Find a participant', 'Jane Citizen', 'Ravi de Silva'];
+    await expectStops(page, 'Tab', [...shell, ...drafts, ...list, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [...shell, ...drafts, ...list].reverse());
+
+    // Enter on the section's Jane Citizen opens yesterday's draft, its <h1> focused; the back link, by Enter, comes
+    // back to that row.
+    await expectStops(page, 'Tab', ['Grow2Notes', 'Today', 'Account', 'Ben Archer', 'Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(heading(page)).toBeFocused();
+    await expect(heading(page)).toHaveText('Jane Citizen Wednesday 30 September 2026');
+    await expectStops(page, 'Shift+Tab', ['Today']);
+    await page.keyboard.press('Enter');
+    await expect(draftRow(page, 'Jane Citizen')).toBeFocused();
+    await expectStops(page, 'Tab', ['Ravi de Silva', 'Find a participant']);
+    await expectNothingKept(page, 'Jane', 'Ben', 'Archer', 'Ravi', 'Walked to the shop');
+  });
+}

@@ -608,3 +608,52 @@ note is made up (A35).
     date read as focus moves to the heading. (The first tab saves before the second opens, as a tab's first save of a
     note takes it over with no banner: design.md §5.6. note-form.md's *Announcements* for what T10 builds;
     app-shell.md's Sign out with a note not saved.)
+
+### Discard and unfinished drafts, once T12 is in test
+
+These steps hold T12's by-hand checks ([tasks.md](../design/backlog/tasks.md), T12's Notes). They need account A,
+account B, the passkey worker of step 18, the kit of steps 26 to 28, and made-up participants with two goals each, such
+as `Jane Citizen` with `Makes own breakfast` and `Phones her sister`, whose notes for today nobody has started: one each
+for steps 63 and 64, three for step 65 and two for each screen reader in step 66, eleven in all. Step 65 runs over two
+days. Every word typed into a note is made up (A35).
+
+63. On the iPhone in Safari, as the passkey worker, open the first participant's note, type a sentence and wait for
+    "Saved" and the time. Press More actions, then Discard draft. Look for the dialog asking "Discard the draft note
+    for" and the participant's full name, then "Nobody will be able to open this draft again.", a red "Discard draft
+    for" and the name, and Go back under it. Press Go back and look for the dialog gone and More actions still there.
+    Open the dialog again and press the red button. Look for Today with no message at the top and the participant's
+    row with no status under the name. Open the row again: look for an empty note; type a sentence and look for "Saved"
+    and the time. (S02.02.08 on a real phone; design.md §14 M2 *Done when*: after a discard, a new note can.)
+64. On the iPhone in Safari, as the passkey worker, open the second participant's note, tick a goal, type a sentence,
+    tick Flag for manager, type a reason and wait for "Saved". Then, on the laptop as account A in Chrome, choose Today
+    and open that participant's row. Look for the worker's name, "started today's note for", the participant's name,
+    the time and "Only", the worker's name, "can finish it."; then Discard draft and Past notes; then the goal ticked
+    and the other not, the sentence as typed, and Flag for manager ticked with "Reason:" and the reason under it, and
+    no Flagged tag. Press Discard draft: look for the worker's name, "started it at" and the time in the dialog, then
+    press the red button. Look for Today with the row showing no status. Then on the iPhone choose Today, and look for
+    the row with no status there too. (S02.04.03 on real devices: a manager reads a worker's draft and discards it.)
+65. On the first day, as account A on the laptop in Chrome, as the passkey worker on the iPhone in Safari and as
+    account B on the Android phone in Chrome, each opens one of the three participants' notes, types a sentence and
+    waits for "Saved"; leave each unsubmitted. On the next day, with NVDA, VoiceOver and TalkBack on in turn, choose
+    Today on each. Look for "Your unfinished drafts, heading level 2" above the list, then the participant's row read
+    as the name, "link", then yesterday's date in full, such as "Wednesday 30 September 2026", with no status. Open
+    the row: look for "This draft is for", yesterday's date, "Submitting it now keeps that date." under the heading,
+    and "Draft · saved" with yesterday's date and the time. Press Submit note: look for the dialog read as "Submit the
+    note for", the name and "alert dialog", never "today's"; submit it, and look for "Note for", the name and
+    "submitted" read on Today, with Your unfinished drafts gone. (S02.01.04 and S02.03.03 on real devices across a
+    real midnight in Melbourne; today.md's *Screen reader* items for the section.)
+66. On the laptop with NVDA and Chrome as account A, then on the iPhone with VoiceOver and Safari as the passkey
+    worker, then on the Android phone with TalkBack and Chrome as account B, each with two participants of its own:
+    open the first participant's note, type a sentence and wait for "Saved". Tab past Submit note: look for "More
+    actions, button, collapsed", then "expanded" as you press it, and Discard draft as the next stop. Press Discard
+    draft: look for "Discard the draft note for", the name and "alert dialog", then "Nobody will be able to open this
+    draft again.". Press Go back and look for focus on More actions, read as it lands there. Open the dialog again,
+    press "Discard draft for" and the name, and look for Today's heading read as it opens. Then have someone else
+    start the second participant's note on another device, ticking Flag for manager with a reason: the passkey worker
+    on the iPhone for the laptop's and the Android phone's passes, and account A on the laptop for the iPhone's. Open
+    that participant's row. On the iPhone, as a worker, look for the sentence ending "can finish it." and Past notes,
+    and nothing more, no Discard draft among it. On the laptop and the Android phone, as managers, look for the same
+    sentence, then Discard draft, Past notes, each goal read with "ticked" or "not ticked", and "Flag for manager,
+    ticked" with the reason after it; press Discard draft and look for the dialog's "started it at" line read with the
+    other person's name and the time, then Go back, and focus back on Discard draft. (note-form.md's *Announcements*
+    for More actions and the Discard dialog; participant-notes.md's manual pass for someone else's draft.)
