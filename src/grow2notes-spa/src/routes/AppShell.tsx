@@ -10,6 +10,7 @@ import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { SignIn } from '../features/auth/SignIn.tsx';
 import { fullPageLoad } from './fullPageLoad.ts';
+import { HiddenBySignInContext } from './hiddenBySignIn.ts';
 import { disarmUnloadGuard } from './leaveGuard.ts';
 import { useRouteChange } from './routeChange.ts';
 import type { RouteHandle } from './routes.tsx';
@@ -36,8 +37,9 @@ type SignedOutInPlace = { page: PageName | undefined; meAnswers: number };
  *
  * When the session ends over a signed-in screen, the frame becomes the signed-out frame again, with sign-in's view C in
  * `<main>` and the screen after it, hidden but mounted, with its before-main bar, so that what it holds comes back as
- * it was when the same person signs in again at the same address (component 7; design.md §8.5). A `Me` for anyone else
- * loads the page afresh at Today instead.
+ * it was when the same person signs in again at the same address (component 7; design.md §8.5); the screen is told
+ * that it is hidden, for the note form's autosave to pause meanwhile. A `Me` for anyone else loads the page afresh at
+ * Today instead, the screen still hidden.
  */
 export function AppShell() {
   useRefreshMe();
@@ -198,7 +200,9 @@ export function AppShell() {
           // Always in the same place, so that view C hides the screen rather than mounting it again.
           <div hidden={inPlace}>
             <WholePageMessageContext value={setMessage}>
-              <Outlet />
+              <HiddenBySignInContext value={inPlace}>
+                <Outlet />
+              </HiddenBySignInContext>
             </WholePageMessageContext>
           </div>
         )}

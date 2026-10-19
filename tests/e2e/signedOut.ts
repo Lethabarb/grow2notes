@@ -1,6 +1,11 @@
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 import { expect } from './fixtures.ts';
 import { serveMe, type Me } from './me.ts';
+
+/** The session cookie (design.md §8.4), whose removal ends the session as the app's own 30 idle minutes would. */
+export const sessionCookie = '__Host-grow2notes';
+
+const isTo = (path: string) => (response: Response) => new URL(response.url()).pathname === path;
 
 /**
  * Expects sign-in's view A in the signed-out frame (sign-in.md *Routes* and component 1): its heading and title, and
@@ -33,4 +38,22 @@ export async function signInInPlaceAs(page: Page, me: Me) {
   await main.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Enter the 6-digit code from your authenticator app').fill('123456');
   await main.getByRole('button', { name: 'Sign in', exact: true }).click();
+}
+
+/**
+ * Ends the app's own session, signed in for real, as an idle half hour does, by removing its cookie, then gives the
+ * window focus, which refreshes `/api/auth/me`, whose `401` shows view C in place.
+ */
+export async function endTheSession(page: Page) {
+  await page.context().clearCookies({ name: sessionCookie });
+  const refreshed = page.waitForResponse(isTo('/api/auth/me'));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  expect((await refreshed).status()).toBe(401);
+}
+
+/** Signs in again in view C with the passkey that setup made on the virtual authenticator. */
+export async function signInAgainWithPasskey(page: Page) {
+  const signedIn = page.waitForResponse(isTo('/api/auth/passkey'));
+  await page.getByRole('main').getByRole('button', { name: 'Sign in with a passkey' }).click();
+  expect((await signedIn).status()).toBe(200);
 }

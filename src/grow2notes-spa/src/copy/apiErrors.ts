@@ -6,6 +6,7 @@ import { stamp, type Ymd } from './format.ts';
  */
 export type ApiErrorCode =
   | 'auth.setup_link_invalid'
+  | 'draft.taken_over'
   | 'note.in_progress_by_other'
   | 'note.lists_changed'
   | 'note.participant_archived'
@@ -31,6 +32,11 @@ type InProgress = {
 export const apiErrorCopy = {
   /** sign-in.md's *Link expired, used or replaced*: a whole-page message, design.md §4.1's sentence split in two. */
   'auth.setup_link_invalid': { heading: 'This link has expired', body: 'Ask a manager to send a new one.' },
+  /**
+   * The takeover banner in the note form's top bar (note-form.md *Conflicts and refusals*), as another page has saved
+   * the note since this page last did (design.md §5.6): design.md §4.3's words, word for word.
+   */
+  'draft.taken_over': 'This note was changed on another device or tab.',
   /**
    * Someone else's draft (note-form.md *States*), with the author's display name in both places, never a first name
    * made from it (microcopy.md): "today's note", or "the note" for an earlier day's (open question 2), started at a

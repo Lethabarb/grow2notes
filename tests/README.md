@@ -110,17 +110,17 @@ npm test
 ```
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
-(`e2e/setup.spec.ts`), the sign-out test that signs in through setup (`e2e/sign-out.spec.ts`), the session warning's
-tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`), the two
-Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets the
-app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
+(`e2e/setup.spec.ts`), the two sign-out tests that sign in through setup (`e2e/sign-out.spec.ts`), the session
+warning's tests (`e2e/session-warning.spec.ts`), the Users test that meets the app's own list (`e2e/users.spec.ts`),
+the two Invite user tests that meet the app's own invite (`e2e/invite-user.spec.ts`), the Resend invite test that meets
+the app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in again that end a real session
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
 Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
 app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
-(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`), the three note
-form tests that meet the app's own Today, notes and Submit (`e2e/note-form.spec.ts`) and the Flagged test that meets the
-app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the published app's own
-`admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
+(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`), the ten note
+form tests that meet the app's own Today, notes, saves and Submit (`e2e/note-form.spec.ts`) and the Flagged test that
+meets the app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the published app's
+own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
 second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
 app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
 each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
@@ -140,7 +140,7 @@ it passes by failing: the run marks it as failed, with a cross, and counts it as
 A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
 width and then at a laptop's.
 
-Six more fixtures are there for the tests that name them, and only those run them:
+Seven more fixtures are there for the tests that name them, and only those run them:
 
 - `invite` runs the published app's `admin bootstrap` from `E2E_APP_DIR`, with the app's settings, as
   `ops/break-glass.md` runs it in the SSH console, for a made-up organisation and manager, Alex Sample, with a new
@@ -162,6 +162,9 @@ Six more fixtures are there for the tests that name them, and only those run the
   signed in beside the first, or one person on two devices.
 - `thirdDevice` gives a third such device, for a third person beside the other two, such as a second manager beside
   a worker and the first (`e2e/flagged.spec.ts`).
+- `secondTab` gives a second tab: a `page` in the test page's own browser context, with its cookies, so the same
+  person, under the same check of the policy, for one person's note in two tabs; the test may close it, as a person
+  closes a tab, or crash it, as a phone kills a tab (below).
 
 A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
 key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
@@ -551,7 +554,12 @@ each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the org
   draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
   `422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
   `409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
-  listed; and `409 note.version_conflict` once the note is submitted;
+  listed; and `409 note.version_conflict` once the note is submitted. A draft keeps the `clientId` and `seq` of the
+  save that it last applied, and numbers later saves as design.md §5.6 does, before their ticks are checked: from the
+  same `clientId`, a `seq` at or below the one kept changes nothing and answers `200` with the time that the draft
+  holds, and a higher one is applied; from another `clientId`, `seq` 1 is applied, taking the draft over, and any other
+  gets `409 draft.taken_over`, writing nothing. So a creating save sent again after its answer was lost finds the
+  draft with its `clientId`, and is taken as a later save;
 - and each Submit, with the checks of T09's Notes in their order: the framework's `400` for an `Idempotency-Key` that
   is missing or not a GUID; `422 validation.failed` under `baseVersion` for any but 0, under `narrative` for a blank
   text, U+0085 alone included, as .NET counts it, or one over 20,000 characters, and under `flagReason` for a reason
@@ -577,9 +585,16 @@ version 2 that T14's Save changes will save, flagged with `flagReason` or not fl
 `archive(participantId)`; `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as
 `alexStarted`, Alex P.'s at 9:14 am; `submitElsewhere(participantId, noteDate)`, the draft submitted by its author in
 another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts its answer, as
-a phone that loses its signal while the answer is on its way. `failNoteReads(page)` aborts each read of a header, a
-history, a note or a form, as `failParticipants` does, until the store serves the page again, and
-`failNoteReads(page, { olderOnly: true })` only each page of a history after the first, which Show older asks for.
+a phone that loses its signal while the answer is on its way. One more, `saveElsewhere(participantId, noteDate,
+elsewhere)`, saves the draft as its author does from another tab or device, with that page's text, ticks, flag and
+reason, the rest kept, and its time, by default the store's: a page's first save under a `clientId` of its own, so that
+the next save of the page that saved before meets the takeover banner. `failNoteReads(page)` aborts each read of a
+header, a history, a note or a form, as `failParticipants` does, until the store serves the page again, and
+`failNoteReads(page, { olderOnly: true })` only each page of a history after the first, which Show older asks for;
+`failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page again, so that autosave
+retries it and shows "Not saved: no connection…" about 1 s after the first failure. For a test that watches the saves,
+of the store's page or of the app's own, `isDraftSaveRequest(request)` tells a save from the page's other requests, and
+`draftRequests` is the glob of a working copy's address, its read's and its save's, for `holdNext`.
 
 ```ts
 await serveMe(page, worker);
@@ -593,14 +608,24 @@ A test of a page that waits on one of those requests holds it with `holdNext`, w
 a request that a glob cannot tell apart by its query: `e2e/past-notes.spec.ts` holds Show older's next page, with
 `before`, and not the first page's request, which has none.
 
-The three tests that meet the app's own answers sign in for real through the `invite` fixture: a manager adds a
-participant with two goals from Today's empty state, finds them, starts their note and reopens the draft, then saves new
-guide prompts, which the emptied draft shows, and then `""`, which leaves its box with no placeholder; a worker whom
-the manager invites, set up on `secondDevice` from the link that `resetSignIn` gives, meets the in-progress sentence at
-that note, while the other organisation's manager, `secondInvite`, meets Page not found there; and such a worker, at a
-phone's width, fills in a note, ticks a goal, flags it with a reason and submits it through the confirmation, then
-finds it Submitted and Flagged on Today, in the read view and in Past notes, as the manager does too, while the other
-organisation's manager meets Page not found at the note and at its Past notes (design.md §14 M2 *Done when*).
+The ten tests that meet the app's own answers sign in for real through the `invite` fixture, each adding Jane Citizen
+with two goals from Today's empty state, as a manager does, with `addJaneWithTwoGoals` from `e2e/addParticipant.ts`: a
+manager finds her, starts her note and reopens the draft, then saves new guide prompts, which the emptied draft shows,
+and then `""`, which leaves its box with no placeholder; a worker whom the manager invites, set up on `secondDevice`
+from the link that `resetSignIn` gives, meets the in-progress sentence at that note, while the other organisation's
+manager, `secondInvite`, meets Page not found there; and such a worker, at a phone's width, fills in a note, ticks a
+goal, flags it with a reason and submits it through the confirmation, then finds it Submitted and Flagged on Today, in
+the read view and in Past notes, as the manager does too, while the other organisation's manager meets Page not found
+at the note and at its Past notes (design.md §14 M2 *Done when*). Seven more prove that autosave never loses words
+(T10), at a phone's width: offline, through `context.setOffline`, "Not saved: no connection…" within about 1 s and
+Submit unavailable, then "Saved" with no action once online, and the draft holding what was typed; a first save let
+through to the app with `route.fetch()` and its answer then aborted, so that the retry, the page's next `seq`, saves
+once with no banner; the same draft in `secondTab`, whose save takes it over, so that the first tab's next save meets
+the takeover banner, Keep wins and Load then replaces the other tab's screen; `secondTab` killed in the middle of a
+sentence typed at a known pace, the text kept but for its last few seconds; the form left and opened again in the same
+page load, its next save applied; the back link and Past notes sending a change waiting, then leaving, and staying
+offline; and a session ended in place mid-note, then the same person signing in again, one save going under the same
+`clientId` and the next `seq`, and another person, set up first with a password, landing on Today with nothing sent.
 `e2e/today.spec.ts`, `e2e/note-form.spec.ts` and `e2e/past-notes.spec.ts` are the examples. They watch the live regions
 as `e2e/participants.spec.ts` does, but for the save indicator, which a reopened draft's form puts in anew with its
 first words (autosave-status.md *Behaviour* 8). Their checks of 200% text, sideways scroll and target sizes use
@@ -613,7 +638,15 @@ page's timers of 1 s with an init script rather than on Playwright's clock, as a
 never finishes under a paused clock; the after-midnight refusal runs on `page.clock`. A check of what a screen does as a
 person comes back to the tab fires the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does,
 since TanStack Query listens for it on the window, not the document, and shows on a screen that opts in to
-`refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`).
+`refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`). A headless page is
+never hidden, so the note form's page-hidden save is checked by giving `document` a `visibilityState` of `'hidden'`
+and dispatching `visibilitychange` on it (`setHidden` in `e2e/note-form.spec.ts`), on a paused `page.clock`, so that
+no timer of autosave's sends the save meanwhile; a wrapper round the page's own `fetch` then shows that the save went
+with `keepalive`. A tab killed as a phone kills one in the background is crashed with `goto('chrome://crash')`, as
+Playwright's own tests crash a Chromium page: the renderer stops at once, unloading nothing, so that the page-hidden
+save that `page.close()` lets the page send does not go, and what the note keeps comes from the saves made while typing
+alone. CDP's `Page.crash` is no stand-in: in a run on Windows the page ran on for seconds after it, long enough to
+save once more.
 
 ### Answering `/api/reviews?status=toReview`
 
@@ -734,6 +767,9 @@ await page.clock.runFor('28:00'); // the warning opens
   refresh of `/api/auth/me` with `200`, which brings the screen back, as when another tab kept the session alive. The
   view sends nothing at 30:00: it asks for passkey options once the session has surely ended by the page's clock, 30:05
   after the last answer came (design.md A61), which, on the paused clock, is 30:05 after the request that it answered.
+- The note form's test signs in on the clock, adds a participant and opens their note while the clock still runs as
+  the real one, and only then pauses it. Its accepted request is the note's first save, which goes as the test runs
+  the clock on by the 2 s after the last change; a change made at 27:59 then goes at 28:00 in place of the warning.
 
 ### Ending a session in place, and signing in again
 
@@ -743,7 +779,10 @@ would. The window's `focus`, dispatched in the page, then refreshes `/api/auth/m
 signed-out-in-place view at the same address; a change sent then, such as Send invite, meets the `401` too. The passkey
 that setup made on the `authenticator` fixture signs the same person in again. To sign in as another person, a test
 sets that person up first, with `secondInvite` on the password path, so that the virtual authenticator holds one
-passkey only, and clears the browser's cookies before the first person's setup.
+passkey only, and clears the browser's cookies before the first person's setup. `endTheSession(page)` and
+`signInAgainWithPasskey(page)` from `e2e/signedOut.ts` end the session and sign the same person in again, and
+`setUpWithPassword(page, person)` from `e2e/setupSignIn.ts` sets the other person up, giving the password and the
+setup key; `e2e/sign-in-again.spec.ts` and the note form's session test use them.
 
 ```ts
 await page.context().clearCookies({ name: '__Host-grow2notes' });

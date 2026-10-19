@@ -487,6 +487,17 @@ return (
 - After Stay signed in, focus returns to the field the person was in, such as the Guided notes box or the flag Reason.
 - After signing in again as the same person, the form reappears exactly as it was. The retried save uses the page's existing `clientId` and next `seq`, so the "This note was changed on another device or tab" banner does **not** appear because of the timeout.
 - This works the same for a past-day note (the banner stays), an earlier-day draft, and "Editing submitted note (version N)", whose pending edit autosaves in the same way (§3.5).
+- As built (T10): a mounted note form registers, in `session.ts` beside `holdWhile`, whether a change is unsaved and
+  its `flushNow()` (`registerSaveFlush()`). The clock asks as the phase would leave `active`, once in each idle period
+  by its newest accepted send time, only while a change is unsaved, and never once a `401` has ended the session, and
+  holds on the answer: a save that gets no answer lets the warning open as the hold settles, and any answer, a `422` or
+  a `5xx` included, starts the clock afresh, as any accepted request does (A57). The shell tells its screen whether the
+  signed-out view hides it (`HiddenBySignInContext`), as the clock's phase cannot, since view C's passkey options and a
+  different person's sign-in are accepted requests too: autosave pauses while it does, its timers and retries cleared,
+  and, as the same person's form shows again, sends at once under the same `clientId` and the next `seq`. Autosave's
+  retries stop 28 minutes after the person last acted on the form, as a failing server's `5xx` answers, which renew the
+  session (A57), would otherwise keep an unattended page's session alive with no warning: the clock then warns 28
+  minutes after the last retry, as on any idle page (A66).
 
 **Submit confirmation (§4.3)**
 - If the warning is due while the confirmation is open, close the confirmation first (= Go back), then open the warning. Focus then returns to **Submit note** on the form, not to "Submit note for Jane Citizen" inside the confirmation. This avoids a quick double tap or a second Enter going from Stay signed in straight onto the commit button ([Opinion]: the two buttons sit in the same place on a phone).

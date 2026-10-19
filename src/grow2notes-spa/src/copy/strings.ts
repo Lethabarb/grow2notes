@@ -13,6 +13,11 @@ export const strings = {
   signOut: 'Sign out',
   /** Sign out's busy label. */
   signingOut: 'Signing out…',
+  /**
+   * The Account panel's status line when a note form's change waiting for its save could not be saved first, so that
+   * no logout was sent (app-shell.md *States*, Sign-out blocked: note not saved; D67).
+   */
+  notSignedOutNoteNotSaved: 'Not signed out: your note is not saved yet. Keep this page open; retrying.',
   /** The warning before the idle sign-out (app-shell.md component 6). */
   sessionWarning: {
     /** Its heading at each step of the countdown, from 28:00, 29:00, 29:20 and 29:40 with no request accepted. */
@@ -389,14 +394,15 @@ export const strings = {
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
    * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; the
    * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
-   * the save indicator while a dead end in the top bar says why the note cannot be saved (autosave-status.md *Exact
-   * copy*). Then Submit note (component 12) and Submit's checks (*Validation*),
-   * inline and in the error summary: Guided notes left blank, with the second sentence only while guide prompts are
-   * set, as they are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with
-   * `reason`; and Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead,
-   * for a note dated `me.today` and for any other, before the name on its own line; its flag line, from the values
-   * that Submit sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not
-   * submitted: no connection. Your draft is saved. Try again." (microcopy.md §9).
+   * the save indicator once a failed save is being retried, as the top bar's second row, and while a dead end or the
+   * takeover banner in the top bar says why the note cannot be saved, then the takeover banner's two choices
+   * (autosave-status.md *Exact copy*). Then Submit note (component 12) and Submit's checks (*Validation*), inline and
+   * in the error summary: Guided notes left blank, with the second sentence only while guide prompts are set, as they
+   * are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with `reason`; and
+   * Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead, for a note
+   * dated `me.today` and for any other, before the name on its own line; its flag line, from the values that Submit
+   * sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not submitted: no
+   * connection. Your draft is saved. Try again." (microcopy.md §9).
    */
   note: {
     loading: 'Loading note…',
@@ -406,7 +412,10 @@ export const strings = {
     guidedNotes: '3. Guided notes',
     flagForManager: 'Flag for manager',
     reason: 'Reason',
+    notSavedRetrying: 'Not saved: no connection. Keep this page open; retrying.',
     notSaved: 'Not saved',
+    keepTheText: 'Keep the text on this screen',
+    loadTheOtherVersion: 'Load the other version',
     submit: 'Submit note',
     writeYourNotes: 'Write your notes in the Guided notes box',
     writeYourNotesNotTheGuide: 'Write your notes in the Guided notes box. The grey text is only a guide.',

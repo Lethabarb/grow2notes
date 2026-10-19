@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import type { Locator, Page, Response } from '@playwright/test';
+import { addJaneWithTwoGoals, janeCitizen, twoGoalTexts } from './addParticipant.ts';
+import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
-import { expectStops, ring } from './focus.ts';
+import { expectFocusAt, expectStops, ring } from './focus.ts';
 import { breakfast, bus, madeUpGoal, sister } from './goals.ts';
 import { savedPrompts, servePrompts } from './guidePrompts.ts';
 import { expectNothingKept } from './kept.ts';
@@ -16,19 +18,29 @@ import {
 } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
-import { alexStarted, failNoteReads, notesStore, type NotesStore } from './notes.ts';
+import {
+  alexStarted,
+  draftRequests,
+  failDraftSaves,
+  failNoteReads,
+  isDraftSaveRequest,
+  notesStore,
+  type DraftSave,
+  type NotesStore,
+} from './notes.ts';
 import { jane, madeUpParticipant, participants, ravi } from './participants.ts';
 import { holdNext } from './requests.ts';
-import { signInThroughSetup } from './setupSignIn.ts';
+import { codeLabel, setUpWithPassword, signInThroughSetup } from './setupSignIn.ts';
+import { endTheSession, signInAgainWithPasskey } from './signedOut.ts';
 import { serveToday } from './today.ts';
 import { inviteThroughThePage } from './users.ts';
 
-// A participant's note in the published app (S02.02.02, S02.02.03, S02.02.07, S02.03.01, S02.03.02), against
-// note-form.md's criteria for identity, loading, autosave, conflicts and refusals, validation and Submit, and layout
-// and accessibility, as far as T08 and T09 build the form. The tests that sign in for real meet the app's own Today,
-// participant, note, guide prompts and Submit; the others answer /api/auth/me, /api/today, the participant's header,
-// the note, its working copy and Submit in the browser, with made-up people and goals (me.ts, today.ts, notes.ts), so
-// that none of those requests reaches the app.
+// A participant's note in the published app (S02.02.02 to S02.02.07, S02.03.01, S02.03.02), against note-form.md's
+// criteria for identity, loading, autosave, conflicts and refusals, validation and Submit, leaving, the session, and
+// layout and accessibility, as far as T08, T09 and T10 build the form. The tests that sign in for real meet the app's
+// own Today, participant, note, guide prompts, saves and Submit; the others answer /api/auth/me, /api/today, the
+// participant's header, the note, its working copy and Submit in the browser, with made-up people and goals (me.ts,
+// today.ts, notes.ts), so that none of those requests reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -117,19 +129,13 @@ const janeArchived = 'Jane Citizen is archived, so this note cannot be started. 
 const noteAddress = (participantId: string, noteDate: string) => `/participants/${participantId}/notes/${noteDate}`;
 
 /** Whether the response answers a save of a note's working copy, `PUT {base}/draft`. */
-const isDraftSave = (response: Response) =>
-  response.request().method() === 'PUT' && /^\/api\/participants\/[^/]+\/notes\/[^/]+\/draft$/.test(
-    new URL(response.url()).pathname,
-  );
+const isDraftSave = (response: Response) => isDraftSaveRequest(response.request());
 
 /** Whether the response answers a read of a note's working copy, `GET {base}/draft`. */
 const isDraftRead = (response: Response) =>
   response.request().method() === 'GET' && /^\/api\/participants\/[^/]+\/notes\/[^/]+\/draft$/.test(
     new URL(response.url()).pathname,
   );
-
-/** A pattern for the next request for a note's working copy, its read or its save, for `holdNext`. */
-const draftRequests = '**/api/participants/*/notes/*/draft';
 
 /** Whether the response answers a Submit, `POST {base}/versions`. */
 const isSubmit = (response: Response) =>
@@ -195,51 +201,6 @@ test.fail('a live region put into the note form with its words fails the test', 
     element.appendChild(region);
   });
 });
-
-// The participant whom the tests that sign in for real add, and their two goals.
-const janeCitizen = { givenName: 'Jane', familyName: 'Citizen', name: 'Jane Citizen' };
-const twoGoalTexts = [breakfast.text, bus.text];
-
-/**
- * From Today with no participants, adds Jane Citizen through the empty state's Add participant, as a manager does, and
- * two goals on her page, then goes back to Today through the nav. Gives her ID.
- */
-async function addJaneWithTwoGoals(page: Page): Promise<string> {
-  await expect(main(page).getByText('No participants yet.', { exact: true })).toBeVisible();
-  await main(page).getByRole('link', { name: 'Add participant', exact: true }).click();
-  await expect(heading(page)).toHaveText('Add participant');
-  await main(page).getByRole('textbox', { name: 'Given name', exact: true }).fill(janeCitizen.givenName);
-  await main(page).getByRole('textbox', { name: 'Family name', exact: true }).fill(janeCitizen.familyName);
-  await main(page).getByRole('textbox', { name: 'Day', exact: true }).fill('7');
-  await main(page).getByRole('textbox', { name: 'Month', exact: true }).fill('3');
-  await main(page).getByRole('textbox', { name: 'Year', exact: true }).fill('1987');
-  const added = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/admin/participants',
-  );
-  await main(page).getByRole('region', { name: 'Details' }).getByRole('button', { name: 'Save', exact: true }).click();
-  const addAnswer = await added;
-  expect(addAnswer.status()).toBe(201);
-  const { id } = (await addAnswer.json()) as { id: string };
-  await expect(heading(page)).toHaveText(janeCitizen.name);
-
-  const goalsSection = main(page).getByRole('region', { name: 'Goals' });
-  for (const text of twoGoalTexts) {
-    await goalsSection.getByRole('textbox', { name: 'New goal', exact: true }).fill(text);
-    const posted = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'POST'
-        && new URL(response.url()).pathname === `/api/admin/participants/${id}/goals`,
-    );
-    await goalsSection.getByRole('button', { name: 'Add goal', exact: true }).click();
-    expect((await posted).status()).toBe(201);
-  }
-
-  await expect(goalsSection.locator('ol > li')).toHaveCount(2);
-  await nav(page).getByRole('link', { name: 'Today', exact: true }).click();
-  await expect(rows(page)).toHaveText([janeCitizen.name]);
-  return id;
-}
 
 /** Saves `text` as the organisation's guide prompts through Manage > Guide prompts, as a manager does. */
 async function savePromptsThroughThePage(page: Page, text: string) {
@@ -1483,5 +1444,774 @@ for (const width of [375, 1280]) {
       flagReason: 'Seemed tired.',
     });
     await expectNothingKept(page, 'Jane', 'Citizen', 'Made toast', 'Seemed tired', 'submitted');
+  });
+}
+
+// Autosave through a dropped signal, a lost answer, a second tab, a closed tab, leaving the form and the session's end
+// (T10: S02.02.04 to S02.02.06), against note-form.md's items 9, 11 to 16, 34 and 36.
+
+/** The save indicator's failed state, the top bar's second row (design.md §4.3). */
+const notSavedRetrying = 'Not saved: no connection. Keep this page open; retrying.';
+// The takeover banner, the top bar's second row, named by its sentence, and its two choices (note-form.md component 1).
+const takeover = (page: Page) => page.locator('#page-bar').getByRole('region', { name: changedElsewhere });
+const keepButton = (page: Page) =>
+  takeover(page).getByRole('button', { name: 'Keep the text on this screen', exact: true });
+const loadButton = (page: Page) => takeover(page).getByRole('button', { name: 'Load the other version', exact: true });
+
+/**
+ * Records the body of each save of a note's working copy that `page` sends from now on, across page loads. Gives a
+ * function that gives them once the browser has reported every request that the page sent before the call, as
+ * `recordRequests` does (tests/README.md), which it can only while the page is online.
+ */
+function recordSaves(page: Page): () => Promise<DraftSave[]> {
+  const sent: DraftSave[] = [];
+  page.on('request', (request) => {
+    if (isDraftSaveRequest(request)) {
+      sent.push(request.postDataJSON() as DraftSave);
+    }
+  });
+  return async () => {
+    await page.evaluate(async () => {
+      await fetch('/healthz');
+    });
+    return [...sent];
+  };
+}
+
+/**
+ * Opens Jane Citizen's note from her row on Today, signed in for real, waits for its <h1>, and gives her two goals' IDs
+ * from the form's read, in the manager's order.
+ */
+async function openJaneCitizensNote(page: Page): Promise<string[]> {
+  const opened = page.waitForResponse(isDraftRead);
+  await row(page, janeCitizen.name).click();
+  const { goals: listed } = (await (await opened).json()) as { goals: { id: string }[] };
+  await expect(heading(page)).toBeFocused();
+  return listed.map(({ id }) => id);
+}
+
+/** Makes the page hidden, as a switch to another app does, or visible again, as the browser reports it. */
+async function setHidden(page: Page, hidden: boolean) {
+  await page.evaluate((isHidden) => {
+    if (isHidden) {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    } else {
+      Reflect.deleteProperty(document, 'visibilityState');
+    }
+
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+test('signed in for real at 375 px, offline: the sentence in about 1 s, Submit unavailable, Saved unasked', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  await openJaneCitizensNote(page);
+  const started = page.waitForResponse(isDraftSave);
+  await box(page).pressSequentially('Went to the shops.');
+  expect((await started).status()).toBe(201);
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+
+  // The signal drops as the person types on: the indicator's exact sentence, as the top bar's second row, within about
+  // 1 s, with Submit note unavailable and described by it (note-form.md item 11).
+  await page.context().setOffline(true);
+  await box(page).pressSequentially(' Bought bread.');
+  await expect(saveStatus(page)).toHaveText(notSavedRetrying, { timeout: 1_000 });
+  await expect(submitNote(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(submitNote(page)).toHaveAccessibleDescription(notSavedRetrying);
+
+  // A press of Submit note opens nothing and says the sentence again in the page's polite region (note-form.md
+  // item 25).
+  await submitNote(page).click({ force: true });
+  await expect(pageStatus(page)).toHaveText(notSavedRetrying);
+  await expect(confirmation(page)).toHaveCount(0);
+
+  // Online again, the app's answer to the save that waited brings "Saved …" with no action.
+  const recovered = page.waitForResponse(isDraftSave);
+  await page.context().setOffline(false);
+  expect((await recovered).status()).toBe(200);
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await expect(submitNote(page)).not.toHaveAttribute('aria-disabled', 'true');
+
+  // Opened again, the draft holds what was typed while offline.
+  await backLink(page).click();
+  await row(page, janeCitizen.name).click();
+  await expect.poll(() => shownText(saveStatus(page))).toMatch(draftSavedAnyTime);
+  await expect(box(page)).toHaveValue('Went to the shops. Bought bread.');
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops', notSavedRetrying);
+});
+
+test('signed in for real at 375 px, the first save’s answer lost: sent again, Saved, with no banner, one note', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  await openJaneCitizensNote(page);
+  const address = new URL(page.url()).pathname;
+  const saves = recordSaves(page);
+
+  // The first save reaches the app, which creates the note, but its answer is lost on the way back (design.md §14 M2).
+  let lostAnswer: number | undefined;
+  await page.route(draftRequests, async (route) => {
+    if (route.request().method() !== 'PUT' || lostAnswer !== undefined) {
+      await route.fallback();
+      return;
+    }
+
+    lostAnswer = (await route.fetch()).status();
+    await route.abort('internetdisconnected');
+  });
+  const retried = page.waitForResponse(isDraftSave);
+  await box(page).pressSequentially(sentence);
+
+  // Its retry, a second later, is the page's next save, which the app applies: "Saved …", and no takeover banner
+  // (note-form.md item 12).
+  const answer = await retried;
+  expect(lostAnswer).toBe(201);
+  expect(answer.status()).toBe(200);
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await expect(takeover(page)).toHaveCount(0);
+  await expect(alert(page)).toBeEmpty();
+  const [first, again, ...more] = await saves();
+  expect(more).toEqual([]);
+  expect(again).toEqual({ ...first, seq: first.seq + 1 });
+
+  // Saved once: Jane's one draft on Today, and the text as typed, once, as the note opens again.
+  await backLink(page).click();
+  await expect(rows(page)).toHaveText([janeCitizen.name]);
+  await expect.poll(() => shownText(rowLine(page, janeCitizen.name))).toMatch(
+    new RegExp(`^Draft · You · saved ${anyTime}$`),
+  );
+  await row(page, janeCitizen.name).click();
+  await expect(page).toHaveURL(address);
+  await expect(box(page)).toHaveValue(sentence);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, sentence);
+});
+
+test('signed in for real at 375 px, two tabs on a draft: the older meets the banner, Keep wins, Load replaces', async ({
+  page,
+  invite,
+  authenticator,
+  secondTab,
+}) => {
+  test.slow();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  const [breakfastId, busId] = await openJaneCitizensNote(page);
+  const address = new URL(page.url()).pathname;
+  await goalRow(page, breakfast.text).locator('span').click();
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+
+  // A second tab opens the draft and adds to it: its first save takes the working copy over.
+  await secondTab.setViewportSize({ width: 375, height: 812 });
+  await secondTab.goto(address);
+  await expect(box(secondTab)).toHaveValue('Went to the shops.');
+  await expect(goalBox(secondTab, breakfast.text)).toBeChecked();
+  await box(secondTab).press('ControlOrMeta+End');
+  const tookOver = secondTab.waitForResponse(isDraftSave);
+  await box(secondTab).pressSequentially(' Typed in the second tab.');
+  const tookOverAnswer = await tookOver;
+  expect(tookOverAnswer.status()).toBe(200);
+  const secondTabFirst = tookOverAnswer.request().postDataJSON() as DraftSave;
+  expect(secondTabFirst.seq).toBe(1);
+  await expect(saveStatus(secondTab)).toHaveText(savedAnyTime);
+
+  // The first tab's next save meets the banner (note-form.md item 15): "Not saved", the sentence said once, focus kept
+  // in the box, and Submit note unavailable.
+  const refused = page.waitForResponse(isDraftSave);
+  await box(page).pressSequentially(' Bought bread.');
+  const refusedAnswer = await refused;
+  expect(refusedAnswer.status()).toBe(409);
+  expect(await refusedAnswer.json()).toMatchObject({ code: 'draft.taken_over' });
+  await expect(takeover(page)).toBeVisible();
+  await expect(saveStatus(page)).toHaveText('Not saved');
+  await expect(alert(page)).toHaveText(changedElsewhere);
+  await expect(box(page)).toBeFocused();
+  await expect(submitNote(page)).toHaveAttribute('aria-disabled', 'true');
+  await expect(box(page)).toHaveValue('Went to the shops. Bought bread.');
+
+  // Typing and ticking go on, kept and not sent, past the 2 s at which a save would go, and past a blur.
+  const sentByFirstTab = recordSaves(page);
+  await box(page).pressSequentially(' Walked home.');
+  await goalBox(page, bus.text).check();
+  await flagBox(page).check();
+  await reasonBox(page).fill(flagReason);
+  await page.waitForTimeout(2_500);
+  expect(await sentByFirstTab()).toEqual([]);
+
+  // Keep the text on this screen: everything on screen, under a new clientId as the page's save 1, which the app
+  // applies; the banner gone, focus back in the box, and "Saved …".
+  const kept = page.waitForResponse(isDraftSave);
+  await keepButton(page).click();
+  const keptAnswer = await kept;
+  expect(keptAnswer.status()).toBe(200);
+  const firstTabText = 'Went to the shops. Bought bread. Walked home.';
+  const keptBody = keptAnswer.request().postDataJSON() as DraftSave;
+  expect(keptBody).toEqual({
+    clientId: expect.any(String),
+    seq: 1,
+    narrative: firstTabText,
+    tickedGoalIds: [breakfastId, busId],
+    isFlagged: true,
+    flagReason,
+  });
+  expect(keptBody.clientId).not.toBe((refusedAnswer.request().postDataJSON() as DraftSave).clientId);
+  await expect(takeover(page)).toHaveCount(0);
+  await expect(box(page)).toBeFocused();
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await expect(submitNote(page)).not.toHaveAttribute('aria-disabled', 'true');
+
+  // Keep won: the second tab's next save meets the banner in turn, and nothing on its screen changes until Load.
+  const secondRefused = secondTab.waitForResponse(isDraftSave);
+  await box(secondTab).pressSequentially(' Lost to Load.');
+  expect((await secondRefused).status()).toBe(409);
+  await expect(takeover(secondTab)).toBeVisible();
+  await expect(box(secondTab)).toHaveValue('Went to the shops. Typed in the second tab. Lost to Load.');
+  await expect(goalBox(secondTab, bus.text)).not.toBeChecked();
+  await expect(flagBox(secondTab)).not.toBeChecked();
+
+  // Load the other version replaces the ticks, the text, the flag and the reason, with focus on the <h1> and "Saved …"
+  // at the other version's time (note-form.md items 15 and 16).
+  const reread = secondTab.waitForResponse(isDraftRead);
+  await loadButton(secondTab).click();
+  expect((await reread).status()).toBe(200);
+  await expect(heading(secondTab)).toBeFocused();
+  await expect(takeover(secondTab)).toHaveCount(0);
+  await expect(box(secondTab)).toHaveValue(firstTabText);
+  await expect(goalBox(secondTab, breakfast.text)).toBeChecked();
+  await expect(goalBox(secondTab, bus.text)).toBeChecked();
+  await expect(flagBox(secondTab)).toBeChecked();
+  await expect(reasonBox(secondTab)).toHaveValue(flagReason);
+  await expect(saveStatus(secondTab)).toHaveText(savedAnyTime);
+
+  // Its next save goes under a new clientId as save 1, which takes the working copy over again.
+  await box(secondTab).press('ControlOrMeta+End');
+  const loadedNext = secondTab.waitForResponse(isDraftSave);
+  await box(secondTab).pressSequentially(' Had tea.');
+  const loadedNextAnswer = await loadedNext;
+  expect(loadedNextAnswer.status()).toBe(200);
+  const loadedNextBody = loadedNextAnswer.request().postDataJSON() as DraftSave;
+  expect(loadedNextBody).toMatchObject({ seq: 1, narrative: `${firstTabText} Had tea.` });
+  expect(loadedNextBody.clientId).not.toBe(secondTabFirst.clientId);
+  for (const tab of [page, secondTab]) {
+    await expectNothingKept(tab, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops', changedElsewhere);
+  }
+});
+
+test('signed in for real, a tab killed mid-sentence: the note opened again lacks at most its last few seconds', async ({
+  page,
+  invite,
+  authenticator,
+  secondTab,
+}) => {
+  test.slow();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  const address = (await row(page, janeCitizen.name).getAttribute('href')) ?? '';
+
+  // In a tab of its own, a sentence, saved; then a long one typed with no pause, at 20 characters a second at most,
+  // and the tab killed in the middle of it, as a phone kills a tab in the background, so that nothing more of the page
+  // runs, not even the page-hidden save that a tab closed by the browser sends (note-form.md item 9, which its own test
+  // proves): the note keeps only what the saves made while typing carried.
+  await secondTab.setViewportSize({ width: 375, height: 812 });
+  await secondTab.goto(address);
+  const first = 'Went to the shops and bought bread.';
+  await box(secondTab).pressSequentially(first);
+  await expect(saveStatus(secondTab)).toHaveText(savedAnyTime);
+  const second =
+    ' Then she walked home along the river, stopping twice to rest on the benches by the boat ramp, and talked about'
+    + ' the ducks, the weather and her sister, whom she phoned as soon as she got in, to say';
+  await box(secondTab).pressSequentially(second, { delay: 50 });
+  const crashed = secondTab.waitForEvent('crash');
+  // Chromium's chrome://crash, as Playwright's own tests crash a page: the renderer stops at once, unloading nothing,
+  // so that this navigation never ends.
+  void secondTab.goto('chrome://crash').catch(() => {});
+  await crashed;
+  await secondTab.close();
+
+  // Opened again in the first tab, the note holds the text as typed but for its last few seconds (design.md §14 M2):
+  // a save goes at most 5 s after the first change that it carries, so every character typed more than 6 s before the
+  // tab was killed, and so some of the second sentence.
+  await row(page, janeCitizen.name).click();
+  await expect(box(page)).toBeVisible();
+  const kept = await box(page).inputValue();
+  const typed = first + second;
+  expect(typed.startsWith(kept), 'the text kept is the start of the text typed').toBe(true);
+  expect(kept.length, 'some of the second sentence').toBeGreaterThan(first.length);
+  expect(typed.length - kept.length, 'the characters lost').toBeLessThanOrEqual(6 * 20);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, first);
+});
+
+test('signed in for real, the form left and opened again in the same page load saves on from the next seq', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  await openJaneCitizensNote(page);
+  const saves = recordSaves(page);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  const [last] = (await saves()).slice(-1);
+
+  // Left by the back link and opened again: the next save is the page's next, under the same clientId, which the app
+  // applies rather than taking it for one that it holds (note-form.md item 13).
+  await backLink(page).click();
+  await row(page, janeCitizen.name).click();
+  await expect.poll(() => shownText(saveStatus(page))).toMatch(draftSavedAnyTime);
+  await box(page).press('ControlOrMeta+End');
+  const next = page.waitForResponse(isDraftSave);
+  await box(page).pressSequentially(' Bought bread.');
+  const answer = await next;
+  expect(answer.status()).toBe(200);
+  expect(answer.request().postDataJSON()).toMatchObject({
+    clientId: last.clientId,
+    seq: last.seq + 1,
+    narrative: 'Went to the shops. Bought bread.',
+  });
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+
+  // Opened once more, it holds the words added.
+  await backLink(page).click();
+  await row(page, janeCitizen.name).click();
+  await expect(box(page)).toHaveValue('Went to the shops. Bought bread.');
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops');
+});
+
+test('signed in for real at 375 px, the back link and Past notes save a change, then go; offline, they stay', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  test.slow();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  const id = await addJaneWithTwoGoals(page);
+  await openJaneCitizensNote(page);
+  const address = new URL(page.url()).pathname;
+  const dialogs = browserDialogs(page);
+
+  // The back link with a change waiting: the change sent at once, "Saving…" while it is out, and Today only once the
+  // app has answered it (note-form.md item 34).
+  const heldSave = await holdNext(page, draftRequests);
+  await box(page).pressSequentially('Went to the shops.');
+  await backLink(page).click();
+  const save = await heldSave();
+  expect(save.request().method()).toBe('PUT');
+  await expect(saveStatus(page)).toHaveText('Saving…');
+  await expect(page).toHaveURL(address);
+  const saved = page.waitForResponse(isDraftSave);
+  await save.continue();
+  expect((await saved).status()).toBe(201);
+  await expect(page).toHaveURL('/');
+  await expect(row(page, janeCitizen.name)).toBeFocused();
+
+  // Past notes, under the <h1>, with a change waiting: the change saved, then Past notes.
+  await row(page, janeCitizen.name).click();
+  await box(page).press('ControlOrMeta+End');
+  const second = page.waitForResponse(isDraftSave);
+  await box(page).pressSequentially(' Bought bread.');
+  await pastNotesLink(page).click();
+  expect((await second).status()).toBe(200);
+  await expect(page).toHaveURL(`/participants/${id}/notes`);
+  await expect(heading(page)).toHaveText(`Past notes ${janeCitizen.name}`);
+
+  // Offline, with "Not saved: …" shown: each link stays, saying the sentence again in the page's polite region.
+  await nav(page).getByRole('link', { name: 'Today', exact: true }).click();
+  await row(page, janeCitizen.name).click();
+  await expect(box(page)).toHaveValue('Went to the shops. Bought bread.');
+  await page.context().setOffline(true);
+  await box(page).press('ControlOrMeta+End');
+  await box(page).pressSequentially(' Walked home.');
+  await expect(saveStatus(page)).toHaveText(notSavedRetrying);
+  for (const link of [backLink(page), pastNotesLink(page)]) {
+    await pageStatus(page).evaluate((region) => {
+      region.textContent = '';
+    });
+    await link.click();
+    await expect(pageStatus(page)).toHaveText(notSavedRetrying);
+    await expect(page).toHaveURL(address);
+    await expect(box(page)).toHaveValue('Went to the shops. Bought bread. Walked home.');
+  }
+
+  // Online again, "Saved …" with no action, and the back link leaves at once.
+  await page.context().setOffline(false);
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await backLink(page).click();
+  await expect(page).toHaveURL('/');
+  expect(dialogs).toEqual([]);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops', notSavedRetrying);
+});
+
+test('signed in for real, a session ended mid-note: the same person signs in again, one save; another, Today', async ({
+  page,
+  invite,
+  secondInvite,
+  authenticator,
+}) => {
+  test.slow();
+  // The other person, of an organisation of their own, set up first with a password, then gone from the browser, so
+  // that the virtual authenticator holds only the first person's passkey (sign-in-again.spec.ts).
+  const other = await setUpWithPassword(page, secondInvite);
+  await page.context().clearCookies();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signInThroughSetup(page, invite, authenticator);
+  await addJaneWithTwoGoals(page);
+  const [breakfastId] = await openJaneCitizensNote(page);
+  const address = new URL(page.url()).pathname;
+  const saves = recordSaves(page);
+  await goalRow(page, breakfast.text).locator('span').click();
+  await flagBox(page).check();
+  await reasonBox(page).fill(flagReason);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  const sentBefore = await saves();
+  const [lastBefore] = sentBefore.slice(-1);
+
+  // A change waiting as the app's session ends: view C in place, at the same address, and nothing sent while it shows,
+  // past the 5 s within which a save would go.
+  await box(page).pressSequentially(' Bought bread.');
+  await endTheSession(page);
+  await expect(heading(page)).toHaveText('You’ve been signed out');
+  await expect(page).toHaveURL(address);
+  await page.waitForTimeout(5_500);
+  expect(await saves()).toHaveLength(sentBefore.length);
+
+  // The same person signs in again with their passkey: the form as it was, with focus on its <h1>, and one save, under
+  // the same clientId as the page's next, which the app applies, with no takeover banner (note-form.md item 36).
+  const resent = page.waitForResponse(isDraftSave);
+  await signInAgainWithPasskey(page);
+  const resentAnswer = await resent;
+  expect(resentAnswer.status()).toBe(200);
+  expect(resentAnswer.request().postDataJSON()).toEqual({
+    clientId: lastBefore.clientId,
+    seq: lastBefore.seq + 1,
+    narrative: 'Went to the shops. Bought bread.',
+    tickedGoalIds: [breakfastId],
+    isFlagged: true,
+    flagReason,
+  });
+  await expect(heading(page)).toHaveText(new RegExp(`^${janeCitizen.name} `));
+  await expect(heading(page)).toBeFocused();
+  await expect(goalBox(page, breakfast.text)).toBeChecked();
+  await expect(reasonBox(page)).toHaveValue(flagReason);
+  await expect(box(page)).toHaveValue('Went to the shops. Bought bread.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await expect(takeover(page)).toHaveCount(0);
+  await expect(page).toHaveURL(address);
+  expect(await saves()).toHaveLength(sentBefore.length + 1);
+
+  // Another change waiting as the session ends again, and the other person signs in on view C: a full page load of
+  // their Today, with nothing of the first person's sent.
+  await box(page).pressSequentially(' Walked home.');
+  await endTheSession(page);
+  await main(page).getByRole('textbox', { name: 'Email address' }).fill(secondInvite.email);
+  await page.getByLabel('Password', { exact: true }).fill(other.password);
+  await main(page).getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel(codeLabel).fill(authenticatorCode(other.key));
+  const reload = page.waitForRequest((request) => request.isNavigationRequest());
+  await main(page).getByRole('button', { name: 'Sign in', exact: true }).click();
+  expect(new URL((await reload).url()).pathname).toBe('/');
+  await expect(heading(page)).toContainText('Today');
+  await expect(page).toHaveURL('/');
+  await expect(box(page)).toHaveCount(0);
+  expect(await saves()).toHaveLength(sentBefore.length + 1);
+  await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, 'Went to the shops', flagReason);
+});
+
+test('the page made hidden sends the newest state at once, with keepalive, while autosave’s timers wait', async ({
+  page,
+}) => {
+  const store = twoGoals();
+  // The page's clock, paused once the form is open, so that none of autosave's timers sends a save.
+  await page.clock.install();
+  await openJanesNote(page, store);
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1_000));
+  // Each request's method and keepalive, as the page's own fetch is called with them.
+  await page.evaluate(() => {
+    const sent: { method: string; keepalive: boolean | undefined }[] = [];
+    Object.assign(window, { fetchesSent: sent });
+    const send = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      sent.push({ method: init?.method ?? 'GET', keepalive: init?.keepalive });
+      return send(input, init);
+    };
+  });
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saving…');
+  expect(store.saves).toEqual([]);
+
+  // Hidden, as on a switch to another app (note-form.md item 9): the save goes at once, with keepalive, and its answer
+  // shows as any save's.
+  const sentAsHidden = page.waitForRequest(isDraftSaveRequest);
+  await setHidden(page, true);
+  expect((await sentAsHidden).postDataJSON()).toMatchObject({ seq: 1, narrative: 'Went to the shops.' });
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  const fetchesSent = await page.evaluate(
+    () => (window as unknown as { fetchesSent: { method: string; keepalive: boolean | undefined }[] }).fetchesSent,
+  );
+  expect(fetchesSent.filter(({ method }) => method === 'PUT')).toEqual([{ method: 'PUT', keepalive: true }]);
+  expect(store.saves).toHaveLength(1);
+  await setHidden(page, false);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops');
+});
+
+test('a draft reopened in a new page load, its first save lost, saves as a new page’s first, with no banner', async ({
+  page,
+}) => {
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  // Opened again in a new page load, whose saves have a clientId of their own, while the draft holds the earlier
+  // page's; the new page's first save is lost before it reaches the server, as with no signal, so that its retry, 1 s
+  // later, is its save 2, which the server answers 409 draft.taken_over (design.md §5.6).
+  await page.reload();
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await page.route(
+    ({ pathname }) => pathname.endsWith('/draft'),
+    (route) => (route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()),
+    { times: 1 },
+  );
+  const before = store.saves.length;
+  await box(page).press('ControlOrMeta+End');
+  await box(page).pressSequentially(' Bought bread.');
+
+  // None of the page's saves of the note had been answered, so it sends the save again at once as a new page's
+  // first, under a new clientId as save 1, which takes the note over: "Saved", and no banner (T10's Notes).
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm', { timeout: 5_000 });
+  await expect(takeover(page)).toHaveCount(0);
+  const sent = store.saves.slice(before);
+  expect(sent.map(({ seq, narrative }) => [seq, narrative])).toEqual([
+    [2, 'Went to the shops. Bought bread.'],
+    [1, 'Went to the shops. Bought bread.'],
+  ]);
+  expect(sent[1].clientId).not.toBe(sent[0].clientId);
+  expect(store.draft(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops. Bought bread.' });
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops');
+});
+
+/**
+ * Makes the open note's saves fail, as a lost signal does, and types `typed`, then expects "Saving…" through the first
+ * failure and the failed state once its retry, 1 s later, has failed too.
+ */
+async function expectNotSavedAfterTyping(page: Page, typed: string) {
+  await failDraftSaves(page);
+  await box(page).pressSequentially(typed);
+  await expect(saveStatus(page)).toHaveText('Saving…');
+  await expect(saveStatus(page)).toHaveText(notSavedRetrying, { timeout: 5_000 });
+}
+
+/**
+ * Lets `store` answer the open note's saves again and waits for the next retry's "Saved 4:12 pm", then saves the draft
+ * from another tab, with another text, Makes own breakfast unticked, the bus ticked and the flag with a reason, and
+ * types `typed`, whose save meets the takeover banner.
+ */
+async function expectTakeoverAfterTyping(page: Page, store: NotesStore, typed: string) {
+  await store.serve(page, worker);
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm', { timeout: 15_000 });
+  store.saveElsewhere(jane.id, worker.today, {
+    narrative: 'Typed in another tab.',
+    tickedGoalIds: [bus.id],
+    isFlagged: true,
+    flagReason,
+    savedAtUtc: '2026-10-01T06:20:00.000Z',
+  });
+  await box(page).pressSequentially(typed);
+  await expect(takeover(page)).toBeVisible();
+  await expect(saveStatus(page)).toHaveText('Not saved');
+}
+
+test('Not saved and the takeover banner pass axe; the choices 44 px, stacked on a phone, side by side after', async ({
+  page,
+}) => {
+  test.slow();
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  // Not saved: the indicator as the top bar's second row, under the back link and the bar's full width, its warning
+  // icon hidden from screen readers, and Submit note unavailable.
+  await expectNotSavedAfterTyping(page, ' Bought bread.');
+  await expect(saveStatus(page).locator('svg')).toHaveAttribute('aria-hidden', 'true');
+  await expect(submitNote(page)).toHaveAttribute('aria-disabled', 'true');
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 800 });
+    const link = await boxOf(backLink(page));
+    const status = await boxOf(saveStatus(page));
+    // The bar's row, in the form's column, which holds the back link and the indicator.
+    const barRow = await boxOf(saveStatus(page).locator('xpath=..'));
+    expect(Math.round(status.x), `the row's start at ${width} px`).toBe(Math.round(link.x));
+    expect(Math.round(status.x), `the bar's start at ${width} px`).toBe(Math.round(barRow.x));
+    expect(Math.round(status.width), `the bar's width at ${width} px`).toBe(Math.round(barRow.width));
+    expect(status.y, `the row under the back link at ${width} px`).toBeGreaterThanOrEqual(link.y + link.height);
+  }
+  await expectAxeToPass(page);
+
+  // The takeover banner, with "Not saved", its icon hidden, and Keep, then Load.
+  await expectTakeoverAfterTyping(page, store, ' Walked home.');
+  await expect(takeover(page).locator('svg')).toHaveAttribute('aria-hidden', 'true');
+  await expect(takeover(page).getByRole('button')).toHaveText([
+    'Keep the text on this screen',
+    'Load the other version',
+  ]);
+  await expectAxeToPass(page);
+
+  // On a phone, each choice the banner's width, Keep above Load; on a laptop, side by side, Keep first; each at least
+  // 44 px high and wide.
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expectAtLeast(takeover(page).getByRole('button'), 44, 44);
+  const [keepOnPhone, loadOnPhone] = [await boxOf(keepButton(page)), await boxOf(loadButton(page))];
+  const words = await boxOf(takeover(page).locator('p'));
+  expect(Math.round(loadOnPhone.x)).toBe(Math.round(keepOnPhone.x));
+  expect(Math.round(loadOnPhone.width)).toBe(Math.round(keepOnPhone.width));
+  expect(Math.round(keepOnPhone.x + keepOnPhone.width)).toBe(Math.round(words.x + words.width));
+  expect(loadOnPhone.y).toBeGreaterThanOrEqual(keepOnPhone.y + keepOnPhone.height);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expectAtLeast(takeover(page).getByRole('button'), 44, 44);
+  const [keepOnLaptop, loadOnLaptop] = [await boxOf(keepButton(page)), await boxOf(loadButton(page))];
+  expect(Math.round(loadOnLaptop.y)).toBe(Math.round(keepOnLaptop.y));
+  expect(loadOnLaptop.x).toBeGreaterThanOrEqual(keepOnLaptop.x + keepOnLaptop.width);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', notSavedRetrying, changedElsewhere);
+});
+
+test('at 320 px with text at 200%, neither Not saved nor the takeover banner scrolls sideways', async ({ page }) => {
+  const store = twoGoals();
+  await serveMe(page, worker);
+  await store.serve(page, worker);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto(noteAddress(jane.id, worker.today));
+  await setTextTo200Percent(page);
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  await expectNotSavedAfterTyping(page, ' Bought bread.');
+  expect(await scrollsSideways(page), 'Not saved').toBe(false);
+
+  await expectTakeoverAfterTyping(page, store, ' Walked home.');
+  expect(await scrollsSideways(page), 'the takeover banner').toBe(false);
+  for (const choice of [keepButton(page), loadButton(page)]) {
+    expect(await choice.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const { x, width } = await boxOf(choice);
+    expect(x + width).toBeLessThanOrEqual(320);
+  }
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', notSavedRetrying, changedElsewhere);
+});
+
+test('in forced colours, the failed row and the takeover banner keep their 2 px edges, in CanvasText', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  const canvasText = await systemColour(page, 'CanvasText');
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  const expectEdge = async (row: Locator) => {
+    for (const side of ['top', 'right', 'bottom', 'left']) {
+      await expect(row).toHaveCSS(`border-${side}-color`, canvasText);
+      await expect(row).toHaveCSS(`border-${side}-style`, 'solid');
+      await expect(row).toHaveCSS(`border-${side}-width`, '2px');
+    }
+  };
+
+  await expectNotSavedAfterTyping(page, ' Bought bread.');
+  await expectEdge(saveStatus(page));
+  await expectTakeoverAfterTyping(page, store, ' Walked home.');
+  await expectEdge(takeover(page));
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', notSavedRetrying, changedElsewhere);
+});
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: the takeover banner's Keep and Load after the back link, each by a key`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const store = twoGoals();
+    await serveMe(page, worker);
+    await serveToday(page, worker.today, participants);
+    await store.serve(page, worker);
+    await page.goto('/');
+    await expect(rows(page)).toHaveCount(2);
+    const shell = ['Skip to main content', 'Grow2Notes', 'Today', 'Account'];
+    await expectStops(page, 'Tab', [...shell, 'Find a participant', 'Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(heading(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
+    await page.keyboard.type('Went to the shops.');
+    await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+    // Another tab saves the note, and the next words meet the banner, with focus kept in the box.
+    const elsewhere = {
+      narrative: 'Typed in another tab.',
+      tickedGoalIds: [bus.id],
+      isFlagged: true,
+      flagReason,
+      savedAtUtc: '2026-10-01T06:20:00.000Z',
+    };
+    store.saveElsewhere(jane.id, worker.today, elsewhere);
+    await page.keyboard.type(' Bought bread.');
+    await expect(takeover(page)).toBeVisible();
+    await expectFocusAt(page, '3. Guided notes');
+
+    // note-form.md *Focus order (Tab)*: the back link, then Keep and Load, then <main>, from Past notes.
+    await expectStops(page, 'Shift+Tab', [
+      bus.text,
+      breakfast.text,
+      'Past notes',
+      'Load the other version',
+      'Keep the text on this screen',
+      'Today',
+      'Account',
+    ]);
+    await expectStops(page, 'Tab', ['Today', 'Keep the text on this screen']);
+
+    // Enter on Keep: the text on screen saved as a new clientId's save 1, the banner gone, and focus back in the box.
+    await page.keyboard.press('Enter');
+    await expect(takeover(page)).toHaveCount(0);
+    await expectFocusAt(page, '3. Guided notes');
+    await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+    expect(store.saves.at(-1)).toMatchObject({ seq: 1, narrative: 'Went to the shops. Bought bread.' });
+    expect(store.draft(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops. Bought bread.' });
+
+    // Taken over again: Space on Load shows the other version, with focus on the <h1>, then the form's Tab order, with
+    // Reason, as the other version is flagged.
+    store.saveElsewhere(jane.id, worker.today, elsewhere);
+    await page.keyboard.type(' Walked home.');
+    await expect(takeover(page)).toBeVisible();
+    await expectStops(page, 'Shift+Tab', [bus.text, breakfast.text, 'Past notes', 'Load the other version']);
+    await page.keyboard.press('Space');
+    await expect(heading(page)).toBeFocused();
+    await expect(takeover(page)).toHaveCount(0);
+    await expect(box(page)).toHaveValue('Typed in another tab.');
+    await expect(saveStatus(page)).toHaveText('Saved 4:20 pm');
+    await expectStops(page, 'Tab', [
+      'Past notes',
+      breakfast.text,
+      bus.text,
+      '3. Guided notes',
+      'Flag for manager',
+      'Reason',
+      'Submit note',
+      'outside the page',
+    ]);
+    await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops', 'Typed in another tab', changedElsewhere);
   });
 }

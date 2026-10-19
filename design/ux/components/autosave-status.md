@@ -325,6 +325,42 @@ Formatting:
   met. The flag and its reason are part of each save, `flagReason` `null` while unticked or blank and cut to 200
   characters without splitting a surrogate pair. `409 note.version_conflict`, a note submitted elsewhere, is a fourth
   dead end, whose sentence is "This note was changed on another device or tab."
+- **As built** (T10, the retries and the page-hidden save): transient means no whole answer (`api()`'s 10 s timeout
+  included), `408`, `429`, `500`, `502`, `503` or `504`. A `Retry-After` on a `429` or `503`, in seconds or as an HTTP
+  date, takes the back-off's place for that one wait, a date already past giving 0. "Not saved: no connection…" shows
+  once the first retry has failed too, or at once for a change typed while the browser reports offline and for a
+  `Retry-After` longer than the first retry's 1 s, so that "Saving…", and a press of Submit waiting on it, never lasts
+  through a longer wait. The retries go on only until 28 minutes after the person last acted on the form (a change, a
+  blur, the page shown again, their sign-in in place, Keep or Submit), then stop, "Not saved: …" kept, until their next
+  change, blur, return to the page or sign-in, so that a failing server's answers never keep an unattended session alive
+  (A66). Each attempt reads the form and takes the next `seq` as it is sent, so a first save lost before it reached the
+  server and retried goes as `seq` 2; while none of the page's saves of the note has been answered, its takeover `409`
+  sends the save again at once under a new `clientId` as `seq` 1, which takes the note over with no banner, as the page
+  has not saved the note (§5.6). During a retry's wait a blur and the 2 s and 5 s timers send nothing, as the retry
+  carries the change; the page shown again, `checkSave()`, `flushNow()` and `resume()` cut the wait short, and the
+  `online` event does not, a wait being 10 s at most. A save that waited offline goes as TanStack resumes it, which it
+  does only for a page that is shown, so a hidden page sends the newest state itself as the browser comes online. The
+  form fetches the antiforgery token as it opens, and as the same person's sign-in shows it again, so that the
+  page-hidden save, through `api()` with `keepalive` while its JSON body is under 60,000 bytes by `TextEncoder`, is one
+  request; its answer counts as any save's, and its failure, a takeover `409` included, is left to the retries. After
+  "Not saved: …", a save answered that did not carry the newest change shows "Saving…" again, and an older save answered
+  after a newer one leaves "Saved" as it is.
+- **As built** (T10, what waits on a save): `flushNow()` gives `true` at once with nothing unsaved or after a dead end,
+  and otherwise once a save carrying the newest change is answered; `checkSave()` gives the content once its own `PUT`
+  is answered carrying the newest change. Each gives `false`, or nothing, as soon as "Not saved: …" shows, for a
+  takeover, a `401` or any refusal that is not retried (a `403`, `404`, `412` or `422`), and `checkSave()` for a change
+  made while its `PUT` was out, while the retries go on: no press, leave or Sign out waits on a save that is retried
+  for ever, and none is acted on later.
+- **As built** (T10, the takeover): the indicator's own state, "Not saved", carries the banner, so that it takes the
+  failed-save row's place and gives way to a dead end. A change typed while it shows is counted and kept, neither said
+  nor sent, and a save answered after it says nothing. Keep counts what is on screen as a change, so that it goes with
+  nothing typed since. Both choices are `aria-disabled`, with no busy label, while Load's read is out. Load reads
+  `GET {base}/draft` outside the draft's query: a read that fails keeps the banner, its buttons ready, and says the
+  form's "The note did not load: …" in the page's polite region; a `404`, the note submitted meanwhile, is the
+  version-conflict dead end, and another user's draft the in-progress one, each with focus on the `<h1>` and said
+  through the assertive region; a note discarded meanwhile loads a new note's empty form, the indicator empty.
+  `beforeunload` follows the indicator, listened for while it says "Saving…", "Not saved: …" or "Not saved", a dead
+  end's included (Behaviour 7).
 - **Shared fetch wrapper:** reuse the app's `api()` wrapper. It adds `X-XSRF-TOKEN` (§9.8) and records accepted requests for the session clock (`session-timeout.md`).
 - **Router:** `useBlocker` needs a data router (`createBrowserRouter`). Confirm the app uses one.
 - **Tests:**
@@ -514,6 +550,8 @@ Set `--bar-height` from a `ResizeObserver` on `.bar`, and use `html { scroll-pad
 - Autosave is stopped while the version `POST` is in flight and resumed if the person taps Go back.
 
 **Today (4.2), consumer only.** On leaving the form, invalidate the `today` and `me/drafts` queries so "Draft · You · saved 9:42 am" and "Your unfinished drafts" match the last acknowledged save.
+- As built (T10): the form calls `invalidateToday()` as it unmounts, whichever way it is left; `['me', 'drafts']`
+  comes with Your unfinished drafts (T12).
 
 ---
 

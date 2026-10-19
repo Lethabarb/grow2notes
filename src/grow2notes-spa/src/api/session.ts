@@ -42,9 +42,11 @@ export function signInCount(): number {
 
 // The session clock (session-timeout.md *The session clock*) predicts when the server will end the session for being
 // idle: 30 minutes after the newest request that it accepted, the session cookie's `ExpireTimeSpan` (design.md §8.4),
-// with the warning from 28 minutes (A24). It never sends a request, which would extend the session, and the server's
-// answer always wins over it.
-const warnAfter = 28 * 60_000;
+// with the warning from 28 minutes (A24). It never sends a request, which would extend the session, though at 28:00 it
+// has autosave send a note form's change waiting, in place of the warning; and the server's answer always wins over it.
+
+/** When the warning opens, in idle milliseconds, at which autosave's unattended retries stop too (A66). */
+export const warnAfter = 28 * 60_000;
 const endAfter = 30 * 60_000;
 
 // The idle times at which the phase moves on: the warning, its countdown's steps (app-shell.md component 6), the end.
@@ -74,6 +76,8 @@ type Clock = {
   ended: boolean;
   /** How many promises are holding the phase as it is. */
   holds: number;
+  /** The idle period, by its `lastAccepted`, in which the clock has had a waiting change sent at 28:00. */
+  flushedFor: number | undefined;
   timer: ReturnType<typeof setTimeout> | undefined;
 };
 
@@ -133,6 +137,45 @@ export function holdWhile(promise: Promise<unknown>): void {
   void promise.then(release, release);
 }
 
+/** What the session clock and Sign out ask of a mounted note form's autosave (T10's Notes). */
+export type SaveFlush = {
+  /** Whether a change is not yet saved, or the takeover banner waits for its answer. */
+  unsaved: () => boolean;
+  /**
+   * Sends a change waiting now: `true` once it is saved, or with nothing to save; `false` as soon as it will not be,
+   * so that nothing waits on a save that is retried for ever.
+   */
+  flushNow: () => Promise<boolean>;
+};
+
+// The note form's autosave while one is mounted, of which there is one at most.
+let saveFlush: SaveFlush | undefined;
+
+/** Registers a mounted note form's autosave, and returns the function that removes it as the form goes. */
+export function registerSaveFlush(flush: SaveFlush): () => void {
+  saveFlush = flush;
+  return () => {
+    if (saveFlush === flush) {
+      saveFlush = undefined;
+    }
+  };
+}
+
+/**
+ * For Sign out (app-shell.md *Press Sign out* step 2): every change of a mounted note form saved, a change made while
+ * its save was out included, as the full page load that follows would lose it. `true` at once with no form mounted or
+ * nothing unsaved; `false` once a save will not be soon, or while the takeover banner waits for its answer.
+ */
+export async function flushSaves(): Promise<boolean> {
+  while (saveFlush?.unsaved() === true) {
+    if (!(await saveFlush.flushNow())) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 /** Calls `listener` each time the phase changes, and returns the function that stops it. */
 export function subscribe(listener: () => void): () => void {
   phaseListeners.add(listener);
@@ -159,6 +202,7 @@ export function startClock(checkSession: () => Promise<unknown>): () => void {
     lastAnswered: now,
     ended: false,
     holds: 0,
+    flushedFor: undefined,
     timer: undefined,
   };
   clock = started;
@@ -198,6 +242,21 @@ function update(current: Clock): void {
 
   const idle = Date.now() - current.lastAccepted;
   const passed = current.ended ? marks.length : marks.filter((mark) => mark <= idle).length;
+  // A change waiting for autosave as the phase would leave `active` goes now, in place of the warning, once in each
+  // idle period, holding the phase: its accepted save starts the clock afresh, and one that fails lets the warning
+  // open as the hold settles (session-timeout.md *The session clock* step 3).
+  if (
+    current.phase === 'active'
+    && passed > 0
+    && !current.ended
+    && current.flushedFor !== current.lastAccepted
+    && saveFlush?.unsaved() === true
+  ) {
+    current.flushedFor = current.lastAccepted;
+    holdWhile(saveFlush.flushNow());
+    return;
+  }
+
   if (phases[passed] !== current.phase) {
     current.phase = phases[passed];
     tell();

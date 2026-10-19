@@ -5,7 +5,7 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { refreshMe, type Me } from '../api/me.ts';
 import { createQueryClient } from '../api/queryClient.ts';
-import { onSessionEnded } from '../api/session.ts';
+import { onSessionEnded, registerSaveFlush } from '../api/session.ts';
 import { buttonClass } from '../components/buttonClass.ts';
 import { pageName } from '../copy/pageNames.ts';
 import { fullPageLoad } from './fullPageLoad.ts';
@@ -161,6 +161,31 @@ function standInGuard() {
 }
 
 const removers: (() => void)[] = [];
+
+/**
+ * A stand-in for a mounted note form's autosave with a change unsaved, registered as the form registers its own: each
+ * time Sign out asks it to save the change, it waits for the test's answer, `true` once saved.
+ */
+function standInForm() {
+  let unsaved = true;
+  const waiting: ((saved: boolean) => void)[] = [];
+  const flushNow = vi.fn(() => new Promise<boolean>((resolve) => waiting.push(resolve)));
+  removers.push(registerSaveFlush({ unsaved: () => unsaved, flushNow }));
+
+  /** Answers the flush asked first. */
+  async function answer(saved: boolean) {
+    const resolve = waiting.shift();
+    if (resolve === undefined) {
+      throw new Error('The form has not been asked.');
+    }
+
+    unsaved = !saved;
+    resolve(saved);
+    await settle();
+  }
+
+  return { flushNow, answer };
+}
 
 /** A listener for the session-ended event, removed after the test. */
 function listenForSessionEnded() {
@@ -571,6 +596,50 @@ describe('Sign out', () => {
     await act(() => vi.advanceTimersByTimeAsync(10_000));
 
     expect(line.textContent).toBe(noConnection);
+  });
+
+  // A note form's change waiting for its save, as app-shell.md *Press Sign out* step 2 has it: the note form itself is
+  // in NotePage.test.tsx.
+  it("saves a note form's change waiting after going busy, then sends the logout, disarmed", async () => {
+    const { logout, armedWhenSent } = notingArmed(answer(204));
+    serveSignOut(worker, logout);
+    const form = standInForm();
+    const { signOut } = await openPanel();
+
+    fireEvent.click(signOut);
+    await settle();
+    await act(() => vi.advanceTimersByTimeAsync(400));
+
+    expect(form.flushNow).toHaveBeenCalledOnce();
+    expect(signOutRequests()).toEqual([]);
+    expect(signOut).toHaveAccessibleName('Signing out…');
+    expect(signOut).toHaveAttribute('aria-disabled', 'true');
+    expect(unloadGuardArmed()).toBe(true);
+
+    await form.answer(true);
+
+    expect(logoutsSent()).toEqual([{ method: 'POST', token: antiforgeryToken }]);
+    expect(armedWhenSent).toEqual([false]);
+    expect(fullPageLoad).toHaveBeenCalledOnce();
+  });
+
+  it("sends no logout when a note form's change cannot be saved, saying so, with Sign out ready", async () => {
+    serveSignOut(manager);
+    const form = standInForm();
+    const { signOut, line } = await openPanel();
+    fireEvent.click(signOut);
+    await settle();
+
+    await form.answer(false);
+
+    expect(line.textContent).toBe('Not signed out: your note is not saved yet. Keep this page open; retrying.');
+    expect(signOutRequests()).toEqual([]);
+    expect(signOut).not.toHaveAttribute('aria-disabled');
+    expect(signOut).toHaveAccessibleName('Sign out');
+    expect(signOut).toHaveFocus();
+    expect(unloadGuardArmed()).toBe(true);
+    expect(fullPageLoad).not.toHaveBeenCalled();
+    expect(headerSignedIn()).toBe(true);
   });
 
   // The tests above run with no page guarding, as on every screen but Guide prompts with unsaved text; those below

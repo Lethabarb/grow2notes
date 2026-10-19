@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Identity;
@@ -26,7 +27,10 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <c>PUT</c>, the autosave: with no live note, the
 /// note, a draft of the caller's, their working copy, the template's goals its snapshot, and
 /// <c>note.draft_started</c>, together or not at all (§5.5 item 2), and <c>201</c>; with the caller's own draft, its
-/// ticks, text and flag replaced, and <c>200</c> (§5.6); and the body's checks. Each, for anyone else's draft,
+/// ticks, text and flag replaced, and <c>200</c>, as §5.6 numbers a page's saves: a save that the working copy holds
+/// already changing nothing, another page's first save taking it over and that page's later one getting
+/// <c>409 draft.taken_over</c>, and two saves at once, a submit among them, decided one after the other; and the
+/// body's checks. Each, for anyone else's draft,
 /// <c>409 note.in_progress_by_other</c> with its author's name and start time, and for a participant not in the
 /// caller's organisation, <c>404</c> (§9.2). The tests add their own participants, goals, users, drafts and, to change
 /// guide prompts, organisation (tests/README.md). The endpoint matrix covers who may call them, and
@@ -471,12 +475,10 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal((new DateOnly(2026, 10, 4), startedAtUtc), (note.NoteDate, note.CreatedAtUtc));
     }
 
-    // A later save, as the same page's next one, and a save sent again after its answer was lost, from the page's first
-    // save number: each replaces the ticks and text, and the page that saved last, and writes no event (§5.3).
-    [Theory]
-    [InlineData(2)]
-    [InlineData(1)]
-    public async Task A_later_save_of_the_author_replaces_the_working_copy_and_answers_200_with_its_time(int seq)
+    // A later save, as the same page's next one: it replaces the ticks and text, and the page's last number, and writes
+    // no event (§5.3).
+    [Fact]
+    public async Task A_later_save_of_the_author_replaces_the_working_copy_and_answers_200_with_its_time()
     {
         var clock = new FakeTimeProvider(new DateTimeOffset(2026, 10, 1, 23, 14, 0, TimeSpan.Zero));
         await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
@@ -496,7 +498,7 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         clock.Advance(TimeSpan.FromMinutes(16));
 
         using var later = await SaveAsync(
-            client, participant.Id, new(2026, 10, 2), Body(clientId, seq, "Jane made toast.", goals[1]));
+            client, participant.Id, new(2026, 10, 2), Body(clientId, 2, "Jane made toast.", goals[1]));
 
         Assert.Equal(HttpStatusCode.OK, later.StatusCode);
         var savedAtUtc = new DateTime(2026, 10, 1, 23, 30, 0, DateTimeKind.Utc);
@@ -505,10 +507,365 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal(StartedAtUtc, note.CreatedAtUtc);
         var draft = Assert.Single(await WorkingCopiesAsync(note.Id));
         Assert.Equal(
-            ("Jane made toast.", clientId, seq, StartedAtUtc, savedAtUtc),
+            ("Jane made toast.", clientId, 2, StartedAtUtc, savedAtUtc),
             (draft.Narrative, draft.LastClientId, draft.LastSeq, draft.CreatedAtUtc, draft.UpdatedAtUtc));
         Assert.Equal([false, true], draft.Items.Select(item => item.IsTicked));
         Assert.Equal(before.LastEventId, (await StoredRowsAsync()).LastEventId);
+    }
+
+    // design.md §5.6: the page that saved last, X, at 5. Its 5 sent again, as after a lost answer, and its 4, as a save
+    // that 5 overtook on the way, each change nothing, the ticks, text, flag and time included, and answer the time of
+    // the save that the working copy holds; its 6 is applied. None writes an event (§5.3).
+    [Fact]
+    public async Task A_save_at_or_below_the_page_s_last_number_changes_nothing_and_a_higher_one_is_applied()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new("Makes own breakfast", 0), new("Phones her sister", 1));
+        var x = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var noteId = await StartAsync(client, participant.Id, TheSecond, FirstBody(listsVersion, x, "Jane"));
+        clock.Advance(SavedAtUtc - StartedAtUtc);
+        using (var fifth = await SaveAsync(
+                   client,
+                   participant.Id,
+                   TheSecond,
+                   FlaggedBody(x, 5, "Jane made toast.", "Jane seemed unwell.", goals[0])))
+        {
+            Assert.Equal(HttpStatusCode.OK, fifth.StatusCode);
+        }
+
+        var held = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            ("Jane made toast.", true, "Jane seemed unwell.", x, 5, SavedAtUtc),
+            (held.Narrative, held.IsFlagged, held.FlagReason, held.LastClientId, held.LastSeq, held.UpdatedAtUtc));
+        Assert.Equal([true, false], held.Items.Select(item => item.IsTicked));
+        var stored = await StoredWorkingCopyAsync(noteId);
+        var before = await StoredRowsAsync();
+
+        foreach (var seq in new[] { 5, 4 })
+        {
+            clock.Advance(TimeSpan.FromMinutes(1));
+
+            using var stale = await SaveAsync(
+                client, participant.Id, TheSecond, Body(x, seq, "Jane went out.", goals[1]));
+
+            Assert.Equal(HttpStatusCode.OK, stale.StatusCode);
+            Assert.Equal(SavedAtUtc, await SavedAtUtcAsync(stale));
+            Assert.Equal(stored, await StoredWorkingCopyAsync(noteId));
+        }
+
+        clock.Advance(TimeSpan.FromMinutes(1));
+        using var sixth = await SaveAsync(client, participant.Id, TheSecond, Body(x, 6, "Jane went out.", goals[1]));
+
+        Assert.Equal(HttpStatusCode.OK, sixth.StatusCode);
+        var savedAtUtc = SavedAtUtc.AddMinutes(3);
+        Assert.Equal(savedAtUtc, await SavedAtUtcAsync(sixth));
+        var draft = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            ("Jane went out.", false, null, x, 6, savedAtUtc),
+            (draft.Narrative, draft.IsFlagged, draft.FlagReason, draft.LastClientId, draft.LastSeq,
+                draft.UpdatedAtUtc));
+        Assert.Equal([false, true], draft.Items.Select(item => item.IsTicked));
+        Assert.Equal(before.LastEventId, (await StoredRowsAsync()).LastEventId);
+    }
+
+    // design.md §5.6: a note's first save that committed, sent again unchanged, as its answer was lost, finds the
+    // caller's own draft, whose working copy holds that page's save 1, so is a save that it holds: 200 with the first
+    // save's time, never a conflict, leaving one note, one working copy and one note.draft_started.
+    [Fact]
+    public async Task A_first_save_sent_again_unchanged_after_its_answer_was_lost_answers_200_and_changes_nothing()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new TestGoal("Phones her sister", 0));
+        var first = FirstBody(
+            await ListsVersionAsync(Caller.WorkerOfA, participant.Id), Guid.NewGuid(), "Jane made toast.", goals[0]);
+        var before = await StoredRowsAsync();
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var noteId = await StartAsync(client, participant.Id, TheSecond, first);
+        var stored = await StoredWorkingCopyAsync(noteId);
+        clock.Advance(SavedAtUtc - StartedAtUtc);
+
+        using var retried = await SaveAsync(client, participant.Id, TheSecond, first);
+
+        Assert.Equal(HttpStatusCode.OK, retried.StatusCode);
+        Assert.Equal(StartedAtUtc, await SavedAtUtcAsync(retried));
+        Assert.Equal(noteId, Assert.Single(await NotesAsync(participant.Id)).Id);
+        Assert.Equal(stored, await StoredWorkingCopyAsync(noteId));
+        Assert.Equal(
+            AuditEventTypes.Note.DraftStarted,
+            Assert.Single(await EventsAfterAsync(before.LastEventId ?? 0)).EventType);
+        var after = await StoredRowsAsync();
+        Assert.Equal((before.Notes + 1, before.Drafts + 1), (after.Notes, after.Drafts));
+    }
+
+    // design.md §14 M2: "a save whose response is lost and is retried does not raise a conflict". The page retries a
+    // save as its next one, reading the form again (T10's Notes), so a note's first save that committed comes again as
+    // 2, still with the lists' version, as the page has had no answer, and with the text typed since: it finds the
+    // caller's own draft, whose working copy holds that page's 1, and is applied, leaving one note, one working copy
+    // and one note.draft_started.
+    [Fact]
+    public async Task A_committed_first_save_retried_as_the_page_s_next_save_is_applied_and_raises_no_conflict()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new TestGoal("Phones her sister", 0));
+        var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        var before = await StoredRowsAsync();
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var noteId = await StartAsync(client, participant.Id, TheSecond, FirstBody(listsVersion, clientId, "Jane"));
+        clock.Advance(SavedAtUtc - StartedAtUtc);
+
+        using var retried = await SaveAsync(
+            client,
+            participant.Id,
+            TheSecond,
+            new
+            {
+                clientId,
+                seq = 2,
+                listsVersion,
+                narrative = "Jane made toast.",
+                tickedGoalIds = new[] { goals[0] },
+                isFlagged = false,
+                flagReason = (string?)null,
+            });
+
+        Assert.Equal(HttpStatusCode.OK, retried.StatusCode);
+        Assert.Equal(SavedAtUtc, await SavedAtUtcAsync(retried));
+        Assert.Equal(noteId, Assert.Single(await NotesAsync(participant.Id)).Id);
+        var draft = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            ("Jane made toast.", clientId, 2, StartedAtUtc, SavedAtUtc),
+            (draft.Narrative, draft.LastClientId, draft.LastSeq, draft.CreatedAtUtc, draft.UpdatedAtUtc));
+        Assert.Equal([true], draft.Items.Select(item => item.IsTicked));
+        Assert.Equal(
+            AuditEventTypes.Note.DraftStarted,
+            Assert.Single(await EventsAfterAsync(before.LastEventId ?? 0)).EventType);
+        var after = await StoredRowsAsync();
+        Assert.Equal((before.Notes + 1, before.Drafts + 1), (after.Notes, after.Drafts));
+    }
+
+    // design.md §5.6: page A's saves reach 4; page B, a second tab or another device, which has not saved the note
+    // before, takes the working copy over with its 1, its ticks, text and flag replacing A's; A's 5 then gets
+    // 409 draft.taken_over, writing nothing, so B's content is kept; and B's 2 is applied. A takeover writes no event,
+    // as no later save does (A28).
+    [Fact]
+    public async Task A_new_page_s_first_save_takes_over_and_the_older_page_s_next_save_gets_409_draft_taken_over()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goals = await factory.Services.AddGoalsAsync(
+            seeded.A, participant.Id, new("Makes own breakfast", 0), new("Phones her sister", 1));
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        using var phone = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var laptop = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var noteId = await StartAsync(phone, participant.Id, TheSecond, FirstBody(listsVersion, a, "Jane"));
+        using (var fourth = await SaveAsync(
+                   phone, participant.Id, TheSecond, Body(a, 4, "Jane made toast.", goals[0])))
+        {
+            Assert.Equal(HttpStatusCode.OK, fourth.StatusCode);
+        }
+
+        var before = await StoredRowsAsync();
+        clock.Advance(SavedAtUtc - StartedAtUtc);
+
+        using (var takeover = await SaveAsync(
+                   laptop,
+                   participant.Id,
+                   TheSecond,
+                   FlaggedBody(b, 1, "Jane made toast and tea.", "Jane seemed unwell.", goals[1])))
+        {
+            Assert.Equal(HttpStatusCode.OK, takeover.StatusCode);
+            Assert.Equal(SavedAtUtc, await SavedAtUtcAsync(takeover));
+        }
+
+        var taken = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            ("Jane made toast and tea.", true, "Jane seemed unwell.", b, 1, SavedAtUtc),
+            (taken.Narrative, taken.IsFlagged, taken.FlagReason, taken.LastClientId, taken.LastSeq,
+                taken.UpdatedAtUtc));
+        Assert.Equal([false, true], taken.Items.Select(item => item.IsTicked));
+        var stored = await StoredWorkingCopyAsync(noteId);
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using (var older = await SaveAsync(
+                   phone, participant.Id, TheSecond, Body(a, 5, "Jane made toast. She went out.", goals[0])))
+        {
+            await ReadCodeAsync(older, HttpStatusCode.Conflict, "draft.taken_over");
+        }
+
+        Assert.Equal(stored, await StoredWorkingCopyAsync(noteId));
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using var next = await SaveAsync(
+            laptop, participant.Id, TheSecond, Body(b, 2, "Jane made toast and tea. She went out.", goals[1]));
+
+        Assert.Equal(HttpStatusCode.OK, next.StatusCode);
+        var draft = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            ("Jane made toast and tea. She went out.", false, b, 2, SavedAtUtc.AddMinutes(2)),
+            (draft.Narrative, draft.IsFlagged, draft.LastClientId, draft.LastSeq, draft.UpdatedAtUtc));
+        Assert.Equal(before.LastEventId, (await StoredRowsAsync()).LastEventId);
+    }
+
+    // autosave-status.md *Behaviour* 1: two saves of one page at once, such as its page-hidden save beside the save in
+    // flight, from the page at 5. The first to arrive is held once it has read the working copy, under its update lock,
+    // and the second, sent meanwhile, waits for that lock, so it is decided on what the first saved, and the higher
+    // number wins whichever comes first: with 7 held, 6 finds 7 saved and changes nothing, answering 7's time; with 6
+    // held, 7 is applied after it. Without the lock, the second would not wait, and a held 6 would overwrite 7.
+    [Theory]
+    [InlineData(7, 6)]
+    [InlineData(6, 7)]
+    public async Task Two_saves_of_one_page_at_once_end_with_the_higher_number_s_content(int heldSeq, int sentSeq)
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(StartedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var x = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        Guid noteId;
+        using (var page = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded))
+        {
+            noteId = await StartAsync(page, participant.Id, TheSecond, FirstBody(listsVersion, x, "Jane"));
+            using var fifth = await SaveAsync(page, participant.Id, TheSecond, Body(x, 5, "Jane made"));
+            Assert.Equal(HttpStatusCode.OK, fifth.StatusCode);
+        }
+
+        clock.Advance(SavedAtUtc - StartedAtUtc);
+        var gate = new HoldsTheWorkingCopyOf(noteId, EntityState.Modified);
+        await using var gated = gate.On(app);
+        using var client = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        var held = SaveAsync(client, participant.Id, TheSecond, Body(x, heldSeq, Narrative(heldSeq)));
+        Task<HttpResponseMessage> sent;
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            clock.Advance(TimeSpan.FromMinutes(1));
+            sent = SaveAsync(client, participant.Id, TheSecond, Body(x, sentSeq, Narrative(sentSeq)));
+            await WaitForALockAsync(sent);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var heldResponse = await held;
+        using var sentResponse = await sent;
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (heldResponse.StatusCode, sentResponse.StatusCode));
+        var (heldAt, sentAt) = (await SavedAtUtcAsync(heldResponse), await SavedAtUtcAsync(sentResponse));
+        Assert.Equal((SavedAtUtc, heldSeq == 7 ? SavedAtUtc : SavedAtUtc.AddMinutes(1)), (heldAt, sentAt));
+        var draft = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            (Narrative(7), 7, heldSeq == 7 ? heldAt : sentAt),
+            (draft.Narrative, draft.LastSeq, draft.UpdatedAtUtc));
+
+        static string Narrative(int seq) => seq == 7 ? "Jane made toast and tea." : "Jane made toast.";
+    }
+
+    // T09's hand-off: a submit holds the working copy's deletion until it commits, here held once it has deleted it,
+    // and an autosave of the author's page sent meanwhile waits for it. Once the submit commits, the autosave finds the
+    // note submitted with no working copy of the author's, and gets 409 note.version_conflict (§6.7), never a 500, and
+    // recreates nothing.
+    [Fact]
+    public async Task An_autosave_sent_while_a_submit_deletes_the_working_copy_gets_409_note_version_conflict()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var today = Today;
+        var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        Guid noteId;
+        using (var page = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded))
+        {
+            noteId = await StartAsync(page, participant.Id, today, FirstBody(listsVersion, clientId, "Jane"));
+        }
+
+        var before = await StoredRowsAsync();
+        var gate = new HoldsTheWorkingCopyOf(noteId, EntityState.Deleted);
+        await using var gated = gate.On(factory);
+        using var client = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        var submit = SubmitAsync(client, participant.Id, today, "Jane made toast.");
+        Task<HttpResponseMessage> autosave;
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            autosave = SaveAsync(client, participant.Id, today, Body(clientId, 2, "Jane made toast and tea."));
+            await WaitForALockAsync(autosave);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var submitted = await submit;
+        using var saved = await autosave;
+        Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        await ReadCodeAsync(saved, HttpStatusCode.Conflict, "note.version_conflict");
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal((NoteStatus.Submitted, 1), (note.Status, note.CurrentVersionNumber));
+        Assert.Empty(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            [AuditEventTypes.Note.Submitted],
+            (await EventsAfterAsync(before.LastEventId ?? 0)).Select(written => written.EventType));
+    }
+
+    // An autosave of the author's page held once it has read the working copy, under its update lock, and the page's
+    // submit sent meanwhile, whose deletion of the working copy waits for the lock: the autosave commits, then the
+    // submit, and both succeed, leaving no working copy. The submit's body repeats the latest content (design.md §6.3),
+    // so what the autosave carried is not lost.
+    [Fact]
+    public async Task A_submit_sent_while_an_autosave_holds_the_working_copy_waits_for_it_and_both_succeed()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var today = Today;
+        var clientId = Guid.NewGuid();
+        var listsVersion = await ListsVersionAsync(Caller.WorkerOfA, participant.Id);
+        Guid noteId;
+        using (var page = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded))
+        {
+            noteId = await StartAsync(page, participant.Id, today, FirstBody(listsVersion, clientId, "Jane"));
+        }
+
+        var before = await StoredRowsAsync();
+        var gate = new HoldsTheWorkingCopyOf(noteId, EntityState.Modified);
+        await using var gated = gate.On(factory);
+        using var client = gated.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        var autosave = SaveAsync(client, participant.Id, today, Body(clientId, 2, "Jane made toast and tea."));
+        Task<HttpResponseMessage> submit;
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            submit = SubmitAsync(client, participant.Id, today, "Jane made toast and tea.");
+            await WaitForALockAsync(submit);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var saved = await autosave;
+        using var submitted = await submit;
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.Created), (saved.StatusCode, submitted.StatusCode));
+        var note = Assert.Single(await NotesAsync(participant.Id));
+        Assert.Equal((NoteStatus.Submitted, 1), (note.Status, note.CurrentVersionNumber));
+        Assert.Empty(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            [AuditEventTypes.Note.Submitted],
+            (await EventsAfterAsync(before.LastEventId ?? 0)).Select(written => written.EventType));
     }
 
     // Only the author may save a draft (design.md §6.3), so another worker, and a manager, get who started it and when,
@@ -1115,6 +1472,11 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
     private static object Body(Guid clientId, int seq, string narrative, params Guid[] tickedGoalIds) =>
         new { clientId, seq, narrative, tickedGoalIds, isFlagged = false, flagReason = (string?)null };
 
+    // The same, with the flag ticked and its reason given.
+    private static object FlaggedBody(
+        Guid clientId, int seq, string narrative, string flagReason, params Guid[] tickedGoalIds) =>
+        new { clientId, seq, narrative, tickedGoalIds, isFlagged = true, flagReason };
+
     // A note's first save as the form sends it: from a page that has not saved the note before, with the lists'
     // version of the template that the form opened with (design.md §5.7), and the flag unticked.
     private static object FirstBody(
@@ -1150,6 +1512,31 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         HttpClient client, Guid participantId, DateOnly noteDate, object body) =>
         await client.PutWithTokenAsync(
             DraftPath(participantId, noteDate), await client.FetchTokenAsync(), body, ifMatch: null);
+
+    // Submit, as the screen sends it, on base 0 with nothing ticked and the flag unticked, over HTTPS with the caller's
+    // antiforgery token and a key of its own (design.md §6.3).
+    private static async Task<HttpResponseMessage> SubmitAsync(
+        HttpClient client, Guid participantId, DateOnly noteDate, string narrative)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/versions"))
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative,
+                tickedGoalIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            }),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
 
     // The save's answer, {savedAtUtc} alone.
     private static async Task<DateTime> SavedAtUtcAsync(HttpResponseMessage response)
@@ -1235,6 +1622,17 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         }
     }
 
+    // A note's first save, which creates it, and the note's ID.
+    private async Task<Guid> StartAsync(HttpClient client, Guid participantId, DateOnly noteDate, object firstBody)
+    {
+        using (var started = await SaveAsync(client, participantId, noteDate, firstBody))
+        {
+            Assert.Equal(HttpStatusCode.Created, started.StatusCode);
+        }
+
+        return Assert.Single(await NotesAsync(participantId)).Id;
+    }
+
     // The participant's notes, live and discarded, through the app's context under A's tenant.
     private async Task<List<Note>> NotesAsync(Guid participantId)
     {
@@ -1259,6 +1657,44 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
                 .Where(draft => draft.NoteId == noteId)
                 .ToListAsync(TestContext.Current.CancellationToken);
         }
+    }
+
+    // The note's one working copy as stored, read in SQL with its snapshot as the JSON stored, so that a save which
+    // changes nothing is seen to leave each column as it was.
+    private async Task<WorkingCopyRow> StoredWorkingCopyAsync(Guid noteId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<WorkingCopyRow>($"""
+                SELECT [Items], [Narrative], [IsFlagged], [FlagReason], [LastClientId], [LastSeq], [UpdatedAtUtc]
+                FROM [NoteDraft]
+                WHERE [NoteId] = {noteId}
+                """)
+            .SingleAsync(TestContext.Current.CancellationToken);
+    }
+
+    // Waits until a request on the database waits for a lock that another's transaction holds, which only the request
+    // given can, as the tests of the collection run one at a time; and fails if that request ends first.
+    private async Task WaitForALockAsync(Task<HttpResponseMessage> request)
+    {
+        while (!request.IsCompleted && !await AnyRequestWaitsForALockAsync())
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        }
+
+        Assert.False(request.IsCompleted, "The request ended without waiting for a lock.");
+    }
+
+    private async Task<bool> AnyRequestWaitsForALockAsync()
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<int>($"""
+                SELECT COUNT(*) AS [Value]
+                FROM sys.dm_exec_requests
+                WHERE [wait_type] LIKE 'LCK[_]M[_]%' AND [database_id] = DB_ID()
+                """)
+            .SingleAsync(TestContext.Current.CancellationToken) > 0;
     }
 
     // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen. The tests of the
@@ -1353,6 +1789,19 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
     /// <summary>How many notes and working copies there are, the last save of any, and the last event's ID.</summary>
     private sealed record StoredRows(int Notes, int Drafts, DateTime? LastSavedAtUtc, long? LastEventId);
 
+    /// <summary>
+    /// A <c>NoteDraft</c> row's snapshot, as the JSON stored, its content, and the page that saved it last, with that
+    /// page's number and the time.
+    /// </summary>
+    private sealed record WorkingCopyRow(
+        string Items,
+        string Narrative,
+        bool IsFlagged,
+        string? FlagReason,
+        Guid LastClientId,
+        int LastSeq,
+        DateTime UpdatedAtUtc);
+
     /// <summary>An audit entry's fields, its <c>Details</c> as the JSON stored.</summary>
     private sealed record WrittenEvent(
         string EventType,
@@ -1412,6 +1861,72 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             }
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// Holds back the first save, made inside a transaction, that changes the working copy of the note whose ID it is
+    /// given as given, until the test lets it go: <see cref="EntityState.Modified"/>, an autosave's, once it has read
+    /// the working copy under its update lock, just before it saves; <see cref="EntityState.Deleted"/>, a submit's,
+    /// once it has deleted the working copy, before it commits. As <see cref="HoldsTheFirstSaveOfTheUser"/> holds a
+    /// save, so that a test's second request meanwhile runs as far as the held one lets it. Every other save passes.
+    /// </summary>
+    private sealed class HoldsTheWorkingCopyOf(Guid noteId, EntityState change) : SaveChangesInterceptor
+    {
+        private readonly TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private DbContext? deleting;
+        private int held;
+
+        /// <summary>Completes once the save is held.</summary>
+        public Task Reached => reached.Task;
+
+        /// <summary><paramref name="app"/>, with this interceptor on every context it makes.</summary>
+        public WebApplicationFactory<Program> On(WebApplicationFactory<Program> app) =>
+            app.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(this))));
+
+        /// <summary>Lets the held save go on.</summary>
+        public void Release() => released.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { Database.CurrentTransaction: not null } context
+                && context.ChangeTracker.Entries<NoteDraft>().Any(
+                    entry => entry.State == change && entry.Entity.NoteId == noteId)
+                && Interlocked.Exchange(ref held, 1) == 0)
+            {
+                if (change == EntityState.Deleted)
+                {
+                    // A deletion is held once it has been sent, so that its lock holds the row.
+                    deleting = context;
+                }
+                else
+                {
+                    await HoldAsync(cancellationToken);
+                }
+            }
+
+            return result;
+        }
+
+        public override async ValueTask<int> SavedChangesAsync(
+            SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
+        {
+            if (eventData.Context is { } context && ReferenceEquals(context, deleting))
+            {
+                deleting = null;
+                await HoldAsync(cancellationToken);
+            }
+
+            return result;
+        }
+
+        private async Task HoldAsync(CancellationToken cancellationToken)
+        {
+            reached.SetResult();
+            await released.Task.WaitAsync(cancellationToken);
         }
     }
 }

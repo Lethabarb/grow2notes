@@ -8,6 +8,7 @@ let apiWithHeaders: typeof ApiModule.apiWithHeaders;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
 let isNotFound: typeof ApiModule.isNotFound;
+let prepareChanges: typeof ApiModule.prepareChanges;
 let onSessionEnded: typeof SessionModule.onSessionEnded;
 let signInCount: typeof SessionModule.signInCount;
 
@@ -125,7 +126,7 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, apiWithHeaders, ApiError, classify, isNotFound } = await import('./api.ts'));
+  ({ api, apiWithHeaders, ApiError, classify, isNotFound, prepareChanges } = await import('./api.ts'));
   ({ onSessionEnded, signInCount } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -355,6 +356,69 @@ describe('api', () => {
       await api('/api/admin/goals/4b2e', { method: 'PUT', body: { text: 'Cook a meal' } });
 
       expect(sentRequest().headers.has('Idempotency-Key')).toBe(false);
+    });
+  });
+
+  describe('keepalive', () => {
+    const draftPath = '/api/participants/3e8b/notes/2026-10-01/draft';
+
+    it.each([true, false])('sends a change with keepalive %s as given, with its antiforgery token', async (keep) => {
+      serve(json(200, { savedAtUtc: '2026-10-01T06:12:00Z' }));
+
+      await api(draftPath, { method: 'PUT', body: { narrative: 'Jane made toast.' }, keepalive: keep });
+
+      const [, init] = fetchMock.mock.calls.filter(([path]) => path !== antiforgeryPath)[0];
+      expect(init?.keepalive).toBe(keep);
+      expect(sentRequest().headers.get('X-XSRF-TOKEN')).toBe('token-1');
+    });
+
+    it('leaves keepalive out when none is given', async () => {
+      serve(new Response(null, { status: 200 }));
+
+      await api('/api/admin/goals/4b2e', { method: 'PUT', body: { text: 'Cook a meal' } });
+
+      const [, init] = fetchMock.mock.calls.filter(([path]) => path !== antiforgeryPath)[0];
+      expect(init).not.toHaveProperty('keepalive');
+    });
+  });
+
+  describe('Retry-After', () => {
+    /** An answer with `status` and a `Retry-After` of `value`, and a problem's body unless `body` is given. */
+    function retryAfter(status: number, value: string, body = JSON.stringify({ type: 'about:blank', status })) {
+      return new Response(body, { status, headers: { 'Content-Type': 'application/json', 'Retry-After': value } });
+    }
+
+    it.each([429, 503])("gives a %i's Retry-After in seconds as milliseconds", async (status) => {
+      fetchMock.mockResolvedValue(retryAfter(status, '3'));
+
+      await expect(api('/api/admin/users')).rejects.toStrictEqual(
+        new ApiError(status, undefined, undefined, undefined, 3_000),
+      );
+    });
+
+    it('gives one as an HTTP date as the milliseconds until then, and 0 for a date already past', async () => {
+      vi.setSystemTime(new Date('2026-10-01T06:12:00Z'));
+      fetchMock
+        .mockResolvedValueOnce(retryAfter(503, 'Thu, 01 Oct 2026 06:12:30 GMT'))
+        .mockResolvedValueOnce(retryAfter(503, 'Thu, 01 Oct 2026 06:11:30 GMT'));
+
+      await expect(api('/api/admin/users')).rejects.toHaveProperty('retryAfterMs', 30_000);
+      await expect(api('/api/admin/users')).rejects.toHaveProperty('retryAfterMs', 0);
+    });
+
+    it('keeps it with an answer whose body is not a problem', async () => {
+      fetchMock.mockResolvedValue(retryAfter(503, '3', '<!doctype html><title>503 Service Unavailable</title>'));
+
+      await expect(api('/api/admin/users')).rejects.toHaveProperty('retryAfterMs', 3_000);
+    });
+
+    it.each([
+      ['another status', 500, '3'],
+      ['a value that is neither seconds nor a date', 503, 'soon'],
+    ])('gives none for %s', async (_case, status, value) => {
+      fetchMock.mockResolvedValue(retryAfter(status, value));
+
+      await expect(api('/api/admin/users')).rejects.toHaveProperty('retryAfterMs', undefined);
     });
   });
 
@@ -648,6 +712,40 @@ describe('api', () => {
       expect(trail()).toEqual([tokenRequest]);
 
       await api('/api/admin/users', { method: 'POST', body: {} });
+      expect(trail()).toEqual([tokenRequest, tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is fetched by prepareChanges() ahead of a change, which then goes alone with it', async () => {
+      serve(done(201));
+
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(trail()).toEqual([tokenRequest]);
+
+      await api('/api/admin/users', { method: 'POST', body: {} });
+      expect(trail()).toEqual([tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is not fetched again by prepareChanges() while one is held or on its way', async () => {
+      serve(done(201));
+
+      prepareChanges();
+      prepareChanges();
+      await api('/api/admin/users', { method: 'POST', body: {} });
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(trail()).toEqual([tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is asked for again by the next change when prepareChanges() fails to get one, throwing nothing', async () => {
+      serve(done(201));
+      fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError('Failed to fetch')));
+
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      await api('/api/admin/users', { method: 'POST', body: {} });
+
       expect(trail()).toEqual([tokenRequest, tokenRequest, 'POST /api/admin/users with token-1']);
     });
 

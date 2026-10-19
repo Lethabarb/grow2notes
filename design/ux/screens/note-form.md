@@ -383,6 +383,12 @@ child, sticks for the whole page rather than for the slot's height.
 | **Row 2: failed save** | In the failed state the same `#save-status` element spans the full width as the banner (attention tint, 2 px attention border, `aria-hidden` warning icon). The text is never shown or announced twice. |
 | **Row 2: blocking banner** | One at a time, replacing the failed-save row: takeover (with two buttons), started by someone else, after midnight, or participant archived. `<section aria-labelledby>` whose label is the sentence; not a live region (it holds controls); the sentence is announced once through the form's assertive announcer (item 16). Buttons are native, stacked full width at 44 px+ on a phone. As built for the three dead ends (T08): in the attention colours of the failed-save row, with its `aria-hidden` warning icon and a real 2 px border, `CanvasText` under forced colours, and the sentence wrapping anywhere, so that a long unbroken name never widens the page. |
 
+As built (T10): the failed-save row is `#save-status` itself, in the same attention colours, border and icon as the
+dead ends' banner, across the bar's row under the back link. The takeover banner has them too, its two choices on a
+line of their own under the sentence, as the shared buttons in a `ButtonGroup`: stacked the banner's width on a phone,
+side by side from 40rem, wrapping. Both are `aria-disabled`, with no busy label, while Load's read is out, as a label
+would be new copy and a slow read shows nothing new.
+
 ### 2. Error summary: [form-validation.md](../components/form-validation.md)
 
 - First child of `<main>`, above the `<h1>`, only after a failed **Submit note** or **Save changes**. `tabIndex={-1}`,
@@ -664,6 +670,14 @@ Interactions; "unavailable" means `aria-disabled` with the reason in `#save-stat
 The middle dot in "Draft · saved" is `<span aria-hidden="true"> · </span>` plus a visually hidden comma
 (`microcopy.md` §7). Times have a non-breaking space before am/pm; exactly 12:00 shows "midday" or "midnight".
 
+As built (T10): **Not saved** shows at once for a change typed while the browser reports offline, and for a
+`Retry-After` longer than the first retry's 1 s. Once it shows, a save answered that did not carry the newest change
+shows **Saving…** again; **Recovered** comes only with a save that carried it. The retries stop 28 minutes after the
+person last acted on the form, **Not saved** kept, until their next change, blur or return (A66). The form fetches the
+antiforgery token as it opens, and as the same person's sign-in shows it again, so that the save as the page is hidden
+(item 9) is one keepalive request, with no token request before it. The retries' rules as built are in
+autosave-status.md *Implementation notes*.
+
 ### Conflicts and refusals (autosave stops)
 
 | State | Indicator | Banner (row 2 of the top bar, one at a time) | Submit | Announced / focus |
@@ -901,6 +915,15 @@ as the note stands now, so "when the `201` carries a `flagStatus`" is read as wh
 - **Load the other version:** `GET {base}/draft`, replace picks, ticks, text (`replaceText`), flag and reason; new
   `clientId`; remove the banner; indicator **Saved [the other version's time]**; focus to the `<h1>`, so the person
   reviews from the top without the keyboard popping up.
+- As built (T10): Load reads `GET {base}/draft` outside the draft's query and opens the uncontrolled Guided notes box
+  anew with the other version's text, checking again any field that has a message. A read that fails keeps the banner,
+  its buttons ready, and says "The note did not load: …" in the page's polite region; a `404`, the note submitted
+  meanwhile, is the version-conflict dead end, and another user's draft the in-progress one, each with focus on the
+  `<h1>`; a note discarded meanwhile loads a new note's empty form, the indicator empty. Keep sends what is on screen
+  as a change of its own, typed or not. A press of Submit note, or of a link, while the banner shows says its sentence
+  in the page's polite region. The picks come with section 2 (T13). A takeover's `409` to a page none of whose saves
+  of the note has been answered, as when its first save never reached the server, brings no banner: the page has not
+  saved the note, so the save goes again at once as its first (autosave-status.md's as-built note).
 
 ### Leaving the form
 
@@ -912,6 +935,18 @@ as the note stands now, so "when the `201` carries a `flagStatus`" is read as wh
 | Sign out from the Account menu while unsaved | Owned by `app-shell-nav.md`: sign-out waits for the save; if it fails, **Not signed out: your note is not saved yet. Keep this page open; retrying.** (P, canonical `microcopy.md` §9). |
 
 After leaving, invalidate the `today` and `me/drafts` queries so Today's "Draft · You · saved 9:42 am" matches.
+
+As built (T10): `useSaveBeforeLeaving()` blocks a navigation to another pathname while a change is unsaved or the
+takeover banner waits, never after a dead end. A blocked one goes once every change is saved, one typed while the save
+was out included, and otherwise stays, never acted on later. Staying says the takeover's sentence while its banner
+shows, and otherwise **Not saved: no connection. Keep this page open; retrying.**, the design's only words for it,
+after a refusal that is not retried (a `403` or `422`) too (app-shell.md's as-built note on Sign out); it says nothing
+more when the leave's own save brought **Not saved: …** or the banner, whose own region says it. A dead end that the
+leave's own save meets keeps the person there, with the text to copy, said by the dead end's own sentence, and the next
+press leaves. Submit's navigation to Today after its `201` passes through the guard's `leaveFreely()`, as Discard's
+and Save changes' and Cancel's will (T12, T14). `beforeunload` follows the indicator, listened for while it says
+**Saving…**, **Not saved: …** or **Not saved**, a dead end's included, and asks only while the shell has not
+disarmed it. The form calls `invalidateToday()` as it unmounts, however it is left; `me/drafts` comes with T12.
 
 ### Session
 
@@ -925,6 +960,12 @@ After leaving, invalidate the `today` and `me/drafts` queries so Today's "Draft 
   in, the form is unhidden, autosave retries with the same `clientId` and next `seq` (no false takeover banner) and
   focus goes to the `<h1>`. A **different** person: full reload to Today; the previous person's unsaved text is
   dropped. Submit, Save changes, Discard and Cancel are never replayed.
+- As built (T10): the form registers its `flushNow()`, with whether anything is unsaved, with the session clock
+  (session-timeout.md's as-built note). The shell tells the form whether the signed-out-in-place view hides it: while
+  it does, autosave's timers and retries are cleared, a page-hidden save is not sent, and each change is counted and
+  kept, the indicator as it was; as the same person's form shows again, **Saving…** shows and the save goes at once.
+  Sign out while the takeover banner shows is refused with **Not signed out: your note is not saved yet. Keep this page
+  open; retrying.**, as a link stays then; after a dead end it goes on.
 
 ### Focus order (Tab)
 

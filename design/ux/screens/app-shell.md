@@ -536,6 +536,21 @@ Every state the shell can be in. Screen states (empty lists, banners) belong to 
 | Sign in again, same person | No token request: `api()` dropped its antiforgery token on the sign-in's `200 Me`, so the next change fetches a fresh one (§9.8). Unhide the route. Invalidate the current screen's queries. Resume autosave (same `clientId`, next `seq`). Restore nav, Account and title. Never replay Submit, Save changes, Discard or Mark reviewed. | The page `<h1>` (on the note form, the participant's name) | The heading |
 | Sign in again, a different person | `disarmUnloadGuard()`, then `location.replace('/')`: the previous person's unsaved text and cached data are dropped, never saved under the new name, and no leave prompt appears | Fresh page | — |
 
+As built (T10): Sign out's step 2 awaits `flushSaves()` (`src/api/session.ts`), which has a mounted note form send its
+change through `flushNow()` until every change is saved, one typed while its save was out included. Its `false`, as
+"Not saved: no connection…" shows, after a refusal that is not retried, or while the takeover banner shows, sends no
+logout and writes "Not signed out: your note is not saved yet. Keep this page open; retrying." into the panel's status
+line, the button ready again; as step 3's `disarmUnloadGuard()` has not yet run, nothing needs re-arming. After a dead
+end, nothing more can be saved, so Sign out goes on. The sentence's "Keep this page open; retrying." is untrue during
+the takeover and after a refusal that is not retried, such as a `403` or a `422`, as autosave then sends nothing until
+the banner's choice or the next change. So are "no connection" and "retrying" in note-form.md's "Not saved: no
+connection. Keep this page open; retrying.", which a leave that stays says after such a refusal too (note-form.md
+*Leaving the form*). Both are built with the design's only words for them, as new ones need the owner's approval; the
+owner can reword them in the copy module (D67). "retrying" is untrue too once autosave's retries have stopped, 28
+minutes after the person last acted on the form, until they act again (A66). On the note form, the same person's sign-in
+again is followed by one token request, where the *Sign in again, same person* row has none: the form fetches a fresh
+antiforgery token as it shows again, so that its save as the page is hidden is one request (note-form.md item 9).
+
 ### The route-change rule (one owner)
 
 The shell is the only code that moves focus or resets scroll on a screen change. Every screen follows this one rule;

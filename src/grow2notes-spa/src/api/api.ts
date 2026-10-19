@@ -22,13 +22,19 @@ export class ApiError extends Error {
   readonly errors: FieldErrors | undefined;
   /** A `409 note.in_progress_by_other`'s author and start time, which the note form shows. */
   readonly startedBy: StartedBy | undefined;
+  /**
+   * How long a `429` or a `503` asks the caller to wait before trying again, in milliseconds from its answer, from its
+   * `Retry-After`, which autosave waits in place of its back-off (autosave-status.md *Behaviour* 4).
+   */
+  readonly retryAfterMs: number | undefined;
 
-  constructor(status: number, code?: string, errors?: FieldErrors, startedBy?: StartedBy) {
+  constructor(status: number, code?: string, errors?: FieldErrors, startedBy?: StartedBy, retryAfterMs?: number) {
     super(code ?? `HTTP ${status}`);
     this.status = status;
     this.code = code;
     this.errors = errors;
     this.startedBy = startedBy;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -47,6 +53,11 @@ export type ApiOptions = {
   timeoutMs?: number;
   /** The caller's own signal, such as TanStack Query's, whose abort is rethrown as it came. */
   signal?: AbortSignal;
+  /**
+   * `fetch`'s `keepalive`, so that the request outlives the page, for the note form's save as the page is hidden
+   * (design.md §5.6), whose caller keeps it to a body under the browser's 64 KiB cap.
+   */
+  keepalive?: boolean;
 };
 
 // The same 10 seconds as autosave and the session ping (empty-loading-error.md *Timing*).
@@ -121,7 +132,7 @@ function heldRequest<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
 }
 
 async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> {
-  const { method = 'GET', body, ifMatch, idempotencyKey, timeoutMs = defaultTimeoutMs, signal } = options;
+  const { method = 'GET', body, ifMatch, idempotencyKey, timeoutMs = defaultTimeoutMs, signal, keepalive } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -137,7 +148,12 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
   const send = (token?: string) =>
     exchange(
       path,
-      { method, headers: token === undefined ? headers : { ...headers, [antiforgeryHeader]: token }, body: json },
+      {
+        method,
+        headers: token === undefined ? headers : { ...headers, [antiforgeryHeader]: token },
+        body: json,
+        ...(keepalive === undefined ? {} : { keepalive }),
+      },
       timeoutMs,
       signal,
     );
@@ -159,7 +175,7 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
     sessionEnded();
   }
 
-  throw failure(response.status, text);
+  throw failure(response.status, text, retryAfterMs(response));
 }
 
 export type Failure = 'offline' | 'signedOut' | 'server';
@@ -189,6 +205,15 @@ export function isNotFound(error: unknown): error is ApiError {
   return (
     error instanceof ApiError && (error.status === 404 || (error.status === 403 && error.code !== 'note.not_editable'))
   );
+}
+
+/**
+ * Fetches the antiforgery token now, unless one is held or on its way, so that a change sent later goes in one
+ * request: the note form's page-hidden save has to go before the browser freezes the page, with no round trip first
+ * (T10's Notes). A request that fails is forgotten, and the next change asks again.
+ */
+export function prepareChanges(): void {
+  void heldToken();
 }
 
 /**
@@ -326,17 +351,18 @@ function endsSession(path: string): boolean {
 }
 
 // The problem's code, when it is a string, a 422's field errors, and what a 409 note.in_progress_by_other includes; a
-// body that is not JSON gives none of them.
-function failure(status: number, text: string): ApiError {
+// body that is not JSON gives none of them, but keeps the answer's Retry-After, as a proxy's 503 has no problem
+// details.
+function failure(status: number, text: string, retryAfter?: number): ApiError {
   let problem: unknown;
   try {
     problem = JSON.parse(text);
   } catch {
-    return new ApiError(status);
+    return new ApiError(status, undefined, undefined, undefined, retryAfter);
   }
 
   if (typeof problem !== 'object' || problem === null) {
-    return new ApiError(status);
+    return new ApiError(status, undefined, undefined, undefined, retryAfter);
   }
 
   const { code, errors, authorDisplayName, startedAtUtc } = problem as {
@@ -352,7 +378,24 @@ function failure(status: number, text: string): ApiError {
     code === 'note.in_progress_by_other' && typeof authorDisplayName === 'string' && typeof startedAtUtc === 'string'
       ? { authorDisplayName, startedAtUtc }
       : undefined,
+    retryAfter,
   );
+}
+
+// A 429's or a 503's Retry-After (RFC 9110 §10.2.3), in seconds or as an HTTP date, as milliseconds from now; none for
+// another status, or for a value that is neither, and none below 0 for a date already past.
+function retryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After')?.trim();
+  if ((response.status !== 429 && response.status !== 503) || value === undefined) {
+    return undefined;
+  }
+
+  if (/^\d+$/.test(value)) {
+    return Number(value) * 1_000;
+  }
+
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
 }
 
 function isFieldErrors(value: unknown): value is FieldErrors {

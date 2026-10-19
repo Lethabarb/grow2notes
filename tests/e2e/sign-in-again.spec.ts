@@ -4,6 +4,8 @@ import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { failMe, manager, serveMe } from './me.ts';
+import { codeLabel, setUpWithPassword } from './setupSignIn.ts';
+import { endTheSession, sessionCookie, signInAgainWithPasskey } from './signedOut.ts';
 import { alex, answerSetupLinks, people, sam, serveUsers } from './users.ts';
 
 // Signing in again in place, sign-in's view C, in the published app (S00.04.08), against sign-in.md's *Sign in again,
@@ -20,19 +22,13 @@ const inviteEmailField = (page: Page) => page.locator('#email');
 const managerRadio = (page: Page) => page.locator('#role-manager');
 const sendInvite = (page: Page) => main(page).getByRole('button', { name: /^(Send invite|Sending…)$/ });
 const pageBar = (page: Page) => page.locator('#page-bar');
-const passkeyButton = (page: Page) => main(page).getByRole('button', { name: 'Sign in with a passkey' });
-
-// The session cookie (design.md §8.4), whose removal ends the session as the app's own 30 idle minutes would.
-const sessionCookie = '__Host-grow2notes';
 
 const signedOutHeading = 'You’ve been signed out';
 const signedOutSentence = 'Sign in again to go back to where you were.';
-const codeLabel = 'Enter the 6-digit code from your authenticator app';
 const failedMessage =
   'Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes.';
 
 const isTo = (path: string) => (message: Request | Response) => new URL(message.url()).pathname === path;
-const isMe = isTo('/api/auth/me');
 const isInvite = (request: Request) => request.method() === 'POST' && isTo('/api/admin/users')(request);
 const isSetupLink = (request: Request) =>
   request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/setup-link');
@@ -59,14 +55,6 @@ function countRequests(page: Page, counted: (request: Request) => boolean): () =
   };
 }
 
-/** Ends the app's session as an idle half hour does, then gives the window focus, which refreshes `/api/auth/me`. */
-async function endTheSession(page: Page) {
-  await page.context().clearCookies({ name: sessionCookie });
-  const refreshed = page.waitForResponse(isMe);
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  expect((await refreshed).status()).toBe(401);
-}
-
 /** Expects view C at `address`: its <h1>, focused, its sentence, the title, and no nav, Account or page bar. */
 async function expectSignedOutAt(page: Page, address: string) {
   await expect(heading(page)).toHaveText(signedOutHeading);
@@ -77,13 +65,6 @@ async function expectSignedOutAt(page: Page, address: string) {
   await expect(page.getByRole('navigation')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Account' })).toHaveCount(0);
   await expect(pageBar(page)).toBeHidden();
-}
-
-/** Signs in again in view C with the passkey that setup made on the virtual authenticator. */
-async function signInWithPasskey(page: Page) {
-  const signedIn = page.waitForResponse(isTo('/api/auth/passkey'));
-  await passkeyButton(page).click();
-  expect((await signedIn).status()).toBe(200);
 }
 
 /**
@@ -117,27 +98,6 @@ async function expectInviteKept(page: Page, person: { displayName: string; email
   await expect(nameField(page)).toHaveValue(person.displayName);
   await expect(inviteEmailField(page)).toHaveValue(person.email);
   await expect(managerRadio(page)).toBeChecked();
-}
-
-/**
- * Sets `person`'s account up with a password and an authenticator app, as setup.spec.ts's password path does, and
- * gives the password and the setup key, from which `authenticatorCode` gives each code.
- */
-async function setUpWithPassword(page: Page, person: Invite) {
-  const password = 'quietharbour';
-  await page.goto(person.setupLink);
-  await main(page).getByRole('link', { name: 'Use a password and authenticator app' }).click();
-  await page.getByLabel('Create a password', { exact: true }).fill(password);
-  await main(page).getByRole('button', { name: 'Continue' }).click();
-  const shownKey = main(page).getByRole('definition');
-  await expect(shownKey).toHaveText(/^[A-Z2-7]{32}$/);
-  const key = await shownKey.innerText();
-  const finished = page.waitForResponse(isTo('/api/auth/setup/password'));
-  await page.getByLabel(codeLabel).fill(authenticatorCode(key));
-  await main(page).getByRole('button', { name: 'Finish setup' }).click();
-  expect((await finished).status()).toBe(200);
-  await expect(heading(page)).toContainText('Today');
-  return { password, key };
 }
 
 /**
@@ -176,7 +136,7 @@ test('signed in for real, a 401 over a half-filled Invite user shows view C, and
   await expectInviteKept(page, person);
   await expectAxeToPass(page);
 
-  await signInWithPasskey(page);
+  await signInAgainWithPasskey(page);
 
   // The form as it was, at the same address, with focus on its <h1>, the frame signed in again.
   await expect(heading(page)).toHaveText('Invite user');
@@ -196,7 +156,7 @@ test('signed in for real, a 401 over a half-filled Invite user shows view C, and
   expect((await refused).status()).toBe(401);
   await expectSignedOutAt(page, address);
 
-  await signInWithPasskey(page);
+  await signInAgainWithPasskey(page);
 
   await expect(heading(page)).toHaveText('Invite user');
   await expect(heading(page)).toBeFocused();

@@ -150,8 +150,8 @@ async function useDevice(browser: Browser, use: (device: Device) => Promise<void
 
 // Every end-to-end test imports test from here, not from @playwright/test (tests/README.md), so a screen that breaks
 // design.md §9.7's policy fails its test, whatever the test checks. A test that names invite, secondInvite,
-// resetSignIn, authenticator, secondDevice or thirdDevice gets them; the others never run a command or add an
-// authenticator.
+// resetSignIn, authenticator, secondDevice, thirdDevice or secondTab gets them; the others never run a command or
+// add an authenticator.
 export const test = base.extend<{
   invite: Invite;
   secondInvite: Invite;
@@ -159,6 +159,7 @@ export const test = base.extend<{
   authenticator: VirtualAuthenticator;
   secondDevice: Device;
   thirdDevice: Device;
+  secondTab: Page;
 }>({
   page: async ({ page }, use) => {
     const expectNoViolations = watchForCspViolations(page);
@@ -186,5 +187,14 @@ export const test = base.extend<{
   // A third person's, such as a second manager beside a worker and the first.
   thirdDevice: async ({ browser }, use) => {
     await useDevice(browser, use);
+  },
+  // A second tab beside the test's page, in its browser context, with its cookies, for one person in two tabs. A test
+  // may close it, as a person closes a tab.
+  secondTab: async ({ page }, use) => {
+    const tab = await page.context().newPage();
+    const expectNoViolations = watchForCspViolations(tab);
+    await use(tab);
+    await tab.close();
+    expectNoViolations();
   },
 });

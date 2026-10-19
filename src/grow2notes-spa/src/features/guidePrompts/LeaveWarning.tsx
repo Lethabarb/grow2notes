@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useBlocker, type BlockerFunction } from 'react-router';
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
 import { strings } from '../../copy/strings.ts';
-import { setLeaveGuard, unloadGuardArmed } from '../../routes/leaveGuard.ts';
+import { setLeaveGuard } from '../../routes/leaveGuard.ts';
+import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
 
 type LeaveWarningProps = {
   /** Whether the field holds text that the server does not, as its last input left it. */
@@ -38,24 +39,7 @@ export function LeaveWarning({ dirty, isDirty }: LeaveWarningProps) {
     return () => setLeaveGuard(null);
   }, [isDirty]);
 
-  // Added only while there is text to lose, as a page with the listener loses the browser's back-forward cache
-  // (settings-textarea.md *Implementation notes*).
-  useEffect(() => {
-    if (!dirty) {
-      return;
-    }
-
-    const warn = (event: BeforeUnloadEvent) => {
-      // Not once the shell has disarmed it, before a full page load that the person chose, or that was another's.
-      if (unloadGuardArmed()) {
-        event.preventDefault();
-        // For Chromium before 119, which asks only when this is set.
-        event.returnValue = true;
-      }
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  useUnloadWarning(dirty);
 
   // Any close but Leave without saving's is Stay: Escape, Android's back gesture and the shell's plain close() too, so
   // that the blocker is never left blocked.

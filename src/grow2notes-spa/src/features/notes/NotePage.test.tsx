@@ -1,4 +1,4 @@
-import { QueryClientProvider, type QueryClient } from '@tanstack/react-query';
+import { onlineManager, QueryClientProvider, type QueryClient } from '@tanstack/react-query';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { createMemoryRouter, parsePath } from 'react-router';
@@ -6,14 +6,22 @@ import { RouterProvider } from 'react-router/dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
+import buttonStyles from '../../components/Button.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
+import { fullPageLoad } from '../../routes/fullPageLoad.ts';
+import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
 import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
+import notePage from './NotePage.module.css';
 import readView from './ReadView.module.css';
+
+// jsdom does not navigate, so the full page load of Sign out, and of another person's sign-in, is a stand-in that
+// counts its calls.
+vi.mock('../../routes/fullPageLoad.ts');
 
 // A memory router of the app's routes.
 type Router = ReturnType<typeof createMemoryRouter>;
@@ -489,6 +497,54 @@ function follows(later: Node, earlier: Node): boolean {
   return (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 }
 
+/** The save indicator's sentence once a failed save is being retried (design.md §4.3). */
+const notSavedRetrying = 'Not saved: no connection. Keep this page open; retrying.';
+
+/** The browser going offline or online, with the event that it fires. */
+function goOnline(online: boolean) {
+  act(() => {
+    window.dispatchEvent(new Event(online ? 'online' : 'offline'));
+  });
+}
+
+/** Counts the changes to `element` and what it holds from now on, as its words being written again would be one. */
+function watchChanges(element: HTMLElement): () => number {
+  let changes = 0;
+  const observer = new MutationObserver((records) => {
+    changes += records.length;
+  });
+  observer.observe(element, { attributes: true, characterData: true, childList: true, subtree: true });
+  return () => changes + observer.takeRecords().length;
+}
+
+/** Every text written into the live region `region` from now on, in turn, each of which a screen reader says. */
+function watchWords(region: HTMLElement): () => string[] {
+  const words: string[] = [];
+  const take = (records: MutationRecord[]) => {
+    for (const record of records) {
+      record.addedNodes.forEach((node) => {
+        words.push(node.textContent ?? '');
+      });
+    }
+  };
+  const observer = new MutationObserver(take);
+  observer.observe(region, { childList: true, subtree: true });
+  return () => {
+    take(observer.takeRecords());
+    return words;
+  };
+}
+
+/** A save refused as another page has saved the note since this page last did (design.md §5.6). */
+const takenOver = problem(409, { code: 'draft.taken_over' });
+
+/** Whether the page asks before it goes, as a reload or a closed tab would find. */
+function unloadAsks(): boolean {
+  const event = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   // `api()` sends each request to a path, as a string, with its method.
@@ -511,6 +567,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  onlineManager.setOnline(true);
   answers.clear();
   fetchMock.mockReset();
   vi.unstubAllGlobals();
@@ -1013,33 +1070,6 @@ describe('Autosave', () => {
     ]);
   });
 
-  it('keeps "Saving…" after a save that failed, sending nothing more until the next change or a blur', async () => {
-    const participant = freshParticipant();
-    serveNote(participant);
-    serveSave(paths(participant).draft, problem(503));
-    renderApp(paths(participant).page);
-    await settle();
-
-    guidedNotes().focus();
-    type('Jane made toast.');
-    await wait(2_000);
-    await settle();
-    expect(saves()).toHaveLength(1);
-    await wait(30_000);
-    expect(saves()).toHaveLength(1);
-    expect(shownSaveStatus()).toBe('Saving…');
-
-    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
-    guidedNotes().blur();
-    await wait(0);
-    expect(saves().map(({ body }) => [body.seq, body.listsVersion])).toEqual([
-      [1, 'lists-1'],
-      [2, 'lists-1'],
-    ]);
-    await settle();
-    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
-  });
-
   it('keeps all of 20,050 characters on screen, with "You have 50 characters too many", and sends 20,000', async () => {
     const participant = freshParticipant();
     serveNote(participant);
@@ -1128,6 +1158,431 @@ describe('Autosave', () => {
       isFlagged: false,
       flagReason: null,
     });
+  });
+});
+
+describe('A save that fails', () => {
+  it('keeps "Saving…" through one failure, then says "Not saved: …" once in the top bar, until saved', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, noConnection);
+    renderApp(paths(participant).page);
+    await settle();
+
+    type('Jane made toast.');
+    await wait(2_000);
+    expect(saves()).toHaveLength(1);
+    await wait(999);
+    expect(shownSaveStatus()).toBe('Saving…');
+
+    await wait(1);
+    expect(saves()).toHaveLength(2);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    // The indicator itself, the top bar's live region after the back link, with an icon that screen readers skip.
+    expect(saveStatus()).toHaveAttribute('role', 'status');
+    expect(saveStatus().textContent).toBe(notSavedRetrying);
+    expect(saveStatus().querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(follows(saveStatus(), within(topBar()).getByRole('link', { name: 'Today' }))).toBe(true);
+
+    const changes = watchChanges(saveStatus());
+    await wait(2_000 + 4_000 + 8_000);
+    expect(saves()).toHaveLength(5);
+    expect(changes()).toBe(0);
+
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    await wait(10_000);
+    await settle();
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual(
+      [1, 2, 3, 4, 5, 6].map((seq) => [seq, 'Jane made toast.']),
+    );
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(saveStatus().querySelector('svg')).toBeNull();
+  });
+
+  it('says "Not saved: …" at once as the browser goes offline, sending nothing, then "Saved …" online', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    renderApp(paths(participant).page);
+    await settle();
+    type('Jane made toast.');
+
+    goOnline(false);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    await wait(30_000);
+    expect(saves()).toEqual([]);
+
+    goOnline(true);
+    await settle();
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+  });
+});
+
+describe('Changed on another device or tab', () => {
+  const sentence = 'This note was changed on another device or tab.';
+
+  /** The text, ticks, flag and reason on screen as the note is taken over. */
+  const onScreen = {
+    narrative: 'Jane made toast. Then a walk.',
+    tickedGoalIds: [breakfast.id, sister.id, bus.id],
+    isFlagged: true,
+    flagReason: 'Seemed tired.',
+  };
+
+  /** The version that another page saved, at 9:50 am, which Load the other version reads. */
+  const otherVersion: Draft = {
+    ...savedDraft('Jane went to the library.'),
+    goals: [breakfast, { ...bus, isTicked: true }, sister],
+    isFlagged: true,
+    flagReason: 'Seemed tired after lunch.',
+    savedAtUtc: '2026-09-30T23:50:00Z',
+  };
+
+  /**
+   * Opens the worker's draft of a participant of their own, whose first save from this page is answered at 9:43 am, its
+   * second `409 draft.taken_over`, and those after it at 9:44 am; and writes "Jane made toast.", which saves.
+   */
+  async function openToLose(): Promise<ParticipantHeader> {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft('Jane')));
+    serveSave(
+      paths(participant).draft,
+      inTurn(saved('2026-09-30T23:43:00Z'), takenOver, saved('2026-09-30T23:44:00Z')),
+    );
+    renderApp(paths(participant).page);
+    await settle();
+    await write('Jane made toast.');
+    return participant;
+  }
+
+  /**
+   * Opens the note as `openToLose()` does; then, with Bus ticked, the flag ticked with a reason and the text written
+   * on, focus left in the box, saves again, which meets the takeover.
+   */
+  async function loseTheNote(): Promise<ParticipantHeader> {
+    const participant = await openToLose();
+
+    fireEvent.click(within(main()).getByText(bus.text));
+    fireEvent.click(flagBox());
+    typeReason(onScreen.flagReason);
+    guidedNotes().focus();
+    await write(onScreen.narrative);
+    return participant;
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    const banner = within(pageBar()).queryByRole('region', { name: sentence });
+    return banner !== null && within(banner).queryAllByRole('button').length > 0 ? banner : null;
+  }
+
+  /** A choice of the takeover banner, by its name. */
+  function choice(name: 'Keep the text on this screen' | 'Load the other version'): HTMLElement {
+    return within(takeoverBanner()!).getByRole('button', { name });
+  }
+
+  /** What the form shows: its text, its goals' ticks, its flag and its reason. */
+  function shownContent() {
+    return [guidedNotes().value, goalBoxes().map((box) => box.checked), flagBox().checked, reasonField().value];
+  }
+
+  /** The reads of the note form, `GET {base}/draft`, sent for `participant`. */
+  function draftReads(participant: ParticipantHeader): number {
+    return sentRequests().filter((request) => request === `GET ${paths(participant).draft}`).length;
+  }
+
+  it('shows the takeover banner after the back link, its two choices next in Tab order, with "Not saved"', async () => {
+    await loseTheNote();
+
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2]);
+    const banner = takeoverBanner()!;
+    expect(banner.tagName).toBe('SECTION');
+    expect(within(banner).getByText(sentence)).toHaveAttribute('id', 'taken-over');
+    expect(banner.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(within(banner).queryByRole('status')).toBeNull();
+    expect(within(banner).queryByRole('alert')).toBeNull();
+    const choices = within(banner).getAllByRole('button');
+    expect(choices.map((button) => button.textContent)).toEqual([
+      'Keep the text on this screen',
+      'Load the other version',
+    ]);
+    expect(choices[0]).toHaveClass(buttonStyles.primary);
+    expect(choices[1]).toHaveClass(buttonStyles.secondary);
+    for (const button of choices) {
+      expect(button).toHaveAttribute('type', 'button');
+      expect(button).not.toHaveAttribute('aria-disabled');
+    }
+    // In the Tab order, the back link, then Keep and Load, then <main>.
+    const focusable = [...pageBar().querySelectorAll('a[href], button, input, textarea, [tabindex]')];
+    expect(focusable).toEqual([within(topBar()).getByRole('link', { name: 'Today' }), ...choices]);
+    expect(follows(main(), choices[1])).toBe(true);
+    expect(follows(banner, saveStatus())).toBe(true);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saveStatus().querySelector('svg')).toBeNull();
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status taken-over');
+    expect(submitButton()).toHaveAccessibleDescription(`Not saved ${sentence}`);
+  });
+
+  it('takes the place of "Not saved: …" in the top bar when a save being retried meets the takeover', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft('Jane')));
+    serveSave(
+      paths(participant).draft,
+      inTurn(saved('2026-09-30T23:43:00Z'), noConnection, noConnection, takenOver),
+    );
+    renderApp(paths(participant).page);
+    await settle();
+    await write('Jane made toast.');
+    type(onScreen.narrative);
+    await wait(2_000 + 1_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(saveStatus()).toHaveClass(notePage.attentionRow);
+
+    await wait(2_000);
+    await settle();
+
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2, 3, 4]);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saveStatus().querySelector('svg')).toBeNull();
+    expect(saveStatus()).not.toHaveClass(notePage.attentionRow);
+    await wait(60_000);
+    expect(saves()).toHaveLength(4);
+  });
+
+  it('says its sentence once, assertively, focus kept, keeping what is typed meanwhile and sending none', async () => {
+    await loseTheNote();
+
+    expect(assertive().textContent).toBe(sentence);
+    expect(document.activeElement).toBe(guidedNotes());
+
+    const changes = watchChanges(assertive());
+    type('Jane made toast. Then a walk to the shops.');
+    fireEvent.click(within(main()).getByText(breakfast.text));
+    guidedNotes().blur();
+    await wait(30_000);
+
+    expect(saves()).toHaveLength(2);
+    expect(changes()).toBe(0);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a walk to the shops.');
+    expect(goalBoxes()[0]).not.toBeChecked();
+  });
+
+  it('sends all on screen on Keep, under a new clientId from 1, focus back in the box, then "Saved …"', async () => {
+    await loseTheNote();
+    type('Jane made toast. Then a walk to the shops.');
+
+    await press(choice('Keep the text on this screen'));
+
+    const [first, , kept] = saves().map(({ body }) => body);
+    expect(kept).toEqual({
+      ...onScreen,
+      clientId: expect.stringMatching(uuid) as string,
+      seq: 1,
+      narrative: 'Jane made toast. Then a walk to the shops.',
+    });
+    expect(kept.clientId).not.toBe(first.clientId);
+    expect(document.activeElement).toBe(guidedNotes());
+    expect(takeoverBanner()).toBeNull();
+    expect(assertive()).toBeEmptyDOMElement();
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+
+    await write('Jane made toast. Then a walk to the shops and back.');
+    expect(saves()[3].body).toMatchObject({ clientId: kept.clientId, seq: 2 });
+  });
+
+  it('gives focus to the <h1> on Keep when nothing had it as the note was taken over', async () => {
+    await openToLose();
+    guidedNotes().focus();
+    type('Jane made toast. Then a walk.');
+    guidedNotes().blur();
+    await settle();
+    expect(takeoverBanner()).not.toBeNull();
+
+    await press(choice('Keep the text on this screen'));
+
+    expect(document.activeElement).toBe(pageHeading());
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+      [1, 'Jane made toast.'],
+      [2, 'Jane made toast. Then a walk.'],
+      [1, 'Jane made toast. Then a walk.'],
+    ]);
+  });
+
+  it("shows the other version's ticks, text, flag and reason on Load, focus on the <h1>, saving from 1", async () => {
+    const participant = await loseTheNote();
+    const other = held(json(otherVersion));
+    serve(paths(participant).draft, other.answer);
+    type('Jane made toast. Then a walk to the shops.');
+
+    await press(choice('Load the other version'));
+    // Both choices wait for its read.
+    expect(choice('Keep the text on this screen')).toHaveAttribute('aria-disabled', 'true');
+    expect(choice('Load the other version')).toHaveAttribute('aria-disabled', 'true');
+    await press(choice('Keep the text on this screen'));
+    expect(saves()).toHaveLength(2);
+
+    other.release();
+    await settle();
+
+    expect(shownContent()).toEqual([
+      otherVersion.narrative,
+      [false, true, false],
+      true,
+      otherVersion.flagReason,
+    ]);
+    expect(document.activeElement).toBe(pageHeading());
+    expect(takeoverBanner()).toBeNull();
+    expect(shownSaveStatus()).toBe(`Saved 9:50${nbsp}am`);
+    expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-30T23:50:00Z');
+    expect(submitButton()).not.toHaveAttribute('aria-disabled');
+    expect(draftReads(participant)).toBe(2);
+    expect(saves()).toHaveLength(2);
+
+    await write('Jane went to the library. Then lunch.');
+    const [first, , next] = saves().map(({ body }) => body);
+    expect(next).toEqual({
+      clientId: expect.stringMatching(uuid) as string,
+      seq: 1,
+      narrative: 'Jane went to the library. Then lunch.',
+      tickedGoalIds: [bus.id],
+      isFlagged: true,
+      flagReason: 'Seemed tired after lunch.',
+    });
+    expect(next.clientId).not.toBe(first.clientId);
+  });
+
+  it('replaces nothing on screen while the banner shows, nor on Keep, as only Load does (item 16)', async () => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, json(otherVersion));
+    const kept = [onScreen.narrative, [true, true, true], true, onScreen.flagReason];
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    goOnline(false);
+    goOnline(true);
+    await wait(60_000);
+    expect(shownContent()).toEqual(kept);
+
+    await press(choice('Keep the text on this screen'));
+    await wait(30_000);
+
+    expect(shownContent()).toEqual(kept);
+    expect(draftReads(participant)).toBe(1);
+  });
+
+  it('opens no confirmation when its check save meets the takeover, a press then saying the sentence', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    serveSave(paths(participant).draft, inTurn(takenOver, saved('2026-09-30T23:44:00Z')));
+
+    await press(submitButton());
+
+    expect(saves()).toHaveLength(2);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(confirmation()).toBeNull();
+    expect(document.activeElement).toBe(submitButton());
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(submitButton());
+    await wait(16);
+    expect(pageStatus().textContent).toBe(sentence);
+    expect(saves()).toHaveLength(2);
+    expect(confirmation()).toBeNull();
+
+    await press(choice('Keep the text on this screen'));
+    await wait(30_000);
+    expect(saves().map(({ body }) => body.seq)).toEqual([1, 2, 1]);
+    expect(document.activeElement).toBe(submitButton());
+    expect(confirmation()).toBeNull();
+  });
+
+  it.each([
+    { failure: 'no connection', answer: noConnection, cause: 'no connection' },
+    { failure: 'a failure of the server', answer: problem(500), cause: 'something went wrong' },
+  ])("keeps the banner, its choices ready, when Load's read meets $failure, saying so politely", async (failing) => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, failing.answer);
+
+    await press(choice('Load the other version'));
+    await wait(16);
+
+    expect(pageStatus().textContent).toBe(`The note did not load: ${failing.cause}. Try again.`);
+    expect(choice('Keep the text on this screen')).not.toHaveAttribute('aria-disabled');
+    expect(choice('Load the other version')).not.toHaveAttribute('aria-disabled');
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(shownContent()).toEqual([onScreen.narrative, [true, true, true], true, onScreen.flagReason]);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each([
+    {
+      deadEnd: 'the version-conflict dead end when it finds no draft, as the note was submitted meanwhile',
+      answer: problem(404),
+      words: sentence,
+    },
+    {
+      deadEnd: "the in-progress dead end when it finds someone else's draft",
+      // 9:14 am on 1 October in Melbourne.
+      answer: startedBy('2026-09-30T23:14:00Z'),
+      words: `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    },
+  ])("ends at $deadEnd on Load's read, saying it, focus on the <h1>", async ({ answer, words }) => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, answer);
+    const changes = watchChanges(assertive());
+
+    await press(choice('Load the other version'));
+
+    const banner = within(pageBar()).getByRole('region', { name: words });
+    expect(within(banner).queryByRole('button')).toBeNull();
+    expect(takeoverBanner()).toBeNull();
+    expect(assertive().textContent).toBe(words);
+    // Written again, so said, though the version-conflict dead end's words are the takeover's.
+    expect(changes()).toBeGreaterThan(0);
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(document.activeElement).toBe(pageHeading());
+    expect(submitButton()).toHaveAttribute('aria-describedby', 'save-status dead-end');
+    expect(guidedNotes()).toHaveValue(onScreen.narrative);
+    type('Jane made toast. Then a walk to the shops.');
+    await wait(30_000);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it("shows a new note's empty form on Load when the note was discarded meanwhile, saving it anew", async () => {
+    const participant = await loseTheNote();
+    serve(paths(participant).draft, json(template()));
+
+    await press(choice('Load the other version'));
+
+    expect(shownContent()).toEqual(['', [false, false, false], false, '']);
+    expect(saveStatus()).toBeEmptyDOMElement();
+    expect(takeoverBanner()).toBeNull();
+    expect(document.activeElement).toBe(pageHeading());
+
+    await write('Jane made toast.');
+    const [first, , next] = saves().map(({ body }) => body);
+    expect(next).toMatchObject({ seq: 1, listsVersion: 'lists-1', narrative: 'Jane made toast.' });
+    expect(next.clientId).not.toBe(first.clientId);
+  });
+
+  it('asks before the page goes while the banner shows, and not once Keep has saved', async () => {
+    await openToLose();
+    expect(unloadAsks()).toBe(false);
+
+    await write('Jane made toast. Then a walk.');
+    expect(takeoverBanner()).not.toBeNull();
+    expect(unloadAsks()).toBe(true);
+
+    await press(choice('Keep the text on this screen'));
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(unloadAsks()).toBe(false);
   });
 });
 
@@ -1674,12 +2129,14 @@ describe('Opening the note form', () => {
     // The header and the note twice, as StrictMode mounts the page, unmounts it and mounts it again: the unmount
     // cancels the first request, whose query function takes the abort signal, and the second mount sends it again. A
     // production build sends each once. The form's read once, sent only once the note has answered, by then mounted
-    // for good. Counted rather than compared as a set, so that a read sent once more as the form opens fails.
+    // for good. Counted rather than compared as a set, so that a read sent once more as the form opens fails. Not the
+    // antiforgery token, which the form fetches as it opens unless an earlier test left one held (T10's Notes).
     const { header, note, draft } = paths(jane);
-    expect(sentRequests().toSorted()).toEqual(
+    const reads = () => sentRequests().filter((request) => request !== `GET ${antiforgeryPath}`);
+    expect(reads().toSorted()).toEqual(
       [`GET ${mePath}`, `GET ${header}`, `GET ${header}`, `GET ${note}`, `GET ${note}`, `GET ${draft}`].toSorted(),
     );
-    expect(sentRequests().indexOf(`GET ${draft}`)).toBeGreaterThan(sentRequests().lastIndexOf(`GET ${note}`));
+    expect(reads().indexOf(`GET ${draft}`)).toBeGreaterThan(reads().lastIndexOf(`GET ${note}`));
     const sent = sentRequests().length;
 
     scrollPage(400);
@@ -1975,6 +2432,17 @@ describe('Submit note', () => {
     expect(submitButton()).toHaveAccessibleDescription('Saving…');
   });
 
+  it('is aria-disabled while "Not saved: …" shows, described by it', async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, noConnection);
+
+    type('Jane made toast.');
+    await wait(3_000);
+
+    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(submitButton()).toHaveAccessibleDescription(notSavedRetrying);
+  });
+
   it("is aria-disabled after a dead end, described by the indicator and the dead end's sentence", async () => {
     const { participant } = await openToSubmit();
     serveSave(paths(participant).draft, problem(422, { code: 'note.participant_archived' }));
@@ -2259,17 +2727,49 @@ describe('Pressing Submit note', () => {
     expect(summaryItems()).toEqual([['Enter a reason for the flag', '#flag-reason']]);
   });
 
-  it('opens nothing when the check save fails, then or later', async () => {
+  it('opens nothing when its check save fails into "Not saved: …", nor once a later save is answered', async () => {
     const { participant } = await openToSubmit();
     await write();
-    serveSave(paths(participant).draft, problem(503));
+    serveSave(paths(participant).draft, noConnection);
 
     await press(submitButton());
-    await wait(30_000);
-
     expect(saves()).toHaveLength(2);
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(1_000);
+    expect(saves()).toHaveLength(3);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
     expect(confirmation()).toBeNull();
-    expect(submitButton()).toHaveAttribute('aria-disabled', 'true');
+
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    await wait(2_000);
+    await settle();
+    expect(saves()).toHaveLength(4);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(confirmation()).toBeNull();
+  });
+
+  it('opens nothing for a change typed while its check save is out, nor once a later save is answered', async () => {
+    const { participant } = await openToSubmit();
+    await write();
+    const check = held(saved('2026-09-30T23:43:00Z'));
+    serveSave(paths(participant).draft, check.answer);
+
+    await press(submitButton());
+    type('Jane made toast. Then a walk.');
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    check.release();
+    await settle();
+    expect(confirmation()).toBeNull();
+
+    await wait(2_000);
+    await settle();
+    expect(saves().map(({ body }) => body.narrative)).toEqual([
+      'Jane made toast.',
+      'Jane made toast.',
+      'Jane made toast. Then a walk.',
+    ]);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(confirmation()).toBeNull();
   });
 
   it('ends at the dead end, opening nothing, when the check save finds the note submitted elsewhere', async () => {
@@ -2298,6 +2798,22 @@ describe('Pressing Submit note', () => {
 
     expect(pageStatus().textContent).toBe('Jane Citizen is archived, so this note cannot be started. Ask a manager.');
     expect(saves()).toHaveLength(1);
+    expect(confirmation()).toBeNull();
+    expect(errorSummary()).toBeNull();
+  });
+
+  it("opens nothing while \"Not saved: …\" shows, saying its sentence again in the page's polite region", async () => {
+    const { participant } = await openToSubmit();
+    serveSave(paths(participant).draft, noConnection);
+    type('Jane made toast.');
+    await wait(3_000);
+    expect(pageStatus()).toBeEmptyDOMElement();
+
+    await press(submitButton());
+    await wait(16);
+
+    expect(pageStatus().textContent).toBe(notSavedRetrying);
+    expect(saves()).toHaveLength(2);
     expect(confirmation()).toBeNull();
     expect(errorSummary()).toBeNull();
   });
@@ -2802,6 +3318,788 @@ function meRequestsFrom(router: Router, answer: Answer = json(worker)): string[]
   });
   return sentFrom;
 }
+
+// Leaving the form within the app, and the browser's own warning (note-form.md *Leaving the form* and items 34 and
+// 35, autosave-status.md *Behaviour* 7).
+describe('Leaving the form', () => {
+  const takeoverSentence = 'This note was changed on another device or tab.';
+
+  /** How the person leaves the form within the app. */
+  type Way = 'the back link' | 'the Past notes link' | 'Back';
+  const ways: Way[] = ['the back link', 'the Past notes link', 'Back'];
+
+  // The dead ends that a save can meet (note-form.md *Conflicts and refusals*).
+  const deadEnds = [
+    { deadEnd: 'after midnight', refusal: problem(422, { code: 'note.past_date_manager_only' }) },
+    // 9:14 am on 1 October in Melbourne.
+    { deadEnd: "someone else's draft", refusal: startedBy('2026-09-30T23:14:00Z') },
+    { deadEnd: 'an archived participant', refusal: problem(422, { code: 'note.participant_archived' }) },
+    { deadEnd: 'a note submitted elsewhere', refusal: problem(409, { code: 'note.version_conflict' }) },
+  ];
+
+  /**
+   * Opens a new note for a participant of their own from Today, as a person does, whose saves `save` answers, with
+   * their Past notes, which have none, to go to.
+   */
+  async function openToLeave(save: Answer = saved('2026-09-30T23:42:00Z')) {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, save);
+    serve(`/api/participants/${participant.id}/notes`, json({ notes: [], hasMore: false }));
+    const { router, client } = await openFromToday([participant]);
+    return { participant, router, client };
+  }
+
+  /** Leaves the form `way`, as the person does, and lets what follows render. */
+  async function leave(way: Way, router: Router) {
+    switch (way) {
+      case 'the back link':
+        await press(within(pageBar()).getByRole('link', { name: 'Today' }));
+        break;
+      case 'the Past notes link':
+        await press(within(main()).getByRole('link', { name: 'Past notes' }));
+        break;
+      case 'Back':
+        await goBack(router);
+        break;
+    }
+  }
+
+  /** Where leaving `way` goes: Today, which opened the form, or the participant's Past notes. */
+  function destination(way: Way, participant: ParticipantHeader): string {
+    return way === 'the Past notes link' ? `/participants/${participant.id}/notes` : '/';
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    return within(pageBar()).queryByRole('region', { name: takeoverSentence });
+  }
+
+  afterEach(() => {
+    rearmUnloadGuard();
+  });
+
+  it.each(ways)('sends a change waiting on %s, "Saving…" until it is saved, then leaves', async (way) => {
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    const { participant, router } = await openToLeave(save.answer);
+    type('Jane made toast.');
+
+    await leave(way, router);
+
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(shownSaveStatus()).toBe('Saving…');
+
+    save.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe(destination(way, participant));
+    await wait(30_000);
+    expect(saves()).toHaveLength(1);
+  });
+
+  it('sends a change typed while the save out is answered too, before it leaves', async () => {
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    const { router } = await openToLeave(save.answer);
+    type('Jane made toast.');
+    await leave('the back link', router);
+    type('Jane made toast. Then a walk.');
+
+    save.release();
+    await settle();
+
+    expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+      [1, 'Jane made toast.'],
+      [2, 'Jane made toast. Then a walk.'],
+    ]);
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it.each(ways)('stays on %s while "Not saved: …" shows, saying it once in the polite region', async (way) => {
+    const { participant, router } = await openToLeave(noConnection);
+    type('Jane made toast.');
+    await wait(3_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    const indicatorChanges = watchChanges(saveStatus());
+    const said = watchWords(pageStatus());
+
+    await leave(way, router);
+    await wait(16);
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(said()).toEqual([notSavedRetrying]);
+    expect(indicatorChanges()).toBe(0);
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each(ways)('stays on %s while the takeover banner shows, saying its sentence once politely', async (way) => {
+    const { participant, router } = await openToLeave(
+      inTurn(saved('2026-09-30T23:43:00Z'), takenOver, saved('2026-09-30T23:44:00Z')),
+    );
+    await write('Jane made toast.');
+    await write('Jane made toast. Then a walk.');
+    expect(takeoverBanner()).not.toBeNull();
+    const alerts = watchChanges(assertive());
+    const said = watchWords(pageStatus());
+
+    await leave(way, router);
+    await wait(16);
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(said()).toEqual([takeoverSentence]);
+    expect(alerts()).toBe(0);
+    expect(takeoverBanner()).not.toBeNull();
+    expect(saves()).toHaveLength(2);
+  });
+
+  it.each(ways.flatMap((way) => [403, 422].map((status) => ({ way, status }))))(
+    'stays on $way when the save that it sends meets a $status, saying "Not saved: …" once politely',
+    async ({ way, status }) => {
+      const { participant, router } = await openToLeave(problem(status));
+      type('Jane made toast.');
+      const said = watchWords(pageStatus());
+
+      await leave(way, router);
+      await wait(16);
+
+      expect(saves()).toHaveLength(1);
+      expect(router.state.location.pathname).toBe(paths(participant).page);
+      expect(said()).toEqual([notSavedRetrying]);
+    },
+  );
+
+  it('stays when its save fails into "Not saved: …", said once by the top bar, going nowhere once saved', async () => {
+    const { participant, router } = await openToLeave(
+      inTurn(noConnection, noConnection, saved('2026-09-30T23:44:00Z')),
+    );
+    type('Jane made toast.');
+    const said = watchWords(pageStatus());
+
+    await leave('the back link', router);
+    expect(shownSaveStatus()).toBe('Saving…');
+    await wait(1_000);
+    await wait(16);
+
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    // The top bar's live region has said it.
+    expect(said()).toEqual([]);
+
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+  });
+
+  it('stays when the save that it sends meets the takeover, which the banner says once', async () => {
+    const { participant, router } = await openToLeave(inTurn(saved('2026-09-30T23:43:00Z'), takenOver));
+    await write('Jane made toast.');
+    type('Jane made toast. Then a walk.');
+    const alerts = watchWords(assertive());
+    const said = watchWords(pageStatus());
+
+    await leave('the back link', router);
+    await wait(16);
+
+    expect(takeoverBanner()).not.toBeNull();
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(alerts()).toEqual([takeoverSentence]);
+    expect(said()).toEqual([]);
+  });
+
+  it.each(ways.flatMap((way) => deadEnds.map((end) => ({ way, ...end }))))(
+    'stays on $way when the save that it sends meets the dead end of $deadEnd, said once, then leaves on another',
+    async ({ way, refusal }) => {
+      const save = held(refusal);
+      const { participant, router } = await openToLeave(save.answer);
+      type('Jane made toast.');
+      const alerts = watchWords(assertive());
+      const said = watchWords(pageStatus());
+      await leave(way, router);
+      const focused = document.activeElement;
+
+      save.release();
+      await settle();
+      await wait(16);
+
+      expect(router.state.location.pathname).toBe(paths(participant).page);
+      expect(shownSaveStatus()).toBe('Not saved');
+      expect(alerts()).toHaveLength(1);
+      expect(within(pageBar()).getByRole('region', { name: alerts()[0] })).toBeInTheDocument();
+      expect(said()).toEqual([]);
+      expect(document.activeElement).toBe(focused);
+      expect(guidedNotes()).toHaveValue('Jane made toast.');
+
+      await leave(way, router);
+
+      expect(router.state.location.pathname).toBe(destination(way, participant));
+      expect(saves()).toHaveLength(1);
+    },
+  );
+
+  it.each(ways)('leaves on %s at once with nothing unsaved, sending nothing', async (way) => {
+    const { participant, router } = await openToLeave();
+    await write('Jane made toast.');
+
+    await leave(way, router);
+
+    expect(router.state.location.pathname).toBe(destination(way, participant));
+    expect(saves()).toHaveLength(1);
+  });
+
+  it.each(ways.flatMap((way) => deadEnds.map((end) => ({ way, ...end }))))(
+    'leaves on $way at once after the dead end of $deadEnd, with a change since, sending nothing more',
+    async ({ way, refusal }) => {
+      const { participant, router } = await openToLeave(refusal);
+      await write('Jane made toast.');
+      expect(shownSaveStatus()).toBe('Not saved');
+      type('Jane made toast. Then a walk.');
+
+      await leave(way, router);
+
+      expect(router.state.location.pathname).toBe(destination(way, participant));
+      expect(saves()).toHaveLength(1);
+    },
+  );
+
+  it('listens for beforeunload from the first unsaved change, through "Not saved: …", until saved', async () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const removed = vi.spyOn(window, 'removeEventListener');
+    const ofUnload = (spy: typeof added | typeof removed) =>
+      spy.mock.calls.filter(([event]) => event === 'beforeunload').length;
+    const listening = () => ofUnload(added) - ofUnload(removed);
+    await openToLeave(inTurn(noConnection, noConnection, saved('2026-09-30T23:44:00Z')));
+    expect(listening()).toBe(0);
+    expect(unloadAsks()).toBe(false);
+
+    type('Jane made toast.');
+    await settle();
+    expect(listening()).toBe(1);
+    expect(unloadAsks()).toBe(true);
+
+    await wait(3_000);
+    expect(shownSaveStatus()).toBe(notSavedRetrying);
+    expect(listening()).toBe(1);
+
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(listening()).toBe(0);
+    expect(unloadAsks()).toBe(false);
+  });
+
+  it('asks nothing before the page goes once the shell has disarmed the warning, a change unsaved', async () => {
+    await openToLeave(noAnswer);
+    type('Jane made toast.');
+    await settle();
+    expect(unloadAsks()).toBe(true);
+
+    disarmUnloadGuard();
+
+    expect(unloadAsks()).toBe(false);
+  });
+
+  it("marks Today's lists stale as the form is left for Past notes", async () => {
+    const { participant, router, client } = await openToLeave();
+    const todayKey = ['today', '2026-10-01'];
+    // As fresh as a list fetched while the form was open.
+    client.setQueryData(todayKey, client.getQueryData(todayKey));
+    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(false);
+
+    await leave('the Past notes link', router);
+
+    expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
+    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(true);
+  });
+
+  it("lands on Today after Submit's 201, though a change was made while its request was out", async () => {
+    const post = held(versionSaved());
+    const { router } = await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    type('Jane made toast. Then a walk.');
+    const said = watchWords(pageStatus());
+
+    post.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(banner()).toHaveFocus();
+    expect(said()).toEqual([]);
+    expect(saves()).toHaveLength(2);
+  });
+});
+
+// The note form's side of the session (note-form.md *Session* and item 36; app-shell.md's Session and Sign out
+// criteria; session-timeout.md *The session clock* step 3 and *The signed-out state*; S02.02.05).
+describe('The session and Sign out', () => {
+  const signedOutHeading = 'You’ve been signed out';
+  const takeoverSentence = 'This note was changed on another device or tab.';
+  const notSignedOut = 'Not signed out: your note is not saved yet. Keep this page open; retrying.';
+  const logout = 'POST /api/auth/logout';
+
+  beforeEach(() => {
+    // A fake system time, as session.test.ts has: 9 am on Thursday 1 October 2026 in Melbourne.
+    vi.setSystemTime(Date.parse('2026-10-01T09:00:00+10:00'));
+    answers.set(logout, () => Promise.resolve(new Response(null, { status: 204 })));
+  });
+
+  afterEach(() => {
+    vi.mocked(fullPageLoad).mockReset();
+    rearmUnloadGuard();
+  });
+
+  /** Opens a new note for a participant of their own at its address, whose saves `save` answers. */
+  async function openForSession(save: Answer = saved('2026-09-30T23:42:00Z')) {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, save);
+    const { router } = renderApp(paths(participant).page);
+    await settle();
+    return { participant, router };
+  }
+
+  /**
+   * The window regains focus, whose refresh of `/api/auth/me` the server accepts: the newest request, from whose send
+   * time the session clock counts. Gives that time.
+   */
+  async function refreshNow(): Promise<number> {
+    const from = Date.now();
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+    await settle();
+    return from;
+  }
+
+  /** Moves the fake clock on to `clock`, in minutes and seconds, as '27:59', after `from`. */
+  async function at(clock: string, from: number) {
+    const [minutes, seconds] = clock.split(':').map(Number);
+    await wait(from + (minutes * 60 + seconds) * 1000 - Date.now());
+  }
+
+  /** The warning before the idle sign-out, if it is open. */
+  function warning(): HTMLElement | null {
+    return screen.queryByRole('dialog', { name: /^You’ll be signed out in/ });
+  }
+
+  /** The Guided notes box, found while the signed-out-in-place view hides it too. */
+  function hiddenBox(): HTMLTextAreaElement {
+    return within(main()).getByRole('textbox', { name: '3. Guided notes', hidden: true });
+  }
+
+  /** Makes the page hidden or visible, with the event that the browser fires. */
+  function showPage(state: DocumentVisibilityState) {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+
+  /** Puts `value` in `field`, as typing or pasting it does. */
+  function fill(field: HTMLElement, value: string) {
+    fireEvent.change(field, { target: { value } });
+  }
+
+  /** Signs in again in the signed-out-in-place view with an email, a password and a code, as `me`. */
+  async function signInAgain(me: Me = worker) {
+    answers.set('POST /api/auth/login', json({ next: 'totp' }));
+    answers.set('POST /api/auth/login/totp', json(me));
+    serve(mePath, json(me));
+    fill(screen.getByRole('textbox', { name: 'Email address' }), 'casey.nguyen@example.org');
+    fill(screen.getByLabelText('Password'), 'correct horse battery staple');
+    await press(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    fill(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    await press(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+  }
+
+  /** Ends the session as the save of `text` meets a `401`, which `/api/auth/me` answers from then on too. */
+  async function endTheSessionOnASave(text: string) {
+    serve(mePath, problem(401));
+    type(text);
+    await wait(2_000);
+    await settle();
+    expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    return within(pageBar()).queryByRole('region', { name: takeoverSentence });
+  }
+
+  /** The Account panel, which has no role to find it by. */
+  function accountPanel(): HTMLElement {
+    const panel = document.getElementById('account-panel');
+    if (panel === null) {
+      throw new Error('There is no #account-panel.');
+    }
+
+    return panel;
+  }
+
+  /** Opens the Account panel and presses Sign out in it, as the person does, and gives the button. */
+  async function pressSignOut(): Promise<HTMLElement> {
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const signOut = within(accountPanel()).getByRole('button', { name: 'Sign out' });
+    await press(signOut);
+    return signOut;
+  }
+
+  /** How many logouts have been sent. */
+  function logouts(): number {
+    return sentRequests().filter((request) => request === logout).length;
+  }
+
+  describe('at 28:00 idle', () => {
+    it('sends a change made at 27:59 at 28:00, and opens no warning once it is answered', async () => {
+      await openForSession();
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast.');
+
+      await wait(999);
+      expect(saves()).toEqual([]);
+      await wait(1);
+
+      // At 28:00, before the 2 s after the change.
+      expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+      await settle();
+      expect(warning()).toBeNull();
+      expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+      // 28 minutes from the save's send time.
+      await at('55:59', from);
+      expect(warning()).toBeNull();
+      await at('56:00', from);
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(1);
+    });
+
+    it('lets the warning open as a save that fails at 28:00 settles, with "Not saved: …" under it', async () => {
+      // The first save holds the antiforgery token, whose request at 28:00 would be accepted, a new idle period.
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), noConnection));
+      await write('Jane made toast.');
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast. Then a walk.');
+
+      await at('28:00', from);
+      expect(saves()).toHaveLength(2);
+      expect(warning()).toBeNull();
+      await at('28:01', from);
+
+      // Its retry failed too.
+      expect(saves()).toHaveLength(3);
+      expect(warning()).not.toBeNull();
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+    });
+
+    it('sends nothing with nothing unsaved, and warns', async () => {
+      await openForSession();
+      await write('Jane made toast.');
+      const from = await refreshNow();
+
+      await at('27:59', from);
+      expect(warning()).toBeNull();
+      await at('28:00', from);
+
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(1);
+    });
+
+    it("stops a failing server's retries 28 minutes after the change, so the warning opens 28 minutes on", async () => {
+      // Every save after the first answered 500, which the clock counts as accepted, as the server renews the session
+      // with it (A57).
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), problem(500)));
+      await write('Jane made toast.');
+      const from = Date.now();
+      type('Jane made toast. Then a walk.');
+
+      await at('28:00', from);
+      const sent = saves().length;
+      expect(warning()).toBeNull();
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+
+      // The last retry went at 27:57, 10 s after the one before, and nothing more is sent, so the clock warns 28
+      // minutes after it, as on any idle page.
+      await at('55:56', from);
+      expect(warning()).toBeNull();
+      await at('55:58', from);
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(sent);
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+    });
+  });
+
+  describe('signed out in place', () => {
+    it('sends nothing while signed out, then the same person signing in again sends the change at once', async () => {
+      const { router } = await openForSession(
+        inTurn(saved('2026-09-30T23:42:00Z'), problem(401), saved('2026-09-30T23:44:00Z')),
+      );
+      const { location } = router.state;
+      fireEvent.click(goalBoxes()[0]);
+      await write('Jane made toast.');
+      fireEvent.click(flagBox());
+      typeReason('Seemed tired.');
+      await endTheSessionOnASave('Jane made toast. Then a walk.');
+      const text = 'Jane made toast. Then a walk. Home by three.';
+
+      // A change, a blur and the page hidden, while the view hides the form.
+      fireEvent.input(hiddenBox(), { target: { value: text } });
+      fireEvent.focusOut(hiddenBox());
+      showPage('hidden');
+      await wait(30_000);
+      showPage('visible');
+      await wait(30_000);
+      expect(saves()).toHaveLength(2);
+
+      await signInAgain();
+
+      const [, lost, resent] = saves();
+      expect(saves()).toHaveLength(3);
+      expect(resent.body).toMatchObject({
+        clientId: lost.body.clientId,
+        seq: 3,
+        narrative: text,
+        tickedGoalIds: [breakfast.id],
+        isFlagged: true,
+        flagReason: 'Seemed tired.',
+      });
+      expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+      expect(pageHeading()).toHaveFocus();
+      expect(guidedNotes()).toHaveValue(text);
+      expect(goalBoxes().map((box) => box.checked)).toEqual([true, false, false]);
+      expect(flagBox()).toBeChecked();
+      expect(reasonField()).toHaveValue('Seemed tired.');
+      expect(takeoverBanner()).toBeNull();
+      expect(router.state.location).toBe(location);
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+      await wait(30_000);
+      expect(saves()).toHaveLength(3);
+    });
+
+    it("holds a change waiting as the window's refresh meets a 401, until the same person signs in", async () => {
+      const { participant } = await openForSession(
+        inTurn(saved('2026-09-30T23:42:00Z'), saved('2026-09-30T23:44:00Z')),
+      );
+      await write('Jane made toast.');
+      serve(mePath, problem(401));
+      type('Jane made toast. Then a walk.');
+
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      await wait(60_000);
+
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      expect(saves()).toHaveLength(1);
+
+      await signInAgain();
+
+      const clientId = saves()[0].body.clientId;
+      expect(saves().map(({ path, body }) => [path, body.clientId, body.seq, body.narrative])).toEqual([
+        [paths(participant).draft, clientId, 1, 'Jane made toast.'],
+        [paths(participant).draft, clientId, 2, 'Jane made toast. Then a walk.'],
+      ]);
+    });
+
+    it('fetches a token as the same person signs in again, so that the page-hidden save is one request', async () => {
+      await openForSession();
+      await write('Jane made toast.');
+      serve(mePath, problem(401));
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      // The sign-in drops the token that the page held (api.ts), and the form fetches another as it shows again.
+      await signInAgain();
+      const tokenRequests = () => sentRequests().filter((request) => request === `GET ${antiforgeryPath}`).length;
+      const fetched = tokenRequests();
+      type('Jane made toast. Then a walk.');
+      showPage('hidden');
+      await settle();
+
+      expect(tokenRequests()).toBe(fetched);
+      const hiddenSave = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT').slice(1);
+      expect(hiddenSave.map(([, init]) => [init?.keepalive, new Headers(init?.headers).has('X-XSRF-TOKEN')])).toEqual([
+        [true, true],
+      ]);
+    });
+
+    it('stops retrying at 30:00 idle with no connection, sending nothing until the same person signs in', async () => {
+      const { participant } = await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), noConnection));
+      await write('Jane made toast.');
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast. Then a walk.');
+      await at('28:01', from);
+      expect(warning()).not.toBeNull();
+
+      await at('30:00', from);
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      const sent = saves().length;
+      const text = 'Jane made toast. Then a walk. Home by three.';
+      fireEvent.input(hiddenBox(), { target: { value: text } });
+      fireEvent.focusOut(hiddenBox());
+      await at('40:00', from);
+      expect(saves()).toHaveLength(sent);
+
+      serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+      await signInAgain();
+
+      expect(saves()).toHaveLength(sent + 1);
+      const { clientId } = saves()[0].body;
+      expect(saves().at(-1)?.body).toMatchObject({ clientId, seq: sent + 1, narrative: text });
+      expect(takeoverBanner()).toBeNull();
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    });
+
+    it("loads the page afresh for another person's sign-in, sending nothing of the earlier person's", async () => {
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), problem(401)));
+      await write('Jane made toast.');
+      await endTheSessionOnASave('Jane made toast. Then a walk.');
+
+      await signInAgain(manager);
+      await wait(60_000);
+
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+      expect(saves()).toHaveLength(2);
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+    });
+
+    it("never sends Submit's POST again after its 401, once the same person has signed in again", async () => {
+      await openToSubmit(json(template()), problem(401));
+      await write();
+      await press(submitButton());
+      serve(mePath, problem(401));
+      await confirmSubmit();
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(submits()).toHaveLength(1);
+      expect(confirmation()).toBeNull();
+      expect(saves()).toHaveLength(2);
+      expect(pageHeading()).toHaveFocus();
+    });
+
+    it('opens no confirmation from a check save that met a 401, its change sent by autosave alone', async () => {
+      const { participant } = await openToSubmit();
+      serveSave(
+        paths(participant).draft,
+        inTurn(saved('2026-09-30T23:42:00Z'), problem(401), saved('2026-09-30T23:44:00Z')),
+      );
+      await write();
+      serve(mePath, problem(401));
+      type('Jane made toast. Then a walk.');
+      await press(submitButton());
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(confirmation()).toBeNull();
+      expect(submits()).toEqual([]);
+      expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+        [1, 'Jane made toast.'],
+        [2, 'Jane made toast. Then a walk.'],
+        [3, 'Jane made toast. Then a walk.'],
+      ]);
+    });
+  });
+
+  describe('Sign out', () => {
+    it('sends a change waiting before POST /api/auth/logout, busy meanwhile, then loads / afresh', async () => {
+      const save = held(saved('2026-09-30T23:42:00Z'));
+      const { participant } = await openForSession(save.answer);
+      type('Jane made toast.');
+
+      const signOut = await pressSignOut();
+      await wait(400);
+
+      expect(saves()).toHaveLength(1);
+      expect(logouts()).toBe(0);
+      expect(signOut).toHaveAccessibleName('Signing out…');
+      expect(signOut).toHaveAttribute('aria-disabled', 'true');
+
+      save.release();
+      await settle();
+
+      expect(sentRequests().filter((request) => request.startsWith('PUT') || request === logout)).toEqual([
+        `PUT ${paths(participant).draft}`,
+        logout,
+      ]);
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      { failure: 'fails, and its retry too', save: noConnection, settles: 1_000 },
+      { failure: 'meets a 422', save: problem(422), settles: 0 },
+      { failure: 'meets a 403', save: problem(403), settles: 0 },
+    ])('sends no logout when the save of a change waiting $failure, saying so, Sign out ready', async ({
+      save,
+      settles,
+    }) => {
+      await openForSession(save);
+      type('Jane made toast.');
+
+      const signOut = await pressSignOut();
+      await wait(settles);
+      await settle();
+
+      expect(within(accountPanel()).getByRole('status').textContent).toBe(notSignedOut);
+      expect(signOut).not.toHaveAttribute('aria-disabled');
+      expect(signOut).toHaveAccessibleName('Sign out');
+      expect(signOut).toHaveFocus();
+      expect(logouts()).toBe(0);
+      expect(fullPageLoad).not.toHaveBeenCalled();
+      expect(unloadAsks()).toBe(true);
+      await wait(30_000);
+      expect(logouts()).toBe(0);
+    });
+
+    it('signs out after a dead end, with a change since, sending nothing more', async () => {
+      await openForSession(problem(409, { code: 'note.version_conflict' }));
+      await write('Jane made toast.');
+      expect(shownSaveStatus()).toBe('Not saved');
+      type('Jane made toast. Then a walk.');
+
+      await pressSignOut();
+      await settle();
+
+      expect(logouts()).toBe(1);
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+      expect(saves()).toHaveLength(1);
+    });
+
+    it('is refused while the takeover banner shows, saying so, with nothing sent', async () => {
+      await openForSession(inTurn(saved('2026-09-30T23:43:00Z'), takenOver));
+      await write('Jane made toast.');
+      await write('Jane made toast. Then a walk.');
+      expect(takeoverBanner()).not.toBeNull();
+
+      const signOut = await pressSignOut();
+      await settle();
+
+      expect(within(accountPanel()).getByRole('status').textContent).toBe(notSignedOut);
+      expect(signOut).not.toHaveAttribute('aria-disabled');
+      expect(logouts()).toBe(0);
+      expect(fullPageLoad).not.toHaveBeenCalled();
+      expect(saves()).toHaveLength(2);
+      expect(takeoverBanner()).not.toBeNull();
+    });
+  });
+});
 
 /** The read view's section under the `<h2>` named `name`. */
 function section(name: string): HTMLElement {
