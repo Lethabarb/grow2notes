@@ -57,12 +57,23 @@ export function invalidateToday(queryClient: QueryClient): Promise<void> {
 }
 
 /**
- * Drops every Today list after Submit (note-form.md *After a successful submit*), so that Today, which shows next,
- * fetches its list afresh and shows the submitted row only as the server gives it, never a row built here or kept from
- * before, which could still say "Draft" (today.md *Conflicts resolved* 2).
+ * Drops every Today list after Submit or Discard (note-form.md *After a successful submit* and *Discard draft*), so
+ * that Today, which shows next, fetches its list afresh and shows the row only as the server gives it, never a row
+ * built here or kept from before, which could still say "Draft" (today.md *Conflicts resolved* 2).
  */
 export function removeToday(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: todayKey });
+}
+
+// The caller's own unfinished drafts, which Today lists under Your unfinished drafts (today.md component 5).
+const myDraftsKey = ['me', 'drafts'] as const;
+
+/**
+ * Drops the caller's unfinished drafts after a Discard (note-form.md *Discard draft*), beside Today's lists, so that
+ * Today fetches them afresh and never lists the draft discarded.
+ */
+export function removeMyDrafts(queryClient: QueryClient): void {
+  queryClient.removeQueries({ queryKey: myDraftsKey });
 }
 
 /**

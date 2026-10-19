@@ -4208,7 +4208,9 @@ manager can read it.
     whatever draft is live there, such as a worker's new one, under a dialog with no "started it at" line; so, too, a
     confirming press whose awaited save meets a dead end sends no `POST`. Focus that was on More actions, in its panel
     or in the dialog goes to the `<h1>`, as it does when Load the other version meets a dead end (note-form.md
-    *Changed on another device or tab*, as built by T10).
+    *Changed on another device or tab*, as built by T10). More actions follows Submit note in the Tab order once the
+    first save is answered, so step 7 adds it to note-form.spec.ts's Tab and Shift+Tab stops after Submit note at both
+    widths, each such check waiting for the indicator's "Saved …" first, so as not to race the save's answer.
   - The session warning closes More actions' panel as it opens, whether or not the Discard dialog is open
     (session-timeout.md *The warning* step 1; app-shell.md's *28:00 idle on a visible page* row), as the header closes
     the Account panel: during the render, a layout effect first moving focus that is in the panel to More actions, so
@@ -4279,7 +4281,7 @@ manager can read it.
       draft for a participant archived since listed, as is the caller's draft for today, which the client drops (step
       5); a pending edit seeded on a submitted note, as T14 will make them, listed as `pendingEdit`; and a draft
       discarded through step 1's endpoint listed no more.
-- [ ] Discard on the note form, through the one Discard dialog (S02.02.08's links to note-form.md item 33, components 13
+- [x] Discard on the note form, through the one Discard dialog (S02.02.08's links to note-form.md item 33, components 13
       and 15, *States* › *Discard dialog*, *Interactions* › *Discard draft* and *Session*, and *Where focus goes*, and
       to confirm-dialog.md's dialog 2; primary-actions.md's More actions bullet; session-timeout.md *The warning* step 1
       and app-shell.md's *28:00 idle on a visible page* row; T10's hand-offs of `stop()`, `resume()` and

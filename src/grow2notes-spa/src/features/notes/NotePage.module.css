@@ -36,6 +36,15 @@
   margin-block-start: var(--section-gap);
 }
 
+/* More actions, 1.5rem under Submit note (component 13), and its panel under it, as the dialog stacks its buttons. */
+.moreActions {
+  margin-block-start: var(--space-5);
+}
+
+.moreActionsPanel {
+  margin-block-start: var(--space-3);
+}
+
 /* The lists-changed notice's region above Goals (component 7): no space while empty, a section's gap once filled. */
 .listsChanged:not(:empty) {
   margin-block-start: var(--section-gap);

@@ -572,8 +572,32 @@ describe('The page hidden and shown again', () => {
 
     hidden.release();
     await wait(0);
-    expect(stopped()).toBeUndefined();
+    expect(stopped()).toBe(true);
     expect(sentSaves).toHaveLength(1);
+  });
+
+  // So that Discard sends nothing once the note at its address may no longer be this draft (T12's Notes).
+  it('gives false from stop() when the save out meets a dead end, and true for one that fails', async () => {
+    const conflict = held(problem(409, 'note.version_conflict'));
+    answerSaves(conflict.answer);
+    const ended = renderAutosave();
+    ended.type('Jane');
+    await wait(2_000);
+    const stoppedAtTheDeadEnd = outcome(ended.autosave().stop());
+
+    conflict.release();
+    await wait(0);
+    expect(stoppedAtTheDeadEnd()).toBe(false);
+    expect(ended.said.at(-1)).toBe('notSaved');
+
+    answerSaves(noConnection);
+    const failing = renderAutosave();
+    failing.type('Jane');
+    await wait(2_000);
+    const stoppedAfterAFailure = outcome(failing.autosave().stop());
+    await wait(30_000);
+    expect(stoppedAfterAFailure()).toBe(true);
+    expect(sentSaves).toHaveLength(2);
   });
 
   it('sends nothing after end(), hidden or shown', async () => {

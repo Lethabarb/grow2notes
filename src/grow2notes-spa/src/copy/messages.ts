@@ -48,6 +48,21 @@ export const msg = {
   /** Today's success banner after Submit (design.md §4.3), with the participant's full name, one phrase. */
   noteSubmitted: (name: string) => `Note for ${name} submitted`,
   /**
+   * The Discard dialog (note-form.md component 15, confirm-dialog.md's dialog 2): its title and its confirming button,
+   * each with the participant's full name; its body's line for a draft dated before today, with the note date in
+   * `dateLong`, as the earlier-day notice on the form words it; and its line for someone else's draft, with the
+   * author's display name as stored and the time the draft was started, as `stamp()` gives it.
+   */
+  discardTitle: (name: string) => `Discard the draft note for ${name}?`,
+  discardDraftFor: (name: string) => `Discard draft for ${name}`,
+  draftIsFor: (noteDate: string) => `This draft is for ${noteDate}.`,
+  startedItAt: (authorDisplayName: string, startedAt: string) => `${authorDisplayName} started it at ${startedAt}.`,
+  /**
+   * A Discard that failed (note-form.md *States* › *Discard dialog*): in the dialog's alert line, or above Submit note
+   * when a browser closed the dialog while its request was out.
+   */
+  notDiscarded: (cause: Cause): string => msg.notDone('discarded', cause),
+  /**
    * The read view's byline before the submitted time (participant-notes.md *Read view*), with the author's display
    * name as stored, as the daily report words it (design.md §11.3).
    */

@@ -110,8 +110,8 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
 const nbsp = ' ';
 
 /**
- * The paths of `participant`'s header, of their note for `noteDate`, `{base}`, and of its form and versions, and of
- * its page.
+ * The paths of `participant`'s header, of their note for `noteDate`, `{base}`, and of its form, versions and discard,
+ * and of its page.
  */
 function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
   return {
@@ -119,6 +119,7 @@ function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
     note: `/api/participants/${participant.id}/notes/${noteDate}`,
     draft: `/api/participants/${participant.id}/notes/${noteDate}/draft`,
     versions: `/api/participants/${participant.id}/notes/${noteDate}/versions`,
+    discard: `/api/participants/${participant.id}/notes/${noteDate}/discard`,
     page: `/participants/${participant.id}/notes/${noteDate}`,
   };
 }
@@ -3319,6 +3320,520 @@ function meRequestsFrom(router: Router, answer: Answer = json(worker)): string[]
   return sentFrom;
 }
 
+// More actions and the Discard dialog on the form (note-form.md components 13 and 15, item 33, *States* › *Discard
+// dialog*, *Interactions* › *Discard draft* and *Session*, and *Where focus goes*; confirm-dialog.md's dialog 2).
+
+/** `POST {base}/discard`'s `204`. */
+const discarded: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
+/** Every Discard sent, as its method and path. */
+function discards(): string[] {
+  return sentRequests().filter((request) => request.startsWith('POST ') && request.endsWith('/discard'));
+}
+
+/** More actions, under Submit note, if it shows. */
+function moreActions(): HTMLElement | null {
+  return within(main()).queryByRole('button', { name: 'More actions' });
+}
+
+/** Discard draft, in More actions' panel, found while the panel is hidden too. */
+function discardDraft(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Discard draft', hidden: true });
+}
+
+/**
+ * Opens the worker's own draft of a participant of their own, Jane Citizen by name, dated `noteDate`, at its address,
+ * whose saves are answered at 9:44 am and whose Discard gets `discard`, with Today's list to land on, and gives them,
+ * the router and the query client.
+ */
+async function openToDiscard(discard: Answer = discarded, noteDate = '2026-10-01') {
+  const participant = freshParticipant();
+  serveNote(participant, json(savedDraft()), noteDate);
+  serveSave(paths(participant, noteDate).draft, saved('2026-09-30T23:44:00Z'));
+  answers.set(`POST ${paths(participant, noteDate).discard}`, discard);
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+  const opened = renderApp(paths(participant, noteDate).page);
+  await settle();
+  return { participant, ...opened };
+}
+
+/** Opens More actions' panel and presses Discard draft in it, which opens the Discard dialog. */
+async function openDiscardDialog() {
+  await press(moreActions()!);
+  await press(discardDraft());
+}
+
+/** Presses the Discard dialog's confirming button, and lets its request be answered. */
+async function confirmDiscard() {
+  await press(dialogButton('Discard draft for Jane Citizen'));
+  await settle();
+}
+
+describe('More actions', () => {
+  it('is not on a new note, and shows once its first save is answered', async () => {
+    const participant = freshParticipant();
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    serveNote(participant);
+    serveSave(paths(participant).draft, save.answer);
+    renderApp(paths(participant).page);
+    await settle();
+    expect(moreActions()).toBeNull();
+
+    type('Jane made toast.');
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe('Saving…');
+    expect(moreActions()).toBeNull();
+
+    save.release();
+    await settle();
+    expect(moreActions()).toBeInTheDocument();
+  });
+
+  it('shows on a reopened draft as a disclosure after Submit note, outside the form, its panel hidden', async () => {
+    await openToDiscard();
+
+    const button = moreActions()!;
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveClass(buttonStyles.secondary);
+    expect(button.closest('form')).toBeNull();
+    expect(follows(button, submitButton())).toBe(true);
+    const panel = document.getElementById(button.getAttribute('aria-controls')!);
+    expect(panel).toHaveAttribute('hidden');
+    expect(panel?.contains(discardDraft())).toBe(true);
+    expect(follows(panel!, button)).toBe(true);
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('opens and closes its panel on each press, focus kept on it, Discard draft secondary', async () => {
+    await openToDiscard();
+
+    await press(moreActions()!);
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'true');
+    expect(moreActions()).toHaveFocus();
+    expect(within(main()).getByRole('button', { name: 'Discard draft' })).toHaveClass(buttonStyles.secondary);
+    expect(confirmation()).toBeNull();
+
+    await press(moreActions()!);
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+  });
+
+  it.each(['More actions', 'Discard draft'])('closes its panel on Escape on %s, focus on More actions', async (on) => {
+    await openToDiscard();
+    await press(moreActions()!);
+    const focused = within(main()).getByRole('button', { name: on });
+    focused.focus();
+
+    fireEvent.keyDown(focused, { key: 'Escape' });
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    expect(moreActions()).toHaveFocus();
+  });
+
+  it('shows while the takeover banner waits, as the draft is still theirs', async () => {
+    const { participant } = await openToDiscard();
+    serveSave(paths(participant).draft, inTurn(saved('2026-09-30T23:44:00Z'), takenOver));
+    await write('Jane made toast.');
+
+    await write('Jane made toast. Then a walk.');
+
+    const sentence = 'This note was changed on another device or tab.';
+    expect(within(pageBar()).getByRole('region', { name: sentence })).toBeInTheDocument();
+    expect(moreActions()).toBeInTheDocument();
+  });
+
+  describe.each([
+    { code: 'note.in_progress_by_other', refusal: startedBy('2026-10-01T00:05:00Z') },
+    { code: 'note.version_conflict', refusal: problem(409, { code: 'note.version_conflict' }) },
+  ])('once a save of the draft meets $code', ({ refusal }) => {
+    it('goes with its open panel, focus on Discard draft going to the <h1>', async () => {
+      const { participant } = await openToDiscard();
+      serveSave(paths(participant).draft, refusal);
+      await press(moreActions()!);
+      discardDraft().focus();
+
+      type('Jane made toast.');
+      await wait(2_000);
+      await settle();
+
+      expect(shownSaveStatus()).toBe('Not saved');
+      expect(moreActions()).toBeNull();
+      expect(within(main()).queryByRole('button', { name: 'Discard draft', hidden: true })).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+    });
+
+    it('closes the Discard dialog with nothing sent, focus on the <h1>', async () => {
+      const { participant } = await openToDiscard();
+      serveSave(paths(participant).draft, refusal);
+      type('Jane made toast.');
+      await openDiscardDialog();
+      expect(confirmation()).not.toBeNull();
+
+      await wait(2_000);
+      await settle();
+
+      expect(confirmation()).toBeNull();
+      expect(moreActions()).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+      expect(discards()).toEqual([]);
+    });
+
+    it('sends no Discard when the save that a confirming press waits for meets it', async () => {
+      const { participant } = await openToDiscard();
+      const save = held(refusal);
+      serveSave(paths(participant).draft, save.answer);
+      await write('Jane made toast.');
+      await openDiscardDialog();
+      await press(dialogButton('Discard draft for Jane Citizen'));
+
+      save.release();
+      await settle();
+      await wait(5_000);
+
+      expect(discards()).toEqual([]);
+      expect(confirmation()).toBeNull();
+      expect(moreActions()).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+    });
+  });
+});
+
+describe('The Discard dialog', () => {
+  it('asks "Discard the draft note for" the name on its title, saying nobody can open it again', async () => {
+    await openToDiscard();
+
+    await openDiscardDialog();
+
+    const dialog = openConfirmation();
+    expect(dialog).toHaveAccessibleName('Discard the draft note for Jane Citizen?');
+    expect(within(dialog).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(dialog).toHaveAccessibleDescription('Nobody will be able to open this draft again.');
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    expect(dialogButton('Discard draft for Jane Citizen')).toHaveClass(buttonStyles.warning);
+    expect(dialogButton('Go back')).toHaveClass(buttonStyles.secondary);
+    expect(within(dialog).getByRole('alert')).toBeEmptyDOMElement();
+    expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+    expect(discards()).toEqual([]);
+  });
+
+  it("says the date of a draft from an earlier day before the line that always ends it", async () => {
+    await openToDiscard(discarded, '2026-09-30');
+
+    await openDiscardDialog();
+
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `This draft is for Wednesday 30${nbsp}September 2026. Nobody will be able to open this draft again.`,
+    );
+  });
+
+  it('shows "Discarding…" once its request has taken 1 s, both buttons busy, their words kept', async () => {
+    await openToDiscard(noAnswer);
+    await openDiscardDialog();
+    const status = within(openConfirmation()).getByRole('status');
+
+    await press(dialogButton('Discard draft for Jane Citizen'));
+
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    for (const button of within(openConfirmation()).getAllByRole('button')) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+    }
+    await wait(998);
+    expect(status).toBeEmptyDOMElement();
+    await wait(1);
+    expect(status).toHaveTextContent(/^Discarding…$/);
+  });
+
+  it('waits for the save out, then sends the Discard, and no save after the confirming press', async () => {
+    const { participant, router } = await openToDiscard();
+    const save = held(saved('2026-09-30T23:44:00Z'));
+    serveSave(paths(participant).draft, save.answer);
+    await write('Jane made toast.');
+    type('Jane made toast. Then a walk.');
+    await openDiscardDialog();
+
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    expect(discards()).toEqual([]);
+
+    save.release();
+    await settle();
+    await wait(5_000);
+
+    const sent = sentRequests();
+    expect(discards()).toEqual([`POST ${paths(participant).discard}`]);
+    expect(sent.indexOf(`POST ${paths(participant).discard}`)).toBeGreaterThan(
+      sent.indexOf(`PUT ${paths(participant).draft}`),
+    );
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    // The leave guard lets the move go, though a change was made that is not saved, as the draft has gone.
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it("puts Today in the form's place, its <h1> focused, with no banner, and its lists fetched afresh", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft()));
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    answers.set(`POST ${paths(participant).discard}`, discarded);
+    const row = onToday(participant);
+    const drafted: TodayNote = {
+      authorDisplayName: 'Casey Nguyen',
+      startedAtUtc: '2026-09-30T23:05:00Z',
+      isFlagged: false,
+      status: 'Draft',
+      isMine: true,
+      savedAtUtc: '2026-09-30T23:42:00Z',
+    };
+    serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
+    const { router, client } = renderApp('/');
+    await settle();
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    // Kept from earlier visits: the caller's unfinished drafts, and the participant's Past notes.
+    client.setQueryData(['me', 'drafts'], []);
+    client.setQueryData(['pastNotes', participant.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
+    await openDiscardDialog();
+    const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    serve(todayPath, fresh.answer);
+
+    await confirmDiscard();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(main().querySelector('[data-route-focus]')).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Today');
+    // No row kept from before the Discard: the rows come with the list that the server gives now.
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    expect(client.getQueryState(['pastNotes', participant.id])?.isInvalidated).toBe(true);
+    fresh.release();
+    await settle();
+    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(main()).not.toHaveTextContent('Draft');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it.each([
+    { cause: 'no connection', answer: noConnection },
+    { cause: 'something went wrong', answer: problem(503) },
+  ])('stays open for "Not discarded: $cause…", focus on its confirming button, ready to try again', async ({
+    cause,
+    answer,
+  }) => {
+    const { participant, router } = await openToDiscard(inTurn(answer, discarded));
+    await openDiscardDialog();
+    const confirm = dialogButton('Discard draft for Jane Citizen');
+
+    await press(confirm);
+    await settle();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(`Not discarded: ${cause}. Try again.`);
+    expect(confirm).toHaveFocus();
+    expect(confirm).not.toHaveAttribute('aria-disabled');
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+
+    await press(confirm);
+    await settle();
+
+    expect(discards()).toHaveLength(2);
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('takes its confirming button away for a draft no longer a draft, Go back then going to Today', async () => {
+    const { router } = await openToDiscard(problem(409, { code: 'note.not_a_draft' }));
+    await openDiscardDialog();
+
+    await confirmDiscard();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(
+      'This draft has already been submitted or discarded.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(discards()).toHaveLength(1);
+  });
+
+  it.each([
+    { how: 'Go back', close: () => press(dialogButton('Go back')) },
+    {
+      how: 'a plain close(), as Escape and Back give',
+      close: async () => {
+        openConfirmation().closest('dialog')!.close();
+        await settle();
+      },
+    },
+  ])('closes on $how with nothing sent, its panel closed, focus on More actions', async ({ close }) => {
+    await openToDiscard();
+    await openDiscardDialog();
+
+    await close();
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(moreActions()).toHaveFocus();
+    expect(discards()).toEqual([]);
+  });
+
+  it('lets autosave go on after Go back, sending at once a change that a failed Discard held', async () => {
+    const { participant } = await openToDiscard(noConnection);
+    type('Jane made toast. Then a walk.');
+    await openDiscardDialog();
+    await confirmDiscard();
+    await wait(5_000);
+    expect(saves()).toEqual([]);
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(saves().map(({ path, body }) => [path, body.narrative])).toEqual([
+      [paths(participant).draft, 'Jane made toast. Then a walk.'],
+    ]);
+  });
+
+  it('sends no save while its request is out, though a browser closed it, and its failure shows', async () => {
+    const post = held(noConnection);
+    await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    type('Jane made toast. Then a walk.');
+    await wait(5_000);
+    expect(saves()).toEqual([]);
+
+    post.release();
+    await settle();
+
+    const alert = submitButton().closest('form')!.querySelector('div[role="alert"]');
+    expect(alert?.textContent).toBe('Not discarded: no connection. Try again.');
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast. Then a walk.']);
+  });
+
+  it("keeps Submit's failure above Submit note as it closes on Go back, discarding nothing", async () => {
+    const post = held(noConnection);
+    await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    post.release();
+    await settle();
+    const alert = submitButton().closest('form')!.querySelector('div[role="alert"]');
+    const failure = 'Not submitted: no connection. Your draft is saved. Try again.';
+    expect(alert?.textContent).toBe(failure);
+
+    await openDiscardDialog();
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(alert?.textContent).toBe(failure);
+    expect(discards()).toEqual([]);
+  });
+
+  it('lands on Today as its request succeeds, though a browser closed it meanwhile', async () => {
+    const post = held(discarded);
+    const { router } = await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+
+    post.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('closes as Go back as the 28-minute warning opens, nothing sent, focus on More actions after Stay', async () => {
+    const { opened } = focusLikeABrowser();
+    await openToDiscard();
+    await openDiscardDialog();
+    const dialog = openConfirmation();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(opened.mock.contexts.at(-1)).toBe(warning);
+    expect(dialog).not.toHaveAttribute('open');
+    expect(confirmation()).toBeNull();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(warning).not.toHaveAttribute('open');
+    expect(moreActions()).toHaveFocus();
+    expect(discards()).toEqual([]);
+    expect(saves()).toEqual([]);
+  });
+
+  it('leaves focus where it was moved after a browser closed it, as its failure lets the warning open', async () => {
+    focusLikeABrowser();
+    const post = held(noConnection);
+    await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    guidedNotes().focus();
+    // The request out holds the session clock's phase, so the warning waits for it to settle.
+    await wait(28 * 60_000);
+    expect(screen.queryByRole('dialog', { name: 'You’ll be signed out in 2 minutes' })).toBeNull();
+
+    post.release();
+    await settle();
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(guidedNotes()).toHaveFocus();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(discards()).toHaveLength(1);
+  });
+
+  it('closes its panel as the warning opens, focus on Discard draft going to More actions after Stay', async () => {
+    focusLikeABrowser();
+    await openToDiscard();
+    await press(moreActions()!);
+    discardDraft().focus();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(moreActions()).toHaveFocus();
+    expect(confirmation()).toBeNull();
+    expect(discards()).toEqual([]);
+    expect(saves()).toEqual([]);
+  });
+});
+
 // Leaving the form within the app, and the browser's own warning (note-form.md *Leaving the form* and items 34 and
 // 35, autosave-status.md *Behaviour* 7).
 describe('Leaving the form', () => {
@@ -3990,6 +4505,31 @@ describe('The session and Sign out', () => {
       expect(confirmation()).toBeNull();
       expect(saves()).toHaveLength(2);
       expect(pageHeading()).toHaveFocus();
+    });
+
+    it('closes the Discard dialog for its 401 before sign-in, and never sends it again once signed in', async () => {
+      await openToDiscard(problem(401));
+      type('Jane made toast. Then a walk.');
+      await openDiscardDialog();
+      serve(mePath, problem(401));
+
+      await confirmDiscard();
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      expect(pageHeading()).toHaveFocus();
+      expect(confirmation()).toBeNull();
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(discards()).toHaveLength(1);
+      expect(confirmation()).toBeNull();
+      expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+      expect(pageHeading()).toHaveFocus();
+      expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+      // Autosave alone goes on, sending the change that the Discard's pause held.
+      expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast. Then a walk.']);
     });
 
     it('opens no confirmation from a check save that met a 401, its change sent by autosave alone', async () => {

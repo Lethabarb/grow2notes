@@ -9,6 +9,7 @@ export type ApiErrorCode =
   | 'draft.taken_over'
   | 'note.in_progress_by_other'
   | 'note.lists_changed'
+  | 'note.not_a_draft'
   | 'note.participant_archived'
   | 'note.past_date_manager_only'
   | 'note.version_conflict'
@@ -51,6 +52,11 @@ export const apiErrorCopy = {
    * first save found them changed: design.md §4.3's words, word for word (microcopy.md §1).
    */
   'note.lists_changed': 'The goal or common-item list was just changed. Please check your ticks.',
+  /**
+   * A Discard refused as the draft was submitted or discarded meanwhile (note-form.md *States* › *Discard dialog*), in
+   * the dialog's alert line, its confirming button gone.
+   */
+  'note.not_a_draft': 'This draft has already been submitted or discarded.',
   /** The archived dead end in the note form's top bar (note-form.md *Conflicts and refusals*), with the full name. */
   'note.participant_archived': (participantName: string) =>
     `${participantName} is archived, so this note cannot be started. Ask a manager.`,

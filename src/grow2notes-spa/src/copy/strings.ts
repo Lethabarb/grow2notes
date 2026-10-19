@@ -402,7 +402,9 @@ export const strings = {
    * Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead, for a note
    * dated `me.today` and for any other, before the name on its own line; its flag line, from the values that Submit
    * sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not submitted: no
-   * connection. Your draft is saved. Try again." (microcopy.md §9).
+   * connection. Your draft is saved. Try again." (microcopy.md §9). Then More actions, the disclosure under Submit
+   * note, and Discard draft in its panel (component 13); and the Discard dialog's line that always ends its body, and
+   * its status line once the request has taken 1 s (component 15, confirm-dialog.md's dialog 2).
    */
   note: {
     loading: 'Loading note…',
@@ -427,6 +429,10 @@ export const strings = {
     flaggedNo: 'Flagged for manager: No',
     submitting: 'Submitting…',
     draftIsSaved: 'Your draft is saved.',
+    moreActions: 'More actions',
+    discardDraft: 'Discard draft',
+    nobodyCanOpenThisDraft: 'Nobody will be able to open this draft again.',
+    discarding: 'Discarding…',
   },
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the

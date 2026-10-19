@@ -1,21 +1,24 @@
 /* Inside the box of dialog.module.css (confirm-dialog.md *Anatomy*). The focus ring is base.css's. */
 
-/* An <h2>, so at --font-size-h2, by base.css. */
+/*
+ * An <h2>, so at --font-size-h2, by base.css, wrapping anywhere, so that a name in it, as in the Discard dialog's
+ * title, stays inside the dialog at 320 px however long and unbroken, never cut short.
+ */
 .title {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 /*
  * The Submit confirmation's name line (confirm-dialog.md *Anatomy*), the largest words in the dialog, as the check is
- * of the name: on its own line, at the <h1>'s size, and wrapping anywhere, so that an unbroken name of 100 characters
- * stays inside the dialog at 320 px, never upper-cased or cut short.
+ * of the name: on its own line, at the <h1>'s size, and wrapping anywhere as the title does, so that an unbroken name
+ * of 100 characters stays inside the dialog at 320 px, never upper-cased or cut short.
  */
 .titleName {
   display: block;
   margin-block-start: var(--space-1);
   font-size: var(--font-size-h1);
   font-weight: 700;
-  overflow-wrap: anywhere;
 }
 
 /* A dialog that opens on its title draws no ring round it, as it is not a control (confirm-dialog.md *States*). */
