@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardE
 import { Link, matchPath, useLocation } from 'react-router';
 import { api, classify } from '../api/api.ts';
 import type { Me } from '../api/me.ts';
-import { getPhase, isWarning, subscribe } from '../api/session.ts';
+import { flushSaves, getPhase, isWarning, subscribe } from '../api/session.ts';
 import { Button } from '../components/Button.tsx';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
@@ -179,8 +179,7 @@ function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; op
   // Emptied as each sign-out starts, so that a failure that repeats is written into an empty line and announced again.
   const [failure, setFailure] = useState('');
 
-  // *Press Sign out* and *Sign out fails* (app-shell.md), but for the autosave flush, which S02.02.05 adds with the
-  // note form.
+  // *Press Sign out* and *Sign out fails* (app-shell.md).
   async function signOut() {
     // First of all, so that a page's Stay sends nothing and leaves the panel as it was.
     if (!(await confirmLeave())) {
@@ -189,6 +188,14 @@ function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; op
 
     setFailure('');
     setSigningOut(true);
+    // A note form's change waiting for its save goes first, as the reload would lose it; one that cannot be saved now
+    // keeps the person signed in, with the page as it is.
+    if (!(await flushSaves())) {
+      setFailure(strings.notSignedOutNoteNotSaved);
+      setSigningOut(false);
+      return;
+    }
+
     // The person has chosen to leave, so the reload that follows the logout asks them nothing more.
     disarmUnloadGuard();
     try {

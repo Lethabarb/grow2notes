@@ -10,6 +10,7 @@ import buttonStyles from '../../components/Button.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
+import { fullPageLoad } from '../../routes/fullPageLoad.ts';
 import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
@@ -17,6 +18,10 @@ import type { VersionSaved } from './NoteForm.tsx';
 import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
 import notePage from './NotePage.module.css';
 import readView from './ReadView.module.css';
+
+// jsdom does not navigate, so the full page load of Sign out, and of another person's sign-in, is a stand-in that
+// counts its calls.
+vi.mock('../../routes/fullPageLoad.ts');
 
 // A memory router of the app's routes.
 type Router = ReturnType<typeof createMemoryRouter>;
@@ -3622,6 +3627,427 @@ describe('Leaving the form', () => {
     expect(banner()).toHaveFocus();
     expect(said()).toEqual([]);
     expect(saves()).toHaveLength(2);
+  });
+});
+
+// The note form's side of the session (note-form.md *Session* and item 36; app-shell.md's Session and Sign out
+// criteria; session-timeout.md *The session clock* step 3 and *The signed-out state*; S02.02.05).
+describe('The session and Sign out', () => {
+  const signedOutHeading = 'You’ve been signed out';
+  const takeoverSentence = 'This note was changed on another device or tab.';
+  const notSignedOut = 'Not signed out: your note is not saved yet. Keep this page open; retrying.';
+  const logout = 'POST /api/auth/logout';
+
+  beforeEach(() => {
+    // A fake system time, as session.test.ts has: 9 am on Thursday 1 October 2026 in Melbourne.
+    vi.setSystemTime(Date.parse('2026-10-01T09:00:00+10:00'));
+    answers.set(logout, () => Promise.resolve(new Response(null, { status: 204 })));
+  });
+
+  afterEach(() => {
+    vi.mocked(fullPageLoad).mockReset();
+    rearmUnloadGuard();
+  });
+
+  /** Opens a new note for a participant of their own at its address, whose saves `save` answers. */
+  async function openForSession(save: Answer = saved('2026-09-30T23:42:00Z')) {
+    const participant = freshParticipant();
+    serveNote(participant);
+    serveSave(paths(participant).draft, save);
+    const { router } = renderApp(paths(participant).page);
+    await settle();
+    return { participant, router };
+  }
+
+  /**
+   * The window regains focus, whose refresh of `/api/auth/me` the server accepts: the newest request, from whose send
+   * time the session clock counts. Gives that time.
+   */
+  async function refreshNow(): Promise<number> {
+    const from = Date.now();
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+    await settle();
+    return from;
+  }
+
+  /** Moves the fake clock on to `clock`, in minutes and seconds, as '27:59', after `from`. */
+  async function at(clock: string, from: number) {
+    const [minutes, seconds] = clock.split(':').map(Number);
+    await wait(from + (minutes * 60 + seconds) * 1000 - Date.now());
+  }
+
+  /** The warning before the idle sign-out, if it is open. */
+  function warning(): HTMLElement | null {
+    return screen.queryByRole('dialog', { name: /^You’ll be signed out in/ });
+  }
+
+  /** The Guided notes box, found while the signed-out-in-place view hides it too. */
+  function hiddenBox(): HTMLTextAreaElement {
+    return within(main()).getByRole('textbox', { name: '3. Guided notes', hidden: true });
+  }
+
+  /** Makes the page hidden or visible, with the event that the browser fires. */
+  function showPage(state: DocumentVisibilityState) {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue(state);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+  }
+
+  /** Puts `value` in `field`, as typing or pasting it does. */
+  function fill(field: HTMLElement, value: string) {
+    fireEvent.change(field, { target: { value } });
+  }
+
+  /** Signs in again in the signed-out-in-place view with an email, a password and a code, as `me`. */
+  async function signInAgain(me: Me = worker) {
+    answers.set('POST /api/auth/login', json({ next: 'totp' }));
+    answers.set('POST /api/auth/login/totp', json(me));
+    serve(mePath, json(me));
+    fill(screen.getByRole('textbox', { name: 'Email address' }), 'casey.nguyen@example.org');
+    fill(screen.getByLabelText('Password'), 'correct horse battery staple');
+    await press(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+    fill(screen.getByRole('textbox', { name: 'Enter the 6-digit code from your authenticator app' }), '123456');
+    await press(screen.getByRole('button', { name: 'Sign in' }));
+    await settle();
+  }
+
+  /** Ends the session as the save of `text` meets a `401`, which `/api/auth/me` answers from then on too. */
+  async function endTheSessionOnASave(text: string) {
+    serve(mePath, problem(401));
+    type(text);
+    await wait(2_000);
+    await settle();
+    expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+  }
+
+  /** The takeover banner in the top bar, if it shows. */
+  function takeoverBanner(): HTMLElement | null {
+    return within(pageBar()).queryByRole('region', { name: takeoverSentence });
+  }
+
+  /** The Account panel, which has no role to find it by. */
+  function accountPanel(): HTMLElement {
+    const panel = document.getElementById('account-panel');
+    if (panel === null) {
+      throw new Error('There is no #account-panel.');
+    }
+
+    return panel;
+  }
+
+  /** Opens the Account panel and presses Sign out in it, as the person does, and gives the button. */
+  async function pressSignOut(): Promise<HTMLElement> {
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    const signOut = within(accountPanel()).getByRole('button', { name: 'Sign out' });
+    await press(signOut);
+    return signOut;
+  }
+
+  /** How many logouts have been sent. */
+  function logouts(): number {
+    return sentRequests().filter((request) => request === logout).length;
+  }
+
+  describe('at 28:00 idle', () => {
+    it('sends a change made at 27:59 at 28:00, and opens no warning once it is answered', async () => {
+      await openForSession();
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast.');
+
+      await wait(999);
+      expect(saves()).toEqual([]);
+      await wait(1);
+
+      // At 28:00, before the 2 s after the change.
+      expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+      await settle();
+      expect(warning()).toBeNull();
+      expect(shownSaveStatus()).toBe(`Saved 9:42${nbsp}am`);
+      // 28 minutes from the save's send time.
+      await at('55:59', from);
+      expect(warning()).toBeNull();
+      await at('56:00', from);
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(1);
+    });
+
+    it('lets the warning open as a save that fails at 28:00 settles, with "Not saved: …" under it', async () => {
+      // The first save holds the antiforgery token, whose request at 28:00 would be accepted, a new idle period.
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), noConnection));
+      await write('Jane made toast.');
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast. Then a walk.');
+
+      await at('28:00', from);
+      expect(saves()).toHaveLength(2);
+      expect(warning()).toBeNull();
+      await at('28:01', from);
+
+      // Its retry failed too.
+      expect(saves()).toHaveLength(3);
+      expect(warning()).not.toBeNull();
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+    });
+
+    it('sends nothing with nothing unsaved, and warns', async () => {
+      await openForSession();
+      await write('Jane made toast.');
+      const from = await refreshNow();
+
+      await at('27:59', from);
+      expect(warning()).toBeNull();
+      await at('28:00', from);
+
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(1);
+    });
+  });
+
+  describe('signed out in place', () => {
+    it('sends nothing while signed out, then the same person signing in again sends the change at once', async () => {
+      const { router } = await openForSession(
+        inTurn(saved('2026-09-30T23:42:00Z'), problem(401), saved('2026-09-30T23:44:00Z')),
+      );
+      const { location } = router.state;
+      fireEvent.click(goalBoxes()[0]);
+      await write('Jane made toast.');
+      fireEvent.click(flagBox());
+      typeReason('Seemed tired.');
+      await endTheSessionOnASave('Jane made toast. Then a walk.');
+      const text = 'Jane made toast. Then a walk. Home by three.';
+
+      // A change, a blur and the page hidden, while the view hides the form.
+      fireEvent.input(hiddenBox(), { target: { value: text } });
+      fireEvent.focusOut(hiddenBox());
+      showPage('hidden');
+      await wait(30_000);
+      showPage('visible');
+      await wait(30_000);
+      expect(saves()).toHaveLength(2);
+
+      await signInAgain();
+
+      const [, lost, resent] = saves();
+      expect(saves()).toHaveLength(3);
+      expect(resent.body).toMatchObject({
+        clientId: lost.body.clientId,
+        seq: 3,
+        narrative: text,
+        tickedGoalIds: [breakfast.id],
+        isFlagged: true,
+        flagReason: 'Seemed tired.',
+      });
+      expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+      expect(pageHeading()).toHaveFocus();
+      expect(guidedNotes()).toHaveValue(text);
+      expect(goalBoxes().map((box) => box.checked)).toEqual([true, false, false]);
+      expect(flagBox()).toBeChecked();
+      expect(reasonField()).toHaveValue('Seemed tired.');
+      expect(takeoverBanner()).toBeNull();
+      expect(router.state.location).toBe(location);
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+      await wait(30_000);
+      expect(saves()).toHaveLength(3);
+    });
+
+    it("holds a change waiting as the window's refresh meets a 401, until the same person signs in", async () => {
+      const { participant } = await openForSession(
+        inTurn(saved('2026-09-30T23:42:00Z'), saved('2026-09-30T23:44:00Z')),
+      );
+      await write('Jane made toast.');
+      serve(mePath, problem(401));
+      type('Jane made toast. Then a walk.');
+
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      await wait(60_000);
+
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      expect(saves()).toHaveLength(1);
+
+      await signInAgain();
+
+      const clientId = saves()[0].body.clientId;
+      expect(saves().map(({ path, body }) => [path, body.clientId, body.seq, body.narrative])).toEqual([
+        [paths(participant).draft, clientId, 1, 'Jane made toast.'],
+        [paths(participant).draft, clientId, 2, 'Jane made toast. Then a walk.'],
+      ]);
+    });
+
+    it('stops retrying at 30:00 idle with no connection, sending nothing until the same person signs in', async () => {
+      const { participant } = await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), noConnection));
+      await write('Jane made toast.');
+      const from = await refreshNow();
+      await at('27:59', from);
+      type('Jane made toast. Then a walk.');
+      await at('28:01', from);
+      expect(warning()).not.toBeNull();
+
+      await at('30:00', from);
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      const sent = saves().length;
+      const text = 'Jane made toast. Then a walk. Home by three.';
+      fireEvent.input(hiddenBox(), { target: { value: text } });
+      fireEvent.focusOut(hiddenBox());
+      await at('40:00', from);
+      expect(saves()).toHaveLength(sent);
+
+      serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+      await signInAgain();
+
+      expect(saves()).toHaveLength(sent + 1);
+      const { clientId } = saves()[0].body;
+      expect(saves().at(-1)?.body).toMatchObject({ clientId, seq: sent + 1, narrative: text });
+      expect(takeoverBanner()).toBeNull();
+      await settle();
+      expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    });
+
+    it("loads the page afresh for another person's sign-in, sending nothing of the earlier person's", async () => {
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), problem(401)));
+      await write('Jane made toast.');
+      await endTheSessionOnASave('Jane made toast. Then a walk.');
+
+      await signInAgain(manager);
+      await wait(60_000);
+
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+      expect(saves()).toHaveLength(2);
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+    });
+
+    it("never sends Submit's POST again after its 401, once the same person has signed in again", async () => {
+      await openToSubmit(json(template()), problem(401));
+      await write();
+      await press(submitButton());
+      serve(mePath, problem(401));
+      await confirmSubmit();
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(submits()).toHaveLength(1);
+      expect(confirmation()).toBeNull();
+      expect(saves()).toHaveLength(2);
+      expect(pageHeading()).toHaveFocus();
+    });
+
+    it('opens no confirmation from a check save that met a 401, its change sent by autosave alone', async () => {
+      const { participant } = await openToSubmit();
+      serveSave(
+        paths(participant).draft,
+        inTurn(saved('2026-09-30T23:42:00Z'), problem(401), saved('2026-09-30T23:44:00Z')),
+      );
+      await write();
+      serve(mePath, problem(401));
+      type('Jane made toast. Then a walk.');
+      await press(submitButton());
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(confirmation()).toBeNull();
+      expect(submits()).toEqual([]);
+      expect(saves().map(({ body }) => [body.seq, body.narrative])).toEqual([
+        [1, 'Jane made toast.'],
+        [2, 'Jane made toast. Then a walk.'],
+        [3, 'Jane made toast. Then a walk.'],
+      ]);
+    });
+  });
+
+  describe('Sign out', () => {
+    it('sends a change waiting before POST /api/auth/logout, busy meanwhile, then loads / afresh', async () => {
+      const save = held(saved('2026-09-30T23:42:00Z'));
+      const { participant } = await openForSession(save.answer);
+      type('Jane made toast.');
+
+      const signOut = await pressSignOut();
+      await wait(400);
+
+      expect(saves()).toHaveLength(1);
+      expect(logouts()).toBe(0);
+      expect(signOut).toHaveAccessibleName('Signing out…');
+      expect(signOut).toHaveAttribute('aria-disabled', 'true');
+
+      save.release();
+      await settle();
+
+      expect(sentRequests().filter((request) => request.startsWith('PUT') || request === logout)).toEqual([
+        `PUT ${paths(participant).draft}`,
+        logout,
+      ]);
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+    });
+
+    it.each([
+      { failure: 'fails, and its retry too', save: noConnection, settles: 1_000 },
+      { failure: 'meets a 422', save: problem(422), settles: 0 },
+      { failure: 'meets a 403', save: problem(403), settles: 0 },
+    ])('sends no logout when the save of a change waiting $failure, saying so, Sign out ready', async ({
+      save,
+      settles,
+    }) => {
+      await openForSession(save);
+      type('Jane made toast.');
+
+      const signOut = await pressSignOut();
+      await wait(settles);
+      await settle();
+
+      expect(within(accountPanel()).getByRole('status').textContent).toBe(notSignedOut);
+      expect(signOut).not.toHaveAttribute('aria-disabled');
+      expect(signOut).toHaveAccessibleName('Sign out');
+      expect(signOut).toHaveFocus();
+      expect(logouts()).toBe(0);
+      expect(fullPageLoad).not.toHaveBeenCalled();
+      expect(unloadAsks()).toBe(true);
+      await wait(30_000);
+      expect(logouts()).toBe(0);
+    });
+
+    it('signs out after a dead end, with a change since, sending nothing more', async () => {
+      await openForSession(problem(409, { code: 'note.version_conflict' }));
+      await write('Jane made toast.');
+      expect(shownSaveStatus()).toBe('Not saved');
+      type('Jane made toast. Then a walk.');
+
+      await pressSignOut();
+      await settle();
+
+      expect(logouts()).toBe(1);
+      expect(fullPageLoad).toHaveBeenCalledOnce();
+      expect(saves()).toHaveLength(1);
+    });
+
+    it('is refused while the takeover banner shows, saying so, with nothing sent', async () => {
+      await openForSession(inTurn(saved('2026-09-30T23:43:00Z'), takenOver));
+      await write('Jane made toast.');
+      await write('Jane made toast. Then a walk.');
+      expect(takeoverBanner()).not.toBeNull();
+
+      const signOut = await pressSignOut();
+      await settle();
+
+      expect(within(accountPanel()).getByRole('status').textContent).toBe(notSignedOut);
+      expect(signOut).not.toHaveAttribute('aria-disabled');
+      expect(logouts()).toBe(0);
+      expect(fullPageLoad).not.toHaveBeenCalled();
+      expect(saves()).toHaveLength(2);
+      expect(takeoverBanner()).not.toBeNull();
+    });
   });
 });
 

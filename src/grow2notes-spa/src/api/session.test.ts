@@ -13,6 +13,8 @@ let holdWhile: typeof SessionModule.holdWhile;
 let subscribe: typeof SessionModule.subscribe;
 let getPhase: typeof SessionModule.getPhase;
 let untilSessionSurelyEnded: typeof SessionModule.untilSessionSurelyEnded;
+let registerSaveFlush: typeof SessionModule.registerSaveFlush;
+let flushSaves: typeof SessionModule.flushSaves;
 type Phase = SessionModule.Phase;
 
 const antiforgeryPath = '/api/auth/antiforgery';
@@ -131,7 +133,8 @@ beforeEach(async () => {
   ({ api } = await import('./api.ts'));
   ({ refreshMe } = await import('./me.ts'));
   ({ createQueryClient } = await import('./queryClient.ts'));
-  ({ startClock, holdWhile, subscribe, getPhase, untilSessionSurelyEnded } = await import('./session.ts'));
+  ({ startClock, holdWhile, subscribe, getPhase, untilSessionSurelyEnded, registerSaveFlush, flushSaves } =
+    await import('./session.ts'));
   vi.useFakeTimers();
   vi.setSystemTime(startTime);
   fetchMock.mockImplementation((path) =>
@@ -539,5 +542,188 @@ describe('the session clock', () => {
     expect(getPhase()).toBe('active');
     await at('68:00');
     expect(told).toEqual(['warn-2m', 'active', 'warn-2m']);
+  });
+});
+
+// A mounted note form's autosave, which the clock asks at 28:00 to send a change waiting, and Sign out before its
+// logout (session-timeout.md *The session clock* step 3; app-shell.md *Press Sign out* step 2; T10's Notes).
+describe("a note form's change waiting", () => {
+  const draftPath = '/api/participants/3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95/notes/2026-10-01/draft';
+
+  /**
+   * Registers a stand-in for a mounted note form's autosave, as the form registers its own: `change()` makes a change,
+   * which its flush sends as a `PUT` through `api()`, as autosave does, giving `true` once it is answered and `false`
+   * once it fails. Gives the flush, to count its calls, and `unmount()`, which removes it as the form goes.
+   */
+  function mountForm() {
+    let made = 0;
+    let saved = 0;
+    const flushNow = vi.fn(async () => {
+      const carried = made;
+      try {
+        await api(draftPath, { method: 'PUT', body: { seq: carried } });
+      } catch {
+        return false;
+      }
+
+      saved = Math.max(saved, carried);
+      return true;
+    });
+    const unmount = registerSaveFlush({ unsaved: () => saved < made, flushNow });
+    stops.push(unmount);
+    return {
+      flushNow,
+      change: () => {
+        made += 1;
+      },
+      unmount,
+    };
+  }
+
+  /** Holds the antiforgery token, as after the form's first save, so that a later change asks for none. */
+  async function holdToken() {
+    server = answer(200);
+    await api(draftPath, { method: 'PUT', body: {} });
+  }
+
+  it('sends a change made at 27:59 at 28:00, holding the phase, and opens no warning once it is accepted', async () => {
+    start();
+    const told = watch();
+    await holdToken();
+    const form = mountForm();
+    await at('27:59');
+    form.change();
+    server = after(3_000, answer(200));
+
+    await at('28:00');
+    expect(form.flushNow).toHaveBeenCalledOnce();
+    await at('28:02');
+    expect(getPhase()).toBe('active');
+    await at('28:03');
+
+    expect(getPhase()).toBe('active');
+    expect(told).toEqual([]);
+    // 28 minutes from the save's send time, with nothing unsaved by then.
+    await at('55:59');
+    expect(told).toEqual([]);
+    await at('56:00');
+    expect(told).toEqual(['warn-2m']);
+    expect(form.flushNow).toHaveBeenCalledOnce();
+  });
+
+  it('lets the warning open as a save failing at 28:00 settles, with no second flush in that idle period', async () => {
+    start();
+    const told = watch();
+    await holdToken();
+    const form = mountForm();
+    form.change();
+    server = after(1_000, noConnection);
+
+    await at('28:00');
+    expect(form.flushNow).toHaveBeenCalledOnce();
+    expect(getPhase()).toBe('active');
+    await at('28:01');
+
+    expect(getPhase()).toBe('warn-2m');
+    expect(told).toEqual(['warn-2m']);
+    await at('29:00');
+    expect(told).toEqual(['warn-2m', 'warn-1m']);
+    expect(form.flushNow).toHaveBeenCalledOnce();
+  });
+
+  it('asks again at the 28:00 mark of the next idle period, after Stay signed in', async () => {
+    start();
+    const told = watch();
+    await holdToken();
+    const form = mountForm();
+    form.change();
+    server = noConnection;
+    await at('28:00');
+    expect(told).toEqual(['warn-2m']);
+
+    await at('28:30');
+    server = answer(204);
+    await api('/api/auth/ping', { method: 'POST' });
+    expect(told).toEqual(['warn-2m', 'active']);
+    server = answer(200);
+    await at('56:30');
+
+    expect(form.flushNow).toHaveBeenCalledTimes(2);
+    expect(getPhase()).toBe('active');
+    expect(told).toEqual(['warn-2m', 'active']);
+  });
+
+  it('calls nothing with nothing unsaved, and warns at 28:00', async () => {
+    start();
+    const told = watch();
+    const form = mountForm();
+
+    await at('28:00');
+
+    expect(form.flushNow).not.toHaveBeenCalled();
+    expect(told).toEqual(['warn-2m']);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('calls nothing once the form has gone, or once a 401 has ended the session', async () => {
+    start();
+    const told = watch();
+    const gone = mountForm();
+    gone.change();
+    gone.unmount();
+    await at('28:00');
+    expect(told).toEqual(['warn-2m']);
+
+    server = answer(200);
+    await api('/api/today');
+    const form = mountForm();
+    form.change();
+    await at('40:00');
+    server = answer(401);
+    await api(mePath).catch(() => {});
+
+    expect(told).toEqual(['warn-2m', 'active', 'expired']);
+    expect(gone.flushNow).not.toHaveBeenCalled();
+    expect(form.flushNow).not.toHaveBeenCalled();
+  });
+
+  describe('for Sign out', () => {
+    it('gives true at once with no form mounted, or nothing unsaved, sending nothing', async () => {
+      await expect(flushSaves()).resolves.toBe(true);
+      const form = mountForm();
+      await expect(flushSaves()).resolves.toBe(true);
+
+      expect(form.flushNow).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('gives true once every change is saved, one made while its save was out included', async () => {
+      const form = mountForm();
+      form.change();
+      server = after(1_000, answer(200));
+      let flushed: boolean | undefined;
+      void flushSaves().then((result) => {
+        flushed = result;
+      });
+
+      await vi.advanceTimersByTimeAsync(500);
+      form.change();
+      await vi.advanceTimersByTimeAsync(500);
+      expect(flushed).toBeUndefined();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(flushed).toBe(true);
+      expect(form.flushNow).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives false as soon as a flush does, asking no more', async () => {
+      const form = mountForm();
+      form.change();
+      server = noConnection;
+
+      await expect(flushSaves()).resolves.toBe(false);
+
+      expect(form.flushNow).toHaveBeenCalledOnce();
+    });
   });
 });

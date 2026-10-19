@@ -1,7 +1,9 @@
 import { onlineManager, useMutation } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
 import { api, ApiError, classify, type Failure, type StartedBy } from '../../api/api.ts';
+import { registerSaveFlush } from '../../api/session.ts';
 import { limits } from '../../limits.ts';
+import { useHiddenBySignIn } from '../../routes/hiddenBySignIn.ts';
 import { noteBase, readDraft, type Draft, type DraftAnswer } from './noteQueries.ts';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 
@@ -155,11 +157,12 @@ export type Autosave = {
    */
   unsaved: () => boolean;
   /**
-   * An unsaved change sent now, the wait for a retry cut short, for a leave or a sign-out that needs it saved first
-   * (T10's Notes): `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying the
-   * newest change is answered, or as a dead end comes; `false` as "Not saved: no connection…" shows, while the retries
-   * go on, for a refusal that is not retried, a takeover included, and while the takeover banner shows, so that nothing
-   * waits on a save that is retried for ever, or on the banner's answer.
+   * An unsaved change sent now, the wait for a retry cut short, for a leave, the session clock's 28:00 mark or a
+   * sign-out that needs it saved first (T10's Notes): `true` at once with nothing unsaved, or after a dead end, and
+   * otherwise once a save carrying the newest change is answered, or as a dead end comes; `false` as "Not saved:
+   * no connection…" shows, while the retries go on, for a refusal that is not retried, a takeover included, and while
+   * the takeover banner shows or the signed-out-in-place view hides the form, so that nothing waits on a save that is
+   * retried for ever, or on the banner's answer.
    */
   flushNow: () => Promise<boolean>;
   /**
@@ -216,6 +219,11 @@ type Progress = {
   paused: boolean;
   /** Another page's save has taken the note over, until Keep or Load, so that nothing is sent meanwhile. */
   takenOver: boolean;
+  /**
+   * The signed-out-in-place view hides the form, from the session's end until the same person signs in again, so that
+   * nothing is sent meanwhile.
+   */
+  signedOut: boolean;
   /** What the indicator says of a change not yet saved: "Saving…", or "Not saved: no connection…" (`failed`). */
   shown: 'saving' | 'failed' | undefined;
   /** The saves since the last answer that failed for a transient reason, which set the wait before the next. */
@@ -257,6 +265,14 @@ type Progress = {
  * dead end. Each change made meanwhile is counted and kept, but neither said nor sent. Keep sends what the form holds
  * then under a new identity, numbered from 1, and Load reads the other version for the form to show, after which the
  * next save does so too (*Behaviour* 3 and 9).
+ *
+ * The session's end pauses autosave too, while the signed-out-in-place view hides the form, from 30:00 idle or the
+ * `401` that ends the session, its timers and retries cleared and every change kept and counted, but not sent
+ * (session-timeout.md *The signed-out state*). As the same person's form shows again, a change unsaved goes at once,
+ * under the note's next save number, which the server takes as this page's, with no takeover; another person's
+ * sign-in loads the page afresh, the form still hidden, with nothing sent. While the form is open, the session clock
+ * has a change waiting sent at its 28:00 mark in place of the warning, and Sign out has it saved before the logout,
+ * each through `flushNow()` (T10's Notes).
  */
 export function useAutosave({
   participantId,
@@ -285,6 +301,7 @@ export function useAutosave({
     stopped: false,
     paused: false,
     takenOver: false,
+    signedOut: false,
     shown: undefined,
     failures: 0,
     mounted: false,
@@ -367,6 +384,34 @@ export function useAutosave({
     };
   }, []);
 
+  // In a layout effect, which runs before the shell's own, so that autosave has paused before the shell closes a Submit
+  // confirmation as the signed-out-in-place view shows, which lets autosave go on.
+  const hidden = useHiddenBySignIn();
+  const onHiddenChange = useEffectEvent((isHidden: boolean) => {
+    const state = progress.current;
+    if (isHidden) {
+      state.signedOut = true;
+      stopTimers(state);
+      stopRetry(state);
+    } else if (state.signedOut) {
+      state.signedOut = false;
+      if (canSend(state) && state.saved < state.made) {
+        sayUnsaved(state);
+        sendNow(state);
+      }
+    }
+  });
+
+  useLayoutEffect(() => {
+    onHiddenChange(hidden);
+  }, [hidden]);
+
+  // For the session clock's 28:00 mark and Sign out, for as long as the form is open.
+  const unsavedNow = useEffectEvent(() => unsaved());
+  const flushNowEvent = useEffectEvent(() => flushNow());
+
+  useEffect(() => registerSaveFlush({ unsaved: () => unsavedNow(), flushNow: () => flushNowEvent() }), []);
+
   function changed() {
     const state = progress.current;
     if (state.stopped) {
@@ -374,8 +419,9 @@ export function useAutosave({
     }
 
     state.made += 1;
-    // Kept for Keep to send, while "Not saved" stays.
-    if (state.takenOver) {
+    // Kept for Keep to send, while "Not saved" stays, or, hidden by the signed-out-in-place view, for the same person's
+    // sign-in to send, the indicator as it was.
+    if (state.takenOver || state.signedOut) {
       return;
     }
 
@@ -794,11 +840,11 @@ export function useAutosave({
 }
 
 /**
- * Whether autosave may send: the form is open, with no dead end, Submit's request is not out, and no takeover waits
- * for its banner's answer.
+ * Whether autosave may send: the form is open, with no dead end, Submit's request is not out, no takeover waits for
+ * its banner's answer, and the signed-out-in-place view does not hide the form.
  */
 function canSend(state: Progress): boolean {
-  return state.mounted && !state.stopped && !state.paused && !state.takenOver;
+  return state.mounted && !state.stopped && !state.paused && !state.takenOver && !state.signedOut;
 }
 
 /**

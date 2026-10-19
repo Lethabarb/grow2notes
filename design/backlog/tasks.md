@@ -3612,6 +3612,14 @@ older page is told the note has moved on, and nothing is overwritten without ask
     Save changes and Cancel call it (the hand-offs). `beforeunload` follows the indicator, listened for while it says
     "Saving…", "Not saved: …" or "Not saved", a dead end's included, as autosave-status.md *Behaviour* 7 keeps the
     browser's warning after one.
+  - The session as built (step 5): the shell's context is `HiddenBySignInContext` (src/routes/hiddenBySignIn.ts), and
+    `registerSaveFlush()` takes the form's `unsaved()` with its `flushNow()`, so that the clock calls nothing with
+    nothing unsaved. The clock asks as the phase would leave `active`, once in each idle period by its newest accepted
+    send time, and never once a `401` has ended the session; a save with no answer lets the warning open as the hold
+    settles, while any answer, a `422` or a `5xx` included, starts the clock afresh, as any accepted request does
+    (A57). Sign out's `flushSaves()` goes once every change is saved, one typed while its save was out included, as a
+    leave does (step 4). While the form is hidden, its timers and retries are cleared and a change is counted and kept
+    with the indicator as it was; as the same person's form shows again, "Saving…" shows and the save goes at once.
 - Hand-offs, which step 6 writes into the receiving tasks' Notes and, dated, into the stories' Notes: Load the other
   version replacing the picks, and the picks in every save that this task sends, with section 2 (T13; S02.02.06's
   second criterion); the takeover banner on a pending edit, as for a draft (T14; autosave-status.md *Per-screen
@@ -3719,7 +3727,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       with nothing unsaved and after each dead end; the listener added at the first unsaved change and removed once it
       is saved (item 35); no ask after `disarmUnloadGuard()`; Today's lists marked stale as the form is left; and
       Submit landing on Today.
-- [ ] An idle sign-out, signing in again and Sign out (S02.02.05's first and second criteria; its links to design.md
+- [x] An idle sign-out, signing in again and Sign out (S02.02.05's first and second criteria; its links to design.md
       §4.0 *Sessions*, §8.5, note-form.md item 36 and *Interactions* › *Session*, app-shell.md's Sign out bullet on
       a waiting autosave, its Session bullet on a waiting autosave at 28:00 and its *28:00 idle on a visible page*, and
       session-timeout.md's clock step 3; T01's hand-offs of app-shell.md's Session bullets "After timing out

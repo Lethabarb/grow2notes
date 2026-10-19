@@ -13,6 +13,11 @@ export const strings = {
   signOut: 'Sign out',
   /** Sign out's busy label. */
   signingOut: 'Signing out…',
+  /**
+   * The Account panel's status line when a note form's change waiting for its save could not be saved first, so that
+   * no logout was sent (app-shell.md *States*, Sign-out blocked: note not saved; D67).
+   */
+  notSignedOutNoteNotSaved: 'Not signed out: your note is not saved yet. Keep this page open; retrying.',
   /** The warning before the idle sign-out (app-shell.md component 6). */
   sessionWarning: {
     /** Its heading at each step of the countdown, from 28:00, 29:00, 29:20 and 29:40 with no request accepted. */
