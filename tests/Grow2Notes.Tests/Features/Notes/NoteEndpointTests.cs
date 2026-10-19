@@ -1,9 +1,15 @@
+using System.Data.Common;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Features.Notes;
@@ -11,20 +17,24 @@ namespace Grow2Notes.Tests.Features.Notes;
 /// <summary>
 /// <c>GET {base}</c> (design.md §6.3), called with the test-only sign-in (<see cref="TestSignIn"/>): a submitted
 /// note's author, first submitted time and current version, its goals in the snapshot's order with its wording and
-/// ticks, the same for a worker and a manager, with no review data (A13, A14); a draft's status alone, whose content it
-/// never gives (A9); <c>404</c> for no live note, a discarded draft included (§5.5 item 1), and for another
-/// organisation's note (§9.2); as JSON that is never stored (§6.1), and reading writes nothing (A28). The tests add
-/// their own participants, goals, users and notes (tests/README.md). The endpoint matrix covers who may call it, and
-/// <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// ticks, the same for a worker and a manager, with no review data (A13, A14); a draft's header, who started it and
+/// when, whose content it gives to a manager alone, by the role as stored, from its author's working copy (§3.4, A9),
+/// and a draft submitted while a manager reads it as the submitted note; <c>404</c> for no live note, a discarded draft
+/// included (§5.5 item 1), and for another organisation's note (§9.2); as JSON that is never stored (§6.1), and reading
+/// writes nothing (A28). The tests add their own participants, goals, users and notes (tests/README.md). The endpoint
+/// matrix covers who may call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     : IClassFixture<Grow2NotesFactory>
 {
-    // Made up (A35): a note for Thursday 1 October 2026, started at 9:14 am and submitted at 4:42 pm in Melbourne.
+    // Made up (A35): a note for Thursday 1 October 2026, started at 9:14 am, a draft last saved at 9:42 am, and
+    // submitted at 4:42 pm in Melbourne.
     private static readonly DateOnly NoteDate = new(2026, 10, 1);
 
     private static readonly DateTime StartedAtUtc = new(2026, 9, 30, 23, 14, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime SavedAtUtc = new(2026, 9, 30, 23, 42, 0, DateTimeKind.Utc);
 
     private static readonly DateTime SubmittedAtUtc = new(2026, 10, 1, 6, 42, 0, DateTimeKind.Utc);
 
@@ -120,21 +130,158 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal([], Goals(current));
     }
 
-    // Its status alone, which tells the page to open the form, for its author and anyone else, and nothing of what it
-    // says (A9) or who started it, until T12 adds a draft's header.
+    // design.md §6.3 and §4.2's "Someone else's draft": a draft's header alone, those three members in that order, to a
+    // worker, whether Alex P. or another worker, which tells the page to open the form or to say whose draft it is, and
+    // nothing of what it says (A9), however much it holds. Whether the caller is a manager is read from the role as
+    // stored, so a worker whose session names Manager gets no more.
     [Fact]
-    public async Task A_draft_gives_its_status_alone_to_its_author_and_to_anyone_else()
+    public async Task A_draft_gives_a_worker_who_started_it_or_not_its_status_author_and_start_time_alone()
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
-        await factory.Services.AddDraftAsync(
-            seeded.A, new(participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, Narrative: "Jane made toast."));
+        var goal = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 0));
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        await factory.Services.AddDraftAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            author,
+            StartedAtUtc,
+            [new(NoteSection.Goal, goal.Id, null, "Makes own breakfast", true)],
+            "Jane made toast.",
+            SavedAtUtc,
+            IsFlagged: true,
+            FlagReason: "Jane seemed unwell."));
+        using var anotherWorker = ClientFor(Caller.WorkerOfA);
+        using var alex = factory.CreateHttpsClient().SignInAs(author);
+        using var namedManager = ClientFor(Caller.WorkerOfA);
+        namedManager.DefaultRequestHeaders.Add(TestSignIn.RoleHeader, nameof(UserRole.Manager));
 
-        foreach (var caller in new[] { Caller.WorkerOfA, Caller.ManagerOfA })
+        foreach (var client in new[] { anotherWorker, alex, namedManager })
         {
-            var note = await ReadAsync(caller, participant.Id);
+            var note = await ReadAsync(client, participant.Id);
 
-            Assert.Equal("""{"status":"Draft"}""", note.GetRawText());
+            Assert.Equal(
+                """{"status":"Draft","authorDisplayName":"Alex P.","startedAtUtc":"2026-09-30T23:14:00Z"}""",
+                note.GetRawText());
         }
+    }
+
+    // design.md §3.4 and §6.3: a manager, by the role as stored, also gets the author's working copy, read-only, in the
+    // current shape as built so far (T12's Notes): its text with its line breaks, its flag and reason, and its
+    // snapshot's goals in the snapshot's order, with their ticks and the wording the draft started with, though one of
+    // them has been reworded since (A3).
+    [Fact]
+    public async Task A_draft_gives_a_manager_its_header_and_its_author_s_working_copy_with_the_snapshot_s_wording()
+    {
+        const string narrative = "Jane made toast.\n\nThen a walk to the shops.";
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var breakfast = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 1));
+        var sister = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Phones her sister", 0));
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        await factory.Services.AddDraftAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            author,
+            StartedAtUtc,
+            [
+                new(NoteSection.Goal, sister.Id, null, "Phones her sister", false),
+                new(NoteSection.Goal, breakfast.Id, null, "Makes own breakfast", true),
+            ],
+            narrative,
+            SavedAtUtc,
+            IsFlagged: true,
+            FlagReason: "Jane seemed unwell."));
+        using var manager = ClientFor(Caller.ManagerOfA);
+        using (var reworded = await manager.PutWithTokenAsync(
+            $"/api/admin/goals/{breakfast.Id}",
+            await manager.FetchTokenAsync(),
+            new { text = "Makes breakfast and lunch" },
+            breakfast.ETag))
+        {
+            Assert.Equal(HttpStatusCode.OK, reworded.StatusCode);
+        }
+
+        var note = await ReadAsync(manager, participant.Id);
+
+        Assert.Equal(
+            ["status", "authorDisplayName", "startedAtUtc", "current"],
+            note.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Draft", note.GetProperty("status").GetString());
+        Assert.Equal("Alex P.", note.GetProperty("authorDisplayName").GetString());
+        Assert.Equal("2026-09-30T23:14:00Z", note.GetProperty("startedAtUtc").GetString());
+        var current = note.GetProperty("current");
+        Assert.Equal(
+            ["narrative", "isFlagged", "flagReason", "goals"],
+            current.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(narrative, current.GetProperty("narrative").GetString());
+        Assert.True(current.GetProperty("isFlagged").GetBoolean());
+        Assert.Equal("Jane seemed unwell.", current.GetProperty("flagReason").GetString());
+        Assert.Equal([("Phones her sister", false), ("Makes own breakfast", true)], Goals(current));
+    }
+
+    // A draft started with nothing ticked or written yet, as its first save may leave it: no text, no reason, as an
+    // unflagged note has none (§5.3), and no goals for a participant who has none. A manager's own draft gives them its
+    // working copy as anyone else's does.
+    [Fact]
+    public async Task An_empty_unflagged_draft_gives_a_manager_empty_text_a_null_reason_and_no_goals()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddDraftAsync(seeded.A, new(participant.Id, NoteDate, seeded.A.ManagerId, StartedAtUtc));
+
+        var current = (await ReadAsync(Caller.ManagerOfA, participant.Id)).GetProperty("current");
+
+        Assert.Equal(
+            """{"narrative":"","isFlagged":false,"flagReason":null,"goals":[]}""", current.GetRawText());
+    }
+
+    // A submit that commits between the manager's read of the draft and their read of its working copy takes the
+    // working copy away (§5.8 step 7), so the note is read again and answers as the submitted note it is now.
+    [Fact]
+    public async Task A_draft_submitted_while_a_manager_reads_it_gives_the_submitted_note()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        var noteId = await factory.Services.AddDraftAsync(
+            seeded.A, new(participant.Id, NoteDate, author, StartedAtUtc, Narrative: "Jane made toast."));
+        var gate = new HoldsTheWorkingCopyReadOf(noteId);
+        await using var gated = gate.On(factory);
+        using var manager = gated.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        using var alex = gated.CreateHttpsClient().SignInAs(author);
+
+        var held = manager.GetAsync(PathOf(participant.Id), cancellationToken);
+        try
+        {
+            await gate.Reached.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+            using var submit = new HttpRequestMessage(HttpMethod.Post, $"{PathOf(participant.Id)}/versions")
+            {
+                Content = JsonContent.Create(new
+                {
+                    baseVersion = 0,
+                    narrative = "Jane made toast.",
+                    tickedGoalIds = Array.Empty<Guid>(),
+                    isFlagged = false,
+                    flagReason = (string?)null,
+                }),
+            };
+            submit.Headers.Add(AntiforgeryTokens.Header, await alex.FetchTokenAsync());
+            submit.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+            using var submitted = await alex.SendAsync(submit, cancellationToken);
+            Assert.Equal(HttpStatusCode.Created, submitted.StatusCode);
+        }
+        finally
+        {
+            gate.Release();
+        }
+
+        using var response = await held;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var note = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.Equal(
+            ["status", "author", "firstSubmittedAtUtc", "current"],
+            note.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Submitted", note.GetProperty("status").GetString());
+        Assert.Equal("Alex P.", note.GetProperty("author").GetProperty("displayName").GetString());
+        Assert.Equal("Jane made toast.", note.GetProperty("current").GetProperty("narrative").GetString());
     }
 
     // A discarded draft is not live (§5.5 item 1), so it is never reached, as no note is.
@@ -222,18 +369,23 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     private static string PathOf(Guid participantId) => $"/api/participants/{participantId}/notes/2026-10-01";
 
-    // Over HTTPS, as the SPA calls the /api group (tests/README.md).
-    private HttpClient ClientFor(Caller caller) => factory.CreateHttpsClient().SignInAs(caller, seeded);
-
-    private async Task<JsonElement> ReadAsync(Caller caller, Guid participantId)
+    private static async Task<JsonElement> ReadAsync(HttpClient client, Guid participantId)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var client = ClientFor(caller);
 
         using var response = await client.GetAsync(PathOf(participantId), cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
+
+    // Over HTTPS, as the SPA calls the /api group (tests/README.md).
+    private HttpClient ClientFor(Caller caller) => factory.CreateHttpsClient().SignInAs(caller, seeded);
+
+    private async Task<JsonElement> ReadAsync(Caller caller, Guid participantId)
+    {
+        using var client = ClientFor(caller);
+        return await ReadAsync(client, participantId);
     }
 
     // The ID of the last event written, by any test: the tests of the collection run one at a time, so none writes
@@ -253,5 +405,47 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
             .SqlQuery<int>($"SELECT COUNT(*) AS [Value] FROM [NoteDraft] WHERE [NoteId] = {noteId}")
             .SingleAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>
+    /// Holds back the first command, sent outside a transaction, that reads a working copy of the note whose ID it is
+    /// given, until the test lets it go: a manager's read of the draft's working copy, once the request has found the
+    /// draft, as <see cref="HoldsTheHeaderUpdateOf"/> holds an update. Every other command passes, so that a submit
+    /// meanwhile runs to its end.
+    /// </summary>
+    private sealed class HoldsTheWorkingCopyReadOf(Guid noteId) : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int held;
+
+        /// <summary>Completes once the command is held.</summary>
+        public Task Reached => reached.Task;
+
+        /// <summary><paramref name="app"/>, with this interceptor on every context it makes.</summary>
+        public WebApplicationFactory<Program> On(WebApplicationFactory<Program> app) =>
+            app.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                services.ConfigureDbContext<Grow2NotesDbContext>(options => options.AddInterceptors(this))));
+
+        /// <summary>Lets the held command go on.</summary>
+        public void Release() => released.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.Transaction is null
+                && command.CommandText.Contains("FROM [NoteDraft]", StringComparison.Ordinal)
+                && command.Parameters.Cast<DbParameter>().Any(parameter => parameter.Value is Guid id && id == noteId)
+                && Interlocked.Exchange(ref held, 1) == 0)
+            {
+                reached.SetResult();
+                await released.Task.WaitAsync(cancellationToken);
+            }
+
+            return result;
+        }
     }
 }

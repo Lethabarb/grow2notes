@@ -4261,7 +4261,7 @@ manager can read it.
       `GET /api/today` `null`, Past notes not listing it, and a first `PUT {base}/draft` creating a new draft for the
       same participant and day, both notes then in the database (the one-live-note index's filter); and no `DELETE`
       on `{base}` among the app's endpoints, with nothing deleted by a discard (A29).
-- [ ] Reading a draft, and one's own unfinished drafts, on the server (S02.04.03's first criterion; S02.01.04's first
+- [x] Reading a draft, and one's own unfinished drafts, on the server (S02.04.03's first criterion; S02.01.04's first
       criterion, and its second to fourth on the server; S02.02.08's third criterion for Your unfinished drafts;
       design.md §4.2 item 2 and A17, §5.3's `(OrganisationId, EditorUserId)` index, §6.3's `GET {base}` for a draft and
       `GET /api/me/drafts`; T09's hand-off of the draft's header and a manager's content): `GET {base}` for a draft

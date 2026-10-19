@@ -40,6 +40,13 @@ internal static class EndpointMatrix
     public static readonly IReadOnlyList<string> AnyMethod = [];
 
     /// <summary>
+    /// The option of a request to the caller's unfinished drafts that names the participant for whom the call first
+    /// started a draft of A's worker's, for the row's answer check, as <see cref="FlaggedInA"/> is for the To review
+    /// list's.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<Guid> DraftedInA = new(nameof(DraftedInA));
+
+    /// <summary>
     /// The option of a request to the To review list that names the participant whose note the call first flagged in
     /// A, for the row's answer check, which is given the response, and through it the request, but not the call.
     /// </summary>
@@ -129,6 +136,13 @@ internal static class EndpointMatrix
         new(Get,       "/api/today",             Unauthorized, OK,     OK,         OK,
             Answer: HoldsTheCallersOwnSeeded(
                 "participant", organisation => [organisation.ParticipantId], listedIn: "participants")),
+
+        // The caller's own unfinished drafts (§6.3), for every signed-in user. No seeded row is a draft, so each call
+        // first starts one of A's worker's in A, whose participant its DraftedInA option names: A's worker's list holds
+        // it, and neither A's manager's, whose working copy it is not, nor B's manager's, which holds nothing of A's
+        // (§5.9 item 7); reading writes nothing (A28).
+        new(Get,       "/api/me/drafts",         Unauthorized, OK,     OK,         OK,
+            MyDraftsAfterADraftStartedInA, HoldsTheDraftStartedInAForAsWorkerAlone),
 
         // A participant's header (§6.3), for every signed-in user, at A's seeded participant, whom B's manager does not
         // find (§9.2).
@@ -385,6 +399,43 @@ internal static class EndpointMatrix
     // For an endpoint that reads a JSON body: a request to the path that it answers, with a body that it reads.
     private static Func<EndpointCall, Task<HttpRequestMessage>> WithJson(string path, object body) =>
         call => Task.FromResult(new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(body) });
+
+    // The caller's unfinished drafts, asked for once the request has added to A a participant of its own, whom its
+    // DraftedInA option names, with a draft of A's worker's for today, as its first save leaves it. The draft's start
+    // time is made up (A35).
+    private static async Task<HttpRequestMessage> MyDraftsAfterADraftStartedInA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today();
+        await call.Services.AddDraftAsync(
+            a, new(participant.Id, today, a.WorkerId, new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc)));
+        var request = new HttpRequestMessage(call.Method, "/api/me/drafts");
+        request.Options.Set(DraftedInA, participant.Id);
+        return request;
+    }
+
+    // For the caller's unfinished drafts: A's worker's list holds the draft that the call started in A for them, and
+    // neither A's manager's nor B's manager's does (§5.9 item 7). Tests start other drafts for A's worker, so the
+    // check looks for the call's own, never at the whole list.
+    private static async Task<IReadOnlyList<string>> HoldsTheDraftStartedInAForAsWorkerAlone(
+        HttpResponseMessage response, Caller caller, SeededOrganisations _)
+    {
+        if (response.RequestMessage?.Options.TryGetValue(DraftedInA, out var participantId) is not true)
+        {
+            throw new InvalidOperationException($"The request names no draft of A's in its {nameof(DraftedInA)}.");
+        }
+
+        var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var listed = answer.EnumerateArray().Any(row => row.GetProperty("participantId").GetGuid() == participantId);
+        return (caller, listed) switch
+        {
+            (Caller.WorkerOfA, false) => [$"lacks the caller's own draft of {participantId}"],
+            (Caller.ManagerOfA, true) => [$"holds A's worker's draft of {participantId}"],
+            (Caller.ManagerOfB, true) => [$"holds the other organisation's draft of {participantId}"],
+            _ => [],
+        };
+    }
 
     // Today's note of a participant whom the request first adds to A, submitted by A's worker, as Submit leaves it. Its
     // times are made up (A35).
