@@ -546,7 +546,10 @@ the takeover and after a refusal that is not retried, such as a `403` or a `422`
 the banner's choice or the next change. So are "no connection" and "retrying" in note-form.md's "Not saved: no
 connection. Keep this page open; retrying.", which a leave that stays says after such a refusal too (note-form.md
 *Leaving the form*). Both are built with the design's only words for them, as new ones need the owner's approval; the
-owner can reword them in the copy module (D67).
+owner can reword them in the copy module (D67). "retrying" is untrue too once autosave's retries have stopped, 28
+minutes after the person last acted on the form, until they act again (A66). On the note form, the same person's sign-in
+again is followed by one token request, where the *Sign in again, same person* row has none: the form fetches a fresh
+antiforgery token as it shows again, so that its save as the page is hidden is one request (note-form.md item 9).
 
 ### The route-change rule (one owner)
 

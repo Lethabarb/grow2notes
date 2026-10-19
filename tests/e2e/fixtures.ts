@@ -151,7 +151,7 @@ async function useDevice(browser: Browser, use: (device: Device) => Promise<void
 // Every end-to-end test imports test from here, not from @playwright/test (tests/README.md), so a screen that breaks
 // design.md §9.7's policy fails its test, whatever the test checks. A test that names invite, secondInvite,
 // resetSignIn, authenticator, secondDevice, thirdDevice or secondTab gets them; the others never run a command or
-// add an // authenticator.
+// add an authenticator.
 export const test = base.extend<{
   invite: Invite;
   secondInvite: Invite;

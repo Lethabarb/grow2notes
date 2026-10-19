@@ -330,15 +330,21 @@ Formatting:
   date, takes the back-off's place for that one wait, a date already past giving 0. "Not saved: no connection…" shows
   once the first retry has failed too, or at once for a change typed while the browser reports offline and for a
   `Retry-After` longer than the first retry's 1 s, so that "Saving…", and a press of Submit waiting on it, never lasts
-  through a longer wait. Each attempt reads the form and takes the next `seq` as it is sent, so a first save lost
-  before it reached the server and retried goes as `seq` 2. During a retry's wait a blur and the 2 s and 5 s timers
-  send nothing, as the retry carries the change; the page shown again, `checkSave()`, `flushNow()` and `resume()` cut
-  the wait short, and the `online` event does not, a wait being 10 s at most. A save that waited offline goes as
-  TanStack resumes it, which it does only for a page that is shown, so a hidden page sends the newest state itself as
-  the browser comes online. The page-hidden save goes through `api()` with `keepalive` while its JSON body is under
-  60,000 bytes by `TextEncoder`, its antiforgery token request first, as a normal `fetch`, when none is held; its answer
-  counts as any save's, and its failure is left to the retries. After "Not saved: …", a save answered that did not
-  carry the newest change shows "Saving…" again, and an older save answered after a newer one leaves "Saved" as it is.
+  through a longer wait. The retries go on only until 28 minutes after the person last acted on the form (a change, a
+  blur, the page shown again, their sign-in in place, Keep or Submit), then stop, "Not saved: …" kept, until their next
+  change, blur, return to the page or sign-in, so that a failing server's answers never keep an unattended session alive
+  (A66). Each attempt reads the form and takes the next `seq` as it is sent, so a first save lost before it reached the
+  server and retried goes as `seq` 2; while none of the page's saves of the note has been answered, its takeover `409`
+  sends the save again at once under a new `clientId` as `seq` 1, which takes the note over with no banner, as the page
+  has not saved the note (§5.6). During a retry's wait a blur and the 2 s and 5 s timers send nothing, as the retry
+  carries the change; the page shown again, `checkSave()`, `flushNow()` and `resume()` cut the wait short, and the
+  `online` event does not, a wait being 10 s at most. A save that waited offline goes as TanStack resumes it, which it
+  does only for a page that is shown, so a hidden page sends the newest state itself as the browser comes online. The
+  form fetches the antiforgery token as it opens, and as the same person's sign-in shows it again, so that the
+  page-hidden save, through `api()` with `keepalive` while its JSON body is under 60,000 bytes by `TextEncoder`, is one
+  request; its answer counts as any save's, and its failure, a takeover `409` included, is left to the retries. After
+  "Not saved: …", a save answered that did not carry the newest change shows "Saving…" again, and an older save answered
+  after a newer one leaves "Saved" as it is.
 - **As built** (T10, what waits on a save): `flushNow()` gives `true` at once with nothing unsaved or after a dead end,
   and otherwise once a save carrying the newest change is answered; `checkSave()` gives the content once its own `PUT`
   is answered carrying the newest change. Each gives `false`, or nothing, as soon as "Not saved: …" shows, for a

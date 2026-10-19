@@ -208,6 +208,15 @@ export function isNotFound(error: unknown): error is ApiError {
 }
 
 /**
+ * Fetches the antiforgery token now, unless one is held or on its way, so that a change sent later goes in one
+ * request: the note form's page-hidden save has to go before the browser freezes the page, with no round trip first
+ * (T10's Notes). A request that fails is forgotten, and the next change asks again.
+ */
+export function prepareChanges(): void {
+  void heldToken();
+}
+
+/**
  * Sends a change with the antiforgery token. A `400` with no `code` is how the `/api` filter refuses a missing or
  * stale token, so such a change is sent once more, with the same body and a fresh token.
  */

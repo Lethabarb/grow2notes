@@ -164,7 +164,7 @@ Seven more fixtures are there for the tests that name them, and only those run t
   a worker and the first (`e2e/flagged.spec.ts`).
 - `secondTab` gives a second tab: a `page` in the test page's own browser context, with its cookies, so the same
   person, under the same check of the policy, for one person's note in two tabs; the test may close it, as a person
-  closes a tab.
+  closes a tab, or crash it, as a phone kills a tab (below).
 
 A test that sets up an account with a password gets each code as a person's authenticator app would, from the setup
 key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` computes, with `node:crypto`, RFC
@@ -621,7 +621,7 @@ at the note and at its Past notes (design.md §14 M2 *Done when*). Seven more pr
 Submit unavailable, then "Saved" with no action once online, and the draft holding what was typed; a first save let
 through to the app with `route.fetch()` and its answer then aborted, so that the retry, the page's next `seq`, saves
 once with no banner; the same draft in `secondTab`, whose save takes it over, so that the first tab's next save meets
-the takeover banner, Keep wins and Load then replaces the other tab's screen; `secondTab` closed in the middle of a
+the takeover banner, Keep wins and Load then replaces the other tab's screen; `secondTab` killed in the middle of a
 sentence typed at a known pace, the text kept but for its last few seconds; the form left and opened again in the same
 page load, its next save applied; the back link and Past notes sending a change waiting, then leaving, and staying
 offline; and a session ended in place mid-note, then the same person signing in again, one save going under the same
@@ -642,7 +642,11 @@ since TanStack Query listens for it on the window, not the document, and shows o
 never hidden, so the note form's page-hidden save is checked by giving `document` a `visibilityState` of `'hidden'`
 and dispatching `visibilitychange` on it (`setHidden` in `e2e/note-form.spec.ts`), on a paused `page.clock`, so that
 no timer of autosave's sends the save meanwhile; a wrapper round the page's own `fetch` then shows that the save went
-with `keepalive`.
+with `keepalive`. A tab killed as a phone kills one in the background is crashed with `goto('chrome://crash')`, as
+Playwright's own tests crash a Chromium page: the renderer stops at once, unloading nothing, so that the page-hidden
+save that `page.close()` lets the page send does not go, and what the note keeps comes from the saves made while typing
+alone. CDP's `Page.crash` is no stand-in: in a run on Windows the page ran on for seconds after it, long enough to
+save once more.
 
 ### Answering `/api/reviews?status=toReview`
 

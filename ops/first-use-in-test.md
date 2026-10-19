@@ -600,9 +600,11 @@ note is made up (A35).
     retrying." read once, and not again while the connection stays off. Press Submit note: look for the same sentence
     read again, and nothing opening. Open Account and press Sign out: look for "Not signed out: your note is not saved
     yet. Keep this page open; retrying." read, and Today and Account still there once you close the panel. Turn the
-    connection on and press nothing: look for "Saved" and the time read. Then open the second participant's note in
-    two tabs, type a word in the second tab and wait for "Saved"; go back to the first tab and type a word there: look
-    for "This note was changed on another device or tab." read once, with the cursor still in Guided notes, and Keep
-    the text on this screen, then Load the other version, as the next two stops after Today, the back link. Press Load
-    the other version and look for the participant's name and the date read as focus moves to the heading.
-    (note-form.md's *Announcements* for what T10 builds; app-shell.md's Sign out with a note not saved.)
+    connection on and press nothing: look for "Saved" and the time read. Then open the second participant's note,
+    type a word and wait for "Saved"; open the same note in a second tab, type a word there and wait for "Saved"; go
+    back to the first tab and type a word there: look for "This note was changed on another device or tab." read once,
+    with the cursor still in Guided notes, and Keep the text on this screen, then Load the other version, as the next
+    two stops after Today, the back link. Press Load the other version and look for the participant's name and the
+    date read as focus moves to the heading. (The first tab saves before the second opens, as a tab's first save of a
+    note takes it over with no banner: design.md §5.6. note-form.md's *Announcements* for what T10 builds;
+    app-shell.md's Sign out with a note not saved.)

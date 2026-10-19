@@ -44,7 +44,9 @@ export function signInCount(): number {
 // idle: 30 minutes after the newest request that it accepted, the session cookie's `ExpireTimeSpan` (design.md §8.4),
 // with the warning from 28 minutes (A24). It never sends a request, which would extend the session, though at 28:00 it
 // has autosave send a note form's change waiting, in place of the warning; and the server's answer always wins over it.
-const warnAfter = 28 * 60_000;
+
+/** When the warning opens, in idle milliseconds, at which autosave's unattended retries stop too (A66). */
+export const warnAfter = 28 * 60_000;
 const endAfter = 30 * 60_000;
 
 // The idle times at which the phase moves on: the warning, its countdown's steps (app-shell.md component 6), the end.

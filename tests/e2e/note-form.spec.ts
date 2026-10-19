@@ -1708,7 +1708,7 @@ test('signed in for real at 375 px, two tabs on a draft: the older meets the ban
   }
 });
 
-test('signed in for real, a tab closed mid-sentence: the note opened again lacks at most its last few seconds', async ({
+test('signed in for real, a tab killed mid-sentence: the note opened again lacks at most its last few seconds', async ({
   page,
   invite,
   authenticator,
@@ -1721,7 +1721,9 @@ test('signed in for real, a tab closed mid-sentence: the note opened again lacks
   const address = (await row(page, janeCitizen.name).getAttribute('href')) ?? '';
 
   // In a tab of its own, a sentence, saved; then a long one typed with no pause, at 20 characters a second at most,
-  // and the tab closed in the middle of it.
+  // and the tab killed in the middle of it, as a phone kills a tab in the background, so that nothing more of the page
+  // runs, not even the page-hidden save that a tab closed by the browser sends (note-form.md item 9, which its own test
+  // proves): the note keeps only what the saves made while typing carried.
   await secondTab.setViewportSize({ width: 375, height: 812 });
   await secondTab.goto(address);
   const first = 'Went to the shops and bought bread.';
@@ -1731,11 +1733,16 @@ test('signed in for real, a tab closed mid-sentence: the note opened again lacks
     ' Then she walked home along the river, stopping twice to rest on the benches by the boat ramp, and talked about'
     + ' the ducks, the weather and her sister, whom she phoned as soon as she got in, to say';
   await box(secondTab).pressSequentially(second, { delay: 50 });
+  const crashed = secondTab.waitForEvent('crash');
+  // Chromium's chrome://crash, as Playwright's own tests crash a page: the renderer stops at once, unloading nothing,
+  // so that this navigation never ends.
+  void secondTab.goto('chrome://crash').catch(() => {});
+  await crashed;
   await secondTab.close();
 
   // Opened again in the first tab, the note holds the text as typed but for its last few seconds (design.md §14 M2):
   // a save goes at most 5 s after the first change that it carries, so every character typed more than 6 s before the
-  // tab closed, and so some of the second sentence.
+  // tab was killed, and so some of the second sentence.
   await row(page, janeCitizen.name).click();
   await expect(box(page)).toBeVisible();
   const kept = await box(page).inputValue();
@@ -1959,6 +1966,42 @@ test('the page made hidden sends the newest state at once, with keepalive, while
   expect(fetchesSent.filter(({ method }) => method === 'PUT')).toEqual([{ method: 'PUT', keepalive: true }]);
   expect(store.saves).toHaveLength(1);
   await setHidden(page, false);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops');
+});
+
+test('a draft reopened in a new page load, its first save lost, saves as a new page’s first, with no banner', async ({
+  page,
+}) => {
+  const store = twoGoals();
+  await openJanesNote(page, store);
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  // Opened again in a new page load, whose saves have a clientId of their own, while the draft holds the earlier
+  // page's; the new page's first save is lost before it reaches the server, as with no signal, so that its retry, 1 s
+  // later, is its save 2, which the server answers 409 draft.taken_over (design.md §5.6).
+  await page.reload();
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await page.route(
+    ({ pathname }) => pathname.endsWith('/draft'),
+    (route) => (route.request().method() === 'PUT' ? route.abort('internetdisconnected') : route.fallback()),
+    { times: 1 },
+  );
+  const before = store.saves.length;
+  await box(page).press('ControlOrMeta+End');
+  await box(page).pressSequentially(' Bought bread.');
+
+  // None of the page's saves of the note had been answered, so it sends the save again at once as a new page's
+  // first, under a new clientId as save 1, which takes the note over: "Saved", and no banner (T10's Notes).
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm', { timeout: 5_000 });
+  await expect(takeover(page)).toHaveCount(0);
+  const sent = store.saves.slice(before);
+  expect(sent.map(({ seq, narrative }) => [seq, narrative])).toEqual([
+    [2, 'Went to the shops. Bought bread.'],
+    [1, 'Went to the shops. Bought bread.'],
+  ]);
+  expect(sent[1].clientId).not.toBe(sent[0].clientId);
+  expect(store.draft(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops. Bought bread.' });
   await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops');
 });
 

@@ -3529,8 +3529,12 @@ older page is told the note has moved on, and nothing is overwritten without ask
     number, one below 1 included, which the app never sends, is the takeover's `409`.
   - Each attempt of a save is a new `seq`, as T08's identity gives it: a retry reads the form and takes the next
     number as it is sent, so that newer text never goes under a number that the server has applied. So a page's first
-    save of a draft that another page saved last, lost before it reached the server and retried as `seq` 2, meets the
-    takeover banner, whose Keep loses nothing.
+    save of a draft that another page saved last, lost before it reached the server and retried as `seq` 2, gets the
+    takeover's `409`. While none of the page's saves of the note has been answered, the page has not saved it, so the
+    save goes again at once under a new `clientId` as `seq` 1, which §5.6 lets take the note over, with no banner,
+    however the numbers were used up: a request with no answer, a `5xx`, `408` or `429`, a token request that failed,
+    a `401`, or a page-hidden save. A page-hidden save leaves such a `409` to the regular saves, as it leaves its other
+    failures (review, below).
   - Transient (step 2) means no whole answer (status `0`, `api()`'s 10 s timeout included), `408`, `429`, `500`,
     `502`, `503` or `504`. A `Retry-After` on a `429` or `503`, in seconds or as an HTTP date, is the next delay in
     place of the back-off's, `ApiError` carrying it from `api()`. Any other refusal is not retried, and one that is
@@ -3547,8 +3551,12 @@ older page is told the note has moved on, and nothing is overwritten without ask
     is. A lists-changed reload that fails for a transient reason is retried as a failure of the save, where T08 left
     it for the next change or blur. TanStack resumes a save that waited offline only once the page is shown (its
     `focusManager`), so the browser coming online while the page is hidden sends the newest state at once, as the
-    page-hidden save does. With no antiforgery token held, the page-hidden save's token request goes first, as a
-    normal `fetch`.
+    page-hidden save does. The form fetches the antiforgery token as it opens, and again as the same person's sign-in,
+    which drops it, shows the form again (`prepareChanges()` in `api.ts`), so that the page-hidden save is one
+    keepalive request, never waiting first on a token request that a frozen page would not send (review, below). The
+    retries stop 28 minutes after the person last acted on the form, by a change, a blur, the page shown again, their
+    sign-in in place, Keep or Submit, "Not saved: …" kept, until their next change, blur, return to the page or sign-in
+    in place (A66; review, below).
   - `flushNow()` gives `true` at once with nothing unsaved, or after a dead end, and otherwise once a save carrying
     the newest change is answered; `checkSave()` gives the content once its own `PUT` is answered carrying the newest
     change. Every other outcome gives `false`, or nothing, as it comes: "Not saved" shown, a takeover, a `401`, a dead
@@ -3643,6 +3651,37 @@ older page is told the note has moved on, and nothing is overwritten without ask
   warning's tests to share (tests/README.md). The by-hand checks are ops/first-use-in-test.md steps 58 to 62,
   S02.02.06's manual check step 59 and S02.02.05's step 61. The step stays unticked until CI's run on the pull request
   passes and is recorded here, as T05's and T09's matching steps did, as the branch is not yet pushed.
+- 19 October 2026, review: 6 findings were confirmed and are fixed here:
+  - Unattended retries kept a session alive while the server failed fast and for long, such as a database refusing
+    its login or out of space, as each `5xx` counts as activity and comes with the session cookie renewed (A57): a
+    form left open on a shared laptop never warned, and its session lasted up to §8.5's 12 hours. The retries now stop
+    28 minutes after the person last acted on the form, "Not saved: …" kept and the change in memory, so that the
+    clock warns 28 minutes after the last retry and ends the session as on any idle page; the next change, blur,
+    return to the page or sign-in in place starts them again (A66, which settles autosave-status.md's "Retry
+    indefinitely" against §8.5's "the SPA never polls in the background"). Vitest: no retry after the 28 minutes, and
+    a change or a blur sending again (`useAutosave.test.tsx`); the warning opening 28 minutes after the last retry of
+    a server answering `500` (`NotePage.test.tsx`).
+  - The page-hidden save of a page load's first change, or of the first after a sign-in, waited on an antiforgery
+    token request, which a phone that freezes the page as it is hidden may never send, losing that change if the tab
+    is then discarded (step 58's check would meet it). The form now fetches the token as it opens and as the same
+    person's sign-in shows it again (`prepareChanges()`), so that the page-hidden save is one keepalive request.
+    Vitest: no token request after the hide, at the form's opening and after a sign-in in place, and
+    `prepareChanges()` in `api.test.ts`. app-shell.md's as-built note records the token request after a sign-in on
+    the note form, where its *Sign in again, same person* row says none is sent.
+  - A stray `//` inside tests/e2e/fixtures.ts's comment over `test`.
+  - The closed-tab test passed on the page-hidden save that Chromium sends as a tab closes, whatever the 5 s saves
+    did. It now kills the tab with Chromium's `chrome://crash`, as Playwright's own tests crash a page, so that nothing
+    more of the page runs and the note keeps only the saves made while typing: on a local run it kept 191 to 194 of
+    231 characters, and with the 5 s save broken it failed where the old test passed. It is the automated half of
+    §14 M2's closed browser and of S02.02.06's manual check; the page-hidden save has its own test.
+  - A reopened draft whose first save from a new page load failed met a false takeover banner, as the retry went as
+    `seq` 2, and Load would then have replaced the words typed since: such a `409` now sends the save again at once as
+    a new page's first (the bullet on each attempt's `seq`, above). Vitest: a first save with no connection, and a
+    page-hidden save that used up `seq` 1 offline (`useAutosave.test.tsx`); Playwright: a draft reopened by a reload,
+    its first save aborted, then "Saved" with no banner, under a new `clientId` as `seq` 1 (note-form.spec.ts).
+  - ops/first-use-in-test.md step 62's two tabs could never show the takeover banner, as the first tab had not saved
+    that note, and its first save is `seq` 1, which takes the note over: the first tab now saves a word before the
+    second tab opens.
 
 ### Steps
 
@@ -3669,8 +3708,8 @@ older page is told the note has moved on, and nothing is overwritten without ask
 - [x] Autosave keeps trying, and saves as the page is hidden (S02.02.04's third and fourth criteria and its links to
       design.md §3.4 *Autosave*, §4.3's save indicator, §5.6 *Client behaviour* and note-form.md items 9, 11, 12 and
       13; autosave-status.md *Behaviour* 1, 2 and 4; T09's hand-off of item 25's press during "Not saved"): in
-      `useAutosave`, a save that fails for a transient reason (Notes) is retried for as long as the form is open,
-      after 1, 2, 4 and 8 s and then every 10 s, or after a `Retry-After`, and after `401`, `403`, `409`, `412` and
+      `useAutosave`, a save that fails for a transient reason (Notes) is retried within A66's bound, after 1, 2,
+      4 and 8 s and then every 10 s, or after a `Retry-After`, and after `401`, `403`, `409`, `412` and
       `422` never; its mutation has `networkMode: 'online'`, so that the browser going offline pauses it and coming
       online sends it; each attempt reads the form and takes the next `seq` as it is sent (Notes); "Saving…" shows
       through the first failure, then the indicator's new failed state, "Not saved: no connection. Keep this page
@@ -3766,7 +3805,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       holding what was typed offline (item 11); a `PUT` let through to the server and its answer aborted, then
       "Saved" with no banner and the text saved once (item 12, §14 M2); two tabs on one draft, the older tab's next
       save showing the banner, Keep winning and the other tab then meeting it, and Load replacing the ticks, text,
-      flag and reason with focus on the `<h1>` (items 15 and 16); a tab closed mid-sentence, then the note opened in
+      flag and reason with focus on the `<h1>` (items 15 and 16); a tab killed mid-sentence, then the note opened in
       a new page holding the text up to the last few seconds (§14 M2's closed browser; the automated half of
       S02.02.06's manual check); the form left and opened again in the same page load, its next save applied (item
       13); the back link and the Past notes link with a change waiting sending it, then leaving, and staying while

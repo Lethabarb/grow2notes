@@ -2,6 +2,7 @@ import { onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../../api/api.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import type { Draft } from './noteQueries.ts';
 import type { SaveIndicator } from './SaveIndicator.tsx';
@@ -50,6 +51,9 @@ describe('sentContent', () => {
 // form shows of it is in NotePage.test.tsx.
 
 const antiforgeryPath = '/api/auth/antiforgery';
+
+// One of the calls that sign someone in, after whose answer `api()` holds no antiforgery token.
+const signInPath = '/api/auth/passkey';
 
 /** A new note's template, as `GET {base}/draft` gives it, with no goals, whose first save sends its lists' version. */
 const template: Draft = {
@@ -173,9 +177,22 @@ function renderAutosave(opened: Draft = template) {
   };
 }
 
+/** What `renderAutosave()` gives. */
+type Rendered = ReturnType<typeof renderAutosave>;
+
 /** Moves the fake clock on by `ms`, and lets every request, retry and render that falls due by then run. */
 async function wait(ms: number) {
   await act(() => vi.advanceTimersByTimeAsync(ms));
+}
+
+/** How many times the antiforgery token has been asked for. */
+function tokenRequests(): number {
+  return fetchMock.mock.calls.filter(([path]) => path === antiforgeryPath).length;
+}
+
+/** A sign-in answered, as the signed-out-in-place view's, after which `api()` holds no antiforgery token. */
+async function signIn() {
+  await api(signInPath, { method: 'POST', body: {} });
 }
 
 /** Makes the page hidden or visible, with the event that the browser fires. */
@@ -221,6 +238,10 @@ beforeEach(() => {
   fetchMock.mockImplementation((path, init) => {
     if (path === antiforgeryPath) {
       return Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } }));
+    }
+
+    if (path === signInPath) {
+      return Promise.resolve(new Response('{}', { headers: { 'Content-Type': 'application/json' } }));
     }
 
     if (init?.method !== 'PUT') {
@@ -338,6 +359,51 @@ describe('A save that fails', () => {
     expect(said).toEqual(['none', 'saving', 'saved']);
   });
 
+  it.each([
+    {
+      act: 'a change',
+      text: 'Jane made toast.',
+      resume: ({ type }: Rendered) => {
+        type('Jane made toast.');
+      },
+    },
+    {
+      act: 'a blur',
+      text: 'Jane',
+      resume: ({ autosave }: Rendered) => {
+        act(() => {
+          autosave().flush();
+        });
+      },
+    },
+  ])(
+    'stops 28 minutes after the person last acted on the form, "Not saved" kept, and goes on at $act',
+    async ({ text, resume }) => {
+      answerSaves(problem(500));
+      const rendered = renderAutosave();
+      const start = Date.now();
+      rendered.type('Jane');
+      act(() => {
+        rendered.autosave().flush();
+      });
+
+      // Every 10 s from the fifth retry on, the last of them sent less than 28 minutes after the change.
+      await wait(60 * 60_000);
+      const sent = sentSaves.length;
+      expect(sentSaves.at(-1)!.at - start).toBeLessThan(28 * 60_000);
+      expect(sentSaves.at(-1)!.at - start).toBeGreaterThanOrEqual(28 * 60_000 - 10_000);
+      expect(rendered.said.at(-1)).toBe('failed');
+      expect(rendered.autosave().unsaved()).toBe(true);
+
+      resume(rendered);
+      await wait(2_000);
+      expect(sentSaves).toHaveLength(sent + 1);
+      expect(sentSaves.at(-1)!.body.narrative).toBe(text);
+      await wait(10_000);
+      expect(sentSaves).toHaveLength(sent + 2);
+    },
+  );
+
   it('waits while the browser is offline, "Not saved" at once, then goes with the newest text online', async () => {
     const { type, said } = renderAutosave();
     type('Jane');
@@ -413,6 +479,22 @@ describe('The page hidden and shown again', () => {
       [2, 'Jane', true],
     ]);
     expect(said).toEqual(['none', 'saving', 'failed', 'saved']);
+  });
+
+  it('fetches the antiforgery token as the form opens, so that the page-hidden save is one request', async () => {
+    // No token held, as on the first page load or after a sign-in.
+    await signIn();
+    const beforeOpening = tokenRequests();
+    const { type } = renderAutosave(reopened);
+    await wait(0);
+    expect(tokenRequests()).toBe(beforeOpening + 1);
+
+    type('Jane');
+    showPage('hidden');
+    await wait(0);
+
+    expect(tokenRequests()).toBe(beforeOpening + 1);
+    expect(sentSaves.map(({ body, keepalive }) => [body.seq, keepalive])).toEqual([[1, true]]);
   });
 
   it('sends nothing as the page is hidden with no change unsaved', async () => {
@@ -771,5 +853,74 @@ describe('Taken over by another page', () => {
       [2, 'Jane made toast.'],
       [1, 'Jane made toast.'],
     ]);
+  });
+
+  /**
+   * The server's answers for a draft that another page saved last, as its save 3, by design.md §5.6's rules: from
+   * another `clientId`, `seq` 1 takes the working copy over and any other number is `409 draft.taken_over`.
+   */
+  function heldByAnotherPage(): Answer {
+    const last = { clientId: crypto.randomUUID(), seq: 3 };
+    return () => {
+      const { clientId, seq } = sentSaves.at(-1)!.body as { clientId: string; seq: number };
+      if (clientId === last.clientId) {
+        last.seq = Math.max(last.seq, seq);
+      } else if (seq === 1) {
+        Object.assign(last, { clientId, seq });
+      } else {
+        return takenOver();
+      }
+
+      return saved('2026-09-30T23:44:00Z')();
+    };
+  }
+
+  it("resends a reopened draft as a new clientId's 1, with no banner, when its first save was lost", async () => {
+    answerSaves(noConnection, heldByAnotherPage());
+    const { autosave, type, said } = renderAutosave(reopened);
+    type('Jane');
+    act(() => {
+      autosave().flush();
+    });
+    await wait(1_000);
+
+    const lostId = sentSaves[0].body.clientId;
+    expect(sentSaves.map(({ body }) => [body.clientId === lostId, body.seq, body.narrative])).toEqual([
+      [true, 1, 'Jane'],
+      [true, 2, 'Jane'],
+      [false, 1, 'Jane'],
+    ]);
+    expect(said).toEqual(['draft', 'saving', 'saved']);
+
+    // The page's next save goes on under the new clientId, which the server now holds as the last to save.
+    type('Jane made toast.');
+    act(() => {
+      autosave().flush();
+    });
+    await wait(0);
+    expect(sentSaves[3].body).toMatchObject({ clientId: sentSaves[2].body.clientId, seq: 2 });
+    expect(said.at(-1)).toBe('saved');
+  });
+
+  it('sends it again so too after the page-hidden save used up the first number offline', async () => {
+    answerSaves(noConnection, heldByAnotherPage());
+    const { type, said } = renderAutosave(reopened);
+    type('Jane');
+    goOnline(false);
+    showPage('hidden');
+    await wait(0);
+    showPage('visible');
+    await wait(30_000);
+
+    goOnline(true);
+    await wait(0);
+
+    expect(sentSaves.map(({ body, keepalive }) => [body.seq, keepalive])).toEqual([
+      [1, true],
+      [2, undefined],
+      [1, undefined],
+    ]);
+    expect(sentSaves[2].body.clientId).not.toBe(sentSaves[0].body.clientId);
+    expect(said).toEqual(['draft', 'saving', 'failed', 'saved']);
   });
 });

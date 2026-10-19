@@ -494,7 +494,10 @@ return (
   a `5xx` included, starts the clock afresh, as any accepted request does (A57). The shell tells its screen whether the
   signed-out view hides it (`HiddenBySignInContext`), as the clock's phase cannot, since view C's passkey options and a
   different person's sign-in are accepted requests too: autosave pauses while it does, its timers and retries cleared,
-  and, as the same person's form shows again, sends at once under the same `clientId` and the next `seq`.
+  and, as the same person's form shows again, sends at once under the same `clientId` and the next `seq`. Autosave's
+  retries stop 28 minutes after the person last acted on the form, as a failing server's `5xx` answers, which renew the
+  session (A57), would otherwise keep an unattended page's session alive with no warning: the clock then warns 28
+  minutes after the last retry, as on any idle page (A66).
 
 **Submit confirmation (§4.3)**
 - If the warning is due while the confirmation is open, close the confirmation first (= Go back), then open the warning. Focus then returns to **Submit note** on the form, not to "Submit note for Jane Citizen" inside the confirmation. This avoids a quick double tap or a second Enter going from Stay signed in straight onto the commit button ([Opinion]: the two buttons sit in the same place on a phone).

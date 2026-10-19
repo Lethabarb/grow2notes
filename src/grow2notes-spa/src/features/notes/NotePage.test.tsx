@@ -2129,12 +2129,14 @@ describe('Opening the note form', () => {
     // The header and the note twice, as StrictMode mounts the page, unmounts it and mounts it again: the unmount
     // cancels the first request, whose query function takes the abort signal, and the second mount sends it again. A
     // production build sends each once. The form's read once, sent only once the note has answered, by then mounted
-    // for good. Counted rather than compared as a set, so that a read sent once more as the form opens fails.
+    // for good. Counted rather than compared as a set, so that a read sent once more as the form opens fails. Not the
+    // antiforgery token, which the form fetches as it opens unless an earlier test left one held (T10's Notes).
     const { header, note, draft } = paths(jane);
-    expect(sentRequests().toSorted()).toEqual(
+    const reads = () => sentRequests().filter((request) => request !== `GET ${antiforgeryPath}`);
+    expect(reads().toSorted()).toEqual(
       [`GET ${mePath}`, `GET ${header}`, `GET ${header}`, `GET ${note}`, `GET ${note}`, `GET ${draft}`].toSorted(),
     );
-    expect(sentRequests().indexOf(`GET ${draft}`)).toBeGreaterThan(sentRequests().lastIndexOf(`GET ${note}`));
+    expect(reads().indexOf(`GET ${draft}`)).toBeGreaterThan(reads().lastIndexOf(`GET ${note}`));
     const sent = sentRequests().length;
 
     scrollPage(400);
@@ -3807,6 +3809,29 @@ describe('The session and Sign out', () => {
       expect(warning()).not.toBeNull();
       expect(saves()).toHaveLength(1);
     });
+
+    it("stops a failing server's retries 28 minutes after the change, so the warning opens 28 minutes on", async () => {
+      // Every save after the first answered 500, which the clock counts as accepted, as the server renews the session
+      // with it (A57).
+      await openForSession(inTurn(saved('2026-09-30T23:42:00Z'), problem(500)));
+      await write('Jane made toast.');
+      const from = Date.now();
+      type('Jane made toast. Then a walk.');
+
+      await at('28:00', from);
+      const sent = saves().length;
+      expect(warning()).toBeNull();
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+
+      // The last retry went at 27:57, 10 s after the one before, and nothing more is sent, so the clock warns 28
+      // minutes after it, as on any idle page.
+      await at('55:56', from);
+      expect(warning()).toBeNull();
+      await at('55:58', from);
+      expect(warning()).not.toBeNull();
+      expect(saves()).toHaveLength(sent);
+      expect(shownSaveStatus()).toBe(notSavedRetrying);
+    });
   });
 
   describe('signed out in place', () => {
@@ -3879,6 +3904,31 @@ describe('The session and Sign out', () => {
       expect(saves().map(({ path, body }) => [path, body.clientId, body.seq, body.narrative])).toEqual([
         [paths(participant).draft, clientId, 1, 'Jane made toast.'],
         [paths(participant).draft, clientId, 2, 'Jane made toast. Then a walk.'],
+      ]);
+    });
+
+    it('fetches a token as the same person signs in again, so that the page-hidden save is one request', async () => {
+      await openForSession();
+      await write('Jane made toast.');
+      serve(mePath, problem(401));
+      act(() => {
+        window.dispatchEvent(new FocusEvent('focus'));
+      });
+      await settle();
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+
+      // The sign-in drops the token that the page held (api.ts), and the form fetches another as it shows again.
+      await signInAgain();
+      const tokenRequests = () => sentRequests().filter((request) => request === `GET ${antiforgeryPath}`).length;
+      const fetched = tokenRequests();
+      type('Jane made toast. Then a walk.');
+      showPage('hidden');
+      await settle();
+
+      expect(tokenRequests()).toBe(fetched);
+      const hiddenSave = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT').slice(1);
+      expect(hiddenSave.map(([, init]) => [init?.keepalive, new Headers(init?.headers).has('X-XSRF-TOKEN')])).toEqual([
+        [true, true],
       ]);
     });
 

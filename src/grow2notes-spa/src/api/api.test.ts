@@ -8,6 +8,7 @@ let apiWithHeaders: typeof ApiModule.apiWithHeaders;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
 let isNotFound: typeof ApiModule.isNotFound;
+let prepareChanges: typeof ApiModule.prepareChanges;
 let onSessionEnded: typeof SessionModule.onSessionEnded;
 let signInCount: typeof SessionModule.signInCount;
 
@@ -125,7 +126,7 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, apiWithHeaders, ApiError, classify, isNotFound } = await import('./api.ts'));
+  ({ api, apiWithHeaders, ApiError, classify, isNotFound, prepareChanges } = await import('./api.ts'));
   ({ onSessionEnded, signInCount } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -711,6 +712,40 @@ describe('api', () => {
       expect(trail()).toEqual([tokenRequest]);
 
       await api('/api/admin/users', { method: 'POST', body: {} });
+      expect(trail()).toEqual([tokenRequest, tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is fetched by prepareChanges() ahead of a change, which then goes alone with it', async () => {
+      serve(done(201));
+
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(trail()).toEqual([tokenRequest]);
+
+      await api('/api/admin/users', { method: 'POST', body: {} });
+      expect(trail()).toEqual([tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is not fetched again by prepareChanges() while one is held or on its way', async () => {
+      serve(done(201));
+
+      prepareChanges();
+      prepareChanges();
+      await api('/api/admin/users', { method: 'POST', body: {} });
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(trail()).toEqual([tokenRequest, 'POST /api/admin/users with token-1']);
+    });
+
+    it('is asked for again by the next change when prepareChanges() fails to get one, throwing nothing', async () => {
+      serve(done(201));
+      fetchMock.mockImplementationOnce(() => Promise.reject(new TypeError('Failed to fetch')));
+
+      prepareChanges();
+      await vi.advanceTimersByTimeAsync(0);
+      await api('/api/admin/users', { method: 'POST', body: {} });
+
       expect(trail()).toEqual([tokenRequest, tokenRequest, 'POST /api/admin/users with token-1']);
     });
 

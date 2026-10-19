@@ -1,7 +1,7 @@
 import { onlineManager, useMutation } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
-import { api, ApiError, classify, type Failure, type StartedBy } from '../../api/api.ts';
-import { registerSaveFlush } from '../../api/session.ts';
+import { api, ApiError, classify, prepareChanges, type Failure, type StartedBy } from '../../api/api.ts';
+import { registerSaveFlush, warnAfter } from '../../api/session.ts';
 import { limits } from '../../limits.ts';
 import { useHiddenBySignIn } from '../../routes/hiddenBySignIn.ts';
 import { noteBase, readDraft, type Draft, type DraftAnswer } from './noteQueries.ts';
@@ -13,7 +13,8 @@ const quietMs = 2_000;
 // pause still saves every few seconds (design.md §14 M2).
 const longestMs = 5_000;
 // autosave-status.md *Behaviour* 4: a save that failed for a transient reason goes again after 1, 2, 4 and 8 s, then
-// every 10 s, for as long as the form is open.
+// every 10 s, for as long as the form is open and the person has acted on it within the session warning's 28 minutes
+// (A66).
 const firstRetryMs = 1_000;
 const longestRetryMs = 10_000;
 // design.md §5.6: browsers cap a keepalive request's body at 64 KiB, so the page-hidden save uses keepalive only for a
@@ -33,8 +34,11 @@ export type DraftContent = { narrative: string; tickedGoalIds: string[]; isFlagg
 /** The note's content as `PUT {base}/draft` and `POST {base}/versions` alike send it (design.md §6.3). */
 export type SentContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string | null };
 
+/** What a save sends beside its identity: the content, and the lists' version until the note exists. */
+type SavedFields = SentContent & { listsVersion?: string };
+
 /** `PUT {base}/draft`'s body (design.md §6.3), as far as this form fills it. */
-type DraftSaveBody = SentContent & { clientId: string; seq: number; listsVersion?: string };
+type DraftSaveBody = SavedFields & { clientId: string; seq: number };
 
 /** A save's answer, the time the working copy was saved, in UTC. */
 type DraftSaved = { savedAtUtc: string };
@@ -48,8 +52,11 @@ type Answered = { carried: number; content: DraftContent; savedAtUtc: string };
  */
 type SaveEvent = { kind: 'saved'; content: DraftContent } | { kind: 'notSaved' | 'refused' | 'deadEnd' };
 
-/** This page load's saves of a note: their random ID, and the number of the last one sent (design.md §5.6). */
-type SaveIdentity = { clientId: string; seq: number };
+/**
+ * This page load's saves of a note: their random ID, the number of the last one sent (design.md §5.6), and whether one
+ * of them has been answered.
+ */
+type SaveIdentity = { clientId: string; seq: number; answered: boolean };
 
 /**
  * Each note's identity of this page load's saves, by participant and date (autosave-status.md *Behaviour* 3), made at
@@ -58,16 +65,16 @@ type SaveIdentity = { clientId: string; seq: number };
  */
 const identities = new Map<string, SaveIdentity>();
 
-/** The identity of the next save of the note at `key`, with the next number. */
+/** The identity of the note at `key`, its number moved on to the next save's. */
 function nextIdentity(key: string): SaveIdentity {
   let identity = identities.get(key);
   if (identity === undefined) {
-    identity = { clientId: crypto.randomUUID(), seq: 0 };
+    identity = { clientId: crypto.randomUUID(), seq: 0, answered: false };
     identities.set(key, identity);
   }
 
   identity.seq += 1;
-  return { ...identity };
+  return identity;
 }
 
 /**
@@ -236,6 +243,11 @@ type Progress = {
   longest: number | undefined;
   /** The retry of a save that failed for a transient reason, which carries what the form holds as it goes. */
   retry: number | undefined;
+  /**
+   * When the person last acted on the form, by `Date.now()`: a change, a blur, the page shown again, their sign-in in
+   * place, Keep or Submit; 0 before any. A retry goes only within the session warning's 28 minutes of it (A66).
+   */
+  attendedAt: number;
   /** What waits on the saves, each told what happens next, and giving `true` once that is its answer. */
   waiters: Set<(event: SaveEvent) => boolean>;
 };
@@ -250,21 +262,25 @@ type Progress = {
  * again at once with their version, "Saving…" shown throughout (autosave-status.md *Behaviour* 5). A dead end stops
  * autosave, with "Not saved".
  *
- * A save that fails for a transient reason goes again for as long as the form is open, after the back-off's wait or a
- * `Retry-After`, each attempt reading the form and taking the next number as it is sent (T10's Notes): "Saving…" shows
- * through the first failure, then "Not saved: no connection…" from the second, or at once for a `Retry-After` longer
- * than the first retry's wait, or while the browser is offline, when the save waits for it to be online again, until
- * a save carrying the newest change is answered. Any other refusal is not retried, and leaves its change for the next
- * change or blur. As the page is hidden, the newest state goes at once, beside any save out, and again as the browser
- * comes online while it is hidden; as it is shown again, an unsaved change goes at once, the wait for a retry cut
- * short. Submit runs a check save before its confirmation opens, and pauses autosave while its own request is out
- * (autosave-status.md *Behaviour* 6).
+ * A save that fails for a transient reason goes again while the form is open, after the back-off's wait or a
+ * `Retry-After`, each attempt reading the form and taking the next number as it is sent (T10's Notes), until 28 minutes
+ * after the person last acted on the form, when the retries stop until they act again (A66): "Saving…" shows through
+ * the first failure, then "Not saved: no connection…" from the second, or at once for a `Retry-After` longer than the
+ * first retry's wait, or while the browser is offline, when the save waits for it to be online again, until a save
+ * carrying the newest change is answered. Any other refusal is not retried, and leaves its change for the next change
+ * or blur. As the page is hidden, the newest state goes at once, beside any save out, and again as the browser comes
+ * online while it is hidden; as it is shown again, an unsaved change goes at once, the wait for a retry cut short. The
+ * antiforgery token is fetched as the form opens, so that the page-hidden save is one request. Submit runs a check
+ * save before its confirmation opens, and pauses autosave while its own request is out (autosave-status.md
+ * *Behaviour* 6).
  *
  * A `409 draft.taken_over`, as another page has saved the note since, from a save or Submit's check save, pauses
  * autosave until the takeover banner is answered, with "Not saved" (autosave-status.md *Behaviour* 5): it is not a
  * dead end. Each change made meanwhile is counted and kept, but neither said nor sent. Keep sends what the form holds
  * then under a new identity, numbered from 1, and Load reads the other version for the form to show, after which the
- * next save does so too (*Behaviour* 3 and 9).
+ * next save does so too (*Behaviour* 3 and 9). To a page none of whose saves of the note has been answered, the `409`
+ * comes of the numbers that its failed attempts used up, so its save goes again at once under a new identity,
+ * numbered from 1, with no banner (T10's Notes).
  *
  * The session's end pauses autosave too, while the signed-out-in-place view hides the form, from 30:00 idle or the
  * `401` that ends the session, its timers and retries cleared and every change kept and counted, but not sent
@@ -308,6 +324,7 @@ export function useAutosave({
     quiet: undefined,
     longest: undefined,
     retry: undefined,
+    attendedAt: 0,
     waiters: new Set(),
   });
 
@@ -337,6 +354,12 @@ export function useAutosave({
     };
   }, [opened]);
 
+  // The page-hidden save must go in one request, as the browser may freeze the page once it is hidden, so the
+  // antiforgery token is fetched as the form opens, rather than as that save is sent (T10's Notes).
+  useEffect(() => {
+    prepareChanges();
+  }, []);
+
   // Hidden, as on a switch to another app, the page may be frozen or closed next, so the newest state goes at once;
   // shown again, an unsaved change goes at once too (autosave-status.md *Behaviour* 1).
   const onVisibilityChange = useEffectEvent(() => {
@@ -348,6 +371,7 @@ export function useAutosave({
     if (document.visibilityState === 'hidden') {
       sendHidden(state);
     } else {
+      state.attendedAt = Date.now();
       sendNow(state);
     }
   });
@@ -395,7 +419,10 @@ export function useAutosave({
       stopRetry(state);
     } else if (state.signedOut) {
       state.signedOut = false;
+      // The sign-in dropped the antiforgery token, which the page-hidden save needs held.
+      prepareChanges();
       if (canSend(state) && state.saved < state.made) {
+        state.attendedAt = Date.now();
         sayUnsaved(state);
         sendNow(state);
       }
@@ -419,6 +446,7 @@ export function useAutosave({
     }
 
     state.made += 1;
+    state.attendedAt = Date.now();
     // Kept for Keep to send, while "Not saved" stays, or, hidden by the signed-out-in-place view, for the same person's
     // sign-in to send, the indicator as it was.
     if (state.takenOver || state.signedOut) {
@@ -510,8 +538,7 @@ export function useAutosave({
   }
 
   // The form as it is now, under the note's next save number, while autosave may send; otherwise nothing, as for a
-  // save that waited for the browser to be online while Submit's request went out or the form was left. The
-  // page-hidden save goes with keepalive while its body fits under the browser's cap.
+  // save that waited for the browser to be online while Submit's request went out or the form was left.
   async function put(state: Progress, hidden: boolean): Promise<Answered | undefined> {
     if (!canSend(state)) {
       return undefined;
@@ -519,18 +546,40 @@ export function useAutosave({
 
     const carried = state.made;
     const content = callbacks.current.read();
-    const body: DraftSaveBody = {
-      ...nextIdentity(noteKey),
+    const fields: SavedFields = {
       ...(state.started || state.listsVersion === undefined ? {} : { listsVersion: state.listsVersion }),
       ...sentContent(content),
     };
+    try {
+      return { carried, content, savedAtUtc: await saveAs(fields, hidden) };
+    } catch (error) {
+      // A takeover's 409 to a page that has had none of its saves of the note answered comes of the numbers that its
+      // failed attempts used up, as when its first never left the browser: this page has not saved the note, so the
+      // save goes again at once as a new page's first, which takes the note over (design.md §5.6; T10's Notes). A
+      // page-hidden save leaves it to the regular saves, as it leaves its other failures.
+      const firstSave = identities.get(noteKey)?.answered === false;
+      if (hidden || !firstSave || !(error instanceof ApiError) || error.code !== 'draft.taken_over') {
+        throw error;
+      }
+
+      identities.delete(noteKey);
+      return { carried, content, savedAtUtc: await saveAs(fields, false) };
+    }
+  }
+
+  // One `PUT` of `fields` under the note's next identity, which its answer marks as answered. The page-hidden save
+  // goes with keepalive while its body fits under the browser's cap.
+  async function saveAs(fields: SavedFields, hidden: boolean): Promise<string> {
+    const identity = nextIdentity(noteKey);
+    const body: DraftSaveBody = { clientId: identity.clientId, seq: identity.seq, ...fields };
     const keepalive = hidden ? new TextEncoder().encode(JSON.stringify(body)).length < keepaliveBytes : undefined;
     const { savedAtUtc } = await api<DraftSaved>(`${noteBase(participantId, noteDate)}/draft`, {
       method: 'PUT',
       body,
       keepalive,
     });
-    return { carried, content, savedAtUtc };
+    identity.answered = true;
+    return savedAtUtc;
   }
 
   // Its answer counts as any save's; its failure is left to the retries of the saves that the timers or the save out
@@ -610,6 +659,14 @@ export function useAutosave({
 
     state.retry = window.setTimeout(() => {
       state.retry = undefined;
+      // Nobody has acted on the form for as long as the session warning waits, so the retries stop until the next
+      // change, blur, return to the page or sign-in, "Not saved: …" kept: a failing server's answers would otherwise
+      // keep an unattended session alive, never letting the clock warn and end it (A66).
+      if (Date.now() - state.attendedAt >= warnAfter) {
+        sayFailed(state);
+        return;
+      }
+
       send(state);
     }, wait);
   }
@@ -654,6 +711,7 @@ export function useAutosave({
       return undefined;
     }
 
+    state.attendedAt = Date.now();
     stopTimers(state);
     stopRetry(state);
     saySaving(state);
@@ -771,6 +829,7 @@ export function useAutosave({
     state.takenOver = false;
     // What the form holds differs from what the server does, the other version, as a change does.
     state.made += 1;
+    state.attendedAt = Date.now();
     sayUnsaved(state);
     sendNow(state);
   }
@@ -825,7 +884,10 @@ export function useAutosave({
 
   return {
     changed,
-    flush,
+    flush: () => {
+      progress.current.attendedAt = Date.now();
+      flush();
+    },
     unsaved,
     flushNow,
     checkSave,

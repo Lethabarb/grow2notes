@@ -672,7 +672,10 @@ The middle dot in "Draft · saved" is `<span aria-hidden="true"> · </span>` plu
 
 As built (T10): **Not saved** shows at once for a change typed while the browser reports offline, and for a
 `Retry-After` longer than the first retry's 1 s. Once it shows, a save answered that did not carry the newest change
-shows **Saving…** again; **Recovered** comes only with a save that carried it. The retries' rules as built are in
+shows **Saving…** again; **Recovered** comes only with a save that carried it. The retries stop 28 minutes after the
+person last acted on the form, **Not saved** kept, until their next change, blur or return (A66). The form fetches the
+antiforgery token as it opens, and as the same person's sign-in shows it again, so that the save as the page is hidden
+(item 9) is one keepalive request, with no token request before it. The retries' rules as built are in
 autosave-status.md *Implementation notes*.
 
 ### Conflicts and refusals (autosave stops)
@@ -918,7 +921,9 @@ as the note stands now, so "when the `201` carries a `flagStatus`" is read as wh
   meanwhile, is the version-conflict dead end, and another user's draft the in-progress one, each with focus on the
   `<h1>`; a note discarded meanwhile loads a new note's empty form, the indicator empty. Keep sends what is on screen
   as a change of its own, typed or not. A press of Submit note, or of a link, while the banner shows says its sentence
-  in the page's polite region. The picks come with section 2 (T13).
+  in the page's polite region. The picks come with section 2 (T13). A takeover's `409` to a page none of whose saves
+  of the note has been answered, as when its first save never reached the server, brings no banner: the page has not
+  saved the note, so the save goes again at once as its first (autosave-status.md's as-built note).
 
 ### Leaving the form
 
