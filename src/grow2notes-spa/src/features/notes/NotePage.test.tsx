@@ -36,6 +36,7 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 const antiforgeryPath = '/api/auth/antiforgery';
 
 // note-form.md's made-up people (A35): Casey Nguyen, a worker, signed in, and the participants. Today in Melbourne is
@@ -582,6 +583,8 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // No unfinished drafts on Today, for a test that goes there.
+  serve(draftsPath, json([]));
   serve(antiforgeryPath, () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );
@@ -1131,12 +1134,14 @@ describe("A manager's Discard of someone else's draft", () => {
     await settle();
     await press(rowLink('Jane Citizen'));
     await settle();
-    // Kept from earlier visits: the manager's unfinished drafts, and the participant's Past notes.
-    client.setQueryData(['me', 'drafts'], []);
+    // Kept from earlier visits: Today's lists, from the one just left, and the participant's Past notes.
+    expect(client.getQueryData(['me', 'drafts'])).toEqual([]);
     client.setQueryData(['pastNotes', jane.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
     await press(managersDiscard());
     const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    const freshDrafts = held(json([]));
     serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
 
     await confirmDiscard();
     await settle();
@@ -1148,8 +1153,11 @@ describe("A manager's Discard of someone else's draft", () => {
     expect(document.title).toBe('Grow2Notes – Today');
     expect(within(main()).queryByRole('list')).toBeNull();
     expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    const sent = sentRequests();
+    expect(sent.lastIndexOf(`GET ${draftsPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(jane).discard}`));
     expect(client.getQueryState(['pastNotes', jane.id])?.isInvalidated).toBe(true);
     fresh.release();
+    freshDrafts.release();
     await settle();
     expect(rowLink('Jane Citizen')).toBeInTheDocument();
     expect(main()).not.toHaveTextContent(/Draft|Alex P\./);
@@ -3556,7 +3564,7 @@ describe('The Submit confirmation', () => {
 });
 
 describe('After Submit', () => {
-  it('pops back to Today, the banner focused before its <h1>, then the row Submitted, never Draft', async () => {
+  it('pops back to Today, the banner focused before its <h1>, then both lists anew, the row Submitted', async () => {
     const participant = freshParticipant();
     serveNote(participant, json(savedDraft()));
     serveSave(paths(participant).draft, saved('2026-10-01T06:10:00Z'));
@@ -3572,7 +3580,7 @@ describe('After Submit', () => {
     };
     const row = onToday(participant);
     serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
-    const { router } = renderApp('/');
+    const { router, client } = renderApp('/');
     await settle();
     expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Draft, You, saved 9:42${nbsp}am`);
     await press(rowLink('Jane Citizen'));
@@ -3580,7 +3588,9 @@ describe('After Submit', () => {
     await write();
     await press(submitButton());
     const fresh = held(json({ date: '2026-10-01', participants: [{ ...row, note: submitted }] } satisfies TodayList));
+    const freshDrafts = held(json([]));
     serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
 
     await confirmSubmit();
     await settle();
@@ -3593,12 +3603,20 @@ describe('After Submit', () => {
     for (const attribute of ['role', 'aria-live']) {
       expect(banner()).not.toHaveAttribute(attribute);
     }
-    // No row kept from before the Submit: the rows come with the list that the server gives now.
+    // No row kept from before the Submit: the rows come with the lists that the server gives now, the day's and the
+    // caller's unfinished drafts.
     expect(within(main()).queryByRole('list')).toBeNull();
     expect(main()).not.toHaveTextContent('Draft');
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
     const sent = sentRequests();
-    expect(sent.lastIndexOf(`GET ${todayPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
+    for (const path of [todayPath, draftsPath]) {
+      expect(sent.lastIndexOf(`GET ${path}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
+    }
     fresh.release();
+    await settle();
+    // Both, in one render, as Today shows its lists together.
+    expect(within(main()).queryByRole('list')).toBeNull();
+    freshDrafts.release();
     await settle();
     expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Submitted, You, 4:12${nbsp}pm`);
     expect(main()).not.toHaveTextContent('Draft');
@@ -3955,12 +3973,14 @@ describe('The Discard dialog', () => {
     await settle();
     await press(rowLink('Jane Citizen'));
     await settle();
-    // Kept from earlier visits: the caller's unfinished drafts, and the participant's Past notes.
-    client.setQueryData(['me', 'drafts'], []);
+    // Kept from earlier visits: Today's lists, from the one just left, and the participant's Past notes.
+    expect(client.getQueryData(['me', 'drafts'])).toEqual([]);
     client.setQueryData(['pastNotes', participant.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
     await openDiscardDialog();
     const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    const freshDrafts = held(json([]));
     serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
 
     await confirmDiscard();
     await settle();
@@ -3970,11 +3990,16 @@ describe('The Discard dialog', () => {
     expect(pageHeading()).toHaveFocus();
     expect(main().querySelector('[data-route-focus]')).toBeNull();
     expect(document.title).toBe('Grow2Notes – Today');
-    // No row kept from before the Discard: the rows come with the list that the server gives now.
+    // No row kept from before the Discard: the rows come with the lists that the server gives now.
     expect(within(main()).queryByRole('list')).toBeNull();
     expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    const sent = sentRequests();
+    expect(sent.lastIndexOf(`GET ${draftsPath}`)).toBeGreaterThan(
+      sent.indexOf(`POST ${paths(participant).discard}`),
+    );
     expect(client.getQueryState(['pastNotes', participant.id])?.isInvalidated).toBe(true);
     fresh.release();
+    freshDrafts.release();
     await settle();
     expect(rowLink('Jane Citizen')).toBeInTheDocument();
     expect(main()).not.toHaveTextContent('Draft');
@@ -4475,17 +4500,21 @@ describe('Leaving the form', () => {
     expect(unloadAsks()).toBe(false);
   });
 
-  it("marks Today's lists stale as the form is left for Past notes", async () => {
+  it("marks Today's lists stale as the form is left for Past notes, its unfinished drafts with the day's", async () => {
     const { participant, router, client } = await openToLeave();
-    const todayKey = ['today', '2026-10-01'];
-    // As fresh as a list fetched while the form was open.
-    client.setQueryData(todayKey, client.getQueryData(todayKey));
-    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(false);
+    const todaysKeys = [['today', '2026-10-01'], ['me', 'drafts']];
+    for (const key of todaysKeys) {
+      // As fresh as a list fetched while the form was open.
+      client.setQueryData(key, client.getQueryData(key));
+      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    }
 
     await leave('the Past notes link', router);
 
     expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
-    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(true);
+    for (const key of todaysKeys) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
   });
 
   it("lands on Today after Submit's 201, though a change was made while its request was out", async () => {

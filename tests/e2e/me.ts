@@ -30,22 +30,23 @@ export const manager: Me = {
 /**
  * Answers each `GET /api/auth/me` that the page sends from now on with `me`, in the browser, so that the request never
  * reaches the app: nobody can sign in in the end-to-end run until the sign-in stories are built (S00.05.01's Notes).
- * Everything else the page loads is the published app's, but Today's list (`serveNoParticipants`). A test that changes
+ * Everything else the page loads is the published app's, but Today's lists (`serveEmptyToday`). A test that changes
  * the person calls this again, which overrides the earlier answers, as Playwright tries the latest route first, and
  * then loads the page again, so that the SPA starts with the new person.
  */
 export async function serveMe(page: Page, me: Me): Promise<void> {
   await page.route('**/api/auth/me', (route) => route.fulfill({ json: me }));
-  await serveNoParticipants(page, me);
+  await serveEmptyToday(page, me);
 }
 
 /**
- * Answers each `GET /api/today` with no participants on `me`'s day, in the browser: Today, where the made-up person
- * lands, asks for its list, which the app, holding no session for them, would answer `401`, ending the session in
- * place.
+ * Answers each `GET /api/today` with no participants on `me`'s day, and each `GET /api/me/drafts` with no unfinished
+ * drafts, in the browser: Today, where the made-up person lands, asks for both, which the app, holding no session for
+ * them, would answer `401`, ending the session in place.
  */
-async function serveNoParticipants(page: Page, me: Me): Promise<void> {
+async function serveEmptyToday(page: Page, me: Me): Promise<void> {
   await page.route('**/api/today', (route) => route.fulfill({ json: { date: me.today, participants: [] } }));
+  await page.route('**/api/me/drafts', (route) => route.fulfill({ json: [] }));
 }
 
 /**
@@ -61,14 +62,14 @@ export async function failMe(page: Page, failure: 'no connection' | number): Pro
 
 /**
  * Answers each `GET /api/auth/me` that the page sends from now on with `me`, as `serveMe` does, but `ms` later, and
- * Today's list as `serveMe` does, at once.
+ * Today's lists as `serveMe` does, at once.
  */
 export async function holdMe(page: Page, me: Me, ms: number): Promise<void> {
   await page.route('**/api/auth/me', async (route) => {
     await wait(ms);
     await route.fulfill({ json: me });
   });
-  await serveNoParticipants(page, me);
+  await serveEmptyToday(page, me);
 }
 
 /**

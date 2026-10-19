@@ -19,6 +19,7 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 const reviewsPath = '/api/reviews?status=toReview';
 
 // Flagged's two addresses: To review's, and Reviewed's, which shows To review until T19 builds Reviewed.
@@ -342,6 +343,8 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // No unfinished drafts on Today, for a test that goes there.
+  serve(draftsPath, json([]));
   // React and React Router report each throw that a boundary catches: the list's 403 and 404 are expected, and
   // anything else shows.
   const report = console.error;

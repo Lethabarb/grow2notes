@@ -371,10 +371,11 @@ export const strings = {
     archived: 'Archived',
   },
   /**
-   * Today (today.md): the visually hidden `<h2>` before its list of participants (component 6), so that a screen
-   * reader moving by headings hears where the list starts.
+   * Today (today.md): the `<h2>` of the caller's drafts and pending edits that the day's list does not show (design.md
+   * §4.2 item 2, component 5); and the visually hidden `<h2>` before its list of participants (component 6), so that a
+   * screen reader moving by headings hears where the list starts.
    */
-  today: { participantsHeading: 'Participants' },
+  today: { unfinishedDraftsHeading: 'Your unfinished drafts', participantsHeading: 'Participants' },
   /**
    * A note's status, by its name in the API (status-tags.md *The mapping*): plain words, never a tag, first on a note's
    * status line, as on Today's rows (today.md component 8) and in the save indicator of a draft reopened.

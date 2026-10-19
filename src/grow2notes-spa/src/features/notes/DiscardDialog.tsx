@@ -8,7 +8,7 @@ import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly, stamp } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { strings } from '../../copy/strings.ts';
-import { removeMyDrafts, removeToday } from '../today/todayQuery.ts';
+import { removeToday } from '../today/todayQuery.ts';
 import { noteBase } from './noteQueries.ts';
 import { invalidatePastNotes } from './pastNotesQuery.ts';
 
@@ -92,7 +92,6 @@ export function DiscardDialog({
 
   function leaveForToday() {
     removeToday(queryClient);
-    removeMyDrafts(queryClient);
     void invalidatePastNotes(queryClient, participantId);
     onLeave?.();
     void navigate('/', { replace: true });

@@ -70,12 +70,14 @@ const commonItemGroups: AdminCommonItemGroup[] = [
   },
 ];
 
-// The made-up answers of the screens' requests, by path: Today's list and the manager screens'.
+// The made-up answers of the screens' requests, by path: Today's lists, with no unfinished drafts, and the manager
+// screens'.
 const screenAnswers: Readonly<Record<string, unknown>> = {
   '/api/today': {
     date: '2026-10-01',
     participants: participants.map(({ id, givenName, familyName }) => ({ id, givenName, familyName, note: null })),
   },
+  '/api/me/drafts': [],
   '/api/admin/users': users,
   '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
@@ -109,7 +111,7 @@ function noAnswer(init?: RequestInit): Promise<Response> {
 }
 
 /**
- * Stubs `fetch` as the server, which answers Today's list, the users', the participants', the common item groups' and
+ * Stubs `fetch` as the server, which answers Today's lists, the users', the participants', the common item groups' and
  * the To review lists and `GET /api/admin/guide-prompts` with their made-up answers and any other request,
  * `GET /api/auth/me`, with `me`, or, for none, never answers.
  */

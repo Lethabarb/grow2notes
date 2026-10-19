@@ -44,13 +44,20 @@ const madeUp: AppRoute[] = [
 const fetchMock = vi.fn<typeof fetch>();
 
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 
 /**
- * `GET /api/auth/me`'s answer for `me`, or, for a request for Today's list, which Today asks for under the header,
- * the list for `me`'s day, with no participants.
+ * `GET /api/auth/me`'s answer for `me`, or, for Today's own requests, which it sends under the header, the list for
+ * `me`'s day, with no participants, and no unfinished drafts.
  */
 function meAnswer(me: Me, path: unknown): Response {
-  const body = path === todayPath ? { date: me.today, participants: [] } : me;
+  let body: unknown = me;
+  if (path === todayPath) {
+    body = { date: me.today, participants: [] };
+  } else if (path === draftsPath) {
+    body = [];
+  }
+
   return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
 }
 
@@ -130,11 +137,13 @@ function logoutsSent() {
 }
 
 /**
- * The address of each request sent but `GET /api/auth/me` and Today's list, which the screen under the header asks
+ * The address of each request sent but `GET /api/auth/me` and Today's lists, which the screen under the header asks
  * for: the antiforgery token's and the logout's.
  */
 function signOutRequests() {
-  return fetchMock.mock.calls.map(([path]) => path).filter((path) => path !== mePath && path !== todayPath);
+  return fetchMock.mock.calls
+    .map(([path]) => path)
+    .filter((path) => path !== mePath && path !== todayPath && path !== draftsPath);
 }
 
 /**

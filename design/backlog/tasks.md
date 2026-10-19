@@ -4333,7 +4333,7 @@ manager can read it.
       "Nothing written yet."; the dialog's lines for today's and an earlier day's draft; focus on the title, and back
       on Discard draft after Go back; a `204` landing on Today with the `<h1>` focused; a `409` as step 3 says; and
       the page title "Grow2Notes – Note" with no name in `location` or `history.state`.
-- [ ] Your unfinished drafts on Today (S02.01.04's second to fifth criteria, and its links to today.md component 5, its
+- [x] Your unfinished drafts on Today (S02.01.04's second to fifth criteria, and its links to today.md component 5, its
       *Order and layout* DOM-order and drafts bullets, *Loading, empty and error*'s one-render bullet and *Refresh*;
       T08's hand-off of the DOM order with the drafts section and `LoadRegion` taking both queries; T09's and T10's
       hand-offs of `['me', 'drafts']` in Submit's removal and in the form's `invalidateToday()`): `myDraftsQuery()`,

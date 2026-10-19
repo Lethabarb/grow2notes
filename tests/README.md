@@ -186,13 +186,13 @@ test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `s
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
 it before `page.goto`. To change who is signed in, call it again with the other person, whose answer then wins, and load
-the page again, so that the SPA starts with them. It answers Today's list, `GET /api/today`, too, with no participants
-on `me`'s day: Today, where the made-up person lands, asks for it, and the app, which holds no session for them, would
-answer `401`, ending the session in place. Everything else the page loads is the published app's, under its
-policy. A test that does not call it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`);
-`e2e/shell.spec.ts` is the example of one that does. A test of signing out answers it only until the page sends the
-logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets the request through to the app from then on,
-so the page that the logout loads meets the app's `401`.
+the page again, so that the SPA starts with them. It answers Today's lists too, `GET /api/today` with no participants
+on `me`'s day and `GET /api/me/drafts` with no unfinished drafts: Today, where the made-up person lands, asks for both,
+and the app, which holds no session for them, would answer `401`, ending the session in place. Everything else the
+page loads is the published app's, under its policy. A test that does not call it meets the app's real `401`, as a
+signed-out visitor does (`e2e/smoke.spec.ts`); `e2e/shell.spec.ts` is the example of one that does. A test of signing
+out answers it only until the page sends the logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets
+the request through to the app from then on, so the page that the logout loads meets the app's `401`.
 
 ```ts
 await serveMe(page, manager);

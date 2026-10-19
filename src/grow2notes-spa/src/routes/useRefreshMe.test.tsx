@@ -15,6 +15,7 @@ vi.mock('./fullPageLoad.ts');
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 
 // A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -69,17 +70,17 @@ const fetchMock = vi.fn<typeof fetch>();
 let server: Answer;
 
 /**
- * Today's list as the server answers it as it answers `/me` now: for the day of the `Me` that `server` gives, with no
- * participants, or as `/me` fails.
+ * One of Today's lists, at `path`, as the server answers it as it answers `/me` now: the list for the day of the `Me`
+ * that `server` gives, with no participants, or the caller's unfinished drafts, with none; or as `/me` fails.
  */
-async function listOfTheDay(): Promise<Response> {
+async function todaysList(path: string): Promise<Response> {
   const me = await server();
   if (!me.ok) {
     return me;
   }
 
   const { today } = (await me.json()) as Me;
-  return new Response(JSON.stringify({ date: today, participants: [] }), {
+  return new Response(JSON.stringify(path === todayPath ? { date: today, participants: [] } : []), {
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -178,7 +179,9 @@ function watchStatusRegions(): () => MutationRecord[] {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  fetchMock.mockImplementation((path) => (path === todayPath ? listOfTheDay() : server()));
+  fetchMock.mockImplementation((path) =>
+    path === todayPath || path === draftsPath ? todaysList(path) : server(),
+  );
   vi.stubGlobal('fetch', fetchMock);
   // Emptied, so that a title a test finds is one the app set.
   document.title = '';
@@ -194,15 +197,17 @@ afterEach(() => {
 });
 
 describe('the refresh of /api/auth/me', () => {
-  it("sends one GET /api/auth/me at start-up, and nothing else but the screen's own request", async () => {
+  it("sends one GET /api/auth/me at start-up, and nothing else but the screen's own requests", async () => {
     server = answerWith(manager);
     renderApp('/');
     await wait(0);
 
-    // Today's list twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the
-    // first request, whose query function takes the abort signal; a production build sends it once. Counted rather
+    // Today's lists twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the
+    // first requests, whose query functions take the abort signal; a production build sends each once. Counted rather
     // than compared as a set, so that a request sent once more at start-up fails.
-    expect(fetchMock.mock.calls.map(([path]) => path).toSorted()).toEqual([mePath, todayPath, todayPath].toSorted());
+    expect(fetchMock.mock.calls.map(([path]) => path).toSorted()).toEqual(
+      [mePath, todayPath, todayPath, draftsPath, draftsPath].toSorted(),
+    );
   });
 
   // Each once the start-up's request has been answered.

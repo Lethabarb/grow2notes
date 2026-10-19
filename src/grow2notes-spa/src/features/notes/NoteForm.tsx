@@ -129,8 +129,9 @@ type NoteFormProps = {
  * top bar has just said it; and a save of its own that meets a dead end keeps the person there too, with the text to
  * copy, said by the dead end's own sentence alone. A leave once a dead end shows, and after Submit's `201`, nothing
  * stops (note-form.md *Leaving the form*). The browser asks before the page goes while the indicator says the change
- * is not saved, a dead end's "Not saved" included, and the shell has not disarmed the warning (item 35). Today's lists
- * are marked stale as the form goes, whichever way, so that Today's row shows how the note was left.
+ * is not saved, a dead end's "Not saved" included, and the shell has not disarmed the warning (item 35). Today's lists,
+ * its unfinished drafts with the day's, are marked stale as the form goes, whichever way, so that Today shows how the
+ * note was left.
  *
  * Confirming a Discard pauses autosave once any save out has settled, sending no save after it, and sends nothing if
  * that save met a dead end; its `204` lets the leave guard let the move to Today go, a change unsaved or not, as the
@@ -422,12 +423,12 @@ export function NoteForm({
   }
 
   // After `201`, or `200` for a retry whose first answer was lost (note-form.md *After a successful submit*): the
-  // banner's sentence in the store, which Today reads; Today's list dropped, so that Today shows only the server's
-  // rows; `me` asked for again when the note is in To review, so that the Flagged badge counts it (app-shell.md
-  // *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to Today then shares; the
-  // confirmation closed; then Today, which the leave guard never stops, though a change was made after a browser
-  // closed the confirmation, as the note is submitted: popped to when it is the entry before, so that Back never
-  // reopens the finished form, and else put in the form's place.
+  // banner's sentence in the store, which Today reads; Today's lists dropped, its unfinished drafts with the day's, so
+  // that Today shows only the server's rows; `me` asked for again when the note is in To review, so that the Flagged
+  // badge counts it (app-shell.md *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to
+  // Today then shares; the confirmation closed; then Today, which the leave guard never stops, though a change was
+  // made after a browser closed the confirmation, as the note is submitted: popped to when it is the entry before, so
+  // that Back never reopens the finished form, and else put in the form's place.
   function submitted(saved: VersionSaved) {
     messageStore.set(msg.noteSubmitted(name));
     removeToday(queryClient);
