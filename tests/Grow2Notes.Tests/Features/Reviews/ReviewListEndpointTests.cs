@@ -177,8 +177,12 @@ public sealed class ReviewListEndpointTests(Grow2NotesFactory factory, SqlServer
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
         var noteId = await AddFlaggedAsync(participant.Id, NoteDate, SubmittedAtUtc);
-        await AddVersion2ByHandAsync(
-            noteId, laterIsFlagged ? "Jane seemed unwell after lunch." : null, flaggedVersionNumber: 1);
+        await factory.Services.AddVersion2Async(
+            seeded.A,
+            noteId,
+            EditedAtUtc,
+            laterIsFlagged ? "Jane seemed unwell after lunch." : null,
+            flaggedVersionNumber: 1);
 
         var row = Assert.Single(RowsOf(await ToReviewAsync(factory, seeded.A.ManagerId), participant.Id));
 
@@ -192,7 +196,8 @@ public sealed class ReviewListEndpointTests(Grow2NotesFactory factory, SqlServer
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A);
         var noteId = await AddFlaggedAsync(participant.Id, NoteDate, SubmittedAtUtc);
-        await AddVersion2ByHandAsync(noteId, "Jane seemed unwell after lunch.", flaggedVersionNumber: 2);
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, EditedAtUtc, "Jane seemed unwell after lunch.", flaggedVersionNumber: 2);
 
         var row = Assert.Single(RowsOf(await ToReviewAsync(factory, seeded.A.ManagerId), participant.Id));
 
@@ -217,8 +222,28 @@ public sealed class ReviewListEndpointTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal([morning.Id, midday.Id, afternoon.Id], ParticipantIds(rows));
     }
 
+    // §6.4: the time is the flagged version's, not the note's first submit or its start: a note submitted flagged at
+    // 4:42 pm on 29 September 2026 in Melbourne, then flagged again with another reason in version 2 at 10:05 am the
+    // next day, as a re-flag leaves it (§5.8's flag rules), is listed after one flagged at 8:30 am that day, though it
+    // was started, submitted and added first.
+    [Fact]
+    public async Task A_note_flagged_again_in_version_2_is_listed_by_that_version_s_time_not_its_first_submit()
+    {
+        var flaggedAgain = await factory.Services.AddParticipantAsync(seeded.A);
+        var flaggedBetween = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await AddFlaggedAsync(flaggedAgain.Id, NoteDate, SubmittedAtUtc);
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, EditedAtUtc, "Jane seemed unwell after lunch.", flaggedVersionNumber: 2);
+        await AddFlaggedAsync(flaggedBetween.Id, NoteDate, new(2026, 9, 29, 22, 30, 0, DateTimeKind.Utc));
+
+        var rows = RowsOf(await ToReviewAsync(factory, seeded.A.ManagerId), flaggedAgain.Id, flaggedBetween.Id);
+
+        Assert.Equal([flaggedBetween.Id, flaggedAgain.Id], ParticipantIds(rows));
+    }
+
     // Two notes flagged in the same millisecond are listed by note ID, in SQL Server's order of a uniqueidentifier, so
-    // that each call lists them alike.
+    // that each call lists them alike. SQL Server gives them in that order without the ORDER BY's Id step too, so these
+    // rows cannot show the step is there: ReviewListOrderTests reads it in the query.
     [Fact]
     public async Task Notes_flagged_in_the_same_millisecond_are_listed_by_note_ID()
     {
@@ -404,35 +429,6 @@ public sealed class ReviewListEndpointTests(Grow2NotesFactory factory, SqlServer
                 flaggedAtUtc,
                 IsFlagged: true,
                 FlagReason: Reason));
-
-    // Version 2 of the note, added by hand as Save changes will add it (§5.8 steps 5 and 6), by A's manager at
-    // EditedAtUtc, flagged with the reason given, or unflagged when there is none; and the header moved on to it, with
-    // the flagged version given and its flag status left in To review. Through the app's context under A's tenant.
-    private async Task AddVersion2ByHandAsync(Guid noteId, string? flagReason, int flaggedVersionNumber)
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var scope = factory.Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
-        {
-            var note = await db.Notes.SingleAsync(n => n.Id == noteId, cancellationToken);
-            note.CurrentVersionNumber = 2;
-            note.FlaggedVersionNumber = flaggedVersionNumber;
-            db.NoteVersions.Add(new NoteVersion
-            {
-                OrganisationId = seeded.A.OrganisationId,
-                NoteId = noteId,
-                VersionNumber = 2,
-                Narrative = "Jane made toast. Then a walk to the shops.",
-                IsFlagged = flagReason is not null,
-                FlagReason = flagReason,
-                CreatedByUserId = seeded.A.ManagerId,
-                CreatedAtUtc = EditedAtUtc,
-                IdempotencyKey = Guid.NewGuid(),
-            });
-            await db.SaveChangesAsync(cancellationToken);
-        }
-    }
 
     // The note's flag status set to To review by hand, through the app's context under A's tenant.
     private async Task SetToReviewByHandAsync(Guid noteId)

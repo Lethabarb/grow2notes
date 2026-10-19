@@ -23,7 +23,8 @@ internal sealed record TestDraft(
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
 /// they started it and when they submitted it; then its version 1's text, flag and reason; the note's flag status, as
 /// Submit leaves it (design.md §5.8's flag rules), To review when version 1 is flagged and None when it is not, unless
-/// the test sets one by hand; and version 1's goal rows, none by default, in their snapshot's order.
+/// the test sets one by hand, To review or Reviewed only over a flagged version 1; and version 1's goal rows, none by
+/// default, in their snapshot's order.
 /// </summary>
 internal sealed record TestSubmittedNote(
     Guid ParticipantId,
@@ -92,12 +93,24 @@ internal static class TestNotes
     /// with a key of its own and its goal rows, each in its place in the order given, its working copy gone; and gives
     /// the note's ID.
     /// </summary>
+    /// <exception cref="ArgumentException">
+    /// The flag status is To review or Reviewed and version 1 is not flagged, which no save leaves, as only a flagged
+    /// version sends a note to To review (§5.8's flag rules); a test of To review over an unflagged current version
+    /// adds a flagged version 1 and an unflagged version 2 (<see cref="AddVersion2Async"/>).
+    /// </exception>
     public static async Task<Guid> AddSubmittedAsync(
         this IServiceProvider services, SeededOrganisation organisation, TestSubmittedNote submitted)
     {
+        var flagStatus = submitted.FlagStatus ?? (submitted.IsFlagged ? FlagStatus.ToReview : FlagStatus.None);
+        if (flagStatus != FlagStatus.None && !submitted.IsFlagged)
+        {
+            throw new ArgumentException(
+                $"A note in {flagStatus} has a flagged version: flag version 1, then add version 2 unflagged.",
+                nameof(submitted));
+        }
+
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
-        var flagStatus = submitted.FlagStatus ?? (submitted.IsFlagged ? FlagStatus.ToReview : FlagStatus.None);
         var note = new Note
         {
             OrganisationId = organisation.OrganisationId,
@@ -141,6 +154,50 @@ internal static class TestNotes
         }
 
         return note.Id;
+    }
+
+    /// <summary>
+    /// Adds version 2 to the note of ID <paramref name="noteId"/> in <paramref name="organisation"/>, one that
+    /// <see cref="AddSubmittedAsync"/> added, by hand as Save changes will add it (design.md §5.8 steps 5 and 6),
+    /// through the app's context under its tenant: written by the organisation's manager at
+    /// <paramref name="savedAtUtc"/>, flagged with <paramref name="flagReason"/>, or not flagged when that is
+    /// <see langword="null"/>; and the header moved on to it, its flagged version
+    /// <paramref name="flaggedVersionNumber"/> and its flag status left as it was.
+    /// </summary>
+    /// <remarks>
+    /// The test gives the flagged version, as §5.8's flag rules set it or, to show that a reason is read from that
+    /// version alone, against them.
+    /// </remarks>
+    public static async Task AddVersion2Async(
+        this IServiceProvider services,
+        SeededOrganisation organisation,
+        Guid noteId,
+        DateTime savedAtUtc,
+        string? flagReason,
+        int flaggedVersionNumber)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
+        {
+            var note = await db.Notes.SingleAsync(n => n.Id == noteId, cancellationToken);
+            note.CurrentVersionNumber = 2;
+            note.FlaggedVersionNumber = flaggedVersionNumber;
+            db.NoteVersions.Add(new NoteVersion
+            {
+                OrganisationId = organisation.OrganisationId,
+                NoteId = noteId,
+                VersionNumber = 2,
+                Narrative = "Jane made toast. Then a walk to the shops.",
+                IsFlagged = flagReason is not null,
+                FlagReason = flagReason,
+                CreatedByUserId = organisation.ManagerId,
+                CreatedAtUtc = savedAtUtc,
+                IdempotencyKey = Guid.NewGuid(),
+            });
+            await db.SaveChangesAsync(cancellationToken);
+        }
     }
 
     /// <summary>

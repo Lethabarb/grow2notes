@@ -3616,6 +3616,58 @@ the reason and when it was flagged. Only submitted flags count.
   Chrome, the arrival read as "Flagged notes, heading level 1", a row read as its name and date, "link", then the author
   and "flagged" with the time, the Reason line when reading on, and the note's back link read as "Flagged" (flagged.md
   *Visual and device*'s manual pass, for what this task builds).
+- Step 6's checklist (19 October 2026, review): the runs of step 6 and the Vitest suite prove four items of flagged.md's
+  *Accessibility checklist* whole for what T11 builds, and they are ticked: the list view's one `<h1>`, "Flagged
+  notes"; the row link named by the full name and the note date alone, its meta line its description; the middle dot
+  `aria-hidden` with a visually hidden ", " in its place, as both suites read the description "Priya Nair, flagged
+  4:42 pm" from the line shown as "Priya Nair · flagged 4:42 pm"; and each note date and flag stamp in a
+  `<time dateTime>`. The two *Screen reader* readings, the arrival and a row, wait for ops/first-use-in-test.md step
+  57, which listens for them, the arrival's ViewLinks half for T19 too. The items that name T19's parts are T19's: the
+  ViewLinks `nav` in the landmarks item; the badge's name (S03.03.03); the ViewLinks names and `aria-current`; the
+  native-controls item, whose `role="tab"` and arrow keys are a view switch's risk; the focus item's Show older, and
+  its Back or refresh once the focused row has gone (S03.03.04, S03.03.05), as step 6 proves its Try again and its
+  Back to a row still listed; and the words item's current view, bold and with a bar. T16's are the Review view's
+  headings and Enter in the comment; the label-in-name item (Mark reviewed, Reviewed, Show older) and the
+  `aria-disabled` item (Mark reviewed, Show older) are T16's and T19's together. No run checks four parts yet, which
+  stay for T26's pass of each screen's checklist (S06.02.01): text at 7:1, as axe runs its AA rules alone; the ring's
+  2 px offset and the row ring's 3 px inset, where step 6 checks its width, colour, `Highlight` and `::after`; no
+  sticky or fixed element; and `<html lang="en-AU">`, the shell's, which `guide-prompts.spec.ts` reads and no T11
+  run does.
+- 19 October 2026, review: 8 findings were confirmed and are fixed here, two of them the same unticked step. None
+  changes the design, so no A-number is added:
+  - No test showed the list's tie-break: SQL Server gives notes flagged in the same millisecond in `Id` order without
+    the `ORDER BY`'s `Id` step too, as their client-made sequential IDs and the filtered index on
+    `(OrganisationId, FlagStatus)`, which carries the clustered key, put them in that order, so the same-millisecond
+    test passed with the step removed. The query is now `ReviewListEndpoint.ToReviewInListOrder`, and
+    `ReviewListOrderTests`, which needs no database, checks that its SQL orders by the `CreatedAtUtc` of the version
+    joined on `FlaggedVersionNumber`, then `[n].[Id]`, as `GoalListOrderTests` does. It fails once the `Id` step is
+    dropped or another time is ordered by; the same-millisecond test's comment now says that its rows cannot show the
+    step.
+  - No test told the flagged version's time from the note's first submit or start, as every ordered row was a flagged
+    version 1, so ordering by `FirstSubmittedAtUtc` or the note's `CreatedAtUtc` passed. A new test lists a note
+    submitted flagged first, then flagged again with another reason in version 2, after one flagged between the two
+    times, and fails under either.
+  - `TestNotes.AddSubmittedAsync` gave a To review status set by hand over an unflagged version 1 a flagged version, a
+    state no save leaves, so the two Today and Past notes tests that set it left notes on seeded A's To review list
+    with no reason. The helper now refuses a flag status other than None over an unflagged version 1, as `notesStore`
+    refuses it (tests/e2e/notes.ts), and those tests add a flagged version 1 and an unflagged version 2, as an edit
+    that unticks the flag leaves it, through the new shared `TestNotes.AddVersion2Async`, which
+    `ReviewListEndpointTests` now uses in place of its own helper. Given the old shape, the helper throws at once.
+  - Two findings: step 6 was ticked although its last part, CI's run on the pull request passing, has not happened,
+    as the branch is not yet pushed. It is unticked, as T05's and T09's matching steps were, and is ticked once that
+    run is recorded in these Notes.
+  - The plan never ticked flagged.md's *Accessibility checklist*, which README §9's accessibility row asks for. Step 6
+    now does, and its checklist Note above says which items the runs prove, which wait for step 57 and which are
+    T19's, T16's or T26's; T19's and T16's Notes say so too.
+  - S03.03.01 had none of the dated Notes that the hand-offs Note above promised, and still said "Confirm at
+    refinement" on the sort key, as coverage.md's E03 M3 Scope row 2 and releases.md's open-question row said it was
+    open. The story gains a dated T11 Note naming the sort key, the flagged version's time and then the note ID, and
+    the task and story that each part not yet proven goes to; the three places now record the answer, and step 6
+    names S03.03.01 with the other stories.
+  - today.md's Submit row still read as a `refreshMe()` after every Submit, as every answer now carries a
+    `flagStatus`. It gains the reading as built, when the answer says `ToReview`, as note-form.md and app-shell.md
+    have it. chronological-list.md's T09 note still said that T16 and T18 bring the whole lists; it now says that the
+    whole mode came with T11.
 
 ### Steps
 
@@ -3697,7 +3749,7 @@ the reason and when it was flagged. Only submitted flags count.
       link "Flagged", which goes back one entry to `/flagged`, the rows shown at once from memory and focus back on the
       row opened; the same read view as from Today but for the label; after a reload, "Today"; `history.state` holding
       no back object; and no `aria-current` in the nav on the note.
-- [x] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
+- [ ] Prove flags reaching To review end to end and bring the documents into line: `tests/e2e/reviews.ts` answering
       `GET /api/reviews?status=toReview` in the browser from `notesStore`'s notes, whose Submit now sets and answers
       `flagStatus`, described in tests/README.md; and a new `flagged.spec.ts`. Signed in for real at 375 px, on the
       app's own answers: a manager adds a participant and invites a worker and a second manager, each set up on a device
@@ -3718,12 +3770,13 @@ the reason and when it was flagged. Only submitted flags count.
       and the copy test passes (no negative contractions, and no "resolved", "closed", "actioned", "please", "sorry" or
       "click"), and the diff holds no trace of the parent company's name (D72). Docs: design.md §6.4's row gaining the
       `400` and the tie-break (Notes); flagged.md, chronological-list.md (the whole mode, built here), note-form.md's
-      *As built (T09)* line and app-shell.md gaining only what the build settles; status-tags.md's *Built* line
-      gaining `MetaLine`'s `statusFirst`, and, beside its *Participant notes history* line on workers and `flagStatus`,
-      one line saying that Submit's answer carries it to every caller and shows no tag (Notes); the hand-offs (Notes)
-      in T16's, T18's and T19's Notes and, dated, in S03.03.02's, S03.03.03's and S03.03.05's Notes; the by-hand checks
-      (Notes) on ops/first-use-in-test.md; no migration, as the model is unchanged; and CI's run on the pull request
-      passing.
+      *As built (T09)* line, today.md's Submit row and app-shell.md gaining only what the build settles;
+      status-tags.md's *Built* line gaining `MetaLine`'s `statusFirst`, and, beside its *Participant notes history*
+      line on workers and `flagStatus`, one line saying that Submit's answer carries it to every caller and shows no
+      tag (Notes); the items of flagged.md's *Accessibility checklist* that these runs and Vitest prove whole for what
+      T11 builds ticked (the checklist Note); the hand-offs (Notes) in T16's, T18's and T19's Notes and, dated, in
+      S03.03.01's, S03.03.02's, S03.03.03's and S03.03.05's Notes; the by-hand checks (Notes) on
+      ops/first-use-in-test.md; no migration, as the model is unchanged; and CI's run on the pull request passing.
 - [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in: the
       CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready` answer
       `200`; `/` and `/flagged` serve this build's `index.html`, its hashed assets answering `200`; signed out,
@@ -3982,6 +4035,11 @@ or changes its reason sends the note back to To review; removing the tick never 
   changes, `['reviews']` is fetched again and `refreshMe()` called, so that To review and the badge lose or gain the
   note. `FlagRulesTests` holds version 1's two rows, from `None`; this task adds versions 2 and later from each start,
   and `notesStore`'s `firstFlagReason` (tests/e2e) stands in for a version 2 until Save changes saves one.
+- From T11's review (19 October 2026): `TestNotes.AddVersion2Async` adds a version 2 by hand with the flagged version
+  the test gives, and `AddSubmittedAsync` refuses To review or Reviewed over an unflagged version 1. T11 ticks the
+  items of flagged.md's *Accessibility checklist* that its runs prove whole (T11's Notes, step 6's checklist), and
+  leaves to this task the Review view's headings and Enter in the comment, and, with T19, the label-in-name item's
+  Mark reviewed and the `aria-disabled` item's Mark reviewed. This task ticks each once its runs prove the whole item.
 
 ### Steps
 
@@ -4126,6 +4184,12 @@ each screen change or window focus with no polling, and the badge and the (n) bo
   of flagged.md *To review list*'s last bullet (S03.03.03); *The note*'s "either Flagged list", from Reviewed
   (S03.03.02); and flagged.md *Loading and errors* and *Back and place* (S03.03.05), as T11 wires the region with its
   words and declares the route's return point (`returnFocus: { fallback: 'sameIndex' }`, `backKey: 'flagged'`).
+- From T11's review (19 October 2026): T11 ticks the items of flagged.md's *Accessibility checklist* that its runs
+  prove whole (T11's Notes, step 6's checklist), and leaves to this task those that name its parts: the ViewLinks
+  `nav` in the landmarks item; the badge's name; the ViewLinks names and `aria-current`; the native-controls item; the
+  focus item's Show older, and its Back or refresh once the focused row has gone; the words item's current view; and,
+  with T16, the label-in-name item's Reviewed and Show older and the `aria-disabled` item's Show older. This task
+  ticks each once its runs prove the whole item, and the *Screen reader* ones once the by-hand pass has heard them.
 
 ### Steps
 

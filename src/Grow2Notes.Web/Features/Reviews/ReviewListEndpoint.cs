@@ -28,10 +28,39 @@ internal static class ReviewListEndpoint
         return api;
     }
 
-    // A note leaves To review only through a review (§3.6, A15), so an archived participant's stays listed (§3.7). Only
-    // a submitted note has versions, so a draft or a discarded draft is never listed, whatever its flag status says. A
-    // flagged version always has a reason, as a save refuses one without (§5.8 step 4). Two notes flagged in the same
-    // millisecond are ordered by ID, so the order is the same from one call to the next.
+    /// <summary>
+    /// The organisation's submitted notes in To review, as <see cref="ToReviewRow"/>s in the list's order,
+    /// <c>ORDER BY</c> the flagged version's <c>CreatedAtUtc</c>, then the note's <c>Id</c> (design.md §6.4).
+    /// </summary>
+    /// <remarks>
+    /// A note leaves To review only through a review (§3.6, A15), so an archived participant's stays listed (§3.7).
+    /// Only a submitted note has versions, so a draft or a discarded draft is never listed, whatever its flag status
+    /// says. A flagged version always has a reason, as a save refuses one without (§5.8 step 4). Two notes flagged in
+    /// the same millisecond are ordered by ID, so the order is the same from one call to the next.
+    /// </remarks>
+    public static IQueryable<ToReviewRow> ToReviewInListOrder(Grow2NotesDbContext db) =>
+        from n in db.Notes.AsNoTracking()
+        where n.Status == NoteStatus.Submitted && n.FlagStatus == FlagStatus.ToReview
+        join participant in db.Participants on n.ParticipantId equals participant.Id
+        join author in db.Users on n.AuthorUserId equals author.Id
+        join flagged in db.NoteVersions
+            on new { NoteId = n.Id, VersionNumber = n.FlaggedVersionNumber }
+            equals new { flagged.NoteId, VersionNumber = (int?)flagged.VersionNumber }
+        join current in db.NoteVersions
+            on new { NoteId = n.Id, VersionNumber = n.CurrentVersionNumber }
+            equals new { current.NoteId, current.VersionNumber }
+        orderby flagged.CreatedAtUtc, n.Id
+        select new ToReviewRow(
+            participant.Id,
+            participant.GivenName,
+            participant.FamilyName,
+            n.NoteDate,
+            author.DisplayName,
+            flagged.FlagReason!,
+            flagged.CreatedAtUtc,
+            n.CurrentVersionNumber,
+            !current.IsFlagged);
+
     private static async Task<Results<Ok<IReadOnlyList<ToReviewRow>>, BadRequest>> GetAsync(
         string? status, Grow2NotesDbContext db, CancellationToken cancellationToken)
     {
@@ -41,29 +70,7 @@ internal static class ReviewListEndpoint
             return TypedResults.BadRequest();
         }
 
-        var rows = await (
-            from n in db.Notes.AsNoTracking()
-            where n.Status == NoteStatus.Submitted && n.FlagStatus == FlagStatus.ToReview
-            join participant in db.Participants on n.ParticipantId equals participant.Id
-            join author in db.Users on n.AuthorUserId equals author.Id
-            join flagged in db.NoteVersions
-                on new { NoteId = n.Id, VersionNumber = n.FlaggedVersionNumber }
-                equals new { flagged.NoteId, VersionNumber = (int?)flagged.VersionNumber }
-            join current in db.NoteVersions
-                on new { NoteId = n.Id, VersionNumber = n.CurrentVersionNumber }
-                equals new { current.NoteId, current.VersionNumber }
-            orderby flagged.CreatedAtUtc, n.Id
-            select new ToReviewRow(
-                participant.Id,
-                participant.GivenName,
-                participant.FamilyName,
-                n.NoteDate,
-                author.DisplayName,
-                flagged.FlagReason!,
-                flagged.CreatedAtUtc,
-                n.CurrentVersionNumber,
-                !current.IsFlagged))
-            .ToListAsync(cancellationToken);
+        var rows = await ToReviewInListOrder(db).ToListAsync(cancellationToken);
         return TypedResults.Ok<IReadOnlyList<ToReviewRow>>(rows);
     }
 }

@@ -385,7 +385,7 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 ## Accessibility checklist
 
 **Headings**
-- [ ] List view: exactly one `<h1>` "Flagged notes"; no other headings are needed above the rows.
+- [x] List view: exactly one `<h1>` "Flagged notes"; no other headings are needed above the rows.
 - [ ] Review view: as participant-notes.md (one `<h1>` with name and date; `<h2>` "1. Goals", "2. Common items",
       "3. Guided notes", "Review"). [Research] WebAIM Screen Reader Survey #10 (n = 1,539): 71.6% navigate long pages
       by headings, https://webaim.org/projects/screenreadersurvey10/
@@ -398,7 +398,7 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 **Names and labels**
 - [ ] Badge link name "Flagged, 3 to review" (visually hidden text, no `aria-label`); "Flagged" at 0.
 - [ ] ViewLinks names are exactly the visible text ("To review (3)", "Reviewed"); `aria-current="page"` on one only.
-- [ ] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
+- [x] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
 - [ ] Every accessible name starts with its visible words (SC 2.5.3), so "click Mark reviewed", "click Reviewed",
       "click Show older" work with voice control.
 
@@ -415,8 +415,8 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
       current page, link".
 - [ ] A To review row reads as "Sam Taylor, Tuesday 29 September 2026, link, Priya Nair, flagged 4:42 pm", then the
       Reason line when reading on (description timing varies by screen reader; unverified per AT).
-- [ ] Middle dots are `aria-hidden` with a visually hidden ", " in their place.
-- [ ] Every date and time is in `<time dateTime>` (`YYYY-MM-DD` for note dates, ISO UTC for stamps).
+- [x] Middle dots are `aria-hidden` with a visually hidden ", " in their place.
+- [x] Every date and time is in `<time dateTime>` (`YYYY-MM-DD` for note dates, ISO UTC for stamps).
 - [ ] `<html lang="en-AU">`.
 
 **Visual**
