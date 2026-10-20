@@ -34,6 +34,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<NoteVersion> NoteVersions => Set<NoteVersion>();
 
+    public DbSet<NoteVersionGroup> NoteVersionGroups => Set<NoteVersionGroup>();
+
     public DbSet<NoteVersionItem> NoteVersionItems => Set<NoteVersionItem>();
 
     // The tenant query filter reads this as each query on a tenant-owned table runs, and nothing else does. So making
@@ -280,7 +282,7 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
                 .HasForeignKey(v => new { v.OrganisationId, v.CreatedByUserId })
                 .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
 
-            // The principal of the composite foreign key from the version's item rows.
+            // The principal of the composite foreign key from the version's group and item rows.
             version.HasAlternateKey(v => new { v.OrganisationId, v.Id });
 
             // Longer than an nvarchar(n) can hold, so only validation enforces Limits.GuidedNotes (§5.1).
@@ -293,6 +295,31 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
             // A retried save finds its first try by its key, and two tries at once cannot both add a version (§5.8).
             version.HasIndex(v => new { v.OrganisationId, v.IdempotencyKey }).IsUnique();
+        });
+
+        builder.Entity<NoteVersionGroup>(group =>
+        {
+            // One row per place in a version's groups (design.md §5.3).
+            group.HasKey(g => new { g.NoteVersionId, g.Position });
+
+            // The principal of the composite foreign key from the version's common item rows.
+            group.HasAlternateKey(g => new { g.OrganisationId, g.NoteVersionId, g.Position });
+
+            // Composite, so the database keeps a row within its version's and its group's organisation (design.md
+            // §5.1, Tenancy). Groups are never deleted, so a row can point at one for good.
+            group.HasOne<NoteVersion>().WithMany()
+                .HasForeignKey(g => new { g.OrganisationId, g.NoteVersionId })
+                .HasPrincipalKey(v => new { v.OrganisationId, v.Id });
+            group.HasOne<CommonItemGroup>().WithMany()
+                .HasForeignKey(g => new { g.OrganisationId, g.CommonItemGroupId })
+                .HasPrincipalKey(c => new { c.OrganisationId, c.Id });
+
+            group.Property(g => g.Name).HasMaxLength(Limits.GroupName);
+
+            // Every note is always shown, so a pick of it means nothing (design.md §5.3).
+            group.ToTable(table => table.HasCheckConstraint(
+                "CK_NoteVersionGroup_EveryNoteNotPicked",
+                "[IsEveryNote] = 0 OR [IsPicked] = 0"));
         });
 
         builder.Entity<NoteVersionItem>(item =>
@@ -313,12 +340,16 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
             item.HasOne<CommonItem>().WithMany()
                 .HasForeignKey(i => new { i.OrganisationId, i.CommonItemId })
                 .HasPrincipalKey(c => new { c.OrganisationId, c.Id });
+            // Optional: a goal row has no group.
+            item.HasOne<NoteVersionGroup>().WithMany()
+                .HasForeignKey(i => new { i.OrganisationId, i.NoteVersionId, i.GroupPosition })
+                .HasPrincipalKey(g => new { g.OrganisationId, g.NoteVersionId, g.Position });
 
             item.Property(i => i.Text).HasMaxLength(Limits.ItemText);
 
             // Each section with the columns that go with it, so no save can leave a goal row with a common item or a
             // group, or a common item row without its item and its group (design.md §5.3). GroupPosition's foreign key
-            // comes with the table of the version's groups, which it points at.
+            // points at the version's NoteVersionGroup row.
             item.ToTable(table => table.HasCheckConstraint(
                 "CK_NoteVersionItem_Section",
                 "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"

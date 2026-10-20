@@ -11,10 +11,10 @@ namespace Grow2Notes.Tests.Data;
 /// The <c>NoteVersionItem</c> table in the app's model, as design.md §5.3 sets it out: one row per place in each
 /// section of a version, with composite foreign keys that keep it within its version's, its goal's and its common
 /// item's organisation (§5.1 <i>Tenancy</i>), and the check constraint that ties each section to its columns. Its
-/// foreign key from <c>GroupPosition</c> comes with the table of a version's groups. The migrations create what the
-/// model holds: CI fails on a model change without a migration, and so does migrating the test database. Building a
-/// model opens no connection, so no test here needs a database. <see cref="ModelTenancyTests"/> checks that the table
-/// is tenant-owned and its foreign keys composite, <see cref="RuntimeRoleTests"/> its denies, and
+/// foreign key from <c>GroupPosition</c> points at the version's <c>NoteVersionGroup</c> rows. The migrations create
+/// what the model holds: CI fails on a model change without a migration, and so does migrating the test database.
+/// Building a model opens no connection, so no test here needs a database. <see cref="ModelTenancyTests"/> checks
+/// that the table is tenant-owned and its foreign keys composite, <see cref="RuntimeRoleTests"/> its denies, and
 /// <see cref="NoteVersionTableTests"/> the check constraint on SQL Server.
 /// </summary>
 public sealed class NoteVersionItemModelTests
@@ -81,7 +81,7 @@ public sealed class NoteVersionItemModelTests
             [
                 ("OrganisationId, CommonItemId", false, null),
                 ("OrganisationId, GoalId", false, null),
-                ("OrganisationId, NoteVersionId", false, (string?)null),
+                ("OrganisationId, NoteVersionId, GroupPosition", false, (string?)null),
             ],
             table.Indexes
                 .Select(index => (
@@ -91,11 +91,11 @@ public sealed class NoteVersionItemModelTests
                 .OrderBy(index => index.Columns, StringComparer.Ordinal));
     }
 
-    // Through the version's, the goal's and the common item's alternate keys, so a row cannot point at another
-    // organisation's; and from GroupPosition to nothing yet. Only the version is required, as a row names a goal or a
-    // common item, never both.
+    // Through the version's, the goal's, the common item's and the version's group's alternate keys, so a row cannot
+    // point at another organisation's. Only the version is required, as a row names a goal or a common item, never
+    // both, and a goal row has no group.
     [Fact]
-    public async Task It_belongs_to_one_version_and_any_goal_or_common_item_of_its_own_organisation()
+    public async Task It_belongs_to_one_version_and_any_goal_common_item_or_group_of_its_own_organisation()
     {
         var item = await NoteVersionItemInTheAppModelAsync();
 
@@ -104,6 +104,12 @@ public sealed class NoteVersionItemModelTests
             (nameof(CommonItem), "OrganisationId, CommonItemId", "OrganisationId, Id", false, false),
             (nameof(Goal), "OrganisationId, GoalId", "OrganisationId, Id", false, false),
             (nameof(NoteVersion), "OrganisationId, NoteVersionId", "OrganisationId, Id", false, true),
+            (
+                nameof(NoteVersionGroup),
+                "OrganisationId, NoteVersionId, GroupPosition",
+                "OrganisationId, NoteVersionId, Position",
+                false,
+                false),
         ];
         Assert.Equal(
             expected,

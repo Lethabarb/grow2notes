@@ -657,3 +657,14 @@ days. Every word typed into a note is made up (A35).
     ticked" with the reason after it; press Discard draft and look for the dialog's "started it at" line read with the
     other person's name and the time, then Go back, and focus back on Discard draft. (note-form.md's *Announcements*
     for More actions and the Discard dialog; participant-notes.md's manual pass for someone else's draft.)
+
+### Common items and group picks, once T13 is in test
+
+These steps hold T13's by-hand checks ([tasks.md](../design/backlog/tasks.md), T13's Notes). Unfinished drafts saved
+before this release hold no common items, as their snapshot predates them: discard them before these steps rather than
+finish them.
+
+67. The database, as in step 26: run `infra/sql/check-database.sql` for test after T13's deploy. Look for PASS on every
+    row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteVersionGroup` for
+    `grow2notes_runtime`, and B7 and B8, which list the `NoteVersionGroup` table and the `AddNoteVersionGroup`
+    migration. (S02.05.01's first criterion, in test.)
