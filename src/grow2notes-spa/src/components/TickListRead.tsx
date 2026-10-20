@@ -68,7 +68,10 @@ function Tick({ text, isTicked }: TickedItem) {
       <span className={styles.readText}>
         {text}
         <Pause />
-        <span className="visually-hidden"> {isTicked ? strings.tickState.ticked : strings.tickState.notTicked}</span>
+        <span className="visually-hidden">
+          {' '}
+          {isTicked ? strings.tickState.ticked : strings.tickState.notTicked}
+        </span>
       </span>
     </>
   );

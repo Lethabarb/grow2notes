@@ -544,8 +544,8 @@ and overriding `serveMe`'s empty answer, as Playwright tries the latest route fi
 `notesStore({ today, participants, goals, commonItemGroups, prompts })` takes the server's date in Melbourne, the
 made-up participants, each one's active goals by participant ID, such as `e2e/goals.ts`'s, the organisation's active
 common item groups as `NoteGroup`s, `{id, name, isEveryNote?, items}`, Every note first, none by default, and its guide
-prompts. Its
-`serve(page, me)` answers the page's requests for a header, a history and a note as `me`'s, through `page.route`:
+prompts. Its `serve(page, me)` answers the page's requests for a header, a history and a note as `me`'s, through
+`page.route`:
 
 - the header, or `404` for a participant that it does not hold;
 - the history, up to 30 live notes dated before `before`, by default tomorrow, newest first, with `hasMore`, each as
@@ -559,17 +559,16 @@ prompts. Its
   else `404`, a discarded draft's day included;
 - the form, a template with the goals unticked, `commonItemGroups` unpicked and unticked, no flag and the lists'
   version, which covers the goals and the groups with their items, the caller's own draft with its flag, picks and
-  ticks,
-  `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404` for a submitted
-  note, for a date after today and, to a worker, for one before yesterday (design.md A65);
+  ticks, `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404` for a
+  submitted note, for a date after today and, to a worker, for one before yesterday (design.md A65);
 - each save, which keeps the flag, and the reason only while flagged, as the API does, and updates the caller's own
   draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
   `422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
   `409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
   listed, a missing or wrong `pickedGroupIds` (Every note, a group with no items, or one outside the snapshot) and a
   missing or wrong `tickedCommonItemIds` (an item outside Every note and the picked groups); and
-  `409 note.version_conflict` once the note is submitted. A draft keeps the `clientId` and `seq` of the
-  save that it last applied, and numbers later saves as design.md §5.6 does, before their ticks are checked: from the
+  `409 note.version_conflict` once the note is submitted. A draft keeps the `clientId` and `seq` of the save that it
+  last applied, and numbers later saves as design.md §5.6 does, before their ticks are checked: from the
   same `clientId`, a `seq` at or below the one kept changes nothing and answers `200` with the time that the draft
   holds, and a higher one is applied; from another `clientId`, `seq` 1 is applied, taking the draft over, and any other
   gets `409 draft.taken_over`, writing nothing. So a creating save sent again after its answer was lost finds the
@@ -609,8 +608,8 @@ the made-up worker's own draft from the day before; `submitElsewhere(participant
 its author in another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts
 its answer, as a phone that loses its signal while the answer is on its way. One more,
 `saveElsewhere(participantId, noteDate, elsewhere)`, saves the draft as its author does from another tab or device, with
-that page's text, ticks, picks, flag and reason, the rest kept, and its time, by default the store's: a page's first save under
-a `clientId` of its own, so that the next save of the page that saved before meets the takeover banner.
+that page's text, ticks, picks, flag and reason, the rest kept, and its time, by default the store's: a page's first
+save under a `clientId` of its own, so that the next save of the page that saved before meets the takeover banner.
 `failNoteReads(page)` aborts each read of a header, a history, a note or a form, as `failParticipants` does, until the
 store serves the page again, and `failNoteReads(page, { olderOnly: true })` only each page of a history after the first,
 which Show older asks for; `failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page

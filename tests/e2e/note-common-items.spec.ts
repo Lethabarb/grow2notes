@@ -30,7 +30,11 @@ const outing: NoteGroup = {
   name: 'Community outing',
   items: [trains, purchases],
 };
-const personalCare: NoteGroup = { id: '7a9c1e3f-6b8d-4e0a-8c2e-5b7d9f1a3c4e', name: 'Personal care', items: [showered] };
+const personalCare: NoteGroup = {
+  id: '7a9c1e3f-6b8d-4e0a-8c2e-5b7d9f1a3c4e',
+  name: 'Personal care',
+  items: [showered],
+};
 
 /** "Saved 4:12 pm", or the like, at whatever time the app saved. */
 const savedAnyTime = /^Saved (\d{1,2}:\d{2}\s[ap]m|midday|midnight)$/;
@@ -136,7 +140,7 @@ test('the form does not scroll sideways at 375 px, with both groups picked', asy
   expect(await scrollsSideways(page), 'Common items with both groups picked').toBe(false);
 });
 
-test('Tab goes through Every note, the picker, the picked items, then Guided notes; Space ticks a box and stays', async ({
+test('Tab goes through Every note, the picker, picked items, then Guided notes; Space ticks a box and stays', async ({
   page,
 }) => {
   await openJanesNote(page);

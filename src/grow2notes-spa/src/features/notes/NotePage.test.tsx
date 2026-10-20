@@ -1637,7 +1637,7 @@ describe('Changed on another device or tab', () => {
   /** The text, ticks, flag and reason on screen as the note is taken over. */
   const onScreen = {
     narrative: 'Jane made toast. Then a walk.',
-    tickedGoalIds: [breakfast.id, sister.id, bus.id],
+    tickedGoalIds: [breakfast.id, bus.id, sister.id],
     pickedGroupIds: [],
     tickedCommonItemIds: [],
     isFlagged: true,
@@ -5506,7 +5506,7 @@ describe('Common items and group picks', () => {
     expect(follows(guidedNotes(), heading)).toBe(true);
   });
 
-  it('opens with the copied picks ticked and their items unticked, and sends nothing until the first change', async () => {
+  it('opens with the copied picks ticked, their items unticked, and sends nothing until the first change', async () => {
     await openWithGroups();
 
     expect(pickBox(outing.name)).toBeChecked();
@@ -5577,7 +5577,7 @@ describe('Common items and group picks', () => {
     expect(saves()[2].body).toMatchObject({ pickedGroupIds: [outing.id], tickedCommonItemIds: [medication.id] });
   });
 
-  it('submits with nothing picked, the confirmation saying nothing of groups, the version carrying both lists', async () => {
+  it('submits with nothing picked, the confirmation saying nothing of groups, both lists in the version', async () => {
     await openWithGroups([everyNote, outing, personalCare]);
     fireEvent.click(itemBox(medication));
     await write();
@@ -5595,7 +5595,7 @@ describe('Common items and group picks', () => {
     });
   });
 
-  /** Opens a new note with `opened`, whose first save is `409 note.lists_changed`, and the form read again `reloaded`. */
+  /** Opens a new note with `opened`, whose first save is `409 note.lists_changed`, and the form read `reloaded`. */
   async function openWithListsChanging(opened: readonly DraftGroup[], reloaded: readonly DraftGroup[]) {
     const participant = freshParticipant();
     serveNote(participant, json(template([breakfast, bus, sister], prompts, opened)));
@@ -5614,7 +5614,7 @@ describe('Common items and group picks', () => {
     { ...personalCare, items: [showered, mealPrepared] },
   ];
 
-  it('reloads the lists keeping the picks still offered and the ticks still shown, the text and the notice', async () => {
+  it('reloads the lists keeping the picks still offered, the ticks still shown, the text and the notice', async () => {
     const { reload, resaved } = await openWithListsChanging(copied, reloadedGroups);
     fireEvent.click(itemBox(medication));
     fireEvent.click(itemBox(mealPrepared));

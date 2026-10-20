@@ -83,7 +83,6 @@ export function CommonItemsField({
                   type="checkbox"
                   className={tickList.box}
                   name="pickedGroup"
-                  value={group.id}
                   aria-controls={`group-${group.id}`}
                   aria-expanded={picked.has(group.id)}
                   checked={picked.has(group.id)}
