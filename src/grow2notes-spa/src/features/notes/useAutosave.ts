@@ -117,8 +117,8 @@ function savedReason({ isFlagged, flagReason }: DraftContent): string | null {
 
 /**
  * The form's content as a save sends it, and as Submit sends it too, built here once (T09's Notes): the text cut to
- * its limit, the ticks, the flag, and the reason as `savedReason()` gives it. Submit's checks have by then refused a
- * text or a reason over its limit, so that Submit sends them whole.
+ * its limit, the ticks, the picks, the flag, and the reason as `savedReason()` gives it. Submit's checks have by then
+ * refused a text or a reason over its limit, so that Submit sends them whole.
  */
 export function sentContent(content: DraftContent): SentContent {
   return {

@@ -12,8 +12,17 @@ export type ParticipantHeader = {
   status: ParticipantStatus;
 };
 
-/** A goal on the note form: its wording as the form shows it, and whether it is ticked as reached. */
-export type DraftGoal = { id: string; text: string; isTicked: boolean };
+/** An item of a list, a goal or a common item: its wording as the form shows it, and whether it is ticked. */
+export type DraftItem = { id: string; text: string; isTicked: boolean };
+
+/**
+ * A common item group of the note form, as the snapshot holds it (design.md §6.3): its name, whether it is Every note,
+ * which is never picked, whether it is picked, and its items, all unticked while it is not picked.
+ */
+export type DraftGroup = { id: string; name: string; isEveryNote: boolean; isPicked: boolean; items: DraftItem[] };
+
+/** A group of a saved note's common items: its name as the version holds it, and its items. */
+export type ReadGroup = { name: string; items: TickedItem[] };
 
 /**
  * The note form with the caller's working copy, as `GET {base}/draft` answers it (design.md §6.3): a new note's
@@ -26,7 +35,8 @@ export type Draft = {
   isSaved: boolean;
   listsVersion?: string;
   guidePrompts: string;
-  goals: DraftGoal[];
+  goals: DraftItem[];
+  commonItemGroups: DraftGroup[];
   narrative: string;
   isFlagged: boolean;
   flagReason: string | null;
@@ -49,7 +59,7 @@ export type SubmittedNote = {
   status: 'Submitted';
   author: { displayName: string };
   firstSubmittedAtUtc: string;
-  current: { narrative: string; goals: TickedItem[] } & (
+  current: { narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
     | { isFlagged: true; flagReason: string }
     | { isFlagged: false; flagReason: null }
   );
@@ -60,7 +70,13 @@ export type SubmittedNote = {
  * §6.3): its Guided notes text as written, every goal of its snapshot, in the snapshot's order, and the flag, whose
  * reason is `null` unless the draft is flagged with one, as a flagged draft needs no reason until Submit (§3.4).
  */
-export type DraftRead = { narrative: string; goals: TickedItem[]; isFlagged: boolean; flagReason: string | null };
+export type DraftRead = {
+  narrative: string;
+  goals: TickedItem[];
+  commonItemGroups: ReadGroup[];
+  isFlagged: boolean;
+  flagReason: string | null;
+};
 
 /**
  * A draft, as `GET {base}` gives it (design.md §6.3): who started it, their display name as stored, and when, in UTC,

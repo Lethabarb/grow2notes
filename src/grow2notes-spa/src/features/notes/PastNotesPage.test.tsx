@@ -148,6 +148,7 @@ function serveSubmittedNote(noteDate = '2026-10-01') {
     current: {
       narrative: 'Jane made toast.',
       goals: [{ text: 'Makes own breakfast', isTicked: true }],
+      commonItemGroups: [],
       isFlagged: true,
       flagReason: 'Jane seemed unwell.',
     },
@@ -163,6 +164,7 @@ function serveNewNote(noteDate = '2026-10-01') {
     listsVersion: 'lists-1',
     guidePrompts: '',
     goals: [],
+    commonItemGroups: [],
     narrative: '',
     isFlagged: false,
     flagReason: null,

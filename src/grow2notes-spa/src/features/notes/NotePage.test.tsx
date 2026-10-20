@@ -18,7 +18,8 @@ import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery
 import type { VersionSaved } from './NoteForm.tsx';
 import type {
   Draft,
-  DraftGoal,
+  DraftGroup,
+  DraftItem,
   DraftNote,
   DraftRead,
   NoteAnswer,
@@ -77,8 +78,8 @@ const zara: ParticipantHeader = {
   status: 'Active',
 };
 
-/** A goal of Jane's, unticked. */
-function goal(id: string, text: string): DraftGoal {
+/** A goal of Jane's, or a common item, unticked. */
+function goal(id: string, text: string): DraftItem {
   return { id, text, isTicked: false };
 }
 
@@ -89,14 +90,44 @@ const garden = goal('2d7b9f4a-6c13-4e58-9a21-5f8e3c0b7d46', 'Waters the garden')
 
 const prompts = 'Mood and wellbeing today?\nWhat did you do together?\nAnything to follow up?';
 
-/** A new note's template, as `GET {base}/draft` gives it, with `goals`, unticked, and no flag. */
-function template(goals: readonly DraftGoal[] = [breakfast, bus, sister], guidePrompts = prompts): Draft {
+/** A group of common items, with `items`, unticked, picked or not as the template copies it. */
+function group(id: string, name: string, items: readonly DraftItem[], isPicked = false): DraftGroup {
+  return { id, name, isEveryNote: false, isPicked, items: [...items] };
+}
+
+const medication = goal('c1a4e7b2-3f58-4d19-8b60-9e2d7a5c3f81', 'Medication prompted');
+const mealPrepared = goal('d6b3f8a1-4e29-4c70-9a15-0f7c2e8b4d63', 'Meal prepared');
+const trains = goal('e8c5a9d3-6b41-4f02-b7e8-1a3d9c6f2b74', 'Travelled by bus or train');
+const purchases = goal('f2d7b1e4-8a63-4d95-a0c9-3b5e1f7a8c26', 'Paid for own purchases');
+const showered = goal('a9e4c6f2-1d75-4b38-8c03-7d2b5a1e9f40', 'Showered');
+
+/** Every note, with its items unticked, which is never picked. */
+const everyNote: DraftGroup = {
+  id: '4b7d1e9a-2c63-4f85-a8b0-6e3f9c1d5a72',
+  name: 'Every note',
+  isEveryNote: true,
+  isPicked: false,
+  items: [medication, mealPrepared],
+};
+const outing = group('7c2a8e5d-9b14-4d63-a1f7-4e0b6d3c8a95', 'Community outing', [trains, purchases]);
+const personalCare = group('b3f6d9a2-5e81-4c47-9d20-8a1c7e4b6f53', 'Personal care', [showered]);
+
+/**
+ * A new note's template, as `GET {base}/draft` gives it, with `goals`, unticked, `commonItemGroups` and no flag. A
+ * group's `isPicked` is what the template copies.
+ */
+function template(
+  goals: readonly DraftItem[] = [breakfast, bus, sister],
+  guidePrompts = prompts,
+  commonItemGroups: readonly DraftGroup[] = [],
+): Draft {
   return {
     baseVersion: 0,
     isSaved: false,
     listsVersion: 'lists-1',
     guidePrompts,
     goals: [...goals],
+    commonItemGroups: [...commonItemGroups],
     narrative: '',
     isFlagged: false,
     flagReason: null,
@@ -110,6 +141,7 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
     isSaved: true,
     guidePrompts: prompts,
     goals: [{ ...breakfast, isTicked: true }, bus, { ...sister, isTicked: true }],
+    commonItemGroups: [],
     narrative,
     isFlagged: false,
     flagReason: null,
@@ -287,7 +319,7 @@ function submittedNote({
     status: 'Submitted',
     author: { displayName: 'Priya Nair' },
     firstSubmittedAtUtc,
-    current: { narrative, goals, ...flag },
+    current: { narrative, goals, commonItemGroups: [], ...flag },
   };
 }
 
@@ -861,6 +893,7 @@ function alexsWorkingCopy(change: Partial<DraftRead> = {}): DraftRead {
       { text: bus.text, isTicked: false },
       { text: sister.text, isTicked: true },
     ],
+    commonItemGroups: [],
     isFlagged: true,
     flagReason: 'Mentioned pain in her left knee\nafter the walk.',
     ...change,
@@ -3507,6 +3540,8 @@ describe('The Submit confirmation', () => {
   it.each([
     // .NET counts U+0085 as blank, where trim() keeps it, so the form's checks pass a text that the server refuses.
     { field: 'narrative', text: '\u0085' },
+    { field: 'pickedGroupIds', text: 'Jane made toast.' },
+    { field: 'tickedCommonItemIds', text: 'Jane made toast.' },
     { field: 'idempotencyKey', text: 'Jane made toast.' },
   ])('closes for a 422 under $field, which the checks do not explain, focusing one unlinked item', async ({
     field,
@@ -5425,5 +5460,288 @@ describe('The read view of a submitted note', () => {
     expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
     expect(pageHeading()).toHaveFocus();
     expect(narrative()).toBeInTheDocument();
+  });
+});
+
+// Common items and the picker (group-picker.md; note-form.md items 30c to 30j), on a note whose template has groups.
+describe('Common items and group picks', () => {
+  /** Every note, Community outing picked, as the template copies it from the last note, and Personal care not. */
+  const copied = [everyNote, { ...outing, isPicked: true }, personalCare];
+
+  const listsNoticeWords = 'The goal or common-item list was just changed. Please check your ticks.';
+
+  /** A picker box, by its group's name. */
+  function pickBox(name: string): HTMLInputElement {
+    return within(main()).getByRole('checkbox', { name });
+  }
+
+  /** The tick box of a common item, which is not in the accessibility tree while its group is not picked. */
+  function itemBox(item: DraftItem): HTMLInputElement {
+    return within(main()).getByRole('checkbox', { name: item.text });
+  }
+
+  /** Opens a new note whose template has `groups`, as `openToSubmit()` opens one. */
+  function openWithGroups(groups: readonly DraftGroup[] = copied) {
+    return openToSubmit(json(template([breakfast, bus, sister], prompts, groups)));
+  }
+
+  it('shows "2. Common items" between Goals and Guided notes, with Every note and the picker', async () => {
+    await openWithGroups();
+
+    const heading = within(main()).getByRole('heading', { level: 2, name: '2. Common items' });
+    expect(follows(heading, within(main()).getByRole('group', { name: '1. Goals' }))).toBe(true);
+    expect(follows(guidedNotes(), heading)).toBe(true);
+    expect(within(main()).getByRole('group', { name: 'Every note' })).toHaveAccessibleDescription('Ticked means done.');
+    expect(within(main()).getByRole('group', { name: 'Which of these happened?' })).toBeInTheDocument();
+  });
+
+  it('shows "No common items set up." for a draft with no groups, as one saved before common items has', async () => {
+    serveNote(jane, json(savedDraft()));
+    renderApp(paths(jane).page);
+    await settle();
+
+    const heading = within(main()).getByRole('heading', { level: 2, name: '2. Common items' });
+    expect(heading.parentElement).toHaveTextContent('No common items set up.');
+    expect(main().querySelector('#common-hint, #picker-hint')).toBeNull();
+    expect(follows(guidedNotes(), heading)).toBe(true);
+  });
+
+  it('opens with the copied picks ticked and their items unticked, and sends nothing until the first change', async () => {
+    await openWithGroups();
+
+    expect(pickBox(outing.name)).toBeChecked();
+    expect(pickBox(outing.name)).toHaveAttribute('aria-expanded', 'true');
+    expect(pickBox(personalCare.name)).not.toBeChecked();
+    expect(pickBox(personalCare.name)).toHaveAttribute('aria-expanded', 'false');
+    expect(itemBox(trains)).not.toBeChecked();
+    expect(itemBox(purchases)).not.toBeChecked();
+    expect(within(main()).queryByRole('checkbox', { name: showered.text })).toBeNull();
+    await wait(60_000);
+    expect(saves()).toEqual([]);
+
+    fireEvent.click(within(main()).getByText(medication.text));
+    await wait(2_000);
+
+    expect(saves()).toHaveLength(1);
+    expect(saves()[0].body).toMatchObject({
+      tickedGoalIds: [],
+      pickedGroupIds: [outing.id],
+      tickedCommonItemIds: [medication.id],
+    });
+  });
+
+  it('shows a group ticked, its items unticked, focus staying on its box', async () => {
+    await openWithGroups();
+    const box = pickBox(personalCare.name);
+    box.focus();
+
+    fireEvent.click(box);
+
+    expect(box).toHaveFocus();
+    expect(box).toBeChecked();
+    expect(box).toHaveAttribute('aria-expanded', 'true');
+    expect(main().querySelector(`#group-${personalCare.id}`)).not.toHaveAttribute('hidden');
+    expect(itemBox(showered)).not.toBeChecked();
+    await wait(2_000);
+    expect(saves()[0].body).toMatchObject({ pickedGroupIds: [outing.id, personalCare.id] });
+  });
+
+  it('hides a group unticked, with its ticked items, at once, opening no dialog and asking nothing', async () => {
+    await openWithGroups();
+    fireEvent.click(itemBox(trains));
+    fireEvent.click(within(main()).getByText(medication.text));
+    await wait(2_000);
+    expect(saves()[0].body).toMatchObject({
+      pickedGroupIds: [outing.id],
+      tickedCommonItemIds: [medication.id, trains.id],
+    });
+
+    const box = pickBox(outing.name);
+    box.focus();
+    fireEvent.click(box);
+
+    expect(document.querySelector('dialog[open]')).toBeNull();
+    expect(box).toHaveFocus();
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    expect(main().querySelector(`#group-${outing.id}`)).toHaveAttribute('hidden');
+    expect(within(main()).queryByRole('checkbox', { name: trains.text })).toBeNull();
+    await wait(2_000);
+    expect(saves()[1].body).toMatchObject({ pickedGroupIds: [], tickedCommonItemIds: [medication.id] });
+
+    fireEvent.click(box);
+
+    expect(itemBox(trains)).not.toBeChecked();
+    expect(itemBox(purchases)).not.toBeChecked();
+    expect(itemBox(medication)).toBeChecked();
+    await wait(2_000);
+    expect(saves()[2].body).toMatchObject({ pickedGroupIds: [outing.id], tickedCommonItemIds: [medication.id] });
+  });
+
+  it('submits with nothing picked, the confirmation saying nothing of groups, the version carrying both lists', async () => {
+    await openWithGroups([everyNote, outing, personalCare]);
+    fireEvent.click(itemBox(medication));
+    await write();
+
+    await press(submitButton());
+
+    expect(confirmation()).not.toBeNull();
+    expect(confirmation()).not.toHaveTextContent(/common|outing|care|picked/i);
+    await confirmSubmit();
+    expect(submits()).toHaveLength(1);
+    expect(submits()[0].body).toMatchObject({
+      tickedGoalIds: [],
+      pickedGroupIds: [],
+      tickedCommonItemIds: [medication.id],
+    });
+  });
+
+  /** Opens a new note with `opened`, whose first save is `409 note.lists_changed`, and the form read again `reloaded`. */
+  async function openWithListsChanging(opened: readonly DraftGroup[], reloaded: readonly DraftGroup[]) {
+    const participant = freshParticipant();
+    serveNote(participant, json(template([breakfast, bus, sister], prompts, opened)));
+    const resaved = held(saved('2026-09-30T23:42:00Z'));
+    serveSave(paths(participant).draft, inTurn(problem(409, { code: 'note.lists_changed' }), resaved.answer));
+    renderApp(paths(participant).page);
+    await settle();
+    const reload = held(json({ ...template([breakfast, bus, sister], prompts, reloaded), listsVersion: 'lists-2' }));
+    serve(paths(participant).draft, reload.answer);
+    return { participant, reload, resaved };
+  }
+
+  // Community outing archived, and Meal prepared moved from Every note into Personal care, which is not picked.
+  const reloadedGroups = [
+    { ...everyNote, items: [medication] },
+    { ...personalCare, items: [showered, mealPrepared] },
+  ];
+
+  it('reloads the lists keeping the picks still offered and the ticks still shown, the text and the notice', async () => {
+    const { reload, resaved } = await openWithListsChanging(copied, reloadedGroups);
+    fireEvent.click(itemBox(medication));
+    fireEvent.click(itemBox(mealPrepared));
+    fireEvent.click(itemBox(trains));
+    type('Jane made toast.');
+    await wait(2_000);
+    expect(saves()[0].body).toMatchObject({
+      pickedGroupIds: [outing.id],
+      tickedCommonItemIds: [medication.id, mealPrepared.id, trains.id],
+    });
+
+    reload.release();
+    await settle();
+
+    expect(listsNotice()).toHaveTextContent(listsNoticeWords);
+    expect(guidedNotes()).toHaveValue('Jane made toast.');
+    expect(within(main()).queryByRole('checkbox', { name: outing.name })).toBeNull();
+    expect(pickBox(personalCare.name)).not.toBeChecked();
+    expect(itemBox(medication)).toBeChecked();
+    expect(within(main()).queryByRole('checkbox', { name: mealPrepared.text })).toBeNull();
+    expect(saves()).toHaveLength(2);
+    expect(saves()[1].body).toMatchObject({
+      listsVersion: 'lists-2',
+      narrative: 'Jane made toast.',
+      pickedGroupIds: [],
+      tickedCommonItemIds: [medication.id],
+    });
+    resaved.release();
+    await settle();
+
+    fireEvent.click(pickBox(personalCare.name));
+    expect(within(main()).getByRole('checkbox', { name: mealPrepared.text })).not.toBeChecked();
+  });
+
+  it.each([
+    {
+      focused: 'an Every note item moved into a group that is not picked',
+      box: () => itemBox(mealPrepared),
+      goesTo: 'the notice',
+    },
+    { focused: 'the box of a group now archived', box: () => pickBox(outing.name), goesTo: 'the notice' },
+    { focused: 'a box that survives', box: () => pickBox(personalCare.name), goesTo: 'the box' },
+  ])('sends focus to $goesTo after the reload, from $focused', async ({ box, goesTo }) => {
+    const { reload } = await openWithListsChanging(copied, reloadedGroups);
+    const focused = box();
+    focused.focus();
+    fireEvent.click(focused);
+    await wait(2_000);
+
+    reload.release();
+    await settle();
+
+    expect(listsNotice()).toHaveTextContent(listsNoticeWords);
+    if (goesTo === 'the notice') {
+      expect(focused).not.toBeInTheDocument();
+      expect(listsNotice()).toHaveFocus();
+    } else {
+      expect(focused).toBeInTheDocument();
+      expect(focused).toHaveFocus();
+      expect(focused).toBeChecked();
+      expect(main().querySelector(`#group-${personalCare.id}`)).not.toHaveAttribute('hidden');
+    }
+  });
+
+  describe('when the note is changed on another device or tab', () => {
+    const keepWords = 'Keep the text on this screen';
+    const loadWords = 'Load the other version';
+
+    /** Opens the worker's draft with the copied picks, saves twice, the second meeting the takeover, Trains ticked. */
+    async function loseTheNote() {
+      const participant = freshParticipant();
+      serveNote(participant, json({ ...savedDraft('Jane'), commonItemGroups: copied }));
+      serveSave(
+        paths(participant).draft,
+        inTurn(saved('2026-09-30T23:43:00Z'), takenOver, saved('2026-09-30T23:44:00Z')),
+      );
+      renderApp(paths(participant).page);
+      await settle();
+      await write('Jane made toast.');
+      fireEvent.click(itemBox(trains));
+      await write('Jane made toast. Then a walk.');
+      expect(saves()).toHaveLength(2);
+      return participant;
+    }
+
+    it('sends the on-screen picks and ticks on Keep, under a new clientId from 1', async () => {
+      await loseTheNote();
+
+      await press(screen.getByRole('button', { name: keepWords }));
+
+      expect(saves()).toHaveLength(3);
+      expect(saves()[2].body).toMatchObject({
+        seq: 1,
+        pickedGroupIds: [outing.id],
+        tickedCommonItemIds: [trains.id],
+        narrative: 'Jane made toast. Then a walk.',
+      });
+      expect(saves()[2].body.clientId).not.toBe(saves()[0].body.clientId);
+    });
+
+    it('replaces the picks and ticks with the other version’s on Load, and saves them from 1', async () => {
+      const participant = await loseTheNote();
+      const theirs: Draft = {
+        ...savedDraft('Jane went to the library.'),
+        commonItemGroups: [
+          everyNote,
+          outing,
+          { ...personalCare, isPicked: true, items: [{ ...showered, isTicked: true }] },
+        ],
+        savedAtUtc: '2026-09-30T23:50:00Z',
+      };
+      serve(paths(participant).draft, json(theirs));
+
+      await press(screen.getByRole('button', { name: loadWords }));
+      await wait(16);
+
+      expect(pickBox(outing.name)).not.toBeChecked();
+      expect(within(main()).queryByRole('checkbox', { name: trains.text })).toBeNull();
+      expect(pickBox(personalCare.name)).toBeChecked();
+      expect(itemBox(showered)).toBeChecked();
+      await write('Jane went to the library. Then lunch.');
+      expect(saves()[2].body).toMatchObject({
+        seq: 1,
+        pickedGroupIds: [personalCare.id],
+        tickedCommonItemIds: [showered.id],
+      });
+      expect(saves()[2].body.clientId).not.toBe(saves()[0].body.clientId);
+    });
   });
 });

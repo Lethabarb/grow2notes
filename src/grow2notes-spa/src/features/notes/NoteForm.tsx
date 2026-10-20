@@ -20,12 +20,14 @@ import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
 import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
 import { invalidateToday, removeToday } from '../today/todayQuery.ts';
+import { CommonItemsField } from './CommonItemsField.tsx';
+import { isOffered, shownItems } from './commonItemGroups.ts';
 import { FlagForManager, reasonId } from './FlagForManager.tsx';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
 import { MoreActions, type MoreActionsHandle } from './MoreActions.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
 import styles from './NotePage.module.css';
-import { noteBase, type Draft } from './noteQueries.ts';
+import { noteBase, type Draft, type DraftGroup } from './noteQueries.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
 import { sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
@@ -47,6 +49,20 @@ export type VersionSaved = {
  * asks before the page goes while it says one of them.
  */
 const atRiskKinds = new Set<SaveIndicator['kind']>(['saving', 'failed', 'takenOver', 'notSaved']);
+
+const idOf = ({ id }: { id: string }) => id;
+
+const isTickedItem = (item: { isTicked: boolean }) => item.isTicked;
+
+/** The IDs of the groups of a snapshot that are picked. */
+function pickedIn(groups: readonly DraftGroup[]): Set<string> {
+  return new Set(groups.filter((group) => group.isPicked).map(idOf));
+}
+
+/** The IDs of the goals and common items of a form that are ticked, in the one set that the form keeps. */
+function tickedIn({ goals, commonItemGroups }: Draft): Set<string> {
+  return new Set([...goals, ...commonItemGroups.flatMap((group) => group.items)].filter(isTickedItem).map(idOf));
+}
 
 /** The Submit confirmation while it is open, and how its request goes (note-form.md *Confirmation dialog*). */
 type Confirmation = {
@@ -97,17 +113,17 @@ type NoteFormProps = {
  * dated before `me.today`, so that it just appears, unannounced, once `me` gives a day that has passed midnight with
  * the form open (status-messages.md *Per-screen notes*); and the Past notes link; then, in a `<form noValidate>`, the
  * lists-changed notice's live region, there and empty from the first render, as a screen reader may not announce
- * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided
+ * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Common
+ * items, its groups, picks and ticks in this page's state too, the picks as copied by the template or saved; Guided
  * notes; Flag for manager, its tick and reason in this page's state too, the reason kept while the box is unticked;
  * and Submit note, with the alert above it; then, outside the form, More actions, with Discard draft, while the note
  * is the viewer's own saved draft, reopened or saved since: never on a new note before its first "Saved …", and
  * through the takeover banner's wait, as the draft is still theirs, until a dead end, as the note at this address may
  * then be no draft of theirs, when it goes with its panel and any Discard dialog, nothing sent, focus that was in them
  * going to the `<h1>` (T12's Notes).
- * Until T13 adds "2. Common items", the sections go from 1 to 3, keeping design.md's numbers. Each tick and each input
- * is a change that autosave saves, and a field that loses focus sends one at once (design.md §3.4). After a dead end,
- * every tick and the text stay as they are, to change and copy, though nothing more is saved (note-form.md *Conflicts
- * and refusals*).
+ * Each pick, tick and input is a change that autosave saves, and a field that loses focus sends one at once (design.md
+ * §3.4). After a dead end, every tick and the text stay as they are, to change and copy, though nothing more is saved
+ * (note-form.md *Conflicts and refusals*).
  *
  * Submit note is never disabled: while "Saving…" or "Not saved: no connection…" shows, or a dead end has stopped
  * autosave, it is `aria-disabled`, and it is described by the save indicator, and by the dead end's sentence while one
@@ -162,9 +178,10 @@ export function NoteForm({
   const box = useRef<HTMLTextAreaElement>(null);
   const notice = useRef<HTMLDivElement>(null);
   const [goals, setGoals] = useState(draft.goals);
-  const [ticked, setTicked] = useState(
-    () => new Set(draft.goals.filter((goal) => goal.isTicked).map((goal) => goal.id)),
-  );
+  const [groups, setGroups] = useState(draft.commonItemGroups);
+  const [picked, setPicked] = useState(() => pickedIn(draft.commonItemGroups));
+  // The goals and common items ticked, by ID, in one set, so that one toggle serves both.
+  const [ticked, setTicked] = useState(() => tickedIn(draft));
   const [listsChanged, setListsChanged] = useState(false);
   // The text that the Guided notes box opens with, and the versions loaded in place of the draft's, by each of which
   // the uncontrolled box opens anew with the version's text.
@@ -204,9 +221,11 @@ export function NoteForm({
   function read(): DraftContent {
     return {
       narrative: box.current!.value,
-      tickedGoalIds: [...ticked],
-      pickedGroupIds: [],
-      tickedCommonItemIds: [],
+      tickedGoalIds: goals.filter((goal) => ticked.has(goal.id)).map((goal) => goal.id),
+      pickedGroupIds: [...picked],
+      tickedCommonItemIds: shownItems(groups, picked)
+        .filter((item) => ticked.has(item.id))
+        .map((item) => item.id),
       isFlagged: flagged,
       flagReason: reason,
     };
@@ -267,15 +286,21 @@ export function NoteForm({
       }),
   });
 
-  // The goals as the form now has them, after a first save found the lists changed (design.md §5.7): the ticks of the
-  // goals still listed kept, by ID, the text as it is, and the notice above Goals until the person leaves. Committed at
-  // once, so that the save sent next reads the ticks shown, and focus, if the box that had it has gone, goes to the
-  // notice; otherwise it stays where it is.
+  // The lists as the form now has them, after a first save found them changed (design.md §5.7): the picks of the
+  // groups still offered kept, by ID, and the ticks of the goals still listed and of the items still shown, so that an
+  // item moved into a group that is not picked loses its tick; the text as it is, and the notice above Goals until the
+  // person leaves. Committed at once, so that the save sent next reads the picks and ticks shown, and focus, if the box
+  // that had it has gone, goes to the notice; otherwise it stays where it is.
   function showListsAsNow(reloaded: Draft) {
     const focused = document.activeElement;
+    const offered = new Set(reloaded.commonItemGroups.filter(isOffered).map((group) => group.id));
+    const stillPicked = new Set([...picked].filter((id) => offered.has(id)));
+    const stillShown = new Set([...reloaded.goals, ...shownItems(reloaded.commonItemGroups, stillPicked)].map(idOf));
     flushSync(() => {
       setGoals(reloaded.goals);
-      setTicked((current) => new Set(reloaded.goals.filter((goal) => current.has(goal.id)).map((goal) => goal.id)));
+      setGroups(reloaded.commonItemGroups);
+      setPicked(stillPicked);
+      setTicked((current) => new Set([...current].filter((id) => stillShown.has(id))));
       setListsChanged(true);
     });
     if (focused?.isConnected === false) {
@@ -283,19 +308,24 @@ export function NoteForm({
     }
   }
 
-  // The other version, as Load read it, in place of what the form held: its goals and their ticks, its text, its flag
-  // and its reason; and any message of Submit's checks checked again on it, as an input would.
+  // The other version, as Load read it, in place of what the form held: its goals, groups, picks and ticks, its text,
+  // its flag and its reason; and any message of Submit's checks checked again on it, as an input would.
   function showOtherVersion(other: Draft) {
     const content = {
       narrative: other.narrative,
-      tickedGoalIds: other.goals.filter((goal) => goal.isTicked).map((goal) => goal.id),
-      pickedGroupIds: [],
-      tickedCommonItemIds: [],
+      tickedGoalIds: other.goals.filter(isTickedItem).map(idOf),
+      pickedGroupIds: [...pickedIn(other.commonItemGroups)],
+      tickedCommonItemIds: other.commonItemGroups
+        .flatMap((group) => group.items)
+        .filter(isTickedItem)
+        .map(idOf),
       isFlagged: other.isFlagged,
       flagReason: other.flagReason ?? '',
     };
     setGoals(other.goals);
-    setTicked(new Set(content.tickedGoalIds));
+    setGroups(other.commonItemGroups);
+    setPicked(new Set(content.pickedGroupIds));
+    setTicked(tickedIn(other));
     setTextLoaded((loaded) => ({ text: content.narrative, loads: loaded.loads + 1 }));
     setFlagged(content.isFlagged);
     setReason(content.flagReason);
@@ -348,17 +378,37 @@ export function NoteForm({
     return lastSaid.current !== 'notSaved';
   }
 
-  function toggle(goalId: string, isTicked: boolean) {
+  function toggle(itemId: string, isTicked: boolean) {
     setTicked((current) => {
       const next = new Set(current);
       if (isTicked) {
-        next.add(goalId);
+        next.add(itemId);
       } else {
-        next.delete(goalId);
+        next.delete(itemId);
       }
 
       return next;
     });
+    autosave.changed();
+  }
+
+  // A group picked or unpicked: unpicking takes its items' ticks away at once, with no question, so that what is on
+  // screen is what is saved, and picking it again shows them unticked (group-picker.md *Behaviour*).
+  function pick(group: DraftGroup, isPicked: boolean) {
+    setPicked((current) => {
+      const next = new Set(current);
+      if (isPicked) {
+        next.add(group.id);
+      } else {
+        next.delete(group.id);
+      }
+
+      return next;
+    });
+    if (!isPicked) {
+      setTicked((current) => new Set([...current].filter((id) => !group.items.some((item) => item.id === id))));
+    }
+
     autosave.changed();
   }
 
@@ -546,6 +596,15 @@ export function NoteForm({
           emptyText={msg.noGoalsSetUp(givenName)}
           items={goals}
           ticked={ticked}
+          onToggle={toggle}
+        />
+        <CommonItemsField
+          className={styles.section}
+          groups={groups}
+          picked={picked}
+          ticked={ticked}
+          emptyText={strings.note.noCommonItemsSetUp}
+          onPick={pick}
           onToggle={toggle}
         />
         <GuidedNotes
