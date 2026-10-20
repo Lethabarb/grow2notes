@@ -578,7 +578,7 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await expect(main(page).getByText('No goals set up for Ravi yet. A manager can add them.', { exact: true }))
     .toBeVisible();
   await expect(main(page).getByRole('group')).toHaveCount(0);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '2. Common items', '3. Guided notes']);
   await expectAxeToPass(page);
   await expectNothingKept(page, 'Jane', 'Ravi', 'Caught the bus', breakfast.text, bus.text);
 });
