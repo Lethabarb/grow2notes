@@ -2,8 +2,9 @@ namespace Grow2Notes.Web.Data;
 
 /// <summary>
 /// One saved version of a submitted note (design.md §5.3, D15): version 1 is the submission, and each later one an
-/// edit, holding the complete text, not a difference. Its goal and common item rows are in
-/// <see cref="NoteVersionItem"/>. A version is only ever added (§5.8), so the history of a note never changes.
+/// edit, holding the complete text, not a difference. Its groups are in <see cref="NoteVersionGroup"/>, and its goal
+/// and common item rows in <see cref="NoteVersionItem"/>. A version is only ever added (§5.8), so the history of a note
+/// never changes.
 /// </summary>
 internal sealed class NoteVersion : ITenantOwned, IAppendOnly
 {
