@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { strings } from './strings.ts';
 
 // Every module in src/copy but its tests, whose samples hold the very words checked for, by its path from the SPA's
 // root. Read whole, comments included, so that the check stays a plain search.
@@ -146,5 +147,16 @@ describe('the wording check', () => {
     };
 
     expect(wordingFailures(sample)).toEqual([]);
+  });
+});
+
+describe('the picker for common items', () => {
+  // group-picker.md: no "group", "select", "check" or "today", as the people who use it read them differently.
+  it('has no "group", "select", "check" or "today" in its words, in any form of them', () => {
+    const { commonItems, commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp } = strings.note;
+
+    for (const words of [commonItems, commonItemsHint, whichHappened, whichHappenedHint, noCommonItemsSetUp]) {
+      expect(words).not.toMatch(/\b(?:group|select|check|today)\w*/i);
+    }
   });
 });
