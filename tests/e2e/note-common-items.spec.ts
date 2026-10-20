@@ -9,9 +9,9 @@ import { notesStore, type NoteGroup } from './notes.ts';
 import { jane, participants } from './participants.ts';
 import { serveToday } from './today.ts';
 
-// Section 2 of the note form, Common items and the picker (S02.05.02, S02.05.03; group-picker.md), as far as the form
-// goes: the groups are the made-up ones of common-items.md's sketch, answered in the browser with the note, so that no
-// request reaches the app, where no made-up person has a session.
+// Section 2 of the note form, Common items and the picker (S02.05.02, S02.05.03; group-picker.md), and of the read view
+// (S02.05.04, D47): the groups are the made-up ones of common-items.md's sketch, answered in the browser with the note,
+// so that no request reaches the app, where no made-up person has a session.
 
 const medication = { id: '1a4c7e90-2b5d-4f81-9c36-8e0a2d4f6b17', text: 'Medication prompted' };
 const meal = { id: '2b5d8fa1-3c6e-4a92-8d47-9f1b3e5a7c28', text: 'Meal prepared' };
@@ -46,6 +46,9 @@ const pickBox = (page: Page, name: string) => main(page).getByRole('checkbox', {
 const itemBox = (page: Page, text: string) => main(page).getByRole('checkbox', { name: text, exact: true });
 const submitNote = (page: Page) => main(page).getByRole('button', { name: 'Submit note', exact: true });
 const confirmation = (page: Page) => page.getByRole('alertdialog');
+const readHeading = (page: Page, level: number) => main(page).getByRole('heading', { level });
+// Every list of the read view, goals and common items alike, as <li> items in the page's order.
+const readItems = (page: Page) => main(page).locator('ul[role="list"] > li');
 
 /** Jane Citizen's note, with two goals and the made-up groups, opened as the worker. */
 async function openJanesNote(page: Page) {
@@ -160,4 +163,47 @@ test('Tab goes through Every note, the picker, picked items, then Guided notes; 
   await expect(pickBox(page, personalCare.name)).toBeFocused();
   await expect(pickBox(page, personalCare.name)).toHaveAttribute('aria-expanded', 'true');
   await expectStops(page, 'Tab', [trains.text, purchases.text, showered.text, '3. Guided notes']);
+});
+
+/** Submits Jane's note with Community outing picked, and Meal prepared and the bus or train ticked, then reads it. */
+async function readJanesSubmittedNote(page: Page) {
+  const store = await openJanesNote(page);
+  await pickBox(page, outing.name).check();
+  await itemBox(page, trains.text).check();
+  await itemBox(page, meal.text).check();
+  await box(page).fill('Jane made toast.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+  await submitNote(page).click();
+  await confirmation(page).getByRole('button', { name: 'Submit note for Jane Citizen', exact: true }).click();
+  await expect.poll(() => store.submits.length, { timeout: 15_000 }).toBe(1);
+  await expect(page).toHaveURL('/');
+
+  await page.goto(`/participants/${jane.id}/notes/${worker.today}`);
+  await expect(readHeading(page, 2)).toHaveText(['1. Goals', '2. Common items', '3. Guided notes']);
+}
+
+test('the read view shows only Every note and the picked group, every item ticked or not (D47)', async ({ page }) => {
+  await readJanesSubmittedNote(page);
+
+  await expect(readHeading(page, 3)).toHaveText([everyNote.name, outing.name]);
+  await expect(readItems(page)).toHaveText([
+    `${breakfast.text}, not ticked`,
+    `${bus.text}, not ticked`,
+    `${medication.text}, not ticked`,
+    `${meal.text}, ticked`,
+    `${trains.text}, ticked`,
+    `${purchases.text}, not ticked`,
+  ]);
+  await expect(main(page).getByText(personalCare.name)).toHaveCount(0);
+  await expect(main(page).getByText(showered.text)).toHaveCount(0);
+  await expect(main(page).getByText('Which of these happened?')).toHaveCount(0);
+  await expect(main(page).getByRole('checkbox')).toHaveCount(0);
+});
+
+test('the read view passes axe, and does not scroll sideways at 375 px', async ({ page }) => {
+  await readJanesSubmittedNote(page);
+
+  await expectAxeToPass(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await scrollsSideways(page), 'The read view with common items').toBe(false);
 });

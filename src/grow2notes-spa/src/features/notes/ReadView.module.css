@@ -30,7 +30,18 @@
   border-block-start: var(--border-divider) solid var(--colour-divider);
 }
 
-/* "Nothing written yet." in place of a draft's empty text (component 7), with no margin that the text has not. */
+/*
+ * The common items' groups, 24 px apart. Each list's own root sets its margin to 0 in a rule of the same weight, so
+ * this names the element as well as the class, and does not leave the winner to the order the stylesheets load in.
+ */
+.groups > div + div {
+  margin-block-start: var(--space-5);
+}
+
+/*
+ * "Nothing written yet." and "No common items set" in place of a draft's empty text (components 6 and 7), with no
+ * margin that the text has not.
+ */
 .empty {
   margin: 0;
 }

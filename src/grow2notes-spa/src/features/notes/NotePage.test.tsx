@@ -24,6 +24,7 @@ import type {
   DraftRead,
   NoteAnswer,
   ParticipantHeader,
+  ReadGroup,
   SubmittedNote,
 } from './noteQueries.ts';
 import notePage from './NotePage.module.css';
@@ -289,9 +290,29 @@ function serveNote(participant: ParticipantHeader, draft: Answer = json(template
   serve(draftPath, draft);
 }
 
+/** Every note and Community outing as a saved note shows them: the picked group, every item ticked or not. */
+const shownGroups: ReadGroup[] = [
+  {
+    name: everyNote.name,
+    items: [
+      { text: medication.text, isTicked: true },
+      { text: mealPrepared.text, isTicked: false },
+    ],
+  },
+  {
+    name: outing.name,
+    items: [
+      { text: trains.text, isTicked: true },
+      { text: purchases.text, isTicked: false },
+    ],
+  },
+];
+
 type SubmittedOptions = {
   narrative?: string;
   goals?: TickedItem[];
+  /** The groups the note shows, as the API gives them; none unless given. */
+  commonItemGroups?: ReadGroup[];
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
   reason?: string;
   firstSubmittedAtUtc?: string;
@@ -308,6 +329,7 @@ function submittedNote({
     { text: bus.text, isTicked: false },
     { text: sister.text, isTicked: true },
   ],
+  commonItemGroups = [],
   reason,
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
 }: SubmittedOptions = {}): SubmittedNote {
@@ -319,7 +341,7 @@ function submittedNote({
     status: 'Submitted',
     author: { displayName: 'Priya Nair' },
     firstSubmittedAtUtc,
-    current: { narrative, goals, commonItemGroups: [], ...flag },
+    current: { narrative, goals, commonItemGroups, ...flag },
   };
 }
 
@@ -1028,9 +1050,38 @@ describe("Someone else's draft, read by a manager", () => {
     expect(follows(narrative(), goals)).toBe(true);
     expect(within(main()).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
       '1. Goals',
+      '2. Common items',
       '3. Guided notes',
     ]);
     expect(main().querySelector('form, input, textarea')).toBeNull();
+  });
+
+  it('shows "2. Common items" with the groups it is given, each item ticked or not, no question', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy({ commonItemGroups: shownGroups }));
+
+    const common = section('2. Common items');
+    expect(follows(common, section('1. Goals'))).toBe(true);
+    expect(follows(section('3. Guided notes'), common)).toBe(true);
+    expect(within(common).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      'Every note',
+      'Community outing',
+    ]);
+    expect(within(common).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Medication prompted, ticked',
+      'Meal prepared, not ticked',
+      'Travelled by bus or train, ticked',
+      'Paid for own purchases, not ticked',
+    ]);
+    expect(within(main()).queryByRole('checkbox')).toBeNull();
+    expect(main()).not.toHaveTextContent('Which of these happened?');
+  });
+
+  it('says "No common items set" under "2. Common items" for a draft whose working copy shows none', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    const common = section('2. Common items');
+    expect(within(common).getByText('No common items set').tagName).toBe('P');
+    expect(within(common).queryByRole('list')).toBeNull();
   });
 
   it('shows a ticked flag as the read-only "Flag for manager" row with its reason, never the Flagged tag', async () => {
@@ -5387,6 +5438,51 @@ describe('The read view of a submitted note', () => {
     const goals = section('1. Goals');
     expect(within(goals).queryByRole('list')).toBeNull();
     expect(within(goals).getByText('No goals set')).toBeInTheDocument();
+  });
+
+  // participant-notes.md item 17a: Every note and the picked groups, as the API gives them, each item ticked or not.
+  it('shows "2. Common items" between Goals and Guided notes, an <h3> per group, items ticked or not', async () => {
+    serveSubmitted(jane, submittedNote({ commonItemGroups: shownGroups }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    const common = section('2. Common items');
+    expect(follows(common, section('1. Goals'))).toBe(true);
+    expect(follows(section('3. Guided notes'), common)).toBe(true);
+    const headings = within(common).getAllByRole('heading', { level: 3 });
+    expect(headings.map((heading) => heading.textContent)).toEqual(['Every note', 'Community outing']);
+    const [everyNoteList, outingList] = within(common).getAllByRole('list');
+    expect(within(everyNoteList).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Medication prompted, ticked',
+      'Meal prepared, not ticked',
+    ]);
+    expect(within(outingList).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Travelled by bus or train, ticked',
+      'Paid for own purchases, not ticked',
+    ]);
+    expect(common.querySelector('.' + readView.groups)).not.toBeNull();
+    expect(within(main()).queryByRole('checkbox')).toBeNull();
+  });
+
+  it('says "No common items set" for a note that shows none, with no list', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    const common = section('2. Common items');
+    expect(within(common).queryByRole('list')).toBeNull();
+    expect(within(common).queryByRole('heading', { level: 3 })).toBeNull();
+    expect(within(common).getByText('No common items set').tagName).toBe('P');
+  });
+
+  it('never asks "Which of these happened?" and shows no group but the ones it is given', async () => {
+    serveSubmitted(jane, submittedNote({ commonItemGroups: shownGroups }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(main()).not.toHaveTextContent('Which of these happened?');
+    expect(main()).not.toHaveTextContent(personalCare.name);
+    expect(within(main()).queryByRole('group')).toBeNull();
   });
 
   // participant-notes.md item 18: escaped text, never HTML, its line breaks kept and wrapped anywhere. jsdom lays out

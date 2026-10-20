@@ -6,7 +6,7 @@ import { msg } from '../../copy/messages.ts';
 import { Pause } from '../../copy/Pause.tsx';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
-import type { SubmittedNote } from './noteQueries.ts';
+import type { ReadGroup, SubmittedNote } from './noteQueries.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import styles from './ReadView.module.css';
 
@@ -47,7 +47,11 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
         )}
       </div>
       <PastNotesLink participantId={participantId} />
-      <ReadSections goals={current.goals} narrative={current.narrative} />
+      <ReadSections
+        goals={current.goals}
+        commonItemGroups={current.commonItemGroups}
+        narrative={current.narrative}
+      />
     </>
   );
 }
@@ -55,21 +59,36 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
 type ReadSectionsProps = {
   /** Every goal of the snapshot, in its order. */
   goals: readonly TickedItem[];
+  /** The groups the note shows, Every note and the picked ones, each with every item, in the order given. */
+  commonItemGroups: readonly ReadGroup[];
   narrative: string;
 };
 
 /**
  * A note's sections as the read view shows them (participant-notes.md components 6 and 7), on a submitted note and on
- * the draft that a manager reads alike, each after a rule: "1. Goals", every goal of the snapshot ticked or not ticked,
- * and "3. Guided notes", the text as React's escaped text, never HTML, or "Nothing written yet." for a draft with
- * nothing but spaces in it, as Submit's checks judge blank, which a submitted note never is. T13 adds "2. Common items"
- * between them, as the form does.
+ * the draft that a manager reads alike, each after a rule: "1. Goals", every goal of the snapshot ticked or not ticked;
+ * "2. Common items", a list under an `<h3>` of the group's name for each group the API gives, which has already left
+ * out the groups that were not picked (design.md D47), so that it shows what it is given and never puts the writer's
+ * question; and "3. Guided notes", the text as React's escaped text, never HTML, or "Nothing written yet." for a draft
+ * with nothing but spaces in it, as Submit's checks judge blank, which a submitted note never is.
  */
-export function ReadSections({ goals, narrative }: ReadSectionsProps) {
+export function ReadSections({ goals, commonItemGroups, narrative }: ReadSectionsProps) {
   return (
     <>
       <div className={styles.section}>
         <TickListRead heading={strings.note.goals} emptyText={strings.readView.noGoals} items={goals} />
+      </div>
+      <div className={styles.section}>
+        <h2>{strings.note.commonItems}</h2>
+        {commonItemGroups.length === 0 ? (
+          <p className={styles.empty}>{strings.readView.noCommonItems}</p>
+        ) : (
+          <div className={styles.groups}>
+            {commonItemGroups.map((each, index) => (
+              <TickListRead key={index} heading={each.name} headingLevel={3} items={each.items} />
+            ))}
+          </div>
+        )}
       </div>
       <div className={styles.section}>
         <h2>{strings.note.guidedNotes}</h2>

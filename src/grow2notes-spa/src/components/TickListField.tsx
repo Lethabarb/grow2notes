@@ -31,7 +31,8 @@ type TickListFieldProps = {
  * whole row the item's `<label>`, around the native box, drawn 40 px with borders, and the item's wording, never
  * truncated; or, with no items, the heading and the sentence alone, as an empty fieldset confuses screen readers. A tap
  * anywhere on the row toggles the box, as a label does, with no handler of its own. The common items' lists are
- * `<h3>`s described by one hint shared by all, and T09's flag row and T13's group rows take its `.box` and row styles.
+ * `<h3>`s described by one hint shared by all, and T09's flag row and the picker's group rows take its `.box` and row
+ * styles.
  */
 export function TickListField({
   idPrefix,
