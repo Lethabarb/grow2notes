@@ -6,26 +6,28 @@ import styles from './TickList.module.css';
 export type TickedItem = { text: string; isTicked: boolean };
 
 type TickListReadProps = {
-  /** The list's `<h2>`, the form's own heading for it, such as "1. Goals". */
+  /** The list's heading, the form's own for it, such as "1. Goals" or, among the common items, a group's name. */
   heading: string;
+  /** The heading's level: an `<h2>` for a section of the note, which is the default, or an `<h3>` inside one. */
+  headingLevel?: 2 | 3;
   /** In place of the list when it has no items, such as "No goals set". */
-  emptyText: string;
+  emptyText?: string;
   /** In the snapshot's order, which the list keeps. */
   items: readonly TickedItem[];
 };
 
 /**
- * A read-only tick list (checkbox-list.md `TickListRead`), for a note that is shown, not edited: the list's `<h2>`,
+ * A read-only tick list (checkbox-list.md `TickListRead`), for a note that is shown, not edited: the list's heading,
  * then each item as a read-only tick; or, with no items, the heading and the sentence alone. Keyed by place, as the API
- * gives the items no ID and the snapshot's order never changes. T13 gives it a heading level for the common items'
- * groups.
+ * gives the items no ID and the snapshot's order never changes. The common items' groups take `<h3>`s.
  */
-export function TickListRead({ heading, emptyText, items }: TickListReadProps) {
+export function TickListRead({ heading, headingLevel = 2, emptyText, items }: TickListReadProps) {
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
     <div className={styles.group}>
-      <h2 className={styles.heading}>{heading}</h2>
+      <Heading className={styles.heading}>{heading}</Heading>
       {items.length === 0 ? (
-        <p className={styles.empty}>{emptyText}</p>
+        emptyText !== undefined && <p className={styles.empty}>{emptyText}</p>
       ) : (
         // Safari drops a list's role once its bullets are gone, unless the role is given (checkbox-list.md).
         <ul role="list" className={styles.readList}>
@@ -66,10 +68,7 @@ function Tick({ text, isTicked }: TickedItem) {
       <span className={styles.readText}>
         {text}
         <Pause />
-        <span className="visually-hidden">
-          {' '}
-          {isTicked ? strings.tickState.ticked : strings.tickState.notTicked}
-        </span>
+        <span className="visually-hidden"> {isTicked ? strings.tickState.ticked : strings.tickState.notTicked}</span>
       </span>
     </>
   );
