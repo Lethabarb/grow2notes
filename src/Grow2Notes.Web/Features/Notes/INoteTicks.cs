@@ -3,9 +3,8 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <summary>
 /// The IDs that a note's content ticks and picks (design.md §5.7, §5.8), as <see cref="DraftSaveRequest"/> and
 /// <see cref="NoteVersionRequest"/> carry them, so that <see cref="NoteSnapshot"/> checks and applies either.
-/// Public, as the requests are.
 /// </summary>
-public interface INoteTicks
+internal interface INoteTicks
 {
     /// <summary>The IDs of the goals ticked as reached.</summary>
     IReadOnlyList<Guid> TickedGoalIds { get; }

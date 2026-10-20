@@ -19,6 +19,8 @@ export type DraftSave = {
   listsVersion?: string;
   narrative: string;
   tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -28,6 +30,8 @@ export type VersionBody = {
   baseVersion: number;
   narrative: string;
   tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
   isFlagged: boolean;
   flagReason: string | null;
 };

@@ -26,13 +26,27 @@ const keepaliveBytes = 60_000;
 const transientStatuses = new Set([0, 408, 429, 500, 502, 503, 504]);
 
 /**
- * What the form holds, as a save reads it: the Guided notes text, the ticked goals, the flag, and the reason as typed,
+ * their ticked items, the flag, and the reason as typed, which the form keeps while the box is unticked.
  * which the form keeps while the box is unticked.
  */
-export type DraftContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string };
+export type DraftContent = {
+  narrative: string;
+  tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
+  isFlagged: boolean;
+  flagReason: string;
+};
 
 /** The note's content as `PUT {base}/draft` and `POST {base}/versions` alike send it (design.md §6.3). */
-export type SentContent = { narrative: string; tickedGoalIds: string[]; isFlagged: boolean; flagReason: string | null };
+export type SentContent = {
+  narrative: string;
+  tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
+  isFlagged: boolean;
+  flagReason: string | null;
+};
 
 /** What a save sends beside its identity: the content, and the lists' version until the note exists. */
 type SavedFields = SentContent & { listsVersion?: string };
@@ -110,6 +124,8 @@ export function sentContent(content: DraftContent): SentContent {
   return {
     narrative: capped(content.narrative, limits.guidedNotes),
     tickedGoalIds: content.tickedGoalIds,
+    pickedGroupIds: content.pickedGroupIds,
+    tickedCommonItemIds: content.tickedCommonItemIds,
     isFlagged: content.isFlagged,
     flagReason: savedReason(content),
   };
