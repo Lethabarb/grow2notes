@@ -268,6 +268,8 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
     listsVersion: expect.any(String),
     narrative: '',
     tickedGoalIds: [template.goals[0].id],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: false,
     flagReason: null,
   });
@@ -548,6 +550,8 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
       listsVersion: expect.any(String),
       narrative: '',
       tickedGoalIds: [bus.id],
+      pickedGroupIds: [],
+      tickedCommonItemIds: [],
       isFlagged: false,
       flagReason: null,
     },
@@ -1077,6 +1081,8 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     baseVersion: 0,
     narrative: sentence,
     tickedGoalIds: [template.goals[0].id],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -1687,6 +1693,8 @@ test('signed in for real at 375 px, two tabs on a draft: the older meets the ban
     seq: 1,
     narrative: firstTabText,
     tickedGoalIds: [breakfastId, busId],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -1926,6 +1934,8 @@ test('signed in for real, a session ended mid-note: the same person signs in aga
     seq: lastBefore.seq + 1,
     narrative: 'Went to the shops. Bought bread.',
     tickedGoalIds: [breakfastId],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -2391,6 +2401,7 @@ test('signed in for real at 375 px, a worker discards and starts again; a manage
         { text: breakfast.text, isTicked: true },
         { text: bus.text, isTicked: false },
       ],
+      commonItemGroups: [],
     },
   });
   await expect(heading(page)).toBeFocused();

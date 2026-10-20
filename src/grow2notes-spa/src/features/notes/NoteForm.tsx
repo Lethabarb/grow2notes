@@ -202,7 +202,14 @@ export function NoteForm({
   const atRisk = indicator !== undefined && atRiskKinds.has(indicator.kind);
 
   function read(): DraftContent {
-    return { narrative: box.current!.value, tickedGoalIds: [...ticked], isFlagged: flagged, flagReason: reason };
+    return {
+      narrative: box.current!.value,
+      tickedGoalIds: [...ticked],
+      pickedGroupIds: [],
+      tickedCommonItemIds: [],
+      isFlagged: flagged,
+      flagReason: reason,
+    };
   }
 
   const autosave = useAutosave({
@@ -282,6 +289,8 @@ export function NoteForm({
     const content = {
       narrative: other.narrative,
       tickedGoalIds: other.goals.filter((goal) => goal.isTicked).map((goal) => goal.id),
+      pickedGroupIds: [],
+      tickedCommonItemIds: [],
       isFlagged: other.isFlagged,
       flagReason: other.flagReason ?? '',
     };

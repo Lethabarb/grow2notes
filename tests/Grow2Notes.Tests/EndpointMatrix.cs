@@ -10,9 +10,11 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.StaticAssets;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using static System.Net.HttpStatusCode;
 
@@ -474,9 +476,11 @@ internal static class EndpointMatrix
             {
                 clientId = Guid.NewGuid(),
                 seq = 1,
-                listsVersion = ListsVersion.Of([]),
+                listsVersion = await ListsVersionOfTodaysFormAsync(call, participant.Id),
                 narrative = "",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
             }),
         };
     }
@@ -501,6 +505,8 @@ internal static class EndpointMatrix
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             }),
@@ -567,6 +573,22 @@ internal static class EndpointMatrix
     }
 
     // The draft's path of the participant's note for today in Melbourne, by the app's own clock.
+    // The lists' version that the participant's form opens with, as A's worker's page reads it from the app: A's lists
+    // are not the seeded ones alone, since other tests add groups and items to A for good.
+    private static async Task<string?> ListsVersionOfTodaysFormAsync(EndpointCall call, Guid participantId)
+    {
+        using var client = call.Services.GetRequiredService<IServer>() is TestServer server
+            ? server.CreateClient()
+            : throw new InvalidOperationException("The matrix calls an app that runs on the test server.");
+        client.BaseAddress = new("https://localhost");
+        client.SignInAs(call.Seeded.A.WorkerId);
+        using var response = await client.GetAsync(
+            TodaysDraftPath(call, participantId), TestContext.Current.CancellationToken);
+        response.EnsureSuccessStatusCode();
+        var form = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        return form.GetProperty("listsVersion").GetString();
+    }
+
     private static string TodaysDraftPath(EndpointCall call, Guid participantId)
     {
         var today = call.Services.GetRequiredService<MelbourneClock>().Today()

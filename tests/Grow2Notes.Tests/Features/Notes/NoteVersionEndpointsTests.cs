@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
@@ -487,7 +488,8 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         var noteId = await LiveNoteIdAsync(participant.Id, today);
         var version = Assert.Single(await StoredVersionsAsync(noteId));
         Assert.Equal(
-            [GoalRow(version.Id, 0, goal.Id, "Makes own breakfast", true)], await StoredItemsAsync(version.Id));
+            [GoalRow(version.Id, 0, goal.Id, "Makes own breakfast", true)],
+            (await StoredItemsAsync(version.Id)).Where(row => row.Section == (byte)NoteSection.Goal));
     }
 
     // design.md §3.3 and §3.4: the draft started at 11:58 pm, and is submitted at 12:01 am, when today is the next
@@ -580,6 +582,8 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
                 seq = 2,
                 narrative = "Jane made toast and tea.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             },
@@ -633,6 +637,8 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
                 seq = caller == Caller.WorkerOfA ? 2 : 1,
                 narrative = "Jane made toast and tea.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             },
@@ -695,23 +701,38 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
     }
 
     // The validation filter's checks (NoteVersionRequest), before the endpoint looks for the participant or a note:
-    // a base version other than 0, which T14 takes, and a body without its narrative or ticks.
+    // a base version other than 0, which T14 takes, and a body without its narrative, ticks or picks, or with one null.
+    // Each case breaks the one member of an otherwise valid body.
     [Theory]
-    [InlineData("""{"baseVersion":1,"narrative":"Jane made toast.","tickedGoalIds":[]}""", "baseVersion")]
-    [InlineData("""{"baseVersion":-1,"narrative":"Jane made toast.","tickedGoalIds":[]}""", "baseVersion")]
-    [InlineData("""{"baseVersion":0,"tickedGoalIds":[]}""", "narrative")]
-    [InlineData("""{"baseVersion":0,"narrative":null,"tickedGoalIds":[]}""", "narrative")]
-    [InlineData("""{"baseVersion":0,"narrative":"Jane made toast."}""", "tickedGoalIds")]
-    [InlineData("""{"baseVersion":0,"narrative":"Jane made toast.","tickedGoalIds":null}""", "tickedGoalIds")]
+    [InlineData("baseVersion", "1")]
+    [InlineData("baseVersion", "-1")]
+    [InlineData("narrative", null)]
+    [InlineData("narrative", "null")]
+    [InlineData("tickedGoalIds", null)]
+    [InlineData("tickedGoalIds", "null")]
+    [InlineData("pickedGroupIds", null)]
+    [InlineData("pickedGroupIds", "null")]
+    [InlineData("tickedCommonItemIds", null)]
+    [InlineData("tickedCommonItemIds", "null")]
     public async Task A_body_that_breaks_a_rule_is_refused_under_that_field_and_writes_nothing(
-        string body, string field)
+        string field, string? value)
     {
+        var body = JsonSerializer.SerializeToNode(Body("Jane made toast."))!.AsObject();
+        if (value is null)
+        {
+            body.Remove(field);
+        }
+        else
+        {
+            body[field] = JsonNode.Parse(value);
+        }
+
         var (participantId, _) = await AddDraftOfTheWorkerAsync();
         var before = await StoredRowsAsync();
         using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
         using var request = new HttpRequestMessage(HttpMethod.Post, VersionsPath(participantId, NoteDate))
         {
-            Content = new StringContent(body, Encoding.UTF8, "application/json"),
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
         };
         request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
         request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
@@ -763,6 +784,104 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         Assert.Equal(before, await StoredRowsAsync());
     }
 
+    // design.md §5.8 step 5 and §5.3: Submit writes one group row for each group of the snapshot, Every note first, with
+    // the picks sent, and one common item row for each of its common items, by group and then item, naming its group by
+    // that group's place, ticked as sent, those of a group that is not picked unticked. The snapshot's names are
+    // copied, not the live groups', which a manager may have renamed since the draft started (S02.05.04).
+    [Fact]
+    public async Task Submit_copies_every_group_and_every_common_item_of_the_snapshot()
+    {
+        var (participantId, noteId, lists) = await AddDraftWithGroupsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SubmitAsync(
+            client,
+            participantId,
+            NoteDate,
+            Guid.NewGuid(),
+            PicksBody([lists.Outing, lists.Outing], [lists.EveryNoteItem, lists.OutingItemB, lists.OutingItemB]));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var version = Assert.Single(await StoredVersionsAsync(noteId));
+        var organisationId = seeded.A.OrganisationId;
+        Assert.Equal(
+            [
+                new GroupRow(version.Id, 0, organisationId, seeded.A.EveryNoteGroupId, "Every note", true, false),
+                new GroupRow(version.Id, 1, organisationId, lists.Outing, "Outings as they were", false, true),
+                new GroupRow(version.Id, 2, organisationId, lists.Care, "Personal care", false, false),
+                new GroupRow(version.Id, 3, organisationId, lists.Empty, "Household", false, false),
+            ],
+            await StoredGroupsAsync(version.Id));
+        Assert.Equal(
+            [
+                GoalRow(version.Id, 0, lists.Goal, "Makes own breakfast", false),
+                CommonRow(version.Id, 0, lists.EveryNoteItem, 0, "Took medication", true),
+                CommonRow(version.Id, 1, lists.OutingItemA, 1, "Caught the bus", false),
+                CommonRow(version.Id, 2, lists.OutingItemB, 1, "Visited the library", true),
+                CommonRow(version.Id, 3, lists.CareItem, 2, "Showered", false),
+            ],
+            await StoredItemsAsync(version.Id));
+    }
+
+    // design.md §5.7 and A45: a note may be submitted with nothing picked, and then keeps every group unpicked.
+    [Fact]
+    public async Task Submit_with_nothing_picked_is_saved()
+    {
+        var (participantId, noteId, _) = await AddDraftWithGroupsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SubmitAsync(
+            client, participantId, NoteDate, Guid.NewGuid(), PicksBody([], []));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var version = Assert.Single(await StoredVersionsAsync(noteId));
+        Assert.All(await StoredGroupsAsync(version.Id), group => Assert.False(group.IsPicked));
+        Assert.All(
+            (await StoredItemsAsync(version.Id)).Where(row => row.Section == (byte)NoteSection.CommonItem),
+            row => Assert.False(row.IsTicked));
+    }
+
+    // design.md §5.7: the picks and the ticks are checked against the snapshot, in this order, before the header moves:
+    // Every note, a group with no item and an ID that is not a group of the snapshot, one added since the draft
+    // started included, cannot be picked; an item that is not in Every note or a picked group, one added to Every note
+    // since included, cannot be ticked.
+    [Theory]
+    [InlineData("every note", "pickedGroupIds")]
+    [InlineData("an empty group", "pickedGroupIds")]
+    [InlineData("an unknown group", "pickedGroupIds")]
+    [InlineData("a group added since", "pickedGroupIds")]
+    [InlineData("an item of an unpicked group", "tickedCommonItemIds")]
+    [InlineData("an unknown item", "tickedCommonItemIds")]
+    [InlineData("an item added to every note since", "tickedCommonItemIds")]
+    public async Task A_pick_or_a_tick_outside_the_snapshot_is_refused_and_creates_nothing(string change, string field)
+    {
+        var (participantId, noteId, lists) = await AddDraftWithGroupsAsync();
+        var organisationId = seeded.A.OrganisationId;
+        var added = await factory.Services.AddGroupAsync(organisationId, new("Meal preparation", 3));
+        await factory.Services.AddItemsAsync(organisationId, added.Id, new TestCommonItem("Cooked dinner", 0));
+        var addedToEveryNote = await factory.Services.AddItemsAsync(
+            organisationId, seeded.A.EveryNoteGroupId, new TestCommonItem("Locked the door", 1));
+        var body = change switch
+        {
+            "every note" => PicksBody([seeded.A.EveryNoteGroupId], []),
+            "an empty group" => PicksBody([lists.Empty], []),
+            "an unknown group" => PicksBody([Guid.NewGuid()], []),
+            "a group added since" => PicksBody([added.Id], []),
+            "an item of an unpicked group" => PicksBody([lists.Outing], [lists.CareItem]),
+            "an unknown item" => PicksBody([], [Guid.NewGuid()]),
+            _ => PicksBody([], [addedToEveryNote[0]]),
+        };
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SubmitAsync(client, participantId, NoteDate, Guid.NewGuid(), body);
+
+        await ReadValidationProblemAsync(response, field);
+        Assert.Equal(before, await StoredRowsAsync());
+        Assert.Equal(1, await WorkingCopiesAsync(noteId));
+        Assert.Equal((byte)NoteStatus.Draft, (await StoredNoteAsync(noteId)).Status);
+    }
+
     private static string VersionsPath(Guid participantId, DateOnly noteDate) =>
         string.Create(
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/versions");
@@ -778,7 +897,29 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
     // sends as null while the box is unticked.
     private static object Body(
         string narrative, bool isFlagged = false, string? flagReason = null, params Guid[] tickedGoalIds) =>
-        new { baseVersion = 0, narrative, tickedGoalIds, isFlagged, flagReason };
+        new
+        {
+            baseVersion = 0,
+            narrative,
+            tickedGoalIds,
+            pickedGroupIds = Array.Empty<Guid>(),
+            tickedCommonItemIds = Array.Empty<Guid>(),
+            isFlagged,
+            flagReason,
+        };
+
+    // The same, unflagged, with the common item groups picked and the common items ticked, and no goal ticked.
+    private static object PicksBody(IReadOnlyList<Guid> pickedGroupIds, IReadOnlyList<Guid> tickedCommonItemIds) =>
+        new
+        {
+            baseVersion = 0,
+            narrative = "Jane made toast.",
+            tickedGoalIds = Array.Empty<Guid>(),
+            pickedGroupIds,
+            tickedCommonItemIds,
+            isFlagged = false,
+            flagReason = (string?)null,
+        };
 
     // Over HTTPS with the caller's antiforgery token and the key, as the SPA submits (tests/README.md).
     private static async Task<HttpResponseMessage> SubmitAsync(
@@ -843,6 +984,8 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
                 listsVersion = form.GetProperty("listsVersion").GetString(),
                 narrative,
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             },
@@ -852,6 +995,65 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
     private static GoalItemRow GoalRow(Guid versionId, int position, Guid goalId, string text, bool isTicked) =>
         new(versionId, (byte)NoteSection.Goal, position, goalId, null, null, text, isTicked);
+
+    private static GoalItemRow CommonRow(
+        Guid versionId, int position, Guid itemId, int groupPosition, string text, bool isTicked) =>
+        new(versionId, (byte)NoteSection.CommonItem, position, null, itemId, groupPosition, text, isTicked);
+
+    // A participant of A's own with a draft of A's worker for NoteDate whose snapshot holds a goal, Every note,
+    // Outings, Personal care and Household, as a note's first save leaves one. The live group is named "Outings
+    // renamed", as if a manager renamed it since the draft started (S02.05.04), and the draft keeps its name.
+    private async Task<(Guid ParticipantId, Guid NoteId, Lists Lists)> AddDraftWithGroupsAsync()
+    {
+        var organisationId = seeded.A.OrganisationId;
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goal = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 0));
+        var everyNoteItem = await factory.Services.AddItemsAsync(
+            organisationId, seeded.A.EveryNoteGroupId, new TestCommonItem("Took medication", 0));
+        var groups = await factory.Services.AddGroupsAsync(
+            organisationId, new("Outings renamed", 0), new("Personal care", 1), new("Household", 2));
+        var outing = await factory.Services.AddItemsAsync(
+            organisationId, groups[0], new("Caught the bus", 0), new("Visited the library", 1));
+        var care = await factory.Services.AddItemsAsync(organisationId, groups[1], new TestCommonItem("Showered", 0));
+        var lists = new Lists(
+            goal.Id, everyNoteItem[0], groups[0], outing[0], outing[1], groups[1], care[0], groups[2]);
+        var noteId = await factory.Services.AddDraftAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            [
+                new(NoteSection.Goal, goal.Id, null, "Makes own breakfast", false),
+                new(NoteSection.CommonItem, lists.EveryNoteItem, seeded.A.EveryNoteGroupId, "Took medication", false),
+                new(NoteSection.CommonItem, lists.OutingItemA, lists.Outing, "Caught the bus", false),
+                new(NoteSection.CommonItem, lists.OutingItemB, lists.Outing, "Visited the library", false),
+                new(NoteSection.CommonItem, lists.CareItem, lists.Care, "Showered", false),
+            ],
+            "Jane",
+            SavedAtUtc,
+            Groups:
+            [
+                new(seeded.A.EveryNoteGroupId, "Every note", true, false),
+                new(lists.Outing, "Outings as they were", false, false),
+                new(lists.Care, "Personal care", false, false),
+                new(lists.Empty, "Household", false, false),
+            ]));
+        return (participant.Id, noteId, lists);
+    }
+
+    private async Task<List<GroupRow>> StoredGroupsAsync(Guid versionId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<GroupRow>($"""
+                SELECT [NoteVersionId], [Position], [OrganisationId], [CommonItemGroupId], [Name], [IsEveryNote],
+                       [IsPicked]
+                FROM [NoteVersionGroup]
+                WHERE [NoteVersionId] = {versionId}
+                ORDER BY [Position]
+                """)
+            .ToListAsync(TestContext.Current.CancellationToken);
+    }
 
     // A participant of A's own with a draft of A's worker for NoteDate, as its first save leaves it, with no goals.
     private async Task<(Guid ParticipantId, Guid NoteId)> AddDraftOfTheWorkerAsync()
@@ -1019,6 +1221,30 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         int? GroupPosition,
         string Text,
         bool IsTicked);
+
+    /// <summary>A <c>NoteVersionGroup</c> row.</summary>
+    private sealed record GroupRow(
+        Guid NoteVersionId,
+        int Position,
+        Guid OrganisationId,
+        Guid CommonItemGroupId,
+        string Name,
+        bool IsEveryNote,
+        bool IsPicked);
+
+    /// <summary>
+    /// The IDs of A's lists behind <c>AddDraftWithGroupsAsync</c>'s draft: its goal, Every note's item, and the groups
+    /// Outings, with two items, Personal care, with one, and Household, with none, in the order of its snapshot.
+    /// </summary>
+    private sealed record Lists(
+        Guid Goal,
+        Guid EveryNoteItem,
+        Guid Outing,
+        Guid OutingItemA,
+        Guid OutingItemB,
+        Guid Care,
+        Guid CareItem,
+        Guid Empty);
 
     /// <summary>An audit entry's fields, its <c>Details</c> as the JSON stored.</summary>
     private sealed record WrittenEvent(

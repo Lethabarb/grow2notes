@@ -75,7 +75,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal("2026-10-01T06:42:00Z", worker.GetProperty("firstSubmittedAtUtc").GetString());
         var current = worker.GetProperty("current");
         Assert.Equal(
-            ["narrative", "isFlagged", "flagReason", "goals"],
+            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(narrative, current.GetProperty("narrative").GetString());
         Assert.True(current.GetProperty("isFlagged").GetBoolean());
@@ -128,6 +128,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.False(current.GetProperty("isFlagged").GetBoolean());
         Assert.Equal(JsonValueKind.Null, current.GetProperty("flagReason").ValueKind);
         Assert.Equal([], Goals(current));
+        Assert.Equal("[]", current.GetProperty("commonItemGroups").GetRawText());
     }
 
     // design.md §6.3 and §4.2's "Someone else's draft": a draft's header alone, those three members in that order, to a
@@ -210,7 +211,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal("2026-09-30T23:14:00Z", note.GetProperty("startedAtUtc").GetString());
         var current = note.GetProperty("current");
         Assert.Equal(
-            ["narrative", "isFlagged", "flagReason", "goals"],
+            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(narrative, current.GetProperty("narrative").GetString());
         Assert.True(current.GetProperty("isFlagged").GetBoolean());
@@ -230,7 +231,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var current = (await ReadAsync(Caller.ManagerOfA, participant.Id)).GetProperty("current");
 
         Assert.Equal(
-            """{"narrative":"","isFlagged":false,"flagReason":null,"goals":[]}""", current.GetRawText());
+            """{"narrative":"","isFlagged":false,"flagReason":null,"goals":[],"commonItemGroups":[]}""",
+            current.GetRawText());
     }
 
     // A submit that commits between the manager's read of the draft and their read of its working copy takes the
@@ -259,6 +261,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
                     baseVersion = 0,
                     narrative = "Jane made toast.",
                     tickedGoalIds = Array.Empty<Guid>(),
+                    pickedGroupIds = Array.Empty<Guid>(),
+                    tickedCommonItemIds = Array.Empty<Guid>(),
                     isFlagged = false,
                     flagReason = (string?)null,
                 }),
@@ -357,10 +361,178 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal(1, await WorkingCopiesAsync(draftId));
     }
 
-    // A version's goals, in its order, as their wording and tick.
-    private static List<(string? Text, bool IsTicked)> Goals(JsonElement current) =>
+    // design.md §6.3 and D47: Every note, when it has items, then the picked groups, in the version's own places, with
+    // the name and wording it was saved with, every item of them, ticked or not. A group that was not picked leaves no
+    // trace, its name and its items included, though it holds items.
+    [Fact]
+    public async Task A_submitted_note_gives_Every_note_then_the_picked_groups_with_every_item_and_nothing_of_the_rest()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var lists = await AddListsAsync();
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            SubmittedAtUtc,
+            Groups:
+            [
+                new(
+                    seeded.A.EveryNoteGroupId,
+                    "Every note",
+                    true,
+                    false,
+                    [new(lists.EveryNoteItem, "Took medication", true)]),
+                new(
+                    lists.Outing,
+                    "Outings as they were",
+                    false,
+                    true,
+                    [
+                        new(lists.OutingItemA, "Caught the bus", true),
+                        new(lists.OutingItemB, "Went to the shop", false),
+                    ]),
+                new(lists.Care, "Personal care", false, false, [new(lists.CareItem, "Showered", false)]),
+                new(lists.Meals, "Meal preparation", false, true, [new(lists.MealsItem, "Cooked dinner", true)]),
+            ]));
+
+        var raw = await ReadAsync(Caller.WorkerOfA, participant.Id);
+
+        var current = raw.GetProperty("current");
+        Assert.Equal(
+            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            current.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(
+            [
+                ("Every note", true, "Took medication", true),
+                ("Outings as they were", false, "Caught the bus", true),
+                ("Outings as they were", false, "Went to the shop", false),
+                ("Meal preparation", false, "Cooked dinner", true),
+            ],
+            CommonItemGroups(current));
+        Assert.DoesNotContain("Personal care", raw.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Showered", raw.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain(lists.Care.ToString(), raw.GetRawText(), StringComparison.Ordinal);
+    }
+
+    // An Every note with no item rows has nothing to show and is left out, and a version with nothing to show gives an
+    // empty array, which the read view calls "No common items set".
+    [Fact]
+    public async Task An_Every_note_with_no_items_is_left_out_and_nothing_to_show_gives_an_empty_array()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var lists = await AddListsAsync();
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            SubmittedAtUtc,
+            Groups:
+            [
+                new(seeded.A.EveryNoteGroupId, "Every note", true, false, []),
+                new(lists.Care, "Personal care", false, false, [new(lists.CareItem, "Showered", false)]),
+            ]));
+
+        var current = (await ReadAsync(Caller.WorkerOfA, participant.Id)).GetProperty("current");
+
+        Assert.Equal("""[]""", current.GetProperty("commonItemGroups").GetRawText());
+    }
+
+    // design.md §3.4 and §6.3: a manager also gets the working copy's shown groups, by the same rule, in the snapshot's
+    // order and with its names; a worker gets the header alone.
+    [Fact]
+    public async Task A_draft_gives_a_manager_its_shown_groups_and_a_worker_none()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var lists = await AddListsAsync();
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        await factory.Services.AddDraftAsync(seeded.A, new(
+            participant.Id,
+            NoteDate,
+            author,
+            StartedAtUtc,
+            [
+                new(NoteSection.CommonItem, lists.EveryNoteItem, seeded.A.EveryNoteGroupId, "Took medication", true),
+                new(NoteSection.CommonItem, lists.OutingItemA, lists.Outing, "Caught the bus", false),
+                new(NoteSection.CommonItem, lists.CareItem, lists.Care, "Showered", false),
+            ],
+            "Jane made toast.",
+            SavedAtUtc,
+            Groups:
+            [
+                new(seeded.A.EveryNoteGroupId, "Every note", true, false),
+                new(lists.Outing, "Outings as they were", false, true),
+                new(lists.Care, "Personal care", false, false),
+                new(lists.Meals, "Meal preparation", false, true),
+            ]));
+
+        var manager = await ReadAsync(Caller.ManagerOfA, participant.Id);
+        var worker = await ReadAsync(Caller.WorkerOfA, participant.Id);
+
+        Assert.Equal(
+            [
+                ("Every note", true, "Took medication", true),
+                ("Outings as they were", false, "Caught the bus", false),
+            ],
+            CommonItemGroups(manager.GetProperty("current")));
+        Assert.DoesNotContain("Showered", manager.GetRawText(), StringComparison.Ordinal);
+        Assert.Equal(
+            ["status", "authorDisplayName", "startedAtUtc"],
+            worker.EnumerateObject().Select(property => property.Name));
+    }
+
+    // The items of a version's shown groups, in their order, each as its group's name and whether it is Every note,
+    // and its own wording and tick. A tuple holding a list would compare the list by reference.
+    private static List<(string? Name, bool IsEveryNote, string? Text, bool IsTicked)> CommonItemGroups(
+        JsonElement current) =>
     [
-        .. current.GetProperty("goals").EnumerateArray().Select(goal =>
+        .. current.GetProperty("commonItemGroups").EnumerateArray().SelectMany(group =>
+        {
+            Assert.Equal(["name", "isEveryNote", "items"], group.EnumerateObject().Select(property => property.Name));
+            var name = group.GetProperty("name").GetString();
+            var isEveryNote = group.GetProperty("isEveryNote").GetBoolean();
+            return TickedRows(group, "items").Select(item => (name, isEveryNote, item.Text, item.IsTicked));
+        }),
+    ];
+
+    /// <summary>
+    /// The IDs of the groups and items that <c>AddListsAsync</c> added to A: Every note's item, the groups Community
+    /// outing, with two items, Personal care, with one, and Meal preparation, with one.
+    /// </summary>
+    private sealed record Lists(
+        Guid EveryNoteItem,
+        Guid Outing,
+        Guid OutingItemA,
+        Guid OutingItemB,
+        Guid Care,
+        Guid CareItem,
+        Guid Meals,
+        Guid MealsItem);
+
+    // Other tests add groups and items to A for good, so a test that looks at them looks at its own alone.
+    private async Task<Lists> AddListsAsync()
+    {
+        var organisationId = seeded.A.OrganisationId;
+        var everyNote = await factory.Services.AddItemsAsync(
+            organisationId, seeded.A.EveryNoteGroupId, new TestCommonItem("Took medication", 0));
+        var groups = await factory.Services.AddGroupsAsync(
+            organisationId, new("Community outing", 0), new("Personal care", 1), new("Meal preparation", 2));
+        var outing = await factory.Services.AddItemsAsync(
+            organisationId, groups[0], new("Caught the bus", 0), new("Visited the library", 1));
+        var care = await factory.Services.AddItemsAsync(organisationId, groups[1], new TestCommonItem("Showered", 0));
+        var meals = await factory.Services.AddItemsAsync(
+            organisationId, groups[2], new TestCommonItem("Cooked dinner", 0));
+        return new(everyNote[0], groups[0], outing[0], outing[1], groups[1], care[0], groups[2], meals[0]);
+    }
+
+    // A version's goals, in its order, as their wording and tick.
+    private static List<(string? Text, bool IsTicked)> Goals(JsonElement current) => TickedRows(current, "goals");
+
+    // The rows of a version's or a group's list, in its order, as their wording and tick.
+    private static List<(string? Text, bool IsTicked)> TickedRows(JsonElement parent, string list) =>
+    [
+        .. parent.GetProperty(list).EnumerateArray().Select(goal =>
         {
             Assert.Equal(["text", "isTicked"], goal.EnumerateObject().Select(property => property.Name));
             return (goal.GetProperty("text").GetString(), goal.GetProperty("isTicked").GetBoolean());

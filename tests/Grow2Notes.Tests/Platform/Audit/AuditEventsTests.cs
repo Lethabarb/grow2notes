@@ -973,9 +973,11 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             {
                 clientId = Guid.NewGuid(),
                 seq = 1,
-                listsVersion = ListsVersion.Of([new(goal.Id, "Makes own breakfast", IsTicked: false)]),
+                listsVersion = await ListsVersionOfTodaysFormAsync(client, participant.Id, today),
                 narrative = "Jane made toast.",
                 tickedGoalIds = new[] { goal.Id },
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -1050,6 +1052,8 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = new[] { goal.Id },
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = true,
                 flagReason = "Jane seemed unwell.",
             }),
@@ -1220,6 +1224,20 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
                 .Select(g => g.ArchivedAtUtc)
                 .SingleAsync(TestContext.Current.CancellationToken);
         }
+    }
+
+    // The lists' version that the participant's form opens with, as the page reads it: A's lists are not the seeded
+    // ones alone, since other tests add groups and items to A for good.
+    private static async Task<string?> ListsVersionOfTodaysFormAsync(
+        HttpClient client, Guid participantId, DateOnly today)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var path = string.Create(
+            CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{today:yyyy-MM-dd}/draft");
+        using var response = await client.GetAsync(path, cancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var form = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        return form.GetProperty("listsVersion").GetString();
     }
 
     // The ID of the one note of a participant added for a row, through the app's context under A's tenant.
