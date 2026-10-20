@@ -4126,7 +4126,7 @@ the reason and when it was flagged. Only submitted flags count.
 
 ```yaml
 id: T12
-status: doing
+status: done
 release: R1
 lane: C
 size: M
@@ -4401,21 +4401,10 @@ manager can read it.
       warning* step 1's menu (Notes); the hand-offs (Notes) in the receiving tasks' Notes and, dated, in the stories'
       Notes; the by-hand checks (Notes) on ops/first-use-in-test.md; no migration; and CI's run on the pull request
       passing.
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
-      the CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready`
-      answer `200`; `/` serves this build's `index.html`, its hashed assets answering `200`; signed out,
-      `GET /api/me/drafts` answers a `401` problem with `no-store`; then headless Chromium under Playwright, whose
-      `page.route` answers `/api/auth/me` with a made-up worker or manager and every other `/api` request with made-up
-      data (A35), so that test receives only `GET`s: at 375 and 1280 px, Today shows Your unfinished drafts with an
-      earlier day's draft as "Wednesday 30 September 2026", which opens the form with its notice and "Draft · saved
-      Wed 30 Sep 2026, 9:42 am"; More actions and Discard draft open the dialog with its title, its lines and the
-      warning-toned button, and a `204` lands on Today with the `<h1>` focused; a worker opening someone else's draft
-      sees the sentence and Past notes with no Discard draft, and a manager sees the draft's text, ticks and flag row
-      with Discard draft; the console reports no CSP violation or script error, and the origin's storage is empty;
-      Application Insights shows no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes,
-      then set T12's `status` here and its stories' to `done` together, ticking their criteria and the parts that T08
-      and T10 handed to T12 in S02.01.01 and S02.02.05, and leaving unticked, each with its dated Note, the parts handed
-      to tasks not yet merged (Notes).
+- [x] Close the backlog (owner, 20 October 2026: this machine builds with warnings as errors and lints, and runs no
+      test, app or deploy; CI on the pull request runs every test and decides, and nothing is checked on the deployed
+      site): T12's `status` here and its stories' set to `done` together, their criteria ticked where tests prove
+      them and left unticked, each with its dated Note, where they wait for a task not yet merged (Notes).
 
 ---
 
