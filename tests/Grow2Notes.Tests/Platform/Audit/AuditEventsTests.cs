@@ -973,9 +973,13 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             {
                 clientId = Guid.NewGuid(),
                 seq = 1,
-                listsVersion = ListsVersion.Of([new(goal.Id, "Makes own breakfast", IsTicked: false)]),
+                listsVersion = ListsVersion.Of(new NoteSnapshot(
+                    [new(a.EveryNoteGroupId, "Every note", IsEveryNote: true, IsPicked: false)],
+                    [new(NoteSection.Goal, goal.Id, null, "Makes own breakfast", false)])),
                 narrative = "Jane made toast.",
                 tickedGoalIds = new[] { goal.Id },
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -1050,6 +1054,8 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = new[] { goal.Id },
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = true,
                 flagReason = "Jane seemed unwell.",
             }),

@@ -474,9 +474,12 @@ internal static class EndpointMatrix
             {
                 clientId = Guid.NewGuid(),
                 seq = 1,
-                listsVersion = ListsVersion.Of([]),
+                listsVersion = ListsVersion.Of(
+                    new NoteSnapshot([new(call.Seeded.A.EveryNoteGroupId, "Every note", true, false)], [])),
                 narrative = "",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
             }),
         };
     }
@@ -501,6 +504,8 @@ internal static class EndpointMatrix
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             }),
