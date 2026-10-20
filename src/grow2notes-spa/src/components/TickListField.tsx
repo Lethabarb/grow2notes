@@ -6,12 +6,16 @@ export type TickItem = { id: string; text: string };
 type TickListFieldProps = {
   /** What each box's id starts with, before the item's ID, such as `goal`, so that `goal-hint` is the hint's. */
   idPrefix: string;
-  /** The list's `<h2>`, in its legend, such as "1. Goals". */
+  /** The list's heading, in its legend, such as "1. Goals" or, among the common items, a group's name. */
   heading: string;
-  /** What a tick means, under the legend, such as "Ticked means reached.". */
-  hint: string;
+  /** The heading's level: an `<h2>` for a section of the form, which is the default, or an `<h3>` inside one. */
+  headingLevel?: 2 | 3;
+  /** What a tick means, under the legend, such as "Ticked means reached."; none where `hintId` is given. */
+  hint?: string;
+  /** The ID of a hint that the form shows once for several lists, which describes the list in place of its own. */
+  hintId?: string;
   /** In place of the list when it has no items, such as "No goals set up for Jane yet. A manager can add them.". */
-  emptyText: string;
+  emptyText?: string;
   /** In the snapshot's order, which the list keeps. */
   items: readonly TickItem[];
   /** The IDs of the items ticked, which the form owns. */
@@ -26,13 +30,15 @@ type TickListFieldProps = {
  * `<fieldset>`, its `<legend>` the list's `<h2>`, described by the hint under it, then a full-width row per item, the
  * whole row the item's `<label>`, around the native box, drawn 40 px with borders, and the item's wording, never
  * truncated; or, with no items, the heading and the sentence alone, as an empty fieldset confuses screen readers. A tap
- * anywhere on the row toggles the box, as a label does, with no handler of its own. T13 gives it a heading level and a
- * shared hint for the common items' lists, and T09's flag row and T13's group rows take its `.box` and row styles.
+ * anywhere on the row toggles the box, as a label does, with no handler of its own. The common items' lists are
+ * `<h3>`s described by one hint shared by all, and T09's flag row and T13's group rows take its `.box` and row styles.
  */
 export function TickListField({
   idPrefix,
   heading,
+  headingLevel = 2,
   hint,
+  hintId,
   emptyText,
   items,
   ticked,
@@ -40,24 +46,27 @@ export function TickListField({
   className,
 }: TickListFieldProps) {
   const groupClass = className === undefined ? styles.group : `${styles.group} ${className}`;
+  const Heading = headingLevel === 2 ? 'h2' : 'h3';
   if (items.length === 0) {
     return (
       <div className={groupClass}>
-        <h2 className={styles.heading}>{heading}</h2>
-        <p className={styles.empty}>{emptyText}</p>
+        <Heading className={styles.heading}>{heading}</Heading>
+        {emptyText !== undefined && <p className={styles.empty}>{emptyText}</p>}
       </div>
     );
   }
 
-  const hintId = `${idPrefix}-hint`;
+  const ownHintId = `${idPrefix}-hint`;
   return (
-    <fieldset className={groupClass} aria-describedby={hintId}>
+    <fieldset className={groupClass} aria-describedby={hintId ?? ownHintId}>
       <legend className={styles.legend}>
-        <h2 className={styles.heading}>{heading}</h2>
+        <Heading className={styles.heading}>{heading}</Heading>
       </legend>
-      <p id={hintId} className={styles.hint}>
-        {hint}
-      </p>
+      {hintId === undefined && (
+        <p id={ownHintId} className={styles.hint}>
+          {hint}
+        </p>
+      )}
       {items.map((item) => {
         const id = `${idPrefix}-${item.id}`;
         return (

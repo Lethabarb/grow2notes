@@ -13,6 +13,20 @@ function Goals({ items }: { items: readonly TickedItem[] }) {
 }
 
 describe('TickListRead', () => {
+  it('has an <h3> with headingLevel 3, and no <h2>', () => {
+    render(<TickListRead heading="Community outing" headingLevel={3} items={[breakfast]} />);
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Community outing');
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+  });
+
+  it('shows the heading alone, with no sentence, for no items and no emptyText', () => {
+    const { container } = render(<TickListRead heading="Community outing" headingLevel={3} items={[]} />);
+
+    expect(screen.getByRole('heading', { level: 3 })).toBeInTheDocument();
+    expect(container.querySelector('p, ul')).toBeNull();
+  });
+
   it('lists each item under the <h2>, in the order given, read as its wording, then ticked or not ticked', () => {
     render(<Goals items={[breakfast, bus]} />);
 

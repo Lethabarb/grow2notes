@@ -11,6 +11,11 @@
   min-inline-size: 0;
 }
 
+/* Before a list of the common items that follows another, 24 px; no display, so that `hidden` still hides it. */
+.block {
+  margin-block-start: var(--space-5);
+}
+
 .legend {
   padding: 0;
 }

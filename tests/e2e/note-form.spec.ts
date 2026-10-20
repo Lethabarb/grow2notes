@@ -521,7 +521,11 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
     'Flag for manager',
     'Reason',
   ]);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expect(box(page)).toHaveAttribute('placeholder', savedPrompts);
   await expect(box(page)).toHaveAttribute('aria-required', 'true');
   await expect(box(page)).not.toHaveAttribute('maxlength');
@@ -578,7 +582,11 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await expect(main(page).getByText('No goals set up for Ravi yet. A manager can add them.', { exact: true }))
     .toBeVisible();
   await expect(main(page).getByRole('group')).toHaveCount(0);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expectAxeToPass(page);
   await expectNothingKept(page, 'Jane', 'Ravi', 'Caught the bus', breakfast.text, bus.text);
 });
@@ -2178,7 +2186,8 @@ for (const width of [375, 1280]) {
   test(`keyboard only at ${width} px: the takeover banner's Keep and Load after the back link, each by a key`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 800 });
+    // Tall enough that the box, below Common items' sentence and under the banner, stays on screen.
+    await page.setViewportSize({ width, height: 1000 });
     const store = twoGoals();
     await serveMe(page, worker);
     await serveToday(page, worker.today, participants);
