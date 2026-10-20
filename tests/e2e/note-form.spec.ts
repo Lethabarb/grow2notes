@@ -2401,6 +2401,7 @@ test('signed in for real at 375 px, a worker discards and starts again; a manage
         { text: breakfast.text, isTicked: true },
         { text: bus.text, isTicked: false },
       ],
+      commonItemGroups: [],
     },
   });
   await expect(heading(page)).toBeFocused();
