@@ -404,9 +404,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             [
-                ("Every note", true, [("Took medication", true)]),
-                ("Outings as they were", false, [("Caught the bus", true), ("Went to the shop", false)]),
-                ("Meal preparation", false, [("Cooked dinner", true)]),
+                ("Every note", true, "Took medication", true),
+                ("Outings as they were", false, "Caught the bus", true),
+                ("Outings as they were", false, "Went to the shop", false),
+                ("Meal preparation", false, "Cooked dinner", true),
             ],
             CommonItemGroups(current));
         Assert.DoesNotContain("Personal care", raw.GetRawText(), StringComparison.Ordinal);
@@ -471,8 +472,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
         Assert.Equal(
             [
-                ("Every note", true, [("Took medication", true)]),
-                ("Outings as they were", false, [("Caught the bus", false)]),
+                ("Every note", true, "Took medication", true),
+                ("Outings as they were", false, "Caught the bus", false),
             ],
             CommonItemGroups(manager.GetProperty("current")));
         Assert.DoesNotContain("Showered", manager.GetRawText(), StringComparison.Ordinal);
@@ -481,17 +482,17 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             worker.EnumerateObject().Select(property => property.Name));
     }
 
-    // A version's shown groups, in their order, as the name, whether it is Every note, and the items' wording and tick.
-    private static List<(string? Name, bool IsEveryNote, List<(string? Text, bool IsTicked)> Items)> CommonItemGroups(
+    // The items of a version's shown groups, in their order, each as its group's name and whether it is Every note,
+    // and its own wording and tick. A tuple holding a list would compare the list by reference.
+    private static List<(string? Name, bool IsEveryNote, string? Text, bool IsTicked)> CommonItemGroups(
         JsonElement current) =>
     [
-        .. current.GetProperty("commonItemGroups").EnumerateArray().Select(group =>
+        .. current.GetProperty("commonItemGroups").EnumerateArray().SelectMany(group =>
         {
             Assert.Equal(["name", "isEveryNote", "items"], group.EnumerateObject().Select(property => property.Name));
-            return (
-                group.GetProperty("name").GetString(),
-                group.GetProperty("isEveryNote").GetBoolean(),
-                TickedRows(group, "items"));
+            var name = group.GetProperty("name").GetString();
+            var isEveryNote = group.GetProperty("isEveryNote").GetBoolean();
+            return TickedRows(group, "items").Select(item => (name, isEveryNote, item.Text, item.IsTicked));
         }),
     ];
 
