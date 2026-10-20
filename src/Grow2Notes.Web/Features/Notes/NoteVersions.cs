@@ -13,9 +13,10 @@ namespace Grow2Notes.Web.Features.Notes;
 /// adds Save changes on a submitted note.
 /// </summary>
 /// <remarks>
-/// Each save runs in one transaction (§5.9), so the header's change, its flag status with it, the version, its goal
-/// rows, the working copy's deletion and <c>note.submitted</c> commit together or not at all. The tenant query filter
-/// keeps every query, and the header's conditional update, to the tenant's organisation (§5.9 item 2).
+/// Each save runs in one transaction (§5.9), so the header's change, its flag status with it, the version, its goal,
+/// group and common item rows, the working copy's deletion and <c>note.submitted</c> commit together or not at all.
+/// The tenant query filter keeps every query, and the header's conditional update, to the tenant's organisation (§5.9
+/// item 2).
 /// </remarks>
 internal sealed class NoteVersions(
     Grow2NotesDbContext db, ITenantContext tenant, IAuditWriter audit, TimeProvider timeProvider)
@@ -39,9 +40,10 @@ internal sealed class NoteVersions(
     /// <paramref name="noteDate"/>, submitting <paramref name="actor"/>'s own draft (§5.8): moves the note to
     /// Submitted, with version 1 its current version and now its first submitted time, and, when it is flagged, To
     /// review with version 1 its flagged version (§5.8's flag rules), by one conditional update;
-    /// adds version 1 with the request's text and flag, a reason only while flagged, and the goals of the working
-    /// copy's snapshot, in its order and with its wording (A3), each ticked as the request says; deletes the working
-    /// copy (§5.6); and writes <c>note.submitted</c>, with the version number and no text.
+    /// adds version 1 with the request's text and flag, a reason only while flagged, the groups of the working copy's
+    /// snapshot, Every note first, each picked as the request says, and its goals and common items, in its order and
+    /// with its wording (A3), each ticked as the request says, those of a group that is not picked unticked; deletes
+    /// the working copy (§5.6); and writes <c>note.submitted</c>, with the version number and no text.
     /// </summary>
     /// <param name="actor">Who submits.</param>
     /// <param name="participantId">The note's participant.</param>
@@ -57,9 +59,9 @@ internal sealed class NoteVersions(
     /// for no live note; who started another user's draft, which only its author may submit (§6.3); the version saved
     /// by an earlier try with the key, changing nothing, or the refusal of a key that a version of another note has;
     /// <see cref="NoteVersionResult.VersionConflict"/> for a submitted note; the refusal of a flagged note with a
-    /// blank reason, or of a ticked ID that is not one of the snapshot's goals, the ticks a set; then the version
-    /// saved. A refusal writes nothing. There is no date or archive check, as a draft already started can still be
-    /// submitted (§3.7, §5.5 item 4).
+    /// blank reason, or of a tick or a pick that the snapshot refuses (<see cref="NoteSnapshot.RefusalOf"/>); then the
+    /// version saved. A refusal writes nothing. There is no date or archive check, as a draft already started can
+    /// still be submitted (§3.7, §5.5 item 4).
     /// </returns>
     public async Task<NoteVersionResult> SaveAsync(
         Actor actor,
@@ -128,12 +130,13 @@ internal sealed class NoteVersions(
             return await AfterAnotherSaveAsync(note.Id, idempotencyKey, cancellationToken);
         }
 
-        var goals = draft.Items.Where(item => item.Section == NoteSection.Goal).ToList();
-        var ticked = request.TickedGoalIds.ToHashSet();
-        if (!ticked.IsSubsetOf(goals.Select(goal => goal.SourceId)))
+        var snapshot = NoteSnapshot.Of(draft);
+        if (snapshot.RefusalOf(request) is { } invalid)
         {
-            return NoteVersionResult.Invalid(NoteDrafts.TickedOutsideTheGoals);
+            return NoteVersionResult.Invalid(invalid);
         }
+
+        var saved = snapshot.With(request);
 
         var now = StoredTime.UtcNow(timeProvider);
 
@@ -177,7 +180,17 @@ internal sealed class NoteVersions(
             IdempotencyKey = idempotencyKey,
         };
         db.NoteVersions.Add(version);
-        db.NoteVersionItems.AddRange(goals.Select((goal, position) => new NoteVersionItem
+        db.NoteVersionGroups.AddRange(saved.Groups.Select((group, position) => new NoteVersionGroup
+        {
+            NoteVersionId = version.Id,
+            Position = position,
+            OrganisationId = organisationId,
+            CommonItemGroupId = group.GroupId,
+            Name = group.Name,
+            IsEveryNote = group.IsEveryNote,
+            IsPicked = group.IsPicked,
+        }));
+        db.NoteVersionItems.AddRange(saved.Goals.Select((goal, position) => new NoteVersionItem
         {
             NoteVersionId = version.Id,
             Section = NoteSection.Goal,
@@ -185,7 +198,21 @@ internal sealed class NoteVersions(
             OrganisationId = organisationId,
             GoalId = goal.SourceId,
             Text = goal.Text,
-            IsTicked = ticked.Contains(goal.SourceId),
+            IsTicked = goal.IsTicked,
+        }));
+        var groupPositions = saved.Groups
+            .Select((group, position) => (group.GroupId, position))
+            .ToDictionary(group => group.GroupId, group => group.position);
+        db.NoteVersionItems.AddRange(saved.CommonItems.Select((item, position) => new NoteVersionItem
+        {
+            NoteVersionId = version.Id,
+            Section = NoteSection.CommonItem,
+            Position = position,
+            OrganisationId = organisationId,
+            CommonItemId = item.SourceId,
+            GroupPosition = groupPositions[item.GroupId!.Value],
+            Text = item.Text,
+            IsTicked = item.IsTicked,
         }));
         db.NoteDrafts.Remove(draft);
         await db.SaveChangesAsync(cancellationToken);

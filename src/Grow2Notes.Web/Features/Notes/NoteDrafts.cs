@@ -1,4 +1,5 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
@@ -27,17 +28,6 @@ internal sealed class NoteDrafts(
     TimeProvider timeProvider)
 {
     /// <summary>
-    /// The refusal of a ticked ID that is not one of the note's goals, under the body's <c>tickedGoalIds</c>, which
-    /// <see cref="NoteVersions"/> answers too. The screen sends only the IDs of the goals it shows, so this answers
-    /// only a request made some other way.
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, string[]> TickedOutsideTheGoals =
-        new Dictionary<string, string[]>
-        {
-            [nameof(DraftSaveRequest.TickedGoalIds)] = ["Each ticked goal must be one of the note's goals."],
-        };
-
-    /// <summary>
     /// The note form for <paramref name="actor"/> on <paramref name="participantId"/>'s note for
     /// <paramref name="noteDate"/>: with no live note, the template of a new note, unless the date is after today in
     /// Melbourne, when no note can exist (§5.5 item 4), or, for an actor who is not a manager, before yesterday (A65);
@@ -56,7 +46,7 @@ internal sealed class NoteDrafts(
         if (note is null)
         {
             return await MayOpenANewNoteAsync(actor, noteDate, cancellationToken)
-                ? DraftRead.Of(await TemplateAsync(participantId, cancellationToken))
+                ? DraftRead.Of(await TemplateAsync(participantId, noteDate, cancellationToken))
                 : DraftRead.NotFound;
         }
 
@@ -76,14 +66,14 @@ internal sealed class NoteDrafts(
     /// <summary>
     /// Saves <paramref name="request"/> as <paramref name="actor"/>'s working copy of
     /// <paramref name="participantId"/>'s note for <paramref name="noteDate"/> (§5.6): with no live note, creates the
-    /// note, a draft whose author the actor is, and their working copy, the template's goals its snapshot, with
+    /// note, a draft whose author the actor is, and their working copy, the template its snapshot, with
     /// <c>note.draft_started</c> (§5.5 item 2), if the note may be started; with the actor's own draft, replaces its
-    /// ticks, text and flag as §5.6 numbers a page's saves, the working copy keeping the page that saved last and that
-    /// page's last number: a save of that page's numbered after it, or the first save of another page, which takes the
-    /// working copy over; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and says who
-    /// started it and when; with a submitted note, on which the actor has no working copy until T14 gives pending
-    /// edits, saves nothing, as a draft's base, 0, is stale (§6.7), and so recreates no working copy. A save sent
-    /// again after its answer was lost finds the actor's own draft, with its page and number, as does a first save
+    /// picks, ticks, text and flag as §5.6 numbers a page's saves, the working copy keeping the page that saved last
+    /// and that page's last number: a save of that page's numbered after it, or the first save of another page, which
+    /// takes the working copy over; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and
+    /// says who started it and when; with a submitted note, on which the actor has no working copy until T14 gives
+    /// pending edits, saves nothing, as a draft's base, 0, is stale (§6.7), and so recreates no working copy. A save
+    /// sent again after its answer was lost finds the actor's own draft, with its page and number, as does a first save
     /// that another of the actor's own first saves beat (§5.5 item 3), and is decided as a later save, never as a
     /// conflict.
     /// </summary>
@@ -94,9 +84,10 @@ internal sealed class NoteDrafts(
     /// item 4's rules that it breaks, in that item's order, then a lists' version that is missing or no longer the
     /// template's (§5.7); or <see cref="DraftSaveResult.VersionConflict"/> for a submitted note, also when a submit
     /// deleted the working copy after this save found the draft; or <see cref="DraftSaveResult.TakenOver"/> for any
-    /// save but the first from a page other than the one that saved last; or the refusal of a ticked ID that is not
-    /// one of the note's goals, the template's for a new note and the snapshot's for a draft, the ticks a set, so that
-    /// an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
+    /// save but the first from a page other than the one that saved last; or the refusal of a tick or a pick that the
+    /// snapshot refuses (<see cref="NoteSnapshot.RefusalOf"/>), the template's for a new note and the snapshot's for
+    /// a draft, so that an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes
+    /// nothing.
     /// </returns>
     public async Task<DraftSaveResult> SaveAsync(
         Actor actor,
@@ -158,17 +149,18 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.NotStarted(refusal);
         }
 
-        var goals = await TemplateGoalsAsync(participantId, cancellationToken);
-        if (request.ListsVersion != ListsVersion.Of(goals))
+        var template = await TemplateSnapshotAsync(participantId, cancellationToken);
+        if (request.ListsVersion != ListsVersion.Of(template))
         {
             return DraftSaveResult.NotStarted(ErrorCode.ListsChanged);
         }
 
-        var ticked = request.TickedGoalIds.ToHashSet();
-        if (!ticked.IsSubsetOf(goals.Select(goal => goal.Id)))
+        if (template.RefusalOf(request) is { } invalid)
         {
-            return DraftSaveResult.Invalid(TickedOutsideTheGoals);
+            return DraftSaveResult.Invalid(invalid);
         }
+
+        var snapshot = template.With(request);
 
         var now = StoredTime.UtcNow(timeProvider);
         var organisationId = tenant.OrganisationId;
@@ -189,11 +181,8 @@ internal sealed class NoteDrafts(
                 NoteId = note.Id,
                 EditorUserId = actor.UserId,
                 OrganisationId = organisationId,
-                Items =
-                [
-                    .. goals.Select(goal =>
-                        new DraftItem(NoteSection.Goal, goal.Id, GroupId: null, goal.Text, ticked.Contains(goal.Id))),
-                ],
+                Groups = [.. snapshot.Groups],
+                Items = [.. snapshot.Items],
                 Narrative = request.Narrative,
                 IsFlagged = request.IsFlagged,
                 FlagReason = FlagReasonOf(request),
@@ -217,7 +206,7 @@ internal sealed class NoteDrafts(
     // other, the second on what the first saved, and the higher number wins whichever comes first (autosave-status.md
     // *Behaviour* 1). A submit that has deleted the working copy holds the read until it commits, so that a save the
     // submit beat finds none, rather than updating a row deleted since: a plain read would not wait, as Azure SQL
-    // reads committed snapshots. The ticks are checked against the snapshot, which keeps the goals' wording as the
+    // reads committed snapshots. The picks and ticks are checked against the snapshot, which keeps the wording as the
     // draft started with it (A3).
     private async Task<DraftSaveResult> UpdateAsync(
         Guid noteId, Actor actor, DraftSaveRequest request, CancellationToken cancellationToken)
@@ -251,18 +240,16 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.TakenOver;
         }
 
-        var ticked = request.TickedGoalIds.ToHashSet();
-        if (!ticked.IsSubsetOf(draft.Items.Where(IsGoal).Select(item => item.SourceId)))
+        var current = NoteSnapshot.Of(draft);
+        if (current.RefusalOf(request) is { } invalid)
         {
-            return DraftSaveResult.Invalid(TickedOutsideTheGoals);
+            return DraftSaveResult.Invalid(invalid);
         }
 
         var now = StoredTime.UtcNow(timeProvider);
-        draft.Items =
-        [
-            .. draft.Items.Select(item =>
-                IsGoal(item) ? item with { IsTicked = ticked.Contains(item.SourceId) } : item),
-        ];
+        var saved = current.With(request);
+        draft.Groups = [.. saved.Groups];
+        draft.Items = [.. saved.Items];
         draft.Narrative = request.Narrative;
         draft.IsFlagged = request.IsFlagged;
         draft.FlagReason = FlagReasonOf(request);
@@ -313,46 +300,117 @@ internal sealed class NoteDrafts(
             .Select(participant => (ParticipantStatus?)participant.Status)
             .SingleOrDefaultAsync(cancellationToken);
 
-    // The template of a new note: the participant's goals as a new draft's snapshot will hold them (§5.7), unticked,
-    // with the lists' version.
-    private async Task<DraftForm> TemplateAsync(Guid participantId, CancellationToken cancellationToken)
+    // The template of a new note: the lists as a new draft's snapshot will hold them (§5.7), with the lists' version,
+    // which the picks do not change, and the groups that the participant's latest earlier note picked picked.
+    private async Task<DraftForm> TemplateAsync(
+        Guid participantId, DateOnly noteDate, CancellationToken cancellationToken)
     {
-        var goals = await TemplateGoalsAsync(participantId, cancellationToken);
-        return new(
-            BaseVersion: 0,
-            IsSaved: false,
-            ListsVersion.Of(goals),
+        var template = await TemplateSnapshotAsync(participantId, cancellationToken);
+        var startingPicks = await StartingPicksAsync(participantId, noteDate, cancellationToken);
+        return FormOf(
+            template.WithStartingPicks(startingPicks),
+            baseVersion: 0,
+            isSaved: false,
+            ListsVersion.Of(template),
             await GuidePromptsAsync(cancellationToken),
-            goals,
-            Narrative: "",
-            IsFlagged: false,
-            FlagReason: null,
-            SavedAtUtc: null);
+            narrative: "",
+            isFlagged: false,
+            flagReason: null,
+            savedAtUtc: null);
     }
 
-    // The participant's active goals in the order of the manager's list (GoalList.InListOrder), unticked.
-    private Task<List<DraftFormGoal>> TemplateGoalsAsync(Guid participantId, CancellationToken cancellationToken) =>
-        GoalList
+    // The lists a new draft's snapshot will hold (§5.7), all unpicked and unticked: the participant's active goals in
+    // the order of the manager's list (GoalList.InListOrder); the active groups in the groups' list order, Every note
+    // first and empty groups included; and the active items group by group, in the items' list order.
+    private async Task<NoteSnapshot> TemplateSnapshotAsync(Guid participantId, CancellationToken cancellationToken)
+    {
+        var goals = await GoalList
             .InListOrder(db.Goals.AsNoTracking()
                 .Where(goal => goal.ParticipantId == participantId && goal.ArchivedAtUtc == null))
-            .Select(goal => new DraftFormGoal(goal.Id, goal.Text, false))
+            .ToListAsync(cancellationToken);
+        var groups = await CommonItemGroupList
+            .InListOrder(db.CommonItemGroups.AsNoTracking().Where(group => group.ArchivedAtUtc == null))
             .ToListAsync(cancellationToken);
 
-    // The goals of the working copy's snapshot, with the wording it was started with (A3), however the participant's
-    // goals have changed since.
+        // A lookup keeps each group's items in the order the query gives them.
+        var itemsByGroup = (await CommonItemGroupList
+            .InListOrder(db.CommonItems.AsNoTracking().Where(item => item.ArchivedAtUtc == null))
+            .ToListAsync(cancellationToken))
+            .ToLookup(item => item.GroupId);
+        return new(
+            [.. groups.Select(group => new DraftGroup(group.Id, group.Name, group.IsEveryNote, IsPicked: false))],
+            [
+                .. goals.Select(goal =>
+                    new DraftItem(NoteSection.Goal, goal.Id, GroupId: null, goal.Text, IsTicked: false)),
+                .. groups.SelectMany(group => itemsByGroup[group.Id].Select(item =>
+                    new DraftItem(NoteSection.CommonItem, item.Id, group.Id, item.Text, IsTicked: false))),
+            ]);
+    }
+
+    // The IDs of the groups picked in the current version of the participant's latest submitted note dated before
+    // noteDate, by anyone (S02.05.03). Nothing keeps where they came from (D83).
+    private async Task<HashSet<Guid>> StartingPicksAsync(
+        Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
+        (await (
+            from note in db.Notes
+                .AsNoTracking()
+                .Where(n => n.ParticipantId == participantId
+                    && n.Status == NoteStatus.Submitted
+                    && n.NoteDate < noteDate)
+                .OrderByDescending(n => n.NoteDate)
+                .Take(1)
+            join version in db.NoteVersions on note.Id equals version.NoteId
+            where version.VersionNumber == note.CurrentVersionNumber
+            join pick in db.NoteVersionGroups on version.Id equals pick.NoteVersionId
+            where pick.IsPicked
+            select pick.CommonItemGroupId)
+            .ToListAsync(cancellationToken))
+        .ToHashSet();
+
+    // The working copy's snapshot, with the names and wording it was started with (A3), however the lists have changed
+    // since.
     private static DraftForm Saved(NoteDraft draft, string guidePrompts) =>
-        new(
+        FormOf(
+            NoteSnapshot.Of(draft),
             draft.BaseVersionNumber,
-            IsSaved: true,
-            ListsVersion: null,
+            isSaved: true,
+            listsVersion: null,
             guidePrompts,
-            [.. draft.Items.Where(IsGoal).Select(item => new DraftFormGoal(item.SourceId, item.Text, item.IsTicked))],
             draft.Narrative,
             draft.IsFlagged,
             draft.FlagReason,
             draft.UpdatedAtUtc);
 
-    private static bool IsGoal(DraftItem item) => item.Section == NoteSection.Goal;
+    private static DraftForm FormOf(
+        NoteSnapshot snapshot,
+        int baseVersion,
+        bool isSaved,
+        string? listsVersion,
+        string guidePrompts,
+        string narrative,
+        bool isFlagged,
+        string? flagReason,
+        DateTime? savedAtUtc) =>
+        new(
+            baseVersion,
+            isSaved,
+            listsVersion,
+            guidePrompts,
+            [.. snapshot.Goals.Select(FormItemOf)],
+            [
+                .. snapshot.Groups.Select(group => new DraftFormGroup(
+                    group.GroupId,
+                    group.Name,
+                    group.IsEveryNote,
+                    group.IsPicked,
+                    [.. snapshot.ItemsOf(group).Select(FormItemOf)])),
+            ],
+            narrative,
+            isFlagged,
+            flagReason,
+            savedAtUtc);
+
+    private static DraftFormItem FormItemOf(DraftItem item) => new(item.SourceId, item.Text, item.IsTicked);
 
     private Task<string> GuidePromptsAsync(CancellationToken cancellationToken) =>
         db.Organisations
