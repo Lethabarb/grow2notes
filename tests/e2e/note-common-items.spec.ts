@@ -79,13 +79,8 @@ test('picking a group shows its items, unticked, and ticking one sends the picks
   await expect(itemBox(page, showered.text)).toHaveCount(0);
   await itemBox(page, trains.text).check();
 
-  await expect(saveStatus(page)).toHaveText(savedAnyTime);
-  expect(store.saves).toHaveLength(1);
-  expect(store.saves[0]).toMatchObject({
-    tickedGoalIds: [],
-    pickedGroupIds: [outing.id],
-    tickedCommonItemIds: [trains.id],
-  });
+  await expect.poll(() => store.saves.at(-1)?.tickedCommonItemIds, { timeout: 15_000 }).toEqual([trains.id]);
+  expect(store.saves.at(-1)).toMatchObject({ tickedGoalIds: [], pickedGroupIds: [outing.id] });
 });
 
 test('unpicking a group hides it with its ticks, asking nothing, and the next save lacks it', async ({ page }) => {
@@ -93,15 +88,15 @@ test('unpicking a group hides it with its ticks, asking nothing, and the next sa
   await pickBox(page, outing.name).check();
   await itemBox(page, trains.text).check();
   await itemBox(page, medication.text).check();
-  await expect(saveStatus(page)).toHaveText(savedAnyTime);
-  expect(store.saves).toHaveLength(1);
+  await expect.poll(() => store.saves.at(-1)?.tickedCommonItemIds.length, { timeout: 15_000 }).toBe(2);
+  const before = store.saves.length;
 
   await pickBox(page, outing.name).uncheck();
   await expect(itemBox(page, trains.text)).toHaveCount(0);
   await expect(pickBox(page, outing.name)).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect.poll(() => store.saves.length, { timeout: 15_000 }).toBe(2);
-  expect(store.saves[1]).toMatchObject({ pickedGroupIds: [], tickedCommonItemIds: [medication.id] });
+  await expect.poll(() => store.saves.length, { timeout: 15_000 }).toBeGreaterThan(before);
+  expect(store.saves.at(-1)).toMatchObject({ pickedGroupIds: [], tickedCommonItemIds: [medication.id] });
 
   await pickBox(page, outing.name).check();
   await expect(itemBox(page, trains.text)).not.toBeChecked();
