@@ -8,7 +8,8 @@ namespace Grow2Notes.Tests.Fixtures;
 /// <summary>
 /// A draft that a test adds for a participant of its own: the participant, the note date, the author and when they
 /// started it; then its author's working copy, with its snapshot's rows (none by default), its text, when it was last
-/// saved, by default when it was started, and its flag and reason, unflagged by default.
+/// saved, by default when it was started, and its flag and reason, unflagged by default; and its snapshot's groups,
+/// none by default. The rows are the goals, then the common items, in the order of their groups.
 /// </summary>
 internal sealed record TestDraft(
     Guid ParticipantId,
@@ -19,14 +20,16 @@ internal sealed record TestDraft(
     string Narrative = "",
     DateTime? SavedAtUtc = null,
     bool IsFlagged = false,
-    string? FlagReason = null);
+    string? FlagReason = null,
+    IReadOnlyList<DraftGroup>? Groups = null);
 
 /// <summary>
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
 /// they started it and when they submitted it; then its version 1's text, flag and reason; the note's flag status, as
 /// Submit leaves it (design.md §5.8's flag rules), To review when version 1 is flagged and None when it is not, unless
-/// the test sets one by hand, To review or Reviewed only over a flagged version 1; and version 1's goal rows, none by
-/// default, in their snapshot's order.
+/// the test sets one by hand, To review or Reviewed only over a flagged version 1; version 1's goal rows, none by
+/// default, in their snapshot's order; and its groups with their common item rows, none by default, in their
+/// snapshot's order.
 /// </summary>
 internal sealed record TestSubmittedNote(
     Guid ParticipantId,
@@ -38,13 +41,28 @@ internal sealed record TestSubmittedNote(
     bool IsFlagged = false,
     string? FlagReason = null,
     FlagStatus? FlagStatus = null,
-    IReadOnlyList<TestVersionGoal>? Goals = null);
+    IReadOnlyList<TestVersionGoal>? Goals = null,
+    IReadOnlyList<TestVersionGroup>? Groups = null);
 
 /// <summary>
 /// A goal row of a <see cref="TestSubmittedNote"/>'s version 1: the ID of a goal of the participant's, its wording as
 /// the version holds it, which need not be the goal's own, and whether it is ticked.
 /// </summary>
 internal sealed record TestVersionGoal(Guid GoalId, string Text, bool IsTicked);
+
+/// <summary>
+/// A group row of a version, with the common item rows in it: the ID of a group of the organisation's, its name as the
+/// version holds it, which need not be the group's own, whether it is Every note and whether it is picked, and its
+/// items in their order. A group takes its place in the version's groups from its place in the list.
+/// </summary>
+internal sealed record TestVersionGroup(
+    Guid GroupId, string Name, bool IsEveryNote, bool IsPicked, IReadOnlyList<TestVersionItem> Items);
+
+/// <summary>
+/// A common item row of a <see cref="TestVersionGroup"/>: the ID of an item of the organisation's, its wording as the
+/// version holds it, which need not be the item's own, and whether it is ticked.
+/// </summary>
+internal sealed record TestVersionItem(Guid CommonItemId, string Text, bool IsTicked);
 
 internal static class TestNotes
 {
@@ -73,6 +91,7 @@ internal static class TestNotes
             NoteId = note.Id,
             EditorUserId = draft.AuthorUserId,
             OrganisationId = organisation.OrganisationId,
+            Groups = [.. draft.Groups ?? []],
             Items = [.. draft.Items ?? []],
             Narrative = draft.Narrative,
             IsFlagged = draft.IsFlagged,
@@ -152,6 +171,7 @@ internal static class TestNotes
             Text = goal.Text,
             IsTicked = goal.IsTicked,
         }));
+        AddGroupRows(db, organisation, version.Id, submitted.Groups ?? []);
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
         {
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -165,8 +185,9 @@ internal static class TestNotes
     /// <see cref="AddSubmittedAsync"/> added, by hand as Save changes will add it (design.md §5.8 steps 5 and 6),
     /// through the app's context under its tenant: written by the organisation's manager at
     /// <paramref name="savedAtUtc"/>, flagged with <paramref name="flagReason"/>, or not flagged when that is
-    /// <see langword="null"/>; and the header moved on to it, its flagged version
-    /// <paramref name="flaggedVersionNumber"/> and its flag status left as it was.
+    /// <see langword="null"/>; its <paramref name="groups"/> with their common item rows, none by default; and the
+    /// header moved on to it, its flagged version <paramref name="flaggedVersionNumber"/> and its flag status left as
+    /// it was.
     /// </summary>
     /// <remarks>
     /// The test gives the flagged version, as §5.8's flag rules set it or, to show that a reason is read from that
@@ -178,7 +199,8 @@ internal static class TestNotes
         Guid noteId,
         DateTime savedAtUtc,
         string? flagReason,
-        int flaggedVersionNumber)
+        int flaggedVersionNumber,
+        IReadOnlyList<TestVersionGroup>? groups = null)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var scope = services.CreateAsyncScope();
@@ -188,7 +210,7 @@ internal static class TestNotes
             var note = await db.Notes.SingleAsync(n => n.Id == noteId, cancellationToken);
             note.CurrentVersionNumber = 2;
             note.FlaggedVersionNumber = flaggedVersionNumber;
-            db.NoteVersions.Add(new NoteVersion
+            var version = new NoteVersion
             {
                 OrganisationId = organisation.OrganisationId,
                 NoteId = noteId,
@@ -199,9 +221,48 @@ internal static class TestNotes
                 CreatedByUserId = organisation.ManagerId,
                 CreatedAtUtc = savedAtUtc,
                 IdempotencyKey = Guid.NewGuid(),
-            });
+            };
+            db.NoteVersions.Add(version);
+            AddGroupRows(db, organisation, version.Id, groups ?? []);
             await db.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Adds a group row for each of <paramref name="groups"/> to version <paramref name="versionId"/>, each in the
+    /// place it has in the list, and a common item row for each of their items: the row's place is its place among all
+    /// the common items, by group and then item, and it names its group by that group's place, as Submit writes them
+    /// (design.md §5.8).
+    /// </summary>
+    private static void AddGroupRows(
+        Grow2NotesDbContext db,
+        SeededOrganisation organisation,
+        Guid versionId,
+        IReadOnlyList<TestVersionGroup> groups)
+    {
+        db.NoteVersionGroups.AddRange(groups.Select((group, position) => new NoteVersionGroup
+        {
+            NoteVersionId = versionId,
+            Position = position,
+            OrganisationId = organisation.OrganisationId,
+            CommonItemGroupId = group.GroupId,
+            Name = group.Name,
+            IsEveryNote = group.IsEveryNote,
+            IsPicked = group.IsPicked,
+        }));
+        db.NoteVersionItems.AddRange(groups
+            .SelectMany((group, groupPosition) => group.Items.Select(item => (groupPosition, item)))
+            .Select((entry, position) => new NoteVersionItem
+            {
+                NoteVersionId = versionId,
+                Section = NoteSection.CommonItem,
+                Position = position,
+                OrganisationId = organisation.OrganisationId,
+                CommonItemId = entry.item.CommonItemId,
+                GroupPosition = entry.groupPosition,
+                Text = entry.item.Text,
+                IsTicked = entry.item.IsTicked,
+            }));
     }
 
     /// <summary>
