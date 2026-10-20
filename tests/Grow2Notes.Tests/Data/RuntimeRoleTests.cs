@@ -45,11 +45,13 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 "DENY DELETE ON dbo.Goal",
                 "DENY DELETE ON dbo.Note",
                 "DENY DELETE ON dbo.NoteVersion",
+                "DENY DELETE ON dbo.NoteVersionGroup",
                 "DENY DELETE ON dbo.NoteVersionItem",
                 "DENY DELETE ON dbo.Organisation",
                 "DENY DELETE ON dbo.Participant",
                 "DENY UPDATE ON dbo.AuditEvent",
                 "DENY UPDATE ON dbo.NoteVersion",
+                "DENY UPDATE ON dbo.NoteVersionGroup",
                 "DENY UPDATE ON dbo.NoteVersionItem",
             ],
             permissions);
@@ -65,6 +67,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     [InlineData("CommonItem")]
     [InlineData("Note")]
     [InlineData("NoteVersion")]
+    [InlineData("NoteVersionGroup")]
     [InlineData("NoteVersionItem")]
     public async Task A_member_of_the_role_gets_error_229_for_a_delete(string table)
     {
@@ -83,6 +86,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     [Theory]
     [InlineData("AuditEvent")]
     [InlineData("NoteVersion")]
+    [InlineData("NoteVersionGroup")]
     [InlineData("NoteVersionItem")]
     public async Task A_member_of_the_role_gets_error_229_for_an_update(string table)
     {
@@ -173,6 +177,10 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                     ([Id], [OrganisationId], [NoteId], [VersionNumber], [Narrative], [IsFlagged], [CreatedByUserId],
                      [CreatedAtUtc], [IdempotencyKey])
                 VALUES (@versionId, @organisationId, @noteId, 1, N'Added', 0, @userId, SYSUTCDATETIME(), NEWID());
+                INSERT INTO [dbo].[NoteVersionGroup]
+                    ([NoteVersionId], [Position], [OrganisationId], [CommonItemGroupId], [Name], [IsEveryNote],
+                     [IsPicked])
+                VALUES (@versionId, 0, @organisationId, @groupId, N'Added', 0, 1);
                 INSERT INTO [dbo].[NoteVersionItem]
                     ([NoteVersionId], [Section], [Position], [OrganisationId], [GoalId], [CommonItemId],
                      [GroupPosition], [Text], [IsTicked])

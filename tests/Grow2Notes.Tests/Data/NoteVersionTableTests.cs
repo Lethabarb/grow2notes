@@ -8,14 +8,16 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// The <c>NoteVersion</c> and <c>NoteVersionItem</c> tables on SQL Server (design.md §5.3, §5.8): the unique indexes
-/// that allow one version of each number per note and one use of a save's key per organisation, the check constraint
-/// that ties each section of a version's rows to its columns, and the app's refusal to change or delete either. The
-/// tests save through the app's context, connected as <c>sa</c>, to which no deny applies, so only the database's own
-/// constraints and the app's check stand between each save and the rows; <see cref="RuntimeRoleTests"/> shows the
-/// database's denies. Each test adds a participant of its own and, where its rows need them, a goal of theirs and an
-/// archived common item in an archived group, so that no list that another test reads changes (tests/README.md).
-/// <see cref="NoteVersionModelTests"/> and <see cref="NoteVersionItemModelTests"/> check the model.
+/// The <c>NoteVersion</c>, <c>NoteVersionGroup</c> and <c>NoteVersionItem</c> tables on SQL Server (design.md §5.3,
+/// §5.8): the unique indexes that allow one version of each number per note and one use of a save's key per
+/// organisation, the check constraints that tie each section of a version's rows to its columns and keep Every note
+/// from being picked, the foreign key from a common item row to its group, and the app's refusal to change or delete
+/// any of them. The tests save through the app's context, connected as <c>sa</c>, to which no deny applies, so only the
+/// database's own constraints and the app's check stand between each save and the rows; <see cref="RuntimeRoleTests"/>
+/// shows the database's denies. Each test adds a participant of its own and, where its rows need them, a goal of
+/// theirs and an archived common item in an archived group, so that no list that another test reads changes
+/// (tests/README.md). <see cref="NoteVersionModelTests"/>, <see cref="NoteVersionGroupModelTests"/> and
+/// <see cref="NoteVersionItemModelTests"/> check the model.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -49,12 +51,14 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
     {
         { nameof(NoteVersion), "changed" },
         { nameof(NoteVersion), "deleted" },
+        { nameof(NoteVersionGroup), "changed" },
+        { nameof(NoteVersionGroup), "deleted" },
         { nameof(NoteVersionItem), "changed" },
         { nameof(NoteVersionItem), "deleted" },
     };
 
-    // The full Guided notes text, longer than an nvarchar(n) can hold, with a reason of the full length; and a goal row
-    // and a common item row, each meeting its arm of the check constraint.
+    // The full Guided notes text, longer than an nvarchar(n) can hold, with a reason of the full length; a group; and a
+    // goal row and a common item row, each meeting its arm of the check constraint.
     [Fact]
     public async Task A_version_and_a_row_meeting_each_arm_of_the_check_constraint_are_saved_as_written()
     {
@@ -67,7 +71,9 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         version.IsFlagged = true;
         version.FlagReason = reason;
 
-        await AddAsync(A, [version, GoalRow(version.Id, sources), CommonItemRow(version.Id, sources)]);
+        await AddAsync(
+            A,
+            [version, GroupRow(version.Id, sources), GoalRow(version.Id, sources), CommonItemRow(version.Id, sources)]);
 
         Assert.Equal(
             [
@@ -76,6 +82,9 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
                     SubmittedAtUtc, version.IdempotencyKey),
             ],
             await StoredVersionsAsync(sources.NoteId));
+        Assert.Equal(
+            [new StoredGroup(version.Id, 0, A.OrganisationId, sources.GroupId, "Morning routine", false, true)],
+            await StoredGroupsAsync(version.Id));
         Assert.Equal(
             [
                 new ItemRow(
@@ -153,7 +162,7 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
     {
         var sources = await AddSourcesAsync();
         var version = NewVersion(A, sources.NoteId);
-        await AddAsync(A, [version]);
+        await AddAsync(A, [version, GroupRow(version.Id, sources)]);
         var row = new NoteVersionItem
         {
             NoteVersionId = version.Id,
@@ -175,25 +184,94 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         Assert.Empty(await StoredItemsAsync(version.Id));
     }
 
+    // Every note is always shown, so a version never holds it picked.
+    [Fact]
+    public async Task A_group_row_that_is_Every_note_and_picked_is_refused_with_error_547()
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        await AddAsync(A, [version]);
+        var group = GroupRow(version.Id, sources);
+        group.IsEveryNote = true;
+        group.IsPicked = true;
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => AddAsync(A, [group]));
+
+        var refusal = Assert.IsType<SqlException>(error.InnerException);
+        Assert.Equal(547, refusal.Number);
+        Assert.Contains("\"CK_NoteVersionGroup_EveryNoteNotPicked\"", refusal.Message, StringComparison.Ordinal);
+        Assert.Empty(await StoredGroupsAsync(version.Id));
+    }
+
+    // Every note unpicked, and a picked group that is not it, each meet the check constraint.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task A_group_row_that_is_not_both_Every_note_and_picked_is_saved_as_written(
+        bool isEveryNote, bool isPicked)
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        var group = GroupRow(version.Id, sources);
+        group.IsEveryNote = isEveryNote;
+        group.IsPicked = isPicked;
+
+        await AddAsync(A, [version, group]);
+
+        Assert.Equal(
+            [
+                new StoredGroup(
+                    version.Id, 0, A.OrganisationId, sources.GroupId, "Morning routine", isEveryNote, isPicked),
+            ],
+            await StoredGroupsAsync(version.Id));
+    }
+
+    // The foreign key is to the group of the same version at that place, so a place that names none is refused.
+    [Fact]
+    public async Task A_common_item_row_whose_group_position_names_no_group_of_its_version_is_refused_with_error_547()
+    {
+        var sources = await AddSourcesAsync();
+        var version = NewVersion(A, sources.NoteId);
+        await AddAsync(A, [version, GroupRow(version.Id, sources)]);
+        var row = CommonItemRow(version.Id, sources);
+        row.GroupPosition = 1;
+
+        var error = await Assert.ThrowsAsync<DbUpdateException>(() => AddAsync(A, [row]));
+
+        var refusal = Assert.IsType<SqlException>(error.InnerException);
+        Assert.Equal(547, refusal.Number);
+        Assert.Contains(
+            "\"FK_NoteVersionItem_NoteVersionGroup_OrganisationId_NoteVersionId_GroupPosition\"",
+            refusal.Message,
+            StringComparison.Ordinal);
+        Assert.Empty(await StoredItemsAsync(version.Id));
+    }
+
     [Theory]
     [MemberData(nameof(ChangesToSavedRows))]
-    public async Task A_saved_row_that_is_changed_or_deleted_is_refused_and_both_tables_are_left_as_they_were(
+    public async Task A_saved_row_that_is_changed_or_deleted_is_refused_and_all_three_tables_are_left_as_they_were(
         string table, string verb)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var sources = await AddSourcesAsync();
         var version = NewVersion(A, sources.NoteId);
-        await AddAsync(A, [version, GoalRow(version.Id, sources)]);
+        await AddAsync(A, [version, GroupRow(version.Id, sources), GoalRow(version.Id, sources)]);
         var versionsBefore = await StoredVersionsAsync(sources.NoteId);
+        var groupsBefore = await StoredGroupsAsync(version.Id);
         var itemsBefore = await StoredItemsAsync(version.Id);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
 
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(A.OrganisationId))
         {
-            object row = table == nameof(NoteVersion)
-                ? await db.NoteVersions.SingleAsync(v => v.Id == version.Id, cancellationToken)
-                : await db.NoteVersionItems.SingleAsync(i => i.NoteVersionId == version.Id, cancellationToken);
+            object row = table switch
+            {
+                nameof(NoteVersion) => await db.NoteVersions.SingleAsync(v => v.Id == version.Id, cancellationToken),
+                nameof(NoteVersionGroup) =>
+                    await db.NoteVersionGroups.SingleAsync(g => g.NoteVersionId == version.Id, cancellationToken),
+                _ => await db.NoteVersionItems.SingleAsync(i => i.NoteVersionId == version.Id, cancellationToken),
+            };
             switch (row, verb)
             {
                 case (_, "deleted"):
@@ -201,6 +279,9 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
                     break;
                 case (NoteVersion saved, _):
                     saved.Narrative = "Changed";
+                    break;
+                case (NoteVersionGroup saved, _):
+                    saved.Name = "Changed";
                     break;
                 case (NoteVersionItem saved, _):
                     saved.Text = "Changed";
@@ -215,6 +296,7 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         }
 
         Assert.Equal(versionsBefore, await StoredVersionsAsync(sources.NoteId));
+        Assert.Equal(groupsBefore, await StoredGroupsAsync(version.Id));
         Assert.Equal(itemsBefore, await StoredItemsAsync(version.Id));
     }
 
@@ -232,7 +314,7 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         var commonItemId = Assert.Single(await factory.Services.AddItemsAsync(
             A.OrganisationId, groupId, new TestCommonItem("Medication given", 0, ArchivedAtUtc: SubmittedAtUtc)));
         var noteId = await AddSubmittedNoteAsync(A, participant.Id, NoteDate);
-        return new(noteId, goalId, commonItemId);
+        return new(noteId, goalId, groupId, commonItemId);
     }
 
     /// <summary>
@@ -286,6 +368,18 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         IsTicked = true,
     };
 
+    // The version's group at place 0, the one that the common item row names: picked and not Every note, which meets
+    // the check constraint.
+    private NoteVersionGroup GroupRow(Guid versionId, Sources sources) => new()
+    {
+        NoteVersionId = versionId,
+        Position = 0,
+        OrganisationId = A.OrganisationId,
+        CommonItemGroupId = sources.GroupId,
+        Name = "Morning routine",
+        IsPicked = true,
+    };
+
     private NoteVersionItem CommonItemRow(Guid versionId, Sources sources) => new()
     {
         NoteVersionId = versionId,
@@ -325,6 +419,18 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
             """).ToListAsync(TestContext.Current.CancellationToken);
     }
 
+    private async Task<List<StoredGroup>> StoredGroupsAsync(Guid versionId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        return await db.Database.SqlQuery<StoredGroup>($"""
+            SELECT [NoteVersionId], [Position], [OrganisationId], [CommonItemGroupId], [Name], [IsEveryNote], [IsPicked]
+            FROM [NoteVersionGroup]
+            WHERE [NoteVersionId] = {versionId}
+            ORDER BY [Position]
+            """).ToListAsync(TestContext.Current.CancellationToken);
+    }
+
     private async Task<List<ItemRow>> StoredItemsAsync(Guid versionId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -338,8 +444,11 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
             """).ToListAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>The note that a test's version is of, and the goal and common item that its rows point at.</summary>
-    private sealed record Sources(Guid NoteId, Guid GoalId, Guid CommonItemId);
+    /// <summary>
+    /// The note that a test's version is of, and the goal, the common item group and the common item that its rows
+    /// point at.
+    /// </summary>
+    private sealed record Sources(Guid NoteId, Guid GoalId, Guid GroupId, Guid CommonItemId);
 
     /// <summary>A <c>NoteVersion</c> row.</summary>
     private sealed record VersionRow(
@@ -353,6 +462,16 @@ public sealed class NoteVersionTableTests(Grow2NotesFactory factory, SqlServerFi
         Guid CreatedByUserId,
         DateTime CreatedAtUtc,
         Guid IdempotencyKey);
+
+    /// <summary>A <c>NoteVersionGroup</c> row.</summary>
+    private sealed record StoredGroup(
+        Guid NoteVersionId,
+        int Position,
+        Guid OrganisationId,
+        Guid CommonItemGroupId,
+        string Name,
+        bool IsEveryNote,
+        bool IsPicked);
 
     /// <summary>A <c>NoteVersionItem</c> row, its section as its stored <c>tinyint</c>.</summary>
     private sealed record ItemRow(
