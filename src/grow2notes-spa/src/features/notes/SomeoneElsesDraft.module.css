@@ -1,0 +1,9 @@
+/* Discard draft, with the alert above it, under the in-progress sentence, as the Past notes line under it is spaced. */
+.discard {
+  margin-block-start: var(--space-4);
+}
+
+/* The flag's reason, as the writer typed it, under the read-only tick row, with none of a paragraph's margin after. */
+.reason {
+  margin: var(--space-1) 0 0;
+}

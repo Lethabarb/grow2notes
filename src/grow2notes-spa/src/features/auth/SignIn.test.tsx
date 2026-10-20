@@ -32,6 +32,7 @@ const passkeyPath = '/api/auth/passkey';
 const passwordPath = '/api/auth/login';
 const codePath = '/api/auth/login/totp';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 
 // A made-up worker (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
@@ -141,7 +142,7 @@ type Server = {
 
 /**
  * Stubs `fetch` as the server: nobody is signed in, the antiforgery endpoint gives a token, the rest answer so, and
- * Today, where a sign-in lands, has no participants.
+ * Today, where a sign-in lands, has no participants and no unfinished drafts.
  */
 function serve({
   me = () => problem(401),
@@ -168,6 +169,8 @@ function serve({
         return code();
       case todayPath:
         return json({ date: worker.today, participants: [] });
+      case draftsPath:
+        return json([]);
       default:
         throw new Error('The test gave no answer for this request.');
     }
@@ -777,6 +780,7 @@ describe('signing in with a passkey', () => {
     expect(queryClient.getQueryCache().getAll().map(({ queryKey }) => queryKey)).toEqual([
       ['me'],
       ['today', worker.today],
+      ['me', 'drafts'],
     ]);
   });
 });

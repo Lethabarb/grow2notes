@@ -11,13 +11,14 @@ import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
 import type { Draft, NoteAnswer, ParticipantHeader, SubmittedNote } from '../notes/noteQueries.ts';
 import type { AdminParticipant } from '../participants/participantsQuery.ts';
-import { todayQuery, type TodayList, type TodayNote, type TodayParticipant } from './todayQuery.ts';
+import { todayQuery, type MyDraft, type TodayList, type TodayNote, type TodayParticipant } from './todayQuery.ts';
 
 // A memory router and a browser router alike.
 type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 const antiforgeryPath = '/api/auth/antiforgery';
 const adminListPath = '/api/admin/participants?includeArchived=true';
 
@@ -166,6 +167,34 @@ const alexsSubmittedNote: SubmittedNote = {
   current: { narrative: 'Jane made toast.', goals: [], isFlagged: false, flagReason: null },
 };
 
+/**
+ * One of Alex Pham's working copies, as `GET /api/me/drafts` lists it (design.md §6.3): a draft, unless a pending edit,
+ * for `participant`, by their names as stored, on `noteDate`, last saved at 9:42 am on 30 September 2026 in Melbourne.
+ */
+function myDraftOf(participant: TodayParticipant, noteDate: string, kind: MyDraft['kind'] = 'draft') {
+  const { id, givenName, familyName } = participant;
+  return { participantId: id, givenName, familyName, noteDate, kind, savedAtUtc: '2026-09-29T23:42:00Z' };
+}
+
+/**
+ * Answers `participant`'s header, active unless archived since, and their note for `noteDate` as Alex Pham's own
+ * draft, started at 9:05 am and last saved at 9:42 am on 30 September 2026 in Melbourne, holding "Went to the
+ * library.", which a row of Your unfinished drafts opens.
+ */
+function serveMyDraftOf(
+  participant: TodayParticipant,
+  noteDate: string,
+  status: ParticipantHeader['status'] = 'Active',
+) {
+  const { id, givenName, familyName } = participant;
+  const base = `/api/participants/${id}/notes/${noteDate}`;
+  const started = { authorDisplayName: worker.displayName, startedAtUtc: '2026-09-29T23:05:00Z' };
+  const saved = { isSaved: true, narrative: 'Went to the library.', savedAtUtc: '2026-09-29T23:42:00Z' };
+  serve(`/api/participants/${id}`, json({ id, givenName, familyName, status } satisfies ParticipantHeader));
+  serve(base, json({ status: 'Draft', ...started } satisfies NoteAnswer));
+  serve(`${base}/draft`, json({ ...newNote, ...saved } satisfies Draft));
+}
+
 /** No connection, which `fetch` rejects at once. */
 const noConnection: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
 
@@ -280,9 +309,18 @@ function line(): HTMLElement {
   return shown[0];
 }
 
-/** The list of rows, or `null` while there is none. */
+/** Your unfinished drafts, the `<h2>` and the list that it heads, or `null` where Today has none. */
+function draftsSection(): HTMLElement | null {
+  return within(main()).queryByRole('heading', { level: 2, name: 'Your unfinished drafts' })?.parentElement ?? null;
+}
+
+/** The list of the participants' rows, beside any of Your unfinished drafts, or `null` while there is none. */
 function rowList(): HTMLElement | null {
-  return within(main()).queryByRole('list');
+  const lists = within(main())
+    .queryAllByRole('list')
+    .filter((list) => draftsSection()?.contains(list) !== true);
+  expect(lists.length).toBeLessThanOrEqual(1);
+  return lists[0] ?? null;
 }
 
 /** The line that describes `link`, or `null` for a row with none. */
@@ -291,13 +329,11 @@ function statusLine(link: HTMLElement): HTMLElement | null {
   return describedBy === null ? null : document.getElementById(describedBy);
 }
 
-/** The rows' links, in order, each row holding exactly one link and nothing else to read but the line it describes. */
-function rowLinks(): HTMLElement[] {
-  const list = rowList();
-  if (list === null) {
-    return [];
-  }
-
+/**
+ * The links of `list`'s rows, in order, each row holding exactly one link and nothing else to read but the line it
+ * describes.
+ */
+function linksOf(list: HTMLElement): HTMLElement[] {
   return within(list)
     .getAllByRole('listitem')
     .map((row) => {
@@ -306,6 +342,25 @@ function rowLinks(): HTMLElement[] {
       expect(row.textContent).toBe(`${links[0].textContent}${statusLine(links[0])?.textContent ?? ''}`);
       return links[0];
     });
+}
+
+/** The participants' rows' links, in order. */
+function rowLinks(): HTMLElement[] {
+  const list = rowList();
+  return list === null ? [] : linksOf(list);
+}
+
+/** The links of the rows of Your unfinished drafts, in order, none where Today has none. */
+function draftLinks(): HTMLElement[] {
+  const section = draftsSection();
+  return section === null ? [] : linksOf(within(section).getByRole('list'));
+}
+
+/** The row link of Your unfinished drafts named `name` and described by `date`, as it shows. */
+function draftLink(name: string, date: string): HTMLElement {
+  const links = draftLinks().filter((link) => link.textContent === name && statusLine(link)?.textContent === date);
+  expect(links).toHaveLength(1);
+  return links[0];
 }
 
 /**
@@ -425,6 +480,8 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // No unfinished drafts, unless a test gives some.
+  serve(draftsPath, json([]));
   serve(antiforgeryPath, () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );
@@ -751,7 +808,11 @@ describe('Today, opening a row', () => {
     const { router } = await openToday(worker, listOf([jane]));
     serveNoteOf(
       jane,
-      json({ status: 'Draft' } satisfies NoteAnswer),
+      json({
+        status: 'Draft',
+        authorDisplayName: 'Alex P.',
+        startedAtUtc: '2026-09-30T23:14:00Z',
+      } satisfies NoteAnswer),
       problem(409, {
         code: 'note.in_progress_by_other',
         authorDisplayName: 'Alex P.',
@@ -1146,7 +1207,7 @@ describe('Today, finding a participant', () => {
     expect(JSON.stringify(window.history.state)).not.toMatch(/citizen/i);
     expect(document.title).toBe('Grow2Notes – Today');
     const keys = client.getQueryCache().getAll().map(({ queryKey }) => queryKey);
-    expect(keys).toEqual([['me'], ['today', '2026-10-01']]);
+    expect(keys).toEqual([['me'], ['today', '2026-10-01'], ['me', 'drafts']]);
     expect(localStorage).toHaveLength(0);
     expect(sessionStorage).toHaveLength(0);
   });
@@ -1233,44 +1294,53 @@ describe('Today, refreshed', () => {
   it.each([
     { trigger: 'the page becomes visible', fire: becomeVisible },
     { trigger: 'the window regains focus', fire: focusWindow },
-  ])('fetches the list again, once, as $trigger, keeping focus and scroll, then polls nothing', async ({ fire }) => {
+  ])('fetches both lists again, once, as $trigger, keeping focus and scroll, then polls nothing', async ({ fire }) => {
     await openToday();
     const link = rowLink('Ravi de Silva');
     link.focus();
     scrollPage(400);
-    const before = sent(todayPath);
+    const before = { today: sent(todayPath), drafts: sent(draftsPath) };
     serve(todayPath, json(listOf([...people, madeUp('0e4c8a2f-7b19-4d63-a5f0-9c2e6b8d4a17', 'Mei', 'Zhang')])));
+    // A draft of yesterday's, started meanwhile on another device.
+    serve(draftsPath, json([myDraftOf(priya, '2026-09-30')]));
 
     fire();
     await settle();
 
-    expect(sent(todayPath)).toBe(before + 1);
+    expect(sent(todayPath)).toBe(before.today + 1);
+    expect(sent(draftsPath)).toBe(before.drafts + 1);
     expect(listedNames()).toEqual([...names, 'Mei Zhang']);
+    expect(draftLinks().map((draft) => draft.textContent)).toEqual(['Priya Kumar']);
     expect(rowLink('Ravi de Silva')).toBe(link);
     expect(link).toHaveFocus();
     expect(window.scrollY).toBe(400);
     await wait(10 * 60_000);
-    expect(sent(todayPath)).toBe(before + 1);
+    expect(sent(todayPath)).toBe(before.today + 1);
+    expect(sent(draftsPath)).toBe(before.drafts + 1);
   });
 
-  // A return to the tab gives both, each in a task of its own, the second while the first's request is out.
+  // A return to the tab gives both, each in a task of its own, the second while the first's requests are out.
   it.each([
     { order: 'visible, then focus', first: becomeVisible, second: focusWindow },
     { order: 'focus, then visible', first: focusWindow, second: becomeVisible },
-  ])('sends one request for both of a return to the tab ($order)', async ({ first, second }) => {
+  ])('sends one request for each list for both of a return to the tab ($order)', async ({ first, second }) => {
     await openToday();
-    const before = sent(todayPath);
+    const before = { today: sent(todayPath), drafts: sent(draftsPath) };
     const list = held(json(listOf(people)));
+    const drafts = held(json([]));
     serve(todayPath, list.answer);
+    serve(draftsPath, drafts.answer);
 
     first();
     await settle();
     second();
     await settle();
     list.release();
+    drafts.release();
     await settle();
 
-    expect(sent(todayPath)).toBe(before + 1);
+    expect(sent(todayPath)).toBe(before.today + 1);
+    expect(sent(draftsPath)).toBe(before.drafts + 1);
     expect(listedNames()).toEqual(names);
   });
 
@@ -1470,5 +1540,283 @@ describe('Today after a change to a participant', () => {
     expect(todayInvalidated(client)).toBe(true);
     await backToToday();
     expect(listedNames()).toEqual(names);
+  });
+});
+
+describe('Today, Your unfinished drafts', () => {
+  const yesterday = '2026-09-30';
+  const yesterdayLong = `Wednesday 30${nbsp}September 2026`;
+
+  /** Opens Today for `me`, Alex Pham unless another, with `list` and `me`'s working copies, and lets it load. */
+  function openWithDrafts(drafts: readonly unknown[], list: TodayList = listOf(people), me: Me = worker) {
+    serve(draftsPath, json(drafts));
+    return openToday(me, list);
+  }
+
+  /** Your unfinished drafts' `<h2>`. */
+  function draftsHeading(): HTMLElement {
+    return within(main()).getByRole('heading', { level: 2, name: 'Your unfinished drafts' });
+  }
+
+  /** The visually hidden `<h2>` before the participants. */
+  function participantsHeading(): HTMLElement {
+    return within(main()).getByRole('heading', { level: 2, name: 'Participants' });
+  }
+
+  /** Expects `elements` in the page in this order. */
+  function expectInOrder(...elements: HTMLElement[]) {
+    for (const [index, element] of elements.slice(1).entries()) {
+      expect(elements[index].compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  }
+
+  /** The participant and the note date of each row of Your unfinished drafts, as they show, in order. */
+  function listedDrafts(): (string | undefined)[][] {
+    return draftLinks().map((link) => [link.textContent, statusLine(link)?.textContent]);
+  }
+
+  it('lists a draft of yesterday after the <h1>, as "Wednesday 30 September 2026", before the list', async () => {
+    await openWithDrafts([myDraftOf(jane, yesterday)]);
+
+    expect(draftsHeading()).not.toHaveClass('visually-hidden');
+    const link = draftLink('Jane Citizen', yesterdayLong);
+    expect(link).toHaveAccessibleName('Jane Citizen');
+    expect(link).toHaveAccessibleDescription(yesterdayLong);
+    expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes/${yesterday}`);
+    expect(link).toHaveAttribute('data-return-key', `${jane.id}/${yesterday}`);
+    const date = statusLine(link)!.querySelector('time');
+    expect(date).toHaveAttribute('datetime', yesterday);
+    expect(date?.textContent).toBe(yesterdayLong);
+    // Jane's row on the day's list stays, as the draft is another day's.
+    expect(listedNames()).toEqual(names);
+    expectInOrder(pageHeading(), draftsHeading(), link, participantsHeading(), search()!, rowList()!);
+  });
+
+  it('opens that draft at its own date, its form holding what was written', async () => {
+    const { router } = await openWithDrafts([myDraftOf(jane, yesterday)]);
+    serveMyDraftOf(jane, yesterday);
+
+    await press(draftLink('Jane Citizen', yesterdayLong));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/${yesterday}`);
+    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the library.');
+  });
+
+  it('lists the draft of a participant archived since, with nothing to say so, and opens it', async () => {
+    const { router } = await openWithDrafts(
+      [myDraftOf(priya, yesterday)],
+      listOf(people.filter((person) => person !== priya)),
+    );
+    serveMyDraftOf(priya, yesterday, 'Archived');
+
+    const link = draftLink('Priya Kumar', yesterdayLong);
+    expect(link.closest('li')?.textContent).toBe(`Priya Kumar${yesterdayLong}`);
+    expect(main()).not.toHaveTextContent(/archive/i);
+    await press(link);
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/participants/${priya.id}/notes/${yesterday}`);
+    expect(within(main()).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the library.');
+  });
+
+  // design.md §3.4 *Earlier-day drafts* and §3.7: the draft keeps its date, and once submitted is unfinished no more.
+  it("submits an archived participant's draft of yesterday, then shows Today's banner and not the row", async () => {
+    const { router } = await openWithDrafts(
+      [myDraftOf(priya, yesterday)],
+      listOf(people.filter((person) => person !== priya)),
+    );
+    serveMyDraftOf(priya, yesterday, 'Archived');
+    const base = `/api/participants/${priya.id}/notes/${yesterday}`;
+    serve(`${base}/draft`, json({ savedAtUtc: '2026-09-30T23:44:00Z' }), 'PUT');
+    const version = JSON.stringify({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00Z', flagStatus: 'None' });
+    serve(
+      `${base}/versions`,
+      () => Promise.resolve(new Response(version, { status: 201, headers: { 'Content-Type': 'application/json' } })),
+      'POST',
+    );
+    await press(draftLink('Priya Kumar', yesterdayLong));
+    await settle();
+    expect(within(main()).getByText(/^This draft is for /).textContent).toBe(
+      `This draft is for ${yesterdayLong}. Submitting it now keeps that date.`,
+    );
+
+    await press(within(main()).getByRole('button', { name: 'Submit note' }));
+    const confirmation = screen.getByRole('alertdialog');
+    expect(confirmation).toHaveAccessibleName('Submit the note for Priya Kumar');
+    serve(draftsPath, json([]));
+    await press(within(confirmation).getByRole('button', { name: 'Submit note for Priya Kumar' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(within(main()).getByText('Note for Priya Kumar submitted').closest('[data-route-focus]')).toHaveFocus();
+    expect(draftsSection()).toBeNull();
+    expect(listedNames()).toEqual(names.filter((name) => name !== 'Priya Kumar'));
+    const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST').map(([path]) => path);
+    expect(posts).toEqual([`${base}/versions`]);
+  });
+
+  it("leaves out the caller's draft of today for someone on the list, and lists one for someone off it", async () => {
+    await openWithDrafts(
+      [myDraftOf(jane, '2026-10-01'), myDraftOf(priya, '2026-10-01')],
+      listOf(people.filter((person) => person !== priya)),
+    );
+
+    expect(listedDrafts()).toEqual([['Priya Kumar', `Thursday 1${nbsp}October 2026`]]);
+    expect(draftLinks()[0]).toHaveAttribute('href', `/participants/${priya.id}/notes/2026-10-01`);
+  });
+
+  it("links a pending edit's row to its edit form, and leaves out today's for someone on the list", async () => {
+    await openWithDrafts([myDraftOf(sean, yesterday, 'pendingEdit'), myDraftOf(jane, '2026-10-01', 'pendingEdit')]);
+
+    expect(listedDrafts()).toEqual([['Seán O’Brien', yesterdayLong]]);
+    const link = draftLink('Seán O’Brien', yesterdayLong);
+    expect(link).toHaveAttribute('href', `/participants/${sean.id}/notes/${yesterday}/edit`);
+    expect(link).toHaveAttribute('data-return-key', `${sean.id}/${yesterday}`);
+  });
+
+  it('has no section and no <h2> of its own when nothing is left to list', async () => {
+    await openWithDrafts([myDraftOf(jane, '2026-10-01')]);
+
+    expect(draftsSection()).toBeNull();
+    expect(within(main()).queryByText('Your unfinished drafts')).toBeNull();
+    expect(within(main()).getAllByRole('heading', { level: 2 })).toEqual([participantsHeading()]);
+    expect(within(main()).getAllByRole('list')).toEqual([rowList()]);
+  });
+
+  it.each([
+    { role: 'a worker', me: worker },
+    { role: 'a manager', me: manager },
+  ])('shows the section beside "No participants yet." for $role, with no search box', async ({ me }) => {
+    await openWithDrafts([myDraftOf(jane, yesterday)], listOf([]), me);
+
+    const link = draftLink('Jane Citizen', yesterdayLong);
+    const none = within(main()).getByText('No participants yet.');
+    expectInOrder(pageHeading(), draftsHeading(), link, participantsHeading(), none);
+    expect(search()).toBeNull();
+    expect(rowList()).toBeNull();
+    expect(addParticipant() !== null).toBe(me.role === 'Manager');
+  });
+
+  it('sorts the rows by family name, then given name, then note date, oldest first', async () => {
+    const adam = madeUp('2d6f8b1e-4c39-4a75-9e20-7b3d5f1a8c64', 'Adam', 'Citizen');
+    await openWithDrafts([
+      myDraftOf(ana, '2026-09-28'),
+      myDraftOf(ravi, yesterday),
+      myDraftOf(jane, yesterday),
+      myDraftOf(zara, '2026-09-29'),
+      myDraftOf(ravi, '2026-09-24'),
+      myDraftOf(adam, yesterday),
+    ]);
+
+    // By the full name, Ana Ward would come before Zara Ali, and by code point "de Silva", in lower case, after Ward.
+    expect(listedDrafts()).toEqual([
+      ['Zara Ali', `Tuesday 29${nbsp}September 2026`],
+      ['Adam Citizen', yesterdayLong],
+      ['Jane Citizen', yesterdayLong],
+      ['Ravi de Silva', `Thursday 24${nbsp}September 2026`],
+      ['Ravi de Silva', yesterdayLong],
+      ['Ana Ward', `Monday 28${nbsp}September 2026`],
+    ]);
+  });
+
+  it('leaves the section as it is, whatever is typed in Find a participant', async () => {
+    await openWithDrafts([myDraftOf(priya, yesterday), myDraftOf(jane, yesterday)]);
+    const before = draftLinks();
+    expect(before.map((link) => link.textContent)).toEqual(['Jane Citizen', 'Priya Kumar']);
+
+    for (const typed of ['jan', 'xyz']) {
+      type(field(), typed);
+
+      const now = draftLinks();
+      expect(now).toHaveLength(before.length);
+      now.forEach((link, index) => {
+        expect(link).toBe(before[index]);
+      });
+    }
+    expect(noMatchSentence()).toHaveTextContent(/^No participant matches ‘xyz’\.$/);
+  });
+
+  it.each([
+    { request: 'the drafts', path: draftsPath, answer: json([myDraftOf(priya, yesterday)]) },
+    { request: "the day's list", path: todayPath, answer: json(listOf(people)) },
+  ])('shows only "Loading participants…" at 1 s while $request request is out, then both lists at once', async ({
+    path,
+    answer,
+  }) => {
+    serve(todayPath, json(listOf(people)));
+    serve(draftsPath, json([myDraftOf(priya, yesterday)]));
+    const late = held(answer);
+    serve(path, late.answer);
+    renderApp('/');
+
+    await wait(999);
+    expect(line()).toBeEmptyDOMElement();
+    await wait(1);
+    expect(line()).toHaveTextContent(/^Loading participants…$/);
+    expect(main().textContent).toBe(`${pageHeading().textContent}Loading participants…`);
+
+    late.release();
+    await settle();
+
+    expect(line()).toBeEmptyDOMElement();
+    expect(listedDrafts()).toEqual([['Priya Kumar', yesterdayLong]]);
+    expect(listedNames()).toEqual(names);
+  });
+
+  it.each([
+    { cause: 'no connection', answer: noConnection },
+    { cause: 'something went wrong', answer: problem(503) },
+  ])('says the list did not load: $cause when the drafts fail, and Try again sends that request alone', async ({
+    cause,
+    answer,
+  }) => {
+    serve(todayPath, json(listOf(people)));
+    serve(draftsPath, answer);
+    renderApp('/');
+    // Its one silent retry fails too.
+    await wait(1000);
+    await settle();
+
+    expect(line().textContent).toBe(`The participant list did not load: ${cause}. Try again.`);
+    expect(within(main()).queryByRole('heading', { level: 2 })).toBeNull();
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(search()).toBeNull();
+    const lists = sent(todayPath);
+    serve(draftsPath, json([myDraftOf(priya, yesterday)]));
+
+    pressTryAgain();
+    await settle();
+
+    expect(sent(todayPath)).toBe(lists);
+    expect(listedDrafts()).toEqual([['Priya Kumar', yesterdayLong]]);
+    expect(listedNames()).toEqual(names);
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it("focuses the draft's row on the way back, never the day's row of the same participant", async () => {
+    const { router } = await openWithDrafts([myDraftOf(jane, yesterday)]);
+    serveMyDraftOf(jane, yesterday);
+    await press(draftLink('Jane Citizen', yesterdayLong));
+    await settle();
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/${yesterday}`);
+
+    await goBack(router);
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(draftLink('Jane Citizen', yesterdayLong)).toHaveFocus();
+  });
+
+  it("focuses the day's row on the way back from it, never the draft's row of the same participant", async () => {
+    const { router } = await openWithDrafts([myDraftOf(jane, yesterday)]);
+    serveNoteOf(jane, problem(404), json(newNote));
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    expect(router.state.location.pathname).toBe(`/participants/${jane.id}/notes/2026-10-01`);
+
+    await goBack(router);
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(rowLink('Jane Citizen')).toHaveFocus();
   });
 });

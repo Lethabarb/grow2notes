@@ -1,4 +1,4 @@
-import { queryOptions, type QueryClient } from '@tanstack/react-query';
+import { partialMatchKey, queryOptions, type Query, type QueryClient } from '@tanstack/react-query';
 import { api } from '../../api/api.ts';
 
 /**
@@ -49,27 +49,62 @@ export function todayQuery(date: string) {
 }
 
 /**
- * Marks every Today list stale, so that Today fetches its list again as it next shows, after a change that Today
- * shows: a participant added, corrected, archived or restored (participants.md *Interactions*).
+ * One of the signed-in user's own working copies of a live note, as `GET /api/me/drafts` lists it (design.md §6.3):
+ * its participant's ID and names as stored, whether or not they are archived since; its note's date; and whether it is
+ * a draft or a pending edit on a submitted note, which tells its row's address (note-form.md *Routes*). The answer
+ * also holds when it was last saved, `savedAtUtc`, which no screen reads.
+ */
+export type MyDraft = {
+  participantId: string;
+  givenName: string;
+  familyName: string;
+  noteDate: string;
+  kind: 'draft' | 'pendingEdit';
+};
+
+const myDraftsKey = ['me', 'drafts'] as const;
+
+/**
+ * The `['me', 'drafts']` query, the caller's unfinished drafts, in no promised order, from which Today builds Your
+ * unfinished drafts (today.md component 5). Fetched again on mount, and with the day's list as the page becomes
+ * visible and on the window's `focus`, through `refetchToday()` (today.md *Refresh*).
+ */
+export const myDraftsQuery = queryOptions({
+  queryKey: myDraftsKey,
+  queryFn: ({ signal }) => api<MyDraft[]>('/api/me/drafts', { signal }),
+  staleTime: 0,
+  refetchOnWindowFocus: true,
+});
+
+/** Whether `query` is one of Today's lists: a day's, whatever its date, or the caller's unfinished drafts. */
+function isTodays({ queryKey }: Query): boolean {
+  return partialMatchKey(queryKey, todayKey) || partialMatchKey(queryKey, myDraftsKey);
+}
+
+/**
+ * Marks Today's lists stale, every day's and the caller's unfinished drafts, so that Today fetches them again as it
+ * next shows, after a change that Today shows: a participant added, corrected, archived or restored (participants.md
+ * *Interactions*), whose name a draft's row shows too, and a note form left, however it went.
  */
 export function invalidateToday(queryClient: QueryClient): Promise<void> {
-  return queryClient.invalidateQueries({ queryKey: todayKey });
+  return queryClient.invalidateQueries({ predicate: isTodays });
 }
 
 /**
- * Drops every Today list after Submit (note-form.md *After a successful submit*), so that Today, which shows next,
- * fetches its list afresh and shows the submitted row only as the server gives it, never a row built here or kept from
- * before, which could still say "Draft" (today.md *Conflicts resolved* 2).
+ * Drops Today's lists, every day's and the caller's unfinished drafts, after Submit or Discard (note-form.md *After a
+ * successful submit* and *Discard draft*), so that Today, which shows next, fetches them afresh and shows the row only
+ * as the server gives it, never a row built here or kept from before, which could still say "Draft", or a draft
+ * under Your unfinished drafts that is one no longer (today.md *Conflicts resolved* 2).
  */
 export function removeToday(queryClient: QueryClient): void {
-  queryClient.removeQueries({ queryKey: todayKey });
+  queryClient.removeQueries({ predicate: isTodays });
 }
 
 /**
- * Fetches the Today list that shows again, as TanStack does as the page becomes visible, sharing a request already
- * out, so that the window's `focus` and `visibilitychange`, which come together as a person returns to the tab, send
- * one request between them.
+ * Fetches Today's lists that show again, as TanStack does as the page becomes visible, sharing a request already out,
+ * so that the window's `focus` and `visibilitychange`, which come together as a person returns to the tab, send one
+ * request for each list between them.
  */
 export function refetchToday(queryClient: QueryClient): Promise<void> {
-  return queryClient.refetchQueries({ queryKey: todayKey, type: 'active' }, { cancelRefetch: false });
+  return queryClient.refetchQueries({ predicate: isTodays, type: 'active' }, { cancelRefetch: false });
 }

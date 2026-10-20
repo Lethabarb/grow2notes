@@ -227,7 +227,7 @@ test('warns from 28:00 to its ping; at 30:00 view C shows, sending nothing, unti
 
   // The app's own clock has barely moved, so the session is alive, as when another tab kept it: the window's focus
   // refreshes /api/auth/me, whose 200 brings Today back as it was, with focus on its <h1> (session-timeout.md
-  // *Behaviour* 5). The hidden Today fetches its list again with it, in either order (today.md *Refresh*).
+  // *Behaviour* 5). The hidden Today fetches its lists again with it, in any order (today.md *Refresh*).
   const refreshed = page.waitForResponse(isMe);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   expect((await refreshed).status()).toBe(200);
@@ -235,7 +235,7 @@ test('warns from 28:00 to its ping; at 30:00 view C shows, sending nothing, unti
   await expect(pageHeading).toBeFocused();
   await expect(page).toHaveTitle('Grow2Notes – Today');
   await expect(todayLink(page)).toBeVisible();
-  expect((await sentSince()).sort()).toEqual(['GET /api/auth/me', 'GET /api/today']);
+  expect((await sentSince()).sort()).toEqual(['GET /api/auth/me', 'GET /api/me/drafts', 'GET /api/today']);
 });
 
 test('Tab and Shift+Tab take focus from Stay signed in out of the page and back, never behind the warning', async ({
@@ -248,15 +248,17 @@ test('Tab and Shift+Tab take focus from Stay signed in out of the page and back,
   await expect(staySignedIn(page)).toBeFocused();
 
   // As focus comes back into the page, the window's focus refreshes /api/auth/me (app-shell.md *Window regains focus*)
-  // and fetches Today's list again behind the warning (today.md *Refresh*), requests that the app accepts, whose
-  // answers start the clock afresh and so close the warning. Both are held until the keys have been pressed, and the
-  // clock with them, so that the warning stays open until then. The list's route stays until the end, as Playwright
+  // and fetches Today's lists again behind the warning (today.md *Refresh*), requests that the app accepts, whose
+  // answers start the clock afresh and so close the warning. All are held until the keys have been pressed, and the
+  // clock with them, so that the warning stays open until then. The lists' routes stay until the end, as Playwright
   // lets every held request go once no route is left.
   const heldRefresh = await holdNext(page, '**/api/auth/me');
   const heldLists: Route[] = [];
-  await page.route('**/api/today', (route) => {
-    heldLists.push(route);
-  });
+  for (const list of ['**/api/today', '**/api/me/drafts']) {
+    await page.route(list, (route) => {
+      heldLists.push(route);
+    });
+  }
 
   // Stay signed in is the page's only stop, as the page behind is inert: from it, Tab and Shift+Tab each take focus
   // out of the page, to the browser's own controls, and the next brings it back (app-shell.md *Tab order*).
@@ -269,16 +271,20 @@ test('Tab and Shift+Tab take focus from Stay signed in out of the page and back,
   await expect(warning(page)).toBeVisible();
 
   // Their answers, the app's 200s, close it, as the clock decides once no request is out, with focus back where it was.
-  // The second focus shared the first's requests.
+  // The second focus shared the first's requests, one for each list.
   const refresh = await heldRefresh();
-  await expect.poll(() => heldLists.length).toBe(1);
-  const answers = Promise.all([page.waitForResponse(isMe), page.waitForResponse(isTo('/api/today'))]);
+  await expect.poll(() => heldLists.length).toBe(2);
+  const answers = Promise.all(
+    [isMe, isTo('/api/today'), isTo('/api/me/drafts')].map((answer) => page.waitForResponse(answer)),
+  );
   await refresh.continue();
-  await heldLists[0].continue();
-  expect((await answers).map((answer) => answer.status())).toEqual([200, 200]);
+  for (const list of heldLists) {
+    await list.continue();
+  }
+  expect((await answers).map((answer) => answer.status())).toEqual([200, 200, 200]);
   await expect(warning(page)).toBeHidden();
   await expect(todayLink(page)).toBeFocused();
-  expect(heldLists).toHaveLength(1);
+  expect(heldLists).toHaveLength(2);
 });
 
 test('with no connection, the open warning says so and counts on, and passes axe with and without its error', async ({

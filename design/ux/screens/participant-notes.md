@@ -353,6 +353,17 @@ Each entry names the component spec, then the settings for this screen only. Sha
    [`primary-actions.md`](../components/primary-actions.md)
    - Trigger **Discard draft** (V) is a secondary `<button>` in the action row. The dialog's final button is the
      warning style. Copy in States.
+   - As built (T12): `SomeoneElsesDraft` (src/features/notes) at the shared note address, for another user's draft,
+     which the form's read refuses. A worker gets the `<h1>`, the in-progress sentence in T02's `Notice`, and Past
+     notes. A manager, from `GET {base}`'s `current`, gets the same sentence, then Discard draft, with the alert above
+     it, then Past notes, then the read view's own sections, "1. Goals" through `TickListRead` and "3. Guided notes" as
+     escaped text, or "Nothing written yet." for a text of spaces alone too, as Submit's checks judge it blank, then
+     the flag as a read-only `TickRowRead`, "Flag for manager", with "Reason: …" under it when it is ticked and has
+     one; never the Flagged tag. T13 adds "2. Common items". Discard draft opens note-form.md's `DiscardDialog`, with
+     its "started it at" line; Go back, Escape or Back gives focus back to Discard draft. A draft started between the
+     page's read of the note and its read of the form, which then has none, shows as a worker's until the page is
+     opened again; and a Discard whose dialog a browser closed while its request was out says why it failed in the
+     alert above Discard draft, as the form says it above Submit note (confirm-dialog.md *Behaviour* 7).
 
 10. **Empty, loading and error states** → [`empty-loading-error.md`](../components/empty-loading-error.md)
     - Page-level `<p role="status">` in `<main>` from first render.

@@ -1,3 +1,8 @@
+/* Your unfinished drafts, a section's gap above what follows it, the search box or the empty state (today.md). */
+.drafts {
+  margin-block-end: var(--section-gap);
+}
+
 /* Add participant in the empty state (empty-loading-error.md), a plain link on a hit area at least 44 px tall (A32). */
 .add {
   display: inline-flex;

@@ -78,3 +78,11 @@ export function pastNotesHeaderQuery(participantId: string) {
 export function dropPastNotes(queryClient: QueryClient, participantId: string): void {
   queryClient.removeQueries({ queryKey: pastNotesKey(participantId) });
 }
+
+/**
+ * Marks `participantId`'s Past notes stale after a Discard (note-form.md *Discard draft*), so that a pop back to them
+ * fetches every page loaded again and lists the draft no more. Exact, so that their header, the name, is left alone.
+ */
+export function invalidatePastNotes(queryClient: QueryClient, participantId: string): Promise<void> {
+  return queryClient.invalidateQueries({ queryKey: pastNotesKey(participantId), exact: true });
+}

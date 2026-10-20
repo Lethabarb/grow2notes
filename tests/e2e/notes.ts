@@ -4,7 +4,7 @@ import type { Page, Request, Route } from '@playwright/test';
 import type { Me } from './me.ts';
 import type { AdminParticipant } from './participants.ts';
 import type { ToReviewRow } from './reviews.ts';
-import type { NoteOf } from './today.ts';
+import type { DraftsOf, MyDraft, NoteOf } from './today.ts';
 
 /** A goal on the note form: its ID and its wording, as the manager's list or a draft's snapshot holds it. */
 export type NoteGoal = { id: string; text: string };
@@ -78,6 +78,9 @@ type HeldDraft = StartedBy & {
   lastSeq: number;
 };
 
+/** A discarded draft as the store keeps it, hidden from every list and screen, its content kept (A29). */
+type DiscardedDraft = HeldDraft & { discardedByUserId: string };
+
 /** What another page of a draft's author holds as it saves the draft, as `saveElsewhere` takes it. */
 export type SavedElsewhere = {
   narrative?: string;
@@ -124,13 +127,14 @@ export const alexStarted: StartedBy = { authorDisplayName: 'Alex P.', startedAtU
 const savedAtFourTwelve = '2026-10-01T06:12:00.000Z';
 
 // A participant's header; their history; their note for a day, which the page reads first; its working copy, which
-// the form reads and autosave puts; and its versions, which Submit posts to.
+// the form reads and autosave puts; its versions, which Submit posts to; and its discard.
 const headerPath = /^\/api\/participants\/([^/]+)$/;
 const historyPath = /^\/api\/participants\/([^/]+)\/notes$/;
 const notePath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)$/;
 const draftPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/draft$/;
 const versionsPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/versions$/;
-const notePaths = [headerPath, historyPath, notePath, draftPath, versionsPath];
+const discardPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/discard$/;
+const notePaths = [headerPath, historyPath, notePath, draftPath, versionsPath, discardPath];
 
 /** A page of a history, as design.md §6.1 *Lists* has it. */
 const pageSize = 30;
@@ -141,6 +145,13 @@ const problem = (status: number, code: string, extensions: Record<string, unknow
   contentType: 'application/problem+json',
   body: JSON.stringify({ type: 'about:blank', title: code, status, code, ...extensions }),
 });
+
+/** A `403` problem with no `code`, as Discard draft refuses a worker who did not start the draft (design.md §6.3). */
+const forbidden = {
+  status: 403,
+  contentType: 'application/problem+json',
+  body: JSON.stringify({ type: 'about:blank', title: 'Forbidden', status: 403 }),
+};
 
 /** The validation filter's `422`, naming the field that it refuses. */
 const refused = (field: string) => problem(422, 'validation.failed', { errors: { [field]: ['Refused.'] } });
@@ -180,12 +191,14 @@ type StoreOptions = {
 /**
  * Participants' notes as the API keeps them (design.md §5.5 to §5.8), in the browser, so that no note request reaches
  * the app, where no made-up person has a session: a participant's header; their history; the note, a submitted note's
- * current version, a draft's `{status}` or `404` for none; the note form, a template, the caller's own draft or
- * another user's `409`, or `404` for a date after today, to a worker for one before yesterday (design.md A65), and for
- * a submitted note; autosave's `PUT`, which creates the note with the creating save's checks, or updates the caller's
- * own draft as design.md §5.6 numbers a page's saves, by `clientId` and `seq`; and Submit's `POST {base}/versions`,
- * with its checks in the API's order, which puts a flagged version 1 in To review. `serve` answers one page's requests
- * as one person's, and `toReview` gives the To review list.
+ * current version, a draft's header, with its author's working copy to a manager, or `404` for none; the note form, a
+ * template, the caller's own draft or another user's `409`, or `404` for a date after today, to a worker for one
+ * before yesterday (design.md A65), and for a submitted note; autosave's `PUT`, which creates the note with the
+ * creating save's checks, or updates the caller's own draft as design.md §5.6 numbers a page's saves, by `clientId`
+ * and `seq`; Submit's `POST {base}/versions`, with its checks in the API's order, which puts a flagged version 1 in To
+ * review; and Discard draft's `POST {base}/discard`, with its checks in the API's order, which hides the draft from
+ * every list and screen and frees the day for a new note. `serve` answers one page's requests as one person's,
+ * `myDrafts` gives a person's unfinished drafts and `toReview` the To review list.
  */
 export function notesStore({
   today: firstToday,
@@ -203,11 +216,16 @@ export function notesStore({
   const goals = new Map(participants.map(({ id }) => [id, (firstGoals[id] ?? []).map(goalOf)]));
   const drafts = new Map<string, HeldDraft>();
   const submitted = new Map<string, HeldSubmitted>();
+  const discarded = new Map<string, DiscardedDraft[]>();
   const saves: DraftSave[] = [];
   const submits: VersionPost[] = [];
 
-  /** The note at `{base}`, as `GET {base}` answers it: a submitted note's current version, a draft's status or none. */
-  function note(participantId: string, noteDate: string) {
+  /**
+   * The note at `{base}`, as `GET {base}` answers it to `me`: a submitted note's current version; a draft's header,
+   * who started it and when, and, to a manager alone, its author's working copy in the same shape as a version, every
+   * goal of its snapshot in order with its tick; or `404` for none, a discarded draft's day included.
+   */
+  function note(me: Me, participantId: string, noteDate: string) {
     const key = `${participantId}/${noteDate}`;
     const held = submitted.get(key);
     if (held !== undefined && headers.has(participantId)) {
@@ -217,7 +235,41 @@ export function notesStore({
       return { json: { status: 'Submitted', author, firstSubmittedAtUtc, current } };
     }
 
-    return headers.has(participantId) && drafts.has(key) ? { json: { status: 'Draft' } } : { status: 404 };
+    const draft = drafts.get(key);
+    if (draft === undefined || !headers.has(participantId)) {
+      return { status: 404 };
+    }
+
+    const { authorDisplayName, startedAtUtc, snapshot, ticked, narrative, isFlagged, flagReason } = draft;
+    const goalsTicked = snapshot.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) }));
+    const content = me.role === 'Manager' ? { current: { narrative, isFlagged, flagReason, goals: goalsTicked } } : {};
+    return { json: { status: 'Draft', authorDisplayName, startedAtUtc, ...content } };
+  }
+
+  /**
+   * Discard draft, as `POST {base}/discard` answers it, with its checks in the API's order: `404` for no participant
+   * or a day with no note; `409 note.not_a_draft` for a submitted note or a day whose draft is discarded already; a
+   * `403` problem with no `code` for a worker who did not start the draft; and otherwise `204`, the draft hidden, its
+   * content kept, and the day free for a new note.
+   */
+  function discard(me: Me, participantId: string, noteDate: string) {
+    const key = `${participantId}/${noteDate}`;
+    const draft = drafts.get(key);
+    if (!headers.has(participantId) || (draft === undefined && !submitted.has(key) && !discarded.has(key))) {
+      return { status: 404 };
+    }
+
+    if (draft === undefined) {
+      return problem(409, 'note.not_a_draft');
+    }
+
+    if (draft.authorUserId !== me.userId && me.role !== 'Manager') {
+      return forbidden;
+    }
+
+    drafts.delete(key);
+    discarded.set(key, [...(discarded.get(key) ?? []), { ...draft, discardedByUserId: me.userId }]);
+    return { status: 204 };
   }
 
   /** The note form for `me`, as `GET {base}/draft` answers it. */
@@ -483,12 +535,17 @@ export function notesStore({
 
     const [, noteOf, noteDateOf = ''] = notePath.exec(pathname) ?? [];
     if (noteOf !== undefined) {
-      return note(noteOf, noteDateOf);
+      return note(me, noteOf, noteDateOf);
     }
 
     const [, submittedOf, submittedDate = ''] = versionsPath.exec(pathname) ?? [];
     if (submittedOf !== undefined) {
       return submit(me, submittedOf, submittedDate, idempotencyKey, body() as VersionBody);
+    }
+
+    const [, discardedOf, discardedDate = ''] = discardPath.exec(pathname) ?? [];
+    if (discardedOf !== undefined) {
+      return discard(me, discardedOf, discardedDate);
     }
 
     const [, participantId = '', noteDate = ''] = draftPath.exec(pathname) ?? [];
@@ -538,6 +595,30 @@ export function notesStore({
     draft: (participantId: string, noteDate: string) => drafts.get(`${participantId}/${noteDate}`),
     /** A participant's submitted note for a day, with its version, if there is one. */
     submitted: (participantId: string, noteDate: string) => submitted.get(`${participantId}/${noteDate}`),
+    /**
+     * The drafts of a participant's note for a day that were discarded, oldest first, each as its last save left it,
+     * with who discarded it.
+     */
+    discarded: (participantId: string, noteDate: string) => discarded.get(`${participantId}/${noteDate}`) ?? [],
+    /**
+     * `me`'s unfinished drafts as `GET /api/me/drafts` lists them, for `serveMyDrafts`, as they stand when the list is
+     * read: each of their own drafts, whatever its date and whether or not its participant is archived since, with the
+     * participant's names and the time of its last save, in the order the store holds them, as the API promises none.
+     * The store keeps no pending edits, which T14 builds, so a test gives their rows itself.
+     */
+    myDrafts: (me: Me): DraftsOf => () =>
+      [...drafts]
+        .filter(([, draft]) => draft.authorUserId === me.userId)
+        .flatMap(([key, draft]): MyDraft[] => {
+          const header = headers.get(key.slice(0, -11));
+          if (header === undefined) {
+            return [];
+          }
+
+          const { id: participantId, givenName, familyName } = header;
+          const noteDate = key.slice(-10);
+          return [{ participantId, givenName, familyName, noteDate, kind: 'draft', savedAtUtc: draft.savedAtUtc }];
+        }),
     /** Each participant's note today as `me` sees it on Today, for `serveToday`, as it stands when the list is read. */
     todayNotes: (me: Me): NoteOf => (participantId) => {
       const key = `${participantId}/${today}`;
@@ -573,11 +654,14 @@ export function notesStore({
         header.status = 'Archived';
       }
     },
-    /** Starts a participant's note for a day as another user, whose draft it then is, with an empty box. */
-    startElsewhere: (participantId: string, noteDate: string, startedBy: StartedBy) => {
+    /**
+     * Starts a participant's note for a day on another page, as another user, or as the user whose ID is given, such as
+     * the person signed in, on the day before, whose draft it then is, with an empty box.
+     */
+    startElsewhere: (participantId: string, noteDate: string, startedBy: StartedBy, authorUserId = 'another user') => {
       drafts.set(`${participantId}/${noteDate}`, {
         ...startedBy,
-        authorUserId: 'another user',
+        authorUserId,
         snapshot: [...(goals.get(participantId) ?? [])],
         ticked: [],
         narrative: '',

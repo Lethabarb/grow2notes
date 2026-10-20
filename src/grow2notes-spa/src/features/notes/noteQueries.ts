@@ -56,10 +56,23 @@ export type SubmittedNote = {
 };
 
 /**
+ * A draft's working copy as `GET {base}` gives it to a manager alone, read-only, in the `current` shape (design.md
+ * §6.3): its Guided notes text as written, every goal of its snapshot, in the snapshot's order, and the flag, whose
+ * reason is `null` unless the draft is flagged with one, as a flagged draft needs no reason until Submit (§3.4).
+ */
+export type DraftRead = { narrative: string; goals: TickedItem[]; isFlagged: boolean; flagReason: string | null };
+
+/**
+ * A draft, as `GET {base}` gives it (design.md §6.3): who started it, their display name as stored, and when, in UTC,
+ * to everyone; and to a manager, its author's working copy too.
+ */
+export type DraftNote = { status: 'Draft'; authorDisplayName: string; startedAtUtc: string; current?: DraftRead };
+
+/**
  * What `GET {base}` found (note-form.md *Routes*): a submitted note, which the read view shows; a draft, whose form,
  * or who started it, the draft's own `GET` gives; or, as `null`, no live note, which opens a new note's form.
  */
-export type NoteAnswer = SubmittedNote | { status: 'Draft' } | null;
+export type NoteAnswer = SubmittedNote | DraftNote | null;
 
 /** `{base}`, the address of a participant's note for a day (design.md §5.5 item 1, §6.3). */
 export function noteBase(participantId: string, noteDate: string): string {

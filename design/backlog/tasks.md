@@ -4126,7 +4126,7 @@ the reason and when it was flagged. Only submitted flags count.
 
 ```yaml
 id: T12
-status: new
+status: done
 release: R1
 lane: C
 size: M
@@ -4171,10 +4171,240 @@ manager can read it.
   sent again, as the Note above says, as autosave alone goes on after signing in again. The form calls
   `invalidateToday()` as it unmounts, however it is left: this task adds `['me', 'drafts']` there (S02.02.05's and
   S02.02.08's dated Notes).
+- Planned on 19 October 2026 from `origin/main` at `34deb30`, with T10 (#65) merged. No owner question holds it:
+  note-form.md open question 6, no success message after Discard, is built as the spec says, focus going to Today's
+  `<h1>`; today.md open questions 2 and 6 as designed, a pending edit's row its name and date alone; and note-form.md
+  open question 9's later `PUT` after a discard as design.md §5.5 has it, unrefused: the route finds no live note, so
+  another page's later save meets what a first save meets (§5.5 item 4, then the lists-changed reload) and may start a
+  new draft, the discarded one staying hidden, while the discarding page sends none once `stop()` has settled. Every
+  new string is a (V), (N) or (P) string of the UX specs as they stood on 9 October 2026, approved by D67. Where the
+  design is silent, the simplest option is taken:
+  - Discarding again (step 1): a day with a discarded draft and no live note answers `409 note.not_a_draft`, as §6.9
+    says of a note "already submitted or discarded", and a day with no note at all `404`; two discards at once are
+    decided by §5.8's conditional update, the later one `409`. A worker who is not the author gets a `403` problem
+    with no `code`, as §6.9 has none for it and no screen offers it to them; whether the caller is a manager is read
+    from the role as stored, as T08's date rules read it. `note.discarded` carries IDs alone, as `note.draft_started`
+    does, the note row holding who discarded it and when.
+  - A draft's `GET {base}` (step 2) gives `authorDisplayName` and `startedAtUtc` as members of their own, the names
+    that §6.3 and the `409`'s extensions use, and a manager's `current` in the shape built so far, from the author's
+    working copy: its text, flag and reason, and its snapshot's goals with their ticks; T13 adds `commonItemGroups` and
+    T14 `versionNumber`, as `NoteRead`'s comment says. `GET /api/me/drafts` promises no order, as today.md has the
+    client sort the section.
+  - The Discard dialog (step 3) has its body lines in confirm-dialog.md's order, each only where it applies: "This
+    draft is for Wednesday 30 September 2026." for an earlier day's draft, "Alex P. started it at 9:14 am." for
+    someone else's, its time through `stamp()` with the note date as its reference day, as A64 gives the in-progress
+    sentence's, then always "Nobody will be able to open this draft again."; its failure sentences are note-form.md's
+    and participant-notes.md's "Not discarded: …" (`msg.notDone`), the screen specs winning over confirm-dialog.md's
+    older wording. After `204`, the form and the manager's view alike remove Today's lists and `['me', 'drafts']`, as
+    Submit does, so that Today never shows the old status for a moment, mark the participant's Past notes stale, so
+    that a pop back to them lists the draft no more, and replace the page with Today, whose `<h1>` takes focus; after
+    `409 note.not_a_draft`, Go back goes to Today the same way (note-form.md *States* › *Discard dialog*).
+  - More actions shows while the form holds the viewer's own saved draft, the takeover banner's wait included, as that
+    draft is still theirs, and goes once autosave meets a dead end, its panel and an open Discard dialog closing with
+    nothing sent (primary-actions.md's "Show it only while the note is a Draft"; note-form.md component 13). A dead
+    end on a saved draft means it is no longer the live draft: submitted elsewhere (`note.version_conflict`), or
+    discarded meanwhile and the day then refused or taken (`note.in_progress_by_other`, `note.past_date_manager_only`,
+    `note.participant_archived`). A Discard then would go to the natural-key address and, for a manager, discard
+    whatever draft is live there, such as a worker's new one, under a dialog with no "started it at" line; so, too, a
+    confirming press whose awaited save meets a dead end sends no `POST`. Focus that was on More actions, in its panel
+    or in the dialog goes to the `<h1>`, as it does when Load the other version meets a dead end (note-form.md
+    *Changed on another device or tab*, as built by T10). More actions follows Submit note in the Tab order once the
+    first save is answered, so step 7 adds it to note-form.spec.ts's Tab and Shift+Tab stops after Submit note at both
+    widths, each such check waiting for the indicator's "Saved …" first, so as not to race the save's answer.
+  - The session warning closes More actions' panel as it opens, whether or not the Discard dialog is open
+    (session-timeout.md *The warning* step 1; app-shell.md's *28:00 idle on a visible page* row), as the header closes
+    the Account panel: during the render, a layout effect first moving focus that is in the panel to More actions, so
+    that the warning gives focus back there and never to a hidden Discard draft. An open Discard dialog closes as Go
+    back, focus going to More actions as Go back's does (note-form.md *Where focus goes*), where the warning gives it
+    back. So note-form.md *Session*'s "focus returns to **Submit note**" is read as the Submit confirmation's alone,
+    as session-timeout.md *The warning* step 3's "the element focused before" and the shared `closeOpenDialogs()` have
+    it, which step 7 records as an "As built (T12)" note.
+  - A manager's read-only draft (step 4) comes from `GET {base}`'s `current`, so a draft started between the page's
+    read of the note and its read of the form, which then has none, shows as a worker's, the sentence and Past notes
+    alone, until the page is opened again; "Nothing written yet." stands for a text of spaces alone too, as Submit's
+    checks judge it blank; and a Discard whose dialog a browser closed while its request was out says why it failed in
+    an alert above Discard draft, as the form says it above Submit note (confirm-dialog.md *Behaviour* 7).
+  - The earlier-day notice (step 6) shows on a draft saved as the form opens (note-form.md *Kinds of note*, set when
+    the form loads), never on a new note, saved since or not, whenever its date is before `me.today`; so on today's
+    draft kept open past midnight it just appears, unannounced, once `me` gives the new day (status-messages.md
+    *Per-screen notes*), as the Submit confirmation's title and the Discard dialog's line change with it. T18's
+    past-day notice wins over it on a manager's past-day draft (note-form.md component 4).
+  - Your unfinished drafts' rows (step 5) take `participantId/noteDate` as their return key, so that a pop back to
+    Today focuses the row opened, never the main list's row of the same participant.
+- Hand-offs, which step 7 writes into the receiving tasks' Notes and, dated, into the stories' Notes: S02.01.04's fifth
+  criterion, a pending edit's row opening its edit form end to end, to T14, which builds pending edits and the `/edit`
+  route, this task building and testing the row's address; S02.03.03's first criterion's `isPastDayNote` being false,
+  to T18, which adds it to `GET {base}` (T09's Notes), this task proving the note date and `FirstSubmittedAtUtc`; the
+  manager's read-only draft's common items, the `current` shape's `commonItemGroups`, to T13; the earlier-day notice
+  and More actions never showing on a pending edit's form (note-form.md *Kinds of note*'s "Editing a submitted
+  note"), to T14, as both show on a note saved as the form opens, which a pending edit is too; and the past-day notice
+  winning over the earlier-day one, to T18.
+- By-hand checks for ops/first-use-in-test.md, in a section of their own after T10's: on the iPhone in Safari, a worker
+  discarding their own draft and landing on Today with the row's status gone, then starting the note again; on the
+  laptop, a manager opening a worker's draft, reading it and discarding it, the worker's phone then showing the row
+  with no status; a draft started one day and found the next under Your unfinished drafts, opened with its earlier-day
+  notice and submitted; and, with NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome, today.md's
+  screen-reader items for the section (its `<h2>`, and each row read as the name, "link", then the date), the Discard
+  dialog read as "Discard the draft note for …, alert dialog" with its body, Go back giving focus to More actions and
+  confirming reading Today's heading, and participant-notes.md's for someone else's draft (the worker's sentence, the
+  manager's flag row read with "ticked" or "not ticked", and Discard draft's dialog with its "started it at" line).
+  None of the absorbed stories has a manual check, so no criterion waits on them (README §9).
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Discard on the server, one endpoint for the writer and a manager (S02.02.08's four criteria; S02.04.03's second
+      criterion's refusal and its third; design.md §3.4 *Discard*, §3.7's deactivated user's drafts, §3.8, §3.9, §5.5
+      item 5, §5.8 *Discard*, §6.3 `POST {base}/discard`, §6.7's Discard row and §14 M2's "after a discard, a new note
+      can"): `POST {base}/discard` in `Features/Notes`, its handler taking the `Actor` as `NoteDrafts` does, in one
+      `InTransactionAsync`: `404` for a participant not in the organisation or a day with no note; `409
+      note.not_a_draft`, added to `ErrorCode` (`ErrorCodeTests`), for a submitted note and for a day whose draft is
+      discarded already; a `403` problem with no `code` for a worker who is not the author (Notes); otherwise §5.8's
+      conditional `ExecuteUpdate`, `Status = Discarded` with `DiscardedAtUtc` now and `DiscardedByUserId` the caller
+      where the note is still a draft, `409 note.not_a_draft` when it changes no row, the content and the working copy
+      kept, and `note.discarded` with IDs alone in the same transaction, answering `204`. Its matrix row (a draft that
+      A's worker starts for each call: `204` for that worker, its author, and for A's manager, `404` for B's manager),
+      the audit-events row and a `SignedOutTests` row. Integration tests on SQL Server: the author's discard leaving
+      the `Note` Discarded with who and when, its `NoteDraft` and text unchanged, and one `note.discarded` naming the
+      author; a manager's discard of a worker's draft, and of a deactivated worker's, recording the manager; another
+      worker's discard `403`, changing nothing; a second discard, and a discard of a submitted note, each `409
+      note.not_a_draft`; two discards held together by an interceptor, as `HoldsTheFirstSaveOfTheUser` holds a save,
+      the later one `409`; a failing event save changing nothing; after a discard, `GET {base}` `404`, the day's row on
+      `GET /api/today` `null`, Past notes not listing it, and a first `PUT {base}/draft` creating a new draft for the
+      same participant and day, both notes then in the database (the one-live-note index's filter); and no `DELETE`
+      on `{base}` among the app's endpoints, with nothing deleted by a discard (A29).
+- [x] Reading a draft, and one's own unfinished drafts, on the server (S02.04.03's first criterion; S02.01.04's first
+      criterion, and its second to fourth on the server; S02.02.08's third criterion for Your unfinished drafts;
+      design.md §4.2 item 2 and A17, §5.3's `(OrganisationId, EditorUserId)` index, §6.3's `GET {base}` for a draft and
+      `GET /api/me/drafts`; T09's hand-off of the draft's header and a manager's content): `GET {base}` for a draft
+      gives everyone `status`, `authorDisplayName` and `startedAtUtc`, the note's `CreatedAtUtc`, and gives a manager,
+      by the role as stored, `current` from the author's working copy too (Notes). `GET /api/me/drafts` in
+      `Features/Notes`, writing nothing: the caller's own working copies of live notes in their organisation, as
+      `[{participantId, givenName, familyName, noteDate, kind, savedAtUtc}]`, `kind` `draft` for base version 0 and
+      `pendingEdit` above it, and `savedAtUtc` the working copy's `UpdatedAtUtc` (Notes). Its matrix row (`200` for
+      each signed-in caller, B's manager's list holding nothing of A's) and a `SignedOutTests` row. Integration tests
+      on SQL Server: a worker's `GET {base}` of Alex P.'s draft, and of their own, holding exactly those three members;
+      a manager's holding `current` with the working copy's text, its ticks in snapshot order, its flag and reason,
+      the snapshot's wording kept after a goal is reworded; a submitted note's answer unchanged; on a `TestClock`, a
+      worker's draft started on 30 September listed on 1 October with `noteDate` 2026-09-30 and `kind: "draft"`;
+      another user's draft, a discarded draft's kept working copy and another organisation's draft never listed; a
+      draft for a participant archived since listed, as is the caller's draft for today, which the client drops (step
+      5); a pending edit seeded on a submitted note, as T14 will make them, listed as `pendingEdit`; and a draft
+      discarded through step 1's endpoint listed no more.
+- [x] Discard on the note form, through the one Discard dialog (S02.02.08's links to note-form.md item 33, components 13
+      and 15, *States* › *Discard dialog*, *Interactions* › *Discard draft* and *Session*, and *Where focus goes*, and
+      to confirm-dialog.md's dialog 2; primary-actions.md's More actions bullet; session-timeout.md *The warning* step 1
+      and app-shell.md's *28:00 idle on a visible page* row; T10's hand-offs of `stop()`, `resume()` and
+      `leaveFreely()`; T01's never-replayed rule; T08's hand-off of today.md's "after Discard (a replace)" focusing the
+      `<h1>`): `DiscardDialog` in `src/features/notes`, built once on T03's `ConfirmDialog` for the form and for step
+      4's manager view: "Discard the draft note for Jane Citizen?" (V), its body lines (Notes), the warning-toned
+      "Discard draft for Jane Citizen" (P) and Go back, focus on the title, "Discarding…" (P) after 1 s, "Not discarded:
+      no connection. Try again." or "Not discarded: something went wrong. Try again." with the dialog kept, and for `409
+      note.not_a_draft` "This draft has already been submitted or discarded." (P) with the confirming button gone, focus
+      on Go back and Go back then going to Today; and after `204` the queries removed and marked stale and a replace to
+      Today (Notes). On the form, under Submit note, More actions (P), an APG disclosure with `aria-expanded` and
+      `aria-controls`, shown once the draft is saved, never on a new note, kept while the takeover banner waits and gone
+      once autosave meets a dead end, its panel and dialog closing with nothing sent and focus in them going to the
+      `<h1>` (Notes), its panel holding the secondary Discard draft (V), Escape closing it with focus back on More
+      actions; confirming calls `stop()`, sends the `POST` once any save out has settled, and none if that save met a
+      dead end, and calls `leaveFreely()` before Today; Go back, Escape or Back closes the dialog and the panel, gives
+      focus to More actions and calls `resume()`; a `401` closes the dialog before signing in again, and nothing is sent
+      again after it; and the session warning, as it opens, closes the panel, dialog or not, focus in the panel moving
+      to More actions first, and the dialog as Go back (Notes). Vitest: More actions absent on a new note, then present
+      once its first save is answered, and on a reopened draft; present while the takeover banner shows; absent after
+      `note.in_progress_by_other` and after `note.version_conflict` on a saved draft, an open panel closed and focus on
+      the `<h1>`, and an open dialog closed with nothing sent; no `POST` when the save that a confirming press awaits
+      meets a dead end; the disclosure, and Escape; the dialog's title, body, buttons, tone and focus; no `PUT` after
+      the confirming press, a save out awaited before the `POST`; `204` landing on Today with its `<h1>` focused, no
+      banner, the leave guard letting it go, and Today's lists and `['me', 'drafts']` fetched afresh; each failure
+      sentence with the dialog kept, and the `409` as said; Go back resuming autosave, a change made before the press
+      then saved; a `401` on the `POST`, then the same person signing in again in place, with one `POST` in all; the
+      warning closing the dialog with nothing sent and focus on More actions after Stay signed in; and the warning
+      opening with only the panel open, focus on Discard draft: the panel closed, nothing sent, and focus on More
+      actions after Stay signed in.
+- [x] Someone else's draft at the shared address (S02.04.03's second, third and fourth criteria on screen, and its
+      links to design.md §4.2's "Someone else's draft" and §4.4's states, and to participant-notes.md items 27 and 28
+      and its *Someone else's draft, worker*, *Someone else's draft, manager* and *Discard dialog* rows and *Focus
+      order*; T08's hand-off of the manager's read-only draft): a worker gets the `<h1>`, the in-progress sentence,
+      for today's note or, "started the note for", an earlier day's, and the Past notes link, with no discard control;
+      a manager, from `GET {base}`'s `current`, gets the same sentence, then Discard draft (V, secondary), Past notes,
+      "1. Goals" through `TickListRead`, "3. Guided notes" as escaped text, or "Nothing written yet." (P) when empty,
+      both sections the read view's own, and a read-only "Flag for manager" tick row (V words) with "Reason: …" when
+      it is ticked, never the Flagged tag; Discard draft opens step 3's dialog with "Alex P. started it at 9:14 am."
+      (P), Go back or Escape giving focus back to Discard draft, and success landing on Today's `<h1>`. The Tab order
+      is the back link, Discard draft, then Past notes. Vitest: a worker's DOM holding the sentence and Past notes and
+      no Discard draft, text, goal or flag; a manager's view holding the draft's ticks in order, its text and, flagged,
+      the flag row with its reason and no Flagged tag; unflagged, "not ticked" and no Reason; empty text reading
+      "Nothing written yet."; the dialog's lines for today's and an earlier day's draft; focus on the title, and back
+      on Discard draft after Go back; a `204` landing on Today with the `<h1>` focused; a `409` as step 3 says; and
+      the page title "Grow2Notes – Note" with no name in `location` or `history.state`.
+- [x] Your unfinished drafts on Today (S02.01.04's second to fifth criteria, and its links to today.md component 5, its
+      *Order and layout* DOM-order and drafts bullets, *Loading, empty and error*'s one-render bullet and *Refresh*;
+      T08's hand-off of the DOM order with the drafts section and `LoadRegion` taking both queries; T09's and T10's
+      hand-offs of `['me', 'drafts']` in Submit's removal and in the form's `invalidateToday()`): `myDraftsQuery()`,
+      `['me', 'drafts']`, refetched on window focus, beside `['today', me.today]` in Today's one `LoadRegion`, and
+      Today's own `focus` listener refetching both; the section after the `<h1>` and before the hidden "Participants"
+      heading, only when entries remain once those dated the list's date whose participant is on the list are dropped:
+      `<h2>` "Your unfinished drafts" (V) and `LinkRow` rows, each linked by the participant's name, described by the
+      note date in `dateLong` in a `<time>`, sorted by family name, then given name, then date, oldest first, with
+      `Intl.Collator('en-AU')`, opening the shared note address for `kind: "draft"` and `…/edit` for `kind:
+      "pendingEdit"`, with a return key of their own (Notes), never filtered by Find a participant, nothing marking an
+      archived participant, and shown in today.md's *Ready, no participants* state too, beside "No participants yet.";
+      and Submit removing `['me', 'drafts']` beside `['today']`, and the form marking it stale with Today's lists as it
+      unmounts. Vitest: a draft dated yesterday listed as "Wednesday 30 September 2026", opening that draft; an archived
+      participant's draft listed and opening; the caller's draft for today for an active participant not listed, and one
+      for a participant no longer on today's list listed; a pending edit's row linking to
+      `/participants/{id}/notes/{date}/edit`; no section and no `<h2>` with nothing left; with an empty participants
+      list and one draft for a participant archived since, the section and its `<h2>` beside "No participants yet." and
+      no search box; the order; search leaving the section as it is; the section and the list in one render, "Loading
+      participants…" while either request is out, and the load-failed sentence when the drafts request fails; window
+      focus refetching both; a row opened, then Back, focusing that row; and after Submit, Today fetching both afresh.
+- [x] A draft from an earlier day (S02.03.03's four criteria, and its links to design.md §3.3, §3.4 *Earlier-day
+      drafts*, §3.7 and §4.3's "Draft from an earlier day", and to note-form.md *Kinds of note* and component 4): on
+      the form, the earlier-day notice after the date, T02's `Notice`, "This draft is for Wednesday 30 September 2026.
+      Submitting it now keeps that date." (N), on a saved draft dated before `me.today` as the form opens (Notes); the
+      indicator's "Draft · saved Wed 30 Sep 2026, 9:42 am" and the confirmation's "Submit the note for", which T08 and
+      T09 built, proved here for an earlier day's draft; and step 3's dialog adding its earlier-day line. Integration
+      tests on a `TestClock`: a worker's draft started on 30 September and submitted on 2 October, version 1 keeping
+      note date 30 September and `FirstSubmittedAtUtc` the time of the submit (`isPastDayNote` is T18's, Notes); and a
+      draft for a participant archived since read, saved and submitted (§3.7). Vitest: the notice on an earlier day's
+      draft, and none on today's draft, a new note or a worker's form for yesterday not yet started; the indicator's
+      words; "Submit the note for" on the earlier day's draft and "Submit today's note for" on today's; the Discard
+      dialog's lines; and an archived participant's earlier-day draft submitted, landing on Today with the banner, and
+      no longer under Your unfinished drafts.
+- [x] Prove the drafts and Discard end to end and bring the documents into line: `tests/e2e/notes.ts` and
+      `tests/e2e/today.ts` answer `POST {base}/discard`, `GET /api/me/drafts` and a draft's header and content in `GET
+      {base}` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and
+      `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: a worker starts a
+      note, opens More actions and Discard draft, sees the dialog naming the participant, presses Go back with focus on
+      More actions, then discards and lands on Today with the `<h1>` focused and the row with no status, the
+      participant's Past notes not listing the draft, and a new note for the same day then saving (design.md §14 M2); a
+      manager starts a note and the invited worker opens it to the sentence and Past notes, with no Discard draft; the
+      worker starts a note and the manager opens it to the read-only draft with its text, ticks and flag row, discards
+      it and lands on Today, where neither sees a status on the row; and the other organisation's manager gets Page not
+      found at the note. With the API answered in the browser: Today with Your unfinished drafts, an earlier day's
+      draft, an archived participant's and a pending edit's row, its address `…/edit`; the earlier day's draft opened
+      with its notice and indicator, then submitted after "Submit the note for", landing on Today with the section gone;
+      axe on Today with the section, the form with More actions open, each state of the Discard dialog, and the worker's
+      and the manager's views of someone else's draft, at both widths; no sideways scroll at 320 px with 200% text in
+      each, and a long unbroken name wrapping in the dialog's title and confirming button; targets of 44, 48 and 56 px;
+      the focus ring and the warning button's border under forced colours; live regions in the DOM before their words;
+      the keyboard-only check (README §9) at both widths, in today.md's, note-form.md's and participant-notes.md's Tab
+      orders with More actions, Discard draft and the dialog; and no name, note text or message in `location`,
+      `document.title`, `history.state`, `localStorage`, `sessionStorage`, IndexedDB or Cache Storage after each flow.
+      Every new string is in `src/copy` and the copy test passes, and the diff holds no trace of the parent company's
+      name (D72). Docs: design.md §6.3 keeps its design and gains only the new facts (the discard's `403` and `404`, and
+      its `409` for a day whose draft is discarded already); today.md, note-form.md, participant-notes.md,
+      confirm-dialog.md and session-timeout.md gain only what the build settles, as "As built (T12)" notes, among them
+      note-form.md component 13's, More actions gone after a dead end, and its *Session* bullet's, focus after Stay
+      signed in going to More actions when the warning closed the Discard dialog or the panel, **Submit note** being the
+      Submit confirmation's alone, with the same in session-timeout.md's row for the two confirmations and its *The
+      warning* step 1's menu (Notes); the hand-offs (Notes) in the receiving tasks' Notes and, dated, in the stories'
+      Notes; the by-hand checks (Notes) on ops/first-use-in-test.md; no migration; and CI's run on the pull request
+      passing.
+- [x] Close the backlog (owner, 20 October 2026: this machine builds with warnings as errors and lints, and runs no
+      test, app or deploy; CI on the pull request runs every test and decides, and nothing is checked on the deployed
+      site): T12's `status` here and its stories' set to `done` together, their criteria ticked where tests prove
+      them and left unticked, each with its dated Note, where they wait for a task not yet merged (Notes).
 
 ---
 
@@ -4238,6 +4468,11 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   own, its retries, the page-hidden save, Keep's and the save sent as the same person signs in again, each built by
   `sentContent()` from the form's `read()` as it is sent (useAutosave.ts). S02.02.06's second criterion stays unticked
   until then (its dated Note, and S02.05.02's).
+- From T12 (19 October 2026): a manager's read-only draft (`SomeoneElsesDraft`, src/features/notes) shows `GET
+  {base}`'s `current` through the read view's own `ReadSections`, so this task gives a draft's `current` its
+  `commonItemGroups`, from the author's working copy, the Every note group if it has items and the groups picked, in
+  the snapshot's order (design.md §6.3), and "2. Common items" shows there as on the read view (S02.04.03's dated
+  Note).
 
 ### Steps
 
@@ -4292,6 +4527,12 @@ and shown the newer version, so nothing is silently overwritten.
   `useSaveBeforeLeaving()`, as Submit's does after its `201`, so that the leave guard's `useBlocker` lets it go and no
   task works around the shared guard. Cancel calls autosave's `stop()` before `DELETE {base}/draft`, as Submit does
   before its `POST` (autosave-status.md *Behaviour* 6). S02.02.06's and S02.06.01's dated Notes.
+- From T12 (19 October 2026): `GET /api/me/drafts` lists a pending edit as `kind: "pendingEdit"`, and its row under
+  Your unfinished drafts links to `/participants/{participantId}/notes/{noteDate}/edit` (TodayPage.test.tsx,
+  today.spec.ts), which this task's route opens: S02.01.04's fifth criterion waits for it (its dated Note). The
+  earlier-day notice and More actions show on a draft saved as the form opens, which a pending edit is too, so this
+  task keeps both off a pending edit's form (note-form.md *Kinds of note*'s "Editing a submitted note"; S02.02.08's
+  and S02.03.03's dated Notes).
 
 ### Steps
 
@@ -4479,6 +4720,11 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 - From T11 (19 October 2026): the version rows reuse what T11 built for To review, with its tests: `ChronoList`'s
   whole mode, with `older` left out, and `MetaLine` with no status word (`statusFirst` false), as only version 1's meta
   line starts with one (status-tags.md *Where it's used*).
+- From T12 (19 October 2026): S02.03.03's first criterion waits for this task's `isPastDayNote` on `GET {base}`, false
+  for a worker's draft submitted after midnight; T12 proves its note date and `FirstSubmittedAtUtc` on a `TestClock`
+  (NoteVersionEndpointsTests). The past-day notice wins over T12's earlier-day notice (note-form.md component 4), which
+  NoteForm.tsx shows on a saved draft dated before `me.today`, so a manager's past-day draft shows this task's alone
+  (S02.03.03's dated Note).
 
 ### Steps
 

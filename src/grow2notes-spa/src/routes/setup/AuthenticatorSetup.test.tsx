@@ -16,6 +16,7 @@ const startPath = '/api/auth/setup/start';
 const keyPath = '/api/auth/setup/authenticator';
 const passwordPath = '/api/auth/setup/password';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 const title = 'Grow2Notes – Set up your account';
 const intro =
   'An authenticator app is a free app on your phone. It shows a new 6-digit code every 30 seconds. You enter the code '
@@ -329,8 +330,9 @@ beforeEach(() => {
   serve(startPath, () => json(account));
   // As the server answers it, with the URI that no screen shows.
   serve(keyPath, () => json({ sharedKey, authenticatorUri: 'otpauth://totp/made-up' }));
-  // Today, where setup ends, with no participants.
+  // Today, where setup ends, with no participants and no unfinished drafts.
   serve(todayPath, () => json({ date: me.today, participants: [] }));
+  serve(draftsPath, () => json([]));
   // `api()` sends each request to a path, as a string.
   fetchMock.mockImplementation((path, init) => {
     const answer = typeof path === 'string' ? answers.get(path) : undefined;
@@ -880,13 +882,15 @@ describe('AuthenticatorSetup (view G), its code step', () => {
     expect(shown.some((element) => element.textContent?.includes('Tuesday 13'))).toBe(true);
     expect(shown.filter((element) => element.textContent?.includes(chooseMethod))).toEqual([]);
     await wait(10 * 60_000);
-    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more but Today's list,
-    // twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the first request,
-    // whose query function takes the abort signal; a production build sends it once. Counted rather than compared as
-    // a set, so that a request sent once more fails.
+    // The new location's one refresh (app-shell.md *Refresh of `/api/auth/me`*), and nothing more but Today's lists,
+    // each twice, as StrictMode mounts Today, unmounts it and mounts it again, and the unmount cancels the first
+    // requests, whose query functions take the abort signal; a production build sends each once. Counted rather than
+    // compared as a set, so that a request sent once more fails.
     const sentSince = sentAfter(requests);
     expect(sentSince[0]).toBe(passwordPath);
-    expect(sentSince.toSorted()).toEqual([passwordPath, mePath, todayPath, todayPath].toSorted());
+    expect(sentSince.toSorted()).toEqual(
+      [passwordPath, mePath, todayPath, todayPath, draftsPath, draftsPath].toSorted(),
+    );
 
     // The two entries after Today's are Forward's, where setup's memory has gone.
     await act(() => router.navigate(1));

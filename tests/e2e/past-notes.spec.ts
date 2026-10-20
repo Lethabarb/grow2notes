@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Page } from '@playwright/test';
+import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops, ring } from './focus.ts';
@@ -8,16 +8,17 @@ import { expectNothingKept } from './kept.ts';
 import { boxOf, expectAtLeast, scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
-import { daysAfter, failNoteReads, notesStore, type NotesStore } from './notes.ts';
+import { alexStarted, daysAfter, failNoteReads, notesStore, type NotesStore } from './notes.ts';
 import { jane, madeUpParticipant, participants, ravi } from './participants.ts';
 import { holdNext, recordRequests } from './requests.ts';
 import { serveToday } from './today.ts';
 
-// A participant's Past notes and the read view of a submitted note in the published app (S02.04.01, S02.04.02),
-// against participant-notes.md's criteria for the history list, the read view and both screens, as far as T09 builds
-// them. Each test answers /api/auth/me, /api/today, the participant's header, their history and their notes in the
-// browser, with made-up people and notes (me.ts, today.ts, notes.ts), so that none of those requests reaches the app;
-// note-form.spec.ts signs in for real and meets the app's own read view and Past notes.
+// A participant's Past notes, the read view of a submitted note and someone else's draft in the published app
+// (S02.04.01 to S02.04.03), against participant-notes.md's criteria for the history list, the read view and both
+// screens, as far as T09 and T12 build them. Each test answers /api/auth/me, /api/today, the participant's header,
+// their history and their notes in the browser, with made-up people and notes (me.ts, today.ts, notes.ts), so that
+// none of those requests reaches the app; note-form.spec.ts signs in for real and meets the app's own read view, Past
+// notes and someone else's draft.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -667,5 +668,371 @@ for (const width of [375, 1280]) {
     await heading(page).focus();
     await expectStops(page, 'Tab', ['Edit participant', names[0]]);
     await expectStops(page, 'Shift+Tab', ['Edit participant', 'Today']);
+  });
+}
+
+// Someone else's draft at the shared note address (S02.04.03; participant-notes.md *Someone else's draft*, items 27
+// and 28), made up (A35): Alex P.'s of Jane's today, started at 9:14 am, with Makes own breakfast ticked, a sentence
+// and the flag with its reason; Alex P.'s of Ravi's today, left empty; and Alex P.'s of Jane's yesterday. A worker gets
+// the in-progress sentence and Past notes; a manager the draft read-only too, with Discard draft and its dialog.
+
+const discardDraft = (page: Page) => main(page).getByRole('button', { name: 'Discard draft', exact: true });
+// The draft's flag as a read-only tick row, and its reason under it (participant-notes.md component 9's neighbours).
+const flagRow = (page: Page) => main(page).locator('p').filter({ hasText: /^Flag for manager/ });
+const reasonLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Reason: / });
+// The Discard dialog (confirm-dialog.md's dialog 2, manager variant).
+const dialog = (page: Page) => page.getByRole('alertdialog');
+// The confirmation's <dialog>, open or closed: the page takes a closed one away once its close event has run, and a key
+// pressed before then would meet the one going.
+const dialogInPage = (page: Page) => page.locator('dialog[role="alertdialog"]');
+const dialogTitle = (page: Page) => dialog(page).getByRole('heading', { level: 2 });
+const dialogButtons = (page: Page) => dialog(page).getByRole('button');
+const confirmDiscard = (page: Page, name = 'Jane Citizen') =>
+  dialog(page).getByRole('button', { name: `Discard draft for ${name}`, exact: true });
+const goBack = (page: Page) => dialog(page).getByRole('button', { name: 'Go back', exact: true });
+const dialogAlert = (page: Page) => dialog(page).getByRole('alert');
+const dialogStatus = (page: Page) => dialog(page).getByRole('status');
+
+// The in-progress sentences (participant-notes.md *States* › *Read view*), for today's note and an earlier day's.
+const alexOnToday = 'Alex P. started today’s note for Jane Citizen at 9:14 am. Only Alex P. can finish it.';
+const alexOnEarlierDay = 'Alex P. started the note for Jane Citizen at 9:14 am. Only Alex P. can finish it.';
+const noLongerADraft = 'This draft has already been submitted or discarded.';
+
+// The warning style's red, tokens.css's --colour-error, on the dialog's confirming button alone.
+const red = 'rgb(164, 0, 15)';
+
+const draftText = 'Went to the shops.\n\nBought bread.';
+const draftReason = 'Seemed tired after the walk.';
+
+/** Whether the response answers a Discard, `POST {base}/discard`. */
+const isDiscard = (response: Response) =>
+  response.request().method() === 'POST' && /^\/api\/participants\/[^/]+\/notes\/[^/]+\/discard$/.test(
+    new URL(response.url()).pathname,
+  );
+
+/** Alex P.'s three drafts, as above. */
+function alexsDrafts(): NotesStore {
+  const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+  store.startElsewhere(jane.id, worker.today, alexStarted);
+  store.saveElsewhere(jane.id, worker.today, {
+    narrative: draftText,
+    tickedGoalIds: [breakfast.id],
+    isFlagged: true,
+    flagReason: draftReason,
+    savedAtUtc: '2026-09-30T23:42:00Z',
+  });
+  store.startElsewhere(ravi.id, worker.today, alexStarted);
+  store.startElsewhere(jane.id, '2026-09-30', { ...alexStarted, startedAtUtc: '2026-09-29T23:14:00Z' });
+  return store;
+}
+
+test('someone else’s draft: a worker’s view, and a manager’s read-only one, never with the Flagged tag, axe', async ({
+  page,
+}) => {
+  const store = alexsDrafts();
+  await openToday(page, store);
+
+  // A worker: the <h1>, the sentence and Past notes, and nothing of the draft, no discard control among it.
+  await row(page, 'Jane Citizen').click();
+  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await expect(main(page).getByText(alexOnToday, { exact: true })).toBeVisible();
+  await expect(main(page).getByRole('link')).toHaveText(['Past notes']);
+  await expect(main(page).getByRole('button')).toHaveCount(0);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveCount(0);
+  for (const absent of [breakfast.text, 'Went to the shops', 'Flag for manager', draftReason, 'Flagged']) {
+    await expect(main(page).getByText(absent)).toHaveCount(0);
+  }
+  await expect(page).toHaveTitle(title('Note'));
+  await expectAxeToPass(page);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Alex', 'Went to the shops', draftReason);
+
+  // A manager: the same sentence, then Discard draft and Past notes, then the draft's sections as the read view shows
+  // a note's, its goals in the snapshot's order and its text as written, and its flag as a read-only tick row with the
+  // reason, never the Flagged tag; nothing to type in or tick, and no save status.
+  await serveMe(page, manager);
+  await serveToday(page, manager.today, participants, store.todayNotes(manager));
+  await store.serve(page, manager);
+  await page.goto('/');
+  await row(page, 'Jane Citizen').click();
+  await expect(heading(page)).toBeFocused();
+  await expect(main(page).getByText(alexOnToday, { exact: true })).toBeVisible();
+  await expect(main(page).getByRole('button')).toHaveText(['Discard draft']);
+  await expect(main(page).getByRole('link')).toHaveText(['Past notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(readGoals(page)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
+  expect(await readText(page).textContent()).toBe(draftText);
+  await expect(flagRow(page)).toHaveText('Flag for manager, ticked');
+  await expect.poll(() => shownText(reasonLine(page))).toBe(`Reason: ${draftReason}`);
+  await expect(flagged(page)).toHaveCount(0);
+  await expect(main(page).getByRole('checkbox')).toHaveCount(0);
+  await expect(main(page).getByRole('textbox')).toHaveCount(0);
+  await expect(page.locator('#save-status')).toHaveCount(0);
+  // In that order, as it reads.
+  expect((await main(page).innerText()).replace(/\s+/g, ' ')).toMatch(
+    /^Jane Citizen Thursday 1 October 2026 Alex P\. started .+ Discard draft Past notes 1\. Goals /,
+  );
+  await expect(page).toHaveTitle(title('Note'));
+  await expectAxeToPass(page);
+
+  // Ravi's, unflagged and empty: "not ticked" with no Reason, "No goals set" and "Nothing written yet.".
+  await page.goto(noteAddress(ravi.id, manager.today));
+  await expect(heading(page)).toHaveText('Ravi de Silva Thursday 1 October 2026');
+  await expect(flagRow(page)).toHaveText('Flag for manager, not ticked');
+  await expect(reasonLine(page)).toHaveCount(0);
+  await expect(main(page).getByText('No goals set', { exact: true })).toBeVisible();
+  await expect(main(page).getByText('Nothing written yet.', { exact: true })).toBeVisible();
+  await expectAxeToPass(page);
+
+  // Jane's from yesterday: "started the note for".
+  await page.goto(noteAddress(jane.id, '2026-09-30'));
+  await expect(heading(page)).toHaveText('Jane Citizen Wednesday 30 September 2026');
+  await expect(main(page).getByText(alexOnEarlierDay, { exact: true })).toBeVisible();
+  await expect(discardDraft(page)).toBeVisible();
+  await expectAxeToPass(page);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Ravi', 'Alex', 'Went to the shops', draftReason);
+});
+
+test('a manager’s Discard draft: the dialog’s lines, Go back and Escape, a 409, and a 204 to Today’s <h1>', async ({
+  page,
+}) => {
+  const store = alexsDrafts();
+  await openToday(page, store, manager);
+  await row(page, 'Jane Citizen').click();
+  await expect(heading(page)).toBeFocused();
+  const sent = recordRequests(page);
+
+  // Opened on its title, which draws no ring: the name in the title and on the warning-styled confirming button, and
+  // who started the draft and when, before the line that always ends the body. The trigger is not red.
+  await discardDraft(page).click();
+  await expect(dialogTitle(page)).toBeFocused();
+  await expect(dialogTitle(page)).toHaveCSS('outline-style', 'none');
+  await expect(dialog(page)).toHaveAccessibleName('Discard the draft note for Jane Citizen?');
+  await expect(dialog(page)).toHaveAccessibleDescription(
+    /^Alex P\. started it at 9:14\sam\. ?Nobody will be able to open this draft again\.$/,
+  );
+  await expect(dialogButtons(page)).toHaveText(['Discard draft for Jane Citizen', 'Go back']);
+  await expect(confirmDiscard(page)).toHaveCSS('background-color', red);
+  await expect(discardDraft(page)).not.toHaveCSS('background-color', red);
+  await expect(dialogAlert(page)).toBeEmpty();
+  await expect(dialogStatus(page)).toBeEmpty();
+  await expectAxeToPass(page);
+
+  // Go back, and Escape, close it with nothing sent, focus back on Discard draft.
+  await goBack(page).click();
+  await expect(dialogInPage(page)).toHaveCount(0);
+  await expect(discardDraft(page)).toBeFocused();
+  await discardDraft(page).click();
+  await expect(dialogTitle(page)).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialogInPage(page)).toHaveCount(0);
+  await expect(discardDraft(page)).toBeFocused();
+  expect((await sent()).filter((request) => request.startsWith('POST'))).toEqual([]);
+
+  // Yesterday's: its date first. Submitted by Alex P. meanwhile, it is a draft no longer: the sentence, the confirming
+  // button gone and focus on Go back, which then goes to Today.
+  await page.goto(noteAddress(jane.id, '2026-09-30'));
+  await discardDraft(page).click();
+  await expect(dialog(page)).toHaveAccessibleDescription(
+    new RegExp(
+      '^This draft is for Wednesday 30\\sSeptember 2026\\. ?Alex P\\. started it at 9:14\\sam\\. ?'
+        + 'Nobody will be able to open this draft again\\.$',
+    ),
+  );
+  await expectAxeToPass(page);
+  store.submitElsewhere(jane.id, '2026-09-30');
+  await confirmDiscard(page).click();
+  await expect(dialogAlert(page)).toHaveText(noLongerADraft);
+  await expect(confirmDiscard(page)).toHaveCount(0);
+  await expect(goBack(page)).toBeFocused();
+  await expectAxeToPass(page);
+  await goBack(page).click();
+  await expect(page).toHaveURL('/');
+  await expect(heading(page)).toBeFocused();
+
+  // Today's draft discarded: its 204, then Today in the note's place, its <h1> focused, with no banner, the row with no
+  // status, and the draft, its words kept, discarded by the manager.
+  await expect(rows(page)).toHaveText(['Jane Citizen', 'Ravi de Silva']);
+  await row(page, 'Jane Citizen').click();
+  await discardDraft(page).click();
+  const discarded = page.waitForResponse(isDiscard);
+  await confirmDiscard(page).click();
+  expect((await discarded).status()).toBe(204);
+  await expect(page).toHaveURL('/');
+  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toContainText('Today');
+  await expect(main(page).locator('[data-route-focus]')).toHaveCount(0);
+  await expect(rows(page)).toHaveText(['Jane Citizen', 'Ravi de Silva']);
+  await expect(rowLine(page, 'Jane Citizen')).toHaveCount(0);
+  expect(store.discarded(jane.id, manager.today)).toEqual([
+    expect.objectContaining({ narrative: draftText, discardedByUserId: manager.userId }),
+  ]);
+
+  // Past notes lists it no more: yesterday's note alone, now submitted.
+  await row(page, 'Jane Citizen').click();
+  await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('');
+  await pastNotesLink(page).click();
+  await expect(heading(page)).toHaveText('Past notes Jane Citizen');
+  await expect(rows(page)).toHaveText(['Wednesday 30 September 2026']);
+  await expect(rows(page)).toHaveAccessibleDescription(/^Submitted ?, Alex P\.$/);
+  await expectNothingKept(page, 'Jane', 'Citizen', 'Alex', 'Went to the shops', draftReason, noLongerADraft);
+});
+
+test('at 320 px with text at 200%, no view of someone else’s draft or the Discard dialog scrolls sideways', async ({
+  page,
+}) => {
+  const long = madeUpParticipant('8f4b0d3a-7c16-4e59-b3a8-1d6f2b9e5c74', 'A'.repeat(50), 'B'.repeat(50));
+  const longName = `${'A'.repeat(50)} ${'B'.repeat(50)}`;
+  const unbroken = 'Wolfeschlegelsteinhausenbergerdorff'.repeat(3);
+  const store = notesStore({ today: worker.today, participants: [long] });
+  store.startElsewhere(long.id, worker.today, { ...alexStarted, authorDisplayName: 'X'.repeat(100) });
+  store.saveElsewhere(long.id, worker.today, { narrative: unbroken, isFlagged: true, flagReason: 'Y'.repeat(200) });
+  await serveMe(page, worker);
+  await store.serve(page, worker);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto(noteAddress(long.id, worker.today));
+  await setTextTo200Percent(page);
+  await expect(main(page).getByText(/^X{100} started today’s note for A{50} B{50} at/)).toBeVisible();
+  expect(await scrollsSideways(page), 'a worker’s view, with a long name and author').toBe(false);
+
+  await serveMe(page, manager);
+  await store.serve(page, manager);
+  await page.reload();
+  await setTextTo200Percent(page);
+  await expect(reasonLine(page)).toBeVisible();
+  expect(await scrollsSideways(page), 'a manager’s view, with a long text and reason').toBe(false);
+
+  // The dialog's title and its confirming button each hold the name whole, inside the dialog.
+  await discardDraft(page).click();
+  await expect(dialogTitle(page)).toHaveText(`Discard the draft note for ${longName}?`);
+  expect(await scrollsSideways(page), 'the Discard dialog').toBe(false);
+  for (const part of [dialog(page), dialogTitle(page), confirmDiscard(page, longName)]) {
+    expect(await part.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    const { x, width } = await boxOf(part);
+    expect(x + width).toBeLessThanOrEqual(320);
+  }
+});
+
+test('someone else’s draft: nothing sticky, Discard draft and the dialog’s buttons 48 px, Past notes 44 px', async ({
+  page,
+}) => {
+  const store = alexsDrafts();
+  await serveMe(page, manager);
+  await store.serve(page, manager);
+  for (const width of [375, 1280]) {
+    await page.setViewportSize({ width, height: 640 });
+    await page.goto(noteAddress(jane.id, manager.today));
+    await expect(discardDraft(page)).toBeVisible();
+    expect(await pinned(page), `a manager's view at ${width} px`).toEqual([]);
+    await expectAtLeast(backLink(page, 'Today'), 44, 44);
+    await expectAtLeast(discardDraft(page), 44, 48);
+    await expectAtLeast(pastNotesLink(page), 44, 44);
+    await discardDraft(page).click();
+    await expectAtLeast(dialogButtons(page), 44, 48);
+  }
+});
+
+test('at 28:00 the warning closes a manager’s Discard dialog, sending nothing; then focus is on Discard draft', async ({
+  page,
+}) => {
+  // Before the page loads, so that its timers and Date run on Playwright's clock, which the test runs on to 28:00.
+  await page.clock.install();
+  const store = alexsDrafts();
+  await serveMe(page, manager);
+  await store.serve(page, manager);
+  await page.goto(noteAddress(jane.id, manager.today));
+  await page.route('**/api/auth/ping', (route) => route.fulfill({ status: 204 }));
+  await discardDraft(page).click();
+  await expect(dialogTitle(page)).toBeFocused();
+  const sent = recordRequests(page);
+
+  await page.clock.runFor('28:00');
+  const warning = page.getByRole('dialog', { name: 'You’ll be signed out in 2 minutes' });
+  const staySignedIn = warning.getByRole('button', { name: 'Stay signed in' });
+  await expect(staySignedIn).toBeFocused();
+  await expect(dialogInPage(page)).toHaveCount(0);
+  await staySignedIn.click();
+  await expect(warning).toBeHidden();
+  // Where the closed dialog gave focus back, as its Go back does, and so the warning too.
+  await expect(discardDraft(page)).toBeFocused();
+  expect(await sent()).toEqual(['POST /api/auth/ping']);
+  expect(store.discarded(jane.id, manager.today)).toEqual([]);
+});
+
+test('in forced colours, the ring is Highlight at each stop of someone else’s draft and its dialog, bordered', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await serveMe(page, manager);
+  await alexsDrafts().serve(page, manager);
+  await page.goto(noteAddress(jane.id, manager.today));
+  const forcedRing = { ...ring, colour: await systemColour(page, 'Highlight') };
+  await heading(page).focus();
+  await expectStops(page, 'Shift+Tab', ['Today'], forcedRing);
+  await expectStops(page, 'Tab', ['Discard draft', 'Past notes'], forcedRing);
+  await expectStops(page, 'Shift+Tab', ['Discard draft'], forcedRing);
+  await page.keyboard.press('Enter');
+  await expect(dialogTitle(page)).toBeFocused();
+  await expectStops(page, 'Tab', ['Discard draft for Jane Citizen', 'Go back'], forcedRing);
+
+  // The warning button's fill gives way to the theme's, so its border is what draws it, in the theme's button text.
+  const buttonText = await systemColour(page, 'ButtonText');
+  for (const side of ['top', 'right', 'bottom', 'left']) {
+    await expect(confirmDiscard(page)).toHaveCSS(`border-${side}-style`, 'solid');
+    await expect(confirmDiscard(page)).toHaveCSS(`border-${side}-width`, '2px');
+    await expect(confirmDiscard(page)).toHaveCSS(`border-${side}-color`, buttonText);
+  }
+});
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: someone else's draft in each view's Tab order, and its dialog by keys`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    const store = alexsDrafts();
+    await openToday(page, store);
+    const shell = ['Skip to main content', 'Grow2Notes', 'Today', 'Account'];
+    await expectStops(page, 'Tab', [...shell, 'Find a participant', 'Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(heading(page)).toBeFocused();
+
+    // A worker's (participant-notes.md *Focus order (Tab)*): the back link, then Past notes.
+    await expectStops(page, 'Tab', ['Past notes', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Past notes', 'Today', ...[...shell].reverse()]);
+
+    // A manager's: the back link, Discard draft, then Past notes.
+    await serveMe(page, manager);
+    await serveToday(page, manager.today, participants, store.todayNotes(manager));
+    await store.serve(page, manager);
+    await page.goto(noteAddress(jane.id, manager.today));
+    await heading(page).focus();
+    await expectStops(page, 'Tab', ['Discard draft', 'Past notes', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['Past notes', 'Discard draft', 'Today', 'Manage']);
+    await expectStops(page, 'Tab', ['Today', 'Discard draft']);
+
+    // Enter opens the dialog on its title, then its two buttons; Go back by Enter, and Escape, each give focus back to
+    // Discard draft, with nothing sent.
+    const sent = recordRequests(page);
+    await page.keyboard.press('Enter');
+    await expect(dialogTitle(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Discard draft for Jane Citizen', 'Go back']);
+    await page.keyboard.press('Enter');
+    await expect(dialogInPage(page)).toHaveCount(0);
+    await expect(discardDraft(page)).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(dialogTitle(page)).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialogInPage(page)).toHaveCount(0);
+    await expect(discardDraft(page)).toBeFocused();
+    expect((await sent()).filter((request) => request.startsWith('POST'))).toEqual([]);
+
+    // Enter on the confirming button discards it: Today, its <h1> focused, then its stops.
+    await page.keyboard.press('Enter');
+    await expectStops(page, 'Tab', ['Discard draft for Jane Citizen']);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/');
+    await expect(heading(page)).toBeFocused();
+    await expectStops(page, 'Tab', ['Find a participant', 'Jane Citizen', 'Ravi de Silva', 'outside the page']);
+    await expectNothingKept(page, 'Jane', 'Citizen', 'Alex', 'Went to the shops', draftReason);
   });
 }

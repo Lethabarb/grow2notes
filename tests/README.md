@@ -6,8 +6,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
   `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
   the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
-  items, Guide prompts, Today and the note form, and Flagged's To review list, with axe accessibility checks, run
-  against the published app.
+  items, Guide prompts, Today and its unfinished drafts, the note form and Discard, someone else's draft, and Flagged's
+  To review list, with axe accessibility checks, run against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -117,15 +117,15 @@ the app's own resend (`e2e/resend-invite.spec.ts`), the two tests of signing in 
 (`e2e/sign-in-again.spec.ts`), the Guide prompts test that saves to the app (`e2e/guide-prompts.spec.ts`), the
 Participants tests that meet the app's own answers (`e2e/participants.spec.ts`), the Common items tests that meet the
 app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's actions that meet the app's own
-(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`), the ten note
-form tests that meet the app's own Today, notes, saves and Submit (`e2e/note-form.spec.ts`) and the Flagged test that
-meets the app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the published app's
-own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures, below), so the
-second terminal gives them what CI's end-to-end step gives them: the published app's folder, in `E2E_APP_DIR`, and the
-app's connection string and `App__Origin`, which must be the address that the tests open. Without one of the three,
-each test that needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the
-database. After a failure, `npx playwright show-report` opens the HTML report, which holds a trace of each failed test.
-Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+(`e2e/user-actions.spec.ts`), the Edit user test that meets the app's own save (`e2e/edit-user.spec.ts`), the eleven
+note form tests that meet the app's own Today, notes, saves, Submit and Discard (`e2e/note-form.spec.ts`) and the
+Flagged test that meets the app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the
+published app's own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures,
+below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
+`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
+Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
+organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
+holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
 
 ## Writing end-to-end tests
 
@@ -186,13 +186,13 @@ test of a signed-in screen answers `GET /api/auth/me` itself, in the browser. `s
 routes the page's requests for it, through Playwright's `page.route`, to an answer of `me`, one of the made-up `worker`
 and `manager` there (A35), in the JSON that `MeEndpointTests` asserts, so that the request never reaches the app. Call
 it before `page.goto`. To change who is signed in, call it again with the other person, whose answer then wins, and load
-the page again, so that the SPA starts with them. It answers Today's list, `GET /api/today`, too, with no participants
-on `me`'s day: Today, where the made-up person lands, asks for it, and the app, which holds no session for them, would
-answer `401`, ending the session in place. Everything else the page loads is the published app's, under its
-policy. A test that does not call it meets the app's real `401`, as a signed-out visitor does (`e2e/smoke.spec.ts`);
-`e2e/shell.spec.ts` is the example of one that does. A test of signing out answers it only until the page sends the
-logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets the request through to the app from then on,
-so the page that the logout loads meets the app's `401`.
+the page again, so that the SPA starts with them. It answers Today's lists too, `GET /api/today` with no participants
+on `me`'s day and `GET /api/me/drafts` with no unfinished drafts: Today, where the made-up person lands, asks for both,
+and the app, which holds no session for them, would answer `401`, ending the session in place. Everything else the
+page loads is the published app's, under its policy. A test that does not call it meets the app's real `401`, as a
+signed-out visitor does (`e2e/smoke.spec.ts`); `e2e/shell.spec.ts` is the example of one that does. A test of signing
+out answers it only until the page sends the logout: `e2e/sign-out.spec.ts` adds a route ahead of `serveMe`'s that lets
+the request through to the app from then on, so the page that the logout loads meets the app's `401`.
 
 ```ts
 await serveMe(page, manager);
@@ -516,24 +516,29 @@ the page could keep them: on a page that `page.goto` loaded, the history entry h
 
 ### Answering Today and a participant's note
 
-Today reads its list with `GET /api/today`, and a participant's note reads their header with
-`GET /api/participants/{participantId}`, the note with `GET {base}`, which says which screen to show, and the form with
-`GET {base}/draft`, whose autosave is `PUT {base}/draft` and whose Submit is `POST {base}/versions`; Past notes reads
-the header and `GET /api/participants/{participantId}/notes?before=` (design.md §6.3). Each needs a session, so a test
-of Today, the note form, the read view or Past notes with a made-up person answers them in the browser, as it answers
-`/api/admin/participants`.
+Today reads its list with `GET /api/today` and the caller's unfinished drafts with `GET /api/me/drafts`, and a
+participant's note reads their header with `GET /api/participants/{participantId}`, the note with `GET {base}`, which
+says which screen to show, and the form with `GET {base}/draft`, whose autosave is `PUT {base}/draft`, whose Submit is
+`POST {base}/versions` and whose Discard draft, a manager's on someone else's draft too, is `POST {base}/discard`;
+Past notes reads the header and `GET /api/participants/{participantId}/notes?before=` (design.md §6.3). Each needs a
+session, so a test of Today, the note form, someone else's draft, the read view or Past notes with a made-up person
+answers them in the browser, as it answers `/api/admin/participants`.
 
-`e2e/today.ts`, beside `e2e/participants.ts`, has two helpers, each routing the page's `GET /api/today` through
-`page.route` and overriding `serveMe`'s empty list, as Playwright tries the latest route first, so call them after
-`serveMe`:
+`e2e/today.ts`, beside `e2e/participants.ts`, has three helpers, each routing one of Today's reads through `page.route`
+and overriding `serveMe`'s empty answer, as Playwright tries the latest route first, so call them after `serveMe`:
 
-- `serveToday(page, date, participants, noteOf)` answers each with `todayList(date, participants, noteOf)`: the date,
-  and the active ones of the made-up participants, such as `e2e/participants.ts`'s, as their IDs and names, in the order
-  given, each with the note that `noteOf` gives for their ID, by default none, worked out afresh for each request. A
-  store's `todayNotes(me)` (below) gives each participant's note today as `me` sees it, so that Today shows what the
-  store holds as it asks; a test of the status lines alone gives notes of its own, in `TodayNote`'s shape.
-- `failToday(page, failure)` aborts each, for `'no connection'`, or answers it with a status, such as `503`. The failure
-  shows about 1 s after the request, after the query client's silent retry.
+- `serveToday(page, date, participants, noteOf)` answers each `GET /api/today` with
+  `todayList(date, participants, noteOf)`: the date, and the active ones of the made-up participants, such as
+  `e2e/participants.ts`'s, as their IDs and names, in the order given, each with the note that `noteOf` gives for their
+  ID, by default none, worked out afresh for each request. A store's `todayNotes(me)` (below) gives each participant's
+  note today as `me` sees it, so that Today shows what the store holds as it asks; a test of the status lines alone
+  gives notes of its own, in `TodayNote`'s shape.
+- `serveMyDrafts(page, draftsOf)` answers each `GET /api/me/drafts` with what `draftsOf` gives then, each entry a
+  `MyDraft`, `{participantId, givenName, familyName, noteDate, kind, savedAtUtc}`. A store's `myDrafts(me)` (below)
+  gives `me`'s own drafts as it holds them; the store keeps no pending edits, which T14 builds, so a test of a pending
+  edit's row adds one of its own, with `kind: 'pendingEdit'`, beside the store's.
+- `failToday(page, failure)` aborts each `GET /api/today`, for `'no connection'`, or answers it with a status, such as
+  `503`. The failure shows about 1 s after the request, after the query client's silent retry.
 
 `e2e/notes.ts` keeps participants' notes in memory as the API keeps them:
 `notesStore({ today, participants, goals, prompts })` takes the server's date in Melbourne, the made-up participants,
@@ -545,8 +550,9 @@ each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the org
   `{noteDate, status, authorDisplayName, isFlagged}` and, on a manager's rows alone, `flagStatus`; or `404`, as for
   the header, and the framework's `400` for a `before` that is not a date;
 - the note, `GET {base}`: a submitted note's current version, `{status: 'Submitted', author: {displayName},
-  firstSubmittedAtUtc, current: {narrative, isFlagged, flagReason, goals: [{text, isTicked}]}}`, `{status: 'Draft'}`
-  for a draft, or else `404`;
+  firstSubmittedAtUtc, current: {narrative, isFlagged, flagReason, goals: [{text, isTicked}]}}`; a draft's header,
+  `{status: 'Draft', authorDisplayName, startedAtUtc}`, with, to a manager alone, its author's working copy in the same
+  `current` shape, every goal of its snapshot in order with its tick; or else `404`, a discarded draft's day included;
 - the form, a template with the goals unticked, no flag and the lists' version, the caller's own draft with its flag,
   `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404` for a submitted
   note, for a date after today and, to a worker, for one before yesterday (design.md A65);
@@ -569,13 +575,19 @@ each one's active goals by participant ID, such as `e2e/goals.ts`'s, and the org
   under `flagReason` for a flagged body with a blank reason, and under `tickedGoalIds` for a goal not in the draft's
   snapshot; and otherwise version 1, its goals from the snapshot with the ticks sent, the draft gone, and the note in
   To review, with version 1 as its flagged version, when it is flagged (design.md §5.8 step 5), answered
-  `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`.
+  `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`;
+- and each Discard, with the checks of T12's Notes in their order: `404` for no participant or a day with no note;
+  `409 note.not_a_draft` for a submitted note or a day whose draft is discarded already; a `403` problem with no `code`
+  for a worker who did not start the draft; and otherwise `204`, the draft, its content kept, gone from every answer
+  above, the history, `todayNotes` and `myDrafts` included, so that the day's next first save creates a new draft.
 
 Each save and Submit answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
 4:12 pm", and which a Submit makes the note's first submitted time; `serve(page, me, { latencyMs })` holds each answer
 that long, as on a slow network. The store's `saves` lists the body of every save sent, and `submits` the key and body
 of every Submit; `draft(participantId, noteDate)` gives a working copy, `submitted(participantId, noteDate)` a submitted
-note, and `todayNotes(me)` each participant's note today, for `serveToday`.
+note, `discarded(participantId, noteDate)` the drafts of that day discarded, each with who discarded it,
+`todayNotes(me)` each participant's note today, for `serveToday`, and `myDrafts(me)` `me`'s own drafts, whatever their
+dates and whether or not their participants are archived since, for `serveMyDrafts`.
 `addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
 user ID, flagged when given a reason, and then in To review, as Submit leaves it, unless its `flagStatus` is set by
 hand, as T16 will set it; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
@@ -583,23 +595,26 @@ version 2 that T14's Save changes will save, flagged with `flagReason` or not fl
 `daysAfter(date, days)` gives the dates of a run of them. Six more do what someone else does while a page is open:
 `setToday(date)`, midnight in Melbourne; `setGoals(participantId, goals)`, a manager's change to the list;
 `archive(participantId)`; `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as
-`alexStarted`, Alex P.'s at 9:14 am; `submitElsewhere(participantId, noteDate)`, the draft submitted by its author in
-another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts its answer, as
-a phone that loses its signal while the answer is on its way. One more, `saveElsewhere(participantId, noteDate,
-elsewhere)`, saves the draft as its author does from another tab or device, with that page's text, ticks, flag and
-reason, the rest kept, and its time, by default the store's: a page's first save under a `clientId` of its own, so that
-the next save of the page that saved before meets the takeover banner. `failNoteReads(page)` aborts each read of a
-header, a history, a note or a form, as `failParticipants` does, until the store serves the page again, and
-`failNoteReads(page, { olderOnly: true })` only each page of a history after the first, which Show older asks for;
-`failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page again, so that autosave
-retries it and shows "Not saved: no connection…" about 1 s after the first failure. For a test that watches the saves,
-of the store's page or of the app's own, `isDraftSaveRequest(request)` tells a save from the page's other requests, and
-`draftRequests` is the glob of a working copy's address, its read's and its save's, for `holdNext`.
+`alexStarted`, Alex P.'s at 9:14 am, or, given the author's user ID too, one started on another page of theirs, such as
+the made-up worker's own draft from the day before; `submitElsewhere(participantId, noteDate)`, the draft submitted by
+its author in another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts
+its answer, as a phone that loses its signal while the answer is on its way. One more,
+`saveElsewhere(participantId, noteDate, elsewhere)`, saves the draft as its author does from another tab or device, with
+that page's text, ticks, flag and reason, the rest kept, and its time, by default the store's: a page's first save under
+a `clientId` of its own, so that the next save of the page that saved before meets the takeover banner.
+`failNoteReads(page)` aborts each read of a header, a history, a note or a form, as `failParticipants` does, until the
+store serves the page again, and `failNoteReads(page, { olderOnly: true })` only each page of a history after the first,
+which Show older asks for; `failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page
+again, so that autosave retries it and shows "Not saved: no connection…" about 1 s after the first failure. For a test
+that watches the saves, of the store's page or of the app's own, `isDraftSaveRequest(request)` tells a save from the
+page's other requests, and `draftRequests` is the glob of a working copy's address, its read's and its save's, for
+`holdNext`.
 
 ```ts
 await serveMe(page, worker);
 const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
 await serveToday(page, worker.today, participants, store.todayNotes(worker));
+await serveMyDrafts(page, store.myDrafts(worker));
 await store.serve(page, worker);
 await page.goto('/');
 ```
@@ -608,16 +623,21 @@ A test of a page that waits on one of those requests holds it with `holdNext`, w
 a request that a glob cannot tell apart by its query: `e2e/past-notes.spec.ts` holds Show older's next page, with
 `before`, and not the first page's request, which has none.
 
-The ten tests that meet the app's own answers sign in for real through the `invite` fixture, each adding Jane Citizen
+The eleven tests that meet the app's own answers sign in for real through the `invite` fixture, each adding Jane Citizen
 with two goals from Today's empty state, as a manager does, with `addJaneWithTwoGoals` from `e2e/addParticipant.ts`: a
 manager finds her, starts her note and reopens the draft, then saves new guide prompts, which the emptied draft shows,
 and then `""`, which leaves its box with no placeholder; a worker whom the manager invites, set up on `secondDevice`
-from the link that `resetSignIn` gives, meets the in-progress sentence at that note, while the other organisation's
-manager, `secondInvite`, meets Page not found there; and such a worker, at a phone's width, fills in a note, ticks a
-goal, flags it with a reason and submits it through the confirmation, then finds it Submitted and Flagged on Today, in
-the read view and in Past notes, as the manager does too, while the other organisation's manager meets Page not found
-at the note and at its Past notes (design.md §14 M2 *Done when*). Seven more prove that autosave never loses words
-(T10), at a phone's width: offline, through `context.setOffline`, "Not saved: no connection…" within about 1 s and
+from the link that `resetSignIn` gives, meets the in-progress sentence and Past notes at that note, the note's header
+alone and no Discard draft, while the other organisation's manager, `secondInvite`, meets Page not found there; such a
+worker, at a phone's width, starts a note, meets More actions once its first save is answered, goes back from the
+Discard dialog to More actions, then discards it, landing on Today's `<h1>` with the row showing no status and Past
+notes listing nothing, and starts the day's note again, whose first save creates it (design.md §14 M2), after which the
+manager reads it, its header and working copy, as the read-only draft, with its ticks, text and flag row, discards it
+and lands on Today, where neither sees a status on the row; and such a worker, at a phone's width, fills in a note,
+ticks a goal, flags it with a reason and submits it through the confirmation, then finds it Submitted and Flagged on
+Today, in the read view and in Past notes, as the manager does too, while the other organisation's manager meets Page
+not found at the note and at its Past notes (design.md §14 M2 *Done when*). Seven more prove that autosave never loses
+words (T10), at a phone's width: offline, through `context.setOffline`, "Not saved: no connection…" within about 1 s and
 Submit unavailable, then "Saved" with no action once online, and the draft holding what was typed; a first save let
 through to the app with `route.fetch()` and its answer then aborted, so that the retry, the page's next `seq`, saves
 once with no banner; the same draft in `secondTab`, whose save takes it over, so that the first tab's next save meets
@@ -628,25 +648,27 @@ offline; and a session ended in place mid-note, then the same person signing in 
 `clientId` and the next `seq`, and another person, set up first with a password, landing on Today with nothing sent.
 `e2e/today.spec.ts`, `e2e/note-form.spec.ts` and `e2e/past-notes.spec.ts` are the examples. They watch the live regions
 as `e2e/participants.spec.ts` does, but for the save indicator, which a reopened draft's form puts in anew with its
-first words (autosave-status.md *Behaviour* 8). Their checks of 200% text, sideways scroll and target sizes use
-`setTextTo200Percent`, `scrollsSideways` and `expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words
-that show, without the visually hidden ones, and the forced-colours ring and the tags' borders use `systemColour` from
-there too. A row's description is checked with `toHaveAccessibleDescription`, and a To review row's name with
-`toHaveAccessibleName`, whose reckoning in Chromium puts a space before each comma that a hidden `Pause` reads for a
-dot or a new line, so their patterns allow one. Today's Waiting state holds the
-page's timers of 1 s with an init script rather than on Playwright's clock, as axe settles each rule on a timer and
-never finishes under a paused clock; the after-midnight refusal runs on `page.clock`. A check of what a screen does as a
-person comes back to the tab fires the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does,
-since TanStack Query listens for it on the window, not the document, and shows on a screen that opts in to
-`refetchOnWindowFocus` that the same events reach it (`comeBack` in `e2e/past-notes.spec.ts`). A headless page is
-never hidden, so the note form's page-hidden save is checked by giving `document` a `visibilityState` of `'hidden'`
-and dispatching `visibilitychange` on it (`setHidden` in `e2e/note-form.spec.ts`), on a paused `page.clock`, so that
-no timer of autosave's sends the save meanwhile; a wrapper round the page's own `fetch` then shows that the save went
-with `keepalive`. A tab killed as a phone kills one in the background is crashed with `goto('chrome://crash')`, as
-Playwright's own tests crash a Chromium page: the renderer stops at once, unloading nothing, so that the page-hidden
-save that `page.close()` lets the page send does not go, and what the note keeps comes from the saves made while typing
-alone. CDP's `Page.crash` is no stand-in: in a run on Windows the page ran on for seconds after it, long enough to
-save once more.
+first words (autosave-status.md *Behaviour* 8). A test that opens a confirmation again by a key just after closing it
+first waits for the closed one's `<dialog>`, `dialog[role="alertdialog"]`, to leave the page: the page takes it away
+only once its close event has run, and a key pressed before then would meet the dialog going rather than open a new one.
+Their checks of 200% text, sideways scroll and target sizes use `setTextTo200Percent`, `scrollsSideways` and
+`expectAtLeast` from `e2e/layout.ts`, where `shownText` gives the words that show, without the visually hidden ones, and
+the forced-colours ring, the tags' borders and the Discard dialog's warning button's border, in `ButtonText`, use
+`systemColour` from there too. A row's description is checked with `toHaveAccessibleDescription`, and a To review row's
+name with `toHaveAccessibleName`, whose reckoning in Chromium puts a space before each comma that a hidden `Pause` reads
+for a dot or a new line, so their patterns allow one. Today's Waiting state holds the page's timers of 1 s with an init
+script rather than on Playwright's clock, as axe settles each rule on a timer and never finishes under a paused clock;
+the after-midnight refusal runs on `page.clock`. A check of what a screen does as a person comes back to the tab fires
+the window's `focus` and a `visibilitychange` that bubbles, as a browser's own does, since TanStack Query listens for it
+on the window, not the document, and shows on a screen that opts in to `refetchOnWindowFocus` that the same events reach
+it (`comeBack` in `e2e/past-notes.spec.ts`). A headless page is never hidden, so the note form's page-hidden save is
+checked by giving `document` a `visibilityState` of `'hidden'` and dispatching `visibilitychange` on it (`setHidden` in
+`e2e/note-form.spec.ts`), on a paused `page.clock`, so that no timer of autosave's sends the save meanwhile; a wrapper
+round the page's own `fetch` then shows that the save went with `keepalive`. A tab killed as a phone kills one in the
+background is crashed with `goto('chrome://crash')`, as Playwright's own tests crash a Chromium page: the renderer stops
+at once, unloading nothing, so that the page-hidden save that `page.close()` lets the page send does not go, and what
+the note keeps comes from the saves made while typing alone. CDP's `Page.crash` is no stand-in: in a run on Windows the
+page ran on for seconds after it, long enough to save once more.
 
 ### Answering `/api/reviews?status=toReview`
 

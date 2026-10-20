@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { meQuery, type Me } from '../../api/me.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import buttonStyles from '../../components/Button.module.css';
+import noticeStyles from '../../components/Notice.module.css';
 import tagStyles from '../../components/Tag.module.css';
 import tickList from '../../components/TickList.module.css';
 import type { TickedItem } from '../../components/TickListRead.tsx';
@@ -15,7 +16,15 @@ import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts'
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
-import type { Draft, DraftGoal, NoteAnswer, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
+import type {
+  Draft,
+  DraftGoal,
+  DraftNote,
+  DraftRead,
+  NoteAnswer,
+  ParticipantHeader,
+  SubmittedNote,
+} from './noteQueries.ts';
 import notePage from './NotePage.module.css';
 import readView from './ReadView.module.css';
 
@@ -28,6 +37,7 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 const antiforgeryPath = '/api/auth/antiforgery';
 
 // note-form.md's made-up people (A35): Casey Nguyen, a worker, signed in, and the participants. Today in Melbourne is
@@ -110,8 +120,8 @@ function savedDraft(narrative = 'Jane made toast.\nThen a walk to the shops.'): 
 const nbsp = ' ';
 
 /**
- * The paths of `participant`'s header, of their note for `noteDate`, `{base}`, and of its form and versions, and of
- * its page.
+ * The paths of `participant`'s header, of their note for `noteDate`, `{base}`, and of its form, versions and discard,
+ * and of its page.
  */
 function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
   return {
@@ -119,6 +129,7 @@ function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
     note: `/api/participants/${participant.id}/notes/${noteDate}`,
     draft: `/api/participants/${participant.id}/notes/${noteDate}/draft`,
     versions: `/api/participants/${participant.id}/notes/${noteDate}/versions`,
+    discard: `/api/participants/${participant.id}/notes/${noteDate}/discard`,
     page: `/participants/${participant.id}/notes/${noteDate}`,
   };
 }
@@ -217,8 +228,23 @@ function freshParticipant(): ParticipantHeader {
 /** `GET {base}`'s `404` for no live note, which the page opens the form's read for, as it does for a draft. */
 const noNote = problem(404);
 
-/** `GET {base}`'s answer for a draft, whose form, or who started it, the form's own read gives. */
-const aDraft = json({ status: 'Draft' } satisfies NoteAnswer);
+/** `GET {base}`'s answer for the worker's own draft, started at 9:05 am, whose form the form's own read gives. */
+const aDraft = json({
+  status: 'Draft',
+  authorDisplayName: 'Casey Nguyen',
+  startedAtUtc: '2026-09-30T23:05:00Z',
+} satisfies NoteAnswer);
+
+/**
+ * Answers Jane's header and Alex P.'s draft of her note for `noteDate`, started at `startedAtUtc`: `GET {base}` with
+ * its header, and with `current`, the working copy that a manager alone gets, if given; and the form's read refused,
+ * as only its author may open it.
+ */
+function serveAlexsDraft(startedAtUtc: string, noteDate = '2026-10-01', current?: DraftRead) {
+  serveNote(jane, startedBy(startedAtUtc), noteDate);
+  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc };
+  serve(paths(jane, noteDate).note, json(current === undefined ? header : { ...header, current }));
+}
 
 /**
  * Answers `participant`'s header, their note for `noteDate` as having none yet, which opens the form's read for a
@@ -558,6 +584,8 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // No unfinished drafts on Today, for a test that goes there.
+  serve(draftsPath, json([]));
   serve(antiforgeryPath, () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );
@@ -821,11 +849,83 @@ describe('The note form when it did not load', () => {
   });
 });
 
+// Someone else's draft at the shared note address (design.md §4.2, §4.4; participant-notes.md view C, items 27 and 28,
+// *Someone else's draft, worker*, *Someone else's draft, manager* and *Discard dialog*, and *Focus order*).
+
+/** Alex P.'s working copy of Jane's note, as a manager reads it: Breakfast and Sister ticked, flagged with a reason. */
+function alexsWorkingCopy(change: Partial<DraftRead> = {}): DraftRead {
+  return {
+    narrative: 'Jane made toast.\nThen a walk to the shops.',
+    goals: [
+      { text: breakfast.text, isTicked: true },
+      { text: bus.text, isTicked: false },
+      { text: sister.text, isTicked: true },
+    ],
+    isFlagged: true,
+    flagReason: 'Mentioned pain in her left knee\nafter the walk.',
+    ...change,
+  };
+}
+
+type AlexsDraftOptions = {
+  noteDate?: string;
+  /** 9:14 am in Melbourne on 1 October unless given. */
+  startedAtUtc?: string;
+  /** How `POST {base}/discard` is answered. */
+  discard?: Answer;
+};
+
+/**
+ * Opens Alex P.'s draft of Jane's note for `noteDate` from Today, as `me`, `GET {base}` holding `current` if it is
+ * given, as for a manager, and gives the router and the query client.
+ */
+async function openAlexsDraft(
+  me: Me,
+  current?: DraftRead,
+  { noteDate = '2026-10-01', startedAtUtc = '2026-09-30T23:14:00Z', discard = discarded }: AlexsDraftOptions = {},
+) {
+  serveAlexsDraft(startedAtUtc, noteDate, current);
+  answers.set(`POST ${paths(jane, noteDate).discard}`, discard);
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
+  const opened = renderApp('/', me);
+  await settle();
+  await act(() => opened.router.navigate(paths(jane, noteDate).page));
+  await settle();
+  return opened;
+}
+
+/** The sentence that says who started the draft and when. */
+function startedSentence(): HTMLElement {
+  return within(main()).getByText(/started/);
+}
+
+/** A manager's Discard draft, on someone else's draft. */
+function managersDiscard(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Discard draft' });
+}
+
+/** The read-only flag row of a draft that a manager reads. */
+function flagRow(): HTMLElement {
+  const row = main().querySelector<HTMLElement>(`p.${tickList.readRow}`);
+  if (row === null) {
+    throw new Error('The page has no read-only flag row.');
+  }
+
+  return row;
+}
+
+/** The elements that Tab stops on in the top bar and `<main>`, in the document's order. */
+function tabStops(): HTMLElement[] {
+  const focusable = 'a[href], button, input, select, textarea, [tabindex]';
+  return [pageBar(), main()]
+    .flatMap((part) => [...part.querySelectorAll<HTMLElement>(focusable)])
+    .filter((element) => element.tabIndex >= 0 && element.closest('[hidden]') === null);
+}
+
 describe("Someone else's draft", () => {
   it("says who started today's note and when, focusing the <h1>, with no form", async () => {
     // 9:14 am in Melbourne on 1 October.
-    serveNote(jane, startedBy('2026-09-30T23:14:00Z'));
-    serve(paths(jane).note, aDraft);
+    serveAlexsDraft('2026-09-30T23:14:00Z');
     await openFromToday();
 
     expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
@@ -843,22 +943,295 @@ describe("Someone else's draft", () => {
 
   it('says who started the note for an earlier day, and when, focusing the <h1>, with no form', async () => {
     // 9:14 am in Melbourne on 30 September.
-    serveNote(jane, startedBy('2026-09-29T23:14:00Z'), '2026-09-30');
-    serve(paths(jane, '2026-09-30').note, aDraft);
-    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
-    const { router } = renderApp('/');
-    await settle();
-
-    await act(() => router.navigate(paths(jane, '2026-09-30').page));
-    await settle();
+    await openAlexsDraft(worker, undefined, { noteDate: '2026-09-30', startedAtUtc: '2026-09-29T23:14:00Z' });
 
     expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Wednesday 30${nbsp}September 2026`);
     expect(pageHeading()).toHaveFocus();
-    expect(within(main()).getByText(/started/).textContent).toBe(
+    expect(startedSentence().textContent).toBe(
       `Alex P. started the note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
     );
     expect(within(main()).queryByRole('checkbox')).toBeNull();
     expect(within(main()).queryByRole('textbox')).toBeNull();
+  });
+
+  it('gives a worker the <h1>, the sentence and Past notes alone: no Discard draft, text, goal or flag', async () => {
+    await openAlexsDraft(worker);
+
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(link).toHaveAttribute('href', `/participants/${jane.id}/notes`);
+    expect(follows(link, startedSentence())).toBe(true);
+    expect(within(main()).getAllByRole('link').map((each) => each.textContent)).toEqual(['Past notes']);
+    expect(within(main()).queryAllByRole('button')).toEqual([]);
+    expect(within(main()).queryAllByRole('heading', { level: 2 })).toEqual([]);
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(main().querySelector(`form, input, textarea, .${tickList.icon}`)).toBeNull();
+    expect(main()).not.toHaveTextContent(/Discard|Goals|Guided notes|Flag|Reason|toast|Nothing written/);
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Past notes']);
+  });
+});
+
+describe("Someone else's draft, read by a manager", () => {
+  it('shows the sentence, Discard draft, Past notes, the goals ticked in order, the text, then the flag', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(pageHeading()).toHaveFocus();
+    expect(startedSentence().textContent).toBe(
+      `Alex P. started today’s note for Jane Citizen at 9:14${nbsp}am. Only Alex P. can finish it.`,
+    );
+    const discard = managersDiscard();
+    expect(discard).toHaveAttribute('type', 'button');
+    expect(discard).toHaveClass(buttonStyles.secondary);
+    expect(follows(discard, startedSentence())).toBe(true);
+    const link = within(main()).getByRole('link', { name: 'Past notes' });
+    expect(follows(link, discard)).toBe(true);
+    const goals = section('1. Goals');
+    expect(follows(goals, link)).toBe(true);
+    expect(within(goals).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+      'Makes own breakfast, ticked',
+      'Catches bus to day program, not ticked',
+      'Phones her sister, ticked',
+    ]);
+    expect(narrative().textContent).toBe('Jane made toast.\nThen a walk to the shops.');
+    expect(follows(narrative(), goals)).toBe(true);
+    expect(within(main()).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual([
+      '1. Goals',
+      '3. Guided notes',
+    ]);
+    expect(main().querySelector('form, input, textarea')).toBeNull();
+  });
+
+  it('shows a ticked flag as the read-only "Flag for manager" row with its reason, never the Flagged tag', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    const row = flagRow();
+    expect(row.textContent).toBe('Flag for manager, ticked');
+    expect(shown(row)).toBe('Flag for manager');
+    expect(row.querySelector('svg path')).not.toBeNull();
+    expect(row.closest(`.${readView.section}`)).not.toBeNull();
+    expect(follows(row, narrative())).toBe(true);
+    const reason = within(main()).getByText(/^Reason:/);
+    expect(reason.textContent).toBe('Reason: Mentioned pain in her left knee\nafter the walk.');
+    expect(reason).toHaveClass(readView.written);
+    expect(follows(reason, row)).toBe(true);
+    expect(main().querySelector(`.${tagStyles.tag}`)).toBeNull();
+    expect(main()).not.toHaveTextContent('Flagged');
+    expect(within(main()).queryByRole('checkbox')).toBeNull();
+  });
+
+  it('shows an unflagged draft\'s flag row as not ticked, with no Reason', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy({ isFlagged: false, flagReason: null }));
+
+    expect(flagRow().textContent).toBe('Flag for manager, not ticked');
+    expect(flagRow().querySelector('svg path')).toBeNull();
+    expect(main()).not.toHaveTextContent(/Reason|Flagged/);
+  });
+
+  it.each(['', ' \n '])('says "Nothing written yet." under Guided notes for a text of %j', async (text) => {
+    await openAlexsDraft(manager, alexsWorkingCopy({ narrative: text }));
+
+    const guided = section('3. Guided notes');
+    expect(within(guided).getByText('Nothing written yet.').tagName).toBe('P');
+    expect(guided.querySelector(`div.${readView.written}`)).toBeNull();
+  });
+
+  it('shows the sentence and Past notes alone for a draft started between the note and form reads', async () => {
+    serveNote(jane, startedBy('2026-09-30T23:14:00Z'));
+    serve(todayPath, json({ date: '2026-10-01', participants: [onToday(jane)] } satisfies TodayList));
+    const { router } = renderApp('/', manager);
+    await settle();
+
+    await act(() => router.navigate(paths(jane).page));
+    await settle();
+
+    expect(startedSentence()).toBeInTheDocument();
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Past notes']);
+    expect(within(main()).queryAllByRole('heading', { level: 2 })).toEqual([]);
+  });
+
+  it('has the back link, Discard draft and Past notes as its Tab stops, in that order', async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(tabStops().map((stop) => stop.textContent)).toEqual(['Today', 'Discard draft', 'Past notes']);
+  });
+
+  it('is "Grow2Notes – Note", with no name or text in the address or history.state', async () => {
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy());
+
+    expect(document.title).toBe('Grow2Notes – Note');
+    const kept = /Jane|Citizen|Alex|toast|knee/;
+    expect(JSON.stringify(router.state.location)).not.toMatch(kept);
+    expect(JSON.stringify(window.history.state)).not.toMatch(kept);
+    expect(window.location.href).not.toMatch(kept);
+  });
+});
+
+describe("A manager's Discard of someone else's draft", () => {
+  it("opens the dialog on its title, saying who started today's draft and at what time", async () => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+
+    await press(managersDiscard());
+
+    const dialog = openConfirmation();
+    expect(dialog).toHaveAccessibleName('Discard the draft note for Jane Citizen?');
+    expect(within(dialog).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(dialog).toHaveAccessibleDescription(
+      `Alex P. started it at 9:14${nbsp}am. Nobody will be able to open this draft again.`,
+    );
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    expect(dialogButton('Discard draft for Jane Citizen')).toHaveClass(buttonStyles.warning);
+    expect(dialogButton('Go back')).toHaveClass(buttonStyles.secondary);
+    expect(discards()).toEqual([]);
+  });
+
+  it("says an earlier day's date first, then who started it and at what time", async () => {
+    // 9:14 am in Melbourne on 30 September.
+    await openAlexsDraft(manager, alexsWorkingCopy(), {
+      noteDate: '2026-09-30',
+      startedAtUtc: '2026-09-29T23:14:00Z',
+    });
+
+    await press(managersDiscard());
+
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `This draft is for Wednesday 30${nbsp}September 2026. Alex P. started it at 9:14${nbsp}am. `
+        + 'Nobody will be able to open this draft again.',
+    );
+  });
+
+  it.each([
+    { how: 'Go back', close: () => press(dialogButton('Go back')) },
+    {
+      how: 'a plain close(), as Escape and Back give',
+      close: async () => {
+        openConfirmation().closest('dialog')!.close();
+        await settle();
+      },
+    },
+  ])('closes on $how with nothing sent, focus back on Discard draft', async ({ close }) => {
+    await openAlexsDraft(manager, alexsWorkingCopy());
+    await press(managersDiscard());
+
+    await close();
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(managersDiscard()).toHaveFocus();
+    expect(discards()).toEqual([]);
+  });
+
+  it("puts Today in the draft's place, its <h1> focused, with its lists fetched afresh", async () => {
+    const drafted: TodayNote = {
+      authorDisplayName: 'Alex P.',
+      startedAtUtc: '2026-09-30T23:14:00Z',
+      isFlagged: false,
+      status: 'Draft',
+      isMine: false,
+    };
+    serveAlexsDraft('2026-09-30T23:14:00Z', '2026-10-01', alexsWorkingCopy());
+    answers.set(`POST ${paths(jane).discard}`, discarded);
+    const row = onToday(jane);
+    serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
+    const { router, client } = renderApp('/', manager);
+    await settle();
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    // Kept from earlier visits: Today's lists, from the one just left, and the participant's Past notes.
+    expect(client.getQueryData(['me', 'drafts'])).toEqual([]);
+    client.setQueryData(['pastNotes', jane.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
+    await press(managersDiscard());
+    const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    const freshDrafts = held(json([]));
+    serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
+
+    await confirmDiscard();
+    await settle();
+
+    expect(discards()).toEqual([`POST ${paths(jane).discard}`]);
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(document.title).toBe('Grow2Notes – Today');
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    const sent = sentRequests();
+    expect(sent.lastIndexOf(`GET ${draftsPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(jane).discard}`));
+    expect(client.getQueryState(['pastNotes', jane.id])?.isInvalidated).toBe(true);
+    fresh.release();
+    freshDrafts.release();
+    await settle();
+    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(main()).not.toHaveTextContent(/Draft|Alex P\./);
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('takes its confirming button away for a draft no longer a draft, Go back then going to Today', async () => {
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy(), {
+      discard: problem(409, { code: 'note.not_a_draft' }),
+    });
+    await press(managersDiscard());
+
+    await confirmDiscard();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(
+      'This draft has already been submitted or discarded.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(discards()).toHaveLength(1);
+  });
+
+  it('says why above Discard draft when its request fails after a browser closed the dialog', async () => {
+    const post = held(noConnection);
+    const { router } = await openAlexsDraft(manager, alexsWorkingCopy(), { discard: post.answer });
+    const alert = managersDiscard().previousElementSibling;
+    expect(alert).toHaveAttribute('role', 'alert');
+    expect(alert).toBeEmptyDOMElement();
+    await press(managersDiscard());
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+
+    post.release();
+    await settle();
+
+    expect(alert?.textContent).toBe('Not discarded: no connection. Try again.');
+    expect(managersDiscard()).toHaveFocus();
+    expect(router.state.location.pathname).toBe(paths(jane).page);
+
+    await press(managersDiscard());
+
+    expect(alert).toBeEmptyDOMElement();
+    expect(openConfirmation()).toBeInTheDocument();
+  });
+
+  it('closes as Go back as the 28-minute warning opens, nothing sent, focus on Discard draft after Stay', async () => {
+    const { opened } = focusLikeABrowser();
+    await openAlexsDraft(manager, alexsWorkingCopy());
+    await press(managersDiscard());
+    const dialog = openConfirmation();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(opened.mock.contexts.at(-1)).toBe(warning);
+    expect(dialog).not.toHaveAttribute('open');
+    expect(confirmation()).toBeNull();
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(managersDiscard()).toHaveFocus();
+    expect(discards()).toEqual([]);
   });
 });
 
@@ -3192,7 +3565,7 @@ describe('The Submit confirmation', () => {
 });
 
 describe('After Submit', () => {
-  it('pops back to Today, the banner focused before its <h1>, then the row Submitted, never Draft', async () => {
+  it('pops back to Today, the banner focused before its <h1>, then both lists anew, the row Submitted', async () => {
     const participant = freshParticipant();
     serveNote(participant, json(savedDraft()));
     serveSave(paths(participant).draft, saved('2026-10-01T06:10:00Z'));
@@ -3208,7 +3581,7 @@ describe('After Submit', () => {
     };
     const row = onToday(participant);
     serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
-    const { router } = renderApp('/');
+    const { router, client } = renderApp('/');
     await settle();
     expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Draft, You, saved 9:42${nbsp}am`);
     await press(rowLink('Jane Citizen'));
@@ -3216,7 +3589,9 @@ describe('After Submit', () => {
     await write();
     await press(submitButton());
     const fresh = held(json({ date: '2026-10-01', participants: [{ ...row, note: submitted }] } satisfies TodayList));
+    const freshDrafts = held(json([]));
     serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
 
     await confirmSubmit();
     await settle();
@@ -3229,12 +3604,20 @@ describe('After Submit', () => {
     for (const attribute of ['role', 'aria-live']) {
       expect(banner()).not.toHaveAttribute(attribute);
     }
-    // No row kept from before the Submit: the rows come with the list that the server gives now.
+    // No row kept from before the Submit: the rows come with the lists that the server gives now, the day's and the
+    // caller's unfinished drafts.
     expect(within(main()).queryByRole('list')).toBeNull();
     expect(main()).not.toHaveTextContent('Draft');
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
     const sent = sentRequests();
-    expect(sent.lastIndexOf(`GET ${todayPath}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
+    for (const path of [todayPath, draftsPath]) {
+      expect(sent.lastIndexOf(`GET ${path}`)).toBeGreaterThan(sent.indexOf(`POST ${paths(participant).versions}`));
+    }
     fresh.release();
+    await settle();
+    // Both, in one render, as Today shows its lists together.
+    expect(within(main()).queryByRole('list')).toBeNull();
+    freshDrafts.release();
     await settle();
     expect(rowLink('Jane Citizen')).toHaveAccessibleDescription(`Submitted, You, 4:12${nbsp}pm`);
     expect(main()).not.toHaveTextContent('Draft');
@@ -3318,6 +3701,666 @@ function meRequestsFrom(router: Router, answer: Answer = json(worker)): string[]
   });
   return sentFrom;
 }
+
+// More actions and the Discard dialog on the form (note-form.md components 13 and 15, item 33, *States* › *Discard
+// dialog*, *Interactions* › *Discard draft* and *Session*, and *Where focus goes*; confirm-dialog.md's dialog 2).
+
+/** `POST {base}/discard`'s `204`. */
+const discarded: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
+/** Every Discard sent, as its method and path. */
+function discards(): string[] {
+  return sentRequests().filter((request) => request.startsWith('POST ') && request.endsWith('/discard'));
+}
+
+/** More actions, under Submit note, if it shows. */
+function moreActions(): HTMLElement | null {
+  return within(main()).queryByRole('button', { name: 'More actions' });
+}
+
+/** Discard draft, in More actions' panel, found while the panel is hidden too. */
+function discardDraft(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Discard draft', hidden: true });
+}
+
+/**
+ * Opens the worker's own draft of a participant of their own, Jane Citizen by name, dated `noteDate`, at its address,
+ * whose saves are answered at 9:44 am and whose Discard gets `discard`, with Today's list to land on, and gives them,
+ * the router and the query client.
+ */
+async function openToDiscard(discard: Answer = discarded, noteDate = '2026-10-01') {
+  const participant = freshParticipant();
+  serveNote(participant, json(savedDraft()), noteDate);
+  serveSave(paths(participant, noteDate).draft, saved('2026-09-30T23:44:00Z'));
+  answers.set(`POST ${paths(participant, noteDate).discard}`, discard);
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+  const opened = renderApp(paths(participant, noteDate).page);
+  await settle();
+  return { participant, ...opened };
+}
+
+/** Opens More actions' panel and presses Discard draft in it, which opens the Discard dialog. */
+async function openDiscardDialog() {
+  await press(moreActions()!);
+  await press(discardDraft());
+}
+
+/** Presses the Discard dialog's confirming button, and lets its request be answered. */
+async function confirmDiscard() {
+  await press(dialogButton('Discard draft for Jane Citizen'));
+  await settle();
+}
+
+describe('More actions', () => {
+  it('is not on a new note, and shows once its first save is answered', async () => {
+    const participant = freshParticipant();
+    const save = held(saved('2026-09-30T23:42:00Z'));
+    serveNote(participant);
+    serveSave(paths(participant).draft, save.answer);
+    renderApp(paths(participant).page);
+    await settle();
+    expect(moreActions()).toBeNull();
+
+    type('Jane made toast.');
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe('Saving…');
+    expect(moreActions()).toBeNull();
+
+    save.release();
+    await settle();
+    expect(moreActions()).toBeInTheDocument();
+  });
+
+  it('shows on a reopened draft as a disclosure after Submit note, outside the form, its panel hidden', async () => {
+    await openToDiscard();
+
+    const button = moreActions()!;
+    expect(button).toHaveAttribute('type', 'button');
+    expect(button).toHaveAttribute('aria-expanded', 'false');
+    expect(button).toHaveClass(buttonStyles.secondary);
+    expect(button.closest('form')).toBeNull();
+    expect(follows(button, submitButton())).toBe(true);
+    const panel = document.getElementById(button.getAttribute('aria-controls')!);
+    expect(panel).toHaveAttribute('hidden');
+    expect(panel?.contains(discardDraft())).toBe(true);
+    expect(follows(panel!, button)).toBe(true);
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('opens and closes its panel on each press, focus kept on it, Discard draft secondary', async () => {
+    await openToDiscard();
+
+    await press(moreActions()!);
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'true');
+    expect(moreActions()).toHaveFocus();
+    expect(within(main()).getByRole('button', { name: 'Discard draft' })).toHaveClass(buttonStyles.secondary);
+    expect(confirmation()).toBeNull();
+
+    await press(moreActions()!);
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+  });
+
+  it.each(['More actions', 'Discard draft'])('closes its panel on Escape on %s, focus on More actions', async (on) => {
+    await openToDiscard();
+    await press(moreActions()!);
+    const focused = within(main()).getByRole('button', { name: on });
+    focused.focus();
+
+    fireEvent.keyDown(focused, { key: 'Escape' });
+
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    expect(moreActions()).toHaveFocus();
+  });
+
+  it('shows while the takeover banner waits, as the draft is still theirs', async () => {
+    const { participant } = await openToDiscard();
+    serveSave(paths(participant).draft, inTurn(saved('2026-09-30T23:44:00Z'), takenOver));
+    await write('Jane made toast.');
+
+    await write('Jane made toast. Then a walk.');
+
+    const sentence = 'This note was changed on another device or tab.';
+    expect(within(pageBar()).getByRole('region', { name: sentence })).toBeInTheDocument();
+    expect(moreActions()).toBeInTheDocument();
+  });
+
+  describe.each([
+    { code: 'note.in_progress_by_other', refusal: startedBy('2026-10-01T00:05:00Z') },
+    { code: 'note.version_conflict', refusal: problem(409, { code: 'note.version_conflict' }) },
+  ])('once a save of the draft meets $code', ({ refusal }) => {
+    it('goes with its open panel, focus on Discard draft going to the <h1>', async () => {
+      const { participant } = await openToDiscard();
+      serveSave(paths(participant).draft, refusal);
+      await press(moreActions()!);
+      discardDraft().focus();
+
+      type('Jane made toast.');
+      await wait(2_000);
+      await settle();
+
+      expect(shownSaveStatus()).toBe('Not saved');
+      expect(moreActions()).toBeNull();
+      expect(within(main()).queryByRole('button', { name: 'Discard draft', hidden: true })).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+    });
+
+    it('closes the Discard dialog with nothing sent, focus on the <h1>', async () => {
+      const { participant } = await openToDiscard();
+      serveSave(paths(participant).draft, refusal);
+      type('Jane made toast.');
+      await openDiscardDialog();
+      expect(confirmation()).not.toBeNull();
+
+      await wait(2_000);
+      await settle();
+
+      expect(confirmation()).toBeNull();
+      expect(moreActions()).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+      expect(discards()).toEqual([]);
+    });
+
+    it('sends no Discard when the save that a confirming press waits for meets it', async () => {
+      const { participant } = await openToDiscard();
+      const save = held(refusal);
+      serveSave(paths(participant).draft, save.answer);
+      await write('Jane made toast.');
+      await openDiscardDialog();
+      await press(dialogButton('Discard draft for Jane Citizen'));
+
+      save.release();
+      await settle();
+      await wait(5_000);
+
+      expect(discards()).toEqual([]);
+      expect(confirmation()).toBeNull();
+      expect(moreActions()).toBeNull();
+      expect(pageHeading()).toHaveFocus();
+    });
+  });
+});
+
+describe('The Discard dialog', () => {
+  it('asks "Discard the draft note for" the name on its title, saying nobody can open it again', async () => {
+    await openToDiscard();
+
+    await openDiscardDialog();
+
+    const dialog = openConfirmation();
+    expect(dialog).toHaveAccessibleName('Discard the draft note for Jane Citizen?');
+    expect(within(dialog).getByRole('heading', { level: 2 })).toHaveFocus();
+    expect(dialog).toHaveAccessibleDescription('Nobody will be able to open this draft again.');
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    expect(dialogButton('Discard draft for Jane Citizen')).toHaveClass(buttonStyles.warning);
+    expect(dialogButton('Go back')).toHaveClass(buttonStyles.secondary);
+    expect(within(dialog).getByRole('alert')).toBeEmptyDOMElement();
+    expect(within(dialog).getByRole('status')).toBeEmptyDOMElement();
+    expect(discards()).toEqual([]);
+  });
+
+  it("says the date of a draft from an earlier day before the line that always ends it", async () => {
+    await openToDiscard(discarded, '2026-09-30');
+
+    await openDiscardDialog();
+
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `This draft is for Wednesday 30${nbsp}September 2026. Nobody will be able to open this draft again.`,
+    );
+  });
+
+  it('shows "Discarding…" once its request has taken 1 s, both buttons busy, their words kept', async () => {
+    await openToDiscard(noAnswer);
+    await openDiscardDialog();
+    const status = within(openConfirmation()).getByRole('status');
+
+    await press(dialogButton('Discard draft for Jane Citizen'));
+
+    expect(dialogButtons()).toEqual(['Discard draft for Jane Citizen', 'Go back']);
+    for (const button of within(openConfirmation()).getAllByRole('button')) {
+      expect(button).toHaveAttribute('aria-disabled', 'true');
+    }
+    await wait(998);
+    expect(status).toBeEmptyDOMElement();
+    await wait(1);
+    expect(status).toHaveTextContent(/^Discarding…$/);
+  });
+
+  it('waits for the save out, then sends the Discard, and no save after the confirming press', async () => {
+    const { participant, router } = await openToDiscard();
+    const save = held(saved('2026-09-30T23:44:00Z'));
+    serveSave(paths(participant).draft, save.answer);
+    await write('Jane made toast.');
+    type('Jane made toast. Then a walk.');
+    await openDiscardDialog();
+
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    expect(discards()).toEqual([]);
+
+    save.release();
+    await settle();
+    await wait(5_000);
+
+    const sent = sentRequests();
+    expect(discards()).toEqual([`POST ${paths(participant).discard}`]);
+    expect(sent.indexOf(`POST ${paths(participant).discard}`)).toBeGreaterThan(
+      sent.indexOf(`PUT ${paths(participant).draft}`),
+    );
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast.']);
+    // The leave guard lets the move go, though a change was made that is not saved, as the draft has gone.
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it("puts Today in the form's place, its <h1> focused, with no banner, and its lists fetched afresh", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft()));
+    serveSave(paths(participant).draft, saved('2026-09-30T23:44:00Z'));
+    answers.set(`POST ${paths(participant).discard}`, discarded);
+    const row = onToday(participant);
+    const drafted: TodayNote = {
+      authorDisplayName: 'Casey Nguyen',
+      startedAtUtc: '2026-09-30T23:05:00Z',
+      isFlagged: false,
+      status: 'Draft',
+      isMine: true,
+      savedAtUtc: '2026-09-30T23:42:00Z',
+    };
+    serve(todayPath, json({ date: '2026-10-01', participants: [{ ...row, note: drafted }] } satisfies TodayList));
+    const { router, client } = renderApp('/');
+    await settle();
+    await press(rowLink('Jane Citizen'));
+    await settle();
+    // Kept from earlier visits: Today's lists, from the one just left, and the participant's Past notes.
+    expect(client.getQueryData(['me', 'drafts'])).toEqual([]);
+    client.setQueryData(['pastNotes', participant.id], { pages: [{ notes: [], hasMore: false }], pageParams: [null] });
+    await openDiscardDialog();
+    const fresh = held(json({ date: '2026-10-01', participants: [row] } satisfies TodayList));
+    const freshDrafts = held(json([]));
+    serve(todayPath, fresh.answer);
+    serve(draftsPath, freshDrafts.answer);
+
+    await confirmDiscard();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(main().querySelector('[data-route-focus]')).toBeNull();
+    expect(document.title).toBe('Grow2Notes – Today');
+    // No row kept from before the Discard: the rows come with the lists that the server gives now.
+    expect(within(main()).queryByRole('list')).toBeNull();
+    expect(client.getQueryData(['me', 'drafts'])).toBeUndefined();
+    const sent = sentRequests();
+    expect(sent.lastIndexOf(`GET ${draftsPath}`)).toBeGreaterThan(
+      sent.indexOf(`POST ${paths(participant).discard}`),
+    );
+    expect(client.getQueryState(['pastNotes', participant.id])?.isInvalidated).toBe(true);
+    fresh.release();
+    freshDrafts.release();
+    await settle();
+    expect(rowLink('Jane Citizen')).toBeInTheDocument();
+    expect(main()).not.toHaveTextContent('Draft');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it.each([
+    { cause: 'no connection', answer: noConnection },
+    { cause: 'something went wrong', answer: problem(503) },
+  ])('stays open for "Not discarded: $cause…", focus on its confirming button, ready to try again', async ({
+    cause,
+    answer,
+  }) => {
+    const { participant, router } = await openToDiscard(inTurn(answer, discarded));
+    await openDiscardDialog();
+    const confirm = dialogButton('Discard draft for Jane Citizen');
+
+    await press(confirm);
+    await settle();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(`Not discarded: ${cause}. Try again.`);
+    expect(confirm).toHaveFocus();
+    expect(confirm).not.toHaveAttribute('aria-disabled');
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+
+    await press(confirm);
+    await settle();
+
+    expect(discards()).toHaveLength(2);
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('takes its confirming button away for a draft no longer a draft, Go back then going to Today', async () => {
+    const { router } = await openToDiscard(problem(409, { code: 'note.not_a_draft' }));
+    await openDiscardDialog();
+
+    await confirmDiscard();
+
+    expect(within(openConfirmation()).getByRole('alert').textContent).toBe(
+      'This draft has already been submitted or discarded.',
+    );
+    expect(dialogButtons()).toEqual(['Go back']);
+    expect(dialogButton('Go back')).toHaveFocus();
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(discards()).toHaveLength(1);
+  });
+
+  it.each([
+    { how: 'Go back', close: () => press(dialogButton('Go back')) },
+    {
+      how: 'a plain close(), as Escape and Back give',
+      close: async () => {
+        openConfirmation().closest('dialog')!.close();
+        await settle();
+      },
+    },
+  ])('closes on $how with nothing sent, its panel closed, focus on More actions', async ({ close }) => {
+    await openToDiscard();
+    await openDiscardDialog();
+
+    await close();
+    await settle();
+
+    expect(confirmation()).toBeNull();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(moreActions()).toHaveFocus();
+    expect(discards()).toEqual([]);
+  });
+
+  it('lets autosave go on after Go back, sending at once a change that a failed Discard held', async () => {
+    const { participant } = await openToDiscard(noConnection);
+    type('Jane made toast. Then a walk.');
+    await openDiscardDialog();
+    await confirmDiscard();
+    await wait(5_000);
+    expect(saves()).toEqual([]);
+
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(saves().map(({ path, body }) => [path, body.narrative])).toEqual([
+      [paths(participant).draft, 'Jane made toast. Then a walk.'],
+    ]);
+  });
+
+  it('sends no save while its request is out, though a browser closed it, and its failure shows', async () => {
+    const post = held(noConnection);
+    await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    // A repeated Escape that a browser lets through while it is busy (confirm-dialog.md *Behaviour* 7).
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    type('Jane made toast. Then a walk.');
+    await wait(5_000);
+    expect(saves()).toEqual([]);
+
+    post.release();
+    await settle();
+
+    const alert = submitButton().closest('form')!.querySelector('div[role="alert"]');
+    expect(alert?.textContent).toBe('Not discarded: no connection. Try again.');
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast. Then a walk.']);
+  });
+
+  it("keeps Submit's failure above Submit note as it closes on Go back, discarding nothing", async () => {
+    const post = held(noConnection);
+    await openToSubmit(json(template()), post.answer);
+    await write();
+    await press(submitButton());
+    await press(dialogButton('Submit note for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    post.release();
+    await settle();
+    const alert = submitButton().closest('form')!.querySelector('div[role="alert"]');
+    const failure = 'Not submitted: no connection. Your draft is saved. Try again.';
+    expect(alert?.textContent).toBe(failure);
+
+    await openDiscardDialog();
+    await press(dialogButton('Go back'));
+    await settle();
+
+    expect(alert?.textContent).toBe(failure);
+    expect(discards()).toEqual([]);
+  });
+
+  it('lands on Today as its request succeeds, though a browser closed it meanwhile', async () => {
+    const post = held(discarded);
+    const { router } = await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+
+    post.release();
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/');
+    expect(pageHeading()).toHaveFocus();
+  });
+
+  it('closes as Go back as the 28-minute warning opens, nothing sent, focus on More actions after Stay', async () => {
+    const { opened } = focusLikeABrowser();
+    await openToDiscard();
+    await openDiscardDialog();
+    const dialog = openConfirmation();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(opened.mock.contexts.at(-1)).toBe(warning);
+    expect(dialog).not.toHaveAttribute('open');
+    expect(confirmation()).toBeNull();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(warning).not.toHaveAttribute('open');
+    expect(moreActions()).toHaveFocus();
+    expect(discards()).toEqual([]);
+    expect(saves()).toEqual([]);
+  });
+
+  it('leaves focus where it was moved after a browser closed it, as its failure lets the warning open', async () => {
+    focusLikeABrowser();
+    const post = held(noConnection);
+    await openToDiscard(post.answer);
+    await openDiscardDialog();
+    await press(dialogButton('Discard draft for Jane Citizen'));
+    openConfirmation().closest('dialog')!.close();
+    await settle();
+    guidedNotes().focus();
+    // The request out holds the session clock's phase, so the warning waits for it to settle.
+    await wait(28 * 60_000);
+    expect(screen.queryByRole('dialog', { name: 'You’ll be signed out in 2 minutes' })).toBeNull();
+
+    post.release();
+    await settle();
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(guidedNotes()).toHaveFocus();
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(discards()).toHaveLength(1);
+  });
+
+  it('closes its panel as the warning opens, focus on Discard draft going to More actions after Stay', async () => {
+    focusLikeABrowser();
+    await openToDiscard();
+    await press(moreActions()!);
+    discardDraft().focus();
+
+    await wait(28 * 60_000);
+
+    const warning = screen.getByRole<HTMLDialogElement>('dialog', { name: 'You’ll be signed out in 2 minutes' });
+    expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+    expect(within(main()).queryByRole('button', { name: 'Discard draft' })).toBeNull();
+    answers.set('POST /api/auth/ping', () => Promise.resolve(new Response(null, { status: 204 })));
+
+    await press(within(warning).getByRole('button', { name: 'Stay signed in' }));
+    await settle();
+
+    expect(moreActions()).toHaveFocus();
+    expect(confirmation()).toBeNull();
+    expect(discards()).toEqual([]);
+    expect(saves()).toEqual([]);
+  });
+});
+
+// A draft from an earlier day (note-form.md *Kinds of note* and component 4; design.md §3.4 *Earlier-day drafts* and
+// §4.3), opened on Thursday 1 October 2026.
+
+/** The earlier-day notice's words on a draft of Wednesday 30 September 2026. */
+const earlierDayWords = `This draft is for Wednesday 30${nbsp}September 2026. Submitting it now keeps that date.`;
+
+/** The earlier-day notice, found by its words, if it shows. */
+function earlierDayNotice(): HTMLElement | null {
+  return within(main()).queryByText(/^This draft is for /)?.closest<HTMLElement>(`.${noticeStyles.notice}`) ?? null;
+}
+
+/** The worker's own draft as `savedDraft()` has it, but last saved at 9:42 am on Wednesday 30 September 2026. */
+function savedEarlier(): Draft {
+  return { ...savedDraft(), savedAtUtc: '2026-09-29T23:42:00Z' };
+}
+
+/**
+ * Opens, for `me`, their note dated `noteDate` of a participant of their own, Jane Citizen by name, as `draft` holds
+ * it, the worker's own draft last saved on 30 September unless another, with its saves answered at 9:44 am on
+ * 1 October, its Submit `201` and Today's list to land on; and gives the participant.
+ */
+async function openOwnNote(noteDate: string, draft: Draft = savedEarlier(), me: Me = worker) {
+  const participant = freshParticipant();
+  serveNote(participant, json(draft), noteDate);
+  serveSave(paths(participant, noteDate).draft, saved('2026-09-30T23:44:00Z'));
+  serveSubmit(paths(participant, noteDate).versions, versionSaved());
+  serve(todayPath, json({ date: '2026-10-01', participants: [onToday(participant)] } satisfies TodayList));
+  renderApp(paths(participant, noteDate).page, me);
+  await settle();
+  return participant;
+}
+
+describe('A draft from an earlier day', () => {
+  it('says that it is for its date, which submitting keeps, after the date and before Past notes', async () => {
+    await openOwnNote('2026-09-30');
+
+    expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Wednesday 30${nbsp}September 2026`);
+    const notice = earlierDayNotice()!;
+    expect(notice.textContent).toBe(earlierDayWords);
+    expect(follows(notice, pageHeading())).toBe(true);
+    expect(follows(within(main()).getByRole('link', { name: 'Past notes' }), notice)).toBe(true);
+    expect(notice.closest('form')).toBeNull();
+    // Plain page content, read in its place: never a live region, and never focused.
+    for (const attribute of ['role', 'aria-live', 'tabindex']) {
+      expect(notice).not.toHaveAttribute(attribute);
+    }
+  });
+
+  it.each([
+    { kind: "the worker's own draft of today", noteDate: '2026-10-01', draft: savedDraft() },
+    { kind: 'a new note of today', noteDate: '2026-10-01', draft: template() },
+    { kind: "the worker's form for yesterday, not yet started", noteDate: '2026-09-30', draft: template() },
+  ])('shows no notice on $kind', async ({ noteDate, draft }) => {
+    await openOwnNote(noteDate, draft);
+
+    expect(guidedNotes()).toBeInTheDocument();
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it("shows none on a manager's new note of an earlier day, once its first save is answered too", async () => {
+    await openOwnNote('2026-09-28', template(), manager);
+
+    await write();
+
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it('says "Draft · saved Wed 30 Sep 2026, 9:42 am" until its first change, the notice kept after it', async () => {
+    await openOwnNote('2026-09-30');
+
+    expect(shownSaveStatus()).toBe(`Draft${nbsp}· saved Wed 30${nbsp}Sep 2026, 9:42${nbsp}am`);
+    expect(saveStatus().querySelector('time')).toHaveAttribute('datetime', '2026-09-29T23:42:00Z');
+
+    await write();
+
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(earlierDayNotice()?.textContent).toBe(earlierDayWords);
+  });
+
+  it.each([
+    {
+      title: 'Submit the note for',
+      noteDate: '2026-09-30',
+      draft: savedEarlier(),
+      date: `Wednesday 30${nbsp}September 2026`,
+    },
+    {
+      title: 'Submit today’s note for',
+      noteDate: '2026-10-01',
+      draft: savedDraft(),
+      date: `Thursday 1${nbsp}October 2026`,
+    },
+  ])("asks \"$title\" the name for the worker's own draft of $noteDate, with its date", async ({
+    noteDate,
+    draft,
+    title,
+    date,
+  }) => {
+    await openOwnNote(noteDate, draft);
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleName(`${title} Jane Citizen`);
+    expect(openConfirmation()).toHaveAccessibleDescription(`${date} Flagged for manager: No`);
+  });
+
+  it("sends the version to its own date's address, then lands on Today", async () => {
+    const participant = await openOwnNote('2026-09-30');
+    await press(submitButton());
+
+    await confirmSubmit();
+    await settle();
+
+    expect(submits().map(({ path }) => path)).toEqual([paths(participant, '2026-09-30').versions]);
+    expect(banner()).toHaveFocus();
+  });
+
+  it("appears on today's draft, unannounced, once `me` gives the next day with the form open", async () => {
+    await openOwnNote('2026-10-01', savedDraft());
+    guidedNotes().focus();
+    serve(mePath, json({ ...worker, today: '2026-10-02' }));
+
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+    await settle();
+
+    const notice = earlierDayNotice()!;
+    expect(notice.textContent).toBe(
+      `This draft is for Thursday 1${nbsp}October 2026. Submitting it now keeps that date.`,
+    );
+    for (const attribute of ['role', 'aria-live', 'tabindex']) {
+      expect(notice).not.toHaveAttribute(attribute);
+    }
+    expect(guidedNotes()).toHaveFocus();
+  });
+});
 
 // Leaving the form within the app, and the browser's own warning (note-form.md *Leaving the form* and items 34 and
 // 35, autosave-status.md *Behaviour* 7).
@@ -3597,17 +4640,21 @@ describe('Leaving the form', () => {
     expect(unloadAsks()).toBe(false);
   });
 
-  it("marks Today's lists stale as the form is left for Past notes", async () => {
+  it("marks Today's lists stale as the form is left for Past notes, its unfinished drafts with the day's", async () => {
     const { participant, router, client } = await openToLeave();
-    const todayKey = ['today', '2026-10-01'];
-    // As fresh as a list fetched while the form was open.
-    client.setQueryData(todayKey, client.getQueryData(todayKey));
-    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(false);
+    const todaysKeys = [['today', '2026-10-01'], ['me', 'drafts']];
+    for (const key of todaysKeys) {
+      // As fresh as a list fetched while the form was open.
+      client.setQueryData(key, client.getQueryData(key));
+      expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    }
 
     await leave('the Past notes link', router);
 
     expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
-    expect(client.getQueryState(todayKey)?.isInvalidated).toBe(true);
+    for (const key of todaysKeys) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
   });
 
   it("lands on Today after Submit's 201, though a change was made while its request was out", async () => {
@@ -3990,6 +5037,31 @@ describe('The session and Sign out', () => {
       expect(confirmation()).toBeNull();
       expect(saves()).toHaveLength(2);
       expect(pageHeading()).toHaveFocus();
+    });
+
+    it('closes the Discard dialog for its 401 before sign-in, and never sends it again once signed in', async () => {
+      await openToDiscard(problem(401));
+      type('Jane made toast. Then a walk.');
+      await openDiscardDialog();
+      serve(mePath, problem(401));
+
+      await confirmDiscard();
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName(signedOutHeading);
+      expect(pageHeading()).toHaveFocus();
+      expect(confirmation()).toBeNull();
+
+      await signInAgain();
+      await wait(60_000);
+
+      expect(discards()).toHaveLength(1);
+      expect(confirmation()).toBeNull();
+      expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+      expect(pageHeading()).toHaveFocus();
+      expect(moreActions()).toHaveAttribute('aria-expanded', 'false');
+      // Autosave alone goes on, sending the change that the Discard's pause held.
+      expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast. Then a walk.']);
     });
 
     it('opens no confirmation from a check save that met a 401, its change sent by autosave alone', async () => {

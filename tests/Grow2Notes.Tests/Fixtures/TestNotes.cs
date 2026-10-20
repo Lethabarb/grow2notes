@@ -7,8 +7,8 @@ namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
 /// A draft that a test adds for a participant of its own: the participant, the note date, the author and when they
-/// started it; then its author's working copy, with its snapshot's rows (none by default), its text, and when it was
-/// last saved, by default when it was started.
+/// started it; then its author's working copy, with its snapshot's rows (none by default), its text, when it was last
+/// saved, by default when it was started, and its flag and reason, unflagged by default.
 /// </summary>
 internal sealed record TestDraft(
     Guid ParticipantId,
@@ -17,7 +17,9 @@ internal sealed record TestDraft(
     DateTime StartedAtUtc,
     IReadOnlyList<DraftItem>? Items = null,
     string Narrative = "",
-    DateTime? SavedAtUtc = null);
+    DateTime? SavedAtUtc = null,
+    bool IsFlagged = false,
+    string? FlagReason = null);
 
 /// <summary>
 /// A submitted note that a test adds for a participant of its own: the participant, the note date, the author, when
@@ -73,6 +75,8 @@ internal static class TestNotes
             OrganisationId = organisation.OrganisationId,
             Items = [.. draft.Items ?? []],
             Narrative = draft.Narrative,
+            IsFlagged = draft.IsFlagged,
+            FlagReason = draft.FlagReason,
             LastClientId = Guid.NewGuid(),
             LastSeq = 1,
             CreatedAtUtc = draft.StartedAtUtc,
@@ -197,6 +201,40 @@ internal static class TestNotes
                 IdempotencyKey = Guid.NewGuid(),
             });
             await db.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Adds <paramref name="editorUserId"/>'s pending edit to the note of ID <paramref name="noteId"/> in
+    /// <paramref name="organisation"/>, a submitted note that <see cref="AddSubmittedAsync"/> added, through the app's
+    /// context under its tenant, as T14's first save of an edit will leave one (design.md §5.3, §5.6): a working copy
+    /// on version 1, its base, with no snapshot rows and made-up text, from a made-up page, started and last saved at
+    /// <paramref name="savedAtUtc"/>.
+    /// </summary>
+    public static async Task AddPendingEditAsync(
+        this IServiceProvider services,
+        SeededOrganisation organisation,
+        Guid noteId,
+        Guid editorUserId,
+        DateTime savedAtUtc)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        db.NoteDrafts.Add(new NoteDraft
+        {
+            NoteId = noteId,
+            EditorUserId = editorUserId,
+            OrganisationId = organisation.OrganisationId,
+            BaseVersionNumber = 1,
+            Narrative = "Jane made toast.",
+            LastClientId = Guid.NewGuid(),
+            LastSeq = 1,
+            CreatedAtUtc = savedAtUtc,
+            UpdatedAtUtc = savedAtUtc,
+        });
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
     }
 

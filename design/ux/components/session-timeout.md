@@ -20,7 +20,7 @@ It also has an invisible part, the **session clock**: a small module that predic
 |---|---|---|
 | **App shell, every signed-in screen** (§4.0): Today, read view and history, Flagged, Report, Manage | Mounted once by the shell, after `<main>` and outside the routes, so it survives navigation. It opens only while the shell shows a signed-in screen. Workers and managers get the same component. | "Activity" means a request the server accepted: page loads, `GET /api/auth/me` on focus and on becoming visible (§6.8), saves, and manager actions. Reading a long note or history without loading anything for 28 minutes brings up the warning. This is correct: the design says idle means the person is idle (§8.5). |
 | **Note form** (§4.3), including a past-day note, an earlier-day draft and "Editing submitted note" | Same component | Typing keeps the session alive, because autosave runs about 2 seconds after typing stops (§5.6). The warning can only appear after the person has stopped changing the note. A change still waiting for its autosave is sent at 28 minutes instead of showing the warning. If the save indicator already says "Not saved: no connection…", the warning can still appear, and Stay signed in can fail for the same reason. |
-| **Submit confirmation** and **Discard draft** confirmation (§4.3) | Same component | Before the warning opens, an open confirmation is closed as if **Go back** or Cancel was chosen. Nothing is submitted or discarded. After the warning, the person taps Submit note again and sees the participant's name again. |
+| **Submit confirmation** and **Discard draft** confirmation (§4.3) | Same component | Before the warning opens, an open confirmation is closed as if **Go back** or Cancel was chosen. Nothing is submitted or discarded. After the warning, the person taps Submit note again and sees the participant's name again. As built (T12), focus then goes back to **Submit note** after the Submit confirmation alone; after the Discard dialog it goes to **More actions** on the form, as after its own Go back, and to **Discard draft** on a manager's read-only draft. |
 | Not used: sign-in and account setup (§4.1) | No session exists | The setup page has its own 30-minute enrolment cookie and its own message: "Your setup session timed out. Open the link from your email again." That belongs to the sign-in component. |
 
 ---
@@ -144,6 +144,10 @@ the start-up message, sign-in or setup, whose requests still move the clock.
    the warning gives focus back to Account and never to a hidden Sign out. Then close any other open `<dialog>` with
    a plain `close()`. Every Grow2Notes confirmation treats a plain close as Go back or Cancel. Also close any open
    menu (the note form's "Discard draft" menu). Then call `showModal()`.
+   As built (T12): the note form's menu is More actions' disclosure (note-form.md component 13). Its panel closes
+   as the warning opens, whether or not the Discard dialog is open, focus that is in it moving to More actions first,
+   so that the warning never gives focus back to a hidden Discard draft; the Discard dialog closes as Go back, focus
+   going to More actions, where the warning gives it back.
 2. Focus lands on **Stay signed in**, the only focusable element.
 3. **Stay signed in** → `POST /api/auth/ping` (with the `X-XSRF-TOKEN` header, §6.1). The press first empties the
    status line, so a failure that repeats is announced again. The button is `aria-disabled` until the answer, and the
@@ -504,6 +508,8 @@ return (
 - The person taps Submit note again and sees the participant's name again. That matches the design's wrong-participant safeguard (§3.9).
 - If Submit itself gets a `401`, sign-in appears in place, and Submit is **not** retried automatically. The person submits again after signing in.
 - The **Discard draft** confirmation is handled the same way (closed as Cancel).
+- As built (T12): after the Discard dialog, focus returns to **More actions**, as after its own Go back, and on a
+  manager's read-only draft to **Discard draft**: **Submit note** is the Submit confirmation's alone.
 
 ---
 

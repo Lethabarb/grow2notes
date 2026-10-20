@@ -109,6 +109,11 @@
   padding-block: var(--space-1);
 }
 
+/* A read-only tick on a line of its own, a paragraph, so with none of a paragraph's margins. */
+.readRow {
+  margin: 0;
+}
+
 /*
  * The box, 1.5rem, in rem so that it grows with the text, its first line's centre on the wording's, drawn in the text's
  * colour, which forced colours keep.

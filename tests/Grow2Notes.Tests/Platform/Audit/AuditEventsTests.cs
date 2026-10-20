@@ -67,6 +67,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.CommonItemGroup.Restored] = test => test.RestoreCommonItemGroupAsync(),
         [AuditEventTypes.GuidePrompts.Updated] = test => test.SaveGuidePromptsAsync(),
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
+        [AuditEventTypes.Note.Discarded] = test => test.DiscardDraftAsync(),
         [AuditEventTypes.Note.Submitted] = test => test.SubmitNoteAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
@@ -990,6 +991,38 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     }
 
     /// <summary>
+    /// <c>note.discarded</c>: A's manager discards a draft of today's note of a participant added for the row, which
+    /// the row adds for A's worker as a first save leaves it, with text written, with <c>POST {base}/discard</c>, which
+    /// records the manager, not the draft's author, as the actor, the note as the entity and its participant as the
+    /// participant, and no <c>Details</c>, so no note text, as the note row holds who discarded it and when (design.md
+    /// §5.3, §9.5).
+    /// </summary>
+    private async Task<WrittenEvent> DiscardDraftAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var today = factory.Services.GetRequiredService<MelbourneClock>().Today();
+        var noteId = await factory.Services.AddDraftAsync(a, new(
+            participant.Id,
+            today,
+            a.WorkerId,
+            new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc),
+            Narrative: "Jane made toast."));
+        await PostAsync(
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/discard"),
+            ifMatch: null);
+
+        return new(
+            AuditEventTypes.Note.Discarded,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Note,
+            noteId,
+            participant.Id,
+            null);
+    }
+
+    /// <summary>
     /// <c>note.submitted</c>: A's worker submits their draft of today's note of a participant added for the row, which
     /// the row adds as a first save leaves it, with a goal ticked and flagged with a reason, with
     /// <c>POST {base}/versions</c>, which records the note as the entity and its participant as the participant, and
@@ -1154,9 +1187,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     private async Task<ApplicationUser> AddWorkerAsync(UserStatus status) =>
         await StoredUserAsync((await factory.AddPasswordUserAsync(a, status)).Email);
 
-    // A change with no body by A's manager, such as an archive or a deactivation, with the ETag of what it changes as
-    // If-Match, which answers 204.
-    private async Task PostAsync(string path, string ifMatch)
+    // A change with no body by A's manager, such as an archive, a deactivation or a discard, with the ETag of what it
+    // changes, if it has one, as If-Match, which answers 204.
+    private async Task PostAsync(string path, string? ifMatch)
     {
         using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
         using var response = await client.PostWithTokenAsync(path, await client.FetchTokenAsync(), ifMatch: ifMatch);

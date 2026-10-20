@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 import { api, ApiError, classify } from '../../api/api.ts';
@@ -22,6 +22,7 @@ import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
 import { invalidateToday, removeToday } from '../today/todayQuery.ts';
 import { FlagForManager, reasonId } from './FlagForManager.tsx';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
+import { MoreActions, type MoreActionsHandle } from './MoreActions.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
 import styles from './NotePage.module.css';
 import { noteBase, type Draft } from './noteQueries.ts';
@@ -90,12 +91,19 @@ type NoteFormProps = {
 };
 
 /**
- * The note form (note-form.md components 2, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note that
- * its checks refused, then the page's `<h1>` and the Past notes link; then, in a `<form noValidate>`, the lists-changed
- * notice's live region, there and empty from the first render, as a screen reader may not announce words written into
- * one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided notes; Flag for
- * manager, its tick and reason in this page's state too, the reason kept while the box is unticked; and Submit note,
- * with the alert above it.
+ * The note form (note-form.md components 2, 4, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note
+ * that its checks refused, then the page's `<h1>`; the earlier-day notice, on a draft saved before the form opened,
+ * never on a new note, saved since or not, as note-form.md's *Kinds of note* are set as the form loads, while it is
+ * dated before `me.today`, so that it just appears, unannounced, once `me` gives a day that has passed midnight with
+ * the form open (status-messages.md *Per-screen notes*); and the Past notes link; then, in a `<form noValidate>`, the
+ * lists-changed notice's live region, there and empty from the first render, as a screen reader may not announce
+ * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Guided
+ * notes; Flag for manager, its tick and reason in this page's state too, the reason kept while the box is unticked;
+ * and Submit note, with the alert above it; then, outside the form, More actions, with Discard draft, while the note
+ * is the viewer's own saved draft, reopened or saved since: never on a new note before its first "Saved …", and
+ * through the takeover banner's wait, as the draft is still theirs, until a dead end, as the note at this address may
+ * then be no draft of theirs, when it goes with its panel and any Discard dialog, nothing sent, focus that was in them
+ * going to the `<h1>` (T12's Notes).
  * Until T13 adds "2. Common items", the sections go from 1 to 3, keeping design.md's numbers. Each tick and each input
  * is a change that autosave saves, and a field that loses focus sends one at once (design.md §3.4). After a dead end,
  * every tick and the text stay as they are, to change and copy, though nothing more is saved (note-form.md *Conflicts
@@ -124,8 +132,14 @@ type NoteFormProps = {
  * top bar has just said it; and a save of its own that meets a dead end keeps the person there too, with the text to
  * copy, said by the dead end's own sentence alone. A leave once a dead end shows, and after Submit's `201`, nothing
  * stops (note-form.md *Leaving the form*). The browser asks before the page goes while the indicator says the change
- * is not saved, a dead end's "Not saved" included, and the shell has not disarmed the warning (item 35). Today's lists
- * are marked stale as the form goes, whichever way, so that Today's row shows how the note was left.
+ * is not saved, a dead end's "Not saved" included, and the shell has not disarmed the warning (item 35). Today's lists,
+ * its unfinished drafts with the day's, are marked stale as the form goes, whichever way, so that Today shows how the
+ * note was left.
+ *
+ * Confirming a Discard pauses autosave once any save out has settled, sending no save after it, and sends nothing if
+ * that save met a dead end; its `204` lets the leave guard let the move to Today go, a change unsaved or not, as the
+ * draft has gone. A Discard dialog closed with nothing discarded lets autosave go on, sending at once a change that the
+ * pause held, and a failure of a request that a browser's close left out shows above Submit note, as Submit's does.
  */
 export function NoteForm({
   ref,
@@ -168,9 +182,15 @@ export function NoteForm({
   // *Behaviour* 7).
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation>();
-  // Why Submit failed after a browser closed the confirmation while its request was out (confirm-dialog.md
+  // Why Submit or Discard failed after a browser closed its dialog while its request was out (confirm-dialog.md
   // *Behaviour* 7), above Submit note.
   const [failure, setFailure] = useState<string>();
+  // Whether the note exists as the viewer's draft: saved before the form opened, or since, as the indicator has said
+  // "Saved …"; no longer once it says nothing again, as after Load found the note discarded meanwhile.
+  const [exists, setExists] = useState(draft.isSaved);
+  const moreActions = useRef<MoreActionsHandle>(null);
+  // Focus was in More actions as a dead end took it away, so the `<h1>` takes it once it has gone.
+  const headingDue = useRef(false);
   // Whether the confirmation is still open as its request ends.
   const confirmationOpen = useRef(false);
   // What had focus as the note was taken over, which Keep gives it back to.
@@ -197,11 +217,20 @@ export function NoteForm({
         focusedAtTakeover.current = focused instanceof HTMLElement && focused !== document.body ? focused : null;
       }
 
+      if (said.kind === 'draft' || said.kind === 'saved') {
+        setExists(true);
+      } else if (said.kind === 'none') {
+        setExists(false);
+      }
+
       onIndicator(said);
     },
     onListsChanged: showListsAsNow,
     onOtherVersion: showOtherVersion,
-    onDeadEnd,
+    onDeadEnd: (stopped) => {
+      headingDue.current = moreActions.current?.hasFocus() ?? false;
+      onDeadEnd(stopped);
+    },
   });
 
   const leaveFreely = useSaveBeforeLeaving({ unsaved: autosave.unsaved, save: saveBeforeLeaving });
@@ -213,6 +242,14 @@ export function NoteForm({
     },
     [queryClient],
   );
+
+  // Once More actions has gone with the dead end, as its dialog, if open, would have kept the `<h1>` inert.
+  useLayoutEffect(() => {
+    if (deadEnd !== undefined && headingDue.current) {
+      headingDue.current = false;
+      focusPageHeading();
+    }
+  }, [deadEnd]);
 
   const { mutate } = useMutation({
     mutationFn: ({ key, content }: Pick<Confirmation, 'key' | 'content'>) =>
@@ -389,12 +426,12 @@ export function NoteForm({
   }
 
   // After `201`, or `200` for a retry whose first answer was lost (note-form.md *After a successful submit*): the
-  // banner's sentence in the store, which Today reads; Today's list dropped, so that Today shows only the server's
-  // rows; `me` asked for again when the note is in To review, so that the Flagged badge counts it (app-shell.md
-  // *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to Today then shares; the
-  // confirmation closed; then Today, which the leave guard never stops, though a change was made after a browser
-  // closed the confirmation, as the note is submitted: popped to when it is the entry before, so that Back never
-  // reopens the finished form, and else put in the form's place.
+  // banner's sentence in the store, which Today reads; Today's lists dropped, its unfinished drafts with the day's, so
+  // that Today shows only the server's rows; `me` asked for again when the note is in To review, so that the Flagged
+  // badge counts it (app-shell.md *Refresh of `/api/auth/me`*), a request that the shell's own refresh on the move to
+  // Today then shares; the confirmation closed; then Today, which the leave guard never stops, though a change was
+  // made after a browser closed the confirmation, as the note is submitted: popped to when it is the entry before, so
+  // that Back never reopens the finished form, and else put in the form's place.
   function submitted(saved: VersionSaved) {
     messageStore.set(msg.noteSubmitted(name));
     removeToday(queryClient);
@@ -476,6 +513,9 @@ export function NoteForm({
     <>
       <ErrorSummary errors={summary} attempt={attempt} />
       {heading}
+      {draft.isSaved && noteDate < me.today && (
+        <Notice>{msg.earlierDayDraft(dateLong(parseDateOnly(noteDate)))}</Notice>
+      )}
       <PastNotesLink participantId={participantId} />
       <form
         noValidate
@@ -546,6 +586,24 @@ export function NoteForm({
           </Button>
         </div>
       </form>
+      {exists && deadEnd === undefined && (
+        <MoreActions
+          ref={moreActions}
+          participantId={participantId}
+          noteDate={noteDate}
+          name={name}
+          stopSaving={autosave.stop}
+          onLeave={leaveFreely}
+          onNotDiscarded={(discardFailure) => {
+            // Only a failure of its own, so that a plain Go back keeps a Submit failure shown.
+            if (discardFailure !== undefined) {
+              setFailure(discardFailure);
+            }
+
+            autosave.resume();
+          }}
+        />
+      )}
       {confirmation !== undefined && (
         <SubmitConfirmation
           name={name}

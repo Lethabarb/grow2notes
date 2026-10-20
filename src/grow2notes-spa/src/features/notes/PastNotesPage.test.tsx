@@ -17,6 +17,7 @@ type Router = ReturnType<typeof createMemoryRouter>;
 
 const mePath = '/api/auth/me';
 const todayPath = '/api/today';
+const draftsPath = '/api/me/drafts';
 
 // participant-notes.md's made-up people (A35): Casey Nguyen, a worker, signed in, and Jordan Ellis, a manager, of the
 // same organisation; today in Melbourne is Thursday 1 October 2026.
@@ -328,6 +329,8 @@ beforeEach(() => {
     return answer(init);
   });
   vi.stubGlobal('fetch', fetchMock);
+  // No unfinished drafts on Today, for a test that goes there.
+  serve(draftsPath, json([]));
   serve('/api/auth/antiforgery', () =>
     Promise.resolve(new Response(null, { status: 204, headers: { 'X-XSRF-TOKEN': 'token-1' } })),
   );

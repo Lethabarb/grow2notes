@@ -371,10 +371,11 @@ export const strings = {
     archived: 'Archived',
   },
   /**
-   * Today (today.md): the visually hidden `<h2>` before its list of participants (component 6), so that a screen
-   * reader moving by headings hears where the list starts.
+   * Today (today.md): the `<h2>` of the caller's drafts and pending edits that the day's list does not show (design.md
+   * §4.2 item 2, component 5); and the visually hidden `<h2>` before its list of participants (component 6), so that a
+   * screen reader moving by headings hears where the list starts.
    */
-  today: { participantsHeading: 'Participants' },
+  today: { unfinishedDraftsHeading: 'Your unfinished drafts', participantsHeading: 'Participants' },
   /**
    * A note's status, by its name in the API (status-tags.md *The mapping*): plain words, never a tag, first on a note's
    * status line, as on Today's rows (today.md component 8) and in the save indicator of a draft reopened.
@@ -402,7 +403,10 @@ export const strings = {
    * Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead, for a note
    * dated `me.today` and for any other, before the name on its own line; its flag line, from the values that Submit
    * sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not submitted: no
-   * connection. Your draft is saved. Try again." (microcopy.md §9).
+   * connection. Your draft is saved. Try again." (microcopy.md §9). Then More actions, the disclosure under Submit
+   * note, and Discard draft in its panel (component 13), as on a manager's read-only draft (participant-notes.md
+   * component 9); and the Discard dialog's line that always ends its body, and its status line once the request has
+   * taken 1 s (component 15, confirm-dialog.md's dialog 2).
    */
   note: {
     loading: 'Loading note…',
@@ -427,13 +431,18 @@ export const strings = {
     flaggedNo: 'Flagged for manager: No',
     submitting: 'Submitting…',
     draftIsSaved: 'Your draft is saved.',
+    moreActions: 'More actions',
+    discardDraft: 'Discard draft',
+    nobodyCanOpenThisDraft: 'Nobody will be able to open this draft again.',
+    discarding: 'Discarding…',
   },
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
    * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals", the words for a version with no
-   * goals, each as the daily report has them (design.md §11.3).
+   * goals, each as the daily report has them (design.md §11.3); and, under "3. Guided notes", the words for a draft
+   * with no text yet, which a manager reads (*Someone else's draft, manager*).
    */
-  readView: { submitted: 'Submitted', noGoals: 'No goals set' },
+  readView: { submitted: 'Submitted', noGoals: 'No goals set', nothingWrittenYet: 'Nothing written yet.' },
   /**
    * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the
    * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).

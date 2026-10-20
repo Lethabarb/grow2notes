@@ -10,7 +10,7 @@ import { matchesName } from '../../components/matchesName.ts';
 import { Notice } from '../../components/Notice.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
-import { dateToday, parseDateOnly } from '../../copy/format.ts';
+import { dateLong, dateToday, parseDateOnly } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { Sep } from '../../copy/Sep.tsx';
@@ -19,21 +19,23 @@ import { messageStore } from '../../routes/messageStore.ts';
 import { useReturnFocusReady } from '../../routes/routeChange.ts';
 import { fullName } from '../participants/participantsQuery.ts';
 import { NoteStatus } from './NoteStatus.tsx';
-import { refetchToday, todayQuery, type TodayList } from './todayQuery.ts';
+import { myDraftsQuery, refetchToday, todayQuery, type MyDraft, type TodayList } from './todayQuery.ts';
 import styles from './TodayPage.module.css';
 
 /**
  * Today at `/` (today.md), everyone's home screen: after Submit, the success banner, "Note for Jane Citizen
  * submitted", which the shell focuses as Today arrives, in place of the `<h1>` or a row (component 2); its `<h1>` at
  * once, "Today · Thursday 1 October", from the server's date in Melbourne, never the device's clock (A33); then the
- * region that loads the day's list. Each row is a return point, which the shell focuses on a pop back to Today once
- * the list, or the failure to load it, is in the page.
+ * one region that loads the day's list and the caller's unfinished drafts, which show together or not at all, so that
+ * the drafts never push the rows down under a finger nor go unsaid (component 4). Each row is a return point, which
+ * the shell focuses on a pop back to Today once both lists, or the failure to load them, are in the page.
  */
 export function TodayPage() {
   const me = useMe();
   const queryClient = useQueryClient();
   const today = useQuery(todayQuery(me.today));
-  useReturnFocusReady(!today.isPending);
+  const drafts = useQuery(myDraftsQuery);
+  useReturnFocusReady(!today.isPending && !drafts.isPending);
   // Submit's sentence, read from the store once, as Today mounts, and kept while Today shows, through every refresh of
   // its list; the store is emptied at once, so that leaving Today and coming back, or a reload, shows it no more.
   const [submitted] = useState(() => messageStore.peek());
@@ -56,7 +58,7 @@ export function TodayPage() {
   }, [listDate, me.today, queryClient]);
 
   // TanStack Query 5 refetches on `visibilitychange` alone, which a click back into a window left visible beside
-  // another never fires, so the window's `focus` fetches the list again too (today.md *Refresh*).
+  // another never fires, so the window's `focus` fetches both lists again too (today.md *Refresh*).
   useEffect(() => {
     const onFocus = () => {
       void refetchToday(queryClient);
@@ -76,13 +78,73 @@ export function TodayPage() {
         <Sep />
         <time dateTime={me.today}>{dateToday(parseDateOnly(me.today))}</time>
       </PageHeading>
-      <LoadRegion queries={[today]} loading={strings.participants.listLoading} what={strings.participants.theList}>
-        {/* Called only once the query has data. */}
+      <LoadRegion
+        queries={[today, drafts]}
+        loading={strings.participants.listLoading}
+        what={strings.participants.theList}
+      >
+        {/* Called only once both queries have data. */}
         {() => (
-          <Participants list={today.data!} isManager={me.role === 'Manager'} typed={typed} onType={setTyped} />
+          <>
+            <UnfinishedDrafts list={today.data!} drafts={drafts.data!} />
+            <Participants list={today.data!} isManager={me.role === 'Manager'} typed={typed} onType={setTyped} />
+          </>
         )}
       </LoadRegion>
     </PageStatus>
+  );
+}
+
+// By family name, then given name, as everywhere (A5), then by note date, oldest first (today.md component 5).
+const collator = new Intl.Collator('en-AU');
+
+type UnfinishedDraftsProps = {
+  list: TodayList;
+  drafts: readonly MyDraft[];
+};
+
+/**
+ * Your unfinished drafts (today.md component 5), only when the caller has a draft or pending edit that the day's list
+ * does not show, as one from an earlier day, or for a participant archived since, which nothing marks, as the draft can
+ * still be submitted (design.md §3.7): its `<h2>`, then a row for each, whose link names the participant alone and
+ * opens the caller's working copy, the note's address for a draft and its edit form for a pending edit, described by
+ * the note date. The rows are a list of their own, which Find a participant never filters, each a return point by its
+ * participant and date, so that a pop back to Today focuses the row opened, never the main list's row of the same
+ * participant (T12's Notes). With nothing left to show, neither the heading nor the list is in the page.
+ */
+function UnfinishedDrafts({ list, drafts }: UnfinishedDraftsProps) {
+  const onTheList = new Set(list.participants.map((participant) => participant.id));
+  const shown = drafts
+    .filter((draft) => draft.noteDate !== list.date || !onTheList.has(draft.participantId))
+    .toSorted(
+      (a, b) =>
+        collator.compare(a.familyName, b.familyName) ||
+        collator.compare(a.givenName, b.givenName) ||
+        collator.compare(a.noteDate, b.noteDate),
+    );
+  if (shown.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={styles.drafts}>
+      <h2>{strings.today.unfinishedDraftsHeading}</h2>
+      <LinkRowList>
+        {shown.map((draft) => {
+          const key = `${draft.participantId}/${draft.noteDate}`;
+          const note = `/participants/${draft.participantId}/notes/${draft.noteDate}`;
+          return (
+            <LinkRow
+              key={key}
+              to={draft.kind === 'draft' ? note : `${note}/edit`}
+              name={fullName(draft)}
+              returnKey={key}
+              detail={[<time dateTime={draft.noteDate}>{dateLong(parseDateOnly(draft.noteDate))}</time>]}
+            />
+          );
+        })}
+      </LinkRowList>
+    </div>
   );
 }
 

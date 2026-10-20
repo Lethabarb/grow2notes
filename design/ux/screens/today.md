@@ -230,6 +230,13 @@ listed here.
 - Rows for a participant archived since the draft started stay (3.7: the draft can still be submitted). Nothing marks
   the archive.
 - Search never filters this section.
+- As built (T12): `UnfinishedDrafts` (src/features/today/TodayPage.tsx), inside Today's one `LoadRegion`, from
+  `myDraftsQuery` (`['me', 'drafts']`, `refetchOnWindowFocus`) beside `['today', me.today]`, both of which Today's own
+  `focus` listener fetches again through `refetchToday()`. Each row is a `LinkRow` whose return key is
+  `participantId/noteDate`, so that a pop back to Today focuses the row opened, never the main list's row of the same
+  participant. The section shows in *Ready, no participants* too, beside "No participants yet.". Submit and Discard
+  remove `['me', 'drafts']` with the day's lists (`removeToday()`), and the note form marks both stale as it unmounts,
+  however it is left (`invalidateToday()`).
 
 ### 6. Hidden "Participants" heading
 
@@ -526,6 +533,7 @@ outdoors in daylight at automatic brightness (status lines and tag readable).
   after its content, so once the region is ready the line, empty from then on, follows the list: nothing shown, read or
   reached by Tab is out of order. The banner, built with Submit (T09), comes first, before the `<h1>`; the drafts
   section comes with S02.01.04 (T12).
+  As built (T12): the drafts section is the region's first content, after the `<h1>` and before the hidden heading.
 - [ ] Rows follow the server order (family, then given); filtering and refetching never reorder them.
 - [ ] Drafts section lists only drafts/pending edits not on today's list, sorted family, given, then note date oldest
   first; hidden entirely when there are none.

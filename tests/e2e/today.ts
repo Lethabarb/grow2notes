@@ -29,8 +29,26 @@ export type TodayParticipant = Pick<AdminParticipant, 'id' | 'givenName' | 'fami
 /** The Today list, as `GET /api/today` answers it: the server's date in Melbourne, and the participants on it. */
 export type TodayList = { date: string; participants: TodayParticipant[] };
 
-// Today's one read.
+/**
+ * One of the signed-in user's own unfinished drafts, as `GET /api/me/drafts` lists it (design.md §6.3): its
+ * participant's ID and names as stored, archived since or not; its note's date; whether it is a draft or a pending edit
+ * on a submitted note; and when it was last saved, in UTC, written with `Z`.
+ */
+export type MyDraft = {
+  participantId: string;
+  givenName: string;
+  familyName: string;
+  noteDate: string;
+  kind: 'draft' | 'pendingEdit';
+  savedAtUtc: string;
+};
+
+/** The signed-in user's unfinished drafts, read as each list is answered. */
+export type DraftsOf = () => readonly MyDraft[];
+
+// Today's two reads: the day's list, and the caller's unfinished drafts.
 const todayRequest = '**/api/today';
+const myDraftsRequest = '**/api/me/drafts';
 
 /** No participant has a note today. */
 const noNotes: NoteOf = () => null;
@@ -64,6 +82,16 @@ export async function serveToday(
   noteOf: NoteOf = noNotes,
 ): Promise<void> {
   await page.route(todayRequest, (route) => route.fulfill({ json: todayList(date, participants, noteOf) }));
+}
+
+/**
+ * Answers each `GET /api/me/drafts` that the page sends from now on, in the browser, with what `draftsOf` gives then,
+ * such as `notesStore`'s `myDrafts(me)`, so that Your unfinished drafts shows the drafts of a store in memory as they
+ * stand when the page asks. It overrides the empty list that `serveMe` gives, as `serveToday` does, so call it after
+ * `serveMe`.
+ */
+export async function serveMyDrafts(page: Page, draftsOf: DraftsOf): Promise<void> {
+  await page.route(myDraftsRequest, (route) => route.fulfill({ json: draftsOf() }));
 }
 
 /**

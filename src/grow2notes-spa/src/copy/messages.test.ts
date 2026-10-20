@@ -42,6 +42,33 @@ describe("Submit's words", () => {
   });
 });
 
+// note-form.md component 15 and *States* › *Discard dialog*, and confirm-dialog.md's dialog 2, word for word.
+describe("Discard's words", () => {
+  it('name the participant in full in the title and on the confirming button', () => {
+    expect(msg.discardTitle('Jane Citizen')).toBe('Discard the draft note for Jane Citizen?');
+    expect(msg.discardDraftFor('Jane Citizen')).toBe('Discard draft for Jane Citizen');
+  });
+
+  it("say an earlier day's date, and who started someone else's draft and when", () => {
+    expect(msg.draftIsFor('Wednesday 30 September 2026')).toBe('This draft is for Wednesday 30 September 2026.');
+    expect(msg.startedItAt('Alex P.', '9:14 am')).toBe('Alex P. started it at 9:14 am.');
+  });
+
+  it('say that it was not discarded, and why', () => {
+    expect(msg.notDiscarded('offline')).toBe('Not discarded: no connection. Try again.');
+    expect(msg.notDiscarded('server')).toBe('Not discarded: something went wrong. Try again.');
+  });
+});
+
+// note-form.md *Kinds of note*, word for word.
+describe("the earlier-day notice's words", () => {
+  it("say the draft's date, then that submitting it keeps that date", () => {
+    expect(msg.earlierDayDraft('Wednesday 30 September 2026')).toBe(
+      'This draft is for Wednesday 30 September 2026. Submitting it now keeps that date.',
+    );
+  });
+});
+
 // participant-notes.md *Read view* › Status lines, word for word.
 describe("the read view's lines", () => {
   it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {

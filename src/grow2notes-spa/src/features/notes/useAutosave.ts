@@ -181,10 +181,11 @@ export type Autosave = {
    */
   checkSave: () => Promise<DraftContent | undefined>;
   /**
-   * Pauses autosave as Submit's request goes, its timers and retries cleared, once any save out, a page-hidden one
-   * included, has settled.
+   * Pauses autosave as Submit's or Discard's request goes, its timers and retries cleared, once any save out, a
+   * page-hidden one included, has settled: `false` if a dead end has stopped autosave, as when that save met one, after
+   * which the note at this address may no longer be this draft, so that Discard sends nothing (T12's Notes).
    */
-  stop: () => Promise<void>;
+  stop: () => Promise<boolean>;
   /** Lets autosave go on after `stop()`, sending at once a change made meanwhile. */
   resume: () => void;
   /** Stops autosave at a dead end that Submit met, for as long as the form is open, as a save's would. */
@@ -271,8 +272,8 @@ type Progress = {
  * or blur. As the page is hidden, the newest state goes at once, beside any save out, and again as the browser comes
  * online while it is hidden; as it is shown again, an unsaved change goes at once, the wait for a retry cut short. The
  * antiforgery token is fetched as the form opens, so that the page-hidden save is one request. Submit runs a check
- * save before its confirmation opens, and pauses autosave while its own request is out (autosave-status.md
- * *Behaviour* 6).
+ * save before its confirmation opens, and pauses autosave while its own request is out, as Discard does
+ * (autosave-status.md *Behaviour* 6).
  *
  * A `409 draft.taken_over`, as another page has saved the note since, from a save or Submit's check save, pauses
  * autosave until the takeover banner is answered, with "Not saved" (autosave-status.md *Behaviour* 5): it is not a
@@ -739,6 +740,7 @@ export function useAutosave({
     stopTimers(state);
     stopRetry(state);
     await settled(state);
+    return !state.stopped;
   }
 
   function resume() {

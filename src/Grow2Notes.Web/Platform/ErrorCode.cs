@@ -34,6 +34,13 @@ internal sealed class ErrorCode
     public static readonly ErrorCode VersionConflict = new(StatusCodes.Status409Conflict, "note.version_conflict");
 
     /// <summary>
+    /// A discard of a note that is not a draft (§5.8 <i>Discard</i>): a submitted note, which can never be discarded
+    /// (§5.5 item 5), or a draft discarded already, by an earlier discard or one that committed while this one ran. It
+    /// changes nothing.
+    /// </summary>
+    public static readonly ErrorCode NotADraft = new(StatusCodes.Status409Conflict, "note.not_a_draft");
+
+    /// <summary>
     /// Another page, a second tab or another device, has taken over the caller's working copy since this page last
     /// saved it (§5.6): any autosave but the first from a page other than the one that saved last. It changes nothing.
     /// </summary>
