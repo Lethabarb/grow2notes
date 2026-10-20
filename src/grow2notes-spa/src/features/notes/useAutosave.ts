@@ -26,8 +26,8 @@ const keepaliveBytes = 60_000;
 const transientStatuses = new Set([0, 408, 429, 500, 502, 503, 504]);
 
 /**
+ * What the form holds, as a save reads it: the Guided notes text, the ticked goals, the picked common item groups and
  * their ticked items, the flag, and the reason as typed, which the form keeps while the box is unticked.
- * which the form keeps while the box is unticked.
  */
 export type DraftContent = {
   narrative: string;
