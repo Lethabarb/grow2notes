@@ -67,6 +67,12 @@ export type SubmittedNote = {
   firstFlagReason?: string;
   /** Set by hand, as T16 will set it; by default `ToReview` for a note with a flagged version, as Submit leaves it. */
   flagStatus?: FlagStatus;
+  /**
+   * Who saved the note's current version, and when, for a note that has been edited: it then reads as version 2 with
+   * the Edited line. By default its author, when it was first submitted, for a note with a `firstFlagReason`, which
+   * has a version 2; none, one version, otherwise.
+   */
+  lastEdit?: { by: string; atUtc: string };
 };
 
 /** The version in a note's `FlaggedVersionNumber` (design.md §5.3): its reason and when it was saved. */
@@ -122,6 +128,8 @@ type HeldSubmitted = StartedBy & {
   flagReason: string | null;
   flagStatus: FlagStatus;
   flaggedVersion: FlaggedVersion | null;
+  /** Who saved the current version, and when, once it is version 2 or later; `null` while it is version 1. */
+  lastEdit: { by: string; atUtc: string } | null;
 };
 
 /**
@@ -304,9 +312,17 @@ export function notesStore({
     const held = submitted.get(key);
     if (held !== undefined && headers.has(participantId)) {
       const { authorDisplayName, firstSubmittedAtUtc, narrative, isFlagged, flagReason, goals: ticks } = held;
-      const author = { displayName: authorDisplayName };
-      const current = { narrative, isFlagged, flagReason, goals: ticks, commonItemGroups: held.commonItemGroups };
-      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, current } };
+      const author = { id: held.authorUserId, displayName: authorDisplayName };
+      const current = {
+        versionNumber: held.currentVersionNumber,
+        narrative,
+        isFlagged,
+        flagReason,
+        goals: ticks,
+        commonItemGroups: held.commonItemGroups,
+      };
+      const edit = held.lastEdit === null ? { isEdited: false } : { isEdited: true, lastEdit: held.lastEdit };
+      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, ...edit, current } };
     }
 
     const draft = drafts.get(key);
@@ -580,6 +596,7 @@ export function notesStore({
       commonItemGroups: readGroupsOf(draft.groups, sent.pickedGroupIds, sent.tickedCommonItemIds),
       isFlagged: sent.isFlagged,
       flagReason,
+      lastEdit: null,
       ...flag,
     });
     drafts.delete(key);
@@ -603,6 +620,8 @@ export function notesStore({
         noteDate: key.slice(-10),
         status: 'Draft',
         authorDisplayName: held.authorDisplayName,
+        currentVersionNumber: 0,
+        isEdited: false,
         isFlagged: false,
         flagStatus: 'None',
       })),
@@ -610,6 +629,8 @@ export function notesStore({
         noteDate: key.slice(-10),
         status: 'Submitted',
         authorDisplayName: held.authorDisplayName,
+        currentVersionNumber: held.currentVersionNumber,
+        isEdited: held.currentVersionNumber > 1,
         isFlagged: held.isFlagged,
         flagStatus: held.flagStatus,
       })),
@@ -821,18 +842,20 @@ export function notesStore({
         commonItemGroups: readGroupsOf(draft.groups, draft.picked, draft.tickedItems),
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
+        lastEdit: null,
         ...flagOf(draft.flagReason, savedAtUtc),
       });
       drafts.delete(key);
     },
     /**
      * Puts a submitted note of a participant's for a day in the store, as if its author had submitted it, and, with
-     * `firstFlagReason`, then saved a version 2 over it.
+     * `firstFlagReason` or `lastEdit`, then saved a version 2 over it.
      */
     addSubmitted: (participantId: string, noteDate: string, added: SubmittedNote) => {
       const { flagReason = null, firstFlagReason } = added;
       const flag = flagOf(firstFlagReason ?? flagReason, added.firstSubmittedAtUtc);
       const flagStatus = added.flagStatus ?? flag.flagStatus;
+      const edited = firstFlagReason !== undefined || added.lastEdit !== undefined;
       if (flagStatus === 'ToReview' && flag.flaggedVersion === null) {
         throw new Error('A note in To review has a flagged version: give it a flagReason or a firstFlagReason.');
       }
@@ -843,7 +866,7 @@ export function notesStore({
         startedAtUtc: added.firstSubmittedAtUtc,
         firstSubmittedAtUtc: added.firstSubmittedAtUtc,
         idempotencyKey: randomUUID(),
-        currentVersionNumber: firstFlagReason === undefined ? 1 : 2,
+        currentVersionNumber: edited ? 2 : 1,
         narrative: added.narrative ?? '',
         goals: added.goals ?? [],
         commonItemGroups: [],
@@ -851,6 +874,9 @@ export function notesStore({
         flagReason,
         flagStatus,
         flaggedVersion: flag.flaggedVersion,
+        lastEdit: edited
+          ? (added.lastEdit ?? { by: added.authorDisplayName, atUtc: added.firstSubmittedAtUtc })
+          : null,
       });
     },
     /**

@@ -47,6 +47,7 @@ const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past
 const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
 const flagLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Flagged/ });
 const flagged = (page: Page) => main(page).getByText('Flagged', { exact: true });
+const editedLine = (page: Page) => main(page).locator('p').filter({ hasText: /^Edited/ });
 const readGoals = (page: Page) => main(page).locator('ul[role="list"] > li');
 const readText = (page: Page) =>
   main(page).getByRole('heading', { name: '3. Guided notes', exact: true }).locator('xpath=following-sibling::div[1]');
@@ -186,6 +187,63 @@ test.fail('a live region put into Past notes with its words fails the test', asy
     region.textContent = 'Made-up words';
     element.appendChild(region);
   });
+});
+
+test('an edited note shows the Edited tag on its row and the Edited line on its read view, passing axe', async ({
+  page,
+}) => {
+  const store = notesStore({ today: worker.today, participants });
+  store.addSubmitted(jane.id, worker.today, {
+    authorDisplayName: priya,
+    firstSubmittedAtUtc: '2026-10-01T06:42:00Z',
+    narrative,
+    flagReason,
+    lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T22:01:00Z' },
+  });
+  store.addSubmitted(jane.id, '2026-09-30', {
+    authorDisplayName: priya,
+    firstSubmittedAtUtc: '2026-09-30T06:42:00Z',
+    lastEdit: { by: 'Jo Smith', atUtc: '2026-09-30T07:03:00Z' },
+  });
+  store.addSubmitted(jane.id, '2026-09-29', { authorDisplayName: priya, firstSubmittedAtUtc: '2026-09-29T06:42:00Z' });
+  await serveMe(page, worker);
+  await store.serve(page, worker);
+  await page.goto(pastNotesAddress(jane.id));
+
+  // Past notes: Flagged, then Edited, on the first row; Edited alone on the second; neither on the third.
+  await expect(rows(page)).toHaveCount(3);
+  await expect(rows(page).first()).toHaveAccessibleDescription(/^Submitted ?, Priya Nair ?, Flagged ?, Edited$/);
+  await expect(rows(page).nth(1)).toHaveAccessibleDescription(/^Submitted ?, Priya Nair ?, Edited$/);
+  await expect(rows(page).nth(2)).toHaveAccessibleDescription(/^Submitted ?, Priya Nair$/);
+  await expect
+    .poll(() => shownText(rowItems(page).first().locator('p')))
+    .toBe('Submitted · Priya Nair Flagged Edited');
+  await expect(main(page).getByText('Edited', { exact: true })).toHaveCount(2);
+  await expectAxeToPass(page);
+
+  // The read view: the byline, the Edited line with its date, as it was made on a later day, then the flag line.
+  await rows(page).first().click();
+  await expect(heading(page)).toBeFocused();
+  await expect.poll(() => shownText(byline(page))).toBe(`Written by ${priya} · Submitted 4:42 pm`);
+  await expect.poll(() => shownText(editedLine(page))).toBe('Edited last change by Jo Smith, Fri 2 Oct 2026, 8:01 am');
+  await expect(editedLine(page).locator('time')).toHaveAttribute('datetime', '2026-10-01T22:01:00Z');
+  await expect.poll(() => shownText(flagLine(page))).toBe(`Flagged Reason: ${flagReason}`);
+  const bylineBox = await boxOf(byline(page));
+  const editedBox = await boxOf(editedLine(page));
+  const flagBox = await boxOf(flagLine(page));
+  expect(bylineBox.y).toBeLessThan(editedBox.y);
+  expect(editedBox.y).toBeLessThan(flagBox.y);
+  await expectAxeToPass(page);
+
+  // On the note's own date the time stands alone.
+  await page.goto(noteAddress(jane.id, '2026-09-30'));
+  await expect(heading(page)).toBeFocused();
+  await expect.poll(() => shownText(editedLine(page))).toBe('Edited last change by Jo Smith, 5:03 pm');
+
+  // One version: no Edited line.
+  await page.goto(noteAddress(jane.id, '2026-09-29'));
+  await expect(heading(page)).toBeFocused();
+  await expect(editedLine(page)).toHaveCount(0);
 });
 
 test('the read view loading, flagged, with no goals, submitted later, failed and not found, passing axe', async ({
