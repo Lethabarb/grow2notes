@@ -12,7 +12,8 @@ namespace Grow2Notes.Web.Features.Notes;
 /// The handler of a participant's note for a day as its form opens and autosaves it (design.md §5.5 to §5.7, §6.3),
 /// found by its natural key, the participant and the note date, so that everyone asking for the same participant and
 /// day reaches the same note, as a handler class that takes the <see cref="Actor"/> (mcp-server.md §3.5, convention 1):
-/// <c>GET</c> and <c>PUT {base}/draft</c> call it with <see cref="Actor.InApp"/>.
+/// <c>GET</c>, <c>PUT</c> and <c>DELETE {base}/draft</c> call it with <see cref="Actor.InApp"/>. A working copy is a
+/// draft, with base version 0, or, on a submitted note, a pending edit on its current version (§5.6).
 /// </summary>
 /// <remarks>
 /// It reaches the live note alone, a draft or a submitted note, never a discarded draft (§5.5 item 1). The tenant query
@@ -32,7 +33,9 @@ internal sealed class NoteDrafts(
     /// <paramref name="noteDate"/>: with no live note, the template of a new note, unless the date is after today in
     /// Melbourne, when no note can exist (§5.5 item 4), or, for an actor who is not a manager, before yesterday (A65);
     /// with the actor's own draft, their working copy; with anyone else's draft, who started it and when, as only its
-    /// author may open it (§6.3).
+    /// author may open it (§6.3). A submitted note opens for its author or a manager alone: with their pending edit,
+    /// or, with none, the template of its current version, which writes nothing, as the first save creates the pending
+    /// edit; anyone else is refused.
     /// </summary>
     public async Task<DraftRead> ReadAsync(
         Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken)
@@ -55,12 +58,37 @@ internal sealed class NoteDrafts(
             return DraftRead.StartedByOther(inProgress);
         }
 
+        var submitted = note.Status == NoteStatus.Submitted;
+        if (submitted && !await note.MayBeEditedByAsync(db, actor, cancellationToken))
+        {
+            return DraftRead.NotEditable;
+        }
+
         var draft = await db.NoteDrafts
             .AsNoTracking()
             .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == actor.UserId, cancellationToken);
-        return draft is null
-            ? DraftRead.NotFound
-            : DraftRead.Of(Saved(draft, await GuidePromptsAsync(cancellationToken)));
+        if (draft is not null)
+        {
+            return DraftRead.Of(Saved(draft, await GuidePromptsAsync(cancellationToken)));
+        }
+
+        if (!submitted)
+        {
+            return DraftRead.NotFound;
+        }
+
+        var content = await NoteVersionContent.ReadAsync(
+            db, note.Id, note.CurrentVersionNumber, cancellationToken);
+        return DraftRead.Of(FormOf(
+            content.Snapshot,
+            note.CurrentVersionNumber,
+            isSaved: false,
+            listsVersion: null,
+            await GuidePromptsAsync(cancellationToken),
+            content.Narrative,
+            content.IsFlagged,
+            content.FlagReason,
+            savedAtUtc: null));
     }
 
     /// <summary>
@@ -71,23 +99,26 @@ internal sealed class NoteDrafts(
     /// picks, ticks, text and flag as §5.6 numbers a page's saves, the working copy keeping the page that saved last
     /// and that page's last number: a save of that page's numbered after it, or the first save of another page, which
     /// takes the working copy over; with anyone else's draft, saves nothing, as only its author may save it (§6.3), and
-    /// says who started it and when; with a submitted note, on which the actor has no working copy until T14 gives
-    /// pending edits, saves nothing, as a draft's base, 0, is stale (§6.7), and so recreates no working copy. A save
-    /// sent again after its answer was lost finds the actor's own draft, with its page and number, as does a first save
-    /// that another of the actor's own first saves beat (§5.5 item 3), and is decided as a later save, never as a
-    /// conflict.
+    /// says who started it and when. A submitted note takes saves from its author or a manager alone, at the base of
+    /// the actor's pending edit or at the note's current version (A70): with no pending edit, a save at the current
+    /// version creates it from that version's rows; with one, a save at its base replaces its picks, ticks, text and
+    /// flag as a draft's save does, and a save at the current version also moves its base there, which is Start again.
+    /// Any other base is stale (§6.7), a draft's 0 included, and recreates no working copy. A save sent again after its
+    /// answer was lost finds the actor's own working copy, with its page and number, as does a first save that another
+    /// of the actor's own first saves beat (§5.5 item 3), and is decided as a later save, never as a conflict.
     /// </summary>
     /// <returns>
     /// The time saved; or, for a save of the page that saved last numbered at or below its last, which the working
     /// copy holds already, the time of the save that it holds, changing nothing; or who started another user's draft,
     /// also when that user's first save beat this one; or, for a save that would create the note, the first of §5.5
     /// item 4's rules that it breaks, in that item's order, then a lists' version that is missing or no longer the
-    /// template's (§5.7); or <see cref="DraftSaveResult.VersionConflict"/> for a submitted note, also when a submit
-    /// deleted the working copy after this save found the draft; or <see cref="DraftSaveResult.TakenOver"/> for any
-    /// save but the first from a page other than the one that saved last; or the refusal of a tick or a pick that the
-    /// snapshot refuses (<see cref="NoteSnapshot.RefusalOf"/>), the template's for a new note and the snapshot's for
-    /// a draft, so that an ID sent twice is one tick; or <see cref="DraftSaveResult.NotFound"/>. A refusal writes
-    /// nothing.
+    /// template's (§5.7); or <see cref="DraftSaveResult.NotEditable"/> for a submitted note that the actor may not
+    /// edit; or <see cref="DraftSaveResult.VersionConflict"/> for a base that the note does not accept, also when a
+    /// submit deleted the working copy after this save found the draft; or <see cref="DraftSaveResult.TakenOver"/> for
+    /// any save but the first from a page other than the one that saved last; or the refusal of a tick or a pick that
+    /// the snapshot refuses (<see cref="NoteSnapshot.RefusalOf"/>), the template's for a new note, the version's for a
+    /// new pending edit and the snapshot's for a working copy, so that an ID sent twice is one tick; or
+    /// <see cref="DraftSaveResult.NotFound"/>. A refusal writes nothing.
     /// </returns>
     public async Task<DraftSaveResult> SaveAsync(
         Actor actor,
@@ -104,6 +135,12 @@ internal sealed class NoteDrafts(
         var note = await LiveNote.FindAsync(db, participantId, noteDate, cancellationToken);
         if (note is null)
         {
+            // No note has no version to base a save on, so only a draft's base can start one.
+            if (request.BaseVersion != 0)
+            {
+                return DraftSaveResult.VersionConflict;
+            }
+
             try
             {
                 return await StartAsync(actor, participantId, status, noteDate, request, cancellationToken);
@@ -124,6 +161,11 @@ internal sealed class NoteDrafts(
         if (note.StartedByOtherThan(actor) is { } inProgress)
         {
             return DraftSaveResult.StartedByOther(inProgress);
+        }
+
+        if (note.Status == NoteStatus.Submitted && !await note.MayBeEditedByAsync(db, actor, cancellationToken))
+        {
+            return DraftSaveResult.NotEditable;
         }
 
         // Set by each attempt, as a transient failure runs the whole work again (§5.9). A commit whose answer was lost
@@ -204,25 +246,50 @@ internal sealed class NoteDrafts(
     // In the save's transaction. The working copy is read under an update lock, held until the transaction ends, so
     // that two saves of it at once, such as a page-hidden save beside the save in flight, are decided one after the
     // other, the second on what the first saved, and the higher number wins whichever comes first (autosave-status.md
-    // *Behaviour* 1). A submit that has deleted the working copy holds the read until it commits, so that a save the
-    // submit beat finds none, rather than updating a row deleted since: a plain read would not wait, as Azure SQL
-    // reads committed snapshots. The picks and ticks are checked against the snapshot, which keeps the wording as the
-    // draft started with it (A3).
+    // *Behaviour* 1). HOLDLOCK extends the lock to the place of a working copy that does not exist yet, so that two
+    // first saves of a pending edit by one editor are decided in turn too. A submit that has deleted the working copy
+    // holds the read until it commits, so that a save the submit beat finds none, rather than updating a row deleted
+    // since: a plain read would not wait, as Azure SQL reads committed snapshots. The note is read after the lock, so
+    // it shows what a save that the lock waited for committed, and both write paths lock the working copy before the
+    // note. The picks and ticks are checked against the snapshot, which keeps the wording as the draft started with it
+    // (A3).
     private async Task<DraftSaveResult> UpdateAsync(
         Guid noteId, Actor actor, DraftSaveRequest request, CancellationToken cancellationToken)
     {
         var draft = await db.NoteDrafts
             .FromSql($"""
-                SELECT * FROM [NoteDraft] WITH (UPDLOCK)
+                SELECT * FROM [NoteDraft] WITH (UPDLOCK, HOLDLOCK)
                 WHERE [NoteId] = {noteId} AND [EditorUserId] = {actor.UserId}
                 """)
             .SingleOrDefaultAsync(cancellationToken);
-
-        // A draft's author has a working copy until its version is saved (§5.6), so with none the note is submitted,
-        // and a draft's base, 0, is stale (§6.7).
-        if (draft is null)
+        var note = await LiveNote.All(db)
+            .Where(n => n.Id == noteId)
+            .Select(n => new { n.Status, n.CurrentVersionNumber })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (note is null)
         {
             return DraftSaveResult.VersionConflict;
+        }
+
+        // The base is one that the note has for the caller (A70): the working copy's own, which keeps saving after
+        // someone else saves a newer version, or, on a submitted note, its current version, which creates a pending
+        // edit or, with one, starts it again. A draft's author has a working copy until its version is saved (§5.6), so
+        // with none the note is submitted, and a draft's base, 0, is stale (§6.7). This comes before the page's number,
+        // so that a draft's page meeting a pending edit is told so, not that it was taken over.
+        var onCurrentVersion = note.Status == NoteStatus.Submitted && request.BaseVersion == note.CurrentVersionNumber;
+        var acceptedBase = draft is null
+            ? onCurrentVersion
+            : draft.BaseVersionNumber == request.BaseVersion || onCurrentVersion;
+        if (!acceptedBase)
+        {
+            return DraftSaveResult.VersionConflict;
+        }
+
+        var now = StoredTime.UtcNow(timeProvider);
+        if (draft is null)
+        {
+            return await CreatePendingEditAsync(
+                noteId, actor, request, note.CurrentVersionNumber, now, cancellationToken);
         }
 
         if (draft.LastClientId == request.ClientId)
@@ -246,8 +313,10 @@ internal sealed class NoteDrafts(
             return DraftSaveResult.Invalid(invalid);
         }
 
-        var now = StoredTime.UtcNow(timeProvider);
         var saved = current.With(request);
+
+        // Every version of a note has the snapshot's lists, so moving the base is all that Start again changes.
+        draft.BaseVersionNumber = request.BaseVersion;
         draft.Groups = [.. saved.Groups];
         draft.Items = [.. saved.Items];
         draft.Narrative = request.Narrative;
@@ -259,6 +328,64 @@ internal sealed class NoteDrafts(
         await db.SaveChangesAsync(cancellationToken);
         return DraftSaveResult.Updated(new(now));
     }
+
+    // The editor's first save of a submitted note: their pending edit, made from the rows of its current version, with
+    // the request's picks, ticks, text and flag. It writes no audit event: only the version it later saves is one
+    // (§5.4).
+    private async Task<DraftSaveResult> CreatePendingEditAsync(
+        Guid noteId,
+        Actor actor,
+        DraftSaveRequest request,
+        int versionNumber,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var content = await NoteVersionContent.ReadAsync(db, noteId, versionNumber, cancellationToken);
+        if (content.Snapshot.RefusalOf(request) is { } invalid)
+        {
+            return DraftSaveResult.Invalid(invalid);
+        }
+
+        var saved = content.Snapshot.With(request);
+        db.NoteDrafts.Add(new NoteDraft
+        {
+            NoteId = noteId,
+            EditorUserId = actor.UserId,
+            OrganisationId = tenant.OrganisationId,
+            BaseVersionNumber = versionNumber,
+            Groups = [.. saved.Groups],
+            Items = [.. saved.Items],
+            Narrative = request.Narrative,
+            IsFlagged = request.IsFlagged,
+            FlagReason = FlagReasonOf(request),
+            LastClientId = request.ClientId,
+            LastSeq = request.Seq,
+            CreatedAtUtc = now,
+            UpdatedAtUtc = now,
+        });
+        await db.SaveChangesAsync(cancellationToken);
+        return DraftSaveResult.Updated(new(now));
+    }
+
+    /// <summary>
+    /// Deletes <paramref name="actor"/>'s own pending edit of <paramref name="participantId"/>'s note for
+    /// <paramref name="noteDate"/>, Cancel (§6.3), by one statement: it changes no other editor's working copy, no
+    /// draft, whose base is 0, which Discard leaves with the note, and no version. It checks no role, as a pending edit
+    /// is the caller's own, whose removal changes nothing that anyone else sees (A71), and writes no audit event
+    /// (§5.4).
+    /// </summary>
+    /// <returns>
+    /// Whether it deleted the pending edit; <see langword="false"/> when the actor has none, for a participant not in
+    /// the organisation, a day with no live note, a draft or another organisation's note alike.
+    /// </returns>
+    public async Task<bool> CancelAsync(
+        Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
+        await db.NoteDrafts
+            .Where(d => d.EditorUserId == actor.UserId
+                && d.BaseVersionNumber > 0
+                && LiveNote.All(db).Any(n =>
+                    n.Id == d.NoteId && n.ParticipantId == participantId && n.NoteDate == noteDate))
+            .ExecuteDeleteAsync(cancellationToken) > 0;
 
     // The reason as sent while the note is flagged, a missing one included, as only Submit needs one (§3.4); never
     // while it is not, as an unflagged note has no reason (§5.3).

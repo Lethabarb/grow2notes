@@ -62,6 +62,8 @@ internal static class EndpointMatrix
 
     private static readonly IReadOnlyList<string> Put = ["PUT"];
 
+    private static readonly IReadOnlyList<string> Delete = ["DELETE"];
+
     private static readonly HttpMethod[] CalledForAnyMethod =
         [HttpMethod.Get, HttpMethod.Post, HttpMethod.Put, HttpMethod.Delete];
 
@@ -189,6 +191,13 @@ internal static class EndpointMatrix
         // author, and A's manager each get 204 (§3.4). B's manager does not find the participant (§9.2).
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/discard", Unauthorized,
             NoContent, NoContent, NotFound, DiscardingADraftOfTheWorkerOfA),
+
+        // Cancel (§6.3, A71), for every signed-in user. Each call cancels the pending edit of today's note of a
+        // participant whom its request first adds to A, submitted by A's worker, and A's worker and A's manager each
+        // hold a pending edit of it, as a call commits (tests/README.md), so each gets 204, and the answer is never
+        // 403. B's manager does not find the participant (§9.2).
+        new(Delete,    "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized,
+            NoContent, NoContent, NotFound, CancellingAPendingEditOfTheWorkerOfAAndTheManagerOfA),
 
         // The To review list (§6.4), outside /api/admin with the Manager policy of its own, so for managers alone. The
         // seeded organisations have no flagged note, so each call first flags one in A, and A's manager's list holds
@@ -528,6 +537,29 @@ internal static class EndpointMatrix
             call.Method,
             string.Create(
                 CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/discard"));
+    }
+
+    // Cancel of today's note of a participant whom the request first adds to A, submitted by A's worker, with a pending
+    // edit each for A's worker and A's manager, as their first saves of an edit leave them. The note's dates and times
+    // are made up (A35).
+    private static async Task<HttpRequestMessage> CancellingAPendingEditOfTheWorkerOfAAndTheManagerOfA(
+        EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var today = call.Services.GetRequiredService<MelbourneClock>().Today();
+        var submittedAtUtc = new DateTime(2026, 10, 2, 6, 42, 0, DateTimeKind.Utc);
+        var noteId = await call.Services.AddSubmittedAsync(
+            a,
+            new(
+                participant.Id,
+                today,
+                a.WorkerId,
+                new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc),
+                submittedAtUtc));
+        await call.Services.AddPendingEditAsync(a, noteId, a.WorkerId, submittedAtUtc);
+        await call.Services.AddPendingEditAsync(a, noteId, a.ManagerId, submittedAtUtc);
+        return new HttpRequestMessage(call.Method, TodaysDraftPath(call, participant.Id));
     }
 
     // The To review list, asked for once the request has added to A a participant of its own, whom its FlaggedInA

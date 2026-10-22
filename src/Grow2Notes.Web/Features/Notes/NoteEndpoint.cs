@@ -75,6 +75,8 @@ internal static class NoteEndpoint
             Author: null,
             note.CreatedAtUtc,
             FirstSubmittedAtUtc: null,
+            IsEdited: null,
+            LastEdit: null,
             Current: null);
 
     // A draft has its author's working copy alone (§5.3), whose goals and common items keep the snapshot's order and
@@ -90,58 +92,31 @@ internal static class NoteEndpoint
             return null;
         }
 
-        var snapshot = NoteSnapshot.Of(draft);
-        return new(
-            draft.Narrative,
-            draft.IsFlagged,
-            draft.FlagReason,
-            [.. snapshot.Goals.Select(item => new NoteReadItem(item.Text, item.IsTicked))],
-            snapshot.ShownGroups);
+        return NoteReadVersion.Of(
+            versionNumber: null, NoteSnapshot.Of(draft), draft.Narrative, draft.IsFlagged, draft.FlagReason);
     }
 
     // The version's own goal and common item rows, in their places, which keep the snapshot's order and wording (§5.3,
     // A3). A group shows when it is Every note or picked and has an item row, the rule that ShownGroups applies to a
-    // working copy.
+    // working copy. A note is edited once it has a version after the first, whose creator and time are its last edit.
     private static async Task<NoteRead> SubmittedAsync(
         Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken)
     {
-        var current = await db.NoteVersions
-            .AsNoTracking()
-            .Where(version => version.NoteId == note.Id && version.VersionNumber == note.CurrentVersionNumber)
-            .Select(version => new NoteReadVersion(
-                version.Narrative,
-                version.IsFlagged,
-                version.FlagReason,
-                db.NoteVersionItems
-                    .Where(item => item.NoteVersionId == version.Id && item.Section == NoteSection.Goal)
-                    .OrderBy(item => item.Position)
-                    .Select(item => new NoteReadItem(item.Text, item.IsTicked))
-                    .ToList(),
-                db.NoteVersionGroups
-                    .Where(group => group.NoteVersionId == version.Id
-                        && (group.IsEveryNote || group.IsPicked)
-                        && db.NoteVersionItems.Any(item => item.NoteVersionId == version.Id
-                            && item.Section == NoteSection.CommonItem
-                            && item.GroupPosition == group.Position))
-                    .OrderBy(group => group.Position)
-                    .Select(group => new NoteReadGroup(
-                        group.Name,
-                        group.IsEveryNote,
-                        db.NoteVersionItems
-                            .Where(item => item.NoteVersionId == version.Id
-                                && item.Section == NoteSection.CommonItem
-                                && item.GroupPosition == group.Position)
-                            .OrderBy(item => item.Position)
-                            .Select(item => new NoteReadItem(item.Text, item.IsTicked))
-                            .ToList()))
-                    .ToList()))
-            .SingleAsync(cancellationToken);
+        var content = await NoteVersionContent.ReadAsync(
+            db, note.Id, note.CurrentVersionNumber, cancellationToken);
+        var isEdited = note.CurrentVersionNumber > 1;
+        var lastEdit = isEdited && await LatestVersion.FindAsync(db, note.Id, cancellationToken) is { } latest
+            ? new NoteReadLastEdit(latest.CreatedBy, latest.CreatedAtUtc)
+            : null;
         return new(
             note.Status.ToString(),
             AuthorDisplayName: null,
-            new(note.AuthorDisplayName),
+            new(note.AuthorUserId, note.AuthorDisplayName),
             StartedAtUtc: null,
             note.FirstSubmittedAtUtc,
-            current);
+            isEdited,
+            lastEdit,
+            NoteReadVersion.Of(
+                note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason));
     }
 }

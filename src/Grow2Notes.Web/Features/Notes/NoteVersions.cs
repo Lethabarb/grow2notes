@@ -9,20 +9,19 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <summary>
 /// The handler of a version save of a participant's note for a day (design.md §5.8, §6.3), found by its natural key as
 /// <see cref="NoteDrafts"/> finds it, as a handler class that takes the <see cref="Actor"/> (mcp-server.md §3.5,
-/// convention 1): <c>POST {base}/versions</c> calls it with <see cref="Actor.InApp"/>. It saves version 1, Submit; T14
-/// adds Save changes on a submitted note.
+/// convention 1): <c>POST {base}/versions</c> calls it with <see cref="Actor.InApp"/>. It saves version 1, Submit, and
+/// each later version, Save changes, on a submitted note.
 /// </summary>
 /// <remarks>
 /// Each save runs in one transaction (§5.9), so the header's change, its flag status with it, the version, its goal,
-/// group and common item rows, the working copy's deletion and <c>note.submitted</c> commit together or not at all.
+/// group and common item rows, the working copy's deletion and <c>note.submitted</c> or <c>note.edited</c> commit
+/// together or not at all.
 /// The tenant query filter keeps every query, and the header's conditional update, to the tenant's organisation (§5.9
 /// item 2).
 /// </remarks>
 internal sealed class NoteVersions(
     Grow2NotesDbContext db, ITenantContext tenant, IAuditWriter audit, TimeProvider timeProvider)
 {
-    private const int FirstVersion = 1;
-
     // The screen makes a key for each opening of its confirmation, so this answers only a request made some other way.
     private static readonly IReadOnlyDictionary<string, string[]> KeyOfAnotherNote = new Dictionary<string, string[]>
     {
@@ -36,32 +35,36 @@ internal sealed class NoteVersions(
         };
 
     /// <summary>
-    /// Saves <paramref name="request"/> as version 1 of <paramref name="participantId"/>'s note for
-    /// <paramref name="noteDate"/>, submitting <paramref name="actor"/>'s own draft (§5.8): moves the note to
-    /// Submitted, with version 1 its current version and now its first submitted time, and, when it is flagged, To
-    /// review with version 1 its flagged version (§5.8's flag rules), by one conditional update;
-    /// adds version 1 with the request's text and flag, a reason only while flagged, the groups of the working copy's
-    /// snapshot, Every note first, each picked as the request says, and its goals and common items, in its order and
-    /// with its wording (A3), each ticked as the request says, those of a group that is not picked unticked; deletes
-    /// the working copy (§5.6); and writes <c>note.submitted</c>, with the version number and no text.
+    /// Saves <paramref name="request"/> as version <c>base + 1</c> of <paramref name="participantId"/>'s note for
+    /// <paramref name="noteDate"/> (§5.8): Submit at base 0, of <paramref name="actor"/>'s own draft, or Save changes
+    /// at the note's current version, of their pending edit. One conditional update moves the note's current version
+    /// to the new one; at base 0 it also moves the note to Submitted, with now its first submitted time, and, when it
+    /// is flagged, to To review with version 1 its flagged version (§5.8's flag rules), and for later versions it
+    /// writes no flag (T16). The version has the request's text and flag, a reason only while flagged, the groups of
+    /// the working copy's snapshot, Every note first, each picked as the request says, and its goals and common items,
+    /// in its order and with its wording (A3), each ticked as the request says, those of a group that is not picked
+    /// unticked, and the actor as its creator. The actor's working copy is deleted (§5.6), and <c>note.submitted</c>
+    /// or <c>note.edited</c> is written, with the version number and no text.
     /// </summary>
-    /// <param name="actor">Who submits.</param>
+    /// <param name="actor">Who saves.</param>
     /// <param name="participantId">The note's participant.</param>
     /// <param name="noteDate">The note's date, which the draft keeps whenever it is submitted (§3.3, §3.4).</param>
     /// <param name="idempotencyKey">
     /// The request's <c>Idempotency-Key</c>, which finds the version that an earlier try with it saved, so that a retry
     /// saves no second one.
     /// </param>
-    /// <param name="request">The base version, 0, and the note's content.</param>
+    /// <param name="request">The base version and the note's content.</param>
     /// <param name="cancellationToken">Cancels the work.</param>
     /// <returns>
     /// In this order: <see cref="NoteVersionResult.NotFound"/> for no participant of that ID in the organisation, or
-    /// for no live note; who started another user's draft, which only its author may submit (§6.3); the version saved
+    /// for no live note; who started another user's draft, which only its author may submit (§6.3);
+    /// <see cref="NoteVersionResult.NotEditable"/> for a submitted note that the actor may not edit; the version saved
     /// by an earlier try with the key, changing nothing, or the refusal of a key that a version of another note has;
-    /// <see cref="NoteVersionResult.VersionConflict"/> for a submitted note; the refusal of a flagged note with a
-    /// blank reason, or of a tick or a pick that the snapshot refuses (<see cref="NoteSnapshot.RefusalOf"/>); then the
-    /// version saved. A refusal writes nothing. There is no date or archive check, as a draft already started can
-    /// still be submitted (§3.7, §5.5 item 4).
+    /// <see cref="NoteVersionResult.VersionConflict"/> for a base that is not the note's current version, with that
+    /// version's creator and time when it has one; the refusal of a flagged note with a blank reason; the same
+    /// conflict for an actor who has no working copy at the base; the refusal of a tick or a pick that the snapshot
+    /// refuses (<see cref="NoteSnapshot.RefusalOf"/>); then the version saved. A refusal writes nothing. There is no
+    /// date or archive check, as a draft already started can still be submitted (§3.7, §5.5 item 4).
     /// </returns>
     public async Task<NoteVersionResult> SaveAsync(
         Actor actor,
@@ -104,6 +107,11 @@ internal sealed class NoteVersions(
             return NoteVersionResult.StartedByOther(inProgress);
         }
 
+        if (note.Status == NoteStatus.Submitted && !await note.MayBeEditedByAsync(db, actor, cancellationToken))
+        {
+            return NoteVersionResult.NotEditable;
+        }
+
         if (await VersionOfKeyAsync(idempotencyKey, cancellationToken) is { } keyed)
         {
             return keyed.NoteId == note.Id
@@ -111,9 +119,11 @@ internal sealed class NoteVersions(
                 : NoteVersionResult.Invalid(KeyOfAnotherNote);
         }
 
-        if (note.Status == NoteStatus.Submitted)
+        // A retry of a save that committed has found its version above, so a base that is not the current one is stale.
+        if (request.BaseVersion != note.CurrentVersionNumber)
         {
-            return NoteVersionResult.VersionConflict;
+            return NoteVersionResult.VersionConflict(
+                await LatestVersion.FindAsync(db, note.Id, cancellationToken));
         }
 
         if (request.IsFlagged && string.IsNullOrWhiteSpace(request.FlagReason))
@@ -121,10 +131,17 @@ internal sealed class NoteVersions(
             return NoteVersionResult.Invalid(FlaggedWithNoReason);
         }
 
-        // A draft's author has a working copy until its version is saved (§5.6), so with none another submit has saved
-        // version 1 since the note was read.
+        // A draft's author has a working copy until its version is saved (§5.6), and an editor of a submitted note
+        // until they save or cancel it, so with none at the base another save has moved the note on since it was read.
+        // The update lock holds the working copy until the transaction ends, before the note's header, as a save of it
+        // does.
         var draft = await db.NoteDrafts
-            .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == actor.UserId, cancellationToken);
+            .FromSql($"""
+                SELECT * FROM [NoteDraft] WITH (UPDLOCK)
+                WHERE [NoteId] = {note.Id} AND [EditorUserId] = {actor.UserId}
+                    AND [BaseVersionNumber] = {request.BaseVersion}
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
         if (draft is null)
         {
             return await AfterAnotherSaveAsync(note.Id, idempotencyKey, cancellationToken);
@@ -140,24 +157,29 @@ internal sealed class NoteVersions(
 
         var now = StoredTime.UtcNow(timeProvider);
 
-        // §5.8 step 5, on base 0. ExecuteUpdate bypasses the save interceptors, which is why only this header update
-        // uses it; it still applies the tenant query filter. A draft has no flag status (§3.6), so version 1 meets the
-        // flag rules from None: their first row puts a flagged one in To review, and their last leaves an unflagged
-        // one None, its flagged version null.
+        // §5.8 step 5. ExecuteUpdate bypasses the save interceptors, which is why only this header update uses it; it
+        // still applies the tenant query filter. A draft has no flag status (§3.6), so version 1 meets the flag rules
+        // from None: their first row puts a flagged one in To review, and their last leaves an unflagged one None, its
+        // flagged version null. The flag rules of later versions are T16's, so a Save changes leaves them as they are.
+        var baseVersion = request.BaseVersion;
+        var versionNumber = baseVersion + 1;
         var advanced = await db.Notes
             .Where(n => n.Id == note.Id
-                && n.CurrentVersionNumber == 0
+                && n.CurrentVersionNumber == baseVersion
                 && (n.Status == NoteStatus.Draft || n.Status == NoteStatus.Submitted))
             .ExecuteUpdateAsync(
                 set =>
                 {
-                    set.SetProperty(n => n.CurrentVersionNumber, FirstVersion)
-                        .SetProperty(n => n.Status, NoteStatus.Submitted)
-                        .SetProperty(n => n.FirstSubmittedAtUtc, now);
-                    if (request.IsFlagged)
+                    set.SetProperty(n => n.CurrentVersionNumber, versionNumber);
+                    if (baseVersion == 0)
                     {
-                        set.SetProperty(n => n.FlagStatus, FlagStatus.ToReview)
-                            .SetProperty(n => n.FlaggedVersionNumber, FirstVersion);
+                        set.SetProperty(n => n.Status, NoteStatus.Submitted)
+                            .SetProperty(n => n.FirstSubmittedAtUtc, now);
+                        if (request.IsFlagged)
+                        {
+                            set.SetProperty(n => n.FlagStatus, FlagStatus.ToReview)
+                                .SetProperty(n => n.FlaggedVersionNumber, versionNumber);
+                        }
                     }
                 },
                 cancellationToken);
@@ -171,7 +193,7 @@ internal sealed class NoteVersions(
         {
             OrganisationId = organisationId,
             NoteId = note.Id,
-            VersionNumber = FirstVersion,
+            VersionNumber = versionNumber,
             Narrative = request.Narrative,
             IsFlagged = request.IsFlagged,
             FlagReason = request.IsFlagged ? request.FlagReason : null,
@@ -219,10 +241,18 @@ internal sealed class NoteVersions(
 
         // The version number alone, as the note row holds its date and author, and an event never copies note text.
         await audit.WriteAsync(
-            organisationId, actor.UserId, AuditEventTypes.Note.Submitted, AuditEntityTypes.Note, note.Id,
-            participantId, new JsonObject { ["versionNumber"] = FirstVersion }, cancellationToken);
-        var flagStatus = request.IsFlagged ? FlagStatus.ToReview : FlagStatus.None;
-        return NoteVersionResult.Added(new(FirstVersion, now, flagStatus.ToString()));
+            organisationId,
+            actor.UserId,
+            baseVersion == 0 ? AuditEventTypes.Note.Submitted : AuditEventTypes.Note.Edited,
+            AuditEntityTypes.Note,
+            note.Id,
+            participantId,
+            new JsonObject { ["versionNumber"] = versionNumber },
+            cancellationToken);
+
+        // Read back, as the note's flag status is the one stored, which an edit leaves as it was.
+        var stored = (await VersionOfKeyAsync(idempotencyKey, cancellationToken))!.Saved;
+        return NoteVersionResult.Added(stored);
     }
 
     // Another save advanced the note after this one read it: an earlier try with the same key, whose version this is
@@ -231,7 +261,7 @@ internal sealed class NoteVersions(
         Guid noteId, Guid idempotencyKey, CancellationToken cancellationToken) =>
         await VersionOfKeyAsync(idempotencyKey, cancellationToken) is { } keyed && keyed.NoteId == noteId
             ? NoteVersionResult.Retried(keyed.Saved)
-            : NoteVersionResult.VersionConflict;
+            : NoteVersionResult.VersionConflict(await LatestVersion.FindAsync(db, noteId, cancellationToken));
 
     // The version that has the key in the tenant's organisation, in which the key is unique (§5.3), with its note, and
     // that note's flag status as it is now, which a review may have changed since the version was saved.

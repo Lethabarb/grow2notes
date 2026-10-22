@@ -64,6 +64,7 @@ internal static class NoteHistoryEndpoint
                 n.NoteDate,
                 n.Status,
                 author.DisplayName,
+                n.CurrentVersionNumber,
                 IsFlagged = db.NoteVersions.Any(
                     v => v.NoteId == n.Id && v.VersionNumber == n.CurrentVersionNumber && v.IsFlagged),
                 n.FlagStatus,
@@ -78,6 +79,8 @@ internal static class NoteHistoryEndpoint
                     row.NoteDate,
                     row.Status.ToString(),
                     row.DisplayName,
+                    row.CurrentVersionNumber,
+                    row.CurrentVersionNumber > 1,
                     row.IsFlagged,
                     isManager ? row.FlagStatus.ToString() : null)),
             ],
