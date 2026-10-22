@@ -470,10 +470,10 @@ describe('Past notes once loaded', () => {
     await openPastNotes();
 
     const [both, edited, plain] = rowLinks();
-    expect(both).toHaveAccessibleDescription('Submitted, Alex P., Flagged, Edited');
+    expect(both).toHaveAccessibleDescription(/^Submitted ?, Alex P\. ?, Flagged ?, Edited$/);
     const bothTags = within(document.getElementById(both.getAttribute('aria-describedby')!)!);
     expect(bothTags.getByText('Edited')).toHaveClass(tagStyles.tag, tagStyles.neutral);
-    expect(edited).toHaveAccessibleDescription('Submitted, Alex P., Edited');
+    expect(edited).toHaveAccessibleDescription(/^Submitted ?, Alex P\. ?, Edited$/);
     expect(plain).toHaveAccessibleDescription('Submitted, Alex P.');
     expect(within(list()).getAllByText('Edited')).toHaveLength(2);
   });

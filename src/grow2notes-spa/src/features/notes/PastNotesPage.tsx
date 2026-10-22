@@ -8,10 +8,10 @@ import { ChronoList } from '../../components/ChronoList.tsx';
 import { LinkRow } from '../../components/LinkRow.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { MetaLine } from '../../components/MetaLine.tsx';
-import type { TagKind } from '../../components/Tag.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
+import type { TagKind } from '../../components/Tag.tsx';
 import { dateLong, parseDateOnly } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
@@ -85,7 +85,7 @@ type LoadedProps = {
   isManager: boolean;
 };
 
-// A row's tags, in the order status-tags.md gives them: Flagged, then Edited. A draft has neither.
+/** A row's tags, in the order status-tags.md gives them: Flagged, then Edited. A draft has neither. */
 function tagsOf(note: PastNote): TagKind[] {
   const tags: TagKind[] = [];
   if (note.status === 'Submitted' && note.isFlagged) {
