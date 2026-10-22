@@ -226,8 +226,8 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | The Today list (all participants, D20), "Your unfinished drafts", and participant history | F02.01 | F02.04 (participant history) | See *Rows to watch* |
 | 2 | The note form: Goals, Common items with the Every note group and the group picker (D44, D45), Guided notes with placeholder prompts, Flag for manager with reason, and Submit | F02.03 | F02.02 (Goals, Guided notes), F02.05 (Common items, group picker) | See *Rows to watch* |
-| 3 | Starting picks copied from the participant's most recent submitted note (D46, A44), with no line naming its date (A47 dropped, D83) | F02.05 | | The owner dropped A47 on 13 October 2026 (S02.05.03 Notes) |
-| 4 | Autosave with `clientId` and `seq`; snapshot (goals, groups and items) at draft creation with the `listsVersion` check; picks autosaved and versioned with the ticks; discard as a status change | F02.02 | F02.05 (picks and the groups snapshot) | |
+| 3 | Starting picks copied from the participant's most recent submitted note (D46, A44), with no line naming its date (A47 dropped, D83) | F02.05 | | The owner dropped A47 on 13 October 2026 (S02.05.03 Notes). Built by T13 (20 October 2026): the template's picks come from the latest earlier submitted note, any author, for groups still offered, and nothing stores the source (S02.05.03) |
+| 4 | Autosave with `clientId` and `seq`; snapshot (goals, groups and items) at draft creation with the `listsVersion` check; picks autosaved and versioned with the ticks; discard as a status change | F02.02 | F02.05 (picks and the groups snapshot) | The groups, picks and common-item ticks are built by T13 (20 October 2026): the snapshot, `listsVersion` over the groups, the picks in every save and in the version (S02.05.01, S02.05.02, S02.05.04) |
 | 5 | One live note per participant per day, enforced by the filtered unique index | F02.02 | | |
 | 6 | Submit creates version 1; Save changes by the author or a manager creates the next version; pending edits and Cancel; version history for managers | F02.06 | F02.03 (version 1), F02.07 (version history) | |
 | 7 | Past-day notes for managers. Melbourne "today" through `TimeProvider` | F02.08 | S00.01.01 (the clock), S02.02.01 (its daylight-saving tests) | |
@@ -243,8 +243,8 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 5 | The server refuses a worker's note for any date other than today in Melbourne; the daylight-saving tests pass with a fake clock, under `TZ=UTC` and on Windows | F02.02 | S00.01.01 (the clock), S02.02.01 (the daylight-saving tests) | |
 | 6 | A second live note for the same participant and day cannot be created (database test); after a discard, a new note can | F02.02 | | |
 | 7 | Each Save changes adds exactly one version, and earlier versions are byte-for-byte unchanged | F02.06 | | |
-| 8 | A goal reworded, or a group renamed, after a draft was created does not change that draft or its submitted version | F02.05 | S02.02.03 (the goals snapshot) | |
-| 9 | A new note starts with the last submitted note's picks, skipping archived groups, and no item ticks; with no earlier note, nothing is picked; unpicking clears ticks; a picks change in an edit creates a new version (automated tests) | F02.05 | S02.06.01 (the edit) | |
+| 8 | A goal reworded, or a group renamed, after a draft was created does not change that draft or its submitted version | F02.05 | S02.02.03 (the goals snapshot) | The group part is built by T13 (20 October 2026): a renamed group keeps its old name in the draft and in `NoteVersionGroup` (S02.05.04) |
+| 9 | A new note starts with the last submitted note's picks, skipping archived groups, and no item ticks; with no earlier note, nothing is picked; unpicking clears ticks; a picks change in an edit creates a new version (automated tests) | F02.05 | S02.06.01 (the edit) | All but the last clause is built by T13 (20 October 2026), unpicking clearing ticks as A46 says (S02.05.02, S02.05.03); the picks change in an edit is T14's (S02.06.01) |
 
 **ux/screens/today.md**
 

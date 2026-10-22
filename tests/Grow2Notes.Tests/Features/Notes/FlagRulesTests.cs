@@ -64,6 +64,8 @@ public sealed class FlagRulesTests(Grow2NotesFactory factory, SqlServerFixture s
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged,
                 flagReason,
             }),

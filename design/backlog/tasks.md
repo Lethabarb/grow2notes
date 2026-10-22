@@ -4412,7 +4412,7 @@ manager can read it.
 
 ```yaml
 id: T13
-status: new
+status: done
 release: R1
 lane: C
 size: L
@@ -4473,10 +4473,86 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
   `commonItemGroups`, from the author's working copy, the Every note group if it has items and the groups picked, in
   the snapshot's order (design.md §6.3), and "2. Common items" shows there as on the read view (S02.04.03's dated
   Note).
+- From T13 (20 October 2026), built in four verticals (the data layer, #67; the notes API, #69; the note form, #68;
+  and this, the read view, the docs and the close). The choices the design left open, and the review's resolutions:
+  - The refusals are `422 validation.failed` with one key, as `tickedGoalIds`'s is, as §5.7, §5.8 and §6.9 give no
+    code: `pickedGroupIds` for picking Every note, a group with no item in the stored snapshot or an ID outside it (a
+    group added after the draft started included), and `tickedCommonItemIds` for an item outside Every note and the
+    picked groups, unknown IDs included. The checks run in the order `listsVersion` (a first save), goals, picks,
+    items, and a refusal writes nothing and has no audit event. No new `ErrorCode` (design.md A67).
+  - `listsVersion` is taken literally from §5.7: the goals and every snapshot group (ID, name, order) with its items
+    (ID, wording, order), Every note and empty groups included, with no picks or ticks, so that a group added, even
+    empty, is a `409 note.lists_changed`. A form opened before the deploy gets one `409` on its first save and
+    reloads (design.md A68).
+  - "At least one item" (§5.7) is at least one item in the stored snapshot, which holds active items only.
+  - Starting picks come from the participant's most recent Submitted note dated before the note date, by any author,
+    from its current version's `IsPicked` rows, and are kept only for groups the template offers. They are worked out
+    in `GET {base}/draft`'s template alone and nothing stores their source (D83). The first `PUT` validates what
+    the page sends and does not work them out again. A later-dated note is no source (a manager's template for an
+    earlier day).
+  - `pickedGroupIds` and `tickedCommonItemIds` are required in both bodies and may be empty, as
+    `tickedGoalIds` is: optional fields would let a client that dropped them clear the picks silently.
+  - Nothing is backfilled. A draft saved before T13 has no groups, so it shows "No common items set up." and submits
+    none, as its snapshot predates common items (A3); a version from before T13 has no `NoteVersionGroup` rows and
+    reads as "No common items set". Both are test data, and ops/first-use-in-test.md says to discard such drafts.
+  - A page open across the deploy cannot save until it is reloaded, but loses nothing silently: an autosave refused
+    with a `422` is sent once and never again (autosave-status.md *Behaviour* 5), the leave guard keeps the text, and
+    Submit's `422` closes the confirmation and shows the summary's "not submitted" item. This is how every earlier
+    change to a body behaved.
+  - A takeover Keep against a different snapshot, which can send a group or an Every note item added after the draft
+    started, gets the same `422` and leaves the change unsaved, as `tickedGoalIds` does. No reload is invented.
+  - Tenancy: a source note of another author is tested. A two-organisation test of the starting picks is declined: the
+    query is scoped to the caller's participant, which the endpoint tests already `404` across organisations,
+    `NoteVersionGroup` is tenant-owned (asserted in its model test), and its composite foreign keys make a
+    cross-organisation row impossible. `Take(1)` by `NoteDate` descending is deterministic, as the unique index on
+    organisation, participant and date allows one submitted note a date.
+  - One pure `NoteSnapshot` holds every snapshot rule: draft start, draft update, Submit, the draft read and
+    `ListsVersion` share it. A version shows a group when it is Every note or picked and has an item row, the same
+    rule for a draft and, in SQL, for a version.
+  - Focus after the lists-changed reload is the existing check: a focused box that has been unmounted (an archived
+    group's row, or an item moved to another list) sends focus to the notice; Load already focuses the `<h1>`.
+  - No global `[hidden]` rule, which departs from note-form.md component 9's suggestion: an unpicked group's wrapper
+    sets no `display` (`.block`), as Flag for manager's does, so the native `hidden` attribute hides it, and a
+    test asserts the attribute.
+  - The read view's `.groups` rule is `.groups > div + div`, not `> * + *`: the lists' own root sets its margin in
+    a rule of the same weight, and naming the element keeps the result from depending on stylesheet order.
+  - The e2e fake's `versionOf` stays a one-line hash that agrees with its own template, and does no starting picks:
+    the server and Vitest tests prove both rules.
+- From T13 (20 October 2026), to T14: edit mode is not built, and `CommonItemsField` takes an `emptyText`, not an
+  `editMode` flag, so T14 passes `readView.noCommonItems` ("No common items set") as the edit form's. T14 proves
+  note-form.md item 30i and §14 M2's "a picks change in an edit creates a new version" (S02.06.01). It builds an edit's
+  working copy from the version's `NoteVersionGroup` and `NoteVersionItem` rows: a `NoteSnapshot` made from
+  version rows, which the record can take. A version from before T13 has no group rows, so T14 decides how an edit of
+  one gets its groups; the simplest is a snapshot with no groups, as a pre-T13 draft has here. S02.08.02 proves the
+  manager's past-day screen; the API's rule that a later note is no source of picks is tested here.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The data layer (#67; S02.05.01's first criterion, design.md §5.3 and §5.8): `NoteVersionGroup`, append-only
+      and tenant-owned, with its key, its alternate key, its composite foreign keys and
+      `CK_NoteVersionGroup_EveryNoteNotPicked`; the optional foreign key from `NoteVersionItem.GroupPosition`; the
+      expand-only `AddNoteVersionGroup` migration with `DENY UPDATE, DELETE` for `grow2notes_runtime`; model,
+      table and runtime-role tests, and ops/first-use-in-test.md step 67.
+- [x] The notes API (#69; S02.05.01 to S02.05.04 on the server, design.md §5.7, §5.8 and §6.3): `NoteSnapshot` and
+      `INoteTicks`; the template's groups and starting picks; `listsVersion` over the groups; the first save's
+      snapshot, later saves' picks and ticks, and the three refusals; Submit writing the group and common-item rows;
+      `GET {base}`'s `commonItemGroups` for a submitted note and a manager's read of a draft; integration tests on
+      SQL Server.
+- [x] The note form (#68; S02.05.02, S02.05.03 and S02.05.04 in the SPA, note-form.md items 30c to 30j and 17,
+      group-picker.md): `CommonItemsField`, `TickListField`'s `headingLevel` and `hintId`, picks and ticks in
+      every save through `sentContent()`, unpicking clearing ticks, the lists-changed reload and Load and Keep with
+      picks; the copy; Vitest and Playwright tests.
+- [x] The read view and the manager's read of a draft (S02.05.01 and S02.05.02's last criteria, participant-notes.md
+      item 17a; S02.04.03's hand-off): "2. Common items" between Goals and Guided notes in `ReadSections`, for
+      `ReadView` and `SomeoneElsesDraft`, an `<h3>` per group or "No common items set", never the question and
+      never filtered; Vitest and Playwright tests, with axe and 375 px.
+- [x] Docs: checkbox-list.md's *Built* bullets; ops/first-use-in-test.md's section for T13, steps 67 to 69 (the
+      database, the 375 px submit check with common items, the group picker's screen-reader pass); design.md §13's A67
+      and A68; the by-hand checks stay out of the work items.
+- [x] Close the backlog (owner, 20 October 2026: this machine builds with warnings as errors and lints, and runs no
+      test, app or deploy; CI on the pull request runs every test and decides): T13's `status` and F02.05's stories'
+      set to `done`, their criteria ticked with dated Notes, S02.02.06's second criterion ticked for its picks,
+      S02.04.03's and F02.03's Notes, and coverage.md's M2 rows 3, 4, 8 and 9 (row 9 but for T14's edit part).
 
 ---
 
@@ -4533,6 +4609,13 @@ and shown the newer version, so nothing is silently overwritten.
   earlier-day notice and More actions show on a draft saved as the form opens, which a pending edit is too, so this
   task keeps both off a pending edit's form (note-form.md *Kinds of note*'s "Editing a submitted note"; S02.02.08's
   and S02.03.03's dated Notes).
+- From T13 (20 October 2026): the note form's section 2 and the read view's are built, and edit mode is not: this task
+  gives `CommonItemsField` its `emptyText`, `readView.noCommonItems`, and proves note-form.md item 30i and the
+  rule that a picks change in an edit makes a new version. The edit's working copy is built from the version's
+  `NoteVersionGroup` and `NoteVersionItem` rows, as a `NoteSnapshot` made from them (`Groups` in position
+  order, `Items` goals then common items, each item's group by `GroupPosition`). A version from before T13 has no
+  group rows, and this task decides how its edit gets groups; the simplest is a snapshot with no groups. The Save
+  changes `POST` already carries `pickedGroupIds` and `tickedCommonItemIds` (T13's Notes).
 
 ### Steps
 

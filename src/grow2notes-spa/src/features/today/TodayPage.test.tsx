@@ -154,6 +154,7 @@ const newNote: Draft = {
   listsVersion: 'lists-1',
   guidePrompts: '',
   goals: [],
+  commonItemGroups: [],
   narrative: '',
   isFlagged: false,
   flagReason: null,
@@ -164,7 +165,7 @@ const alexsSubmittedNote: SubmittedNote = {
   status: 'Submitted',
   author: { displayName: 'Alex P.' },
   firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
-  current: { narrative: 'Jane made toast.', goals: [], isFlagged: false, flagReason: null },
+  current: { narrative: 'Jane made toast.', goals: [], commonItemGroups: [], isFlagged: false, flagReason: null },
 };
 
 /**

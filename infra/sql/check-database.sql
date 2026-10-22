@@ -14,8 +14,8 @@
 --      kv-grow2notes-<env>, and no unencrypted masterKey. The app identity can read and add keys.
 --   D  grow2notes_runtime is in db_datareader and db_datawriter only, and is denied DELETE on dbo.Organisation,
 --      dbo.AspNetUsers, dbo.Participant, dbo.Goal, dbo.CommonItemGroup, dbo.CommonItem and dbo.Note, and UPDATE and
---      DELETE on dbo.AuditEvent, dbo.NoteVersion and dbo.NoteVersionItem; impersonating the app identity shows the
---      denies in effect, and that it may delete the working copies in dbo.NoteDraft.
+--      DELETE on dbo.AuditEvent, dbo.NoteVersion, dbo.NoteVersionGroup and dbo.NoteVersionItem; impersonating the app
+--      identity shows the denies in effect, and that it may delete the working copies in dbo.NoteDraft.
 --   E  Entra-only authentication is on, no database user signs in with a SQL password, and no Entra group is a
 --      database user. For information only: the app identity's open sessions.
 -- The second result set has one row per row of the key ring, as dates and 1/0 flags. To check that a restart of the
@@ -318,6 +318,14 @@ BEGIN TRY
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersion', N'OBJECT', N'UPDATE')), N'NULL'),
         N' DELETE=',
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersion', N'OBJECT', N'DELETE')), N'NULL'),
+        N'; NoteVersionGroup SELECT=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'SELECT')), N'NULL'),
+        N' INSERT=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'INSERT')), N'NULL'),
+        N' UPDATE=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'UPDATE')), N'NULL'),
+        N' DELETE=',
+        ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'DELETE')), N'NULL'),
         N'; NoteVersionItem SELECT=',
         ISNULL(CONVERT(nvarchar(4), HAS_PERMS_BY_NAME(N'dbo.NoteVersionItem', N'OBJECT', N'SELECT')), N'NULL'),
         N' INSERT=',
@@ -368,6 +376,10 @@ BEGIN TRY
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersion', N'OBJECT', N'INSERT') = 1
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersion', N'OBJECT', N'UPDATE') = 0
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersion', N'OBJECT', N'DELETE') = 0
+                         AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'SELECT') = 1
+                         AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'INSERT') = 1
+                         AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'UPDATE') = 0
+                         AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionGroup', N'OBJECT', N'DELETE') = 0
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionItem', N'OBJECT', N'SELECT') = 1
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionItem', N'OBJECT', N'INSERT') = 1
                          AND HAS_PERMS_BY_NAME(N'dbo.NoteVersionItem', N'OBJECT', N'UPDATE') = 0
@@ -476,7 +488,7 @@ FROM (SELECT object_id, name FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo')
 FULL JOIN (VALUES (N'__EFMigrationsHistory'), (N'AspNetUserClaims'), (N'AspNetUserLogins'), (N'AspNetUserPasskeys'),
                   (N'AspNetUsers'), (N'AspNetUserTokens'), (N'AuditEvent'), (N'CommonItem'), (N'CommonItemGroup'),
                   (N'DataProtectionKeys'), (N'Goal'), (N'Note'), (N'NoteDraft'), (N'NoteVersion'),
-                  (N'NoteVersionItem'), (N'Organisation'), (N'Participant')) AS e(name)
+                  (N'NoteVersionGroup'), (N'NoteVersionItem'), (N'Organisation'), (N'Participant')) AS e(name)
     ON e.name = t.name COLLATE DATABASE_DEFAULT;
 
 DECLARE @b8 nvarchar(max) = (
@@ -488,7 +500,8 @@ DECLARE @b8Expected int = (
     WHERE MigrationId IN (N'20261004032521_InitialCreate', N'20261008130254_AddAuditEvent',
                           N'20261014113808_AddParticipant', N'20261017154447_AddGoal',
                           N'20261017230811_AddCommonItems', N'20261017231729_AddNote',
-                          N'20261018085706_AddNoteVersion'));
+                          N'20261018085706_AddNoteVersion',
+                          N'20261020054950_AddNoteVersionGroup'));
 
 ------------------------------------------------------------------------------------------------------------------------
 -- C. The Data Protection key ring in SQL, wrapped by the Key Vault key
@@ -574,10 +587,12 @@ SELECT @d3 = STRING_AGG(CONCAT(p.state_desc, N' ', p.permission_name, N' on ', p
                                                            OBJECT_ID(N'dbo.CommonItem', N'U'),
                                                            OBJECT_ID(N'dbo.Note', N'U'),
                                                            OBJECT_ID(N'dbo.NoteVersion', N'U'),
+                                                           OBJECT_ID(N'dbo.NoteVersionGroup', N'U'),
                                                            OBJECT_ID(N'dbo.NoteVersionItem', N'U')))
                                     OR (p.permission_name = N'UPDATE'
                                         AND p.major_id IN (OBJECT_ID(N'dbo.AuditEvent', N'U'),
                                                            OBJECT_ID(N'dbo.NoteVersion', N'U'),
+                                                           OBJECT_ID(N'dbo.NoteVersionGroup', N'U'),
                                                            OBJECT_ID(N'dbo.NoteVersionItem', N'U'))))
                               THEN 1 ELSE 0 END)
 FROM sys.database_permissions AS p
@@ -707,10 +722,10 @@ WITH checks AS (
               ISNULL(@b6, N'(no tables)'),
               CASE WHEN @b6Total > 0 AND @b6NotDbo = 0 THEN 1 ELSE 0 END),
         (207, N'B7', N'Tables created by the migrations, plus __EFMigrationsHistory',
-              N'17 present, none missing',
+              N'18 present, none missing',
               CONCAT(ISNULL(@b7Present, 0), N' present; missing: ', ISNULL(@b7Missing, N'none'),
                      N'; other tables: ', ISNULL(@b7Extra, N'none')),
-              CASE WHEN @b7Present = 17 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
+              CASE WHEN @b7Present = 18 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
         (208, N'B8', N'Migrations history (dbo.__EFMigrationsHistory)',
               CONCAT(N'20261004032521_InitialCreate (EF Core 10.0.12), ',
                      N'20261008130254_AddAuditEvent (EF Core 10.0.12), ',
@@ -718,9 +733,10 @@ WITH checks AS (
                      N'20261017154447_AddGoal (EF Core 10.0.12), ',
                      N'20261017230811_AddCommonItems (EF Core 10.0.12), ',
                      N'20261017231729_AddNote (EF Core 10.0.12), ',
-                     N'20261018085706_AddNoteVersion (EF Core 10.0.12)'),
+                     N'20261018085706_AddNoteVersion (EF Core 10.0.12), ',
+                     N'20261020054950_AddNoteVersionGroup (EF Core 10.0.12)'),
               ISNULL(@b8, N'(empty)'),
-              CASE WHEN @b8Expected = 7 THEN 1 ELSE 0 END),
+              CASE WHEN @b8Expected = 8 THEN 1 ELSE 0 END),
 
         (301, N'C1', N'Key ring table dbo.DataProtectionKeys and its columns',
               N'Id int, FriendlyName nvarchar(max), Xml nvarchar(max)',
@@ -769,24 +785,27 @@ WITH checks AS (
                      N'DENY DELETE on OBJECT_OR_COLUMN dbo.Note; ',
                      N'DENY DELETE on OBJECT_OR_COLUMN dbo.NoteVersion; ',
                      N'DENY UPDATE on OBJECT_OR_COLUMN dbo.NoteVersion; ',
+                     N'DENY DELETE on OBJECT_OR_COLUMN dbo.NoteVersionGroup; ',
+                     N'DENY UPDATE on OBJECT_OR_COLUMN dbo.NoteVersionGroup; ',
                      N'DENY DELETE on OBJECT_OR_COLUMN dbo.NoteVersionItem; ',
                      N'DENY UPDATE on OBJECT_OR_COLUMN dbo.NoteVersionItem; ',
                      N'DENY DELETE on OBJECT_OR_COLUMN dbo.Organisation; ',
                      N'DENY DELETE on OBJECT_OR_COLUMN dbo.Participant'),
               ISNULL(@d3, N'(none)'),
-              CASE WHEN @d3Count = 13 AND @d3Expected = 13 THEN 1 ELSE 0 END),
+              CASE WHEN @d3Count = 15 AND @d3Expected = 15 THEN 1 ELSE 0 END),
         (404, N'D4', N'Members of grow2notes_runtime',
               @AppUser,
               ISNULL(@d4, N'(none)'),
               CASE WHEN @d4 = @AppUser THEN 1 ELSE 0 END),
         (405, N'D5',
               CONCAT(N'As the app identity: SELECT and INSERT allowed; DELETE refused on Organisation, ',
-                     N'AspNetUsers, AuditEvent, Participant, Goal, CommonItemGroup, CommonItem, Note, NoteVersion and ',
-                     N'NoteVersionItem, and UPDATE on AuditEvent, NoteVersion and NoteVersionItem; DELETE allowed on ',
-                     N'NoteDraft'),
+                     N'AspNetUsers, AuditEvent, Participant, Goal, CommonItemGroup, CommonItem, Note, NoteVersion, ',
+                     N'NoteVersionGroup and NoteVersionItem, and UPDATE on AuditEvent, NoteVersion, ',
+                     N'NoteVersionGroup and NoteVersionItem; DELETE allowed on NoteDraft'),
               CONCAT(N'SELECT=1 INSERT=1 UPDATE=1 DELETE=0 on Organisation, AspNetUsers, Participant, Goal, ',
                      N'CommonItemGroup, CommonItem and Note; SELECT=1 INSERT=1 UPDATE=0 DELETE=0 on AuditEvent, ',
-                     N'NoteVersion and NoteVersionItem; SELECT=1 INSERT=1 UPDATE=1 DELETE=1 on NoteDraft'),
+                     N'NoteVersion, NoteVersionGroup and NoteVersionItem; ',
+                     N'SELECT=1 INSERT=1 UPDATE=1 DELETE=1 on NoteDraft'),
               COALESCE(@d5, N'(not run, see A6)'),
               CASE WHEN @a6Error IS NULL AND @d5Pass = 1 THEN 1 ELSE 0 END),
 

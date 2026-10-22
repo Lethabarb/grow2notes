@@ -268,6 +268,8 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
     listsVersion: expect.any(String),
     narrative: '',
     tickedGoalIds: [template.goals[0].id],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: false,
     flagReason: null,
   });
@@ -519,7 +521,11 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
     'Flag for manager',
     'Reason',
   ]);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expect(box(page)).toHaveAttribute('placeholder', savedPrompts);
   await expect(box(page)).toHaveAttribute('aria-required', 'true');
   await expect(box(page)).not.toHaveAttribute('maxlength');
@@ -548,6 +554,8 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
       listsVersion: expect.any(String),
       narrative: '',
       tickedGoalIds: [bus.id],
+      pickedGroupIds: [],
+      tickedCommonItemIds: [],
       isFlagged: false,
       flagReason: null,
     },
@@ -574,7 +582,11 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
   await expect(main(page).getByText('No goals set up for Ravi yet. A manager can add them.', { exact: true }))
     .toBeVisible();
   await expect(main(page).getByRole('group')).toHaveCount(0);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expectAxeToPass(page);
   await expectNothingKept(page, 'Jane', 'Ravi', 'Caught the bus', breakfast.text, bus.text);
 });
@@ -1077,6 +1089,8 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     baseVersion: 0,
     narrative: sentence,
     tickedGoalIds: [template.goals[0].id],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -1687,6 +1701,8 @@ test('signed in for real at 375 px, two tabs on a draft: the older meets the ban
     seq: 1,
     narrative: firstTabText,
     tickedGoalIds: [breakfastId, busId],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -1926,6 +1942,8 @@ test('signed in for real, a session ended mid-note: the same person signs in aga
     seq: lastBefore.seq + 1,
     narrative: 'Went to the shops. Bought bread.',
     tickedGoalIds: [breakfastId],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
     isFlagged: true,
     flagReason,
   });
@@ -2168,7 +2186,8 @@ for (const width of [375, 1280]) {
   test(`keyboard only at ${width} px: the takeover banner's Keep and Load after the back link, each by a key`, async ({
     page,
   }) => {
-    await page.setViewportSize({ width, height: 800 });
+    // Tall enough that the box, below Common items' sentence and under the banner, stays on screen.
+    await page.setViewportSize({ width, height: 1000 });
     const store = twoGoals();
     await serveMe(page, worker);
     await serveToday(page, worker.today, participants);
@@ -2391,6 +2410,7 @@ test('signed in for real at 375 px, a worker discards and starts again; a manage
         { text: breakfast.text, isTicked: true },
         { text: bus.text, isTicked: false },
       ],
+      commonItemGroups: [],
     },
   });
   await expect(heading(page)).toBeFocused();

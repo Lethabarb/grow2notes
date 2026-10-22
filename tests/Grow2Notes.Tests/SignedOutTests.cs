@@ -190,6 +190,8 @@ public sealed class SignedOutTests : IAsyncDisposable
                 listsVersion = "made-up",
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
             },
             TestContext.Current.CancellationToken);
 
@@ -211,6 +213,8 @@ public sealed class SignedOutTests : IAsyncDisposable
                 baseVersion = 0,
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             }),

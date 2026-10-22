@@ -9,6 +9,12 @@ import type { DraftsOf, MyDraft, NoteOf } from './today.ts';
 /** A goal on the note form: its ID and its wording, as the manager's list or a draft's snapshot holds it. */
 export type NoteGoal = { id: string; text: string };
 
+/**
+ * A group of common items on the note form: its ID, its name and its items, as the managers' list or a draft's
+ * snapshot holds it. Every note is the one with `isEveryNote`.
+ */
+export type NoteGroup = { id: string; name: string; isEveryNote?: boolean; items: readonly NoteGoal[] };
+
 /** Who started another user's draft, as `409 note.in_progress_by_other` names them (design.md §6.9). */
 export type StartedBy = { authorDisplayName: string; startedAtUtc: string };
 
@@ -19,6 +25,8 @@ export type DraftSave = {
   listsVersion?: string;
   narrative: string;
   tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -28,6 +36,8 @@ export type VersionBody = {
   baseVersion: number;
   narrative: string;
   tickedGoalIds: string[];
+  pickedGroupIds: string[];
+  tickedCommonItemIds: string[];
   isFlagged: boolean;
   flagReason: string | null;
 };
@@ -70,6 +80,9 @@ type HeldDraft = StartedBy & {
   authorUserId: string;
   snapshot: NoteGoal[];
   ticked: string[];
+  groups: NoteGroup[];
+  picked: string[];
+  tickedItems: string[];
   narrative: string;
   isFlagged: boolean;
   flagReason: string | null;
@@ -85,6 +98,8 @@ type DiscardedDraft = HeldDraft & { discardedByUserId: string };
 export type SavedElsewhere = {
   narrative?: string;
   tickedGoalIds?: string[];
+  pickedGroupIds?: string[];
+  tickedCommonItemIds?: string[];
   isFlagged?: boolean;
   flagReason?: string;
   /** The time of its save, by default the store's. */
@@ -102,6 +117,7 @@ type HeldSubmitted = StartedBy & {
   currentVersionNumber: number;
   narrative: string;
   goals: { text: string; isTicked: boolean }[];
+  commonItemGroups: ReturnType<typeof readGroupsOf>;
   isFlagged: boolean;
   flagReason: string | null;
   flagStatus: FlagStatus;
@@ -165,11 +181,66 @@ const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A goal as the API gives it, its ID and wording alone, from a goal with more, such as goals.ts's. */
 const goalOf = ({ id, text }: NoteGoal): NoteGoal => ({ id, text });
 
-/** The lists' version, which changes with any goal's ID, wording or place, as the API's does (design.md §5.7). */
-const versionOf = (goals: readonly NoteGoal[]) =>
+/** The lists' version, which changes with any goal or group, or item of one, as the API's does (design.md §5.7). */
+const versionOf = (goals: readonly NoteGoal[], groups: readonly NoteGroup[]) =>
   createHash('sha256')
-    .update(JSON.stringify(goals.map(({ id, text }) => [id, text])))
+    .update(
+      JSON.stringify({
+        goals: goals.map(({ id, text }) => [id, text]),
+        groups: groups.map(({ id, name, items }) => ({ id, name, items: items.map((item) => [item.id, item.text]) })),
+      }),
+    )
     .digest('base64');
+
+/** The picks and ticks of common items that a save or Submit sends. */
+type SentTicks = Pick<DraftSave, 'pickedGroupIds' | 'tickedCommonItemIds'>;
+
+/** The groups of a snapshot that the note shows: Every note and the picked groups, when they have items. */
+const shownOf = (groups: readonly NoteGroup[], picked: readonly string[]) =>
+  groups.filter((group) => (group.isEveryNote === true || picked.includes(group.id)) && group.items.length > 0);
+
+/**
+ * The `422` that the API answers picks and ticks that a snapshot's `groups` do not allow, in its order: a missing
+ * list, a pick of Every note, of a group with no items or of one outside the snapshot, and a tick of an item that is
+ * not in Every note or a picked group; or `null` for those that it allows.
+ */
+function refusedTicks(groups: readonly NoteGroup[], { pickedGroupIds, tickedCommonItemIds }: SentTicks) {
+  if (!Array.isArray(pickedGroupIds)) {
+    return refused('pickedGroupIds');
+  }
+
+  if (!Array.isArray(tickedCommonItemIds)) {
+    return refused('tickedCommonItemIds');
+  }
+
+  const offered = groups.filter((group) => group.isEveryNote !== true && group.items.length > 0);
+  if (!pickedGroupIds.every((id) => offered.some((group) => group.id === id))) {
+    return refused('pickedGroupIds');
+  }
+
+  const shown = shownOf(groups, pickedGroupIds).flatMap((group) => group.items);
+  return tickedCommonItemIds.every((id) => shown.some((item) => item.id === id))
+    ? null
+    : refused('tickedCommonItemIds');
+}
+
+/** The groups as `GET {base}/draft` gives them: all of the snapshot, with its picks and ticks. */
+const formGroupsOf = (groups: readonly NoteGroup[], picked: readonly string[], ticked: readonly string[]) =>
+  groups.map(({ id, name, isEveryNote = false, items }) => ({
+    id,
+    name,
+    isEveryNote,
+    isPicked: picked.includes(id),
+    items: items.map((item) => ({ ...item, isTicked: ticked.includes(item.id) })),
+  }));
+
+/** The groups as `GET {base}` gives them for a note: those shown, with every item and its tick, and no IDs. */
+const readGroupsOf = (groups: readonly NoteGroup[], picked: readonly string[], ticked: readonly string[]) =>
+  shownOf(groups, picked).map(({ name, isEveryNote = false, items }) => ({
+    name,
+    isEveryNote,
+    items: items.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) })),
+  }));
 
 /** The date `days` after `date`, both written `yyyy-MM-dd`; before it for a negative number. */
 export const daysAfter = (date: string, days: number) =>
@@ -182,6 +253,8 @@ type StoreOptions = {
   participants: readonly AdminParticipant[];
   /** Each participant's active goals, by participant ID, in the manager's order; one not named has none. */
   goals?: Readonly<Record<string, readonly NoteGoal[]>>;
+  /** The organisation's active common item groups, Every note first, in the managers' order; by default none. */
+  commonItemGroups?: readonly NoteGroup[];
   /** The organisation's guide prompts, `""` for none. */
   prompts?: string;
   /** The time that each save and each Submit answers with, by default 4:12 pm in Melbourne on 1 October 2026. */
@@ -204,6 +277,7 @@ export function notesStore({
   today: firstToday,
   participants,
   goals: firstGoals = {},
+  commonItemGroups = [],
   prompts = '',
   savedAtUtc = savedAtFourTwelve,
 }: StoreOptions) {
@@ -231,7 +305,7 @@ export function notesStore({
     if (held !== undefined && headers.has(participantId)) {
       const { authorDisplayName, firstSubmittedAtUtc, narrative, isFlagged, flagReason, goals: ticks } = held;
       const author = { displayName: authorDisplayName };
-      const current = { narrative, isFlagged, flagReason, goals: ticks };
+      const current = { narrative, isFlagged, flagReason, goals: ticks, commonItemGroups: held.commonItemGroups };
       return { json: { status: 'Submitted', author, firstSubmittedAtUtc, current } };
     }
 
@@ -242,7 +316,11 @@ export function notesStore({
 
     const { authorDisplayName, startedAtUtc, snapshot, ticked, narrative, isFlagged, flagReason } = draft;
     const goalsTicked = snapshot.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) }));
-    const content = me.role === 'Manager' ? { current: { narrative, isFlagged, flagReason, goals: goalsTicked } } : {};
+    const shown = readGroupsOf(draft.groups, draft.picked, draft.tickedItems);
+    const content =
+      me.role === 'Manager'
+        ? { current: { narrative, isFlagged, flagReason, goals: goalsTicked, commonItemGroups: shown } }
+        : {};
     return { json: { status: 'Draft', authorDisplayName, startedAtUtc, ...content } };
   }
 
@@ -287,6 +365,7 @@ export function notesStore({
         isSaved: true,
         guidePrompts: prompts,
         goals: draft.snapshot.map((goal) => ({ ...goal, isTicked: draft.ticked.includes(goal.id) })),
+        commonItemGroups: formGroupsOf(draft.groups, draft.picked, draft.tickedItems),
         narrative: draft.narrative,
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
@@ -307,9 +386,10 @@ export function notesStore({
     const json = {
       baseVersion: 0,
       isSaved: false,
-      listsVersion: versionOf(listed),
+      listsVersion: versionOf(listed, commonItemGroups),
       guidePrompts: prompts,
       goals: listed.map((goal) => ({ ...goal, isTicked: false })),
+      commonItemGroups: formGroupsOf(commonItemGroups, [], []),
       narrative: '',
       isFlagged: false,
       flagReason: null,
@@ -354,8 +434,15 @@ export function notesStore({
         return refused('tickedGoalIds');
       }
 
+      const refusal = refusedTicks(draft.groups, sent);
+      if (refusal !== null) {
+        return refusal;
+      }
+
       Object.assign(draft, {
         ticked,
+        picked: [...new Set(sent.pickedGroupIds)],
+        tickedItems: [...new Set(sent.tickedCommonItemIds)],
         narrative: sent.narrative,
         ...flag,
         savedAtUtc,
@@ -378,12 +465,17 @@ export function notesStore({
       return problem(422, 'note.participant_archived');
     }
 
-    if (sent.listsVersion !== versionOf(listed)) {
+    if (sent.listsVersion !== versionOf(listed, commonItemGroups)) {
       return problem(409, 'note.lists_changed');
     }
 
     if (!ticked.every((id) => listed.some((goal) => goal.id === id))) {
       return refused('tickedGoalIds');
+    }
+
+    const refusal = refusedTicks(commonItemGroups, sent);
+    if (refusal !== null) {
+      return refusal;
     }
 
     drafts.set(key, {
@@ -392,6 +484,9 @@ export function notesStore({
       startedAtUtc: savedAtUtc,
       snapshot: [...listed],
       ticked,
+      groups: [...commonItemGroups],
+      picked: [...new Set(sent.pickedGroupIds)],
+      tickedItems: [...new Set(sent.tickedCommonItemIds)],
       narrative: sent.narrative,
       ...flag,
       savedAtUtc,
@@ -466,6 +561,11 @@ export function notesStore({
       return refused('tickedGoalIds');
     }
 
+    const refusal = refusedTicks(draft.groups, sent);
+    if (refusal !== null) {
+      return refusal;
+    }
+
     const flagReason = sent.isFlagged ? sent.flagReason : null;
     const flag = flagOf(flagReason, savedAtUtc);
     submitted.set(key, {
@@ -477,6 +577,7 @@ export function notesStore({
       currentVersionNumber: 1,
       narrative: sent.narrative,
       goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: ticked.has(id) })),
+      commonItemGroups: readGroupsOf(draft.groups, sent.pickedGroupIds, sent.tickedCommonItemIds),
       isFlagged: sent.isFlagged,
       flagReason,
       ...flag,
@@ -664,6 +765,9 @@ export function notesStore({
         authorUserId,
         snapshot: [...(goals.get(participantId) ?? [])],
         ticked: [],
+        groups: [...commonItemGroups],
+        picked: [],
+        tickedItems: [],
         narrative: '',
         isFlagged: false,
         flagReason: null,
@@ -687,6 +791,8 @@ export function notesStore({
       const isFlagged = elsewhere.isFlagged ?? draft.isFlagged;
       Object.assign(draft, {
         ticked: elsewhere.tickedGoalIds ?? draft.ticked,
+        picked: elsewhere.pickedGroupIds ?? draft.picked,
+        tickedItems: elsewhere.tickedCommonItemIds ?? draft.tickedItems,
         narrative: elsewhere.narrative ?? draft.narrative,
         isFlagged,
         flagReason: isFlagged ? (elsewhere.flagReason ?? draft.flagReason) : null,
@@ -712,6 +818,7 @@ export function notesStore({
         currentVersionNumber: 1,
         narrative: draft.narrative,
         goals: draft.snapshot.map(({ id, text }) => ({ text, isTicked: draft.ticked.includes(id) })),
+        commonItemGroups: readGroupsOf(draft.groups, draft.picked, draft.tickedItems),
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
         ...flagOf(draft.flagReason, savedAtUtc),
@@ -739,6 +846,7 @@ export function notesStore({
         currentVersionNumber: firstFlagReason === undefined ? 1 : 2,
         narrative: added.narrative ?? '',
         goals: added.goals ?? [],
+        commonItemGroups: [],
         isFlagged: flagReason !== null,
         flagReason,
         flagStatus,

@@ -196,7 +196,7 @@ For the read view (4.4), a manager reading someone else's draft (4.2), one versi
 ### Implementation notes (React 19 + native HTML + CSS Modules)
 
 - **No React Aria for this component.** Native HTML covers everything. No form library (7.5).
-- The checkboxes are **controlled** (`checked` plus `onChange`). The form keeps `tickedGoalIds`, `tickedCommonItemIds` and `pickedGroupIds` as `Set<string>` in state and sends them as arrays in the autosave `PUT` and the submit `POST` (6.3). `tickedCommonItemIds` is sent filtered to Every note and the picked groups' items (group-picker.md).
+- The checkboxes are **controlled** (`checked` plus `onChange`). The form keeps the ticked goals and common items in one `Set<string>` and the picked groups in another, and sends `tickedGoalIds`, `tickedCommonItemIds` and `pickedGroupIds` as arrays in the autosave `PUT` and the submit `POST` (6.3). `tickedCommonItemIds` is sent filtered to Every note and the picked groups' items (group-picker.md).
 - IDs: `goal-${item.id}` and `common-${item.id}`. Server item IDs are unique and stable, which also keeps the right rows mounted after a lists reload. `name`/`value` are set for clear semantics and tests; the form is never natively submitted.
 - Item wording is rendered as React text children, never with `dangerouslySetInnerHTML`, never auto-linked, and never truncated.
 - The Flag for manager tick box (`conditional-reveal.md`) should reuse the same `.box` class, so every tick box in the app looks and behaves the same.
@@ -205,12 +205,22 @@ For the read view (4.4), a manager reading someone else's draft (4.2), one versi
   before it; the native box is `appearance: none`, drawn 2.5rem with a border in the text's colour and its tick by
   borders on `::before`, which forced colours and printing keep; and each row is the item's `<label>`, at least
   `--target-row` tall and the column wide, so a tap anywhere on it, its far end included, toggles the box. T13 adds
-  `headingLevel` and `hintId` with the common items, and T09's flag row and T13's group rows reuse `.box` and `.row`.
+  `headingLevel` and `hintId` with the common items (see T13 below), and T09's flag row and T13's group rows reuse
+  `.box` and `.row`.
 - **Built** (T09, for the read view): `TickListRead` in `src/components/TickListRead.tsx`, on
-  `TickList.module.css`'s heading, an `<h2>` until T13 gives it `headingLevel`: each item a 1.5rem box drawn as an
+  `TickList.module.css`'s heading, an `<h2>` unless given `headingLevel` (T13): each item a 1.5rem box drawn as an
   inline SVG, in the text's colour, with the tick inside when ticked, then the wording, and "ticked" or "not ticked"
   after a `Pause`, for screen readers alone; no row dividers, hover or pointer, as nothing in it is a control. The note
   form's Flag for manager row is `.row` and `.box`, its dividers included.
+- **Built** (T13, for the common items): `TickListField` and `TickListRead` take `headingLevel` (2, or 3 inside
+  Common items), and `TickListField` takes `hintId`, which describes its fieldset in place of its own hint, with
+  `hint` and `emptyText` optional in both. `CommonItemsField` in `src/features/notes` is section 2 of the form, as
+  group-picker.md sketches it but for these: it takes an `emptyText`, not an `editMode` flag, which T14 will supply; it
+  is styled from `TickList.module.css` alone, whose `.block` puts 24 px before each list that follows another and sets
+  no `display`, so the native `hidden` attribute still hides an unpicked group's wrapper, with no global `[hidden]`
+  rule; and `isOffered` and `shownItems` are in `commonItemGroups.ts`. The read view's section 2 is one
+  `TickListRead` with `headingLevel={3}` per group the API gives, 24 px apart by `.groups` in `ReadView.module.css`,
+  or "No common items set" for none; it never shows the question, and it shows what it is given, unfiltered.
 
 ```tsx
 // TickListField.tsx

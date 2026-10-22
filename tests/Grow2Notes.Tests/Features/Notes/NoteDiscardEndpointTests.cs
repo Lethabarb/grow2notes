@@ -395,6 +395,8 @@ public sealed class NoteDiscardEndpointTests(Grow2NotesFactory factory, SqlServe
                 listsVersion = form.GetProperty("listsVersion").GetString(),
                 narrative,
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             },

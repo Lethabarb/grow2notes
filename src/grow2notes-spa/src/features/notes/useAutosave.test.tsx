@@ -28,9 +28,16 @@ describe('capped', () => {
 });
 
 describe('sentContent', () => {
-  const content = { narrative: 'Jane made toast.', tickedGoalIds: ['g1'], isFlagged: true, flagReason: 'Unwell.' };
+  const content = {
+    narrative: 'Jane made toast.',
+    tickedGoalIds: ['g1'],
+    pickedGroupIds: ['p1'],
+    tickedCommonItemIds: ['c1'],
+    isFlagged: true,
+    flagReason: 'Unwell.',
+  };
 
-  it('sends the text, the ticks, the flag and the reason, as autosave and Submit alike send them', () => {
+  it('sends the text, the ticks, the picks, the flag and the reason, as autosave and Submit alike send them', () => {
     expect(sentContent(content)).toEqual(content);
   });
 
@@ -62,6 +69,7 @@ const template: Draft = {
   listsVersion: 'lists-1',
   guidePrompts: '',
   goals: [],
+  commonItemGroups: [],
   narrative: '',
   isFlagged: false,
   flagReason: null,
@@ -73,6 +81,7 @@ const reopened: Draft = {
   isSaved: true,
   guidePrompts: '',
   goals: [],
+  commonItemGroups: [],
   narrative: '',
   isFlagged: false,
   flagReason: null,
@@ -140,10 +149,18 @@ function sentTexts(): [unknown, unknown][] {
  * query client of its own, made as `main.tsx` makes the app's: what its indicator says, in turn, and `type()`, which
  * puts a text in the form as one input, a change.
  */
-function renderAutosave(opened: Draft = template) {
+function renderAutosave(opened: Draft = template, overrides: Partial<DraftContent> = {}) {
   const client = createQueryClient();
   const participantId = crypto.randomUUID();
-  const content: DraftContent = { narrative: '', tickedGoalIds: [], isFlagged: false, flagReason: '' };
+  const content: DraftContent = {
+    narrative: '',
+    tickedGoalIds: [],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
+    isFlagged: false,
+    flagReason: '',
+    ...overrides,
+  };
   const said: SaveIndicator['kind'][] = [];
   const { result } = renderHook(
     () =>
@@ -226,7 +243,15 @@ function outcome<T>(promise: Promise<T>): () => T | typeof pending {
  * text's limit: "€" is one character and three bytes.
  */
 function textOf(bytes: number): string {
-  const empty = { clientId: crypto.randomUUID(), seq: 2, narrative: '', tickedGoalIds: [], isFlagged: false };
+  const empty = {
+    clientId: crypto.randomUUID(),
+    seq: 2,
+    narrative: '',
+    tickedGoalIds: [],
+    pickedGroupIds: [],
+    tickedCommonItemIds: [],
+    isFlagged: false,
+  };
   const rest = bytes - new TextEncoder().encode(JSON.stringify({ ...empty, flagReason: null })).length;
   return '€'.repeat(Math.floor(rest / 3)) + 'x'.repeat(rest % 3);
 }
@@ -267,6 +292,28 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
+});
+
+describe('A save', () => {
+  const picks = { tickedGoalIds: ['g1'], pickedGroupIds: ['p1', 'p2'], tickedCommonItemIds: ['c1'] };
+
+  it('carries the picks and the ticks of common items, as it carries the goals, when the text is saved', async () => {
+    const { type } = renderAutosave(template, picks);
+    type('Jane');
+    await wait(5_000);
+
+    expect(sentSaves).toHaveLength(1);
+    expect(sentSaves[0].body).toMatchObject(picks);
+  });
+
+  it('carries them as the page is hidden too', async () => {
+    const { type } = renderAutosave(reopened, picks);
+    type('Jane');
+    showPage('hidden');
+    await wait(0);
+
+    expect(sentSaves[0]).toMatchObject({ keepalive: true, body: picks });
+  });
 });
 
 describe('A save that fails', () => {

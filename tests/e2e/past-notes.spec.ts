@@ -219,7 +219,11 @@ test('the read view loading, flagged, with no goals, submitted later, failed and
   await expect(readGoals(page)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
   expect(await readText(page).textContent()).toBe(narrative);
   await expect(readText(page)).toHaveCSS('white-space', 'pre-wrap');
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expect(main(page).getByRole('checkbox')).toHaveCount(0);
   await expect(main(page).getByRole('textbox')).toHaveCount(0);
   await expect(main(page).getByRole('button')).toHaveCount(0);
@@ -759,7 +763,11 @@ test('someone else’s draft: a worker’s view, and a manager’s read-only one
   await expect(main(page).getByText(alexOnToday, { exact: true })).toBeVisible();
   await expect(main(page).getByRole('button')).toHaveText(['Discard draft']);
   await expect(main(page).getByRole('link')).toHaveText(['Past notes']);
-  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['1. Goals', '3. Guided notes']);
+  await expect(main(page).getByRole('heading', { level: 2 })).toHaveText([
+    '1. Goals',
+    '2. Common items',
+    '3. Guided notes',
+  ]);
   await expect(readGoals(page)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
   expect(await readText(page).textContent()).toBe(draftText);
   await expect(flagRow(page)).toHaveText('Flag for manager, ticked');

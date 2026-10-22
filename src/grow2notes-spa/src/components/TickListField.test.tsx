@@ -104,4 +104,63 @@ describe('TickListField', () => {
     expect(screen.queryByRole('checkbox')).toBeNull();
     expect(screen.queryByText('Ticked means reached.')).toBeNull();
   });
+
+  it('has an <h3> in its legend with headingLevel 3, and an <h2> by default', () => {
+    render(
+      <TickListField
+        idPrefix="common"
+        heading="Every note"
+        headingLevel={3}
+        hint="Ticked means done."
+        items={[breakfast]}
+        ticked={new Set()}
+        onToggle={() => {}}
+      />,
+    );
+
+    const group = screen.getByRole('group', { name: 'Every note' });
+    expect(within(group.querySelector('legend')!).getByRole('heading', { level: 3 })).toHaveTextContent('Every note');
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+  });
+
+  it('has an <h3> with headingLevel 3 when there are no items too', () => {
+    render(
+      <TickListField
+        idPrefix="common"
+        heading="Every note"
+        headingLevel={3}
+        emptyText="Nothing."
+        items={[]}
+        ticked={new Set()}
+        onToggle={() => {}}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Every note');
+    expect(screen.getByText('Nothing.')).toBeInTheDocument();
+  });
+
+  it('is described by the hint of hintId, and renders no hint of its own, when it is given', () => {
+    const { container } = render(
+      <>
+        <p id="common-hint">Ticked means done.</p>
+        <TickListField
+          idPrefix="common"
+          heading="Every note"
+          hint="Its own."
+          hintId="common-hint"
+          items={[breakfast]}
+          ticked={new Set()}
+          onToggle={() => {}}
+        />
+      </>,
+    );
+
+    const group = screen.getByRole('group', { name: 'Every note' });
+    expect(group).toHaveAttribute('aria-describedby', 'common-hint');
+    expect(group).toHaveAccessibleDescription('Ticked means done.');
+    expect(screen.queryByText('Its own.')).toBeNull();
+    expect(container.querySelector('#common-hint')).toBe(screen.getByText('Ticked means done.'));
+    expect(container.querySelectorAll('p')).toHaveLength(1);
+  });
 });

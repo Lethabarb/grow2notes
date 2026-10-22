@@ -529,6 +529,43 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.ToTable("NoteVersion");
                 });
 
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionGroup", b =>
+                {
+                    b.Property<Guid>("NoteVersionId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("CommonItemGroupId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<bool>("IsEveryNote")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsPicked")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OrganisationId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("NoteVersionId", "Position");
+
+                    b.HasIndex("OrganisationId", "CommonItemGroupId");
+
+                    b.ToTable("NoteVersionGroup", t =>
+                        {
+                            t.HasCheckConstraint(
+                                "CK_NoteVersionGroup_EveryNoteNotPicked", "[IsEveryNote] = 0 OR [IsPicked] = 0");
+                        });
+                });
+
             modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionItem", b =>
                 {
                     b.Property<Guid>("NoteVersionId")
@@ -567,7 +604,7 @@ namespace Grow2Notes.Web.Data.Migrations
 
                     b.HasIndex("OrganisationId", "GoalId");
 
-                    b.HasIndex("OrganisationId", "NoteVersionId");
+                    b.HasIndex("OrganisationId", "NoteVersionId", "GroupPosition");
 
                     b.ToTable("NoteVersionItem", t =>
                         {
@@ -854,6 +891,23 @@ namespace Grow2Notes.Web.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionGroup", b =>
+                {
+                    b.HasOne("Grow2Notes.Web.Data.CommonItemGroup", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "CommonItemGroupId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Grow2Notes.Web.Data.NoteVersion", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "NoteVersionId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersionItem", b =>
                 {
                     b.HasOne("Grow2Notes.Web.Data.CommonItem", null)
@@ -874,6 +928,12 @@ namespace Grow2Notes.Web.Data.Migrations
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Grow2Notes.Web.Data.NoteVersionGroup", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "NoteVersionId", "GroupPosition")
+                        .HasPrincipalKey("OrganisationId", "NoteVersionId", "Position")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Grow2Notes.Web.Data.Participant", b =>

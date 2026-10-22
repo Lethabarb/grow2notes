@@ -657,3 +657,38 @@ days. Every word typed into a note is made up (A35).
     ticked" with the reason after it; press Discard draft and look for the dialog's "started it at" line read with the
     other person's name and the time, then Go back, and focus back on Discard draft. (note-form.md's *Announcements*
     for More actions and the Discard dialog; participant-notes.md's manual pass for someone else's draft.)
+
+### Common items and group picks, once T13 is in test
+
+These steps hold T13's by-hand checks ([tasks.md](../design/backlog/tasks.md), T13's Notes). Unfinished drafts saved
+before this release hold no common items, as their snapshot predates them: discard them before these steps rather than
+finish them. The steps need the passkey worker of step 18, the kit of steps 26 to 28, and made-up participants with two
+goals each, whose notes for today nobody has started: one for step 68 and one for each screen reader in step 69, four in
+all. Every word typed into a note is made up (A35).
+
+67. The database, as in step 26: run `infra/sql/check-database.sql` for test after T13's deploy. Look for PASS on every
+    row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteVersionGroup` for
+    `grow2notes_runtime`, and B7 and B8, which list the `NoteVersionGroup` table and the `AddNoteVersionGroup`
+    migration. (S02.05.01's first criterion, in test.)
+68. On the iPhone in Safari, at its usual text size and held upright, repeat step 54 with common items. A manager has
+    first set up Every note with an item and two groups with an item or two each, such as `Community outing`. Sign in
+    as the passkey worker and open a participant's note: tick a goal, an Every note item and one group, tick an item in
+    that group, type a sentence or two into Guided notes, and look for "Saving…" then "Saved" and the time. Press
+    Submit note and look for the confirmation with nothing cut short, and nothing in it about groups; press "Submit
+    note for" and the name. Open the participant's row: look for the note as written with "2. Common items" between
+    the goals and Guided notes, Every note and the ticked group each with its items ticked or not, and the other group
+    nowhere. Nothing in the form or the read view runs past the screen's edge. (F02.03's step-54 check repeated once
+    F02.05 is done; S02.05.02 and S02.05.04 on a real phone.)
+69. On the laptop with NVDA and Chrome, then on the iPhone with VoiceOver and Safari, then on the Android phone with
+    TalkBack and Chrome, each as a worker with its own participant whose note for today nobody has started: open the
+    note and move into "2. Common items". Look for the picker's legend, "Which of these happened?", and its hint, "Tick
+    all that happened.", read on entering it. Tick a group: look for "expanded" read for it, and "collapsed" again as
+    you untick it (TalkBack's support is unverified: note what it reads). With a group unticked, Tab or swipe through
+    the form: look for the group's items skipped. Tick it again and look for its items, unticked. With Voice Control
+    or Voice Access, say "Tap" and a group's name and look for its box ticking. Then repeat on the laptop at a window
+    320 px wide and at 200% text size, looking for nothing cut off or hidden, and with a Windows contrast theme on,
+    looking for every box and tick still drawn. (group-picker.md's *Test (M6)*; S02.05.02's manual check.)
+
+Two checks of earlier steps now cover more, and are not repeated. Step 62's Load the other version also replaces the
+group ticks with the other version's. Step 64's manager, who reads a worker's draft, now also finds "2. Common items"
+between the goals and Guided notes, with the groups the worker has ticked and their items ticked or not (S02.04.03).

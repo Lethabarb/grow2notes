@@ -392,27 +392,33 @@ export const strings = {
   tag: { flagged: 'Flagged' },
   /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
-   * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), and Guided notes' heading,
-   * which is its box's label, each numbered as design.md numbers the form's sections, whichever of them it shows; the
-   * flag's tick box and the label of the Reason it reveals (design.md §4.3 item 6, conditional-reveal.md *Copy*); and
-   * the save indicator once a failed save is being retried, as the top bar's second row, and while a dead end or the
-   * takeover banner in the top bar says why the note cannot be saved, then the takeover banner's two choices
-   * (autosave-status.md *Exact copy*). Then Submit note (component 12) and Submit's checks (*Validation*), inline and
-   * in the error summary: Guided notes left blank, with the second sentence only while guide prompts are set, as they
-   * are the grey text; the name that Guided notes' too-long message starts with, as Reason's starts with `reason`; and
-   * Reason left blank while the flag is ticked. Then the confirmation (component 14): its title's lead, for a note
-   * dated `me.today` and for any other, before the name on its own line; its flag line, from the values that Submit
-   * sends; its status line once the request has taken 1 s; and what a failure says is safe, as in "Not submitted: no
-   * connection. Your draft is saved. Try again." (microcopy.md §9). Then More actions, the disclosure under Submit
-   * note, and Discard draft in its panel (component 13), as on a manager's read-only draft (participant-notes.md
-   * component 9); and the Discard dialog's line that always ends its body, and its status line once the request has
-   * taken 1 s (component 15, confirm-dialog.md's dialog 2).
+   * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), the Common items' heading
+   * and hint, the question over the picker with its hint, and the sentence for a form with no common items
+   * (group-picker.md *Exact copy*), and Guided notes' heading, which is its box's label, each numbered as design.md
+   * numbers the form's sections, whichever of them it shows; the flag's tick box and the label of the Reason it reveals
+   * (design.md §4.3 item 6, conditional-reveal.md *Copy*); and the save indicator once a failed save is being retried,
+   * as the top bar's second row, and while a dead end or the takeover banner in the top bar says why the note cannot be
+   * saved, then the takeover banner's two choices (autosave-status.md *Exact copy*). Then Submit note (component 12)
+   * and Submit's checks (*Validation*), inline and in the error summary: Guided notes left blank, with the second
+   * sentence only while guide prompts are set, as they are the grey text; the name that Guided notes' too-long message
+   * starts with, as Reason's starts with `reason`; and Reason left blank while the flag is ticked. Then the
+   * confirmation (component 14): its title's lead, for a note dated `me.today` and for any other, before the name on
+   * its own line; its flag line, from the values that Submit sends; its status line once the request has taken 1 s; and
+   * what a failure says is safe, as in "Not submitted: no connection. Your draft is saved. Try again." (microcopy.md
+   * §9). Then More actions, the disclosure under Submit note, and Discard draft in its panel (component 13), as on a
+   * manager's read-only draft (participant-notes.md component 9); and the Discard dialog's line that always ends its
+   * body, and its status line once the request has taken 1 s (component 15, confirm-dialog.md's dialog 2).
    */
   note: {
     loading: 'Loading note…',
     theNote: 'The note',
     goals: '1. Goals',
     goalsHint: 'Ticked means reached.',
+    commonItems: '2. Common items',
+    commonItemsHint: 'Ticked means done.',
+    whichHappened: 'Which of these happened?',
+    whichHappenedHint: 'Tick all that happened. Their items show below.',
+    noCommonItemsSetUp: 'No common items set up.',
     guidedNotes: '3. Guided notes',
     flagForManager: 'Flag for manager',
     reason: 'Reason',
@@ -438,11 +444,16 @@ export const strings = {
   },
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
-   * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals", the words for a version with no
-   * goals, each as the daily report has them (design.md §11.3); and, under "3. Guided notes", the words for a draft
-   * with no text yet, which a manager reads (*Someone else's draft, manager*).
+   * byline, as in "Written by Priya Nair · Submitted 4:42 pm", and, under "1. Goals" and "2. Common items", the words
+   * for a version with none, each as the daily report has them (design.md §11.3); and, under "3. Guided notes", the
+   * words for a draft with no text yet, which a manager reads (*Someone else's draft, manager*).
    */
-  readView: { submitted: 'Submitted', noGoals: 'No goals set', nothingWrittenYet: 'Nothing written yet.' },
+  readView: {
+    submitted: 'Submitted',
+    noGoals: 'No goals set',
+    noCommonItems: 'No common items set',
+    nothingWrittenYet: 'Nothing written yet.',
+  },
   /**
    * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the
    * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).

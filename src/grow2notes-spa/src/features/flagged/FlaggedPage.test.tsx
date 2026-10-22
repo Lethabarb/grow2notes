@@ -313,7 +313,7 @@ function serveNote(row: ToReviewNote) {
     status: 'Submitted',
     author: { displayName: row.authorDisplayName },
     firstSubmittedAtUtc: row.flaggedAtUtc,
-    current: { narrative: 'Had lunch at the cafe, then a walk.', goals, ...flag },
+    current: { narrative: 'Had lunch at the cafe, then a walk.', goals, commonItemGroups: [], ...flag },
   };
   serve(`/api/participants/${id}`, json(participant));
   serve(`/api/participants/${id}/notes/${row.noteDate}`, json(note));

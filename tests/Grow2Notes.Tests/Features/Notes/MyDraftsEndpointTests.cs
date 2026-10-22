@@ -223,6 +223,8 @@ public sealed class MyDraftsEndpointTests(Grow2NotesFactory factory, SqlServerFi
                 listsVersion = form.GetProperty("listsVersion").GetString(),
                 narrative = "Jane made toast.",
                 tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = false,
                 flagReason = (string?)null,
             },

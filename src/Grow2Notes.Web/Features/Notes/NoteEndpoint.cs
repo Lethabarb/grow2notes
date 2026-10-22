@@ -77,28 +77,31 @@ internal static class NoteEndpoint
             FirstSubmittedAtUtc: null,
             Current: null);
 
-    // A draft has its author's working copy alone (§5.3), whose goals keep the snapshot's order and the wording it was
-    // started with (A3), however the participant's goals have changed since.
+    // A draft has its author's working copy alone (§5.3), whose goals and common items keep the snapshot's order and
+    // the wording it was started with (A3), however the participant's lists have changed since.
     private static async Task<NoteReadVersion?> AuthorsWorkingCopyAsync(
         Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken)
     {
         var draft = await db.NoteDrafts
             .AsNoTracking()
             .SingleOrDefaultAsync(d => d.NoteId == note.Id && d.EditorUserId == note.AuthorUserId, cancellationToken);
-        return draft is null
-            ? null
-            : new(
-                draft.Narrative,
-                draft.IsFlagged,
-                draft.FlagReason,
-                [
-                    .. draft.Items
-                        .Where(item => item.Section == NoteSection.Goal)
-                        .Select(item => new NoteReadItem(item.Text, item.IsTicked)),
-                ]);
+        if (draft is null)
+        {
+            return null;
+        }
+
+        var snapshot = NoteSnapshot.Of(draft);
+        return new(
+            draft.Narrative,
+            draft.IsFlagged,
+            draft.FlagReason,
+            [.. snapshot.Goals.Select(item => new NoteReadItem(item.Text, item.IsTicked))],
+            snapshot.ShownGroups);
     }
 
-    // The version's own goal rows, in their places, which keep the snapshot's order and wording (§5.3, A3).
+    // The version's own goal and common item rows, in their places, which keep the snapshot's order and wording (§5.3,
+    // A3). A group shows when it is Every note or picked and has an item row, the rule that ShownGroups applies to a
+    // working copy.
     private static async Task<NoteRead> SubmittedAsync(
         Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken)
     {
@@ -113,6 +116,24 @@ internal static class NoteEndpoint
                     .Where(item => item.NoteVersionId == version.Id && item.Section == NoteSection.Goal)
                     .OrderBy(item => item.Position)
                     .Select(item => new NoteReadItem(item.Text, item.IsTicked))
+                    .ToList(),
+                db.NoteVersionGroups
+                    .Where(group => group.NoteVersionId == version.Id
+                        && (group.IsEveryNote || group.IsPicked)
+                        && db.NoteVersionItems.Any(item => item.NoteVersionId == version.Id
+                            && item.Section == NoteSection.CommonItem
+                            && item.GroupPosition == group.Position))
+                    .OrderBy(group => group.Position)
+                    .Select(group => new NoteReadGroup(
+                        group.Name,
+                        group.IsEveryNote,
+                        db.NoteVersionItems
+                            .Where(item => item.NoteVersionId == version.Id
+                                && item.Section == NoteSection.CommonItem
+                                && item.GroupPosition == group.Position)
+                            .OrderBy(item => item.Position)
+                            .Select(item => new NoteReadItem(item.Text, item.IsTicked))
+                            .ToList()))
                     .ToList()))
             .SingleAsync(cancellationToken);
         return new(
