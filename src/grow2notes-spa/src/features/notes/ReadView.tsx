@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
+import { useMe } from '../../api/me.ts';
+import { buttonClass } from '../../components/buttonClass.ts';
 import { Tag } from '../../components/Tag.tsx';
 import { TickListRead, type TickedItem } from '../../components/TickListRead.tsx';
 import { parseDateOnly, stamp } from '../../copy/format.ts';
@@ -24,12 +27,16 @@ type ReadViewProps = {
  * "Written by Priya Nair · Submitted 4:42 pm", the time alone when the note was submitted on its own date in
  * Melbourne, else with its date (microcopy.md §3, *Reference day*); then, only when the note has more than one
  * version, the Edited line, the Edited tag and, after a pause, who saved the current version and when; then, only when
- * that version is flagged, the Flagged tag and the reason after a pause; then the actions, the Past notes link; then
- * its sections. T14 adds Edit, T16 a manager's review lines and panel, and T18 the past-day line and Version history.
+ * that version is flagged, the Flagged tag and the reason after a pause; then the actions, Edit first, only for the
+ * note's author and for a manager, never shown disabled, which opens the edit form in this entry's place, and the Past
+ * notes link; then its sections. T16 adds a manager's review lines and panel, and T18 the past-day line and Version
+ * history.
  */
 export function ReadView({ heading, participantId, note, noteDate }: ReadViewProps) {
   const { author, firstSubmittedAtUtc, current } = note;
+  const me = useMe();
   const day = parseDateOnly(noteDate);
+  const canEdit = me.role === 'Manager' || author.id === me.userId;
   return (
     <>
       {heading}
@@ -49,7 +56,14 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
         )}
         <FlagLine current={current} />
       </div>
-      <PastNotesLink participantId={participantId} />
+      <div className={styles.actions}>
+        {canEdit && (
+          <Link to={`/participants/${participantId}/notes/${noteDate}/edit`} replace className={buttonClass()}>
+            {strings.readView.edit}
+          </Link>
+        )}
+        <PastNotesLink participantId={participantId} />
+      </div>
       <ReadSections
         goals={current.goals}
         commonItemGroups={current.commonItemGroups}

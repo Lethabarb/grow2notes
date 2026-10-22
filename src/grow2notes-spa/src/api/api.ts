@@ -208,6 +208,14 @@ export function isNotFound(error: unknown): error is ApiError {
 }
 
 /**
+ * Whether `error` is the refusal of an edit (`403 note.not_editable`, design.md §6.3): the note exists and the person
+ * may read it, but only its author or a manager may edit it, so the screen shows the cannot-edit page in place of itself.
+ */
+export function isNotEditable(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.status === 403 && error.code === 'note.not_editable';
+}
+
+/**
  * Fetches the antiforgery token now, unless one is held or on its way, so that a change sent later goes in one
  * request: the note form's page-hidden save has to go before the browser freezes the page, with no round trip first
  * (T10's Notes). A request that fails is forgotten, and the next change asks again.
