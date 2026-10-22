@@ -6349,6 +6349,8 @@ describe('Save changes', () => {
     await wait(2);
     expect(button).toHaveAttribute('data-busy', 'true');
     expect(button).toHaveTextContent('Saving changes…');
+    // The status region is emptied and written again on the next animation frame.
+    await wait(16);
     expect(pageStatus()).toHaveTextContent('Saving changes…');
 
     version.release();
@@ -6527,7 +6529,7 @@ describe('The version-conflict notice', () => {
 
     const notice = conflictNotice();
     expect(notice).toHaveFocus();
-    expect(within(notice).getByRole('heading', { level: 2, name: /saved version 3/ })).toHaveTextContent(
+    expect(within(notice).getByRole('heading', { level: 2, name: /saved version 3/ }).textContent).toBe(
       `Sam Lee saved version 3 at 5:03${nbsp}pm while you were editing.`,
     );
     expect(notice).toHaveTextContent('Your changes are still below.');
