@@ -6,7 +6,7 @@ import { api } from '../../api/api.ts';
 import { createQueryClient } from '../../api/queryClient.ts';
 import type { Draft } from './noteQueries.ts';
 import type { SaveIndicator } from './SaveIndicator.tsx';
-import { capped, sentContent, useAutosave, type DraftContent } from './useAutosave.ts';
+import { capped, sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
 
 describe('capped', () => {
   it('leaves a text of the limit or shorter as it is', () => {
@@ -88,6 +88,12 @@ const reopened: Draft = {
   savedAtUtc: '2026-09-30T23:40:00Z',
 };
 
+/** A submitted note's pending edit, based on version 2, as `GET {base}/draft` gives it before any save. */
+const edit: Draft = { ...template, baseVersion: 2, listsVersion: undefined };
+
+/** The same pending edit reopened, last saved at 9:40 am. */
+const reopenedEdit: Draft = { ...edit, isSaved: true, savedAtUtc: '2026-09-30T23:40:00Z' };
+
 /** How the server meets a save: an answer, or a failure as `fetch` has one. */
 type Answer = () => Promise<Response>;
 
@@ -126,6 +132,9 @@ type SentSave = { at: number; body: Record<string, unknown>; bytes: number; keep
 /** Every save sent, in order. */
 let sentSaves: SentSave[] = [];
 
+/** How the server answers a read of the draft, for Load the other version. */
+let draftRead: Answer = () => Promise.reject(new TypeError('Failed to fetch'));
+
 /** How the server answers the saves still to come, in turn, the last one's answer given again once all have been. */
 let saveAnswers: Answer[] = [];
 
@@ -162,6 +171,8 @@ function renderAutosave(opened: Draft = template, overrides: Partial<DraftConten
     ...overrides,
   };
   const said: SaveIndicator['kind'][] = [];
+  const deadEnds: DeadEnd[] = [];
+  const others: Draft[] = [];
   const { result } = renderHook(
     () =>
       useAutosave({
@@ -173,8 +184,12 @@ function renderAutosave(opened: Draft = template, overrides: Partial<DraftConten
           said.push(indicator.kind);
         },
         onListsChanged: () => {},
-        onOtherVersion: () => {},
-        onDeadEnd: () => {},
+        onOtherVersion: (other) => {
+          others.push(other);
+        },
+        onDeadEnd: (deadEnd) => {
+          deadEnds.push(deadEnd);
+        },
       }),
     {
       wrapper: ({ children }: { children: ReactNode }) => (
@@ -185,6 +200,8 @@ function renderAutosave(opened: Draft = template, overrides: Partial<DraftConten
   return {
     autosave: () => result.current,
     said,
+    deadEnds,
+    others,
     type: (narrative: string) => {
       content.narrative = narrative;
       act(() => {
@@ -251,6 +268,7 @@ function textOf(bytes: number): string {
     pickedGroupIds: [],
     tickedCommonItemIds: [],
     isFlagged: false,
+    baseVersion: 0,
   };
   const rest = bytes - new TextEncoder().encode(JSON.stringify({ ...empty, flagReason: null })).length;
   return '€'.repeat(Math.floor(rest / 3)) + 'x'.repeat(rest % 3);
@@ -267,6 +285,10 @@ beforeEach(() => {
 
     if (path === signInPath) {
       return Promise.resolve(new Response('{}', { headers: { 'Content-Type': 'application/json' } }));
+    }
+
+    if (init?.method === 'GET') {
+      return draftRead();
     }
 
     if (init?.method !== 'PUT') {
@@ -313,6 +335,146 @@ describe('A save', () => {
     await wait(0);
 
     expect(sentSaves[0]).toMatchObject({ keepalive: true, body: picks });
+  });
+});
+
+describe('A pending edit', () => {
+  /** A read of the draft that answers `draft`, as the server does. */
+  function serveDraft(draft: Draft) {
+    const body = JSON.stringify(draft);
+    draftRead = () => Promise.resolve(new Response(body, { headers: { 'Content-Type': 'application/json' } }));
+  }
+
+  /** Saves "Jane", then meets the conflict of a newer version with "Jane made toast."; later saves are answered. */
+  async function meetTheConflict() {
+    answerSaves(saved(), problem(409, 'note.version_conflict'), saved('2026-09-30T23:44:00Z'));
+    const rendered = renderAutosave(reopenedEdit);
+    for (const text of ['Jane', 'Jane made toast.']) {
+      rendered.type(text);
+      act(() => {
+        rendered.autosave().flush();
+      });
+      await wait(0);
+    }
+
+    return rendered;
+  }
+
+  it('sends its base version in every save, a page-hidden one too, and a draft sends 0', async () => {
+    const pendingEdit = renderAutosave(reopenedEdit);
+    pendingEdit.type('Jane');
+    await wait(2_000);
+    pendingEdit.type('Jane made toast.');
+    showPage('hidden');
+    await wait(0);
+    showPage('visible');
+    const draft = renderAutosave(reopened);
+    draft.type('Jane');
+    await wait(2_000);
+
+    expect(sentSaves.map(({ body }) => body.baseVersion)).toEqual([2, 2, 0]);
+  });
+
+  it('opens a reopened pending edit as saved, never as a draft, and a new one with nothing said', () => {
+    expect(renderAutosave(reopenedEdit).said).toEqual(['saved']);
+    expect(renderAutosave(edit).said).toEqual(['none']);
+    expect(renderAutosave(reopened).said).toEqual(['draft']);
+  });
+
+  it('stops at a 403 note.not_editable, a dead end, with "Not saved" and no more saves', async () => {
+    answerSaves(problem(403, 'note.not_editable'));
+    const { type, said, deadEnds } = renderAutosave(reopenedEdit);
+    type('Jane');
+    await wait(2_000);
+    type('Jane made toast.');
+    await wait(60_000);
+
+    expect(sentSaves).toHaveLength(1);
+    expect(deadEnds).toEqual([{ code: 'note.not_editable' }]);
+    expect(said.at(-1)).toBe('notSaved');
+  });
+
+  it('stops at a 409 note.version_conflict until startAgain(), which sends at once with the new base', async () => {
+    const { autosave, type, said, deadEnds } = await meetTheConflict();
+    expect(deadEnds).toEqual([{ code: 'note.version_conflict' }]);
+    expect(said.at(-1)).toBe('notSaved');
+    type('Jane made toast. Then a walk.');
+    await wait(30_000);
+    expect(sentSaves).toHaveLength(2);
+
+    act(() => {
+      autosave().startAgain(3);
+    });
+    expect(said.at(-1)).toBe('saving');
+    await wait(0);
+
+    expect(sentSaves).toHaveLength(3);
+    expect(sentSaves[2].body).toMatchObject({
+      baseVersion: 3,
+      clientId: sentSaves[0].body.clientId,
+      seq: 3,
+      narrative: 'Jane made toast. Then a walk.',
+    });
+    expect(said.at(-1)).toBe('saved');
+
+    type('Jane made toast. Then a walk to the shops.');
+    await wait(2_000);
+    expect(sentSaves[3].body).toMatchObject({ baseVersion: 3, seq: 4 });
+  });
+
+  it('sends what the form holds on startAgain() even with no change made since the conflict', async () => {
+    const { autosave } = await meetTheConflict();
+
+    act(() => {
+      autosave().startAgain(4);
+    });
+    await wait(0);
+
+    expect(sentSaves[2].body).toMatchObject({ baseVersion: 4, seq: 3, narrative: 'Jane made toast.' });
+  });
+
+  describe('Load the other version', () => {
+    /** Saves "Jane", then meets the takeover with "Jane made toast.", on a page opened as `opened`. */
+    async function loseTheNote(opened: Draft) {
+      answerSaves(saved(), problem(409, 'draft.taken_over'), saved());
+      const rendered = renderAutosave(opened);
+      for (const text of ['Jane', 'Jane made toast.']) {
+        rendered.type(text);
+        act(() => {
+          rendered.autosave().flush();
+        });
+        await wait(0);
+      }
+
+      return rendered;
+    }
+
+    it('is the version-conflict dead end on a draft page whose read is a pending edit', async () => {
+      const { autosave, deadEnds, others } = await loseTheNote(reopened);
+
+      serveDraft(reopenedEdit);
+      const loaded = outcome(autosave().load());
+      await wait(0);
+
+      expect(loaded()).toBe('deadEnd');
+      expect(deadEnds).toEqual([{ code: 'note.version_conflict' }]);
+      expect(others).toEqual([]);
+    });
+
+    it('adopts the base of the answer on an edit page, and the saves after it send it', async () => {
+      const { autosave, type, said, others } = await loseTheNote(reopenedEdit);
+
+      serveDraft({ ...reopenedEdit, baseVersion: 3, narrative: 'Sam made tea.' });
+      const loaded = outcome(autosave().load());
+      await wait(0);
+      type('Sam made tea. Then a nap.');
+      await wait(2_000);
+
+      expect(loaded()).toBe('shown');
+      expect(others.map((other) => other.baseVersion)).toEqual([3]);
+      expect(said.at(-1)).toBe('saved');
+      expect(sentSaves.at(-1)?.body).toMatchObject({ baseVersion: 3, seq: 1 });
+    });
   });
 });
 

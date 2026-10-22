@@ -3,9 +3,13 @@ import type { Page, Request, Response } from '@playwright/test';
 import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
-import { failMe, manager, serveMe } from './me.ts';
+import { breakfast, bus } from './goals.ts';
+import { failMe, manager, serveMe, worker } from './me.ts';
+import { notesStore } from './notes.ts';
+import { jane, participants } from './participants.ts';
 import { codeLabel, setUpWithPassword } from './setupSignIn.ts';
 import { endTheSession, sessionCookie, signInAgainWithPasskey } from './signedOut.ts';
+import { serveMyDrafts, serveToday } from './today.ts';
 import { alex, answerSetupLinks, people, sam, serveUsers } from './users.ts';
 
 // Signing in again in place, sign-in's view C, in the published app (S00.04.08), against sign-in.md's *Sign in again,
@@ -269,3 +273,67 @@ test("on a user's page, a Resend invite's 401 shows view C over the hidden back 
   await expect(main(page).locator('button + [role="status"]')).toBeEmpty();
   expect(await resendsSent()).toBe(1);
 });
+
+// An edit's request that meets the end of the session (S02.06.01, note-form.md *Session*): view C over the hidden form,
+// nothing said above the buttons, and the request never sent again once the same person signs in.
+for (const press of ['Save changes', 'Cancel'] as const) {
+  test(`on the edit form, a ${press}'s 401 shows view C over the hidden form, and it is never sent again`, async ({
+    page,
+  }) => {
+    const store = notesStore({ today: manager.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+    store.addSubmitted(jane.id, manager.today, {
+      authorDisplayName: worker.displayName,
+      authorUserId: worker.userId,
+      firstSubmittedAtUtc: '2026-10-01T05:10:00Z',
+      narrative: 'Went to the shops.',
+      goals: [{ id: breakfast.id, text: breakfast.text, isTicked: true }],
+    });
+    await serveMe(page, manager);
+    await serveToday(page, manager.today, participants, store.todayNotes(manager));
+    await serveMyDrafts(page, store.myDrafts(manager));
+    await store.serve(page, manager);
+    // The request that meets the end of the session, from now on, which the page counts.
+    const pressed = press === 'Save changes';
+    await page.route(
+      (url) => /\/notes\/[^/]+\/(versions|draft)$/.test(url.pathname),
+      (route) => {
+        const method = route.request().method();
+        const ends = pressed ? method === 'POST' : method === 'DELETE';
+        return ends ? route.fulfill({ status: 401 }) : route.fallback();
+      },
+    );
+    const sent = countRequests(
+      page,
+      (request) =>
+        request.method() === (pressed ? 'POST' : 'DELETE')
+        && new URL(request.url()).pathname.endsWith(pressed ? '/versions' : '/draft'),
+    );
+    await page.goto(`/participants/${jane.id}/notes/${manager.today}/edit`);
+    await expect(heading(page)).toContainText('Editing submitted note (version 1)');
+    await main(page).getByRole('textbox', { name: '3. Guided notes' }).fill('Went to the shops. Then home.');
+    await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
+
+    // The session has gone, so that /api/auth/me answers 401 too, as the window's focus asks it again below.
+    await failMe(page, 401);
+    await main(page).getByRole('button', { name: press, exact: true }).click();
+
+    await expectSignedOutAt(page, page.url());
+    expect(await sent()).toBe(1);
+
+    // Signing in again as the same manager, through the password and code steps, which the browser answers for the app.
+    await page.route('**/api/auth/login', (route) => route.fulfill({ json: { next: 'totp' } }));
+    await page.route('**/api/auth/login/totp', (route) => route.fulfill({ json: manager }));
+    await serveMe(page, manager);
+    await main(page).getByRole('textbox', { name: 'Email address' }).fill(sam.email);
+    await page.getByLabel('Password', { exact: true }).fill('made-up password');
+    await main(page).getByRole('button', { name: 'Continue' }).click();
+    await page.getByLabel(codeLabel).fill('123456');
+    await main(page).getByRole('button', { name: 'Sign in', exact: true }).click();
+
+    // The form as it was, its words kept, with nothing said above its buttons, and the request sent only the once.
+    await expect(heading(page)).toContainText('Editing submitted note (version 1)');
+    await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the shops. Then home.');
+    await expect(main(page).locator('form [role="alert"]')).toBeEmpty();
+    expect(await sent()).toBe(1);
+  });
+}

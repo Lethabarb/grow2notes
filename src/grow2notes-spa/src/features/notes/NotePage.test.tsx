@@ -164,6 +164,7 @@ function paths(participant: ParticipantHeader, noteDate = '2026-10-01') {
     versions: `/api/participants/${participant.id}/notes/${noteDate}/versions`,
     discard: `/api/participants/${participant.id}/notes/${noteDate}/discard`,
     page: `/participants/${participant.id}/notes/${noteDate}`,
+    edit: `/participants/${participant.id}/notes/${noteDate}/edit`,
   };
 }
 
@@ -318,12 +319,16 @@ type SubmittedOptions = {
   firstSubmittedAtUtc?: string;
   /** Who saved the current version, and when, for a note edited since it was submitted; none for one that was not. */
   lastEdit?: { by: string; atUtc: string };
+  /** The note's author, Priya Nair, another worker, unless given. */
+  author?: SubmittedNote['author'];
+  /** The current version's number, 1, or 2 for a note edited since, unless given. */
+  versionNumber?: number;
 };
 
 /**
  * Jane's note as `GET {base}` gives it once submitted: written by Priya Nair, another worker, at 4:42 pm in Melbourne
  * on 1 October 2026 unless given another time, with Breakfast and Sister ticked, and not flagged unless given a reason.
- * Given a last edit it is at version 2, else at version 1.
+ * Given a last edit it is at version 2, else at version 1, unless given another.
  */
 function submittedNote({
   narrative = 'Jane made toast.\nThen a walk to the shops.',
@@ -336,6 +341,8 @@ function submittedNote({
   reason,
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
   lastEdit,
+  author = { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+  versionNumber = lastEdit === undefined ? 1 : 2,
 }: SubmittedOptions = {}): SubmittedNote {
   const flag =
     reason === undefined
@@ -343,9 +350,9 @@ function submittedNote({
       : ({ isFlagged: true, flagReason: reason } as const);
   return {
     status: 'Submitted',
-    author: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+    author,
     firstSubmittedAtUtc,
-    current: { versionNumber: lastEdit === undefined ? 1 : 2, narrative, goals, commonItemGroups, ...flag },
+    current: { versionNumber, narrative, goals, commonItemGroups, ...flag },
     ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };
 }
@@ -1378,6 +1385,7 @@ describe('Autosave', () => {
           body: {
             clientId: expect.any(String) as string,
             seq: 1,
+            baseVersion: 0,
             listsVersion: 'lists-1',
             narrative,
             tickedGoalIds,
@@ -1575,6 +1583,7 @@ describe('Autosave', () => {
         {
           clientId: expect.any(String) as string,
           seq: 1,
+          baseVersion: 0,
           narrative: 'Jane made toast.\nThen a walk to the shops.',
           tickedGoalIds: [breakfast.id],
           pickedGroupIds: [],
@@ -1619,6 +1628,7 @@ describe('Autosave', () => {
     expect(laterSave).toEqual({
       clientId: firstSave.clientId,
       seq: 2,
+      baseVersion: 0,
       narrative: 'Jane made toast.',
       tickedGoalIds: [breakfast.id, sister.id],
       pickedGroupIds: [],
@@ -1851,6 +1861,7 @@ describe('Changed on another device or tab', () => {
     expect(kept).toEqual({
       ...onScreen,
       clientId: expect.stringMatching(uuid) as string,
+      baseVersion: 0,
       seq: 1,
       narrative: 'Jane made toast. Then a walk to the shops.',
     });
@@ -1919,6 +1930,7 @@ describe('Changed on another device or tab', () => {
       clientId: expect.stringMatching(uuid) as string,
       seq: 1,
       narrative: 'Jane went to the library. Then lunch.',
+      baseVersion: 0,
       tickedGoalIds: [bus.id],
       pickedGroupIds: [],
       tickedCommonItemIds: [],
@@ -3102,6 +3114,7 @@ describe('Pressing Submit note', () => {
         body: {
           clientId: expect.any(String) as string,
           seq: 1,
+          baseVersion: 0,
           narrative: 'Jane made toast.\nThen a walk to the shops.',
           tickedGoalIds: [breakfast.id, sister.id],
           pickedGroupIds: [],
@@ -5437,7 +5450,8 @@ describe('The read view of a submitted note', () => {
     expect(follows(within(main()).getByRole('link', { name: 'Past notes' }), flag)).toBe(true);
   });
 
-  // participant-notes.md component 5, the action row, which holds Past notes alone until T14 and T18 add theirs.
+  // participant-notes.md component 5, the action row, which holds Past notes alone for a worker who did not write the
+  // note, with Edit before it for the author and a manager, and T18 adds Version history.
   it('has the Past notes link after the byline and the flag line, before Goals', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
@@ -5580,7 +5594,7 @@ describe('The read view of a submitted note', () => {
     expect(reads()).toBeGreaterThan(before);
   });
 
-  // participant-notes.md item 21; T14 adds Edit, T16 a manager's review lines and panel, and T18 Version history.
+  // participant-notes.md item 21; T16 adds a manager's review lines and panel, and T18 Version history.
   it("has no Edit, Version history, To review, Reviewed or review panel in a worker's DOM, and no form", async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
@@ -5895,5 +5909,741 @@ describe('Common items and group picks', () => {
       });
       expect(saves()[2].body.clientId).not.toBe(saves()[0].body.clientId);
     });
+  });
+});
+
+// Editing a submitted note (T14; note-form.md *Routes*, *Kinds of note*, components 6 and 12, *Edit-mode actions*;
+// autosave-status.md *Behaviour* 6 and 10).
+
+/** The text of the version being edited, which the read view shows too. */
+const oldText = 'Jane made toast.\nThen a walk to the shops.';
+
+/** The worker, Casey Nguyen, as the author of a note. */
+const mine = { id: worker.userId, displayName: worker.displayName };
+
+/** Casey's own note as `GET {base}` gives it: version 2, last changed by Jo Smith at 5:03 pm on the note date. */
+function editedNote(options: SubmittedOptions = {}): SubmittedNote {
+  return submittedNote({
+    author: mine,
+    narrative: oldText,
+    lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' },
+    ...options,
+  });
+}
+
+/** The pending edit's form, as `GET {base}/draft` gives it for a note at version 2, before any save. */
+function editDraft(overrides: Partial<Draft> = {}): Draft {
+  return {
+    baseVersion: 2,
+    isSaved: false,
+    guidePrompts: prompts,
+    goals: [{ ...breakfast, isTicked: true }, bus, { ...sister, isTicked: true }],
+    commonItemGroups: [],
+    narrative: oldText,
+    isFlagged: false,
+    flagReason: null,
+    ...overrides,
+  };
+}
+
+/** Answers each Cancel of a pending edit, a `DELETE {base}/draft` to `path`, with `answer` from now on. */
+function serveCancel(path: string, answer: Answer) {
+  answers.set(`DELETE ${path}`, answer);
+}
+
+/** Cancel's `204`. */
+const noContent: Answer = () => Promise.resolve(new Response(null, { status: 204 }));
+
+/** Every Cancel sent, as its path. */
+function cancels(): string[] {
+  return fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE').map(([path]) => path as string);
+}
+
+/** The Edit link of the read view. */
+function editLink(): HTMLElement {
+  return within(main()).getByRole('link', { name: 'Edit' });
+}
+
+/** Save changes, at the end of the edit form. */
+function saveChangesButton(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Save changes' });
+}
+
+/** Cancel, after Save changes. */
+function cancelButton(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Cancel' });
+}
+
+/** The alert above the buttons, where a request that failed says so. */
+function requestAlert(): HTMLElement {
+  const alert = main().querySelector<HTMLElement>('form [role="alert"]');
+  if (alert === null) {
+    throw new Error('The form has no alert above its buttons.');
+  }
+
+  return alert;
+}
+
+/** The version-conflict notice, found by its heading. */
+function conflictNotice(): HTMLElement {
+  return screen.getByRole('region', { name: /while you were editing/ });
+}
+
+/** Presses `button` and lets the requests it sends, and the screen they lead to, be answered. */
+async function pressAndWait(button: HTMLElement) {
+  await press(button);
+  await wait(50);
+  await settle();
+}
+
+type EditAnswers = {
+  note?: Answer;
+  draft?: Answer;
+  save?: Answer;
+  submit?: Answer;
+  cancel?: Answer;
+};
+
+/**
+ * Serves a participant of their own, Jane Citizen, with Casey's version 2 of her note for today, and the worker's
+ * pending edit of it, whose saves are answered at 9:42 am; shows the read view, then presses Edit, and lets the edit
+ * form open. Gives the participant, the router and the client.
+ */
+async function openToEdit({ note, draft, save, submit, cancel }: EditAnswers = {}, me: Me = worker) {
+  const participant = freshParticipant();
+  const { header, note: notePath, draft: draftPath, versions } = paths(participant);
+  serve(header, json(participant));
+  serve(notePath, note ?? json(editedNote()));
+  serve(draftPath, draft ?? json(editDraft()));
+  serveSave(draftPath, save ?? saved('2026-09-30T23:42:00Z'));
+  serveSubmit(versions, submit ?? versionSaved());
+  serveCancel(draftPath, cancel ?? noContent);
+  const { router, client } = renderApp(paths(participant).page, me);
+  await settle();
+  await press(editLink());
+  await settle();
+  return { participant, router, client };
+}
+
+describe('The read view, for a note that the viewer may edit', () => {
+  it('puts Edit first in the action row, for the note’s author, before Past notes, replacing the entry', async () => {
+    serveSubmitted(jane, editedNote());
+    serve(paths(jane).draft, json(editDraft()));
+    const { router } = renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).getAllByRole('link').map((link) => link.textContent)).toEqual(['Edit', 'Past notes']);
+    expect(editLink()).toHaveAttribute('href', `${paths(jane).page}/edit`);
+    expect(editLink()).toHaveClass(buttonStyles.button);
+    expect(follows(editLink(), statusLines()[1])).toBe(true);
+
+    await press(editLink());
+
+    expect(router.state.location.pathname).toBe(`${paths(jane).page}/edit`);
+    expect(router.state.historyAction).toBe('REPLACE');
+  });
+
+  it('puts Edit first for a manager, on a note that another wrote', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page, manager);
+    await settle();
+
+    expect(within(main()).getAllByRole('link').map((link) => link.textContent)).toEqual(['Edit', 'Past notes']);
+  });
+
+  it('shows no Edit to a worker who did not write the note', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).queryByRole('link', { name: 'Edit' })).toBeNull();
+  });
+});
+
+describe('The edit page', () => {
+  it('shows the caption in the <h1>, Save changes and Cancel, and no More actions or earlier-day notice', async () => {
+    const participant = freshParticipant();
+    const page = paths(participant, '2026-09-30');
+    serve(page.header, json(participant));
+    serve(page.note, json(editedNote()));
+    serve(page.draft, json(editDraft({ isSaved: true, savedAtUtc: '2026-09-30T23:40:00Z' })));
+    renderApp(page.edit, manager);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName(
+      `Editing submitted note (version 2) Jane Citizen Wednesday 30${nbsp}September 2026`,
+    );
+    expect(within(main()).getAllByRole('button')).toEqual([saveChangesButton(), cancelButton()]);
+    expect(saveChangesButton()).toHaveAttribute('type', 'submit');
+    expect(main()).not.toHaveTextContent(/More actions|This draft is for/);
+    expect(document.title).toBe('Grow2Notes – Note');
+    expect(follows(guidedNotes(), pageHeading())).toBe(true);
+  });
+
+  it('says "Saved 9:40 am" for a reopened pending edit, never "Draft", and nothing for a new one', async () => {
+    const reopened = freshParticipant();
+    serve(paths(reopened).header, json(reopened));
+    serve(paths(reopened).note, json(editedNote()));
+    serve(paths(reopened).draft, json(editDraft({ isSaved: true, savedAtUtc: '2026-09-30T23:40:00Z' })));
+    renderApp(paths(reopened).edit);
+    await settle();
+
+    expect(shownSaveStatus()).toBe(`Saved 9:40${nbsp}am`);
+    expect(saveStatus().textContent).not.toMatch(/Draft/);
+  });
+
+  it('says "No goals set" and "No common items set" for the lists a version left empty', async () => {
+    const participant = freshParticipant();
+    serve(paths(participant).header, json(participant));
+    serve(paths(participant).note, json(editedNote({ goals: [] })));
+    serve(paths(participant).draft, json(editDraft({ goals: [] })));
+    renderApp(paths(participant).edit);
+    await settle();
+
+    expect(shownSaveStatus()).toBe('');
+    expect(main()).toHaveTextContent('No goals set');
+    expect(main()).toHaveTextContent('No common items set');
+    expect(main()).not.toHaveTextContent(/No goals set up|No common items set up/);
+  });
+
+  it('replaces to the shared address for a note that is a draft, or has none, and shows the form there', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(savedDraft()));
+    serve(paths(participant).note, aDraft);
+    const { router } = renderApp(paths(participant).edit);
+    await settle();
+    // The replace remounts the page, which reads the form's own answer afresh before it shows the form.
+    await wait(50);
+    await settle();
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(saveStatus().textContent).toMatch(/^Draft/);
+    expect(within(main()).getByRole('button', { name: 'Submit note' })).toBeInTheDocument();
+  });
+
+  it('replaces to the shared address for a participant with no note yet', async () => {
+    const participant = freshParticipant();
+    serveNote(participant);
+    const { router } = renderApp(paths(participant).edit);
+    await settle();
+    // The replace remounts the page, which reads the form's own answer afresh before it shows the form.
+    await wait(50);
+    await settle();
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(within(main()).getByRole('button', { name: 'Submit note' })).toBeInTheDocument();
+  });
+
+  it('shows "You cannot edit this note", under the nav, titled Note, with Read the note, for a 403', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const participant = freshParticipant();
+    serveSubmitted(participant, submittedNote());
+    serve(paths(participant).draft, problem(403, { code: 'note.not_editable' }));
+    const { router } = renderApp(paths(participant).edit);
+    await settle();
+
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+    expect(main()).toHaveTextContent('Only the person who wrote it, or a manager, can edit it.');
+    expect(within(main()).getByRole('link', { name: 'Read the note' })).toHaveAttribute(
+      'href',
+      paths(participant).page,
+    );
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+    expect(document.title).toBe('Grow2Notes – Note');
+    expect(within(main()).queryByRole('button')).toBeNull();
+    expect(router.state.location.pathname).toBe(paths(participant).edit);
+  });
+
+  it('focuses the <h1> of the cannot-edit page, reached from the Edit link of a stale read view', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await openToEdit({ draft: problem(403, { code: 'note.not_editable' }) });
+
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+    expect(pageHeading()).toHaveFocus();
+  });
+});
+
+describe('At the shared address, a form read that finds the note submitted', () => {
+  it.each([
+    { read: 'a pending edit’s form, with a base above 0', draft: json(editDraft()) },
+    { read: 'a 403 note.not_editable', draft: problem(403, { code: 'note.not_editable' }) },
+  ])('reads the note again and shows its read view, for $read', async ({ draft }) => {
+    const participant = freshParticipant();
+    serveNote(participant, draft);
+    // No note when the page first read it, submitted by the time of its second read.
+    serve(paths(participant).note, inTurn(noNote, json(editedNote())));
+    const { router } = renderApp(paths(participant).page);
+    await settle();
+    await wait(50);
+    await settle();
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(shown(statusLines()[0])).toMatch(/^Written by Casey Nguyen/);
+    expect(narrative()).toHaveTextContent(/^Jane made toast\./);
+    expect(main().querySelector('form')).toBeNull();
+  });
+});
+
+describe('Save changes', () => {
+  const newText = 'Jane made toast. Then a walk, and lunch out.';
+
+  /** The text of every Guided notes section the read view showed, as the page changed. */
+  function watchNarratives(): () => string[] {
+    const texts: string[] = [];
+    const observer = new MutationObserver(() => {
+      for (const written of main().querySelectorAll(`div.${readView.written}`)) {
+        texts.push(written.textContent);
+      }
+    });
+    observer.observe(main(), { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+      return texts;
+    };
+  }
+
+  it('sends the check save, then the version at its base with a key, then replaces to the new read view', async () => {
+    let note = json(editedNote());
+    const saveChanges = () => {
+      const lastEdit = { by: worker.displayName, atUtc: '2026-10-01T08:10:00Z' };
+      note = json(editedNote({ narrative: newText, lastEdit }));
+      return versionSaved()();
+    };
+    const { participant, router } = await openToEdit({ note: (init) => note(init), submit: saveChanges });
+    expect(pageHeading()).toHaveAccessibleName(
+      `Editing submitted note (version 2) Jane Citizen Thursday 1${nbsp}October 2026`,
+    );
+    type(newText);
+    await wait(2_000);
+    const narratives = watchNarratives();
+
+    await pressAndWait(saveChangesButton());
+
+    expect(saves().map(({ body }) => [body.baseVersion, body.narrative])).toEqual([
+      [2, newText],
+      [2, newText],
+    ]);
+    expect(submits()).toEqual([
+      {
+        path: paths(participant).versions,
+        key: expect.stringMatching(uuid) as string,
+        body: {
+          baseVersion: 2,
+          narrative: newText,
+          tickedGoalIds: [breakfast.id, sister.id],
+          pickedGroupIds: [],
+          tickedCommonItemIds: [],
+          isFlagged: false,
+          flagReason: null,
+        },
+      },
+    ]);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+    expect(narrative().textContent).toBe(newText);
+    expect(narratives()).not.toContain(oldText);
+    expect(main().querySelector('form')).toBeNull();
+    expect(banner()).toBeNull();
+  });
+
+  it('asks for the pending edits and the reviews list again, and for me, as it leaves', async () => {
+    const { participant, client } = await openToEdit();
+    const invalidated = vi.spyOn(client, 'invalidateQueries');
+    const removed = vi.spyOn(client, 'removeQueries');
+    type(newText);
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(removed).toHaveBeenCalledWith({ queryKey: ['notes', participant.id, '2026-10-01'] });
+    expect(invalidated).toHaveBeenCalledWith({ queryKey: ['reviews'] });
+    expect(invalidated).toHaveBeenCalledWith({ queryKey: ['pastNotes', participant.id], exact: true });
+    expect(sentRequests()).toContain(`GET ${mePath}`);
+  });
+
+  it('refuses a blank Guided notes with the form’s checks, sending no version', async () => {
+    await openToEdit({ draft: json(editDraft({ narrative: '' })) });
+
+    await pressAndWait(saveChangesButton());
+
+    expect(submits()).toEqual([]);
+    expect(errorSummary()).not.toBeNull();
+    expect(summaryItems().map(([words]) => words)).toEqual([
+      'Write your notes in the Guided notes box. The grey text is only a guide.',
+    ]);
+  });
+
+  it('shows "Changes not saved: …" above the buttons after a lost answer, text kept, no dialog', async () => {
+    await openToEdit({ submit: noConnection });
+    type(newText);
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(requestAlert().textContent).toBe('Changes not saved: no connection. Try again.');
+    expect(guidedNotes()).toHaveValue(newText);
+    expect(confirmation()).toBeNull();
+    expect(saveChangesButton()).not.toHaveAttribute('aria-disabled');
+    expect(pageHeading()).toHaveAccessibleName(
+      `Editing submitted note (version 2) Jane Citizen Thursday 1${nbsp}October 2026`,
+    );
+  });
+
+  it('says something went wrong for a 500', async () => {
+    await openToEdit({ submit: problem(500) });
+
+    await pressAndWait(saveChangesButton());
+
+    expect(requestAlert().textContent).toBe('Changes not saved: something went wrong. Try again.');
+  });
+
+  it('sends no check save, and the same key, for a press with nothing typed since a lost answer', async () => {
+    const { participant } = await openToEdit({ submit: inTurn(noConnection, versionSaved(200)) });
+    type(newText);
+    await wait(2_000);
+    await pressAndWait(saveChangesButton());
+    const putsBefore = saves().length;
+    expect(submits()).toHaveLength(1);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(saves()).toHaveLength(putsBefore);
+    expect(submits()).toHaveLength(2);
+    expect(submits()[1].key).toBe(submits()[0].key);
+    expect(submits()[1].body).toEqual(submits()[0].body);
+    expect(sentRequests().filter((request) => request === `POST ${paths(participant).versions}`)).toHaveLength(2);
+    expect(pageHeading()).toHaveAccessibleName(`Jane Citizen Thursday 1${nbsp}October 2026`);
+  });
+
+  it('sends a new key, after a check save, for a press with a change made since a lost answer', async () => {
+    await openToEdit({ submit: inTurn(noConnection, versionSaved()) });
+    type(newText);
+    await wait(2_000);
+    await pressAndWait(saveChangesButton());
+    type(`${newText} More.`);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(submits()).toHaveLength(2);
+    expect(submits()[1].key).not.toBe(submits()[0].key);
+    expect(submits()[1].body.narrative).toBe(`${newText} More.`);
+    expect(saves().at(-1)?.body.narrative).toBe(`${newText} More.`);
+  });
+
+  it('shows "Saving changes…" in the button only after 400 ms, and the page’s status says it', async () => {
+    const version = held(versionSaved());
+    await openToEdit({ submit: version.answer });
+    type(newText);
+    await wait(2_000);
+
+    // Once the busy label shows, the button's name is no longer exactly "Save changes", so it is found only once.
+    const button = saveChangesButton();
+    await press(button);
+    await wait(397);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(2);
+    expect(button).toHaveAttribute('data-busy', 'true');
+    expect(button).toHaveTextContent('Saving changes…');
+    // The status region is emptied and written again on the next animation frame.
+    await wait(16);
+    expect(pageStatus()).toHaveTextContent('Saving changes…');
+
+    version.release();
+    await wait(50);
+    await settle();
+    expect(main().querySelector('form')).toBeNull();
+  });
+
+  it('shows the whole-page refusal for a 403 note.not_editable at the version', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await openToEdit({ submit: problem(403, { code: 'note.not_editable' }) });
+    type(newText);
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
+  });
+
+  it('shows the whole page on a press after a background save met a 403, with no banner meanwhile', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await openToEdit({ save: problem(403, { code: 'note.not_editable' }) });
+    type(newText);
+    await wait(2_000);
+
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(pageBar().querySelector('#dead-end')).toBeNull();
+    expect(assertive()).toBeEmptyDOMElement();
+    type(`${newText} More.`);
+    await wait(30_000);
+    expect(saves()).toHaveLength(1);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+    expect(submits()).toEqual([]);
+  });
+
+  it('shows the whole page when its check save meets the 403', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await openToEdit({ save: problem(403, { code: 'note.not_editable' }) });
+
+    await pressAndWait(saveChangesButton());
+
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+    expect(submits()).toEqual([]);
+  });
+
+});
+
+describe('Cancel', () => {
+  it('stops autosave, deletes the pending edit with no save after it, and replaces to the read view', async () => {
+    const { participant, router } = await openToEdit();
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    type('Jane made toast. Then a nap, and a walk.');
+
+    await pressAndWait(cancelButton());
+
+    expect(cancels()).toEqual([paths(participant).draft]);
+    expect(saves()).toHaveLength(1);
+    const requests = sentRequests();
+    const cancelled = requests.indexOf(`DELETE ${paths(participant).draft}`);
+    expect(cancelled).toBeGreaterThan(requests.indexOf(`PUT ${paths(participant).draft}`));
+    expect(requests.slice(cancelled).filter((request) => request.startsWith('PUT '))).toEqual([]);
+    expect(submits()).toEqual([]);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveFocus();
+    expect(narrative().textContent).toBe(oldText);
+    expect(main().querySelector('form')).toBeNull();
+  });
+
+  it('lands on the read view for a 404, a pending edit already cancelled', async () => {
+    const { participant, router } = await openToEdit({ cancel: problem(404) });
+
+    await pressAndWait(cancelButton());
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(narrative().textContent).toBe(oldText);
+  });
+
+  it('shows "Not cancelled: …" above the buttons for a failure, and lets autosave go on', async () => {
+    await openToEdit({ cancel: noConnection });
+    type('Jane made toast. Then a nap.');
+
+    await pressAndWait(cancelButton());
+
+    expect(requestAlert().textContent).toBe('Not cancelled: no connection. Try again.');
+    expect(cancelButton()).not.toHaveAttribute('aria-disabled');
+    await wait(2_000);
+    expect(saves().map(({ body }) => body.narrative)).toEqual(['Jane made toast. Then a nap.']);
+  });
+
+  it('shows "Cancelling…" in the button only after 400 ms', async () => {
+    const request = held(noContent);
+    await openToEdit({ cancel: request.answer });
+
+    const button = cancelButton();
+    await press(button);
+    await wait(397);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(2);
+    expect(button).toHaveAttribute('data-busy', 'true');
+    expect(button).toHaveTextContent('Cancelling…');
+
+    request.release();
+    await wait(50);
+    await settle();
+    expect(main().querySelector('form')).toBeNull();
+  });
+
+  it('works after a background save met a 403, deleting the pending edit and landing on the read view', async () => {
+    const { participant, router } = await openToEdit({ save: problem(403, { code: 'note.not_editable' }) });
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    expect(shownSaveStatus()).toBe('Not saved');
+
+    await pressAndWait(cancelButton());
+
+    expect(cancels()).toEqual([paths(participant).draft]);
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(narrative().textContent).toBe(oldText);
+  });
+
+  it('ignores a press of Save changes, and a second of Cancel, while the request of Cancel is out', async () => {
+    const request = held(noContent);
+    await openToEdit({ cancel: request.answer });
+    await press(cancelButton());
+
+    await press(saveChangesButton());
+    await press(cancelButton());
+
+    expect(saves()).toEqual([]);
+    expect(submits()).toEqual([]);
+    expect(cancels()).toHaveLength(1);
+    request.release();
+    await wait(50);
+  });
+});
+
+describe('The version-conflict notice', () => {
+  const newerText = 'Sam wrote this while Casey was editing.';
+  const newer = () =>
+    submittedNote({
+      author: mine,
+      narrative: newerText,
+      reason: 'Seemed tired.',
+      lastEdit: { by: 'Sam Lee', atUtc: '2026-10-01T07:03:00Z' },
+      versionNumber: 3,
+    });
+  const conflict = problem(409, {
+    code: 'note.version_conflict',
+    currentVersion: 3,
+    createdBy: 'Sam Lee',
+    createdAtUtc: '2026-10-01T07:03:00Z',
+  });
+
+  /** An edit whose first save, a PUT, is saved, its second meets the conflict, and later ones are saved at 9:44 am. */
+  async function openToConflict() {
+    const opened = await openToEdit({
+      save: inTurn(saved('2026-09-30T23:43:00Z'), conflict, saved('2026-09-30T23:44:00Z')),
+    });
+    serve(paths(opened.participant).note, json(newer()));
+    return opened;
+  }
+
+  it('shows and takes focus for a press of Save changes that meets a conflict, sending no version', async () => {
+    await openToConflict();
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    const notice = conflictNotice();
+    expect(notice).toHaveFocus();
+    expect(within(notice).getByRole('heading', { level: 2, name: /saved version 3/ }).textContent).toBe(
+      `Sam Lee saved version 3 at 5:03${nbsp}pm while you were editing.`,
+    );
+    expect(notice).toHaveTextContent('Your changes are still below.');
+    expect(notice.querySelector('details')).toHaveAttribute('open');
+    expect(within(notice).getByText('Version 3 by Sam Lee')).toBeInTheDocument();
+    expect(notice).toHaveTextContent(newerText);
+    expect(notice).toHaveTextContent('Flagged');
+    expect(within(notice).getByRole('button', { name: 'Start again from the latest version' })).toBeInTheDocument();
+    expect(follows(notice, pageHeading())).toBe(true);
+    expect(follows(guidedNotes(), notice)).toBe(true);
+    expect(submits()).toEqual([]);
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a nap.');
+    expect(shownSaveStatus()).toBe('Not saved');
+    expect(saveChangesButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(pageBar().querySelector('#dead-end')).toBeNull();
+  });
+
+  it('shows without moving focus for a background save that meets a conflict', async () => {
+    const opened = await openToEdit({ save: conflict });
+    serve(paths(opened.participant).note, json(newer()));
+    guidedNotes().focus();
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    await settle();
+
+    expect(conflictNotice()).toBeInTheDocument();
+    expect(guidedNotes()).toHaveFocus();
+    expect(shownSaveStatus()).toBe('Not saved');
+  });
+
+  it('focuses the notice again on a press of Save changes while it waits, sending nothing', async () => {
+    await openToConflict();
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    await pressAndWait(saveChangesButton());
+    guidedNotes().focus();
+    const sent = sentRequests().length;
+
+    await press(saveChangesButton());
+
+    expect(conflictNotice()).toHaveFocus();
+    expect(sentRequests()).toHaveLength(sent);
+  });
+
+  it('shows for a version that meets a conflict, with the attempt dropped', async () => {
+    const opened = await openToEdit({ submit: conflict });
+    serve(paths(opened.participant).note, json(newer()));
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    expect(submits()).toHaveLength(1);
+    expect(conflictNotice()).toHaveFocus();
+    expect(shownSaveStatus()).toBe('Not saved');
+  });
+
+  it('starts again keeping the content, the caption following, the details closed, and focus on the <h1>', async () => {
+    const opened = await openToConflict();
+    fireEvent.click(within(main()).getByText(bus.text));
+    fireEvent.click(flagBox());
+    typeReason('Seemed tired after lunch.');
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    await pressAndWait(saveChangesButton());
+
+    await press(within(conflictNotice()).getByRole('button', { name: 'Start again from the latest version' }));
+    await wait(50);
+    await settle();
+
+    const start = saves().at(-1)!.body;
+    expect(start).toMatchObject({
+      baseVersion: 3,
+      narrative: 'Jane made toast. Then a nap.',
+      tickedGoalIds: [breakfast.id, bus.id, sister.id],
+      isFlagged: true,
+      flagReason: 'Seemed tired after lunch.',
+    });
+    expect(start.clientId).toBe(saves()[0].body.clientId);
+    expect(start.seq).toBe(3);
+    expect(pageHeading()).toHaveAccessibleName(
+      `Editing submitted note (version 3) Jane Citizen Thursday 1${nbsp}October 2026`,
+    );
+    expect(pageHeading()).toHaveFocus();
+    expect(conflictNotice().querySelector('details')).not.toHaveAttribute('open');
+    expect(within(conflictNotice()).queryByRole('button')).toBeNull();
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a nap.');
+    expect(shownSaveStatus()).toBe(`Saved 9:44${nbsp}am`);
+    expect(saveChangesButton()).not.toHaveAttribute('aria-disabled');
+
+    await pressAndWait(saveChangesButton());
+
+    expect(submits().map(({ body }) => body.baseVersion)).toEqual([3]);
+    expect(opened.router.state.location.pathname).toBe(paths(opened.participant).page);
+  });
+
+  it('says that the newer version did not load, with Try again, and shows it once it loads', async () => {
+    const opened = await openToEdit({ save: conflict });
+    serve(paths(opened.participant).note, noConnection);
+    guidedNotes().focus();
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+    // After the read's one silent retry.
+    await wait(1_000);
+    await settle();
+
+    const notice = main().querySelector<HTMLElement>('section[tabindex="-1"]')!;
+    expect(notice).toHaveTextContent('The note did not load: no connection. Try again.');
+    expect(guidedNotes()).toHaveValue('Jane made toast. Then a nap.');
+
+    serve(paths(opened.participant).note, json(newer()));
+    await press(within(notice).getByRole('button', { name: 'Try again' }));
+    await settle();
+
+    expect(conflictNotice()).toHaveTextContent(newerText);
   });
 });

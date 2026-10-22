@@ -4560,7 +4560,7 @@ Only picked groups' items can be ticked, and picks are saved and versioned with 
 
 ```yaml
 id: T14
-status: doing
+status: done
 release: R1
 lane: C
 size: M
@@ -4616,6 +4616,58 @@ and shown the newer version, so nothing is silently overwritten.
   order, `Items` goals then common items, each item's group by `GroupPosition`). A version from before T13 has no
   group rows, and this task decides how its edit gets groups; the simplest is a snapshot with no groups. The Save
   changes `POST` already carries `pickedGroupIds` and `tickedCommonItemIds` (T13's Notes).
+- From T14 (22 October 2026), the decisions where design.md was silent, in the order a person meets them. A69 to A72
+  are the four that a caller or a user sees; the rest are recorded here.
+  - Cancel is `DELETE {base}/draft`, one `ExecuteDeleteAsync` of the caller's own row with `BaseVersionNumber > 0`:
+    `204`, or `404` for none, a draft's working copy included. It answers no `403`: design.md §6.3's DELETE row names
+    none, and its "Author or Manager" column says who may hold a pending edit. This departs from R18's "also applies to
+    Cancel", which holds for `/edit`, both `draft` reads and writes and Save changes (A71). The SPA's Cancel has no
+    `403` branch, and takes a `404` as already cancelled.
+  - Start again re-reads no version rows. Version 1 is written from the draft's snapshot, each pending edit is copied
+    from version n's rows, and version n + 1 from that copy with only picks, ticks, text and flag changed, so every
+    version of a note has one snapshot structure: moving `BaseVersionNumber` and taking the request's content is the
+    rebuild design.md §6.3 describes, and the "tick the newer version lacks" question does not arise (A70). Only
+    creating a pending edit reads version rows (`NoteVersionContent`).
+  - Creating a pending edit answers `200`, not `201`, which stays for the save that creates the note; `GET {base}/draft`
+    on a submitted note with no pending edit gives the current version's template (`baseVersion` n, `isSaved` false, no
+    `listsVersion`, no `savedAtUtc`) and writes nothing, so the first `PUT` makes the row.
+  - A version from before T13 has no group or common-item rows, so its pending edit has none: the form and the read
+    view say "No common items set".
+  - Interim flag gap until T16 (S03.01.02): Save changes at a base of 1 or more stores `IsFlagged` and `FlagReason` on
+    the version and leaves `Note.FlagStatus` and `FlaggedVersionNumber` as they are. The To review list reads its reason
+    from the flagged version and already says "Flag removed in a later edit" for an unflagging edit, so nothing crashes
+    or shows blank; what waits is a flag added by an edit, which shows Flagged on Today's and Past notes' rows but does
+    not reach To review or the badge until T16. The SPA already calls `refreshMe()` and invalidates `['reviews']` after
+    Save changes, so T16 needs no SPA change. It is the owner's call whether T16 runs soon after T14.
+  - Conflict by self: Save changes at the current base with no pending edit of the caller's, because they saved or
+    cancelled on another device, or a retry after a lost answer whose content changed since, answers `409` naming the
+    current version, which may be the caller's own save. The notice then reads a little oddly, "… saved version n while
+    you were editing", and Start again recovers cleanly, recreating the edit from what is on screen. Accepted.
+  - The retry rule: a Save changes press whose content equals the last failed attempt's, on the same base, sends no
+    check save, which would meet the version a lost answer made, but `autosave.stop()` and then `POST` with that
+    attempt's `Idempotency-Key`, so a version that was made answers `200` and leaves edit mode. A press after any
+    change runs the normal flow with a new key (the key check precedes the base check on the server).
+  - Load the other version on an edit page adopts the answer's base, and the caption follows; on a draft's page an
+    answer with a base above 0 is the version-conflict dead end, in place of the old `404` signal, which stays for A65's
+    days. On the shared address, a form read that finds the note submitted between the two reads, an answer with a base
+    above 0 or a `403 note.not_editable`, reads `GET {base}` again and shows the read view.
+  - Cache: Save changes and Cancel `removeQueries` `['notes', participantId, noteDate]` in the same turn as the
+    `replace`, where note-form.md says invalidate, so that the read view never shows the version read before; Past
+    notes and `['reviews']` are invalidated, `me` is asked for again after a save, and Today and `['me','drafts']`
+    refresh from the form's own unmount. The version-conflict notice's read sits under the same prefix.
+  - The version-conflict notice is labelled by its heading only once the fresh read has shown it, as before that the
+    section has none. The newer version's own section headings ("Goals", "Common items", "Guided notes") inside its
+    open details repeat the form's, as the design has the notice show the newer version through `ReadSections`; they
+    are kept, as the details is the newer version read-only, and a screen reader meets them in that region.
+  - Audit: Save changes writes `note.edited` with `{"versionNumber": n + 1}` in the version's transaction, never text;
+    starting a pending edit, its autosaves, Start again and Cancel write none (design.md §5.4, §5.6).
+  - Permission order: on a submitted note only the author or a stored Manager may read the form, `PUT` or `POST`, at any
+    base, so a worker who is not the author gets `403 note.not_editable` where T08 and T09 gave `404` and `409`. The
+    form's `403` at a background save is A72; Save changes' own `403`, or a press after one, shows the whole page.
+  - Save changes with nothing changed adds a version (A69), and the base rules for `PUT` are A70.
+  - The 400 ms busy labels, "Saving changes…" and "Cancelling…", the failure lines "Changes not saved: …" and "Not
+    cancelled: …", and the notice's words are the design's, in `src/copy`, approved as written (D67, 9 October
+    2026), so no words are the developer's own. The by-hand checks are steps 70 to 76 of ops/first-use-in-test.md.
 
 ### Plan
 
@@ -4661,7 +4713,22 @@ added by an edit does not reach To review until T16.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The server (#72; S02.06.01 to S02.06.03 on the server, design.md §5.7, §5.8 and §6.3): `NoteVersionContent` and
+      `LatestVersion`, `LiveNote.MayBeEditedByAsync`, `ErrorCode.NotEditable`; `GET` and `PUT {base}/draft` for a
+      submitted note, `DELETE {base}/draft`, `POST {base}/versions` at base n with `note.edited`, the conflict's
+      extensions, `GET {base}`'s `author.id`, `isEdited` and `lastEdit`, the history's `isEdited`; integration tests
+      on SQL Server, the endpoint matrix and audit rows.
+- [x] The read side of the SPA (#73): the Edited line and the Edited tag on Past notes, `NoteHeading` with its caption,
+      `FlagLine` and `Tag` pieces; Vitest and Playwright tests.
+- [x] The edit mode of the SPA (#74; S02.06.01 to S02.06.03 in the SPA, note-form.md components 6
+      and 12, autosave-status.md *Behaviour* 6 and 10): the `/edit` route, Edit first in the read view's action row,
+      Save changes and Cancel, the version-conflict notice with Start again, the cannot-edit page, `useAutosave`'s
+      `baseVersion`, `startAgain` and `not_editable` dead end; Vitest, and Playwright's `edit-note.spec.ts` with
+      additions to `today.spec.ts` and `sign-in-again.spec.ts`, on `notesStore`'s pending edits.
+- [x] Docs: this task's Notes; design.md §13's A69 to A72; ops/first-use-in-test.md's section for T14, steps 70 to 76
+      (phones, a manager's past-day pending edit, two editors, the cannot-edit page from a pasted link, NVDA and
+      VoiceOver, and offline Save changes and Cancel); tests/README.md's `notesStore`; coverage.md's M2 rows 6, 7 and 9
+      and note-form.md's rows 3 and 6; S02.06.01 to S02.06.03 and S02.01.04's fifth criterion ticked.
 
 ---
 

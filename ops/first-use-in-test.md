@@ -692,3 +692,60 @@ all. Every word typed into a note is made up (A35).
 Two checks of earlier steps now cover more, and are not repeated. Step 62's Load the other version also replaces the
 group ticks with the other version's. Step 64's manager, who reads a worker's draft, now also finds "2. Common items"
 between the goals and Guided notes, with the groups the worker has ticked and their items ticked or not (S02.04.03).
+
+### Editing a submitted note, once T14 is in test
+
+These steps hold T14's by-hand checks ([tasks.md](../design/backlog/tasks.md), T14's Notes). They need the manager and
+the passkey worker of step 18, the kit of steps 26 to 28, and made-up participants with two goals each: a submitted
+note by the worker for today for steps 70 and 73 to 76, and one for a past day for step 71, written by the worker. Every
+word typed into a note is made up (A35). The editing is on the notes that steps 54 and 68 submitted, or new ones.
+
+70. On the iPhone in Safari, at its usual text size and held upright, sign in as the passkey worker and open a note
+    that the worker submitted: look for the byline, then Edit first in the row with Past notes, in a box at least as
+    tall as a finger. Press Edit and look for "Editing submitted note (version 1)" above the participant's name and the
+    date, the goals and groups ticked as they were, the text, and Save changes and Cancel under the flag, nothing cut
+    short and nothing running past the screen's edge. Change a sentence: look for "Saving…", then "Saved" and the time.
+    Press Save changes and look for the read view, with focus on the name and the date, the new text, and a new line,
+    "Edited", with "last change by" and the worker's name. Press Past notes and look for "Edited" on the row. Press Edit
+    again, change a tick, press Cancel and look for the read view as it was, with no change. (S02.06.01's first, second
+    and fifth criteria on a real phone; note-form.md's layout and states for edit mode.)
+71. As the manager on the laptop, open the Past notes of a participant and a note for a day before today that the
+    worker submitted. Press Edit, change a word, and wait for "Saved". Go back to Today, without pressing Save
+    changes or Cancel: look for "Your unfinished drafts" with the participant's name and that day's date.
+    Press the row and look for the edit form with your word in it and "Saved" with the date, then press Save changes
+    and look for the read view, written by the worker, with "last change by" and the manager's name. (S02.06.02's
+    third criterion and S02.01.04's fifth, in test.)
+72. With the worker on the iPhone and the manager on the laptop, both on the same submitted note: press Edit on both and
+    change a different word on each, waiting for "Saved". Press Save changes on the laptop first. On the iPhone, press
+    Save changes: look for focus moving to a notice that says who saved which version and when, "while you were
+    editing", and "Your changes are still below.", the newer version open under "Version 2 by" and the manager's name,
+    your own text unchanged in the form and "Not saved" at the top. Press "Start again from the latest version" and look
+    for the notice's version closed, "Editing submitted note (version 2)" above the name, focus on the name and
+    "Saved". Press Save changes and look for the read view with the worker's words and the worker's name on the Edited
+    line; press Past notes and look for one "Edited" row. (S02.06.03's first and second criteria, on a real phone.)
+73. Copy the address of a submitted note that the worker wrote, add `/edit` to its end, and paste it into a browser
+    signed in as a second worker, who did not write it: look for "You cannot edit this note", "Only the person who
+    wrote it, or a manager, can edit it." and the link "Read the note", with the navigation above and the tab titled
+    "Grow2Notes – Note", and focus on the heading. Press "Read the note" and look for the read view, with no Edit among
+    its links. (S02.06.01's last criterion; empty-loading-error.md's Edit refused row.)
+74. On the laptop with NVDA and Chrome, as the worker on a submitted note of their own: look for Edit read as a link
+    before Past notes. Press it and look for the heading read with "Editing submitted note (version 1)" first, then the
+    name and the date, and for Save changes and Cancel read as buttons. Press Save changes: look for "Saving changes…"
+    said if it takes more than a moment, then the read view's heading, with the Edited line read as "Edited", then "last
+    change by", the name and the time. Make a conflict as in step 72 with the manager on a second window: look for the
+    heading of the notice read on arrival, "…while you were editing", then "Your changes are still below.", the
+    newer version's summary as a button that opens and closes it, and Start again from the latest version as a button;
+    look for focus on the form's heading after it. (note-form.md's *Announcements* and *Focus order* for edit mode;
+    autosave-status.md's *Behaviour* 10.)
+75. On the iPhone with VoiceOver and Safari, repeat step 74's reading of the Edit link, the heading, the Edited line,
+    the notice and its buttons, and swipe through the form: look for Save changes and Cancel as the last two stops, the
+    notice's disclosure announced as expanded and then collapsed after Start again, and no stop on the closed
+    version's text. With Voice Control or Voice Access, say "Tap Edit" and "Tap Save changes" and look for each acting.
+    (note-form.md's manual pass for edit mode, on the platform that cannot be tested here.)
+76. On the iPhone, open the edit form, change a word and wait for "Saved". Turn on airplane mode, press Save changes
+    and look for "Changes not saved: no connection. Try again." above the buttons, the text still in the box and no
+    dialog; press Cancel and look for "Not cancelled: no connection. Try again.". Turn airplane mode off, press Save
+    changes and look for the read view with the new text. Then look for the Edited line and, once T18's Version
+    history exists, for exactly one new version, not two. Repeat with airplane mode turned on after pressing Save
+    changes, so that the answer is lost, then off and pressing Save changes again: look again for exactly one new
+    version. (S02.06.01's second criterion and A69, with the retry's key.)

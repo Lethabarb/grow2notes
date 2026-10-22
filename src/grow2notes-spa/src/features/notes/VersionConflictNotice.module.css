@@ -1,0 +1,44 @@
+/*
+ * The version-conflict notice (note-form.md component 6), in page flow above the form: a 6 px bar and a 1 px border in
+ * the attention colour on its tint, as the top bar's attention rows have, the words in the body's colour, in the
+ * reading column. The bar is a border, so that forced colours keep it. It takes focus by script only, so no ring shows
+ * on a click.
+ */
+.notice {
+  max-inline-size: var(--measure);
+  margin-block-start: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--border-divider) solid var(--colour-attention-edge);
+  border-inline-start-width: 6px;
+  border-radius: var(--radius-s);
+  background: var(--colour-attention-tint);
+  color: var(--colour-text);
+}
+
+.heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-body);
+}
+
+.line {
+  margin: 0 0 var(--space-3);
+}
+
+/* The newer version's summary is the control that opens and closes it, on a hit area at least 44 px tall. */
+.summary {
+  padding-block: var(--space-3);
+  min-block-size: var(--target-min);
+  box-sizing: border-box;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.start {
+  margin-block-start: var(--space-4);
+}
+
+@media (forced-colors: active) {
+  .notice {
+    border-color: CanvasText;
+  }
+}

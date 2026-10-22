@@ -68,6 +68,23 @@ export const msg = {
    */
   notDiscarded: (cause: Cause): string => msg.notDone('discarded', cause),
   /**
+   * The note form's caption in edit mode, inside its heading before the name (note-form.md *Kinds of note*): the number
+   * is the version being edited.
+   */
+  editingSubmittedNote: (version: number) => `Editing submitted note (version ${version})`,
+  /**
+   * The version-conflict notice's heading (note-form.md component 6): who saved the newer version, which, and when,
+   * with the time as `stamp()` gives it.
+   */
+  savedVersionWhileEditing: (displayName: string, version: number, at: string) =>
+    `${displayName} saved version ${version} at ${at} while you were editing.`,
+  /** The summary of the notice's newer version: "Version 3 by Sam Lee". */
+  versionBy: (version: number, displayName: string) => `Version ${version} by ${displayName}`,
+  /** A Save changes that failed, in the alert above the buttons (note-form.md *Edit-mode actions*). */
+  changesNotSaved: (cause: Cause): string => `Changes not saved: ${strings.cause[cause]}. Try again.`,
+  /** A Cancel that failed, in the alert above the buttons. */
+  notCancelled: (cause: Cause): string => msg.notDone('cancelled', cause),
+  /**
    * The read view's byline before the submitted time (participant-notes.md *Read view*), with the author's display
    * name as stored, as the daily report words it (design.md §11.3).
    */
