@@ -77,6 +77,11 @@ describe("the read view's lines", () => {
       'Reason: Mentioned pain in his left knee after the walk.',
     );
   });
+
+  it('name who made the last change as stored, with the comma that the time follows', () => {
+    expect(strings.tag.edited).toBe('Edited');
+    expect(msg.lastChangeBy('Jo Smith')).toBe('last change by Jo Smith,');
+  });
 });
 
 // participant-notes.md *History list* states, word for word.
