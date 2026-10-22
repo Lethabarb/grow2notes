@@ -4621,8 +4621,8 @@ and shown the newer version, so nothing is silently overwritten.
   - Cancel is `DELETE {base}/draft`, one `ExecuteDeleteAsync` of the caller's own row with `BaseVersionNumber > 0`:
     `204`, or `404` for none, a draft's working copy included. It answers no `403`: design.md §6.3's DELETE row names
     none, and its "Author or Manager" column says who may hold a pending edit. This departs from R18's "also applies to
-    Cancel", which holds for `/edit`, both `draft` reads and writes and Save changes (A71). The SPA's Cancel has no `403`
-    branch, and takes a `404` as already cancelled.
+    Cancel", which holds for `/edit`, both `draft` reads and writes and Save changes (A71). The SPA's Cancel has no
+    `403` branch, and takes a `404` as already cancelled.
   - Start again re-reads no version rows. Version 1 is written from the draft's snapshot, each pending edit is copied
     from version n's rows, and version n + 1 from that copy with only picks, ticks, text and flag changed, so every
     version of a note has one snapshot structure: moving `BaseVersionNumber` and taking the request's content is the
@@ -4644,17 +4644,17 @@ and shown the newer version, so nothing is silently overwritten.
     current version, which may be the caller's own save. The notice then reads a little oddly, "… saved version n while
     you were editing", and Start again recovers cleanly, recreating the edit from what is on screen. Accepted.
   - The retry rule: a Save changes press whose content equals the last failed attempt's, on the same base, sends no
-    check save, which would meet the version a lost answer made, but `autosave.stop()` and then `POST` with that attempt's
-    `Idempotency-Key`, so a version that was made answers `200` and leaves edit mode. A press after any change runs the
-    normal flow with a new key (the key check precedes the base check on the server).
+    check save, which would meet the version a lost answer made, but `autosave.stop()` and then `POST` with that
+    attempt's `Idempotency-Key`, so a version that was made answers `200` and leaves edit mode. A press after any
+    change runs the normal flow with a new key (the key check precedes the base check on the server).
   - Load the other version on an edit page adopts the answer's base, and the caption follows; on a draft's page an
     answer with a base above 0 is the version-conflict dead end, in place of the old `404` signal, which stays for A65's
     days. On the shared address, a form read that finds the note submitted between the two reads, an answer with a base
     above 0 or a `403 note.not_editable`, reads `GET {base}` again and shows the read view.
-  - Cache: Save changes and Cancel `removeQueries` `['notes', participantId, noteDate]` in the same turn as the `replace`,
-    where note-form.md says invalidate, so that the read view never shows the version read before; Past notes and
-    `['reviews']` are invalidated, `me` is asked for again after a save, and Today and `['me','drafts']` refresh from the
-    form's own unmount. The version-conflict notice's read sits under the same prefix.
+  - Cache: Save changes and Cancel `removeQueries` `['notes', participantId, noteDate]` in the same turn as the
+    `replace`, where note-form.md says invalidate, so that the read view never shows the version read before; Past
+    notes and `['reviews']` are invalidated, `me` is asked for again after a save, and Today and `['me','drafts']`
+    refresh from the form's own unmount. The version-conflict notice's read sits under the same prefix.
   - The version-conflict notice is labelled by its heading only once the fresh read has shown it, as before that the
     section has none. The newer version's own section headings ("Goals", "Common items", "Guided notes") inside its
     open details repeat the form's, as the design has the notice show the newer version through `ReadSections`; they
@@ -4716,8 +4716,8 @@ added by an edit does not reach To review until T16.
 - [x] The server (#72; S02.06.01 to S02.06.03 on the server, design.md §5.7, §5.8 and §6.3): `NoteVersionContent` and
       `LatestVersion`, `LiveNote.MayBeEditedByAsync`, `ErrorCode.NotEditable`; `GET` and `PUT {base}/draft` for a
       submitted note, `DELETE {base}/draft`, `POST {base}/versions` at base n with `note.edited`, the conflict's
-      extensions, `GET {base}`'s `author.id`, `isEdited` and `lastEdit`, the history's `isEdited`; integration tests on SQL
-      Server, the endpoint matrix and audit rows.
+      extensions, `GET {base}`'s `author.id`, `isEdited` and `lastEdit`, the history's `isEdited`; integration tests
+      on SQL Server, the endpoint matrix and audit rows.
 - [x] The read side of the SPA (#73): the Edited line and the Edited tag on Past notes, `NoteHeading` with its caption,
       `FlagLine` and `Tag` pieces; Vitest and Playwright tests.
 - [x] The edit mode of the SPA (#74; S02.06.01 to S02.06.03 in the SPA, note-form.md components 6

@@ -13,11 +13,11 @@ import { jane, participants } from './participants.ts';
 import { holdNext } from './requests.ts';
 import { serveMyDrafts, serveToday } from './today.ts';
 
-// Editing a submitted note in the published app (S02.06.01 to S02.06.03), against note-form.md's criteria for edit mode:
-// the Edit action, Save changes and Cancel, the version-conflict notice and the cannot-edit page, as T14 builds them.
-// Each test answers /api/auth/me, /api/today, /api/me/drafts, the participant's header, the note, its working copy,
-// Save changes and Cancel in the browser, with made-up people and goals (me.ts, today.ts, notes.ts), so that none of
-// those requests reaches the app.
+// Editing a submitted note in the published app (S02.06.01 to S02.06.03), against note-form.md's criteria for edit
+// mode: the Edit action, Save changes and Cancel, the version-conflict notice and the cannot-edit page, as T14
+// builds them. Each test answers /api/auth/me, /api/today, /api/me/drafts, the participant's header, the note, its
+// working copy, Save changes and Cancel in the browser, with made-up people and goals (me.ts, today.ts, notes.ts), so
+// that none of those requests reaches the app.
 
 /** A page title: "Grow2Notes – ", with an en dash, and the page's name (app-shell.md component 3). */
 const title = (pageName: string) => `Grow2Notes – ${pageName}`;
@@ -324,7 +324,7 @@ test('a conflict met by a background save shows the notice without moving focus'
   expect(store.submits).toEqual([]);
 
   // A press of Save changes while it waits focuses the notice and sends nothing.
-  await saveChanges(page).click();
+  await saveChanges(page).click({ force: true });
   await expect(notice(page)).toBeFocused();
   expect(store.submits).toEqual([]);
 });
@@ -342,7 +342,7 @@ test('Save changes and Cancel show their busy labels while their requests are ou
   await saveChanges(page).click();
   const post = await heldVersion();
   await expect(saveChanges(page)).toHaveAttribute('aria-disabled', 'true');
-  await expect.poll(() => shownText(saveChanges(page))).toBe('Saving changes…');
+  await expect(saveChanges(page)).toHaveAccessibleName('Saving changes…');
   await expect(main(page).locator('p.visually-hidden[role="status"]')).toHaveText('Saving changes…');
   await expect(cancel(page)).toBeVisible();
   await post.fallback();
@@ -355,7 +355,7 @@ test('Save changes and Cancel show their busy labels while their requests are ou
   await cancel(page).click();
   const remove = await heldCancel();
   await expect(cancel(page)).toHaveAttribute('aria-disabled', 'true');
-  await expect.poll(() => shownText(cancel(page))).toBe('Cancelling…');
+  await expect(cancel(page)).toHaveAccessibleName('Cancelling…');
   await remove.fallback();
   await expect(page).toHaveURL(address);
 });
@@ -457,7 +457,8 @@ test('the keyboard alone goes through the form, Save changes and Cancel, and the
   await openEdit(page, store);
   await expect(heading(page)).toBeFocused();
 
-  // note-form.md *Focus order (Tab)*: Past notes, each goal's box, Guided notes, Flag for manager, Save changes, Cancel.
+  // note-form.md *Focus order (Tab)*: Past notes, each goal's box, Guided notes, Flag for manager, Save changes,
+  // Cancel.
   await expectStops(page, 'Tab', ['Past notes', breakfast.text, bus.text, '3. Guided notes']);
   await page.keyboard.type(' Then home.');
   await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);

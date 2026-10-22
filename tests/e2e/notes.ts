@@ -303,8 +303,9 @@ type StoreOptions = {
  * Submit's and Save changes' `POST {base}/versions`, with their checks in the API's order, the first of which puts a
  * flagged version 1 in To review and the second saves version n + 1 over version n; Cancel's `DELETE {base}/draft`,
  * which deletes the caller's own pending edit; and Discard draft's `POST {base}/discard`, with its checks in the
- * API's order, which hides the draft from every list and screen and frees the day for a new note. `serve` answers one page's requests as one person's,
- * `myDrafts` gives a person's unfinished drafts and `toReview` the To review list.
+ * API's order, which hides the draft from every list and screen and frees the day for a new note.
+ * `serve` answers one page's requests as one person's, `myDrafts` gives a person's unfinished drafts and `toReview`
+ * the To review list.
  */
 export function notesStore({
   today: firstToday,

@@ -726,8 +726,8 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
 73. Copy the address of a submitted note that the worker wrote, add `/edit` to its end, and paste it into a browser
     signed in as a second worker, who did not write it: look for "You cannot edit this note", "Only the person who
     wrote it, or a manager, can edit it." and the link "Read the note", with the navigation above and the tab titled
-    "Grow2Notes – Note", and focus on the heading. Press "Read the note" and look for the read view, with no Edit among its links.
-    (S02.06.01's last criterion; empty-loading-error.md's Edit refused row.)
+    "Grow2Notes – Note", and focus on the heading. Press "Read the note" and look for the read view, with no Edit among
+    its links. (S02.06.01's last criterion; empty-loading-error.md's Edit refused row.)
 74. On the laptop with NVDA and Chrome, as the worker on a submitted note of their own: look for Edit read as a link
     before Past notes. Press it and look for the heading read with "Editing submitted note (version 1)" first, then the
     name and the date, and for Save changes and Cancel read as buttons. Press Save changes: look for "Saving changes…"

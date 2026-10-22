@@ -608,10 +608,11 @@ Each save and Submit answers with `savedAtUtc`, by default 06:12 UTC on 1 Octobe
 4:12 pm", and which a Submit makes the note's first submitted time; `serve(page, me, { latencyMs })` holds each answer
 that long, as on a slow network. The store's `saves` lists the body of every save sent, `submits` the key and body
 of every Submit and Save changes, and `cancels` every Cancel; `draft(participantId, noteDate)` gives a working copy,
-`pendingEdit(participantId, noteDate, me)` `me`'s pending edit of a submitted note, `submitted(participantId, noteDate)` a submitted
-note, `discarded(participantId, noteDate)` the drafts of that day discarded, each with who discarded it,
-`todayNotes(me)` each participant's note today, for `serveToday`, and `myDrafts(me)` `me`'s own drafts, whatever their
-dates and whether or not their participants are archived since, for `serveMyDrafts`.
+`pendingEdit(participantId, noteDate, me)` `me`'s pending edit of a submitted note,
+`submitted(participantId, noteDate)` a submitted note, `discarded(participantId, noteDate)` the drafts of that day
+discarded, each with who discarded it, `todayNotes(me)` each participant's note today, for `serveToday`, and
+`myDrafts(me)` `me`'s own drafts, whatever their dates and whether or not their participants are archived since, for
+`serveMyDrafts`.
 `addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
 user ID, flagged when given a reason, and then in To review, as Submit leaves it, unless its `flagStatus` is set by
 hand, as T16 will set it; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
@@ -634,8 +635,8 @@ save under a `clientId` of its own, so that the next save of the page that saved
 store serves the page again, and `failNoteReads(page, { olderOnly: true })` only each page of a history after the first,
 which Show older asks for; `failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page
 again, so that autosave retries it and shows "Not saved: no connection…" about 1 s after the first failure;
-`failEditRequests(page)` aborts each Save changes, `POST {base}/versions`, and each Cancel, `DELETE {base}/draft`, in the
-same way, for the failure lines above the edit form's buttons. For a test
+`failEditRequests(page)` aborts each Save changes, `POST {base}/versions`, and each Cancel, `DELETE {base}/draft`,
+in the same way, for the failure lines above the edit form's buttons. For a test
 that watches the saves, of the store's page or of the app's own, `isDraftSaveRequest(request)` tells a save from the
 page's other requests, and `draftRequests` is the glob of a working copy's address, its read's and its save's, for
 `holdNext`.
