@@ -535,8 +535,8 @@ and overriding `serveMe`'s empty answer, as Playwright tries the latest route fi
   gives notes of its own, in `TodayNote`'s shape.
 - `serveMyDrafts(page, draftsOf)` answers each `GET /api/me/drafts` with what `draftsOf` gives then, each entry a
   `MyDraft`, `{participantId, givenName, familyName, noteDate, kind, savedAtUtc}`. A store's `myDrafts(me)` (below)
-  gives `me`'s own drafts as it holds them; the store keeps no pending edits, which T14 builds, so a test of a pending
-  edit's row adds one of its own, with `kind: 'pendingEdit'`, beside the store's.
+  gives `me`'s own drafts as it holds them, and their pending edits of submitted notes, a manager's of a past day's
+  note included, as `kind: 'pendingEdit'` rows; a test of Today's rows alone gives rows of its own, beside the store's.
 - `failToday(page, failure)` aborts each `GET /api/today`, for `'no connection'`, or answers it with a status, such as
   `503`. The failure shows about 1 s after the request, after the query client's silent retry.
 
@@ -559,30 +559,45 @@ prompts. Its `serve(page, me)` answers the page's requests for a header, a histo
   else `404`, a discarded draft's day included;
 - the form, a template with the goals unticked, `commonItemGroups` unpicked and unticked, no flag and the lists'
   version, which covers the goals and the groups with their items, the caller's own draft with its flag, picks and
-  ticks, `409 note.in_progress_by_other` with the author's name and start time for another user's, or `404` for a
-  submitted note, for a date after today and, to a worker, for one before yesterday (design.md A65);
+  ticks, `409 note.in_progress_by_other` with the author's name and start time for another user's, `404` for a date
+  after today and, to a worker, for one before yesterday (design.md A65); and, for a submitted note, `403
+  note.not_editable` to a worker who did not write it, else the caller's own pending edit, saved, with its base
+  version, or the current version as a template, at its base, with no `listsVersion` and nothing saved;
 - each save, which keeps the flag, and the reason only while flagged, as the API does, and updates the caller's own
   draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
   `422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
   `409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
   listed, a missing or wrong `pickedGroupIds` (Every note, a group with no items, or one outside the snapshot) and a
   missing or wrong `tickedCommonItemIds` (an item outside Every note and the picked groups); and
-  `409 note.version_conflict` once the note is submitted. A draft keeps the `clientId` and `seq` of the save that it
+  `409 note.version_conflict` for a `baseVersion` that the note has no working copy at (a draft is 0). A save of a
+  submitted note's `baseVersion` is its pending edit's own base, which keeps saving after another editor has saved a
+  newer version, or the note's current version, which creates the pending edit, `200`, from that version, or, from one
+  with a pending edit, is Start again and moves its base; any other is `409 note.version_conflict`, before the saves
+  are numbered, and a worker who did not write the note gets `403 note.not_editable`, at any base. A draft, and a
+  pending edit, keeps the `clientId` and `seq` of the save that it
   last applied, and numbers later saves as design.md §5.6 does, before their ticks are checked: from the
   same `clientId`, a `seq` at or below the one kept changes nothing and answers `200` with the time that the draft
   holds, and a higher one is applied; from another `clientId`, `seq` 1 is applied, taking the draft over, and any other
   gets `409 draft.taken_over`, writing nothing. So a creating save sent again after its answer was lost finds the
   draft with its `clientId`, and is taken as a later save;
-- and each Submit, with the checks of T09's Notes in their order: the framework's `400` for an `Idempotency-Key` that
-  is missing or not a GUID; `422 validation.failed` under `baseVersion` for any but 0, under `narrative` for a blank
+- each Cancel, `DELETE {base}/draft`: `204` for the caller's own pending edit, which it deletes, and `404` for none,
+  a draft's working copy included, which it never deletes, and for a participant that the store does not hold;
+- and each Submit and each Save changes, with the checks of T09's and T14's Notes in their order: the framework's `400`
+  for an `Idempotency-Key` that is missing or not a GUID; `422 validation.failed` under `baseVersion` for a negative
+  number, under `narrative` for a blank
   text, U+0085 alone included, as .NET counts it, or one over 20,000 characters, and under `flagReason` for a reason
-  over 200; `404` for no participant or no live note; `409 note.in_progress_by_other` for another user's draft; the
-  retry's `200` with the version and the note's flag status as it is now for a key that this note's version has, and
-  `422` under `idempotencyKey` for one that another note's has; `409 note.version_conflict` for a submitted note; `422`
-  under `flagReason` for a flagged body with a blank reason, under `tickedGoalIds` for a goal not in the draft's
-  snapshot, and under `pickedGroupIds` or `tickedCommonItemIds` as a save does; and otherwise version 1, its goals from
-  the snapshot with the ticks sent, its shown groups with the picks and ticks sent, the draft gone, and the note in
-  To review, with version 1 as its flagged version, when it is flagged (design.md §5.8 step 5), answered
+  over 200; `404` for no participant or no live note; `409 note.in_progress_by_other` for another user's draft; `403
+  note.not_editable` for a submitted note that a worker who did not write it posts to; the retry's `200` with the
+  version and the note's flag status as it is now for a key that this note's version has, and `422` under
+  `idempotencyKey` for one that another note's has; `409 note.version_conflict` for a `baseVersion` that is not the
+  note's current version, with `currentVersion`, `createdBy` and `createdAtUtc` of that version, none for a note with
+  none; `422` under `flagReason` for a flagged body with a blank reason; `409 note.version_conflict` again for no
+  working copy of the caller's at that base; `422` under `tickedGoalIds` for a goal not in the snapshot, and under
+  `pickedGroupIds` or `tickedCommonItemIds` as a save does; and otherwise version `baseVersion + 1`: at 0, version 1,
+  its goals from the snapshot with the ticks sent, its shown groups with the picks and ticks sent, the draft gone, and
+  the note in To review, with version 1 as its flagged version, when it is flagged (design.md §5.8 step 5); at a later
+  base, the note's current version replaced, last changed by the caller at the store's time, with the author, the flag
+  status and the flagged version left as they are until T16, and the caller's pending edit gone. Each is answered
   `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`;
 - and each Discard, with the checks of T12's Notes in their order: `404` for no participant or a day with no note;
   `409 note.not_a_draft` for a submitted note or a day whose draft is discarded already; a `403` problem with no `code`
@@ -591,29 +606,36 @@ prompts. Its `serve(page, me)` answers the page's requests for a header, a histo
 
 Each save and Submit answers with `savedAtUtc`, by default 06:12 UTC on 1 October 2026, which the page shows as "Saved
 4:12 pm", and which a Submit makes the note's first submitted time; `serve(page, me, { latencyMs })` holds each answer
-that long, as on a slow network. The store's `saves` lists the body of every save sent, and `submits` the key and body
-of every Submit; `draft(participantId, noteDate)` gives a working copy, `submitted(participantId, noteDate)` a submitted
+that long, as on a slow network. The store's `saves` lists the body of every save sent, `submits` the key and body
+of every Submit and Save changes, and `cancels` every Cancel; `draft(participantId, noteDate)` gives a working copy,
+`pendingEdit(participantId, noteDate, me)` `me`'s pending edit of a submitted note, `submitted(participantId, noteDate)` a submitted
 note, `discarded(participantId, noteDate)` the drafts of that day discarded, each with who discarded it,
 `todayNotes(me)` each participant's note today, for `serveToday`, and `myDrafts(me)` `me`'s own drafts, whatever their
 dates and whether or not their participants are archived since, for `serveMyDrafts`.
 `addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
 user ID, flagged when given a reason, and then in To review, as Submit leaves it, unless its `flagStatus` is set by
 hand, as T16 will set it; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
-version 2 that T14's Save changes will save, flagged with `flagReason` or not flagged without one;
-`daysAfter(date, days)` gives the dates of a run of them. Six more do what someone else does while a page is open:
+version 2 that Save changes saved, flagged with `flagReason` or not flagged without one, as it is, at version 2, with
+a `lastEdit`; its goals may carry IDs, for its pending edits' forms;
+`daysAfter(date, days)` gives the dates of a run of them. Eight more do what someone else does while a page is open:
 `setToday(date)`, midnight in Melbourne; `setGoals(participantId, goals)`, a manager's change to the list;
 `archive(participantId)`; `startElsewhere(participantId, noteDate, startedBy)`, another user's draft, such as
 `alexStarted`, Alex P.'s at 9:14 am, or, given the author's user ID too, one started on another page of theirs, such as
 the made-up worker's own draft from the day before; `submitElsewhere(participantId, noteDate)`, the draft submitted by
-its author in another tab; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit makes but aborts
-its answer, as a phone that loses its signal while the answer is on its way. One more,
+its author in another tab; `startEdit(participantId, noteDate, me, elsewhere)`, `me`'s pending edit of a submitted
+note, from its current version, with what another page of theirs holds; `editElsewhere(participantId, noteDate, by,
+elsewhere)`, a version saved over the current one by another editor named `by`, so that a pending edit at the older
+version meets the conflict; and `loseNextSubmitAnswer()`, which keeps the version that the next Submit or Save changes
+makes but aborts its answer, as a phone that loses its signal while the answer is on its way. One more,
 `saveElsewhere(participantId, noteDate, elsewhere)`, saves the draft as its author does from another tab or device, with
 that page's text, ticks, picks, flag and reason, the rest kept, and its time, by default the store's: a page's first
 save under a `clientId` of its own, so that the next save of the page that saved before meets the takeover banner.
 `failNoteReads(page)` aborts each read of a header, a history, a note or a form, as `failParticipants` does, until the
 store serves the page again, and `failNoteReads(page, { olderOnly: true })` only each page of a history after the first,
 which Show older asks for; `failDraftSaves(page)` aborts each save, `PUT {base}/draft`, until the store serves the page
-again, so that autosave retries it and shows "Not saved: no connection…" about 1 s after the first failure. For a test
+again, so that autosave retries it and shows "Not saved: no connection…" about 1 s after the first failure;
+`failEditRequests(page)` aborts each Save changes, `POST {base}/versions`, and each Cancel, `DELETE {base}/draft`, in the
+same way, for the failure lines above the edit form's buttons. For a test
 that watches the saves, of the store's page or of the app's own, `isDraftSaveRequest(request)` tells a save from the
 page's other requests, and `draftRequests` is the glob of a working copy's address, its read's and its save's, for
 `holdNext`.
