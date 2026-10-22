@@ -265,6 +265,7 @@ test('signed in for real at 375 px, a manager finds Jane on Today, starts her no
   expect(firstAnswer.request().postDataJSON()).toEqual({
     clientId: expect.any(String),
     seq: 1,
+    baseVersion: 0,
     listsVersion: expect.any(String),
     narrative: '',
     tickedGoalIds: [template.goals[0].id],
@@ -551,6 +552,7 @@ test('the form new, saving, saved, reopened and with no goals, each passing axe'
     {
       clientId: expect.any(String),
       seq: 1,
+      baseVersion: 0,
       listsVersion: expect.any(String),
       narrative: '',
       tickedGoalIds: [bus.id],
@@ -1699,6 +1701,7 @@ test('signed in for real at 375 px, two tabs on a draft: the older meets the ban
   expect(keptBody).toEqual({
     clientId: expect.any(String),
     seq: 1,
+    baseVersion: 0,
     narrative: firstTabText,
     tickedGoalIds: [breakfastId, busId],
     pickedGroupIds: [],
@@ -1940,6 +1943,7 @@ test('signed in for real, a session ended mid-note: the same person signs in aga
   expect(resentAnswer.request().postDataJSON()).toEqual({
     clientId: lastBefore.clientId,
     seq: lastBefore.seq + 1,
+    baseVersion: 0,
     narrative: 'Went to the shops. Bought bread.',
     tickedGoalIds: [breakfastId],
     pickedGroupIds: [],
