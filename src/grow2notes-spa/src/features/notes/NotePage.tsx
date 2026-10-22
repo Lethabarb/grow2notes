@@ -1,18 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState, type Ref } from 'react';
-import { useParams } from 'react-router';
-import type { StartedBy } from '../../api/api.ts';
+import { useEffect, useRef, useState, type Ref } from 'react';
+import { Navigate, useParams } from 'react-router';
+import { isNotEditable, type StartedBy } from '../../api/api.ts';
 import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
-import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import textBox from '../../components/TextBox.module.css';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
-import { dateLong, parseDateOnly } from '../../copy/format.ts';
+import { parseDateOnly } from '../../copy/format.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { useBackTo } from '../../routes/routeChange.ts';
@@ -26,22 +25,30 @@ import {
   type ParticipantHeader,
 } from './noteQueries.ts';
 import { NoteForm, type NoteFormHandle } from './NoteForm.tsx';
+import { NoteHeading } from './NoteHeading.tsx';
 import styles from './NotePage.module.css';
 import { ReadView } from './ReadView.tsx';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
 import { SomeoneElsesDraft } from './SomeoneElsesDraft.tsx';
-import type { DeadEnd } from './useAutosave.ts';
+import type { BannerDeadEnd } from './useAutosave.ts';
 
 /**
  * A participant's note for a day at `/participants/{participantId}/notes/{noteDate}` (note-form.md *Routes*), keyed by
  * both, so that nothing of one participant's note is ever kept on the page for another's (identity item 1).
  */
-export function NotePage() {
+export function NotePage({ editing = false }: { editing?: boolean }) {
   const { participantId = '', noteDate = '' } = useParams();
-  return <Note key={`${participantId}/${noteDate}`} participantId={participantId} noteDate={noteDate} />;
+  return (
+    <Note
+      key={`${participantId}/${noteDate}/${editing}`}
+      participantId={participantId}
+      noteDate={noteDate}
+      editing={editing}
+    />
+  );
 }
 
-type NoteProps = { participantId: string; noteDate: string };
+type NoteProps = { participantId: string; noteDate: string; editing: boolean };
 
 /**
  * The note's page at the shared note address (note-form.md *Routes*), in the form's 40rem column, which decides what it
@@ -62,7 +69,7 @@ type NoteProps = { participantId: string; noteDate: string };
  * render, as a screen reader may not announce words written into one added with them; its polite twin is the page's
  * `PageStatus`.
  */
-function Note({ participantId, noteDate }: NoteProps) {
+function Note({ participantId, noteDate, editing }: NoteProps) {
   const participant = useQuery(participantQuery(participantId));
   const note = useQuery(noteQuery(participantId, noteDate));
   const form = useRef<NoteFormHandle>(null);
@@ -73,9 +80,22 @@ function Note({ participantId, noteDate }: NoteProps) {
   const formOpen = indicator !== undefined;
   const takenOver = indicator?.kind === 'takenOver';
   const said = takenOver ? apiErrorCopy['draft.taken_over'] : deadEnd;
-  const submitted = !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
-  const formNeeded = note.data !== undefined && submitted === undefined;
+  const sharedUrl = `/participants/${participantId}/notes/${noteDate}`;
+  // The edit address shows the form of a submitted note alone, and any other note is for the shared address.
+  const notEdited = editing && note.data !== undefined && note.data?.status !== 'Submitted';
+  const submitted = !editing && !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
+  const formNeeded = editing ? note.data?.status === 'Submitted' : note.data !== undefined && submitted === undefined;
   const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
+  // At the shared address, a form's read that finds the note submitted between the two reads, as a pending edit's, or
+  // as refused to this person, sends the page to read the note again, and show its read view.
+  const answeredAsEdit = draft.data !== undefined && 'draft' in draft.data && draft.data.draft.baseVersion > 0;
+  const readsSubmitted = !editing && formNeeded && (isNotEditable(draft.error) || answeredAsEdit);
+  const { refetch: readNoteAgain } = note;
+  useEffect(() => {
+    if (readsSubmitted) {
+      void readNoteAgain();
+    }
+  }, [readsSubmitted, readNoteAgain]);
   const back = useBackTo({ pastNotes: pageName.pastNotes, flagged: strings.navItem.flagged });
 
   return (
@@ -99,14 +119,16 @@ function Note({ participantId, noteDate }: NoteProps) {
       </PageBar>
       <div className={textBox.column}>
         <LoadRegion
-          queries={formNeeded ? [participant, note, draft] : [participant, note]}
+          queries={formNeeded && !readsSubmitted ? [participant, note, draft] : [participant, note]}
           loading={strings.note.loading}
           what={strings.note.theNote}
           fallbackHeading={pageName.note}
         >
           {/* Called only once every query given has data. */}
           {() =>
-            submitted === undefined ? (
+            notEdited ? (
+              <Navigate replace to={sharedUrl} />
+            ) : readsSubmitted ? null : submitted === undefined ? (
               <Loaded
                 formRef={form}
                 participant={participant.data!}
@@ -237,24 +259,6 @@ function WarningIcon() {
   );
 }
 
-/**
- * The note's identity `<h1>` (note-identity-header.md), on the form and the read view alike, which takes the focus
- * left pending for it on arrival: the name as stored, never translated, then the note date, so that a screen reader
- * reads the person and the day together, as "Jane Citizen Thursday 1 October 2026".
- */
-function NoteHeading({ name, noteDate }: { name: string; noteDate: string }) {
-  return (
-    <PageHeading>
-      <span className={styles.name} translate="no">
-        {name}
-      </span>{' '}
-      <time className={styles.date} dateTime={noteDate}>
-        {dateLong(parseDateOnly(noteDate))}
-      </time>
-    </PageHeading>
-  );
-}
-
 type LoadedProps = {
   /** The form's, for the takeover banner in the top bar. */
   formRef: Ref<NoteFormHandle>;
@@ -306,7 +310,7 @@ function Loaded({
     });
   }
 
-  function deadEndSentence(stopped: DeadEnd): string {
+  function deadEndSentence(stopped: BannerDeadEnd): string {
     switch (stopped.code) {
       case 'note.past_date_manager_only':
         return apiErrorCopy['note.past_date_manager_only'];
@@ -339,7 +343,6 @@ function Loaded({
       name={name}
       givenName={participant.givenName}
       draft={opened.draft}
-      heading={heading}
       indicator={indicator}
       deadEnd={deadEnd}
       onIndicator={onIndicator}

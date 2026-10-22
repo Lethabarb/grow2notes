@@ -28,4 +28,21 @@ describe('Tag', () => {
     expect(tag).not.toHaveStyle({ whiteSpace: 'nowrap' });
     expect(tag).not.toHaveStyle({ textOverflow: 'ellipsis' });
   });
+
+  it('is Edited in the neutral tone, as plain text after Flagged in a row', () => {
+    render(
+      <p>
+        Submitted <Tag kind="flagged" /> <Tag kind="edited" />
+      </p>,
+    );
+
+    const tag = screen.getByText('Edited');
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag).toHaveClass(styles.tag, styles.neutral);
+    expect(tag).not.toHaveClass(styles.attention);
+    expect(tag.closest('p')).toHaveTextContent(/^Submitted Flagged Edited$/);
+    for (const attribute of ['role', 'aria-label', 'tabindex', 'title']) {
+      expect(tag).not.toHaveAttribute(attribute);
+    }
+  });
 });

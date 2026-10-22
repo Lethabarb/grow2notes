@@ -1,10 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type Ref } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
-import { api, ApiError, classify } from '../../api/api.ts';
+import { api, ApiError, classify, isNotEditable } from '../../api/api.ts';
 import { refreshMe, useMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
+import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { focusPageHeading } from '../../components/focusPageHeading.ts';
@@ -15,7 +16,7 @@ import { TickListField } from '../../components/TickListField.tsx';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
 import { dateLong, parseDateOnly } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
-import { strings } from '../../copy/strings.ts';
+import { strings, type Cause } from '../../copy/strings.ts';
 import { messageStore } from '../../routes/messageStore.ts';
 import { openerBefore } from '../../routes/routeChange.ts';
 import { useUnloadWarning } from '../../routes/useUnloadWarning.ts';
@@ -26,12 +27,15 @@ import { FlagForManager, reasonId } from './FlagForManager.tsx';
 import { GuidedNotes, guidedNotesId } from './GuidedNotes.tsx';
 import { MoreActions, type MoreActionsHandle } from './MoreActions.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
+import { NoteHeading } from './NoteHeading.tsx';
 import styles from './NotePage.module.css';
 import { noteBase, type Draft, type DraftGroup } from './noteQueries.ts';
+import { invalidatePastNotes } from './pastNotesQuery.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
-import { sentContent, useAutosave, type DeadEnd, type DraftContent } from './useAutosave.ts';
+import { sentContent, useAutosave, type BannerDeadEnd, type DraftContent } from './useAutosave.ts';
 import { useSaveBeforeLeaving } from './useSaveBeforeLeaving.ts';
+import { VersionConflictNotice } from './VersionConflictNotice.tsx';
 
 /**
  * `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when; and the note's flag
@@ -81,6 +85,21 @@ type Confirmation = {
   canConfirm: boolean;
 };
 
+/**
+ * A Save changes attempt: the content it sent, as the check save saved it, with the version it was based on and its
+ * `Idempotency-Key`, which a press with the same content sends again, after a failure with no answer (note-form.md
+ * *Pressing Submit note*, design.md §6.3).
+ */
+type Attempt = Pick<Confirmation, 'content' | 'key'> & { baseVersion: number };
+
+/**
+ * The version-conflict notice while it shows (note-form.md component 6): how many conflicts have met the form, which
+ * opens it anew for each, how many times a press of Save changes has asked for focus on it, which it gives once it has
+ * read the newer version, and whether Start again has been pressed, after which it stays, closed, for reference, until
+ * Save changes succeeds.
+ */
+type Conflict = { count: number; focusRequests: number; restarted: boolean };
+
 /** What the takeover banner in the top bar asks of the form (note-form.md *Changed on another device or tab*). */
 export type NoteFormHandle = {
   keep: () => void;
@@ -96,14 +115,13 @@ type NoteFormProps = {
   name: string;
   givenName: string;
   draft: Draft;
-  /** The page's `<h1>`, which follows the error summary (note-form.md components 2 and 3). */
-  heading: ReactNode;
   /** What the save indicator says, none until autosave first says it. */
   indicator: SaveIndicator | undefined;
   /** The sentence of the dead end that stopped autosave, in the top bar's second row, if one has. */
   deadEnd: string | undefined;
   onIndicator: (indicator: SaveIndicator) => void;
-  onDeadEnd: (deadEnd: DeadEnd) => void;
+  /** A dead end for the top bar's banner: not an edit's refusal or version conflict, which the form handles. */
+  onDeadEnd: (deadEnd: BannerDeadEnd) => void;
 };
 
 /**
@@ -156,6 +174,19 @@ type NoteFormProps = {
  * that save met a dead end; its `204` lets the leave guard let the move to Today go, a change unsaved or not, as the
  * draft has gone. A Discard dialog closed with nothing discarded lets autosave go on, sending at once a change that the
  * pause held, and a failure of a request that a browser's close left out shows above Submit note, as Submit's does.
+ *
+ * Opened on a pending edit, a draft with a base version above 0 (note-form.md *Kinds of note*), it is the edit mode
+ * of a submitted note: the `<h1>` has the caption "Editing submitted note (version 2)", which Start again and Load move
+ * to the version they show; the lists that an empty version leaves say "No goals set" and "No common items set"; there
+ * is no earlier-day notice and no More actions; and Save changes and Cancel take the place of Submit note. Save changes
+ * runs Submit's press, the checks and the check save, then `POST {base}/versions` at the base with no confirmation, its
+ * `Idempotency-Key` kept for a press with the same content after a failure with no answer, which skips the check save,
+ * as that would meet the version the lost answer made. Cancel stops autosave and sends `DELETE {base}/draft` for any
+ * state of the form, a dead end included. Each leaves the form by `replace` to the read view, dropping the note's
+ * queries first so that it never shows what it read before, and no message is shown. A newer version met on a press, by
+ * the check save or the version, or by a background save, shows the version-conflict notice in place of Save changes,
+ * which waits for Start again; a refused edit, from a press, shows the whole-page "You cannot edit this note", while
+ * a background save that meets it stops quietly, "Not saved", so that Cancel still works (A70 to A72).
  */
 export function NoteForm({
   ref,
@@ -164,7 +195,6 @@ export function NoteForm({
   name,
   givenName,
   draft,
-  heading,
   indicator,
   deadEnd,
   onIndicator,
@@ -177,6 +207,9 @@ export function NoteForm({
   const announce = useAnnounce();
   const box = useRef<HTMLTextAreaElement>(null);
   const notice = useRef<HTMLDivElement>(null);
+  const editing = draft.baseVersion > 0;
+  // The version that a pending edit is based on, which Start again and Load move on, and Save changes sends.
+  const [base, setBase] = useState(draft.baseVersion);
   const [goals, setGoals] = useState(draft.goals);
   const [groups, setGroups] = useState(draft.commonItemGroups);
   const [picked, setPicked] = useState(() => pickedIn(draft.commonItemGroups));
@@ -202,6 +235,16 @@ export function NoteForm({
   // Why Submit or Discard failed after a browser closed its dialog while its request was out (confirm-dialog.md
   // *Behaviour* 7), above Submit note.
   const [failure, setFailure] = useState<string>();
+  // Cancel's request is out.
+  const [cancelling, setCancelling] = useState(false);
+  // An edit that is no longer allowed, which a press of Save changes shows as the whole page, thrown at render.
+  const [refusal, setRefusal] = useState<ApiError>();
+  const [conflict, setConflict] = useState<Conflict>();
+  // A press of Save changes is under way, so that a conflict it meets takes focus; and an edit refused to a background
+  // save, which the next press shows.
+  const pressing = useRef(false);
+  const notEditable = useRef(false);
+  const lastAttempt = useRef<Attempt>(undefined);
   // Whether the note exists as the viewer's draft: saved before the form opened, or since, as the indicator has said
   // "Saved …"; no longer once it says nothing again, as after Load found the note discarded meanwhile.
   const [exists, setExists] = useState(draft.isSaved);
@@ -254,6 +297,17 @@ export function NoteForm({
     onListsChanged: showListsAsNow,
     onOtherVersion: showOtherVersion,
     onDeadEnd: (stopped) => {
+      if (stopped.code === 'note.not_editable') {
+        notEditable.current = true;
+        return;
+      }
+
+      if (editing && stopped.code === 'note.version_conflict') {
+        const focusRequests = pressing.current ? 1 : 0;
+        setConflict((shown) => ({ count: (shown?.count ?? 0) + 1, focusRequests, restarted: false }));
+        return;
+      }
+
       headingDue.current = moreActions.current?.hasFocus() ?? false;
       onDeadEnd(stopped);
     },
@@ -277,13 +331,18 @@ export function NoteForm({
     }
   }, [deadEnd]);
 
+  // Submit's version, at base 0, and Save changes', at the version being edited: one request, with one key each try.
   const { mutate } = useMutation({
-    mutationFn: ({ key, content }: Pick<Confirmation, 'key' | 'content'>) =>
+    mutationFn: ({ key, content, baseVersion }: Pick<Confirmation, 'key' | 'content'> & { baseVersion: number }) =>
       api<VersionSaved>(`${noteBase(participantId, noteDate)}/versions`, {
         method: 'POST',
-        body: { baseVersion: draft.baseVersion, ...sentContent(content) },
+        body: { baseVersion, ...sentContent(content) },
         idempotencyKey: key,
       }),
+  });
+
+  const { mutate: cancelEdit } = useMutation({
+    mutationFn: () => api<void>(`${noteBase(participantId, noteDate)}/draft`, { method: 'DELETE' }),
   });
 
   // The lists as the form now has them, after a first save found them changed (design.md §5.7): the picks of the
@@ -329,6 +388,10 @@ export function NoteForm({
     setTextLoaded((loaded) => ({ text: content.narrative, loads: loaded.loads + 1 }));
     setFlagged(content.isFlagged);
     setReason(content.flagReason);
+    if (editing) {
+      setBase(other.baseVersion);
+    }
+
     recheck(content);
   }
 
@@ -476,12 +539,15 @@ export function NoteForm({
     setConfirmation({ ...open, busy: true, error: undefined });
     setBusy(true);
     await autosave.stop();
-    mutate(open, {
-      onSuccess: submitted,
-      onError: (error) => {
-        notSubmitted(open, error);
+    mutate(
+      { ...open, baseVersion: base },
+      {
+        onSuccess: submitted,
+        onError: (error) => {
+          notSubmitted(open, error);
+        },
       },
-    });
+    );
   }
 
   // After `201`, or `200` for a retry whose first answer was lost (note-form.md *After a successful submit*): the
@@ -562,8 +628,186 @@ export function NoteForm({
     }
   }
 
+  // Whether this press repeats the last attempt that went unanswered: the same content on the same base, so the same
+  // key.
+  function repeatedAttempt(content: DraftContent): Attempt | undefined {
+    const last = lastAttempt.current;
+    const same = last?.baseVersion === base && JSON.stringify(last.content) === JSON.stringify(content);
+    return same ? last : undefined;
+  }
+
+  // A press of Save changes that ends without a request out.
+  function pressEnded() {
+    pressing.current = false;
+    setBusy(false);
+    if (notEditable.current) {
+      setRefusal(new ApiError(403, 'note.not_editable'));
+    }
+  }
+
+  // Save changes (note-form.md *Pressing Submit note*, autosave-status.md *Behaviour* 6), in Submit's order: the
+  // checks; an edit refused to a background save, as the whole page; a conflict waiting, which gets focus again; a
+  // takeover or a failed save, said again; then the check save, the checks again on what it saved, autosave stopped,
+  // and the version with a new key. A press with the content of the last attempt that went unanswered sends no check
+  // save, which would meet the version that attempt may have made, and sends its key again, so that a version it did
+  // make answers `200`.
+  async function pressSave() {
+    if (cancelling) {
+      return;
+    }
+
+    setUnexplained(false);
+    setFailure(undefined);
+    const content = read();
+    if (!passesChecks(content)) {
+      return;
+    }
+
+    if (notEditable.current) {
+      pressEnded();
+      return;
+    }
+
+    if (conflict !== undefined && !conflict.restarted) {
+      setConflict({ ...conflict, focusRequests: conflict.focusRequests + 1 });
+      return;
+    }
+
+    if (deadEnd !== undefined) {
+      announce?.(deadEnd);
+      return;
+    }
+
+    if (takenOver) {
+      announce?.(apiErrorCopy['draft.taken_over']);
+      return;
+    }
+
+    if (indicator?.kind === 'failed') {
+      announce?.(strings.note.notSavedRetrying);
+      return;
+    }
+
+    pressing.current = true;
+    setBusy(true);
+    let attempt = repeatedAttempt(content);
+    if (attempt === undefined) {
+      const saved = await autosave.checkSave();
+      if (saved === undefined || !passesChecks(saved)) {
+        pressEnded();
+        return;
+      }
+
+      attempt = { content: saved, key: crypto.randomUUID(), baseVersion: base };
+    }
+
+    if (!(await autosave.stop())) {
+      pressEnded();
+      return;
+    }
+
+    lastAttempt.current = attempt;
+    mutate(attempt, {
+      onSuccess: () => {
+        leaveEditMode(true);
+      },
+      onError: (error) => {
+        notSaved(error);
+      },
+    });
+  }
+
+  // A version not saved by Save changes. A `422` is the summary's one unlinked item and a new key next time; a newer
+  // version, shown by the notice; a refused edit, the whole page; a `401` says nothing, as the shell has it, and is
+  // never sent again; anything else is told above the buttons, the attempt kept for the press that tries again.
+  function notSaved(error: unknown) {
+    if (isNotEditable(error)) {
+      notEditable.current = true;
+      pressEnded();
+      return;
+    }
+
+    if (error instanceof ApiError && error.code === 'note.version_conflict') {
+      // The dead end stops autosave until Start again, and the form shows the notice, focused as a press met it.
+      lastAttempt.current = undefined;
+      autosave.end({ code: 'note.version_conflict' });
+    } else {
+      if (error instanceof ApiError && error.status === 422) {
+        lastAttempt.current = undefined;
+        setErrors({});
+        setUnexplained(true);
+        setAttempt((count) => count + 1);
+      } else {
+        setFailure(failureWords(error, msg.changesNotSaved));
+      }
+
+      autosave.resume();
+    }
+
+    pressing.current = false;
+    setBusy(false);
+  }
+
+  // Cancel (autosave-status.md *Behaviour* 6): for any state of the form, a dead end and a conflict included, autosave
+  // is stopped, whatever stopping answers, and then the pending edit is deleted. `204`, or `404` for one already gone,
+  // leaves; a `401` says nothing; anything else is told above the buttons. The server never refuses it with a `403`.
+  async function pressCancel() {
+    if (busy || cancelling) {
+      return;
+    }
+
+    setFailure(undefined);
+    setCancelling(true);
+    await autosave.stop();
+    cancelEdit(undefined, {
+      onSuccess: () => {
+        leaveEditMode(false);
+      },
+      onError: (error) => {
+        if (error instanceof ApiError && error.status === 404) {
+          leaveEditMode(false);
+          return;
+        }
+
+        setCancelling(false);
+        setFailure(failureWords(error, msg.notCancelled));
+        autosave.resume();
+      },
+    });
+  }
+
+  // After Save changes or Cancel: the note's queries removed, not marked stale, in the same turn as the move, so that
+  // the read view that opens never shows the version read before; Past notes and the reviews list marked stale, `me`
+  // asked for again after a save, as the flag may have changed the badge; then the read view in the form's place, which
+  // the leave guard never stops, and which nothing says anything of.
+  function leaveEditMode(saved: boolean) {
+    queryClient.removeQueries({ queryKey: ['notes', participantId, noteDate] });
+    void invalidatePastNotes(queryClient, participantId);
+    void queryClient.invalidateQueries({ queryKey: ['reviews'] });
+    if (saved) {
+      // A failure leaves `me` as it was, as the shell's refreshes do.
+      refreshMe(queryClient).catch(() => {});
+    }
+
+    leaveFreely();
+    void navigate(`/participants/${participantId}/notes/${noteDate}`, { replace: true });
+  }
+
+  // Start again from the latest version: the base moves, so does the caption, and what is on screen is sent at once.
+  function startAgain(version: number) {
+    autosave.startAgain(version);
+    setBase(version);
+    setConflict((shown) => shown && { ...shown, restarted: true });
+    focusPageHeading();
+  }
+
+  if (refusal !== undefined) {
+    // For the route's error boundary, which shows "You cannot edit this note" in place of the whole screen.
+    throw refusal;
+  }
+
   const summary: FormError[] = [
-    ...(unexplained ? [{ message: msg.notSubmitted('server') }] : []),
+    ...(unexplained ? [{ message: editing ? msg.changesNotSaved('server') : msg.notSubmitted('server') }] : []),
     ...(errors.narrative === undefined ? [] : [{ message: errors.narrative, fieldId: guidedNotesId }]),
     ...(errors.flagReason === undefined ? [] : [{ message: errors.flagReason, fieldId: reasonId }]),
   ];
@@ -571,16 +815,27 @@ export function NoteForm({
   return (
     <>
       <ErrorSummary errors={summary} attempt={attempt} />
-      {heading}
-      {draft.isSaved && noteDate < me.today && (
+      <NoteHeading name={name} noteDate={noteDate} caption={editing ? msg.editingSubmittedNote(base) : undefined} />
+      {!editing && draft.isSaved && noteDate < me.today && (
         <Notice>{msg.earlierDayDraft(dateLong(parseDateOnly(noteDate)))}</Notice>
       )}
       <PastNotesLink participantId={participantId} />
+      {conflict !== undefined && (
+        <VersionConflictNotice
+          key={conflict.count}
+          participantId={participantId}
+          noteDate={noteDate}
+          conflicts={conflict.count}
+          focusRequests={conflict.focusRequests}
+          restarted={conflict.restarted}
+          onStartAgain={startAgain}
+        />
+      )}
       <form
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          void pressSubmit();
+          void (editing ? pressSave() : pressSubmit());
         }}
         // React's onBlur bubbles, as focusout does, so it hears every field of the form.
         onBlur={autosave.flush}
@@ -593,7 +848,7 @@ export function NoteForm({
           className={styles.section}
           heading={strings.note.goals}
           hint={strings.note.goalsHint}
-          emptyText={msg.noGoalsSetUp(givenName)}
+          emptyText={editing ? strings.readView.noGoals : msg.noGoalsSetUp(givenName)}
           items={goals}
           ticked={ticked}
           onToggle={toggle}
@@ -603,7 +858,7 @@ export function NoteForm({
           groups={groups}
           picked={picked}
           ticked={ticked}
-          emptyText={strings.note.noCommonItemsSetUp}
+          emptyText={editing ? strings.readView.noCommonItems : strings.note.noCommonItemsSetUp}
           onPick={pick}
           onToggle={toggle}
         />
@@ -638,23 +893,54 @@ export function NoteForm({
         />
         <div className={styles.actions}>
           <RequestAlert>{failure}</RequestAlert>
-          <Button
-            type="submit"
-            variant="primary"
-            busy={busy}
-            unavailable={
-              indicator?.kind === 'saving' || indicator?.kind === 'failed' || takenOver || deadEnd !== undefined
-            }
-            onUnavailablePress={() => void pressSubmit()}
-            aria-describedby={
-              deadEnd !== undefined ? 'save-status dead-end' : takenOver ? 'save-status taken-over' : 'save-status'
-            }
-          >
-            {strings.note.submit}
-          </Button>
+          {editing ? (
+            <ButtonGroup>
+              <Button
+                type="submit"
+                variant="primary"
+                busy={busy}
+                busyLabel={strings.note.savingChanges}
+                unavailable={
+                  indicator?.kind === 'saving' ||
+                  indicator?.kind === 'failed' ||
+                  takenOver ||
+                  deadEnd !== undefined ||
+                  (conflict !== undefined && !conflict.restarted)
+                }
+                onUnavailablePress={() => void pressSave()}
+                aria-describedby={
+                  deadEnd !== undefined ? 'save-status dead-end' : takenOver ? 'save-status taken-over' : 'save-status'
+                }
+              >
+                {strings.note.saveChanges}
+              </Button>
+              <Button
+                busy={cancelling}
+                busyLabel={strings.note.cancelling}
+                onClick={() => void pressCancel()}
+              >
+                {strings.cancel}
+              </Button>
+            </ButtonGroup>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              busy={busy}
+              unavailable={
+                indicator?.kind === 'saving' || indicator?.kind === 'failed' || takenOver || deadEnd !== undefined
+              }
+              onUnavailablePress={() => void pressSubmit()}
+              aria-describedby={
+                deadEnd !== undefined ? 'save-status dead-end' : takenOver ? 'save-status taken-over' : 'save-status'
+              }
+            >
+              {strings.note.submit}
+            </Button>
+          )}
         </div>
       </form>
-      {exists && deadEnd === undefined && (
+      {!editing && exists && deadEnd === undefined && (
         <MoreActions
           ref={moreActions}
           participantId={participantId}
@@ -688,10 +974,10 @@ export function NoteForm({
   );
 }
 
-/** What a failed Submit says, by its cause: nothing for a `401`, which the session flow has. */
-function failureWords(error: unknown): string | undefined {
+/** What a failed request says, by its cause, in Submit's words unless given others: nothing for a `401`. */
+function failureWords(error: unknown, words: (cause: Cause) => string = msg.notSubmitted): string | undefined {
   const cause = classify(error);
-  return cause === 'signedOut' ? undefined : msg.notSubmitted(cause);
+  return cause === 'signedOut' ? undefined : words(cause);
 }
 
 type SubmitConfirmationProps = {

@@ -122,10 +122,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-  // But the save indicator of a draft that a row of Your unfinished drafts reopens, which the form puts in anew with
-  // its first words, "Draft · saved …", so that they are the page's own rather than announced as a change
-  // (autosave-status.md *Behaviour* 8).
-  const announcedLate = liveRegionsAddedWithWords.filter((region) => !/^<p id="save-status"[^>]*>Draft</.test(region));
+  // But the save indicator of a draft or a pending edit that a row of Your unfinished drafts reopens, which the form
+  // puts in anew with its first words, "Draft · saved …" or "Saved …", so that they are the page's own rather than
+  // announced as a change (autosave-status.md *Behaviour* 8).
+  const announcedLate = liveRegionsAddedWithWords.filter(
+    (region) => !/^<p id="save-status"[^>]*>(Draft<|Saved)/.test(region),
+  );
   expect(announcedLate, 'live regions put into the page with their words').toEqual([]);
   expect(await hiddenLiveRegions(page), 'live regions with display: none').toEqual([]);
 });
@@ -646,7 +648,8 @@ test('in forced colours, the Flagged tag keeps its border, in the text colour', 
 // Your unfinished drafts (S02.01.04, today.md component 5), from the worker's own drafts in a store (notes.ts), each
 // started at 9:14 am and saved at 9:42 am on its day in Melbourne, with made-up words (A35): Jane Citizen's from
 // yesterday, Ben Archer's from the day before, Ben being archived since, and Jane's for today, which her row on the
-// list shows instead; and a pending edit of Ravi de Silva's note of 28 September, which T14 builds, given beside them.
+// list shows instead; and a pending edit of Ravi de Silva's note of 28 September, given beside them by hand, and, in
+// a store of its own, a real one (S02.01.04's fifth criterion).
 
 // The section's <h2>, then its rows, each a return point by its participant and date, and the list's rows, each by
 // its participant alone.
@@ -781,6 +784,38 @@ test('Your unfinished drafts: yesterday’s, an archived person’s and a pendin
   await expect(draftsHeading(page)).toHaveCount(0);
   await expect(draftRows(page)).toHaveCount(0);
   await expect(main(page).getByRole('heading', { level: 2 })).toHaveText(['Participants']);
+});
+
+test('a pending edit’s row opens its edit form, with the words it saved, and Back focuses that row', async ({
+  page,
+}) => {
+  const store = notesStore({ today: worker.today, participants, goals: { [ravi.id]: [breakfast, bus] } });
+  store.addSubmitted(ravi.id, '2026-09-28', {
+    authorDisplayName: worker.displayName,
+    authorUserId: worker.userId,
+    firstSubmittedAtUtc: '2026-09-28T05:10:00Z',
+    narrative: 'Walked to the shop.',
+    goals: [{ id: breakfast.id, text: breakfast.text, isTicked: true }],
+  });
+  store.startEdit(ravi.id, '2026-09-28', worker, {
+    narrative: 'Walked to the shop and home again.',
+    savedAtUtc: '2026-09-28T06:12:00Z',
+  });
+  await openTodayWithDrafts(page, store);
+
+  await expect(draftRows(page)).toHaveText(['Ravi de Silva']);
+  await expect(draftRow(page, 'Ravi de Silva')).toHaveAttribute('href', `${noteAddress(ravi.id, '2026-09-28')}/edit`);
+  await draftRow(page, 'Ravi de Silva').click();
+
+  await expect(page).toHaveURL(`${noteAddress(ravi.id, '2026-09-28')}/edit`);
+  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toHaveText('Editing submitted note (version 1) Ravi de Silva Monday 28 September 2026');
+  await expect(notesBox(page)).toHaveValue('Walked to the shop and home again.');
+  await expect(page.locator('#save-status')).toHaveText('Saved Mon 28 Sep 2026, 4:12 pm');
+  await expect(main(page).getByRole('button', { name: 'Save changes', exact: true })).toBeVisible();
+  await expect(main(page).getByRole('button', { name: 'Cancel', exact: true })).toBeVisible();
+  await backLink(page).click();
+  await expect(draftRow(page, 'Ravi de Silva')).toBeFocused();
 });
 
 test('a row of Your unfinished drafts opens its draft, an archived person’s too, and Back focuses that row', async ({

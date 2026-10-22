@@ -20,3 +20,10 @@
   background: var(--colour-attention-tint-strong);
   color: var(--colour-attention-text);
 }
+
+/* Anything that is only a fact (status-tags.md *Colour tokens*): 13.1:1 text on the neutral tint, whose edge is the
+   border that forced colours draw. */
+.neutral {
+  background: var(--colour-neutral-tint);
+  color: var(--colour-neutral-text);
+}

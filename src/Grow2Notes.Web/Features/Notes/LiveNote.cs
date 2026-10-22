@@ -50,4 +50,12 @@ internal sealed record LiveNote(
     /// </summary>
     public DraftInProgress? StartedByOtherThan(Actor actor) =>
         Status == NoteStatus.Draft && AuthorUserId != actor.UserId ? new(AuthorDisplayName, CreatedAtUtc) : null;
+
+    /// <summary>
+    /// Whether <paramref name="actor"/> may edit the note once it is submitted: its author, or a user whose stored role
+    /// is Manager (D19, §6.3). Anyone else is refused, whatever base they send.
+    /// </summary>
+    public async Task<bool> MayBeEditedByAsync(
+        Grow2NotesDbContext db, Actor actor, CancellationToken cancellationToken) =>
+        AuthorUserId == actor.UserId || await StoredRole.IsManagerAsync(db, actor, cancellationToken);
 }

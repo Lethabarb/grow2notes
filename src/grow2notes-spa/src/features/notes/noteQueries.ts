@@ -50,20 +50,21 @@ export type Draft = {
 export type DraftAnswer = { draft: Draft } | { startedBy: StartedBy };
 
 /**
- * A submitted note, as `GET {base}` gives it to anyone signed in (design.md §6.3): its author's display name as stored,
- * when it was first submitted, in UTC, and its current version: the Guided notes text as written, every goal of its
- * snapshot, in the snapshot's order, and the flag, with its reason, which a flagged version always has and an
- * unflagged one never (design.md §5.3, §5.8 step 4).
+ * A submitted note, as `GET {base}` gives it to anyone signed in (design.md §6.3): its author's id and display name as
+ * stored, when it was first submitted, in UTC, and its current version: its number, the Guided notes text as written,
+ * every goal of its snapshot, in the snapshot's order, and the flag, with its reason, which a flagged version always
+ * has and an unflagged one never (design.md §5.3, §5.8 step 4). A note with more than one version is edited, and says
+ * who saved the current one and when.
  */
 export type SubmittedNote = {
   status: 'Submitted';
-  author: { displayName: string };
+  author: { id: string; displayName: string };
   firstSubmittedAtUtc: string;
-  current: { narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
+  current: { versionNumber: number; narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
     | { isFlagged: true; flagReason: string }
     | { isFlagged: false; flagReason: null }
   );
-};
+} & ({ isEdited: false } | { isEdited: true; lastEdit: { by: string; atUtc: string } });
 
 /**
  * A draft's working copy as `GET {base}` gives it to a manager alone, read-only, in the `current` shape (design.md

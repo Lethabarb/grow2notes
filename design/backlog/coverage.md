@@ -229,7 +229,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 3 | Starting picks copied from the participant's most recent submitted note (D46, A44), with no line naming its date (A47 dropped, D83) | F02.05 | | The owner dropped A47 on 13 October 2026 (S02.05.03 Notes). Built by T13 (20 October 2026): the template's picks come from the latest earlier submitted note, any author, for groups still offered, and nothing stores the source (S02.05.03) |
 | 4 | Autosave with `clientId` and `seq`; snapshot (goals, groups and items) at draft creation with the `listsVersion` check; picks autosaved and versioned with the ticks; discard as a status change | F02.02 | F02.05 (picks and the groups snapshot) | The groups, picks and common-item ticks are built by T13 (20 October 2026): the snapshot, `listsVersion` over the groups, the picks in every save and in the version (S02.05.01, S02.05.02, S02.05.04) |
 | 5 | One live note per participant per day, enforced by the filtered unique index | F02.02 | | |
-| 6 | Submit creates version 1; Save changes by the author or a manager creates the next version; pending edits and Cancel; version history for managers | F02.06 | F02.03 (version 1), F02.07 (version history) | |
+| 6 | Submit creates version 1; Save changes by the author or a manager creates the next version; pending edits and Cancel; version history for managers | F02.06 | F02.03 (version 1), F02.07 (version history) | All but the version history is built by T14 (22 October 2026): pending edits, Save changes at base n, Cancel and the conflict (S02.06.01 to S02.06.03); the version history is F02.07's |
 | 7 | Past-day notes for managers. Melbourne "today" through `TimeProvider` | F02.08 | S00.01.01 (the clock), S02.02.01 (its daylight-saving tests) | |
 
 **design.md §14 M2 Done when**
@@ -242,9 +242,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 4 | Browser developer tools show no note content in localStorage, sessionStorage, IndexedDB or Cache Storage | F02.02 | DoD (nothing stored on the device, D22) | |
 | 5 | The server refuses a worker's note for any date other than today in Melbourne; the daylight-saving tests pass with a fake clock, under `TZ=UTC` and on Windows | F02.02 | S00.01.01 (the clock), S02.02.01 (the daylight-saving tests) | |
 | 6 | A second live note for the same participant and day cannot be created (database test); after a discard, a new note can | F02.02 | | |
-| 7 | Each Save changes adds exactly one version, and earlier versions are byte-for-byte unchanged | F02.06 | | |
+| 7 | Each Save changes adds exactly one version, and earlier versions are byte-for-byte unchanged | F02.06 | | Built by T14 (22 October 2026): one conditional update on `CurrentVersionNumber`, and a test of three Save changes that compares versions 1 and 2 and their rows field by field (S02.06.01) |
 | 8 | A goal reworded, or a group renamed, after a draft was created does not change that draft or its submitted version | F02.05 | S02.02.03 (the goals snapshot) | The group part is built by T13 (20 October 2026): a renamed group keeps its old name in the draft and in `NoteVersionGroup` (S02.05.04) |
-| 9 | A new note starts with the last submitted note's picks, skipping archived groups, and no item ticks; with no earlier note, nothing is picked; unpicking clears ticks; a picks change in an edit creates a new version (automated tests) | F02.05 | S02.06.01 (the edit) | All but the last clause is built by T13 (20 October 2026), unpicking clearing ticks as A46 says (S02.05.02, S02.05.03); the picks change in an edit is T14's (S02.06.01) |
+| 9 | A new note starts with the last submitted note's picks, skipping archived groups, and no item ticks; with no earlier note, nothing is picked; unpicking clears ticks; a picks change in an edit creates a new version (automated tests) | F02.05 | S02.06.01 (the edit) | All but the last clause is built by T13 (20 October 2026), unpicking clearing ticks as A46 says (S02.05.02, S02.05.03); the picks change in an edit is built by T14 (22 October 2026), with the group an edit can still pick after it was archived (S02.06.01) |
 
 **ux/screens/today.md**
 
@@ -265,10 +265,10 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | `note-form.md › Identity and wrong-participant protection` | F02.03 | | |
 | 2 | `note-form.md › Autosave` | F02.02 | | |
-| 3 | `note-form.md › Conflicts and refusals` | F02.02 | S02.06.03 (two editors) | |
+| 3 | `note-form.md › Conflicts and refusals` | F02.02 | S02.06.03 (two editors) | The two editors are built by T14 (22 October 2026): the version-conflict notice, Start again and the cannot-edit page (S02.06.03, S02.06.01) |
 | 4 | `note-form.md › Validation and Submit` | F02.03 | | |
 | 5 | `note-form.md › Common items and groups (D44–D47)` | F02.05 | | |
-| 6 | `note-form.md › Edit mode, discard, leaving, session` | F02.02 | F02.06 (edit mode) | See *Rows to watch* |
+| 6 | `note-form.md › Edit mode, discard, leaving, session` | F02.02 | F02.06 (edit mode) | See *Rows to watch*. Edit mode is built by T14 (22 October 2026): items 30a, 30b, 30i, 31 and 32 (S02.06.01) |
 | 7 | `note-form.md › Layout and accessibility` | DoD | S06.02.03 (VoiceOver and TalkBack at M6) | |
 
 **ux/screens/participant-notes.md**

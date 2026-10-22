@@ -389,7 +389,7 @@ export const strings = {
    */
   statusLine: { you: 'You', saved: 'saved', started: 'started' },
   /** Each kind of `Tag`, by its kind (status-tags.md *The mapping*). */
-  tag: { flagged: 'Flagged' },
+  tag: { flagged: 'Flagged', edited: 'Edited' },
   /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), the Common items' heading
@@ -441,6 +441,11 @@ export const strings = {
     discardDraft: 'Discard draft',
     nobodyCanOpenThisDraft: 'Nobody will be able to open this draft again.',
     discarding: 'Discarding…',
+    saveChanges: 'Save changes',
+    savingChanges: 'Saving changes…',
+    cancelling: 'Cancelling…',
+    yourChangesAreStillBelow: 'Your changes are still below.',
+    startAgain: 'Start again from the latest version',
   },
   /**
    * The read view of a submitted note (participant-notes.md *Read view*): the word before its submitted time in the
@@ -453,6 +458,16 @@ export const strings = {
     noGoals: 'No goals set',
     noCommonItems: 'No common items set',
     nothingWrittenYet: 'Nothing written yet.',
+    edit: 'Edit',
+  },
+  /**
+   * The whole page for a refused edit (empty-loading-error.md *Whole-page messages*): `403 note.not_editable`, reached
+   * by an old link or a stale screen, as the note exists and the person may read it.
+   */
+  cannotEditNote: {
+    heading: 'You cannot edit this note',
+    body: 'Only the person who wrote it, or a manager, can edit it.',
+    readTheNote: 'Read the note',
   },
   /**
    * Past notes (participant-notes.md *History list*), whose caption and failure sentence are its page name: the

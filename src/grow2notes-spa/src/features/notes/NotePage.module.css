@@ -10,6 +10,15 @@
   text-align: end;
 }
 
+/* The <h1>'s caption, on its own line, in body type and the secondary colour (note-identity-header.md). */
+.caption {
+  display: block;
+  margin-block-end: var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: 400;
+  color: var(--colour-text-secondary);
+}
+
 /* The name as stored, never upper-cased or cut short, wrapping however long, and never hyphenated (component 3). */
 .name {
   display: block;

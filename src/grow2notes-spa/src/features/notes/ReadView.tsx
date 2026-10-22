@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router';
+import { useMe } from '../../api/me.ts';
+import { buttonClass } from '../../components/buttonClass.ts';
 import { Tag } from '../../components/Tag.tsx';
 import { TickListRead, type TickedItem } from '../../components/TickListRead.tsx';
 import { parseDateOnly, stamp } from '../../copy/format.ts';
@@ -22,12 +25,18 @@ type ReadViewProps = {
  * The read view of a submitted note (participant-notes.md *Read view*, note-read-view.md), its current version as
  * written, in the daily report's order and words (design.md §11.3), with no control on it: the `<h1>`; the byline,
  * "Written by Priya Nair · Submitted 4:42 pm", the time alone when the note was submitted on its own date in
- * Melbourne, else with its date (microcopy.md §3, *Reference day*); then, only when the version is flagged, the Flagged
- * tag and the reason after a pause; then the actions, the Past notes link; then its sections. T14 adds Edit and the
- * Edited line, T16 a manager's review lines and panel, and T18 the past-day line and Version history.
+ * Melbourne, else with its date (microcopy.md §3, *Reference day*); then, only when the note has more than one
+ * version, the Edited line, the Edited tag and, after a pause, who saved the current version and when; then, only when
+ * that version is flagged, the Flagged tag and the reason after a pause; then the actions, Edit first, only for the
+ * note's author and for a manager, never shown disabled, which opens the edit form in this entry's place, and the Past
+ * notes link; then its sections. T16 adds a manager's review lines and panel, and T18 the past-day line and Version
+ * history.
  */
 export function ReadView({ heading, participantId, note, noteDate }: ReadViewProps) {
   const { author, firstSubmittedAtUtc, current } = note;
+  const me = useMe();
+  const day = parseDateOnly(noteDate);
+  const canEdit = me.role === 'Manager' || author.id === me.userId;
   return (
     <>
       {heading}
@@ -36,23 +45,50 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
           {msg.writtenBy(author.displayName)}
           <Sep />
           {strings.readView.submitted}{' '}
-          <time dateTime={firstSubmittedAtUtc}>{stamp(firstSubmittedAtUtc, parseDateOnly(noteDate))}</time>
+          <time dateTime={firstSubmittedAtUtc}>{stamp(firstSubmittedAtUtc, day)}</time>
         </p>
-        {current.isFlagged && (
+        {note.isEdited && (
           <p className={styles.line}>
-            <Tag kind="flagged" />
-            <Pause />{' '}
-            <span className={styles.written}>{msg.flagReason(current.flagReason)}</span>
+            <Tag kind="edited" />
+            <Pause /> {msg.lastChangeBy(note.lastEdit.by)}{' '}
+            <time dateTime={note.lastEdit.atUtc}>{stamp(note.lastEdit.atUtc, day)}</time>
           </p>
         )}
+        <FlagLine current={current} />
       </div>
-      <PastNotesLink participantId={participantId} />
+      <div className={styles.actions}>
+        {canEdit && (
+          <Link to={`/participants/${participantId}/notes/${noteDate}/edit`} replace className={buttonClass()}>
+            {strings.readView.edit}
+          </Link>
+        )}
+        <PastNotesLink participantId={participantId} />
+      </div>
       <ReadSections
         goals={current.goals}
         commonItemGroups={current.commonItemGroups}
         narrative={current.narrative}
       />
     </>
+  );
+}
+
+/**
+ * The flag line of a version that is flagged (participant-notes.md component 4): the Flagged tag and, after a pause,
+ * the reason as written; nothing for one that is not. The read view shows it for the note's current version, and the
+ * version-conflict notice for the newer version it lays out.
+ */
+export function FlagLine({ current }: { current: SubmittedNote['current'] }) {
+  if (!current.isFlagged) {
+    return null;
+  }
+
+  return (
+    <p className={styles.line}>
+      <Tag kind="flagged" />
+      <Pause />{' '}
+      <span className={styles.written}>{msg.flagReason(current.flagReason)}</span>
+    </p>
   );
 }
 

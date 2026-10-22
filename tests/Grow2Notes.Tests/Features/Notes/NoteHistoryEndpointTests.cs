@@ -89,8 +89,8 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
         Assert.False(history.GetProperty("hasMore").GetBoolean());
     }
 
-    // §6.3's fields that this task gives, in its order, and nothing of what the draft says (A9): its status and author
-    // as stored, never flagged, as only a version is.
+    // §6.3's fields, in its order, and nothing of what the draft says (A9): its status and author as stored, no
+    // version and so never edited, and never flagged, as only a version is.
     [Fact]
     public async Task A_draft_row_gives_its_date_status_and_author_and_is_never_flagged()
     {
@@ -103,11 +103,13 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
 
         var row = Assert.Single(history.GetProperty("notes").EnumerateArray());
         Assert.Equal(
-            ["noteDate", "status", "authorDisplayName", "isFlagged"],
+            ["noteDate", "status", "authorDisplayName", "currentVersionNumber", "isEdited", "isFlagged"],
             row.EnumerateObject().Select(property => property.Name));
         Assert.Equal("2026-09-30", row.GetProperty("noteDate").GetString());
         Assert.Equal("Draft", row.GetProperty("status").GetString());
         Assert.Equal("Sam Lee", row.GetProperty("authorDisplayName").GetString());
+        Assert.Equal(0, row.GetProperty("currentVersionNumber").GetInt32());
+        Assert.False(row.GetProperty("isEdited").GetBoolean());
         Assert.False(row.GetProperty("isFlagged").GetBoolean());
         Assert.DoesNotContain("toast", history.GetRawText(), StringComparison.Ordinal);
     }
@@ -143,6 +145,30 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
 
         Assert.Equal([(NoteDate, true), (NoteDate.AddDays(-1), false)], NoteDates(history).Zip(Flags(history)));
         Assert.DoesNotContain("unwell", history.GetRawText(), StringComparison.Ordinal);
+    }
+
+    // §6.3: the number of the current version, and edited once there is a version after the first, whoever saved it.
+    [Fact]
+    public async Task Each_row_gives_its_current_version_s_number_and_whether_the_note_is_edited()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddSubmittedAsync(
+            seeded.A, new(participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        var edited = await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            NoteDate.AddDays(-1),
+            seeded.A.WorkerId,
+            StartedAtUtc.AddDays(-1),
+            SubmittedAtUtc.AddDays(-1)));
+        await factory.Services.AddVersion2Async(
+            seeded.A, edited, SubmittedAtUtc.AddDays(-1).AddHours(1), flagReason: null, flaggedVersionNumber: 1);
+
+        var history = await HistoryAsync(Caller.WorkerOfA, participant.Id);
+
+        Assert.Equal(
+            [(1, false), (2, true)],
+            Rows(history).Select(row =>
+                (row.GetProperty("currentVersionNumber").GetInt32(), row.GetProperty("isEdited").GetBoolean())));
     }
 
     // An archived participant's notes are kept (§3.7), and anyone may read them (D20).
@@ -185,7 +211,7 @@ public sealed class NoteHistoryEndpointTests(Grow2NotesFactory factory, SqlServe
         Assert.Equal(
             ["ToReview", "None"], Rows(manager).Select(row => row.GetProperty("flagStatus").GetString()));
         Assert.Equal(
-            ["noteDate", "status", "authorDisplayName", "isFlagged", "flagStatus"],
+            ["noteDate", "status", "authorDisplayName", "currentVersionNumber", "isEdited", "isFlagged", "flagStatus"],
             Rows(manager)[0].EnumerateObject().Select(property => property.Name));
         Assert.All(Rows(worker), row => Assert.False(row.TryGetProperty("flagStatus", out _)));
     }

@@ -45,3 +45,19 @@
 .empty {
   margin: 0;
 }
+
+/*
+ * The actions under the byline: Edit, when the viewer may edit, then the Past notes link, on one line that wraps, each
+ * on a hit area at least 44 px tall.
+ */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
+  align-items: center;
+  margin-block-start: var(--space-4);
+}
+
+.actions > p {
+  margin: 0;
+}

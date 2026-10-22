@@ -103,6 +103,11 @@ export const routes: AppRoute[] = [
             element: <NotePage />,
             handle: { pageName: pageName.note, backKey: 'note' },
           },
+          {
+            path: 'participants/:participantId/notes/:noteDate/edit',
+            element: <NotePage editing />,
+            handle: { pageName: pageName.note, backKey: 'note' },
+          },
           // Every manager screen goes in here.
           {
             element: <ManagerOnly />,

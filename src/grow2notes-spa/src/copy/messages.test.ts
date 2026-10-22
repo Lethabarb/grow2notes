@@ -77,6 +77,11 @@ describe("the read view's lines", () => {
       'Reason: Mentioned pain in his left knee after the walk.',
     );
   });
+
+  it('name who made the last change as stored, with the comma that the time follows', () => {
+    expect(strings.tag.edited).toBe('Edited');
+    expect(msg.lastChangeBy('Jo Smith')).toBe('last change by Jo Smith,');
+  });
 });
 
 // participant-notes.md *History list* states, word for word.
@@ -199,5 +204,40 @@ describe("a list row's Save refused as stale (list-editor.md *Request errors*)",
 describe('the note form with no goals (design.md §4.3)', () => {
   it("says so with the participant's given name, as design.md writes it", () => {
     expect(msg.noGoalsSetUp('Jane')).toBe('No goals set up for Jane yet. A manager can add them.');
+  });
+});
+
+describe("a submitted note's edit mode (note-form.md *Kinds of note*, component 6 and *Edit-mode actions*)", () => {
+  it('captions the form with the version being edited', () => {
+    expect(msg.editingSubmittedNote(2)).toBe('Editing submitted note (version 2)');
+  });
+
+  it('says who saved which newer version and when, and names the version in its summary', () => {
+    expect(msg.savedVersionWhileEditing('Sam Lee', 3, '5:03 pm')).toBe(
+      'Sam Lee saved version 3 at 5:03 pm while you were editing.',
+    );
+    expect(msg.versionBy(3, 'Sam Lee')).toBe('Version 3 by Sam Lee');
+  });
+
+  it('says that the changes were not saved, and why, with Try again', () => {
+    expect(msg.changesNotSaved('offline')).toBe('Changes not saved: no connection. Try again.');
+    expect(msg.changesNotSaved('server')).toBe('Changes not saved: something went wrong. Try again.');
+  });
+
+  it('says that the edit was not cancelled, and why', () => {
+    expect(msg.notCancelled('offline')).toBe('Not cancelled: no connection. Try again.');
+    expect(msg.notCancelled('server')).toBe('Not cancelled: something went wrong. Try again.');
+  });
+
+  it('words the buttons and the refused edit as the design has them', () => {
+    expect(strings.note.saveChanges).toBe('Save changes');
+    expect(strings.note.savingChanges).toBe('Saving changes…');
+    expect(strings.note.cancelling).toBe('Cancelling…');
+    expect(strings.note.startAgain).toBe('Start again from the latest version');
+    expect(strings.cannotEditNote).toEqual({
+      heading: 'You cannot edit this note',
+      body: 'Only the person who wrote it, or a manager, can edit it.',
+      readTheNote: 'Read the note',
+    });
   });
 });

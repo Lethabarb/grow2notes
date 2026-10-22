@@ -1,6 +1,14 @@
 import { onlineManager, useMutation } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from 'react';
-import { api, ApiError, classify, prepareChanges, type Failure, type StartedBy } from '../../api/api.ts';
+import {
+  api,
+  ApiError,
+  classify,
+  isNotEditable,
+  prepareChanges,
+  type Failure,
+  type StartedBy,
+} from '../../api/api.ts';
 import { registerSaveFlush, warnAfter } from '../../api/session.ts';
 import { limits } from '../../limits.ts';
 import { useHiddenBySignIn } from '../../routes/hiddenBySignIn.ts';
@@ -48,8 +56,11 @@ export type SentContent = {
   flagReason: string | null;
 };
 
-/** What a save sends beside its identity: the content, and the lists' version until the note exists. */
-type SavedFields = SentContent & { listsVersion?: string };
+/**
+ * What a save sends beside its identity: the version it is based on, 0 for a draft and the version being edited for a
+ * pending edit, the content, and the lists' version until the note exists.
+ */
+type SavedFields = SentContent & { baseVersion: number; listsVersion?: string };
 
 /** `PUT {base}/draft`'s body (design.md §6.3), as far as this form fills it. */
 type DraftSaveBody = SavedFields & { clientId: string; seq: number };
@@ -134,12 +145,19 @@ export function sentContent(content: DraftContent): SentContent {
 /**
  * A refusal of a save that no later save gets past, so that autosave stops (note-form.md *Conflicts and refusals*): a
  * worker's first save of a note for a day before today, as after midnight; a first save for an archived participant;
- * another user's draft, with who started it and when; and a note submitted meanwhile, on another device or tab, which
- * Submit can meet too (T09's Notes).
+ * another user's draft, with who started it and when; a note submitted meanwhile, on another device or tab, which
+ * Submit can meet too (T09's Notes); and, in edit mode, a newer version saved since the edit was based on, and an edit
+ * the person may no longer make, such as a manager made a worker meanwhile (A72), which the form handles itself.
  */
 export type DeadEnd =
-  | { code: 'note.past_date_manager_only' | 'note.participant_archived' | 'note.version_conflict' }
+  | { code: 'note.past_date_manager_only' }
+  | { code: 'note.participant_archived' }
+  | { code: 'note.version_conflict' }
+  | { code: 'note.not_editable' }
   | { code: 'note.in_progress_by_other'; startedBy: StartedBy };
+
+/** A dead end that the page's top bar words in a banner, as the form takes the refused edit and its conflict itself. */
+export type BannerDeadEnd = Exclude<DeadEnd, { code: 'note.not_editable' }>;
 
 /**
  * How Load the other version went: `'shown'`, the form showing the other version, or `'deadEnd'`, its read meeting a
@@ -164,7 +182,7 @@ type AutosaveOptions = {
   onListsChanged: (reloaded: Draft) => void;
   /** The other version, as Load the other version read it, which the form shows in place of its own. */
   onOtherVersion: (other: Draft) => void;
-  /** A dead end, after which autosave sends nothing more. */
+  /** A dead end, after which autosave sends nothing more, until Start again, in edit mode. */
   onDeadEnd: (deadEnd: DeadEnd) => void;
 };
 
@@ -216,6 +234,12 @@ export type Autosave = {
    * note's saves start again under a new identity, with "Saved" at the other version's time.
    */
   load: () => Promise<LoadOutcome>;
+  /**
+   * Start again from the latest version, in edit mode, after a version conflict: the working copy rebased on
+   * `baseVersion`, the version now current, what the form holds sent at once under the same identity with the next save
+   * number, as a change of its own, which takes the stop away.
+   */
+  startAgain: (baseVersion: number) => void;
 };
 
 /** Where autosave is, kept from render to render. */
@@ -233,6 +257,8 @@ type Progress = {
   hiddenOut: Set<Promise<void>>;
   /** A save fell due while one was out, and goes as that one settles. */
   due: boolean;
+  /** The version that saves are based on, which every save sends: 0 for a draft; Start again moves a pending edit's. */
+  baseVersion: number;
   /** The note exists: the draft was saved before it opened, or a save from this form was answered. */
   started: boolean;
   /** The version of the lists that the form shows, which each save sends until the note exists (design.md §5.7). */
@@ -299,6 +325,11 @@ type Progress = {
  * comes of the numbers that its failed attempts used up, so its save goes again at once under a new identity,
  * numbered from 1, with no banner (T10's Notes).
  *
+ * A pending edit is the same working copy on a submitted note, opened with a base version above 0, which every save
+ * sends and the indicator reopens it "Saved" at (note-form.md *Kinds of note*). A `409 note.version_conflict` there is
+ * a newer version saved since, and a `403 note.not_editable` an edit no longer allowed: each stops autosave as a dead
+ * end, which the form answers itself, and Start again lifts the first by moving the base (A70, A72).
+ *
  * The session's end pauses autosave too, while the signed-out-in-place view hides the form, from 30:00 idle or the
  * `401` that ends the session, its timers and retries cleared and every change kept and counted, but not sent
  * (session-timeout.md *The signed-out state*). As the same person's form shows again, a change unsaved goes at once,
@@ -329,6 +360,7 @@ export function useAutosave({
     out: undefined,
     hiddenOut: new Set(),
     due: false,
+    baseVersion: opened.baseVersion,
     started: opened.isSaved,
     listsVersion: opened.listsVersion,
     stopped: false,
@@ -359,7 +391,7 @@ export function useAutosave({
     state.mounted = true;
     callbacks.current.onIndicator(
       opened.isSaved && opened.savedAtUtc !== undefined
-        ? { kind: 'draft', savedAtUtc: opened.savedAtUtc }
+        ? { kind: opened.baseVersion > 0 ? 'saved' : 'draft', savedAtUtc: opened.savedAtUtc }
         : { kind: 'none' },
     );
     return () => {
@@ -564,6 +596,7 @@ export function useAutosave({
     const carried = state.made;
     const content = callbacks.current.read();
     const fields: SavedFields = {
+      baseVersion: state.baseVersion,
       ...(state.started || state.listsVersion === undefined ? {} : { listsVersion: state.listsVersion }),
       ...sentContent(content),
     };
@@ -852,9 +885,12 @@ export function useAutosave({
     sendNow(state);
   }
 
-  // Outside the draft's query, as the lists-changed reload reads it (T10's Notes). A `404`, the note submitted
-  // meanwhile, is the version-conflict dead end; another user's draft, which the note can be only once discarded and
-  // started again, is the in-progress one; and a note discarded meanwhile loads as a new note's form.
+  // Outside the draft's query, as the lists-changed reload reads it (T10's Notes). On a draft's page, a `404` (the
+  // note discarded and its day gone, A65) and an answer that is a pending edit's, with a base above 0, the note
+  // submitted meanwhile, are the version-conflict dead end; on an edit page, the other version is the pending edit as
+  // it is now saved, whose base is adopted, as Load means showing the other version. Another user's draft, which the
+  // note can be only once discarded and started again, is the in-progress dead end; and a note discarded meanwhile
+  // loads as a new note's form.
   async function load(): Promise<LoadOutcome> {
     const state = progress.current;
     let answer: DraftAnswer;
@@ -867,6 +903,11 @@ export function useAutosave({
 
       if (error instanceof ApiError && error.status === 404) {
         stopAt(state, { code: 'note.version_conflict' });
+        return 'deadEnd';
+      }
+
+      if (isNotEditable(error)) {
+        stopAt(state, { code: 'note.not_editable' });
         return 'deadEnd';
       }
 
@@ -883,8 +924,14 @@ export function useAutosave({
     }
 
     const { draft } = answer;
+    if (opened.baseVersion === 0 && draft.baseVersion > 0) {
+      stopAt(state, { code: 'note.version_conflict' });
+      return 'deadEnd';
+    }
+
     identities.delete(noteKey);
     state.takenOver = false;
+    state.baseVersion = draft.baseVersion;
     state.started = draft.isSaved;
     state.listsVersion = draft.listsVersion;
     state.saved = state.made;
@@ -893,6 +940,20 @@ export function useAutosave({
       draft.savedAtUtc === undefined ? { kind: 'none' } : { kind: 'saved', savedAtUtc: draft.savedAtUtc },
     );
     return 'shown';
+  }
+
+  // The conflict's way out (note-form.md component 6): the base moves to the version now current, and what is on screen
+  // is sent as a change, under the same identity, so that the server rebases the working copy without a takeover. It
+  // also lifts the pause of the Save changes that met the conflict, whose request has ended.
+  function startAgain(baseVersion: number) {
+    const state = progress.current;
+    state.baseVersion = baseVersion;
+    state.stopped = false;
+    state.paused = false;
+    state.made += 1;
+    state.attendedAt = Date.now();
+    sayUnsaved(state);
+    sendNow(state);
   }
 
   function unsaved(): boolean {
@@ -916,6 +977,7 @@ export function useAutosave({
     },
     keep,
     load,
+    startAgain,
   };
 }
 
@@ -955,6 +1017,7 @@ function deadEndOf(error: ApiError): DeadEnd | undefined {
     case 'note.past_date_manager_only':
     case 'note.participant_archived':
     case 'note.version_conflict':
+    case 'note.not_editable':
       return { code: error.code };
     case 'note.in_progress_by_other':
       return error.startedBy === undefined ? undefined : { code: error.code, startedBy: error.startedBy };
