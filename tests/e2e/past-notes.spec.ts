@@ -237,12 +237,12 @@ test('an edited note shows the Edited tag on its row and the Edited line on its 
 
   // On the note's own date the time stands alone.
   await page.goto(noteAddress(jane.id, '2026-09-30'));
-  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toHaveText('Jane Citizen Wednesday 30 September 2026');
   await expect.poll(() => shownText(editedLine(page))).toBe('Edited last change by Jo Smith, 5:03 pm');
 
   // One version: no Edited line.
   await page.goto(noteAddress(jane.id, '2026-09-29'));
-  await expect(heading(page)).toBeFocused();
+  await expect(heading(page)).toHaveText('Jane Citizen Tuesday 29 September 2026');
   await expect(editedLine(page)).toHaveCount(0);
 });
 
