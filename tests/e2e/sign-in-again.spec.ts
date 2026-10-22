@@ -297,12 +297,17 @@ for (const press of ['Save changes', 'Cancel'] as const) {
     await page.route(
       (url) => /\/notes\/[^/]+\/(versions|draft)$/.test(url.pathname),
       (route) => {
-        const { method } = route.request();
+        const method = route.request().method();
         const ends = pressed ? method === 'POST' : method === 'DELETE';
         return ends ? route.fulfill({ status: 401 }) : route.fallback();
       },
     );
-    const sent = countRequests(page, (request) => request.method() === (pressed ? 'POST' : 'DELETE'));
+    const sent = countRequests(
+      page,
+      (request) =>
+        request.method() === (pressed ? 'POST' : 'DELETE')
+        && new URL(request.url()).pathname.endsWith(pressed ? '/versions' : '/draft'),
+    );
     await page.goto(`/participants/${jane.id}/notes/${manager.today}/edit`);
     await expect(heading(page)).toContainText('Editing submitted note (version 1)');
     await main(page).getByRole('textbox', { name: '3. Guided notes' }).fill('Went to the shops. Then home.');
