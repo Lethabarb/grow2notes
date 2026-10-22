@@ -84,7 +84,7 @@ public sealed class MyDraftsEndpointTests(Grow2NotesFactory factory, SqlServerFi
     }
 
     // design.md §5.3: once a note is submitted, its author and any manager may each have a pending edit of their own,
-    // as T14 will make them (seeded here), listed to each of them alone as a pending edit, with its own last save.
+    // as T14 makes them (seeded here), listed to each of them alone as a pending edit, with its own last save.
     [Fact]
     public async Task A_pending_edit_is_listed_to_its_editor_alone_as_a_pending_edit()
     {
@@ -109,6 +109,48 @@ public sealed class MyDraftsEndpointTests(Grow2NotesFactory factory, SqlServerFi
 
         using var readerClient = factory.CreateHttpsClient().SignInAs(reader);
         Assert.Empty(await MyDraftsAsync(readerClient));
+    }
+
+    // A manager's first save of an edit of an earlier day's note, a pending edit made through the real autosave (T14),
+    // is listed to that manager alone as a pending edit, with the time of that save; the note's author has none.
+    [Fact]
+    public async Task A_manager_s_pending_edit_of_an_earlier_day_s_note_is_listed_to_the_manager_alone()
+    {
+        var author = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Priya Nair");
+        var manager = await factory.Services.AddUserAsync(seeded.A, UserRole.Manager, "Sam Lee");
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddSubmittedAsync(
+            seeded.A, new(participant.Id, NoteDate, author, StartedAtUtc, SubmittedAtUtc));
+        await using var app = factory.WithWebHostBuilder(
+            builder => builder.UseClock(new FakeTimeProvider(On1OctoberAt900)));
+        using var managerClient = app.CreateHttpsClient().SignInAs(manager);
+        using var authorClient = app.CreateHttpsClient().SignInAs(author);
+
+        using (var edit = await managerClient.PutWithTokenAsync(
+                   $"{NotePath(participant.Id, NoteDate)}/draft",
+                   await managerClient.FetchTokenAsync(),
+                   new
+                   {
+                       baseVersion = 1,
+                       clientId = Guid.NewGuid(),
+                       seq = 1,
+                       narrative = "Jane made toast and tea.",
+                       tickedGoalIds = Array.Empty<Guid>(),
+                       pickedGroupIds = Array.Empty<Guid>(),
+                       tickedCommonItemIds = Array.Empty<Guid>(),
+                       isFlagged = false,
+                       flagReason = (string?)null,
+                   },
+                   ifMatch: null))
+        {
+            Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        }
+
+        var listed = Assert.Single(await MyDraftsAsync(managerClient));
+
+        Assert.Equal(
+            (participant.Id, "Jane", "Citizen", "2026-09-30", "pendingEdit", "2026-09-30T23:00:00Z"), Row(listed));
+        Assert.Empty(await MyDraftsAsync(authorClient));
     }
 
     // design.md §5.3's NoteDraft rules and §9.2: the caller's own live draft alone, never another user's draft, the

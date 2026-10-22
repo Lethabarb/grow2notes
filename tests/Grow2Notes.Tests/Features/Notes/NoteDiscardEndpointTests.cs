@@ -307,7 +307,8 @@ public sealed class NoteDiscardEndpointTests(Grow2NotesFactory factory, SqlServe
     }
 
     // A29: the app has no hard delete, so it maps no DELETE on a note, and a DELETE there gets the unknown path's 404,
-    // leaving the draft live; the discard itself keeps the note and its working copy (above).
+    // leaving the draft live; the discard itself keeps the note and its working copy (above). The one DELETE on a
+    // note's address, {base}/draft, removes a pending edit alone and never a draft (NoteDraftCancelEndpointTests).
     [Fact]
     public async Task The_app_maps_no_DELETE_on_a_note_and_a_DELETE_there_deletes_nothing()
     {
