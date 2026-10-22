@@ -69,6 +69,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Note.DraftStarted] = test => test.StartDraftAsync(),
         [AuditEventTypes.Note.Discarded] = test => test.DiscardDraftAsync(),
         [AuditEventTypes.Note.Submitted] = test => test.SubmitNoteAsync(),
+        [AuditEventTypes.Note.Edited] = test => test.EditNoteAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
@@ -1071,6 +1072,74 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             noteId,
             participant.Id,
             new JsonObject { ["versionNumber"] = 1 }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>note.edited</c>: A's manager saves their changes to today's note of a participant added for the row, which
+    /// the row adds as Submit leaves it, with version 1 written by A's worker, with <c>POST {base}/versions</c> at base
+    /// 1 after their first save of the edit, which writes no event of its own, which records the note as the entity and
+    /// its participant as the participant, and the new version's number alone in <c>Details</c>, so no note text
+    /// (design.md §5.3, §9.5).
+    /// </summary>
+    private async Task<WrittenEvent> EditNoteAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var today = factory.Services.GetRequiredService<MelbourneClock>().Today();
+        var noteId = await factory.Services.AddSubmittedAsync(a, new(
+            participant.Id,
+            today,
+            a.WorkerId,
+            new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 18, 6, 0, 0, DateTimeKind.Utc)));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        var path = string.Create(
+            CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}");
+        using (var edit = await client.PutWithTokenAsync(
+                   $"{path}/draft",
+                   await client.FetchTokenAsync(),
+                   new
+                   {
+                       baseVersion = 1,
+                       clientId = Guid.NewGuid(),
+                       seq = 1,
+                       narrative = "Jane made toast and tea.",
+                       tickedGoalIds = Array.Empty<Guid>(),
+                       pickedGroupIds = Array.Empty<Guid>(),
+                       tickedCommonItemIds = Array.Empty<Guid>(),
+                       isFlagged = false,
+                       flagReason = (string?)null,
+                   },
+                   ifMatch: null))
+        {
+            Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{path}/versions")
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 1,
+                narrative = "Jane made toast and tea.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            }),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return new(
+            AuditEventTypes.Note.Edited,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Note,
+            noteId,
+            participant.Id,
+            new JsonObject { ["versionNumber"] = 2 }.ToJsonString());
     }
 
     /// <summary>

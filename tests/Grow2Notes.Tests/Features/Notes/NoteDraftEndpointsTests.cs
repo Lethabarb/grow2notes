@@ -21,7 +21,12 @@ namespace Grow2Notes.Tests.Features.Notes;
 
 /// <summary>
 /// <c>GET</c> and <c>PUT {base}/draft</c> (design.md §6.3), called with the test-only sign-in
-/// (<see cref="TestSignIn"/>). The <c>GET</c>: with no live note, the template of a new note, with the participant's
+/// (<see cref="TestSignIn"/>). On a submitted note they give the author's or a manager's pending edit: the <c>GET</c>
+/// the saved one or, with none, the template of the current version, writing nothing, and the <c>PUT</c> creating it
+/// from that version's rows at the current version, saving it at its own base, and moving its base on to the current
+/// version, Start again, with <c>409 note.version_conflict</c> and no extensions for any other base and
+/// <c>403 note.not_editable</c> for a worker who did not write the note (§6.7, §6.9). The <c>GET</c>: with no live
+/// note, the template of a new note, with the participant's
 /// active goals in the manager's order, unticked, the organisation's guide prompts and the lists' version (§5.7),
 /// unless the date is after today (§5.5 item 4), or, for a worker, before yesterday (A65); with the caller's own draft,
 /// their working copy, with the wording it started with (A3); and opening the form writes nothing (§3.3). The
@@ -1891,6 +1896,414 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
             ItemsOf(outing));
     }
 
+    // design.md §6.3, S02.06.01: a submitted note's form, for its author and for a manager alike, is the template of
+    // its current version, built from the version's rows and writing nothing: base version 1, not saved, with no
+    // lists' version and no saved time; its goals, groups, including one archived since, items, wording, order, picks
+    // and ticks, its text and its flag as the version holds them.
+    [Theory]
+    [InlineData(Caller.WorkerOfA)]
+    [InlineData(Caller.ManagerOfA)]
+    public async Task A_submitted_note_s_form_is_the_template_of_its_current_version_for_its_author_and_a_manager(
+        Caller caller)
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var lists = await AddListsAsync();
+        var goal = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 0));
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            TheSecond,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            SavedAtUtc,
+            IsFlagged: true,
+            FlagReason: "Jane seemed unwell.",
+            Goals: [new(goal.Id, "Makes own breakfast", true)],
+            Groups: SourceGroups(lists, lists.Outing)));
+        var before = await StoredRowsAsync();
+
+        var form = await ReadFormAsync(caller, participant.Id, TheSecond);
+
+        Assert.Equal(
+            [
+                "baseVersion", "isSaved", "guidePrompts", "goals", "commonItemGroups", "narrative", "isFlagged",
+                "flagReason",
+            ],
+            form.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(
+            (1, false, "Jane made toast.", await GuidePromptsAsync()),
+            (form.GetProperty("baseVersion").GetInt32(), form.GetProperty("isSaved").GetBoolean(),
+                form.GetProperty("narrative").GetString(), form.GetProperty("guidePrompts").GetString()));
+        Assert.Equal((true, "Jane seemed unwell."), Flag(form));
+        Assert.Equal([(goal.Id, "Makes own breakfast", true)], Goals(form));
+        var groups = form.GetProperty("commonItemGroups").EnumerateArray().ToList();
+        Assert.Equal(
+            [
+                (seeded.A.EveryNoteGroupId, "Every note", true, false),
+                (lists.Outing, "Community outing", false, true),
+                (lists.Care, "Personal care", false, false),
+                (lists.Empty, "Household", false, false),
+                (lists.Archived, "Meal preparation", false, false),
+            ],
+            groups.Select(group => (
+                IdOf(group),
+                group.GetProperty("name").GetString(),
+                group.GetProperty("isEveryNote").GetBoolean(),
+                group.GetProperty("isPicked").GetBoolean())));
+        Assert.Equal([(lists.EveryNoteItem, "Took medication", false)], ItemsOf(groups[0]));
+        Assert.Equal(
+            [(lists.OutingItemA, "Caught the bus", true), (lists.OutingItemB, "Visited the library", true)],
+            ItemsOf(groups[1]));
+        Assert.Equal([(lists.CareItem, "Showered", false)], ItemsOf(groups[2]));
+        Assert.Empty(ItemsOf(groups[3]));
+        Assert.Empty(ItemsOf(groups[4]));
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // A version saved before common items had groups has no group rows, so its template has none.
+    [Fact]
+    public async Task A_version_from_before_groups_gives_a_template_with_none()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var goal = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 0));
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            TheSecond,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            SavedAtUtc,
+            Goals: [new(goal.Id, "Makes own breakfast", false)]));
+
+        var form = await ReadFormAsync(Caller.WorkerOfA, participant.Id, TheSecond);
+
+        Assert.Equal([(goal.Id, "Makes own breakfast", false)], Goals(form));
+        Assert.Empty(form.GetProperty("commonItemGroups").EnumerateArray());
+    }
+
+    // The editor's own pending edit, once saved, is the form: the saved base and time, and the edit's own text.
+    [Fact]
+    public async Task A_saved_pending_edit_is_the_form_with_its_base_its_text_and_its_saved_time()
+    {
+        var (participantId, _, _, _) = await AddSubmittedForEditsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var saved = await SaveAsync(
+            client, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea."));
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        var form = await ReadFormAsync(Caller.WorkerOfA, participantId, TheSecond);
+
+        Assert.Equal(
+            (1, true, "Jane made toast and tea.", await SavedAtUtcAsync(saved)),
+            (form.GetProperty("baseVersion").GetInt32(), form.GetProperty("isSaved").GetBoolean(),
+                form.GetProperty("narrative").GetString(), form.GetProperty("savedAtUtc").GetDateTime()));
+        Assert.False(form.TryGetProperty("listsVersion", out _));
+    }
+
+    // design.md §6.9: a worker who did not write a submitted note may neither open its form nor save an edit of it, at
+    // base 0, a draft's, or at the note's current version, and nothing is written; B's manager does not find it.
+    [Fact]
+    public async Task A_worker_who_did_not_write_the_note_is_refused_its_form_as_not_editable()
+    {
+        var (participantId, _, _, _) = await AddSubmittedForEditsAsync();
+        var other = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(other);
+
+        using var response = await client.GetAsync(
+            DraftPath(participantId, TheSecond), TestContext.Current.CancellationToken);
+
+        await ReadCodeAsync(response, HttpStatusCode.Forbidden, "note.not_editable");
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task A_worker_who_did_not_write_the_note_is_refused_a_save_as_not_editable_at_any_base(
+        int baseVersion)
+    {
+        var (participantId, _, _, _) = await AddSubmittedForEditsAsync();
+        var other = await factory.Services.AddUserAsync(seeded.A, UserRole.Worker, "Alex P.");
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(other);
+
+        using var response = await SaveAsync(
+            client, participantId, TheSecond, EditBody(baseVersion, Guid.NewGuid(), 1, "Jane made toast and tea."));
+
+        await ReadCodeAsync(response, HttpStatusCode.Forbidden, "note.not_editable");
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    [Fact]
+    public async Task B_s_manager_does_not_find_A_s_submitted_note_to_open_or_edit()
+    {
+        var (participantId, _, _, _) = await AddSubmittedForEditsAsync();
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.ManagerOfB, seeded);
+
+        using var form = await client.GetAsync(
+            DraftPath(participantId, TheSecond), TestContext.Current.CancellationToken);
+        using var save = await SaveAsync(
+            client, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea."));
+
+        await form.ReadProblemAsync(HttpStatusCode.NotFound);
+        await save.ReadProblemAsync(HttpStatusCode.NotFound);
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // S02.06.01: the first save at the note's current version creates the editor's pending edit from that version's
+    // rows, with the request's picks, ticks, text and flag, and answers 200 with its time; the note, its versions and
+    // the audit log are as they were, as only Save changes writes.
+    [Fact]
+    public async Task The_first_save_of_an_edit_creates_a_pending_edit_and_changes_nothing_else()
+    {
+        var (participantId, noteId, lists, goalId) = await AddSubmittedForEditsAsync();
+        var before = await StoredRowsAsync();
+        var note = Assert.Single(await NotesAsync(participantId));
+        var page = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client,
+            participantId,
+            TheSecond,
+            EditBody(
+                1, page, 1, "Jane made toast and tea.", true, "Jane seemed unwell.", [goalId], [lists.Care],
+                [lists.CareItem]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var savedAt = await SavedAtUtcAsync(response);
+        var copy = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(
+            (seeded.A.WorkerId, 1, "Jane made toast and tea.", true, "Jane seemed unwell.", page, 1, savedAt, savedAt),
+            (copy.EditorUserId, copy.BaseVersionNumber, copy.Narrative, copy.IsFlagged, copy.FlagReason,
+                copy.LastClientId, copy.LastSeq, copy.CreatedAtUtc, copy.UpdatedAtUtc));
+        Assert.Equal(
+            [
+                (seeded.A.EveryNoteGroupId, "Every note", true, false),
+                (lists.Outing, "Community outing", false, false),
+                (lists.Care, "Personal care", false, true),
+                (lists.Empty, "Household", false, false),
+                (lists.Archived, "Meal preparation", false, false),
+            ],
+            copy.Groups.Select(group => (group.GroupId, group.Name, group.IsEveryNote, group.IsPicked)));
+        Assert.Equal(
+            [
+                new DraftItem(NoteSection.Goal, goalId, null, "Makes own breakfast", true),
+                new DraftItem(
+                    NoteSection.CommonItem, lists.EveryNoteItem, seeded.A.EveryNoteGroupId, "Took medication", false),
+                new DraftItem(NoteSection.CommonItem, lists.OutingItemA, lists.Outing, "Caught the bus", false),
+                new DraftItem(NoteSection.CommonItem, lists.OutingItemB, lists.Outing, "Visited the library", false),
+                new DraftItem(NoteSection.CommonItem, lists.CareItem, lists.Care, "Showered", true),
+            ],
+            copy.Items);
+        var after = await StoredRowsAsync();
+        Assert.Equal(
+            (before.Notes, before.Drafts + 1, before.LastEventId), (after.Notes, after.Drafts, after.LastEventId));
+        var stillNote = Assert.Single(await NotesAsync(participantId));
+        Assert.Equal(
+            (note.Status, note.CurrentVersionNumber, note.AuthorUserId),
+            (stillNote.Status, stillNote.CurrentVersionNumber, stillNote.AuthorUserId));
+        Assert.Equal(1, await VersionCountAsync(noteId));
+    }
+
+    // The same save sent again, after its answer was lost, is the page's number held already: 200 with the time that
+    // the working copy holds, changing nothing.
+    [Fact]
+    public async Task A_save_of_an_edit_sent_again_answers_200_with_the_held_time()
+    {
+        var clock = new FakeTimeProvider(new DateTimeOffset(SavedAtUtc));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var (participantId, noteId, _, _) = await AddSubmittedForEditsAsync();
+        var body = EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea.");
+        using var client = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var first = await SaveAsync(client, participantId, TheSecond, body);
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using var again = await SaveAsync(client, participantId, TheSecond, body);
+
+        Assert.Equal((HttpStatusCode.OK, HttpStatusCode.OK), (first.StatusCode, again.StatusCode));
+        var heldAt = await SavedAtUtcAsync(again);
+        Assert.Equal(await SavedAtUtcAsync(first), heldAt);
+        Assert.Equal(SavedAtUtc, heldAt);
+        Assert.Single(await WorkingCopiesAsync(noteId));
+    }
+
+    // design.md §6.7: the base must be one the note has for the caller. With no live note it can only be 0, so a save
+    // at base 1 creates nothing; on a draft it can only be 0, so the draft keeps its text; and with no pending edit it
+    // can only be the current version, so a save at version 1 of a note now at version 2 creates none. None names a
+    // version, as a PUT carries no extensions.
+    [Fact]
+    public async Task A_save_at_base_1_with_no_live_note_is_a_conflict_with_no_extensions_and_creates_nothing()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client, participant.Id, Today, EditBody(1, Guid.NewGuid(), 1, "Jane made toast."));
+
+        await ReadConflictWithoutExtensionsAsync(response);
+        Assert.Empty(await NotesAsync(participant.Id));
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    [Fact]
+    public async Task A_save_at_base_1_on_a_draft_is_a_conflict_and_leaves_the_draft_as_it_was()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var page = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        var listsVersion = await ListsVersionAsync(client, participant.Id, Today);
+        var noteId = await StartAsync(client, participant.Id, Today, FirstBody(listsVersion, page, "Jane"));
+        var copy = await StoredWorkingCopyAsync(noteId);
+
+        using var response = await SaveAsync(
+            client, participant.Id, Today, EditBody(1, page, 2, "Jane made toast and tea."));
+
+        await ReadConflictWithoutExtensionsAsync(response);
+        Assert.Equal(copy, await StoredWorkingCopyAsync(noteId));
+        Assert.Equal(0, Assert.Single(await WorkingCopiesAsync(noteId)).BaseVersionNumber);
+    }
+
+    [Fact]
+    public async Task A_save_at_a_stale_base_with_no_pending_edit_is_a_conflict_and_creates_none()
+    {
+        var (participantId, noteId, _, _) = await AddSubmittedForEditsAsync();
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, SavedAtUtc.AddHours(1), flagReason: null, flaggedVersionNumber: 1);
+        var before = await StoredRowsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        using var response = await SaveAsync(
+            client, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea."));
+
+        await ReadConflictWithoutExtensionsAsync(response);
+        Assert.Empty(await WorkingCopiesAsync(noteId));
+        Assert.Equal(before, await StoredRowsAsync());
+    }
+
+    // A70: a pending edit saves at its own base after someone else has saved a newer version, so the conflict is met at
+    // Save changes, not at each keystroke; its base stays.
+    [Fact]
+    public async Task A_pending_edit_keeps_saving_at_its_own_base_after_a_newer_version_is_saved()
+    {
+        var (participantId, noteId, _, _) = await AddSubmittedForEditsAsync();
+        var page = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var created = await SaveAsync(
+                   client, participantId, TheSecond, EditBody(1, page, 1, "Jane made toast and tea.")))
+        {
+            Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        }
+
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, SavedAtUtc.AddHours(1), flagReason: null, flaggedVersionNumber: 1);
+
+        using var response = await SaveAsync(
+            client, participantId, TheSecond, EditBody(1, page, 2, "Jane made toast, tea and jam."));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var copy = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal((1, "Jane made toast, tea and jam.", 2), (copy.BaseVersionNumber, copy.Narrative, copy.LastSeq));
+    }
+
+    // A70 and design.md §6.3: Start again is a save whose base is the newer current version. It moves the base, and
+    // takes the request's picks, ticks, text and flag, over the same lists as before, as every version of a note has
+    // the snapshot of its draft.
+    [Fact]
+    public async Task Start_again_moves_the_base_to_the_current_version_and_keeps_the_structure()
+    {
+        var (participantId, noteId, lists, goalId) = await AddSubmittedForEditsAsync();
+        var page = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var created = await SaveAsync(
+                   client, participantId, TheSecond, EditBody(1, page, 1, "Jane made toast and tea.")))
+        {
+            Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        }
+
+        var before = Assert.Single(await WorkingCopiesAsync(noteId));
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, SavedAtUtc.AddHours(1), flagReason: null, flaggedVersionNumber: 1);
+
+        using var response = await SaveAsync(
+            client,
+            participantId,
+            TheSecond,
+            EditBody(
+                2, page, 2, "Jane made toast and jam.", false, null, [goalId], [lists.Outing], [lists.OutingItemB]));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var copy = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal((2, "Jane made toast and jam."), (copy.BaseVersionNumber, copy.Narrative));
+        Assert.Equal(
+            before.Groups.Select(group => (group.GroupId, group.Name, group.IsEveryNote)),
+            copy.Groups.Select(group => (group.GroupId, group.Name, group.IsEveryNote)));
+        Assert.Equal(
+            before.Items.Select(item => (item.Section, item.SourceId, item.GroupId, item.Text)),
+            copy.Items.Select(item => (item.Section, item.SourceId, item.GroupId, item.Text)));
+        Assert.Equal(
+            [lists.Outing],
+            copy.Groups.Where(group => group.IsPicked).Select(group => group.GroupId));
+        Assert.Equal(
+            [goalId, lists.OutingItemB],
+            copy.Items.Where(item => item.IsTicked).Select(item => item.SourceId));
+    }
+
+    // A draft page that opened before the note was submitted saves at base 0 against the author's pending edit: the
+    // base is stale, so it is told so, not that another page took the working copy over, though its page and number
+    // would be taken for one.
+    [Fact]
+    public async Task A_draft_page_s_save_against_a_pending_edit_is_a_version_conflict_not_a_takeover()
+    {
+        var (participantId, noteId, _, _) = await AddSubmittedForEditsAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using (var created = await SaveAsync(
+                   client, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea.")))
+        {
+            Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        }
+
+        var copy = await StoredWorkingCopyAsync(noteId);
+
+        using var response = await SaveAsync(
+            client, participantId, TheSecond, Body(Guid.NewGuid(), 5, "Jane made toast and jam."));
+
+        await ReadConflictWithoutExtensionsAsync(response);
+        Assert.Equal(copy, await StoredWorkingCopyAsync(noteId));
+    }
+
+    // Two first saves of one editor's pending edit at once, as from two devices: the lock on the place of the working
+    // copy decides them one after the other, so both are answered 200, the second as a takeover by a page that has not
+    // saved before, and exactly one working copy is left, with no failure.
+    [Fact]
+    public async Task Two_first_saves_of_one_editor_s_pending_edit_at_once_both_answer_200_and_leave_one_working_copy()
+    {
+        var (participantId, noteId, _, _) = await AddSubmittedForEditsAsync();
+        using var one = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var other = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+
+        var responses = await Task.WhenAll(
+            SaveAsync(one, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and tea.")),
+            SaveAsync(other, participantId, TheSecond, EditBody(1, Guid.NewGuid(), 1, "Jane made toast and jam.")));
+
+        try
+        {
+            Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
+        }
+        finally
+        {
+            foreach (var response in responses)
+            {
+                response.Dispose();
+            }
+        }
+
+        var copy = Assert.Single(await WorkingCopiesAsync(noteId));
+        Assert.Equal(1, copy.BaseVersionNumber);
+        Assert.Equal(1, copy.LastSeq);
+    }
+
     private static string DraftPath(Guid participantId, DateOnly noteDate) =>
         string.Create(
             CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}/draft");
@@ -2229,6 +2642,68 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Guid participantId, DateOnly noteDate, Guid authorUserId, Lists lists, params Guid[] picked) =>
         factory.Services.AddSubmittedAsync(seeded.A, new(
             participantId, noteDate, authorUserId, StartedAtUtc, SavedAtUtc, Groups: SourceGroups(lists, picked)));
+
+    // A pending edit's save as the form sends it: on the base given, from the page and with the number given, with the
+    // content on screen and no lists' version, which only a save that creates the note reads.
+    private static object EditBody(
+        int baseVersion,
+        Guid clientId,
+        int seq,
+        string narrative,
+        bool isFlagged = false,
+        string? flagReason = null,
+        IReadOnlyList<Guid>? tickedGoalIds = null,
+        IReadOnlyList<Guid>? pickedGroupIds = null,
+        IReadOnlyList<Guid>? tickedCommonItemIds = null) =>
+        new
+        {
+            baseVersion,
+            clientId,
+            seq,
+            narrative,
+            tickedGoalIds = tickedGoalIds ?? [],
+            pickedGroupIds = pickedGroupIds ?? [],
+            tickedCommonItemIds = tickedCommonItemIds ?? [],
+            isFlagged,
+            flagReason,
+        };
+
+    // A 409 note.version_conflict that names no version, as a PUT's carries no extensions.
+    private static async Task ReadConflictWithoutExtensionsAsync(HttpResponseMessage response)
+    {
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(HttpStatusCode.Conflict));
+        var root = problem.RootElement;
+        Assert.Equal("note.version_conflict", root.GetProperty("code").GetString());
+        Assert.All(
+            new[] { "currentVersion", "createdBy", "createdAtUtc" },
+            extension => Assert.False(root.TryGetProperty(extension, out _)));
+    }
+
+    // A participant of A's own with a note of A's worker for TheSecond, submitted as version 1: a goal ticked, the
+    // lists that AddListsAsync added as groups, Community outing picked, and the note flagged; and their IDs.
+    private async Task<(Guid ParticipantId, Guid NoteId, Lists Lists, Guid GoalId)> AddSubmittedForEditsAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var lists = await AddListsAsync();
+        var goal = await factory.Services.AddGoalAsync(seeded.A, participant.Id, new("Makes own breakfast", 0));
+        var noteId = await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id,
+            TheSecond,
+            seeded.A.WorkerId,
+            StartedAtUtc,
+            SavedAtUtc,
+            Goals: [new(goal.Id, "Makes own breakfast", true)],
+            Groups: SourceGroups(lists, lists.Outing)));
+        return (participant.Id, noteId, lists, goal.Id);
+    }
+
+    private async Task<int> VersionCountAsync(Guid noteId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<int>($"SELECT COUNT(*) AS [Value] FROM [NoteVersion] WHERE [NoteId] = {noteId}")
+            .SingleAsync(TestContext.Current.CancellationToken);
+    }
 
     // A's guide prompts as they are stored now.
     private async Task<string> GuidePromptsAsync()
