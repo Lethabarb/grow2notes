@@ -19,7 +19,7 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # The Linux half of the MelbourneClock check: its tests pass with the machine clock in UTC as well as on Windows
       # (design.md §14 M2).
@@ -100,6 +100,7 @@ jobs:
       - name: Install WebKit for Playwright
         working-directory: src/grow2notes-spa
         run: npx playwright install --with-deps webkit
+        timeout-minutes: 10
 
       - name: Test the formats in WebKit
         working-directory: src/grow2notes-spa
@@ -210,6 +211,7 @@ jobs:
       - name: Install Chromium for Playwright
         working-directory: tests/e2e
         run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
 
       # Running the bundle here also proves it works before a deploy depends on it. The container's certificate is
       # self-signed, hence TrustServerCertificate.
