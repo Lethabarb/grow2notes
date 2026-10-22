@@ -88,10 +88,8 @@ function Note({ participantId, noteDate, editing }: NoteProps) {
   const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
   // At the shared address, a form's read that finds the note submitted between the two reads, as a pending edit's, or
   // as refused to this person, sends the page to read the note again, and show its read view.
-  const readsSubmitted =
-    !editing &&
-    formNeeded &&
-    (isNotEditable(draft.error) || (draft.data !== undefined && 'draft' in draft.data && draft.data.draft.baseVersion > 0));
+  const answeredAsEdit = draft.data !== undefined && 'draft' in draft.data && draft.data.draft.baseVersion > 0;
+  const readsSubmitted = !editing && formNeeded && (isNotEditable(draft.error) || answeredAsEdit);
   const { refetch: readNoteAgain } = note;
   useEffect(() => {
     if (readsSubmitted) {

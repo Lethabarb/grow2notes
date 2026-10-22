@@ -723,10 +723,10 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
     for the notice's version closed, "Editing submitted note (version 2)" above the name, focus on the name and
     "Saved". Press Save changes and look for the read view with the worker's words and the worker's name on the Edited
     line; press Past notes and look for one "Edited" row. (S02.06.03's first and second criteria, on a real phone.)
-73. Copy the address of a submitted note that the worker wrote, add `/edit` to its end, and paste it into a browser signed
-    in as a second worker, who did not write it: look for "You cannot edit this note", "Only the person who wrote it, or
-    a manager, can edit it." and the link "Read the note", with the navigation above and the tab titled "Grow2Notes –
-    Note", and focus on the heading. Press "Read the note" and look for the read view, with no Edit among its links.
+73. Copy the address of a submitted note that the worker wrote, add `/edit` to its end, and paste it into a browser
+    signed in as a second worker, who did not write it: look for "You cannot edit this note", "Only the person who
+    wrote it, or a manager, can edit it." and the link "Read the note", with the navigation above and the tab titled
+    "Grow2Notes – Note", and focus on the heading. Press "Read the note" and look for the read view, with no Edit among its links.
     (S02.06.01's last criterion; empty-loading-error.md's Edit refused row.)
 74. On the laptop with NVDA and Chrome, as the worker on a submitted note of their own: look for Edit read as a link
     before Past notes. Press it and look for the heading read with "Editing submitted note (version 1)" first, then the
@@ -737,15 +737,15 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
     newer version's summary as a button that opens and closes it, and Start again from the latest version as a button;
     look for focus on the form's heading after it. (note-form.md's *Announcements* and *Focus order* for edit mode;
     autosave-status.md's *Behaviour* 10.)
-75. On the iPhone with VoiceOver and Safari, repeat step 74's reading of the Edit link, the heading, the Edited line, the
-    notice and its buttons, and swipe through the form: look for Save changes and Cancel as the last two stops, the
+75. On the iPhone with VoiceOver and Safari, repeat step 74's reading of the Edit link, the heading, the Edited line,
+    the notice and its buttons, and swipe through the form: look for Save changes and Cancel as the last two stops, the
     notice's disclosure announced as expanded and then collapsed after Start again, and no stop on the closed
     version's text. With Voice Control or Voice Access, say "Tap Edit" and "Tap Save changes" and look for each acting.
     (note-form.md's manual pass for edit mode, on the platform that cannot be tested here.)
 76. On the iPhone, open the edit form, change a word and wait for "Saved". Turn on airplane mode, press Save changes
     and look for "Changes not saved: no connection. Try again." above the buttons, the text still in the box and no
     dialog; press Cancel and look for "Not cancelled: no connection. Try again.". Turn airplane mode off, press Save
-    changes and look for the read view with the new text. Then look for the Edited line and, once T18's Version history
-    exists, for exactly one new version, not two. Repeat with
-    airplane mode turned on after pressing Save changes, so that the answer is lost, then off and pressing Save changes
-    again: look again for exactly one new version. (S02.06.01's second criterion and A69, with the retry's key.)
+    changes and look for the read view with the new text. Then look for the Edited line and, once T18's Version
+    history exists, for exactly one new version, not two. Repeat with airplane mode turned on after pressing Save
+    changes, so that the answer is lost, then off and pressing Save changes again: look again for exactly one new
+    version. (S02.06.01's second criterion and A69, with the retry's key.)

@@ -6112,6 +6112,9 @@ describe('The edit page', () => {
     serve(paths(participant).note, aDraft);
     const { router } = renderApp(paths(participant).edit);
     await settle();
+    // The replace remounts the page, which reads the form's own answer afresh before it shows the form.
+    await wait(50);
+    await settle();
 
     expect(router.state.location.pathname).toBe(paths(participant).page);
     expect(router.state.historyAction).toBe('REPLACE');
@@ -6123,6 +6126,9 @@ describe('The edit page', () => {
     const participant = freshParticipant();
     serveNote(participant);
     const { router } = renderApp(paths(participant).edit);
+    await settle();
+    // The replace remounts the page, which reads the form's own answer afresh before it shows the form.
+    await wait(50);
     await settle();
 
     expect(router.state.location.pathname).toBe(paths(participant).page);
@@ -6140,7 +6146,10 @@ describe('The edit page', () => {
 
     expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
     expect(main()).toHaveTextContent('Only the person who wrote it, or a manager, can edit it.');
-    expect(within(main()).getByRole('link', { name: 'Read the note' })).toHaveAttribute('href', paths(participant).page);
+    expect(within(main()).getByRole('link', { name: 'Read the note' })).toHaveAttribute(
+      'href',
+      paths(participant).page,
+    );
     expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument();
     expect(document.title).toBe('Grow2Notes – Note');
     expect(within(main()).queryByRole('button')).toBeNull();
@@ -6268,7 +6277,7 @@ describe('Save changes', () => {
     ]);
   });
 
-  it('shows "Changes not saved: …" above the buttons after a lost answer, with the text kept and no dialog', async () => {
+  it('shows "Changes not saved: …" above the buttons after a lost answer, text kept, no dialog', async () => {
     await openToEdit({ submit: noConnection });
     type(newText);
     await wait(2_000);
@@ -6331,13 +6340,15 @@ describe('Save changes', () => {
     type(newText);
     await wait(2_000);
 
-    await press(saveChangesButton());
+    // Once the busy label shows, the button's name is no longer exactly "Save changes", so it is found only once.
+    const button = saveChangesButton();
+    await press(button);
     await wait(397);
-    expect(saveChangesButton()).toHaveAttribute('aria-disabled', 'true');
-    expect(saveChangesButton()).not.toHaveAttribute('data-busy');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('data-busy');
     await wait(2);
-    expect(saveChangesButton()).toHaveAttribute('data-busy', 'true');
-    expect(saveChangesButton()).toHaveTextContent('Saving changes…');
+    expect(button).toHaveAttribute('data-busy', 'true');
+    expect(button).toHaveTextContent('Saving changes…');
     expect(pageStatus()).toHaveTextContent('Saving changes…');
 
     version.release();
@@ -6390,7 +6401,7 @@ describe('Save changes', () => {
 });
 
 describe('Cancel', () => {
-  it('stops autosave, deletes the pending edit with no save after it, and replaces to the unchanged read view', async () => {
+  it('stops autosave, deletes the pending edit with no save after it, and replaces to the read view', async () => {
     const { participant, router } = await openToEdit();
     type('Jane made toast. Then a nap.');
     await wait(2_000);
@@ -6437,13 +6448,14 @@ describe('Cancel', () => {
     const request = held(noContent);
     await openToEdit({ cancel: request.answer });
 
-    await press(cancelButton());
+    const button = cancelButton();
+    await press(button);
     await wait(397);
-    expect(cancelButton()).toHaveAttribute('aria-disabled', 'true');
-    expect(cancelButton()).not.toHaveAttribute('data-busy');
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).not.toHaveAttribute('data-busy');
     await wait(2);
-    expect(cancelButton()).toHaveAttribute('data-busy', 'true');
-    expect(cancelButton()).toHaveTextContent('Cancelling…');
+    expect(button).toHaveAttribute('data-busy', 'true');
+    expect(button).toHaveTextContent('Cancelling…');
 
     request.release();
     await wait(50);
@@ -6515,7 +6527,7 @@ describe('The version-conflict notice', () => {
 
     const notice = conflictNotice();
     expect(notice).toHaveFocus();
-    expect(within(notice).getByRole('heading', { level: 2 })).toHaveTextContent(
+    expect(within(notice).getByRole('heading', { level: 2, name: /saved version 3/ })).toHaveTextContent(
       `Sam Lee saved version 3 at 5:03${nbsp}pm while you were editing.`,
     );
     expect(notice).toHaveTextContent('Your changes are still below.');

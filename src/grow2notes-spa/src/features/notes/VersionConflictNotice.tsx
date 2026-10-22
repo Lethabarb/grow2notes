@@ -50,8 +50,11 @@ export function VersionConflictNotice({
     refetchOnReconnect: false,
   });
 
+  // The heading exists only once the read has found a newer version, so the section is labelled only then.
+  const headingShown = newer.data?.status === 'Submitted' && newer.data.isEdited;
+
   return (
-    <section ref={ref} tabIndex={-1} aria-labelledby={headingId} className={styles.notice}>
+    <section ref={ref} tabIndex={-1} aria-labelledby={headingShown ? headingId : undefined} className={styles.notice}>
       <LoadRegion queries={[newer]} loading={strings.note.loading} what={strings.note.theNote}>
         {() => {
           const found = newer.data;

@@ -386,7 +386,7 @@ describe('Page not found for a refused region', () => {
 });
 
 describe('You cannot edit this note for a region that a refused edit failed', () => {
-  it('shows in place of the whole screen for a 403 note.not_editable, under the nav, with the route title kept', async () => {
+  it('shows in place of the whole screen for a 403 note.not_editable, under the nav, with the title kept', async () => {
     serveRecord(refusedId, problem(403, 'note.not_editable'));
     const { router } = renderApp(refusedAddress);
     await settle();

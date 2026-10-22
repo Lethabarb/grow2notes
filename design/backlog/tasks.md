@@ -4655,6 +4655,10 @@ and shown the newer version, so nothing is silently overwritten.
     where note-form.md says invalidate, so that the read view never shows the version read before; Past notes and
     `['reviews']` are invalidated, `me` is asked for again after a save, and Today and `['me','drafts']` refresh from the
     form's own unmount. The version-conflict notice's read sits under the same prefix.
+  - The version-conflict notice is labelled by its heading only once the fresh read has shown it, as before that the
+    section has none. The newer version's own section headings ("Goals", "Common items", "Guided notes") inside its
+    open details repeat the form's, as the design has the notice show the newer version through `ReadSections`; they
+    are kept, as the details is the newer version read-only, and a screen reader meets them in that region.
   - Audit: Save changes writes `note.edited` with `{"versionNumber": n + 1}` in the version's transaction, never text;
     starting a pending edit, its autosaves, Start again and Cancel write none (design.md §5.4, §5.6).
   - Permission order: on a submitted note only the author or a stored Manager may read the form, `PUT` or `POST`, at any

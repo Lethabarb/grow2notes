@@ -209,7 +209,8 @@ export function isNotFound(error: unknown): error is ApiError {
 
 /**
  * Whether `error` is the refusal of an edit (`403 note.not_editable`, design.md §6.3): the note exists and the person
- * may read it, but only its author or a manager may edit it, so the screen shows the cannot-edit page in place of itself.
+ * may read it, but only its author or a manager may edit it, so the screen shows the cannot-edit page in place of
+ * itself.
  */
 export function isNotEditable(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 403 && error.code === 'note.not_editable';

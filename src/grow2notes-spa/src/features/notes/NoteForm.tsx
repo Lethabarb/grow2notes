@@ -635,7 +635,8 @@ export function NoteForm({
     }
   }
 
-  // Whether this press repeats the last attempt that went unanswered: the same content on the same base, so the same key.
+  // Whether this press repeats the last attempt that went unanswered: the same content on the same base, so the same
+  // key.
   function repeatedAttempt(content: DraftContent): Attempt | undefined {
     const last = lastAttempt.current;
     const same = last?.baseVersion === base && JSON.stringify(last.content) === JSON.stringify(content);
@@ -651,12 +652,12 @@ export function NoteForm({
     }
   }
 
-  // Save changes (note-form.md *Pressing Submit note*, autosave-status.md *Behaviour* 6), in Submit's order: the checks;
-  // an edit refused to a background save, as the whole page; a conflict waiting, which gets focus again; a takeover or
-  // a failed save, said again; then the check save, the checks again on what it saved, autosave stopped, and the
-  // version with a new key. A press with the content of the last attempt that went unanswered sends no check save, which
-  // would meet the version that attempt may have made, and sends its key again, so that a version it did make answers
-  // `200`.
+  // Save changes (note-form.md *Pressing Submit note*, autosave-status.md *Behaviour* 6), in Submit's order: the
+  // checks; an edit refused to a background save, as the whole page; a conflict waiting, which gets focus again; a
+  // takeover or a failed save, said again; then the check save, the checks again on what it saved, autosave stopped,
+  // and the version with a new key. A press with the content of the last attempt that went unanswered sends no check
+  // save, which would meet the version that attempt may have made, and sends its key again, so that a version it did
+  // make answers `200`.
   async function pressSave() {
     if (cancelling) {
       return;

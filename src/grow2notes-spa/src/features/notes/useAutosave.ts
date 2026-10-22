@@ -257,7 +257,7 @@ type Progress = {
   hiddenOut: Set<Promise<void>>;
   /** A save fell due while one was out, and goes as that one settles. */
   due: boolean;
-  /** The version that saves are based on, which every save sends: 0 for a draft, and Start again moves a pending edit's. */
+  /** The version that saves are based on, which every save sends: 0 for a draft; Start again moves a pending edit's. */
   baseVersion: number;
   /** The note exists: the draft was saved before it opened, or a save from this form was answered. */
   started: boolean;

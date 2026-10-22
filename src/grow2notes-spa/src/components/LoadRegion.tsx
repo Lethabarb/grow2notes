@@ -54,8 +54,8 @@ export function LoadRegion({ queries, loading, what, fallbackHeading, children }
   }, [ready]);
 
   // Thrown for the screens' route error boundary, which shows Page not found, or the cannot-edit page, in place of the
-  // whole screen, so that a screen's <h1> shown at once does not stay beside theirs. Thrown where the failure sentence would show,
-  // once none of the queries is still fetching, so that a `404` waits for the others as the sentence does.
+  // whole screen, so that a screen's <h1> shown at once does not stay beside theirs. Thrown where the failure sentence
+  // would show, once none of the queries is still fetching, so that a `404` waits for the others as the sentence does.
   if (isNotFound(error) || isNotEditable(error)) {
     throw error;
   }
