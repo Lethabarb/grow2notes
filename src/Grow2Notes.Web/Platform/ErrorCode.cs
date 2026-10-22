@@ -14,6 +14,12 @@ internal sealed class ErrorCode
     public const string Extension = "code";
 
     /// <summary>
+    /// A worker who is not the author tried to open or save a pending edit of a submitted note, or to save its
+    /// changes (§6.3), which only its author or a manager may edit. It changes nothing.
+    /// </summary>
+    public static readonly ErrorCode NotEditable = new(StatusCodes.Status403Forbidden, "note.not_editable");
+
+    /// <summary>
     /// Another user started this participant's note for that day (§3.2), and only they can open or save its draft
     /// (§6.3). It includes <c>{authorDisplayName, startedAtUtc}</c>.
     /// </summary>
@@ -27,9 +33,11 @@ internal sealed class ErrorCode
     public static readonly ErrorCode ListsChanged = new(StatusCodes.Status409Conflict, "note.lists_changed");
 
     /// <summary>
-    /// The base version that a save of the note's content works on is no longer the note's current one (§6.7): a submit
-    /// of a note that is already submitted, or an autosave of a draft, whose base is 0, where the caller has no working
-    /// copy of the note, which is submitted. It creates and changes nothing.
+    /// The base version that a save of the note's content works on is no longer one that the note has for the caller
+    /// (§6.7): a submit of a note that is already submitted, a save of Save changes after another version was saved, or
+    /// an autosave whose base the note does not accept. <c>POST {base}/versions</c> adds <c>{currentVersion, createdBy,
+    /// createdAtUtc}</c> when the note has a version; <c>PUT {base}/draft</c> adds none. It creates and changes
+    /// nothing.
     /// </summary>
     public static readonly ErrorCode VersionConflict = new(StatusCodes.Status409Conflict, "note.version_conflict");
 
