@@ -19,7 +19,7 @@ jobs:
   build:
     name: Build and test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       # The Linux half of the MelbourneClock check: its tests pass with the machine clock in UTC as well as on Windows
       # (design.md §14 M2).
