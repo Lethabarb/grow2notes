@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useId, type Ref } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useMe } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
@@ -11,12 +11,15 @@ import { FlagLine, ReadSections } from './ReadView.tsx';
 import styles from './VersionConflictNotice.module.css';
 
 type VersionConflictNoticeProps = {
-  /** The notice's section, which the form focuses when a press of Save changes meets the conflict, or again. */
-  ref: Ref<HTMLElement>;
   participantId: string;
   noteDate: string;
   /** The conflicts met so far, so that a second conflict reads the note afresh and opens the notice anew. */
   conflicts: number;
+  /**
+   * How many times a press of Save changes has asked for focus on the notice, which is given once, for each, when the
+   * notice has its heading to be read by, or its failure and Try again.
+   */
+  focusRequests: number;
   /** Start again has been pressed: the newer version stays, closed, for reference, and the button has gone. */
   restarted: boolean;
   /** Start again from the latest version, given its number. */
@@ -32,10 +35,10 @@ type VersionConflictNoticeProps = {
  * rather than from the 409's own details. A failed read says so, with Try again, in the notice.
  */
 export function VersionConflictNotice({
-  ref,
   participantId,
   noteDate,
   conflicts,
+  focusRequests,
   restarted,
   onStartAgain,
 }: VersionConflictNoticeProps) {
@@ -53,8 +56,24 @@ export function VersionConflictNotice({
   // The heading exists only once the read has found a newer version, so the section is labelled only then.
   const headingShown = newer.data?.status === 'Submitted' && newer.data.isEdited;
 
+  const section = useRef<HTMLElement>(null);
+  const focused = useRef(0);
+  // Focus goes to the notice only once it has something to say, or its failure, so that it is read on arrival.
+  const readable = headingShown || newer.isError;
+  useEffect(() => {
+    if (readable && focusRequests > focused.current) {
+      focused.current = focusRequests;
+      section.current?.focus();
+    }
+  }, [readable, focusRequests]);
+
   return (
-    <section ref={ref} tabIndex={-1} aria-labelledby={headingShown ? headingId : undefined} className={styles.notice}>
+    <section
+      ref={section}
+      tabIndex={-1}
+      aria-labelledby={headingShown ? headingId : undefined}
+      className={styles.notice}
+    >
       <LoadRegion queries={[newer]} loading={strings.note.loading} what={strings.note.theNote}>
         {() => {
           const found = newer.data;

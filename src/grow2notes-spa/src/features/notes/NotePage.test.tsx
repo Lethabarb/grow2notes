@@ -6547,6 +6547,29 @@ describe('The version-conflict notice', () => {
     expect(pageBar().querySelector('#dead-end')).toBeNull();
   });
 
+  it('takes focus only once it has read the newer version, and then has its name', async () => {
+    const opened = await openToEdit({
+      save: inTurn(saved('2026-09-30T23:43:00Z'), conflict, saved('2026-09-30T23:44:00Z')),
+    });
+    const read = held(json(newer()));
+    serve(paths(opened.participant).note, read.answer);
+    type('Jane made toast. Then a nap.');
+    await wait(2_000);
+
+    await pressAndWait(saveChangesButton());
+
+    const waiting = main().querySelector('section[tabindex="-1"]');
+    expect(waiting).not.toBeNull();
+    expect(waiting).not.toHaveFocus();
+    expect(waiting).not.toHaveAttribute('aria-labelledby');
+    read.release();
+    await settle();
+
+    expect(conflictNotice()).toBe(waiting);
+    expect(conflictNotice()).toHaveFocus();
+    expect(conflictNotice()).toHaveAccessibleName(/Sam Lee saved version 3/);
+  });
+
   it('shows without moving focus for a background save that meets a conflict', async () => {
     const opened = await openToEdit({ save: conflict });
     serve(paths(opened.participant).note, json(newer()));

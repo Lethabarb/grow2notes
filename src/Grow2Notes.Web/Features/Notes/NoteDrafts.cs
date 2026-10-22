@@ -380,6 +380,8 @@ internal sealed class NoteDrafts(
     /// </returns>
     public async Task<bool> CancelAsync(
         Actor actor, Guid participantId, DateOnly noteDate, CancellationToken cancellationToken) =>
+        // ExecuteDelete skips the save interceptors, which is safe here: a working copy is not append-only, the delete
+        // needs no tenant stamp, and the tenant query filter still applies to the statement.
         await db.NoteDrafts
             .Where(d => d.EditorUserId == actor.UserId
                 && d.BaseVersionNumber > 0

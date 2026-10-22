@@ -332,7 +332,9 @@ for (const press of ['Save changes', 'Cancel'] as const) {
 
     // The form as it was, its words kept, with nothing said above its buttons, and the request sent only the once.
     await expect(heading(page)).toContainText('Editing submitted note (version 1)');
-    await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue('Went to the shops. Then home.');
+    await expect(main(page).getByRole('textbox', { name: '3. Guided notes' })).toHaveValue(
+      'Went to the shops. Then home.',
+    );
     await expect(main(page).locator('form [role="alert"]')).toBeEmpty();
     expect(await sent()).toBe(1);
   });

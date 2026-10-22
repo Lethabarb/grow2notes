@@ -94,10 +94,11 @@ type Attempt = Pick<Confirmation, 'content' | 'key'> & { baseVersion: number };
 
 /**
  * The version-conflict notice while it shows (note-form.md component 6): how many conflicts have met the form, which
- * opens it anew for each, whether it is due focus, as a press of Save changes met the conflict, and whether Start again
- * has been pressed, after which it stays, closed, for reference, until Save changes succeeds.
+ * opens it anew for each, how many times a press of Save changes has asked for focus on it, which it gives once it has
+ * read the newer version, and whether Start again has been pressed, after which it stays, closed, for reference, until
+ * Save changes succeeds.
  */
-type Conflict = { count: number; focus: boolean; restarted: boolean };
+type Conflict = { count: number; focusRequests: number; restarted: boolean };
 
 /** What the takeover banner in the top bar asks of the form (note-form.md *Changed on another device or tab*). */
 export type NoteFormHandle = {
@@ -206,7 +207,6 @@ export function NoteForm({
   const announce = useAnnounce();
   const box = useRef<HTMLTextAreaElement>(null);
   const notice = useRef<HTMLDivElement>(null);
-  const conflictNotice = useRef<HTMLElement>(null);
   const editing = draft.baseVersion > 0;
   // The version that a pending edit is based on, which Start again and Load move on, and Save changes sends.
   const [base, setBase] = useState(draft.baseVersion);
@@ -303,8 +303,8 @@ export function NoteForm({
       }
 
       if (editing && stopped.code === 'note.version_conflict') {
-        const focus = pressing.current;
-        setConflict((shown) => ({ count: (shown?.count ?? 0) + 1, focus, restarted: false }));
+        const focusRequests = pressing.current ? 1 : 0;
+        setConflict((shown) => ({ count: (shown?.count ?? 0) + 1, focusRequests, restarted: false }));
         return;
       }
 
@@ -330,13 +330,6 @@ export function NoteForm({
       focusPageHeading();
     }
   }, [deadEnd]);
-
-  // Once the notice shows for a conflict that a press met, focus goes to it, scrolled into view.
-  useEffect(() => {
-    if (conflict?.focus === true) {
-      conflictNotice.current?.focus();
-    }
-  }, [conflict]);
 
   // Submit's version, at base 0, and Save changes', at the version being edited: one request, with one key each try.
   const { mutate } = useMutation({
@@ -676,7 +669,7 @@ export function NoteForm({
     }
 
     if (conflict !== undefined && !conflict.restarted) {
-      setConflict({ ...conflict, focus: true });
+      setConflict({ ...conflict, focusRequests: conflict.focusRequests + 1 });
       return;
     }
 
@@ -804,7 +797,7 @@ export function NoteForm({
   function startAgain(version: number) {
     autosave.startAgain(version);
     setBase(version);
-    setConflict((shown) => shown && { ...shown, focus: false, restarted: true });
+    setConflict((shown) => shown && { ...shown, restarted: true });
     focusPageHeading();
   }
 
@@ -830,10 +823,10 @@ export function NoteForm({
       {conflict !== undefined && (
         <VersionConflictNotice
           key={conflict.count}
-          ref={conflictNotice}
           participantId={participantId}
           noteDate={noteDate}
           conflicts={conflict.count}
+          focusRequests={conflict.focusRequests}
           restarted={conflict.restarted}
           onStartAgain={startAgain}
         />

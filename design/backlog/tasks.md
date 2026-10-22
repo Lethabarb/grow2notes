@@ -4668,48 +4668,12 @@ and shown the newer version, so nothing is silently overwritten.
   - The 400 ms busy labels, "Saving changes…" and "Cancelling…", the failure lines "Changes not saved: …" and "Not
     cancelled: …", and the notice's words are the design's, in `src/copy`, approved as written (D67, 9 October
     2026), so no words are the developer's own. The by-hand checks are steps 70 to 76 of ops/first-use-in-test.md.
-
-### Plan
-
-Outcome: the author or a manager edits a submitted note through a private pending edit. Save changes adds one
-version, Cancel deletes only the caller's pending edit, and everyone sees the Edited label.
-
-Design approach: no migration, no new handler class, no new policy. Reuse the draft endpoints, the note form and
-autosave, switching into edit mode whenever the opened draft has `baseVersion > 0`.
-
-- `GET {base}/draft` on a submitted note: `403 note.not_editable` for a worker who is not the author (checked before
-  the base); otherwise the caller's pending edit, or the current version's template (writes nothing).
-- `PUT {base}/draft` gains `baseVersion`. The first PUT at the current version creates the pending edit (200). One
-  base rule: the stored base, or the current version (Start again, which only moves the base); anything else is
-  `409 note.version_conflict`. The working copy is read `WITH (UPDLOCK, HOLDLOCK)`.
-- `DELETE {base}/draft` (new): one `ExecuteDelete` of the caller's row with base > 0; 204, else 404. No 403 (design
-  6.3's row lists none; departs from R18's Cancel clause), no audit.
-- `POST {base}/versions` generalised from base 0 to base n: permission, then Idempotency-Key, then base check, then the
-  working copy at that base. Writes version n+1 and `note.edited`; the flag state on the note is left to T16.
-- `GET {base}` gains `author.id`, `isEdited`, `lastEdit`, `current.versionNumber`; history rows gain
-  `currentVersionNumber` and `isEdited`.
-- SPA: `/edit` route, Edit action, Save changes and Cancel, version-conflict notice with Start again, cannot-edit page,
-  Edited line and tag.
-
-Domain changes: new read models `NoteVersionContent` and `LatestVersion`, `LiveNote.MayBeEditedByAsync`,
-`ErrorCode.NotEditable`, and the DTO fields above.
-
-Reuse: `NoteDrafts.SaveAsync/UpdateAsync`, `FormOf`, `NoteVersions.SubmitAsync` with `VersionOfKeyAsync` and
-`AfterAnotherSaveAsync`, `NoteForm`, `useAutosave`, `ReadSections`, `Tag`, `LoadRegion`.
-
-Decisions where design.md is silent (to become A69 to A72): a Save changes with nothing changed still adds a version;
-a PUT at a pending edit's own stored base keeps saving after a newer version; Cancel answers 204 or 404, never 403; a
-403 mid-edit stops autosave quietly and the next Save changes press shows the cannot-edit page. Interim gap: a flag
-added by an edit does not reach To review until T16.
-
-### Verticals
-
-- v1: Server: pending edits, Save changes at base n, Cancel, Edited read fields, conflict extensions; depends_on: none;
-  R03, R06, R07, R08, R09, R10, R11, R20, R21, R23, R26, R28, R29, R30
-- v2: SPA read side: Edited line, Past notes Edited tag, shared NoteHeading, FlagLine and Tag pieces; depends_on: v1;
-  R17
-- v3: SPA edit mode: /edit route, Edit action, Save changes, Cancel, conflict notice, cannot-edit page, e2e, docs;
-  depends_on: v1, v2; R01, R02, R04, R05, R12, R13, R14, R15, R16, R18, R19, R22, R24, R25, R27, R31, R32
+  - Defaults built as the specs say, unless the owner overturns them: the caption's number is the version being edited,
+    and Start again updates it (note-form.md open question 3); no success message after Save changes or Cancel, focus on
+    the read view's `<h1>` (open question 6); a failed save stays on the form with no dialog (open question 7); a press
+    during "Saving…" runs the check save first (open question 8); a pending edit's row in Your unfinished drafts shows
+    the name and date only (today.md open question 2); and the notice reads the newer version through `GET {base}` as
+    any signed-in user, so a worker who is the author sees it too.
 
 ### Steps
 
