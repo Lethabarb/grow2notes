@@ -163,9 +163,17 @@ const newNote: Draft = {
 /** Alex P.'s note for Jane, as `GET {base}` gives it once submitted at 4:12 pm, unflagged, with no goals. */
 const alexsSubmittedNote: SubmittedNote = {
   status: 'Submitted',
-  author: { displayName: 'Alex P.' },
+  author: { id: '6f3a8c10-0000-4000-8000-000000000002', displayName: 'Alex P.' },
   firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
-  current: { narrative: 'Jane made toast.', goals: [], commonItemGroups: [], isFlagged: false, flagReason: null },
+  isEdited: false,
+  current: {
+    versionNumber: 1,
+    narrative: 'Jane made toast.',
+    goals: [],
+    commonItemGroups: [],
+    isFlagged: false,
+    flagReason: null,
+  },
 };
 
 /**

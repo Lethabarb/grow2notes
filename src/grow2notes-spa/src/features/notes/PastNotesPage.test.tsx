@@ -66,9 +66,16 @@ function daysBefore(date: string, days: number): string {
   return new Date(Date.UTC(y, m - 1, d - days)).toISOString().slice(0, 10);
 }
 
-/** A submitted note on the history, by Alex P. unless another author is given, not flagged unless said. */
-function submitted(noteDate: string, authorDisplayName = 'Alex P.', isFlagged = false): PastNote {
-  return { noteDate, status: 'Submitted', authorDisplayName, isFlagged };
+/** A submitted note on the history, by Alex P. unless another is given, not flagged and not edited unless said. */
+function submitted(noteDate: string, authorDisplayName = 'Alex P.', isFlagged = false, isEdited = false): PastNote {
+  return {
+    noteDate,
+    status: 'Submitted',
+    authorDisplayName,
+    currentVersionNumber: isEdited ? 2 : 1,
+    isEdited,
+    isFlagged,
+  };
 }
 
 /** `count` submitted notes, one a day, newest first, from `newest`. */
@@ -143,9 +150,11 @@ function servePastNotes(notes: PastNote[] = first30, hasMore = true) {
 function serveSubmittedNote(noteDate = '2026-10-01') {
   const note: SubmittedNote = {
     status: 'Submitted',
-    author: { displayName: 'Priya Nair' },
+    author: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
     firstSubmittedAtUtc: `${daysBefore(noteDate, 0)}T06:42:00Z`,
+    isEdited: false,
     current: {
+      versionNumber: 1,
       narrative: 'Jane made toast.',
       goals: [{ text: 'Makes own breakfast', isTicked: true }],
       commonItemGroups: [],
@@ -418,7 +427,14 @@ describe('Past notes once loaded', () => {
   // participant-notes.md items 6, 9 and 10: the date alone names the row; its status, author and tags describe it.
   it("names each row by its date alone, in a <time>, described by its status, author and tags", async () => {
     // A draft's flag is seen by no one else (design.md §3.6), so no draft row shows it, whatever comes.
-    const draft = { noteDate: '2026-09-30', status: 'Draft', authorDisplayName: 'Sam Lee', isFlagged: true };
+    const draft = {
+      noteDate: '2026-09-30',
+      status: 'Draft',
+      authorDisplayName: 'Sam Lee',
+      currentVersionNumber: 0,
+      isEdited: true,
+      isFlagged: true,
+    };
     servePastNotes(
       [submitted('2026-10-01', 'Alex P.', true), draft as unknown as PastNote, submitted('2026-09-29', 'Priya Nair')],
       false,
@@ -440,6 +456,26 @@ describe('Past notes once loaded', () => {
     // Each status word bold, as on Today.
     expect(within(list()).getByText('Draft')).toHaveStyle({ fontWeight: '700' });
     expect(rowDates()).toEqual(['2026-10-01', '2026-09-30', '2026-09-29']);
+  });
+
+  it('shows the Edited tag in the neutral tone after Flagged, on a note with more than one version', async () => {
+    servePastNotes(
+      [
+        submitted('2026-10-01', 'Alex P.', true, true),
+        submitted('2026-09-30', 'Alex P.', false, true),
+        submitted('2026-09-29', 'Alex P.'),
+      ],
+      false,
+    );
+    await openPastNotes();
+
+    const [both, edited, plain] = rowLinks();
+    expect(both).toHaveAccessibleDescription('Submitted, Alex P., Flagged, Edited');
+    const bothTags = within(document.getElementById(both.getAttribute('aria-describedby')!)!);
+    expect(bothTags.getByText('Edited')).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    expect(edited).toHaveAccessibleDescription('Submitted, Alex P., Edited');
+    expect(plain).toHaveAccessibleDescription('Submitted, Alex P.');
+    expect(within(list()).getAllByText('Edited')).toHaveLength(2);
   });
 
   it('has a static top bar, with the back link to Today, when nothing in the app opened it', async () => {

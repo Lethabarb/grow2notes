@@ -316,11 +316,14 @@ type SubmittedOptions = {
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
   reason?: string;
   firstSubmittedAtUtc?: string;
+  /** Who saved the current version, and when, for a note edited since it was submitted; none for one that was not. */
+  lastEdit?: { by: string; atUtc: string };
 };
 
 /**
  * Jane's note as `GET {base}` gives it once submitted: written by Priya Nair, another worker, at 4:42 pm in Melbourne
  * on 1 October 2026 unless given another time, with Breakfast and Sister ticked, and not flagged unless given a reason.
+ * Given a last edit it is at version 2, else at version 1.
  */
 function submittedNote({
   narrative = 'Jane made toast.\nThen a walk to the shops.',
@@ -332,6 +335,7 @@ function submittedNote({
   commonItemGroups = [],
   reason,
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
+  lastEdit,
 }: SubmittedOptions = {}): SubmittedNote {
   const flag =
     reason === undefined
@@ -339,9 +343,10 @@ function submittedNote({
       : ({ isFlagged: true, flagReason: reason } as const);
   return {
     status: 'Submitted',
-    author: { displayName: 'Priya Nair' },
+    author: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
     firstSubmittedAtUtc,
-    current: { narrative, goals, commonItemGroups, ...flag },
+    current: { versionNumber: lastEdit === undefined ? 1 : 2, narrative, goals, commonItemGroups, ...flag },
+    ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };
 }
 
@@ -5390,6 +5395,48 @@ describe('The read view of a submitted note', () => {
     expect(follows(reason, tag)).toBe(true);
   });
 
+  // 7:03 am on Thursday 1 October in UTC is 5:03 pm in Melbourne, the note date; 10:01 pm is 9:01 am on the Friday.
+  it('says Edited and who made the last change, then the time alone when that was on the note date', async () => {
+    serveSubmitted(jane, submittedNote({ lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' } }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    const lines = statusLines();
+    expect(lines).toHaveLength(2);
+    const [byline, edited] = lines;
+    const tag = within(edited).getByText('Edited');
+    expect(tag).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    expect(edited.textContent).toBe(`Edited, last change by Jo Smith, 5:03${nbsp}pm`);
+    expect(shown(edited)).toBe(`Edited last change by Jo Smith, 5:03${nbsp}pm`);
+    expect(edited.querySelector('time')).toHaveAttribute('datetime', '2026-10-01T07:03:00Z');
+    expect(follows(edited, byline)).toBe(true);
+  });
+
+  it('gives the time of the last change with its date when that was on a later day', async () => {
+    serveSubmitted(jane, submittedNote({ lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T23:01:00Z' } }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(shown(statusLines()[1])).toBe(`Edited last change by Jo Smith, Fri 2${nbsp}Oct 2026, 9:01${nbsp}am`);
+  });
+
+  it('shows the Edited line between the byline and the flag line', async () => {
+    serveSubmitted(
+      jane,
+      submittedNote({ reason: 'Jane seemed unwell.', lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' } }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const [byline, edited, flag] = statusLines();
+    expect(shown(byline)).toMatch(/^Written by/);
+    expect(shown(edited)).toMatch(/^Edited last change by/);
+    expect(shown(flag)).toMatch(/^Flagged/);
+    expect(follows(edited, byline)).toBe(true);
+    expect(follows(flag, edited)).toBe(true);
+    expect(follows(within(main()).getByRole('link', { name: 'Past notes' }), flag)).toBe(true);
+  });
+
   // participant-notes.md component 5, the action row, which holds Past notes alone until T14 and T18 add theirs.
   it('has the Past notes link after the byline and the flag line, before Goals', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
@@ -5409,6 +5456,15 @@ describe('The read view of a submitted note', () => {
 
     expect(statusLines()).toHaveLength(1);
     expect(main()).not.toHaveTextContent(/Flagged|Reason/);
+  });
+
+  it('shows no Edited line on a note with one version', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(statusLines()).toHaveLength(1);
+    expect(main()).not.toHaveTextContent(/Edited|last change/);
   });
 
   // checkbox-list.md `TickListRead`: text, never a form control, the state in words after a pause.

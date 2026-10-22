@@ -8,6 +8,7 @@ import { ChronoList } from '../../components/ChronoList.tsx';
 import { LinkRow } from '../../components/LinkRow.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { MetaLine } from '../../components/MetaLine.tsx';
+import type { TagKind } from '../../components/Tag.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
@@ -84,19 +85,34 @@ type LoadedProps = {
   isManager: boolean;
 };
 
+// A row's tags, in the order status-tags.md gives them: Flagged, then Edited. A draft has neither.
+function tagsOf(note: PastNote): TagKind[] {
+  const tags: TagKind[] = [];
+  if (note.status === 'Submitted' && note.isFlagged) {
+    tags.push('flagged');
+  }
+
+  if (note.status === 'Submitted' && note.isEdited) {
+    tags.push('edited');
+  }
+
+  return tags;
+}
+
 /**
  * The list once loaded (participant-notes.md components 3 to 7): the `<h1>`, the caption "Past notes" and the name as
  * stored, never translated; for a manager alone, Edit participant, there even with no notes; then the notes, newest
  * first, 30 at a time with Show older, or "No notes yet for Jane Citizen.". Each row's link names the note's date
  * alone and opens the note, which shows what this person may see of it, as the list cannot tell; its status and author
- * describe it, and Flagged too on a submitted note whose current version is flagged, never on a draft.
+ * describe it, and Flagged too on a submitted note whose current version is flagged, then Edited when it has more than
+ * one version, never on a draft.
  */
 function Loaded({ participant, notes, isManager }: LoadedProps) {
   const name = fullName(participant);
   return (
     <>
       <PageHeading>
-        <span className={styles.caption}>{pageName.pastNotes}</span>{' '}
+        <span className={noteStyles.caption}>{pageName.pastNotes}</span>{' '}
         <span className={noteStyles.name} translate="no">
           {name}
         </span>
@@ -123,7 +139,7 @@ function Loaded({ participant, notes, isManager }: LoadedProps) {
               detail={[
                 <MetaLine
                   parts={[strings.noteStatus[note.status], note.authorDisplayName]}
-                  tags={note.status === 'Submitted' && note.isFlagged ? ['flagged'] : []}
+                  tags={tagsOf(note)}
                 />,
               ]}
             />
