@@ -28,8 +28,9 @@ const saveStatus = (page: Page) => page.locator('#save-status');
 const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
 const editLink = (page: Page) => main(page).getByRole('link', { name: 'Edit', exact: true });
 const pastNotesLink = (page: Page) => main(page).getByRole('link', { name: 'Past notes', exact: true });
-const saveChanges = (page: Page) => main(page).getByRole('button', { name: 'Save changes', exact: true });
-const cancel = (page: Page) => main(page).getByRole('button', { name: 'Cancel', exact: true });
+// Either name, because a busy button renames itself while its request is out.
+const saveChanges = (page: Page) => main(page).getByRole('button', { name: /^(Save changes|Saving changes…)$/ });
+const cancel =(page: Page) => main(page).getByRole('button', { name: /^(Cancel|Cancelling…)$/ });
 // The alert above the buttons, where a request that failed says so.
 const requestAlert = (page: Page) => main(page).locator('form [role="alert"]');
 const byline = (page: Page) => main(page).locator('p').filter({ hasText: /^Written by / });
