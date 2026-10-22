@@ -122,10 +122,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-  // But the save indicator of a draft that a row of Your unfinished drafts reopens, which the form puts in anew with
-  // its first words, "Draft · saved …", so that they are the page's own rather than announced as a change
-  // (autosave-status.md *Behaviour* 8).
-  const announcedLate = liveRegionsAddedWithWords.filter((region) => !/^<p id="save-status"[^>]*>Draft</.test(region));
+  // But the save indicator of a draft or a pending edit that a row of Your unfinished drafts reopens, which the form
+  // puts in anew with its first words, "Draft · saved …" or "Saved …", so that they are the page's own rather than
+  // announced as a change (autosave-status.md *Behaviour* 8).
+  const announcedLate = liveRegionsAddedWithWords.filter(
+    (region) => !/^<p id="save-status"[^>]*>(Draft<|Saved)/.test(region),
+  );
   expect(announcedLate, 'live regions put into the page with their words').toEqual([]);
   expect(await hiddenLiveRegions(page), 'live regions with display: none').toEqual([]);
 });

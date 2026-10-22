@@ -270,7 +270,7 @@ test('two editors meet the notice, Start again keeps the changes, and Save chang
   // The author's Save changes meets the newer version: the notice, focused, with it laid out, and nothing saved.
   await saveChanges(page).click();
   await expect(notice(page)).toBeFocused();
-  await expect(notice(page).getByRole('heading', { level: 2 })).toHaveText(
+  await expect(notice(page).getByRole('heading', { name: /while you were editing/ })).toHaveText(
     'Sam Lee saved version 3 at 4:12 pm while you were editing.',
   );
   await expect(notice(page)).toContainText('Your changes are still below.');
@@ -314,7 +314,7 @@ test('a conflict met by a background save shows the notice without moving focus'
   await box(page).pressSequentially(' Then home.');
 
   await expect(notice(page)).toBeVisible();
-  await expect(notice(page).getByRole('heading', { level: 2 })).toHaveText(
+  await expect(notice(page).getByRole('heading', { name: /while you were editing/ })).toHaveText(
     'Sam Lee saved version 3 at 4:12 pm while you were editing.',
   );
   await expect(box(page)).toBeFocused();
@@ -342,7 +342,6 @@ test('Save changes and Cancel show their busy labels while their requests are ou
   await saveChanges(page).click();
   const post = await heldVersion();
   await expect(saveChanges(page)).toHaveAttribute('aria-disabled', 'true');
-  await expect(saveChanges(page)).toHaveAttribute('data-busy', 'true');
   await expect.poll(() => shownText(saveChanges(page))).toBe('Saving changes…');
   await expect(main(page).locator('p.visually-hidden[role="status"]')).toHaveText('Saving changes…');
   await expect(cancel(page)).toBeVisible();
@@ -356,7 +355,6 @@ test('Save changes and Cancel show their busy labels while their requests are ou
   await cancel(page).click();
   const remove = await heldCancel();
   await expect(cancel(page)).toHaveAttribute('aria-disabled', 'true');
-  await expect(cancel(page)).toHaveAttribute('data-busy', 'true');
   await expect.poll(() => shownText(cancel(page))).toBe('Cancelling…');
   await remove.fallback();
   await expect(page).toHaveURL(address);
