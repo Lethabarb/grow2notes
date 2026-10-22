@@ -7,6 +7,7 @@ let api: typeof ApiModule.api;
 let apiWithHeaders: typeof ApiModule.apiWithHeaders;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
+let isNotEditable: typeof ApiModule.isNotEditable;
 let isNotFound: typeof ApiModule.isNotFound;
 let prepareChanges: typeof ApiModule.prepareChanges;
 let onSessionEnded: typeof SessionModule.onSessionEnded;
@@ -126,7 +127,7 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, apiWithHeaders, ApiError, classify, isNotFound, prepareChanges } = await import('./api.ts'));
+  ({ api, apiWithHeaders, ApiError, classify, isNotEditable, isNotFound, prepareChanges } = await import('./api.ts'));
   ({ onSessionEnded, signInCount } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -940,5 +941,23 @@ describe('isNotFound', () => {
     { failed: 'nothing', error: () => undefined },
   ])('is false for $failed', ({ error }) => {
     expect(isNotFound(error())).toBe(false);
+  });
+});
+
+describe('isNotEditable', () => {
+  it('is true for a 403 note.not_editable', () => {
+    expect(isNotEditable(new ApiError(403, 'note.not_editable'))).toBe(true);
+  });
+
+  it.each([
+    { failed: 'a 403 with another code', error: () => new ApiError(403, 'forbidden') },
+    { failed: 'a 403 with no code', error: () => new ApiError(403) },
+    { failed: 'a 404', error: () => new ApiError(404) },
+    { failed: 'a 409 note.version_conflict', error: () => new ApiError(409, 'note.version_conflict') },
+    { failed: 'status 0', error: () => new ApiError(0) },
+    { failed: 'a TypeError from a bug', error: () => new TypeError('x is not a function') },
+    { failed: 'nothing', error: () => undefined },
+  ])('is false for $failed', ({ error }) => {
+    expect(isNotEditable(error())).toBe(false);
   });
 });

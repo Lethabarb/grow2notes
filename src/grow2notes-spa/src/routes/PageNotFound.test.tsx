@@ -305,15 +305,12 @@ describe('Page not found for a refused region', () => {
     expectPageNotFound();
   });
 
-  it.each([
-    { failure: 'a 403 note.not_editable', answer: problem(403, 'note.not_editable'), failsAfter: 0 },
-    // After its one silent retry.
-    { failure: 'a 500', answer: problem(500), failsAfter: 1000 },
-  ])("shows the region's server sentence for $failure, in the screen", async ({ answer, failsAfter }) => {
-    serveRecord(refusedId, answer);
+  it("shows the region's server sentence for a 500, in the screen", async () => {
+    serveRecord(refusedId, problem(500));
     renderApp(refusedAddress);
 
-    await wait(failsAfter);
+    // After its one silent retry.
+    await wait(1000);
     await settle();
 
     expect(line().textContent).toBe('This record did not load: something went wrong. Try again.');
@@ -384,6 +381,44 @@ describe('Page not found for a refused region', () => {
     expect(client.getQueryState([recordPath(foundId)])?.status).toBe('error');
     expect(within(main()).getByText('Riverbend house')).toBeInTheDocument();
     expect(line()).toBeEmptyDOMElement();
+    expectRecordScreen();
+  });
+});
+
+describe('You cannot edit this note for a region that a refused edit failed', () => {
+  it('shows in place of the whole screen for a 403 note.not_editable, under the nav, with the route title kept', async () => {
+    serveRecord(refusedId, problem(403, 'note.not_editable'));
+    const { router } = renderApp(refusedAddress);
+    await settle();
+
+    const heading = pageHeading();
+    expect(heading).toHaveAccessibleName('You cannot edit this note');
+    expect(screenElements().map((element) => element.textContent)).toEqual([
+      'You cannot edit this note',
+      'Only the person who wrote it, or a manager, can edit it.',
+      'Read the note',
+      '',
+    ]);
+    expect(screen.getAllByRole('heading', { level: 1 })).toEqual([heading]);
+    expect(navItems()).toEqual(['Today', 'Flagged', 'Report', 'Manage']);
+    // It is not Page not found, so the shell keeps the route's own title and marks its section.
+    expect(document.title).toBe('Grow2Notes – User');
+    expect(currentItems()).toEqual(['Manage true']);
+    expect(router.state.location.pathname).toBe(refusedAddress);
+  });
+
+  it('shows after the same address was answered 200 before, and gives way to a screen answered 200 next', async () => {
+    serveRecord(foundId, json({ id: foundId, name: 'Riverbend house' }));
+    serveRecord(refusedId, problem(403, 'note.not_editable'));
+    const { router } = renderApp(foundAddress);
+    await settle();
+
+    await act(() => router.navigate(refusedAddress));
+    await settle();
+    expect(pageHeading()).toHaveAccessibleName('You cannot edit this note');
+
+    await act(() => router.navigate(foundAddress));
+    await settle();
     expectRecordScreen();
   });
 });
