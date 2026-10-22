@@ -4665,6 +4665,10 @@ and shown the newer version, so nothing is silently overwritten.
     base, so a worker who is not the author gets `403 note.not_editable` where T08 and T09 gave `404` and `409`. The
     form's `403` at a background save is A72; Save changes' own `403`, or a press after one, shows the whole page.
   - Save changes with nothing changed adds a version (A69), and the base rules for `PUT` are A70.
+  - Cancel while offline with an unsent change or a stuck save waits on `autosave.stop()`, as Discard's does, so it
+    stays on "Cancelling…" with no message until the connection returns; the failure line shows only when the `DELETE`
+    itself fails. Accepted: it follows the stop-autosave-first rule, and a stuck save settles once the connection is
+    back.
   - The 400 ms busy labels, "Saving changes…" and "Cancelling…", the failure lines "Changes not saved: …" and "Not
     cancelled: …", and the notice's words are the design's, in `src/copy`, approved as written (D67, 9 October
     2026), so no words are the developer's own. The by-hand checks are steps 70 to 76 of ops/first-use-in-test.md.

@@ -742,10 +742,13 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
     notice's disclosure announced as expanded and then collapsed after Start again, and no stop on the closed
     version's text. With Voice Control or Voice Access, say "Tap Edit" and "Tap Save changes" and look for each acting.
     (note-form.md's manual pass for edit mode, on the platform that cannot be tested here.)
-76. On the iPhone, open the edit form, change a word and wait for "Saved". Turn on airplane mode, press Save changes
-    and look for "Changes not saved: no connection. Try again." above the buttons, the text still in the box and no
-    dialog; press Cancel and look for "Not cancelled: no connection. Try again.". Turn airplane mode off, press Save
-    changes and look for the read view with the new text. Then look for the Edited line and, once T18's Version
-    history exists, for exactly one new version, not two. Repeat with airplane mode turned on after pressing Save
-    changes, so that the answer is lost, then off and pressing Save changes again: look again for exactly one new
-    version. (S02.06.01's second criterion and A69, with the retry's key.)
+76. On the iPhone, open the edit form, change a word and wait for "Saved". Then, in this order: (a) turn on airplane
+    mode and press Cancel: look for "Not cancelled: no connection. Try again." above the buttons, the text still in
+    the box and no dialog. (b) Still offline, press Save changes: look for the top bar's "Not saved: no connection.
+    Keep this page open; retrying.", nothing above the buttons, and no dialog. (c) Turn airplane mode off, wait for
+    "Saved", and press Save changes: look for the read view with the new text and the Edited line. (d) For "Changes
+    not saved: no connection. Try again.", open the edit form again, change a word, wait for "Saved", press Save
+    changes and turn on airplane mode at once, so that the request fails or its answer is lost; this is timing-
+    dependent and may take a few tries. Then turn airplane mode off and press Save changes again with nothing typed:
+    look for the read view and, once T18's Version history exists, for exactly one new version, not two. (S02.06.01's
+    second criterion and A69, with the retry's key.)
