@@ -4716,7 +4716,7 @@ added by an edit does not reach To review until T16.
       Server, the endpoint matrix and audit rows.
 - [x] The read side of the SPA (#73): the Edited line and the Edited tag on Past notes, `NoteHeading` with its caption,
       `FlagLine` and `Tag` pieces; Vitest and Playwright tests.
-- [x] The edit mode of the SPA (this task's third vertical; S02.06.01 to S02.06.03 in the SPA, note-form.md components 6
+- [x] The edit mode of the SPA (#74; S02.06.01 to S02.06.03 in the SPA, note-form.md components 6
       and 12, autosave-status.md *Behaviour* 6 and 10): the `/edit` route, Edit first in the read view's action row,
       Save changes and Cancel, the version-conflict notice with Start again, the cannot-edit page, `useAutosave`'s
       `baseVersion`, `startAgain` and `not_editable` dead end; Vitest, and Playwright's `edit-note.spec.ts` with
