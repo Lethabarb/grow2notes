@@ -73,6 +73,11 @@ export const msg = {
    */
   writtenBy: (displayName: string) => `Written by ${displayName}`,
   /**
+   * The read view's Edited line after the Edited tag (status-tags.md item 4): who saved the current version, with the
+   * comma that the time follows.
+   */
+  lastChangeBy: (displayName: string) => `last change by ${displayName},`,
+  /**
    * The read view's flag line after the Flagged tag (design.md §4.4), and a To review row's line after its meta line,
    * there with the reason up to its first line break (flagged.md item 4): the reason, after the form's label for it.
    */

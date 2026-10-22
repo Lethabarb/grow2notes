@@ -389,7 +389,7 @@ export const strings = {
    */
   statusLine: { you: 'You', saved: 'saved', started: 'started' },
   /** Each kind of `Tag`, by its kind (status-tags.md *The mapping*). */
-  tag: { flagged: 'Flagged' },
+  tag: { flagged: 'Flagged', edited: 'Edited' },
   /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), the Common items' heading

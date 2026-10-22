@@ -4,12 +4,13 @@ import type { ParticipantHeader } from './noteQueries.ts';
 
 /**
  * A live note on a participant's history, as `GET /api/participants/{participantId}/notes` gives it to anyone signed
- * in (design.md §6.3): its date, its status, its author's display name as stored, and whether its current version is
- * flagged, which a draft never is. A manager's rows also hold `flagStatus`, which no screen reads until T16.
+ * in (design.md §6.3): its date, its status, its author's display name as stored, its current version's number and
+ * whether it has more than one, and whether that version is flagged, which a draft never is. A draft has no version
+ * (0) and is never edited. A manager's rows also hold `flagStatus`, which no screen reads until T16.
  */
-export type PastNote = { noteDate: string; authorDisplayName: string } & (
-  | { status: 'Draft'; isFlagged: false }
-  | { status: 'Submitted'; isFlagged: boolean }
+export type PastNote = { noteDate: string; authorDisplayName: string; currentVersionNumber: number } & (
+  | { status: 'Draft'; isEdited: false; isFlagged: false }
+  | { status: 'Submitted'; isEdited: boolean; isFlagged: boolean }
 );
 
 /** A page of the history (design.md §6.1 *Lists*): up to 30 live notes, newest first, and whether older ones

@@ -8,11 +8,10 @@ import { Button } from '../../components/Button.tsx';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { LoadRegion } from '../../components/LoadRegion.tsx';
 import { PageBar } from '../../components/PageBar.tsx';
-import { PageHeading } from '../../components/PageHeading.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import textBox from '../../components/TextBox.module.css';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
-import { dateLong, parseDateOnly } from '../../copy/format.ts';
+import { parseDateOnly } from '../../copy/format.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { useBackTo } from '../../routes/routeChange.ts';
@@ -26,6 +25,7 @@ import {
   type ParticipantHeader,
 } from './noteQueries.ts';
 import { NoteForm, type NoteFormHandle } from './NoteForm.tsx';
+import { NoteHeading } from './NoteHeading.tsx';
 import styles from './NotePage.module.css';
 import { ReadView } from './ReadView.tsx';
 import { SaveIndicatorText, type SaveIndicator } from './SaveIndicator.tsx';
@@ -234,24 +234,6 @@ function WarningIcon() {
       <path d="M10 5v6.5" fill="none" stroke="currentColor" strokeWidth="2" />
       <circle cx="10" cy="14.5" r="1.25" fill="currentColor" />
     </svg>
-  );
-}
-
-/**
- * The note's identity `<h1>` (note-identity-header.md), on the form and the read view alike, which takes the focus
- * left pending for it on arrival: the name as stored, never translated, then the note date, so that a screen reader
- * reads the person and the day together, as "Jane Citizen Thursday 1 October 2026".
- */
-function NoteHeading({ name, noteDate }: { name: string; noteDate: string }) {
-  return (
-    <PageHeading>
-      <span className={styles.name} translate="no">
-        {name}
-      </span>{' '}
-      <time className={styles.date} dateTime={noteDate}>
-        {dateLong(parseDateOnly(noteDate))}
-      </time>
-    </PageHeading>
   );
 }
 

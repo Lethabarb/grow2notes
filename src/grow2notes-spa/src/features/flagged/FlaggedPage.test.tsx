@@ -302,18 +302,26 @@ function notePage(row: ToReviewNote): string {
  * Answers the reads of `row`'s note page: its participant's header, and the note as `GET {base}` gives it, submitted
  * by its author when it was flagged, its current version flagged unless a later edit removed the flag.
  */
-function serveNote(row: ToReviewNote) {
+function serveNote(row: ToReviewAnswer) {
   const { participantId: id, givenName, familyName } = row;
   const participant: ParticipantHeader = { id, givenName, familyName, status: 'Active' };
   const flag = row.flagRemovedLater
     ? ({ isFlagged: false, flagReason: null } as const)
     : ({ isFlagged: true, flagReason: row.flagReason } as const);
   const goals = [{ text: 'Catches bus to day program', isTicked: true }];
+  const edit = { by: 'Jo Smith', atUtc: row.flaggedAtUtc };
   const note: SubmittedNote = {
     status: 'Submitted',
-    author: { displayName: row.authorDisplayName },
+    author: { id: '6f3a8c10-0000-4000-8000-000000000002', displayName: row.authorDisplayName },
     firstSubmittedAtUtc: row.flaggedAtUtc,
-    current: { narrative: 'Had lunch at the cafe, then a walk.', goals, commonItemGroups: [], ...flag },
+    ...(row.currentVersionNumber > 1 ? ({ isEdited: true, lastEdit: edit } as const) : ({ isEdited: false } as const)),
+    current: {
+      versionNumber: row.currentVersionNumber,
+      narrative: 'Had lunch at the cafe, then a walk.',
+      goals,
+      commonItemGroups: [],
+      ...flag,
+    },
   };
   serve(`/api/participants/${id}`, json(participant));
   serve(`/api/participants/${id}/notes/${row.noteDate}`, json(note));
