@@ -16,8 +16,9 @@ namespace Grow2Notes.Tests.Features.Notes;
 
 /// <summary>
 /// <c>GET {base}</c> (design.md §6.3), called with the test-only sign-in (<see cref="TestSignIn"/>): a submitted
-/// note's author, first submitted time and current version, its goals in the snapshot's order with its wording and
-/// ticks, the same for a worker and a manager, with no review data (A13, A14); a draft's header, who started it and
+/// note's author, first submitted time, whether it has been edited and by whom last, and current version, its goals in
+/// the snapshot's order with its wording and ticks, the same for a worker and a manager, with no review data (A13,
+/// A14), a pending edit never showing; a draft's header, who started it and
 /// when, whose content it gives to a manager alone, by the role as stored, from its author's working copy (§3.4, A9),
 /// and a draft submitted while a manager reads it as the submitted note; <c>404</c> for no live note, a discarded draft
 /// included (§5.5 item 1), and for another organisation's note (§9.2); as JSON that is never stored (§6.1), and reading
@@ -40,9 +41,9 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
-    // design.md §6.3's fields that this task gives, in its order, and nothing more: no flagStatus, reviews or
+    // design.md §6.3's fields that these tasks give, in its order, and nothing more: no flagStatus, reviews or
     // versionCount for a manager either, even on a note To review, as T16 and T18 add them. The text keeps its line
-    // breaks, and the reason is the flagged version's.
+    // breaks, and the reason is the flagged version's. A note with one version is not edited, and has no last edit.
     [Fact]
     public async Task A_submitted_note_gives_a_worker_and_a_manager_its_author_submitted_time_and_current_version()
     {
@@ -66,21 +67,54 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
         Assert.Equal(worker.GetRawText(), manager.GetRawText());
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "current"],
+            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
             worker.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Submitted", worker.GetProperty("status").GetString());
         var writtenBy = worker.GetProperty("author");
-        Assert.Equal(["displayName"], writtenBy.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(["id", "displayName"], writtenBy.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(author, writtenBy.GetProperty("id").GetGuid());
         Assert.Equal("Priya Nair", writtenBy.GetProperty("displayName").GetString());
         Assert.Equal("2026-10-01T06:42:00Z", worker.GetProperty("firstSubmittedAtUtc").GetString());
+        Assert.False(worker.GetProperty("isEdited").GetBoolean());
         var current = worker.GetProperty("current");
         Assert.Equal(
-            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            ["versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
             current.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(1, current.GetProperty("versionNumber").GetInt32());
         Assert.Equal(narrative, current.GetProperty("narrative").GetString());
         Assert.True(current.GetProperty("isFlagged").GetBoolean());
         Assert.Equal("Jane seemed unwell.", current.GetProperty("flagReason").GetString());
         Assert.Equal([("Makes own breakfast", true)], Goals(current));
+    }
+
+    // design.md §6.3: a note with a version after the first is edited, whoever wrote it, and its last edit is the
+    // current version's creator and time, here the manager's, while the author stays the worker's (D39); the version
+    // shown is the current one, and a pending edit, even a manager's, shows to no one.
+    [Fact]
+    public async Task An_edited_note_gives_the_editor_and_time_of_its_current_version_and_that_version_s_number()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        var editedAtUtc = SubmittedAtUtc.AddHours(1);
+        await factory.Services.AddVersion2Async(
+            seeded.A, noteId, editedAtUtc, flagReason: null, flaggedVersionNumber: 1);
+        await factory.Services.AddPendingEditAsync(seeded.A, noteId, seeded.A.WorkerId, editedAtUtc.AddHours(1));
+
+        var note = await ReadAsync(Caller.WorkerOfA, participant.Id);
+
+        Assert.Equal(
+            ["status", "author", "firstSubmittedAtUtc", "isEdited", "lastEdit", "current"],
+            note.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(seeded.A.WorkerId, note.GetProperty("author").GetProperty("id").GetGuid());
+        Assert.True(note.GetProperty("isEdited").GetBoolean());
+        var lastEdit = note.GetProperty("lastEdit");
+        Assert.Equal(["by", "atUtc"], lastEdit.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(await DisplayNameOfAsync(seeded.A.ManagerId), lastEdit.GetProperty("by").GetString());
+        Assert.Equal(editedAtUtc, lastEdit.GetProperty("atUtc").GetDateTime());
+        var current = note.GetProperty("current");
+        Assert.Equal(2, current.GetProperty("versionNumber").GetInt32());
+        Assert.Equal("Jane made toast. Then a walk to the shops.", current.GetProperty("narrative").GetString());
     }
 
     // Every goal row of the version, in its place (§5.3), with the wording and tick it was saved with (A3), whatever
@@ -281,7 +315,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var note = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "current"],
+            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
             note.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Submitted", note.GetProperty("status").GetString());
         Assert.Equal("Alex P.", note.GetProperty("author").GetProperty("displayName").GetString());
@@ -400,7 +434,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
         var current = raw.GetProperty("current");
         Assert.Equal(
-            ["narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
+            ["versionNumber", "narrative", "isFlagged", "flagReason", "goals", "commonItemGroups"],
             current.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             [
@@ -538,6 +572,15 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             return (goal.GetProperty("text").GetString(), goal.GetProperty("isTicked").GetBoolean());
         }),
     ];
+
+    // A user's display name as stored, read past the tenant query filter with plain SQL.
+    private async Task<string> DisplayNameOfAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<string>($"SELECT [DisplayName] AS [Value] FROM [AspNetUsers] WHERE [Id] = {userId}")
+            .SingleAsync(TestContext.Current.CancellationToken);
+    }
 
     private static string PathOf(Guid participantId) => $"/api/participants/{participantId}/notes/2026-10-01";
 
