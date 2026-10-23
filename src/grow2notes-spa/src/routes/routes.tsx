@@ -9,6 +9,7 @@ import { VersionHistoryPage } from '../features/notes/VersionHistoryPage.tsx';
 import { VersionPage } from '../features/notes/VersionPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
+import { WritePastDayNotePage } from '../features/participants/WritePastDayNotePage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
 import { EditUserPage } from '../features/users/EditUserPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
@@ -150,6 +151,11 @@ export const routes: AppRoute[] = [
                 path: 'manage/participants/:participantId',
                 element: <ParticipantPage />,
                 handle: { pageName: pageName.participant, backKey: 'participant' },
+              },
+              {
+                path: 'manage/participants/:participantId/past-day-note',
+                element: <WritePastDayNotePage />,
+                handle: { pageName: pageName.writePastDayNote },
               },
               {
                 path: 'manage/common-items',

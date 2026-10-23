@@ -63,6 +63,11 @@ export const msg = {
    */
   earlierDayDraft: (noteDate: string) => `${msg.draftIsFor(noteDate)} Submitting it now keeps that date.`,
   /**
+   * The note form's notice on a manager's past-day note (note-form.md *Kinds of note*), in the place of the earlier-day
+   * notice: the note's date and the day it was written, both in `dateLong`.
+   */
+  pastDayNotice: (noteDate: string, writtenOn: string) => `Past-day note for ${noteDate}, written on ${writtenOn}.`,
+  /**
    * A Discard that failed (note-form.md *States* › *Discard dialog*): in the dialog's alert line, or above Submit note
    * when a browser closed the dialog while its request was out.
    */
@@ -207,6 +212,8 @@ export const msg = {
   participantArchived: (name: string) =>
     `${name} is archived, so this page is read-only. They are not on Today and no new notes can be written for them. `
     + 'Their past notes are kept.',
+  /** Write past-day note's whole page for an archived participant (participants.md C4), with their full name. */
+  noNewNotesArchived: (name: string) => `${name} is archived, so no new notes can be written for them.`,
   /**
    * A Send invite or a Resend invite that failed, above its button, and a refusal that names no field of Invite user's
    * (users.md *States*).

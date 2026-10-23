@@ -491,6 +491,17 @@ export const strings = {
    */
   pastNotes: { loading: 'Loading notes…', editParticipant: 'Edit participant' },
   /**
+   * Write past-day note's one field (participants.md C3 and date-navigation.md): its label, its hint, Continue, and
+   * the two messages that Continue can give in place of leaving.
+   */
+  pastDayNote: {
+    noteDate: 'Note date',
+    hint: 'A date before today',
+    continue: 'Continue',
+    enterTheNoteDate: 'Enter the note date',
+    mustBeInThePast: 'Note date must be in the past',
+  },
+  /**
    * Version history (version-history.md *Copy on this screen*), whose caption and failure sentence are its page name:
    * the region's loading line; the line of a note with one version, with no full stop; page B's bold line, for the
    * current version, or, for an earlier one, the words before the link to the current version and the full stop after
