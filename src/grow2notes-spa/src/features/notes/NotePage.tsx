@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type Ref } from 'react';
 import { Navigate, useParams } from 'react-router';
 import { isNotEditable, type StartedBy } from '../../api/api.ts';
-import { useMe } from '../../api/me.ts';
+import { useMe, type Me } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { ButtonGroup } from '../../components/ButtonGroup.tsx';
@@ -11,7 +11,7 @@ import { PageBar } from '../../components/PageBar.tsx';
 import { PageStatus } from '../../components/PageStatus.tsx';
 import textBox from '../../components/TextBox.module.css';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
-import { parseDateOnly } from '../../copy/format.ts';
+import { melbourneDay, parseDateOnly, type Ymd } from '../../copy/format.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { useBackTo } from '../../routes/routeChange.ts';
@@ -107,7 +107,11 @@ function Note({ participantId, noteDate, editing }: NoteProps) {
       void readNoteAgain();
     }
   }, [readsSubmitted, readNoteAgain]);
-  const back = useBackTo({ pastNotes: pageName.pastNotes, flagged: strings.navItem.flagged });
+  const back = useBackTo({
+    pastNotes: pageName.pastNotes,
+    flagged: strings.navItem.flagged,
+    participant: pageName.participant,
+  });
 
   return (
     <PageStatus>
@@ -276,6 +280,19 @@ function WarningIcon() {
   );
 }
 
+/**
+ * The day a past-day note was written, in Melbourne, for the form's notice: for a new note, today, when a manager opens
+ * a date before it, as only a manager can write one; for a note found, the day of its first change, when it is one,
+ * a draft saved on a later day than its date or a submitted note in edit mode.
+ */
+function pastDayWrittenOnOf(found: NoteAnswer, noteDate: string, me: Me): Ymd | undefined {
+  if (found === null) {
+    return me.role === 'Manager' && noteDate < me.today ? parseDateOnly(me.today) : undefined;
+  }
+
+  return found.isPastDayNote ? melbourneDay(found.startedAtUtc) : undefined;
+}
+
 type LoadedProps = {
   /** The form's, for the takeover banner in the top bar. */
   formRef: Ref<NoteFormHandle>;
@@ -341,6 +358,7 @@ function Loaded({
   }
 
   const heading = <NoteHeading name={name} noteDate={noteDate} />;
+  const pastDayWrittenOn = pastDayWrittenOnOf(found, noteDate, me);
 
   return 'startedBy' in opened ? (
     <SomeoneElsesDraft
@@ -360,6 +378,7 @@ function Loaded({
       name={name}
       givenName={participant.givenName}
       draft={opened.draft}
+      pastDayWrittenOn={pastDayWrittenOn}
       indicator={indicator}
       deadEnd={deadEnd}
       onIndicator={onIndicator}

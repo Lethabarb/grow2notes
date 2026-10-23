@@ -6,6 +6,7 @@ import { useMe } from '../../api/me.ts';
 import { BackLink } from '../../components/BackLink.tsx';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
+import { ButtonGroup } from '../../components/ButtonGroup.tsx';
 import { DateOfBirthField } from '../../components/DateOfBirthField.tsx';
 import { ErrorSummary, type FormError } from '../../components/ErrorSummary.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
@@ -312,8 +313,8 @@ type ParticipantProps =
  * Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any
  * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and
  * the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Past notes, a
- * link styled as a secondary button, then, after a rule, Archive participant; T18 adds Write past-day note and T21
- * Export record after Past notes. Nothing is checked before Save, which checks every field in page order and sends
+ * link styled as a secondary button, then Write past-day note, which an archived participant has not, then, after a
+ * rule, Archive participant; T21 adds Export record after them. Nothing is checked before Save, which checks every field in page order and sends
  * nothing while one fails; once a field shows a message, each edit checks it again. A `201` shows "Saved 4:12 pm" from
  * its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's goals query, as they have none,
  * rather than fetching it, and replaces the address with the participant's, in the screen. A save of a participant who
@@ -623,9 +624,16 @@ function Participant({ participant, onAdded }: ParticipantProps) {
       {known !== undefined && (
         <section aria-labelledby={actionsHeadingId} className={styles.actions}>
           <h2 id={actionsHeadingId}>{strings.participantActions.heading}</h2>
-          <Link to={`/participants/${known.id}/notes`} className={buttonClass()}>
-            {pageName.pastNotes}
-          </Link>
+          <ButtonGroup>
+            <Link to={`/participants/${known.id}/notes`} className={buttonClass()}>
+              {pageName.pastNotes}
+            </Link>
+            {!archived && (
+              <Link to={`/manage/participants/${known.id}/past-day-note`} className={buttonClass()}>
+                {pageName.writePastDayNote}
+              </Link>
+            )}
+          </ButtonGroup>
           {!archived && (
             <div className={styles.archive}>
               <RequestAlert>{statusFailure}</RequestAlert>

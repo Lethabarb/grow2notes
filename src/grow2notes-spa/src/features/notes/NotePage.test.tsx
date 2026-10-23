@@ -7301,3 +7301,175 @@ describe('The Review panel', () => {
     expect(document.title).not.toContain('Not decided');
   });
 });
+
+// A manager's past-day note (T18; note-form.md *Kinds of note*, participants.md C): the form's notice, which takes the
+// earlier-day notice's place, and the back link of the note that the Write past-day note page's Continue replaced its
+// own entry with. Today in Melbourne is Thursday 1 October 2026.
+
+/** The past-day notice's words on a note of Monday 28 September 2026, written on Thursday 1 October. */
+const pastDayWords = `Past-day note for Monday 28${nbsp}September 2026, written on Thursday 1${nbsp}October 2026.`;
+
+/** The past-day notice, found by its words, if it shows. */
+function pastDayNotice(): HTMLElement | null {
+  return within(main()).queryByText(/^Past-day note for /)?.closest<HTMLElement>(`.${noticeStyles.notice}`) ?? null;
+}
+
+describe("A past-day note's form", () => {
+  it("shows the notice on a manager's new note of an earlier day, in place of the earlier-day one", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    renderApp(paths(participant, '2026-09-28').page, manager);
+    await settle();
+
+    const notice = pastDayNotice()!;
+    expect(notice.textContent).toBe(pastDayWords);
+    expect(follows(notice, pageHeading())).toBe(true);
+    expect(notice.closest('form')).toBeNull();
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it("shows no notice on a worker's form of an earlier day, as only a manager writes one", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    renderApp(paths(participant, '2026-09-28').page, worker);
+    await settle();
+
+    expect(guidedNotes()).toBeInTheDocument();
+    expect(pastDayNotice()).toBeNull();
+  });
+
+  it('shows the notice alone on a saved past-day draft, the day written being its start in Melbourne', async () => {
+    const participant = freshParticipant();
+    const { note } = paths(participant, '2026-09-28');
+    serveNote(participant, json(savedDraft()), '2026-09-28');
+    // 9:30 am on 1 October in Melbourne, but still 30 September in UTC.
+    serve(
+      note,
+      json({
+        status: 'Draft',
+        authorDisplayName: manager.displayName,
+        startedAtUtc: '2026-09-30T23:30:00Z',
+        isPastDayNote: true,
+      } satisfies DraftNote),
+    );
+    renderApp(paths(participant, '2026-09-28').page, manager);
+    await settle();
+
+    expect(pastDayNotice()?.textContent).toBe(pastDayWords);
+    expect(earlierDayNotice()).toBeNull();
+    expect(within(main()).getAllByText(/^(?:Past-day note for|This draft is for) /)).toHaveLength(1);
+  });
+
+  it('keeps the earlier-day notice on a saved draft of an earlier day that is not a past-day note', async () => {
+    const participant = freshParticipant();
+    const { note } = paths(participant, '2026-09-30');
+    serveNote(participant, json(savedEarlier()), '2026-09-30');
+    serve(
+      note,
+      json({
+        status: 'Draft',
+        authorDisplayName: worker.displayName,
+        startedAtUtc: '2026-09-29T23:05:00Z',
+        isPastDayNote: false,
+      } satisfies DraftNote),
+    );
+    renderApp(paths(participant, '2026-09-30').page, worker);
+    await settle();
+
+    expect(earlierDayNotice()?.textContent).toBe(earlierDayWords);
+    expect(pastDayNotice()).toBeNull();
+  });
+
+  it('shows the notice in edit mode of a past-day note, and no earlier-day notice', async () => {
+    const participant = freshParticipant();
+    const page = paths(participant, '2026-09-28');
+    serve(page.header, json(participant));
+    serve(page.note, json(editedNote({ isPastDayNote: true, startedAtUtc: '2026-09-30T23:30:00Z' })));
+    serve(page.draft, json(editDraft({ isSaved: true, savedAtUtc: '2026-10-01T00:40:00Z' })));
+    renderApp(page.edit, manager);
+    await settle();
+
+    expect(pastDayNotice()?.textContent).toBe(pastDayWords);
+    expect(earlierDayNotice()).toBeNull();
+    expect(follows(pastDayNotice()!, pageHeading())).toBe(true);
+  });
+
+  it('asks "Submit the note for" the name, with its date, once a manager has written the note', async () => {
+    await openOwnNote('2026-09-28', template(), manager);
+    await write();
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleName('Submit the note for Jane Citizen');
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `Monday 28${nbsp}September 2026 Flagged for manager: No`,
+    );
+  });
+});
+
+/** Enters `value` in the Write past-day note page's Note date field, and presses Continue. */
+async function continueWith(value: string) {
+  fireEvent.change(within(main()).getByLabelText('Note date'), { target: { value } });
+  await press(within(main()).getByRole('button', { name: 'Continue' }));
+  await settle();
+}
+
+describe('The back link of a past-day note that Continue replaced the date page with', () => {
+  it('reads Participant when participant detail opened the date page, and pops back to it', async () => {
+    const participant = freshParticipant();
+    serve(
+      '/api/admin/participants?includeArchived=true',
+      json([{ ...participant, dateOfBirth: '1987-03-07', rowVersion: 'AAAAAAAAB9E=' }]),
+    );
+    serve(`/api/admin/participants/${participant.id}/goals?includeArchived=true`, json([]));
+    serveNote(participant, json(template()), '2026-09-28');
+    const { router } = renderApp(`/manage/participants/${participant.id}`, manager);
+    await settle();
+    await press(within(main()).getByRole('link', { name: 'Write past-day note' }));
+    expect(router.state.location.pathname).toBe(`/manage/participants/${participant.id}/past-day-note`);
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.location.pathname).toBe(paths(participant, '2026-09-28').page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Participant');
+    expect(back).toHaveAttribute('href', `/manage/participants/${participant.id}`);
+    await press(back);
+    expect(router.state.location.pathname).toBe(`/manage/participants/${participant.id}`);
+    expect(router.state.historyAction).toBe('POP');
+  });
+
+  it('reads Past notes when Past notes opened the date page, and pops back to it', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    serve(`/api/participants/${participant.id}/notes`, json({ notes: [], hasMore: false }));
+    const { router } = renderApp(`/participants/${participant.id}/notes`, manager);
+    await settle();
+    await press(within(main()).getByRole('link', { name: 'Write past-day note' }));
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.historyAction).toBe('REPLACE');
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Past notes');
+    expect(back).toHaveAttribute('href', `/participants/${participant.id}/notes`);
+    await press(back);
+    expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
+    expect(router.state.historyAction).toBe('POP');
+  });
+
+  it('reads Today when nothing in the app opened the date page, as after a reload', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    const { router } = renderApp(`/manage/participants/${participant.id}/past-day-note`, manager);
+    await settle();
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.location.pathname).toBe(paths(participant, '2026-09-28').page);
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Today');
+    expect(back).toHaveAttribute('href', '/');
+  });
+});

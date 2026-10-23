@@ -14,7 +14,7 @@ import { useAnnounce } from '../../components/pageStatusContext.ts';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { TickListField } from '../../components/TickListField.tsx';
 import { apiErrorCopy } from '../../copy/apiErrors.ts';
-import { dateLong, parseDateOnly } from '../../copy/format.ts';
+import { dateLong, parseDateOnly, type Ymd } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { strings, type Cause } from '../../copy/strings.ts';
 import { messageStore } from '../../routes/messageStore.ts';
@@ -115,6 +115,8 @@ type NoteFormProps = {
   name: string;
   givenName: string;
   draft: Draft;
+  /** The day a past-day note was written, for the notice that takes the earlier-day notice's place. */
+  pastDayWrittenOn: Ymd | undefined;
   /** What the save indicator says, none until autosave first says it. */
   indicator: SaveIndicator | undefined;
   /** The sentence of the dead end that stopped autosave, in the top bar's second row, if one has. */
@@ -126,7 +128,8 @@ type NoteFormProps = {
 
 /**
  * The note form (note-form.md components 2, 4, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note
- * that its checks refused, then the page's `<h1>`; the earlier-day notice, on a draft saved before the form opened,
+ * that its checks refused, then the page's `<h1>`; the past-day notice, on a past-day note, in edit mode too, which takes
+ * the place of the earlier-day notice, on a draft saved before the form opened,
  * never on a new note, saved since or not, as note-form.md's *Kinds of note* are set as the form loads, while it is
  * dated before `me.today`, so that it just appears, unannounced, once `me` gives a day that has passed midnight with
  * the form open (status-messages.md *Per-screen notes*); and the Past notes link; then, in a `<form noValidate>`, the
@@ -195,6 +198,7 @@ export function NoteForm({
   name,
   givenName,
   draft,
+  pastDayWrittenOn,
   indicator,
   deadEnd,
   onIndicator,
@@ -812,13 +816,20 @@ export function NoteForm({
     ...(errors.flagReason === undefined ? [] : [{ message: errors.flagReason, fieldId: reasonId }]),
   ];
 
+  const dateWords = dateLong(parseDateOnly(noteDate));
+  // One notice at most: a past-day note's, which says why the date is not today's, or else an earlier day's draft's.
+  const dayNotice =
+    pastDayWrittenOn !== undefined
+      ? msg.pastDayNotice(dateWords, dateLong(pastDayWrittenOn))
+      : !editing && draft.isSaved && noteDate < me.today
+        ? msg.earlierDayDraft(dateWords)
+        : undefined;
+
   return (
     <>
       <ErrorSummary errors={summary} attempt={attempt} />
       <NoteHeading name={name} noteDate={noteDate} caption={editing ? msg.editingSubmittedNote(base) : undefined} />
-      {!editing && draft.isSaved && noteDate < me.today && (
-        <Notice>{msg.earlierDayDraft(dateLong(parseDateOnly(noteDate)))}</Notice>
-      )}
+      {dayNotice !== undefined && <Notice>{dayNotice}</Notice>}
       <PastNotesLink participantId={participantId} />
       {conflict !== undefined && (
         <VersionConflictNotice
