@@ -280,6 +280,9 @@ describe('Flagged', () => {
   });
 });
 
+// A note's version history, both of whose pages are manager screens, and where it sits.
+const versionHistoryPath = `/participants/${participants[0].id}/notes/2026-09-30/versions`;
+
 describe('Page not found', () => {
   it.each([
     { me: worker, path: '/flagged' },
@@ -287,6 +290,8 @@ describe('Page not found', () => {
     { me: manager, path: '/no-such-page' },
     { me: worker, path: '/no-such-page' },
     { me: worker, path: '/manage' },
+    { me: worker, path: versionHistoryPath },
+    { me: worker, path: `${versionHistoryPath}/2` },
   ])('shows at $path for a $me.role, with the nav still there and no item current', async ({ me, path }) => {
     serveMe(me);
     renderApp(path);
@@ -414,4 +419,30 @@ describe('the page titles', () => {
       }
     });
   });
+});
+
+describe('the version history routes', () => {
+  it.each([
+    { page: 'the version list', path: versionHistoryPath },
+    { page: 'a version', path: `${versionHistoryPath}/2` },
+  ])('give $page a manager, titled "Grow2Notes – Version history"', async ({ path }) => {
+    serveMe(manager);
+    renderApp(path);
+    await settle();
+
+    expect(document.title).toBe('Grow2Notes – Version history');
+  });
+
+  it.each([versionHistoryPath, `${versionHistoryPath}/2`])(
+    'show a worker Page not found at %s, and send nothing about the note',
+    async (path) => {
+      serveMe(worker);
+      renderApp(path);
+      await settle();
+
+      expectPageNotFound();
+      const sent = fetchMock.mock.calls.map(([request]) => request as string);
+      expect(sent.filter((request) => request.includes('/participants/'))).toEqual([]);
+    },
+  );
 });
