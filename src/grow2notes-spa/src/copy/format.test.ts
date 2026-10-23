@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { count, dateLong, datePlain, dateTime, dateToday, parseDateOnly, stamp, time } from './format.ts';
+import {
+  count,
+  dateLong,
+  datePlain,
+  dateTime,
+  dateToday,
+  dayBefore,
+  melbourneDay,
+  parseDateOnly,
+  stamp,
+  time,
+} from './format.ts';
 
 const firstOctober = { y: 2026, m: 10, d: 1 };
 
@@ -29,6 +40,31 @@ describe('the dates', () => {
     expect(dateLong(parseDateOnly('2026-09-30'))).toBe('Wednesday 30\u00A0September 2026');
     expect(dateToday(firstOctober)).toBe('Thursday 1\u00A0October');
     expect(datePlain(firstOctober)).toBe('1\u00A0October 2026');
+  });
+});
+
+describe('dayBefore', () => {
+  it('gives the day before within a month, across a month and across a year', () => {
+    expect(dayBefore('2026-10-15')).toBe('2026-10-14');
+    expect(dayBefore('2026-10-01')).toBe('2026-09-30');
+    expect(dayBefore('2027-01-01')).toBe('2026-12-31');
+  });
+
+  it('gives 29 February before 1 March of a leap year, and 28 February of any other', () => {
+    expect(dayBefore('2028-03-01')).toBe('2028-02-29');
+    expect(dayBefore('2027-03-01')).toBe('2027-02-28');
+  });
+});
+
+describe('melbourneDay', () => {
+  it('gives the Melbourne day on either side of Melbourne midnight', () => {
+    expect(melbourneDay('2026-09-30T13:59:00Z')).toEqual({ y: 2026, m: 9, d: 30 });
+    expect(melbourneDay('2026-09-30T14:00:00Z')).toEqual(firstOctober);
+  });
+
+  it('gives the day on either side of midnight after the change to daylight saving on 4 October 2026', () => {
+    expect(melbourneDay('2026-10-04T12:59:00Z')).toEqual({ y: 2026, m: 10, d: 4 });
+    expect(melbourneDay('2026-10-04T13:00:00Z')).toEqual({ y: 2026, m: 10, d: 5 });
   });
 });
 
