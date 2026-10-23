@@ -895,8 +895,9 @@ signing in again in place (*Session*); the Discard is not sent again after it.
    (`status-messages.md`).
 
 As built (T09): step 2 removes `['today']` alone, as Today has no drafts section until T12, which removes
-`['me', 'drafts']` too. As built (T11): the `201`, and a retry's `200`, carry `flagStatus` to every caller, the retry's
-as the note stands now, so "when the `201` carries a `flagStatus`" is read as when it says `ToReview`; the
+`['me', 'drafts']` too. As built (T11): the `201`, and a retry's `200`, carried `flagStatus` to every caller, the retry's
+as the note stands now (T16: to a manager alone, so a worker's answer has none and the form refreshes `me` only for a
+manager), so "when the `201` carries a `flagStatus`" is read as when it says `ToReview`; the
 `refreshMe()` then shares its request with the shell's own refresh on the move to Today, and a failure of it leaves
 `me` as it was.
 
