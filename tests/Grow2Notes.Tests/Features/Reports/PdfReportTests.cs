@@ -43,7 +43,7 @@ public sealed class PdfReportTests
         Assert.All(letters, letter =>
         {
             Assert.All(letter.Value.EnumerateRunes(), rune => Assert.True(DejaVuSans.Draws(rune)));
-            Assert.Contains("DejaVuSans", letter.FontName);
+            Assert.Contains("DejaVu Sans", letter.FontName);
         });
     }
 
