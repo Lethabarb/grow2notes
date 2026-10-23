@@ -313,7 +313,9 @@ function serveNote(row: ToReviewAnswer) {
   const note: SubmittedNote = {
     status: 'Submitted',
     author: { id: '6f3a8c10-0000-4000-8000-000000000002', displayName: row.authorDisplayName },
+    startedAtUtc: row.flaggedAtUtc,
     firstSubmittedAtUtc: row.flaggedAtUtc,
+    isPastDayNote: false,
     ...(row.currentVersionNumber > 1 ? ({ isEdited: true, lastEdit: edit } as const) : ({ isEdited: false } as const)),
     current: {
       versionNumber: row.currentVersionNumber,

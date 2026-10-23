@@ -389,7 +389,7 @@ export const strings = {
    */
   statusLine: { you: 'You', saved: 'saved', started: 'started' },
   /** Each kind of `Tag`, by its kind (status-tags.md *The mapping*). */
-  tag: { flagged: 'Flagged', edited: 'Edited', toReview: 'To review', reviewed: 'Reviewed' },
+  tag: { flagged: 'Flagged', edited: 'Edited', toReview: 'To review', reviewed: 'Reviewed', pastDay: 'Past-day note' },
   /**
    * The Review panel on a manager's read view (review-panel.md, participant-notes.md component 8 and *States*): its
    * heading, its field's name for the too-long message, its label, hint and buttons, the sentences of the two conflicts
@@ -490,6 +490,20 @@ export const strings = {
    * region's loading line, and Edit participant, the manager's link to the participant's page (design.md §4.4 item 1).
    */
   pastNotes: { loading: 'Loading notes…', editParticipant: 'Edit participant' },
+  /**
+   * Version history (version-history.md *Copy on this screen*), whose caption and failure sentence are its page name:
+   * the region's loading line; the line of a note with one version, with no full stop; page B's bold line, for the
+   * current version, or, for an earlier one, the words before the link to the current version and the full stop after
+   * it; and the suffix after the name of someone other than the note's author who saved a version.
+   */
+  versionHistory: {
+    loading: 'Loading version history…',
+    notEdited: 'Not edited since submit',
+    thisIsCurrent: 'This is the current version.',
+    earlier: 'This is an earlier version. The current version is',
+    fullStop: '.',
+    managerSuffix: ' (manager)',
+  },
   /**
    * The Flagged screen's To review list (flagged.md item 4 and *States*), whose failure sentence starts with the page
    * name, "Flagged notes did not load: …": the region's loading line (L2); the word before a row's flag time, as in

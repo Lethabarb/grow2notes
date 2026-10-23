@@ -65,3 +65,21 @@ describe('Tag', () => {
     }
   });
 });
+
+describe('Tag, Past-day note', () => {
+  it('is Past-day note in the neutral tone, as plain text after a pause', () => {
+    render(
+      <p>
+        <Tag kind="pastDay" /> written by Jo Smith
+      </p>,
+    );
+
+    const tag = screen.getByText('Past-day note');
+    expect(tag.tagName).toBe('SPAN');
+    expect(tag).toHaveClass(styles.tag, styles.neutral);
+    expect(tag).not.toHaveClass(styles.attention);
+    for (const attribute of ['role', 'aria-label', 'tabindex', 'title']) {
+      expect(tag).not.toHaveAttribute(attribute);
+    }
+  });
+});

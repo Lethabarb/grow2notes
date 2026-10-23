@@ -60,9 +60,13 @@ export type NoteReview = {
   comment: string | null;
 };
 
+/** Who wrote a note or saved one of its versions: their id and display name as stored (design.md §6.3). */
+export type NoteAuthor = { id: string; displayName: string };
+
 /**
  * A submitted note, as `GET {base}` gives it to anyone signed in (design.md §6.3): its author's id and display name as
- * stored, when it was first submitted, in UTC, and its current version: its number, the Guided notes text as written,
+ * stored, when it was started and first submitted, in UTC, whether it is a past-day note, which a manager wrote on a
+ * later day than its date, and its current version: its number, the Guided notes text as written,
  * every goal of its snapshot, in the snapshot's order, and the flag, with its reason, which a flagged version always
  * has and an unflagged one never (design.md §5.3, §5.8 step 4). A note with more than one version is edited, and says
  * who saved the current one and when. To a manager alone, it also gives its review status and every review, newest
@@ -70,8 +74,10 @@ export type NoteReview = {
  */
 export type SubmittedNote = {
   status: 'Submitted';
-  author: { id: string; displayName: string };
+  author: NoteAuthor;
+  startedAtUtc: string;
   firstSubmittedAtUtc: string;
+  isPastDayNote: boolean;
   flagStatus?: FlagStatus;
   reviews?: NoteReview[];
   current: { versionNumber: number; narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
@@ -94,10 +100,16 @@ export type DraftRead = {
 };
 
 /**
- * A draft, as `GET {base}` gives it (design.md §6.3): who started it, their display name as stored, and when, in UTC,
- * to everyone; and to a manager, its author's working copy too.
+ * A draft, as `GET {base}` gives it (design.md §6.3): who started it, their display name as stored, when, in UTC, and
+ * whether it is a past-day note, to everyone; and to a manager, its author's working copy too.
  */
-export type DraftNote = { status: 'Draft'; authorDisplayName: string; startedAtUtc: string; current?: DraftRead };
+export type DraftNote = {
+  status: 'Draft';
+  authorDisplayName: string;
+  startedAtUtc: string;
+  isPastDayNote: boolean;
+  current?: DraftRead;
+};
 
 /**
  * What `GET {base}` found (note-form.md *Routes*): a submitted note, which the read view shows; a draft, whose form,

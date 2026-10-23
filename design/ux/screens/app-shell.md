@@ -639,7 +639,9 @@ could land after the new person's. **No timer, no `refetchInterval`, no push** (
 **Queries that opt in to `refetchOnWindowFocus: true`** (the complete list; a screen that needs it adds itself here):
 Today's `['today', date]` and `['me', 'drafts']` (today.md); Flagged's `['reviews', 'toReview']` and
 `['reviews', 'reviewed']` (flagged.md); the Daily report has-notes check (daily-report.md); a participant's Past notes
-list (participant-notes.md); `['admin', 'users']` (users.md). Note content (`['notes', participantId, noteDate]`),
+list (participant-notes.md); a note's version list, `['notes', participantId, noteDate, 'versions']`, the one query
+under the note's key that opts in, so that a manager sees a version that another has just saved (version-history.md);
+`['admin', 'users']` (users.md). Note content (`['notes', participantId, noteDate]`),
 drafts and every setup form's data stay off, so nothing a person is reading or editing changes under them.
 
 ### Live regions (complete list)

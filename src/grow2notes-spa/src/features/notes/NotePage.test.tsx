@@ -31,6 +31,7 @@ import type {
   SubmittedNote,
 } from './noteQueries.ts';
 import notePage from './NotePage.module.css';
+import pastNotesLink from './PastNotesLink.module.css';
 import readView from './ReadView.module.css';
 
 // jsdom does not navigate, so the full page load of Sign out, and of another person's sign-in, is a stand-in that
@@ -270,6 +271,7 @@ const aDraft = json({
   status: 'Draft',
   authorDisplayName: 'Casey Nguyen',
   startedAtUtc: '2026-09-30T23:05:00Z',
+  isPastDayNote: false,
 } satisfies NoteAnswer);
 
 /**
@@ -279,7 +281,7 @@ const aDraft = json({
  */
 function serveAlexsDraft(startedAtUtc: string, noteDate = '2026-10-01', current?: DraftRead) {
   serveNote(jane, startedBy(startedAtUtc), noteDate);
-  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc };
+  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc, isPastDayNote: false };
   serve(paths(jane, noteDate).note, json(current === undefined ? header : { ...header, current }));
 }
 
@@ -319,7 +321,11 @@ type SubmittedOptions = {
   commonItemGroups?: ReadGroup[];
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
   reason?: string;
+  /** When the note was started, 3:00 pm that day unless given. */
+  startedAtUtc?: string;
   firstSubmittedAtUtc?: string;
+  /** Whether a manager wrote the note on a later day than its date; not unless given. */
+  isPastDayNote?: boolean;
   /** Who saved the current version, and when, for a note edited since it was submitted; none for one that was not. */
   lastEdit?: { by: string; atUtc: string };
   /** The note's author, Priya Nair, another worker, unless given. */
@@ -342,7 +348,9 @@ function submittedNote({
   ],
   commonItemGroups = [],
   reason,
+  startedAtUtc = '2026-10-01T05:00:00Z',
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
+  isPastDayNote = false,
   lastEdit,
   author = { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
   versionNumber = lastEdit === undefined ? 1 : 2,
@@ -354,7 +362,9 @@ function submittedNote({
   return {
     status: 'Submitted',
     author,
+    startedAtUtc,
     firstSubmittedAtUtc,
+    isPastDayNote,
     current: { versionNumber, narrative, goals, commonItemGroups, ...flag },
     ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };
@@ -5394,6 +5404,43 @@ describe('The read view of a submitted note', () => {
     );
   });
 
+  // A manager wrote it on Saturday 3 October for Thursday 1 October (design.md D35, A11): the past-day line takes the
+  // byline's place, and the submitted time follows it on a line of its own.
+  it('shows the past-day line, then Submitted, in place of Written by, for a past-day note', async () => {
+    const jo = { id: 'b7a1c0de-0000-4000-8000-000000000003', displayName: 'Jo Smith' };
+    serveSubmitted(
+      jane,
+      submittedNote({
+        author: jo,
+        isPastDayNote: true,
+        startedAtUtc: '2026-10-03T00:14:00Z',
+        firstSubmittedAtUtc: '2026-10-03T00:40:00Z',
+      }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const [pastDay, submitted] = statusLines();
+    expect(pastDay.textContent).toBe(
+      `Past-day note, written by Jo Smith (manager) on Sat 3${nbsp}Oct 2026, 10:14${nbsp}am`,
+    );
+    expect(within(pastDay).getByText('Past-day note')).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    expect(pastDay.querySelector('time')).toHaveAttribute('datetime', '2026-10-03T00:14:00Z');
+    expect(follows(pastDay, pageHeading())).toBe(true);
+    expect(shown(submitted)).toBe(`Submitted Sat 3${nbsp}Oct 2026, 10:40${nbsp}am`);
+    expect(submitted.querySelector('time')).toHaveAttribute('datetime', '2026-10-03T00:40:00Z');
+    expect(follows(submitted, pastDay)).toBe(true);
+    expect(main()).not.toHaveTextContent('Written by');
+  });
+
+  it('shows no past-day line for a note written on its own day', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(main()).not.toHaveTextContent('Past-day note');
+  });
+
   it('shows Flagged, then the reason as written, in the text colour, on a flagged note alone', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Mentioned pain in his left knee\nafter the walk.' }));
     renderApp(paths(jane).page);
@@ -6046,12 +6093,51 @@ describe('The read view, for a note that the viewer may edit', () => {
     expect(router.state.historyAction).toBe('REPLACE');
   });
 
-  it('puts Edit first for a manager, on a note that another wrote', async () => {
+  it('puts Edit, Version history and Past notes, in that order, in the action row of a manager', async () => {
     serveSubmitted(jane);
     renderApp(paths(jane).page, manager);
     await settle();
 
-    expect(within(main()).getAllByRole('link').map((link) => link.textContent)).toEqual(['Edit', 'Past notes']);
+    const links = within(main()).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Edit', 'Version history', 'Past notes']);
+    expect(links[1]).toHaveAttribute('href', `${paths(jane).page}/versions`);
+    expect(links[1]).toHaveClass(pastNotesLink.link);
+    expect(follows(links[1], links[0])).toBe(true);
+  });
+
+  it('shows a manager Version history on a note with one version too', async () => {
+    serveSubmitted(jane, submittedNote({ versionNumber: 1 }));
+    renderApp(paths(jane).page, manager);
+    await settle();
+
+    expect(within(main()).getByRole('link', { name: 'Version history' })).toHaveAttribute(
+      'href',
+      `${paths(jane).page}/versions`,
+    );
+  });
+
+  it('opens the version list from Version history, pushing an entry', async () => {
+    serveSubmitted(jane);
+    const { router } = renderApp(paths(jane).page, manager);
+    await settle();
+    const saved = {
+      versionNumber: 1,
+      createdBy: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+    };
+    serve(`${paths(jane).note}/versions`, json([{ ...saved, createdAtUtc: '2026-10-01T06:42:00Z' }]));
+
+    await press(within(main()).getByRole('link', { name: 'Version history' }));
+
+    expect(router.state.location.pathname).toBe(`${paths(jane).page}/versions`);
+    expect(router.state.historyAction).toBe('PUSH');
+  });
+
+  it('shows a worker who wrote the note no Version history', async () => {
+    serveSubmitted(jane, editedNote());
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).queryByRole('link', { name: 'Version history' })).toBeNull();
   });
 
   it('shows no Edit to a worker who did not write the note', async () => {

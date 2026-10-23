@@ -109,6 +109,23 @@ export const msg = {
   reviewComment: (comment: string) => `Comment: ${comment}`,
   /** A Mark reviewed that failed, in the alert above its button: "Not marked reviewed: no connection. Try again." */
   notMarkedReviewed: (cause: Cause): string => msg.notDone('marked reviewed', cause),
+  /** A version's number, as its row's link and its page's caption (version-history.md *Copy on this screen*). */
+  version: (versionNumber: number) => `Version ${versionNumber}`,
+  /** The link to the current version, in page B's line for an earlier version, with the full stop after it. */
+  versionLink: (versionNumber: number) => `version ${versionNumber}`,
+  /** Page B's loading line, and what its failure sentence says did not load, which is the version's caption. */
+  loadingVersion: (versionNumber: number) => `Loading version ${versionNumber}…`,
+  /** Page A's sentence under its heading, from the highest number in the list, the screen's only source for it. */
+  currentVersionIs: (versionNumber: number) => `The current version is version ${versionNumber}.`,
+  /** Page B's saved-by line for version 1, with the comma that the time follows and the name with any suffix. */
+  submittedBy: (displayName: string) => `Submitted by ${displayName},`,
+  /** Page B's saved-by line for a later version, with the comma that the time follows and the name with any suffix. */
+  savedBy: (displayName: string) => `Saved by ${displayName},`,
+  /**
+   * The past-day line after its tag (status-tags.md, microcopy.md): who wrote the note, always a manager, as only a
+   * manager can write a note for an earlier day, then the time of the note's start, from `format.dateTime()`.
+   */
+  pastDayWrittenBy: (displayName: string) => `written by ${displayName} (manager) on`,
   /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
   noNotesYet: (name: string) => `No notes yet for ${name}.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
