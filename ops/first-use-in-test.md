@@ -752,3 +752,64 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
     dependent and may take a few tries. Then turn airplane mode off and press Save changes again with nothing typed:
     look for the read view and, once T18's Version history exists, for exactly one new version, not two. (S02.06.01's
     second criterion and A69, with the retry's key.)
+
+### Mark reviewed and re-flag, once T16 is in test
+
+These steps hold T16's by-hand checks ([tasks.md](../design/backlog/tasks.md), T16's Notes). They need account A and
+account B, both managers (step 13), the passkey worker of step 18, the kit of steps 26 to 28, and a made-up participant
+with two goals. The worker submits two notes for today with Flag for manager ticked and a made-up reason, such as
+`Asked about a new medication`, so that each manager has a note to review; every word typed is made up (A35). A note
+can be flagged again after a review by a manager's edit, as step 84 does.
+
+77. The database, as in step 26: run `infra/sql/check-database.sql` for test after T16's deploy. Look for PASS on every
+    row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteReview` for
+    `grow2notes_runtime`, and B7 and B8, which list the `NoteReview` table and the `AddNoteReview` migration.
+    (S03.02.01's migration criterion, in test.)
+78. On the laptop with NVDA and Chrome, sign in as account A, choose Flagged, then a To review note. Look for the
+    heading level 1 with the participant's name and the date, and for the headings "1. Goals", "2. Common items", "3.
+    Guided notes" and "Review" in that order when listing headings. Move to the box and look for "Comment (optional)"
+    read as its name, then the hint "Shown in the daily report and record exports, and cannot be changed later" and
+    "You can enter up to 500 characters" as its description, and for the count read as you type. Paste 501 characters
+    and press Mark reviewed: look for "Comment must be 500 characters or less" read as an alert, the box read as
+    invalid with the message, and focus in the box; delete a character and look for the message gone. Press Enter in
+    the box and look for a new line, not a press of the button. Press Mark reviewed with a short comment and look for
+    "Marking reviewed…" said if it takes more than a moment, then focus moving to "Reviewed by" and the manager's name,
+    "on" and the date and time, read as one sentence with "Comment:" and the words typed. (S03.02.01's first criterion;
+    review-panel.md's *Announcements* and *Focus order*; flagged.md's Review view headings and Enter items, in a real
+    screen reader.)
+79. On the iPhone with VoiceOver and Safari, as account B, repeat step 78 on the second note: swipe to the "Review"
+    heading and look for it read as a heading, then the box with its label, hint and count, the button read as "Mark
+    reviewed, button", and, after a press, the record read with focus on it. Turn on airplane mode and press Mark
+    reviewed: look for "Not marked reviewed: no connection. Try again." read as an alert, focus staying on the button
+    and the comment still in the box; turn it off and press again. (S03.02.01 and S03.02.03, on the platform that
+    cannot be tested here.)
+80. On the Android phone with TalkBack and Chrome, repeat step 79 with a new flagged note: the heading, the box with
+    its label, hint and count, the error for 501 characters, "Marking reviewed…" and the record with focus on it. With
+    Voice Access, say "Tap Mark reviewed" and look for it acting. (S03.02.01 and S03.02.03 on the third platform; the
+    visible words are the control's name, flagged.md's label-in-name item.)
+81. On a real phone held upright with the browser at its usual text size, open a To review note as a manager at 375 px
+    wide and look for no sideways scroll, the box and Mark reviewed as wide as the page's column, and the box's text
+    not zooming the page when you tap into it on the iPhone. Press Enter in the box and look for a new line. Dictate a
+    long comment, and look for the count including the dictated words, and the 501st character refused as in step 78.
+    (participant-notes.md's phone layout; flagged.md's Enter item with dictation, which no automated test covers.)
+82. With account A on the laptop and account B on the phone, open the same To review note, type a comment on each, and
+    press Mark reviewed on the laptop first. On the phone press Mark reviewed: look for focus moving to "This note was
+    marked reviewed while you had it open.", account A's record under it, then "Your comment was not saved:" and the
+    words typed on the phone, with no Mark reviewed button. Then reload the note on the phone and look for the Reviewed
+    line only, with no Review heading and no box. (S03.02.03 and A73; participant-notes.md's two-managers case.)
+83. With the passkey worker on the laptop and account A on the phone, open the worker's flagged note on the phone and
+    type a comment. On the laptop press Edit, change a word, and press Save changes. On the phone press Mark reviewed:
+    look for the new text shown in the note, "This note was edited after you opened it. Read the latest version, then
+    mark it reviewed." in the alert, the comment still in the box, and focus on the button. Press Mark reviewed again
+    and look for the record. Open the note's Past notes list as the worker and look for no "To review" or "Reviewed"
+    tag anywhere. (S03.02.03's first criterion and S03.02.02's first criterion, with real people.)
+84. As account A, open a note that is Reviewed and press Edit, change the reason of the flag, and press Save changes.
+    With account B already on Flagged in another window, and without reloading it, return to that tab and look for the
+    note in To review. Open it as account A and look for the To review tag, the Review panel with an empty box and the
+    earlier review no longer shown as the note's state. Review it again, then edit it, untick the flag and save: look
+    for the note still in To review, "Flag removed in a later edit" and the earlier reason. Once T19 is in test, also
+    look for the badge and "To review (n)" counting it without a reload. (S03.01.02 end to end; the badge and the count
+    are S03.03.03's.)
+85. Open a note from Flagged and look for the back link "Flagged". Press Edit and look for the same label above the
+    form; press Cancel and look for the read view with "Flagged" again; press Edit and Save changes, look for "Flagged"
+    once more, and press it to return to the Flagged list. (flagged.md component 7's second bullet.)

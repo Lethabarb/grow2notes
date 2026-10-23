@@ -14,11 +14,11 @@ namespace Grow2Notes.Tests;
 /// sign-in, so with the session cookie as the default scheme. A request that the fallback policy or the
 /// <c>Manager</c> policy refuses is challenged by the cookie, and gets a <c>401</c> problem, as a test-only endpoint
 /// behind the fallback policy, the app's own <c>/api/auth/me</c>, Today's list, the caller's unfinished drafts, a
-/// participant's header, history, note and note form, a note's save, submit and discard, the To review list, its admin
-/// lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation and reactivation show; so
-/// the others show that the page, its files and the health endpoints are <c>AllowAnonymous</c>, and that a request
-/// that no file, page or API endpoint answers still matches one, and gets a <c>404</c>. The app has no database here,
-/// so they run without Docker: a request with no cookie never reaches one.
+/// participant's header, history, note and note form, a note's save, submit, discard and review, the To review list,
+/// its admin lists, its <c>/api/admin/users</c> posted to, and a user's edit, setup link, deactivation and
+/// reactivation show; so the others show that the page, its files and the health endpoints are <c>AllowAnonymous</c>,
+/// and that a request that no file, page or API endpoint answers still matches one, and gets a <c>404</c>. The app has
+/// no database here, so they run without Docker: a request with no cookie never reaches one.
 /// </summary>
 public sealed class SignedOutTests : IAsyncDisposable
 {
@@ -237,6 +237,23 @@ public sealed class SignedOutTests : IAsyncDisposable
 
         using var response = await client.PostAsync(
             $"{Participant}/notes/2026-10-01/discard", content: null, TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Null(response.Headers.Location);
+    }
+
+    // As a note's discard, with Mark reviewed's body: the Manager policy challenges it before the endpoint, which would
+    // need the database that is not here, reviews anything.
+    [Fact]
+    public async Task A_review_of_a_note_with_no_session_gets_a_401_problem_that_is_never_stored()
+    {
+        using var client = app.CreateHttpsClient();
+
+        using var response = await client.PostAsJsonAsync(
+            $"{Participant}/notes/2026-10-01/reviews",
+            new { versionNumber = 1, comment = (string?)null },
+            TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.Unauthorized);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());

@@ -82,6 +82,16 @@ describe("the read view's lines", () => {
     expect(strings.tag.edited).toBe('Edited');
     expect(msg.lastChangeBy('Jo Smith')).toBe('last change by Jo Smith,');
   });
+
+  // participant-notes.md component 4 and *States*, design.md A74: the one formatter of who reviewed a note and when.
+  it('say who reviewed a note, before the date and time, and give its comment and a failed Mark reviewed', () => {
+    expect(strings.tag.reviewed).toBe('Reviewed');
+    expect(msg.reviewedBy('Jo Smith')).toBe('by Jo Smith on');
+    expect(msg.reviewComment('Called her mum.')).toBe('Comment: Called her mum.');
+    expect(msg.notMarkedReviewed('offline')).toBe('Not marked reviewed: no connection. Try again.');
+    expect(msg.notMarkedReviewed('server')).toBe('Not marked reviewed: something went wrong. Try again.');
+    expect(msg.tooLong(strings.review.comment, 500)).toBe('Comment must be 500 characters or less');
+  });
 });
 
 // participant-notes.md *History list* states, word for word.

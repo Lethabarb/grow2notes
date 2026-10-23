@@ -261,6 +261,7 @@ builder.Services.AddScoped<CommonItemGroupChanges>();
 builder.Services.AddScoped<NoteDrafts>();
 builder.Services.AddScoped<NoteVersions>();
 builder.Services.AddScoped<NoteDiscard>();
+builder.Services.AddScoped<NoteReviews>();
 
 // The operator commands (design.md §7.4), one per scope for the same reason: a command's own saves, those of the
 // invite, the reset or the new security stamps it makes, and its audit events share the scope's context, and so the one
@@ -376,6 +377,7 @@ var api = app.MapApiGroup()
     .MapNoteDraftEndpoints()
     .MapNoteVersionEndpoints()
     .MapNoteDiscardEndpoint()
+    .MapNoteReviewEndpoint()
     .MapReviewListEndpoint();
 
 api.MapAdminGroup()

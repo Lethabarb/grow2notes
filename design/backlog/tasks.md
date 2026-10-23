@@ -4742,7 +4742,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T16
-status: new
+status: done
 release: R1
 lane: A
 size: L
@@ -4787,10 +4787,118 @@ or changes its reason sends the note back to To review; removing the tick never 
   items of flagged.md's *Accessibility checklist* that its runs prove whole (T11's Notes, step 6's checklist), and
   leaves to this task the Review view's headings and Enter in the comment, and, with T19, the label-in-name item's
   Mark reviewed and the `aria-disabled` item's Mark reviewed. This task ticks each once its runs prove the whole item.
+- Built (23 October 2026). The decisions where design.md was silent or the plan chose between two readings:
+  - Any manager may review any flagged note, their own included, and one review is enough (A73). The words "Reviewed by
+    {name} on {date, time}" come from one formatter, `msg.reviewedBy` beside `format.dateTime`, for the status line,
+    the panel's record and T19's Reviewed list (A74); the report's wording is T20's.
+  - `flagStatus` on the answer to `POST {base}/versions` is sent to a manager alone, so a worker author's Save changes,
+    or the retry of a keyed save, can never reveal "Reviewed" (the branch review's must-fix). design.md §6.3's versions
+    row says `flagStatus?` and so overrides T11's "to every caller"; the SPA's `refreshMe()` after a flagged Submit is
+    unchanged, as only a manager has a badge. status-tags.md, note-form.md, today.md and tests/README.md are corrected.
+  - `GET {base}` gives a manager `flagStatus` (`None` included) and `reviews[]` (`[]` included), and a worker or a
+    draft neither key. A review is `{versionNumber, reviewedBy: {id, displayName}, reviewedAtUtc, comment | null}`,
+    newest first, every one of them. `reviewedBy.id` lets the client tell its own lost press from another manager's
+    review. The read view uses `reviews[0]`; there is no Earlier reviews block.
+  - The Review panel shows only for a note that is To review when the page opens (participant-notes.md component 8,
+    which wins over review-panel.md *Behaviour* 1 and its Reviewed record panel). It stays mounted for the visit,
+    including after the note refetches as Reviewed. The limitation: a Reviewed note that another manager re-flags by an
+    edit while it is open gets its panel only when the page is next opened.
+  - The removed flag's reason comes from `toReviewForNoteQuery`, on its own key `['reviews', 'toReviewForNote']` with
+    `gcTime` 0 and `staleTime` 0, so a note opened from Past notes long after Flagged was cached never shows a stale
+    reason, and invalidating `['reviews']` still covers it. It is enabled for every To review note a manager opens, so
+    that a refetch within the visit never unmounts the read view or its panel; only a note whose current version is
+    unflagged waits for it, and a failed lookup leaves out the Reason line alone.
+  - The client refuses a comment whose raw text is over 500 characters, the count the person sees; the server checks
+    the comment as sent (422 `validation.failed` under `comment`), then trims it and stores a blank one as null.
+  - There is no date or archive check on a review, as there is none on Save changes: a note of an archived participant
+    can be reviewed. No Idempotency-Key: the conditional update (`FlagStatus = ToReview` and the current version) makes
+    a second write impossible, and a repeated press, or a re-run after a lost answer, gets `409 review.not_current` and
+    writes nothing; the client's refetch recognises its own review at the version on screen as success.
+  - `reason changed` is an exact ordinal comparison of the two versions' stored reasons, so "a" against "A" counts. The
+    flag rule reads the immutable base version and the request, never `Note.FlagStatus`, inside the one guarded update
+    of §5.8 step 5. A re-flag writes no audit event of its own, as `note.edited` records the version.
+  - `NoteReview` has no foreign key from (NoteId, VersionNumber) to `NoteVersion`: §5.3 asks for none and the
+    conditional update has already proved the version current. Its (OrganisationId, ReviewedAtUtc) index is created
+    now, although T19's Reviewed tab is its first reader. The migration `AddNoteReview` was generated with the pinned
+    dotnet-ef 10.0.12, its snapshot diff adds `NoteReview` only, the DENY UPDATE, DELETE is added by hand last in `Up`
+    and the REVOKE first in `Down`, and the SQL from `migrations script AddNoteVersionGroup AddNoteReview` was read and
+    quoted in the v1 PR (#77). v1 also added the table, the migration and the two denies to
+    `infra/sql/check-database.sql`, which `CheckDatabaseScriptTests` reads.
+  - The unsent comment is kept in a module-level `Map` keyed by participant and note date (the screen spec wins over
+    review-panel.md's note ID). It is written on each input, read by the textarea's initialiser, deleted when the form
+    is replaced by a record, and never in storage, the address, router state or the title; a reload loses it.
+  - On a `409` the panel fetches the note again: Reviewed by this manager at the version on screen is success; Reviewed
+    otherwise shows the focused "marked reviewed while you had it open" message, that review's record and "Your comment
+    was not saved:" with the text; still To review shows the edited-since-opened sentence, keeps the comment and sends
+    the newer version on the next press; a failed refetch shows `review.not_current`'s own sentence.
+  - `me` has no `toReviewCount` yet, so the badge and "To review (n)" dropping by one after Mark reviewed, and rising
+    after a re-flag, are T19's (S03.03.03, flagged.md's *View switch and count*). T16 still calls `refreshMe()` after
+    its own review, and its tests assert that `/api/auth/me` is requested and that the row has left To review.
+  - Review fixes (23 October 2026): `note.reviewed` has its row in the shared audit-events test (`AuditEventsTests`,
+    `ReviewNoteAsync`), so T24's guard finds none missing; `SignedOutTests` has the signed-out `POST .../reviews`; and
+    the panel's success and failure work sits in the `useMutation` options, which TanStack Query still runs when the
+    manager leaves the page while the press is out, where `mutate`'s own callbacks would be dropped.
+- Hand-offs closed (23 October 2026): T11's, the panel, flagged.md component 7's label across Edit, Save changes and
+  Cancel (`review.spec.ts`), and `['reviews']` fetched again with `refreshMe()` after Mark reviewed and after Save
+  changes; T11's F03.01 feature check, now ticked, as `FlagRulesTests` holds rows for version 1 and for later versions
+  from each start; and T14's interim flag gap: Save changes now sets To review when a flagged version has a changed or
+  new reason, so a flag added by an edit reaches To review, and the SPA needed no change.
+- The stories (23 October 2026): S03.02.01 and S03.02.03 are done, with every criterion ticked. S03.02.02 and S03.01.02
+  stay `doing`, as S03.01.01 does: the Reviewed list's wording (S03.02.02's third criterion) and the badge (S03.01.02's
+  last criterion) wait for T19, each with a dated Note naming it. F03.02's feature check and F03.01's are ticked.
+- flagged.md's *Accessibility checklist* (23 October 2026): the Review view's headings and Enter in the comment are
+  ticked. The label-in-name and `aria-disabled` items carry a dated note that Mark reviewed's part is proven; T19 ticks
+  them whole with Reviewed, Show older and Try again. The *Screen reader* items wait for the by-hand pass.
+- By hand: steps 77 to 85 of ops/first-use-in-test.md (the database check; NVDA with Chrome, VoiceOver with iOS Safari
+  and TalkBack with Android Chrome on the panel; a real phone at 375 px; two managers on two devices; an author editing
+  while a manager has the note open; a re-flag by an edit seen on Flagged; the back label after Edit, Save changes and
+  Cancel).
+
+### Plan
+
+Planned 23 October 2026. One new append-only table (`NoteReview`), one endpoint, a manager's review fields on two reads,
+the design.md §5.8 flag rules for later versions, and one panel.
+
+- Outcome: a manager marks a To review note reviewed (one conditional update on `Note`, a `NoteReview` row and one
+  `note.reviewed` audit row in one transaction). A stale or repeated press gets 409 `review.not_current`.
+- Domain: `NoteReview` (tenant-owned, append-only, migration `AddNoteReview` with DENY UPDATE, DELETE). `LiveNote`
+  gains `FlagStatus`; `NoteRead` gains `flagStatus` and `reviews` for a manager only. `NoteVersionSaved.flagStatus`
+  becomes manager-only (the review's must-fix; overrides T11's "to every caller" in §6.3).
+- Flag rules: every save decides from the request and the base `NoteVersion` only; a flagged save whose base was
+  unflagged or had a different reason (ordinal) sets To review at the new version, inside the existing guarded update.
+- SPA: Tag kinds, status lines on the read view, Past notes tags, `ReviewPanel` (unsent comment kept in memory only),
+  `toReviewForNoteQuery` (own key, `gcTime` 0) for a removed flag's reason.
+- Reuse: `NoteDiscard` shape, `Policies.Manager`, `StoredRole.IsManagerAsync`, `NoteReadAuthor`, `Button`,
+  `RequestAlert`, `CharacterCount`, `FieldError`, `NoteForm.leaveEditMode`'s invalidations.
+- Decisions where design.md is silent: any manager may review any flagged note, including their own (A73); one
+  formatter "Reviewed by {name} on {date, time}" everywhere (A74); the panel shows only for To review at first render
+  (participant-notes.md item 8 wins over R13); no Idempotency-Key (the conditional update gives one row); no date or
+  archive check on review; badge and "To review (n)" drops are T19's because `me` has no `toReviewCount` yet.
+
+### Verticals
+
+- v1: Server: NoteReview table, Mark reviewed endpoint, manager-only review data on reads; depends_on: none;
+  R01 R02 R04 R05 R06 R07 R12
+- v2: Server: flag rules for later versions (re-flag after an edit); depends_on: v1; R19 R20 R21 R22 R23
+- v3: SPA: review status on read view and Past notes, Review panel, e2e; depends_on: v1;
+  R03 R08 R09 R10 R11 R13 R14 R15 R16 R17 R18 R24 R25 R26 R27 R28
+- v4: Docs and backlog: A73, A74, design.md §6.3, T16 Notes, stories, flagged.md, by-hand checks;
+  depends_on: v1 v2 v3; R30
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The server (#77; S03.02.01 to S03.02.03 on the server, design.md §5.3, §6.3 and §6.4): `NoteReview` and its
+      migration `AddNoteReview` with the DENY, `POST {base}/reviews` and `ErrorCode.ReviewNotCurrent`, a manager's
+      `flagStatus` and `reviews[]` on `GET {base}`, the version answer's manager-only `flagStatus`; integration tests on
+      SQL Server, the model and table tests, the endpoint matrix and the runtime-role lists.
+- [x] The flag rules for later versions (#78; S03.01.02, design.md §5.8): `raisesFlag` inside the one guarded update;
+      `FlagRulesTests`' rows for versions 2 and later, and the refused save.
+- [x] The SPA (#79; S03.02.01 to S03.02.03 and S03.02.02 in the SPA): the To review and Reviewed tags and Past notes
+      tags, the read view's status lines, `ReviewPanel` and its conflicts, `toReviewForNoteQuery`, copy, limits and
+      error codes; Vitest, and Playwright's `review.spec.ts` on `notesStore`'s reviews and flag rules.
+- [x] Docs (#80): this task's Notes; design.md §6.3, §6.4 and §13's A73 and A74; the four stories and F03.01's and
+      F03.02's feature checks; flagged.md's checklist; ops/first-use-in-test.md's steps 77 to 85; the stale "every
+      caller" lines of status-tags.md, note-form.md, today.md and tests/README.md; coverage.md's E03 rows.
 
 ---
 
@@ -4942,6 +5050,12 @@ each screen change or window focus with no polling, and the badge and the (n) bo
   focus item's Show older, and its Back or refresh once the focused row has gone; the words item's current view; and,
   with T16, the label-in-name item's Reviewed and Show older and the `aria-disabled` item's Show older. This task
   ticks each once its runs prove the whole item, and the *Screen reader* ones once the by-hand pass has heard them.
+- From T16 (23 October 2026): `me` has no `toReviewCount`, so the badge and "To review (n)" are built here, and the
+  halves that wait for them are this task's with S03.03.03: S03.01.02's last criterion (the badge after Save changes),
+  the "(n)" and badge dropping after Mark reviewed (flagged.md *View switch and count*), and the label-in-name and
+  `aria-disabled` items of flagged.md's checklist, which carry a dated note that Mark reviewed's part is proven. The
+  Reviewed list uses `msg.reviewedBy` with `format.dateTime` (A74), "reviewed by Sam Lee on Fri 2 Oct 2026, 9:30 am", in
+  place of chronological-list.md's row without "on"; S03.02.02's third criterion is ticked when it does.
 
 ### Steps
 

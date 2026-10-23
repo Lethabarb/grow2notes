@@ -1097,7 +1097,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     flagReason,
   });
   expect(answer.request().headers()['idempotency-key']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-/);
-  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String), flagStatus: 'ToReview' });
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: expect.any(String) });
 
   // Today, with the banner focused and Jane's row Submitted by "You", flagged.
   await expect(phone).toHaveURL('/');
@@ -1107,8 +1107,11 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     new RegExp(`^Submitted · You · ${anyTime} Flagged$`),
   );
 
-  /** Expects the read view of the note that Riley submitted, as anyone in the organisation sees it. */
-  async function expectRileysNote(on: Page) {
+  /**
+   * Expects the read view of the note that Riley submitted. A worker has no text box, while a manager, as the note is
+   * flagged and so To review, has the Review panel's one comment box and its Mark reviewed button.
+   */
+  async function expectRileysNote(on: Page, viewer: 'worker' | 'manager') {
     await expect(heading(on)).toBeFocused();
     await expect(heading(on)).toHaveText(new RegExp(`^${janeCitizen.name}\\s\\w+day \\d{1,2}\\s\\w+ \\d{4}$`));
     await expect.poll(() => shownText(byline(on))).toMatch(
@@ -1118,7 +1121,13 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     await expect(readGoals(on)).toHaveText([`${breakfast.text}, ticked`, `${bus.text}, not ticked`]);
     await expect(readText(on)).toHaveText(sentence);
     await expect(main(on).getByRole('checkbox')).toHaveCount(0);
-    await expect(main(on).getByRole('textbox')).toHaveCount(0);
+    if (viewer === 'worker') {
+      await expect(main(on).getByRole('textbox')).toHaveCount(0);
+    } else {
+      await expect(main(on).getByRole('textbox')).toHaveCount(1);
+      await expect(main(on).getByRole('textbox', { name: 'Comment (optional)', exact: true })).toBeVisible();
+      await expect(main(on).getByRole('button', { name: 'Mark reviewed', exact: true })).toBeVisible();
+    }
     await expect(saveStatus(on)).toHaveCount(0);
   }
 
@@ -1127,7 +1136,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
   await row(phone, janeCitizen.name).click();
   expect((await read).status()).toBe(200);
   await expect(phone).toHaveURL(address);
-  await expectRileysNote(phone);
+  await expectRileysNote(phone, 'worker');
   await pastNotesLink(phone).click();
   await expect(phone).toHaveURL(`/participants/${id}/notes`);
   await expect(heading(phone)).toBeFocused();
@@ -1139,7 +1148,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
   );
   await phone.locator('#page-bar').getByRole('link', { name: 'Note', exact: true }).click();
   await expect(phone).toHaveURL(address);
-  await expectRileysNote(phone);
+  await expectRileysNote(phone, 'worker');
   await expectNothingKept(phone, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason, 'submitted');
 
   // The manager's Today shows the note as Riley's, flagged, and opens the same read view.
@@ -1148,7 +1157,7 @@ test('signed in for real at 375 px, a worker flags and submits a note: Today, th
     new RegExp(`^Submitted · Riley Sample · ${anyTime} Flagged$`),
   );
   await row(page, janeCitizen.name).click();
-  await expectRileysNote(page);
+  await expectRileysNote(page, 'manager');
   await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason);
 
   // The other organisation's manager meets Page not found at the note and at its Past notes.
@@ -1185,16 +1194,12 @@ test('a lost answer to Submit, tried again in the confirmation with the same key
   await expect(confirmButton(page)).toBeFocused();
   expect(store.submitted(jane.id, worker.today)).toMatchObject({ narrative: 'Went to the shops.' });
 
-  // Pressed again: the same key, answered 200 with the version already made, unflagged, and Today.
+  // Pressed again: the same key, answered 200 with the version already made, and Today.
   const retried = page.waitForResponse(isSubmit);
   await confirmButton(page).click();
   const answer = await retried;
   expect(answer.status()).toBe(200);
-  expect(await answer.json()).toEqual({
-    versionNumber: 1,
-    createdAtUtc: '2026-10-01T06:12:00.000Z',
-    flagStatus: 'None',
-  });
+  expect(await answer.json()).toEqual({ versionNumber: 1, createdAtUtc: '2026-10-01T06:12:00.000Z' });
   await expect(banner(page)).toBeFocused();
   await expect(banner(page)).toHaveText('Note for Jane Citizen submitted');
   const [first, second] = store.submits;

@@ -32,6 +32,8 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
 
     public DbSet<NoteDraft> NoteDrafts => Set<NoteDraft>();
 
+    public DbSet<NoteReview> NoteReviews => Set<NoteReview>();
+
     public DbSet<NoteVersion> NoteVersions => Set<NoteVersion>();
 
     public DbSet<NoteVersionGroup> NoteVersionGroups => Set<NoteVersionGroup>();
@@ -355,6 +357,25 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
                 "([Section] = 1 AND [GoalId] IS NOT NULL AND [CommonItemId] IS NULL AND [GroupPosition] IS NULL)"
                 + " OR ([Section] = 2 AND [CommonItemId] IS NOT NULL AND [GoalId] IS NULL"
                 + " AND [GroupPosition] IS NOT NULL)"));
+        });
+
+        builder.Entity<NoteReview>(review =>
+        {
+            // Composite, so the database keeps a review within its note's and its reviewer's organisation (design.md
+            // §5.1, Tenancy). Deliberately no foreign key to the reviewed version: the review's conditional update
+            // already proves it the note's current one (§5.3).
+            review.HasOne<Note>().WithMany()
+                .HasForeignKey(r => new { r.OrganisationId, r.NoteId })
+                .HasPrincipalKey(n => new { n.OrganisationId, n.Id });
+            review.HasOne<ApplicationUser>().WithMany()
+                .HasForeignKey(r => new { r.OrganisationId, r.ReviewedByUserId })
+                .HasPrincipalKey(u => new { u.OrganisationId, u.Id });
+
+            review.Property(r => r.Comment).HasMaxLength(Limits.ReviewComment);
+
+            // A note's reviews, newest first, for the read view; and the organisation's, for the Reviewed list (§5.3).
+            review.HasIndex(r => new { r.NoteId, r.ReviewedAtUtc });
+            review.HasIndex(r => new { r.OrganisationId, r.ReviewedAtUtc });
         });
 
         // Deliberately no relationships, so the table has no foreign keys (design.md §5.3).

@@ -5,6 +5,7 @@ using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Notes;
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -41,9 +42,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
-    // design.md §6.3's fields that these tasks give, in its order, and nothing more: no flagStatus, reviews or
-    // versionCount for a manager either, even on a note To review, as T16 and T18 add them. The text keeps its line
-    // breaks, and the reason is the flagged version's. A note with one version is not edited, and has no last edit.
+    // design.md §6.3's fields that these tasks give, in its order, and nothing more: no versionCount, as T18 adds it.
+    // A manager has the flag status and the reviews after the version, and a worker neither, even on a note To
+    // review. The text keeps its line breaks, and the reason is the flagged version's. A note with one version is not
+    // edited, and has no last edit.
     [Fact]
     public async Task A_submitted_note_gives_a_worker_and_a_manager_its_author_submitted_time_and_current_version()
     {
@@ -65,7 +67,11 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var worker = await ReadAsync(Caller.WorkerOfA, participant.Id);
         var manager = await ReadAsync(Caller.ManagerOfA, participant.Id);
 
-        Assert.Equal(worker.GetRawText(), manager.GetRawText());
+        Assert.Equal(
+            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current", "flagStatus", "reviews"],
+            manager.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("ToReview", manager.GetProperty("flagStatus").GetString());
+        Assert.Equal(0, manager.GetProperty("reviews").GetArrayLength());
         Assert.Equal(
             ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
             worker.EnumerateObject().Select(property => property.Name));
@@ -85,6 +91,67 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.True(current.GetProperty("isFlagged").GetBoolean());
         Assert.Equal("Jane seemed unwell.", current.GetProperty("flagReason").GetString());
         Assert.Equal([("Makes own breakfast", true)], Goals(current));
+    }
+
+    // A manager always has a submitted note's flag status, None included, and its reviews, none included.
+    [Fact]
+    public async Task A_manager_gets_flagStatus_None_and_no_reviews_for_a_note_never_flagged()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc));
+
+        var note = await ReadAsync(Caller.ManagerOfA, participant.Id);
+
+        Assert.Equal("None", note.GetProperty("flagStatus").GetString());
+        Assert.Equal(JsonValueKind.Array, note.GetProperty("reviews").ValueKind);
+        Assert.Equal(0, note.GetProperty("reviews").GetArrayLength());
+    }
+
+    // A worker never learns that a manager reviewed their note: neither key, and nothing of the review's comment, which
+    // is the manager's alone (A9). The same holds for a worker whose session names Manager, as the role is read as
+    // stored.
+    [Fact]
+    public async Task A_worker_gets_neither_flagStatus_nor_reviews_nor_a_review_s_comment_for_a_reviewed_note()
+    {
+        const string comment = "Called Sam's mum.";
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc, IsFlagged: true,
+            FlagReason: "Jane seemed unwell.", FlagStatus: FlagStatus.Reviewed));
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+            db.NoteReviews.Add(new()
+            {
+                OrganisationId = seeded.A.OrganisationId,
+                NoteId = noteId,
+                VersionNumber = 1,
+                ReviewedByUserId = seeded.A.ManagerId,
+                ReviewedAtUtc = SubmittedAtUtc.AddHours(1),
+                Comment = comment,
+            });
+            using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(seeded.A.OrganisationId))
+            {
+                await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        using var namedManager = ClientFor(Caller.WorkerOfA);
+        namedManager.DefaultRequestHeaders.Add(TestSignIn.RoleHeader, nameof(UserRole.Manager));
+        var viaWorker = await ReadAsync(Caller.WorkerOfA, participant.Id);
+        var viaNamedManager = await ReadAsync(namedManager, participant.Id);
+        var manager = await ReadAsync(Caller.ManagerOfA, participant.Id);
+
+        foreach (var worker in new[] { viaWorker, viaNamedManager })
+        {
+            Assert.Equal(
+                ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
+                worker.EnumerateObject().Select(property => property.Name));
+            Assert.DoesNotContain("Sam", worker.GetRawText(), StringComparison.Ordinal);
+        }
+
+        Assert.Equal(comment, manager.GetProperty("reviews")[0].GetProperty("comment").GetString());
     }
 
     // design.md §6.3: a note with a version after the first is edited, whoever wrote it, and its last edit is the
@@ -315,7 +382,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var note = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
+            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current", "flagStatus", "reviews"],
             note.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Submitted", note.GetProperty("status").GetString());
         Assert.Equal("Alex P.", note.GetProperty("author").GetProperty("displayName").GetString());

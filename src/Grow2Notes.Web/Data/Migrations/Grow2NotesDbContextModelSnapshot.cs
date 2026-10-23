@@ -478,6 +478,45 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.ToTable("NoteDraft");
                 });
 
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteReview", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("NoteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganisationId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("ReviewedAtUtc")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<Guid>("ReviewedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NoteId", "ReviewedAtUtc");
+
+                    b.HasIndex("OrganisationId", "NoteId");
+
+                    b.HasIndex("OrganisationId", "ReviewedAtUtc");
+
+                    b.HasIndex("OrganisationId", "ReviewedByUserId");
+
+                    b.ToTable("NoteReview");
+                });
+
             modelBuilder.Entity("Grow2Notes.Web.Data.NoteVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -869,6 +908,23 @@ namespace Grow2Notes.Web.Data.Migrations
                     b.HasOne("Grow2Notes.Web.Data.Note", null)
                         .WithMany()
                         .HasForeignKey("OrganisationId", "NoteId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Grow2Notes.Web.Data.NoteReview", b =>
+                {
+                    b.HasOne("Grow2Notes.Web.Data.Note", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "NoteId")
+                        .HasPrincipalKey("OrganisationId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Grow2Notes.Web.Data.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId", "ReviewedByUserId")
                         .HasPrincipalKey("OrganisationId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();

@@ -389,7 +389,23 @@ export const strings = {
    */
   statusLine: { you: 'You', saved: 'saved', started: 'started' },
   /** Each kind of `Tag`, by its kind (status-tags.md *The mapping*). */
-  tag: { flagged: 'Flagged', edited: 'Edited' },
+  tag: { flagged: 'Flagged', edited: 'Edited', toReview: 'To review', reviewed: 'Reviewed' },
+  /**
+   * The Review panel on a manager's read view (review-panel.md, participant-notes.md component 8 and *States*): its
+   * heading, its field's name for the too-long message, its label, hint and buttons, the sentences of the two conflicts
+   * a `409` can mean, and the comment line of a review that another manager made first.
+   */
+  review: {
+    heading: 'Review',
+    comment: 'Comment',
+    commentLabel: 'Comment (optional)',
+    commentHint: 'Shown in the daily report and record exports, and cannot be changed later',
+    markReviewed: 'Mark reviewed',
+    markingReviewed: 'Marking reviewed…',
+    reviewedWhileOpen: 'This note was marked reviewed while you had it open.',
+    commentNotSaved: 'Your comment was not saved:',
+    editedSinceOpened: 'This note was edited after you opened it. Read the latest version, then mark it reviewed.',
+  },
   /**
    * The note form (note-form.md): its loading line and what did not load, as the failure sentence starts
    * (empty-loading-error.md); then Goals' heading, in its legend, and hint (design.md §4.3), the Common items' heading

@@ -287,7 +287,8 @@ follows the component spec as written, except where "Conflicts resolved" says ot
 - Edit replaces the read view with the form, and Save changes or Cancel replace it back, so the entry before is still
   the Flagged list and the label stays "Flagged" (the shell copies the record across each replace).
 - As built (T11): the label is the nav item's word, which `useBackTo` takes beside the page names (app-shell.md
-  component 3a); the route declares `backKey: 'flagged'`. The read view opens without its review panel until T16.
+  component 3a); the route declares `backKey: 'flagged'`. The read view opens with its review panel
+  for a To review note (T16).
 
 ### 8. Read view and 9. Review panel
 
@@ -386,8 +387,9 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 
 **Headings**
 - [x] List view: exactly one `<h1>` "Flagged notes"; no other headings are needed above the rows.
-- [ ] Review view: as participant-notes.md (one `<h1>` with name and date; `<h2>` "1. Goals", "2. Common items",
-      "3. Guided notes", "Review"). [Research] WebAIM Screen Reader Survey #10 (n = 1,539): 71.6% navigate long pages
+- [x] Review view: as participant-notes.md (one `<h1>` with name and date; `<h2>` "1. Goals", "2. Common items",
+      "3. Guided notes", "Review"). (23 October 2026, T16: `NotePage.test.tsx`
+      and axe in `review.spec.ts`.) [Research] WebAIM Screen Reader Survey #10 (n = 1,539): 71.6% navigate long pages
       by headings, https://webaim.org/projects/screenreadersurvey10/
 
 **Landmarks**
@@ -400,15 +402,18 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
 - [ ] ViewLinks names are exactly the visible text ("To review (3)", "Reviewed"); `aria-current="page"` on one only.
 - [x] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
 - [ ] Every accessible name starts with its visible words (SC 2.5.3), so "click Mark reviewed", "click Reviewed",
-      "click Show older" work with voice control.
+      "click Show older" work with voice control. (23 October 2026, T16: Mark reviewed's part is proven, its name being
+      its visible words; T19 ticks the item whole with Reviewed and Show older.)
 
 **Keyboard**
 - [ ] Every control is a native `<a href>` or `<button>`; no `role="tab"`, no arrow-key model, no roving tabindex,
       no positive tabindex.
-- [ ] Enter in the comment makes a new line; no key handlers on the textarea (IME and dictation safe).
+- [x] Enter in the comment makes a new line; no key handlers on the textarea (IME and dictation safe). (23 October 2026,
+      T16: `NotePage.test.tsx`; dictation is a by-hand check, ops/first-use-in-test.md.)
 - [ ] Focus never falls to `<body>`: after Show older, Try again, Back to the list, and when a refresh removes the
       focused row (the note's own cases are in participant-notes.md).
-- [ ] No button is ever `disabled`; busy uses `aria-disabled`.
+- [ ] No button is ever `disabled`; busy uses `aria-disabled`. (23 October 2026, T16: Mark reviewed's part is proven by
+      `NotePage.test.tsx`; T19 ticks the item whole with Show older and Try again.)
 
 **Screen reader**
 - [ ] Arrival: "Flagged notes, heading level 1"; then "Flagged notes, navigation, list, 2 items, To review (3),
@@ -458,7 +463,8 @@ is checked before sending) · 4.1.2 Name, Role, Value · 4.1.3 Status Messages.
       is "To review (3)"; with 0 rows "To review (0)"; if the first load failed it stays "To review".
 - [ ] "Reviewed" never shows a count.
 - [ ] The "(n)" equals the number of To review rows, and after Mark reviewed the badge and the "(n)" both drop by 1
-      when the list next shows.
+      when the list next shows. (23 October 2026, T16 refreshes `me` and the review lists after Mark reviewed; the badge
+      and the "(n)" are T19's, as `me` has no `toReviewCount` yet.)
 
 **To review list**
 - [ ] Rows are in the API's order (oldest first); the client does not re-sort.

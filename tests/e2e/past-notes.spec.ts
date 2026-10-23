@@ -377,7 +377,8 @@ test('Past notes loading, listed, Show older loading, failed and ended, empty, f
   await first.fallback();
 
   // Listed: the <h1>, its caption and the name, Edit participant, then the newest 30, newest first, each named by its
-  // date alone and described by its status, author and tags, then Show older and its empty status line.
+  // date alone and described by its status, author and tags, then Show older and its empty status line. A manager's
+  // rows have To review after Flagged.
   await expect(heading(page)).toHaveText('Past notes Jane Citizen');
   await expect(editParticipant(page)).toHaveAttribute('href', `/manage/participants/${jane.id}`);
   await expect(main(page).locator('ol[role="list"] > li')).toHaveCount(30);
@@ -385,9 +386,11 @@ test('Past notes loading, listed, Show older loading, failed and ended, empty, f
   expect(await rows(page).first().textContent()).toBe('Thursday 1 October 2026');
   await expect(rows(page).first().locator('time')).toHaveAttribute('datetime', worker.today);
   await expect(rows(page).nth(1)).toHaveText('Wednesday 30 September 2026');
-  await expect(rows(page).first()).toHaveAccessibleDescription(/^Submitted ?, Priya Nair ?, Flagged$/);
+  await expect(rows(page).first()).toHaveAccessibleDescription(/^Submitted ?, Priya Nair ?, Flagged ?, To review$/);
   await expect(rows(page).nth(1)).toHaveAccessibleDescription(/^Submitted ?, Alex P\.$/);
-  await expect.poll(() => shownText(rowItems(page).first().locator('p'))).toBe('Submitted · Priya Nair Flagged');
+  await expect
+    .poll(() => shownText(rowItems(page).first().locator('p')))
+    .toBe('Submitted · Priya Nair Flagged To review');
   await expect(showOlder(page)).toBeVisible();
   await expect(olderLine(page)).toBeEmpty();
   await expect(main(page).getByText(/\d+ (notes|of)|end of/i)).toHaveCount(0);

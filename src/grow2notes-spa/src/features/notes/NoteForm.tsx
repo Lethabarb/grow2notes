@@ -29,7 +29,7 @@ import { MoreActions, type MoreActionsHandle } from './MoreActions.tsx';
 import { checkNote, type NoteErrors } from './noteChecks.ts';
 import { NoteHeading } from './NoteHeading.tsx';
 import styles from './NotePage.module.css';
-import { noteBase, type Draft, type DraftGroup } from './noteQueries.ts';
+import { noteBase, type Draft, type DraftGroup, type FlagStatus } from './noteQueries.ts';
 import { invalidatePastNotes } from './pastNotesQuery.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import type { SaveIndicator } from './SaveIndicator.tsx';
@@ -38,13 +38,13 @@ import { useSaveBeforeLeaving } from './useSaveBeforeLeaving.ts';
 import { VersionConflictNotice } from './VersionConflictNotice.tsx';
 
 /**
- * `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when; and the note's flag
- * status, the `FlagStatus` name, to every caller, which the form reads only to refresh `me` and shows nowhere.
+ * `POST {base}/versions`' answer (design.md §6.3): the number of the version saved, and when; and, to a manager alone,
+ * the note's flag status, which the form reads only to refresh `me` and shows nowhere.
  */
 export type VersionSaved = {
   versionNumber: number;
   createdAtUtc: string;
-  flagStatus: 'None' | 'ToReview' | 'Reviewed';
+  flagStatus?: FlagStatus;
 };
 
 /**

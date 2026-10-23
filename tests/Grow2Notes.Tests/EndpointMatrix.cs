@@ -192,6 +192,12 @@ internal static class EndpointMatrix
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/discard", Unauthorized,
             NoContent, NoContent, NotFound, DiscardingADraftOfTheWorkerOfA),
 
+        // Mark reviewed (§6.4), for managers. Each call reviews a note that A's worker submitted flagged, of a
+        // participant whom its request first adds to A, as a call commits (tests/README.md), so A's manager gets 201
+        // and A's worker 403. B's manager does not find the participant (§9.2).
+        new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/reviews", Unauthorized,
+            Forbidden, Created, NotFound, ReviewingAFlaggedNoteOfTheWorkerOfA),
+
         // Cancel (§6.3, A71), for every signed-in user. Each call cancels the pending edit of today's note of a
         // participant whom its request first adds to A, submitted by A's worker, and A's worker and A's manager each
         // hold a pending edit of it, as a call commits (tests/README.md), so each gets 204, and the answer is never
@@ -537,6 +543,28 @@ internal static class EndpointMatrix
             call.Method,
             string.Create(
                 CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/discard"));
+    }
+
+    // Mark reviewed of a note that A's worker submitted flagged, as Submit leaves it, in To review at version 1, for a
+    // participant whom the request first adds to A. The note's date, times and reason are made up (A35).
+    private static async Task<HttpRequestMessage> ReviewingAFlaggedNoteOfTheWorkerOfA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        var noteDate = new DateOnly(2026, 10, 2);
+        await call.Services.AddSubmittedAsync(
+            a,
+            new(
+                participant.Id,
+                noteDate,
+                a.WorkerId,
+                new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc),
+                new DateTime(2026, 10, 2, 6, 42, 0, DateTimeKind.Utc),
+                IsFlagged: true,
+                FlagReason: "Jane seemed unwell."));
+        var path = string.Create(
+            CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{noteDate:yyyy-MM-dd}/reviews");
+        return new HttpRequestMessage(call.Method, path) { Content = JsonContent.Create(new { versionNumber = 1 }) };
     }
 
     // Cancel of today's note of a participant whom the request first adds to A, submitted by A's worker, with a pending

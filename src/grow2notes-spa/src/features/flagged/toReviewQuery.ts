@@ -24,6 +24,9 @@ const keptFor = 30 * 60_000;
 
 const toReviewKey = ['reviews', 'toReview'] as const;
 
+const fetchToReview = ({ signal }: { signal: AbortSignal }) =>
+  api<ToReviewNote[]>('/api/reviews?status=toReview', { signal });
+
 /**
  * The `['reviews', 'toReview']` query (flagged.md item 4 and component 6): the whole list, oldest flag first, in the
  * API's order. Fetched again on every mount, as `staleTime: 0` has it, and as the page becomes visible, as app-shell.md
@@ -32,10 +35,24 @@ const toReviewKey = ['reviews', 'toReview'] as const;
  */
 export const toReviewQuery = queryOptions({
   queryKey: toReviewKey,
-  queryFn: ({ signal }) => api<ToReviewNote[]>('/api/reviews?status=toReview', { signal }),
+  queryFn: fetchToReview,
   staleTime: 0,
   gcTime: keptFor,
   refetchOnWindowFocus: true,
+});
+
+/**
+ * The To review list as a note's read view uses it, to find the reason of a flag that a later edit removed
+ * (participant-notes.md *Data for the read view*): the same request under a key of its own, so that it never reuses the
+ * Flagged list's kept answer, whose reason may be older than the note, and is dropped when the page goes, so that each
+ * visit waits for a fresh one. Under `['reviews']` too, so that a review or an edit marks it stale with the rest.
+ */
+export const toReviewForNoteQuery = queryOptions({
+  queryKey: ['reviews', 'toReviewForNote'],
+  queryFn: fetchToReview,
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnWindowFocus: false,
 });
 
 /**
