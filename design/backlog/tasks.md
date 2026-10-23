@@ -5090,7 +5090,7 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 
 ```yaml
 id: T19
-status: doing
+status: done
 release: R1
 lane: A
 size: M
@@ -5142,6 +5142,83 @@ each screen change or window focus with no polling, and the badge and the (n) bo
   `aria-disabled` items of flagged.md's checklist, which carry a dated note that Mark reviewed's part is proven. The
   Reviewed list uses `msg.reviewedBy` with `format.dateTime` (A74), "reviewed by Sam Lee on Fri 2 Oct 2026, 9:30 am", in
   place of chronological-list.md's row without "on"; S03.02.02's third criterion is ticked when it does.
+- Built 23 October 2026. T19's decisions, labelled D1 to D17 here, are this task's own and not decisions.md's:
+  - D1: `reviewedBy` is the reviewer's display name as a plain string, as `authorDisplayName` is and as
+    `msg.reviewedBy(name)` takes it; the list has no use for the ID. `GET {base}`'s `reviews[].reviewedBy` keeps its
+    `{id, displayName}`. A deactivated reviewer keeps the name.
+  - D2: the cursor is exclusive and a pair, ordered `ReviewedAtUtc` descending then `Id` descending: `before` is the
+    last item's `reviewedAtUtc` and `beforeId` its `reviewId`, the one field beyond design.md §6.4. A page holds at most
+    30 whatever the ties (S03.03.02's second criterion); the first draft's grown page was refused because it broke
+    that. Both values or neither, else the bare 400.
+  - D3: the cursor's ID comparison is `r.Id.CompareTo(id) < 0`, which EF Core translates to `[Id] < @id` (a
+    `ToQueryString` test in `ReviewListOrderTests` fails the build if it stops). The `WHERE` and the `ORDER BY` use SQL
+    Server's `uniqueidentifier` order, so they agree; tests never assume .NET's Guid order among tied rows.
+  - D4: a Reviewed row's React key and `data-return-key` are its `reviewId`, in place of flagged.md's joined string.
+  - D5: `before` is bound as `DateTimeOffset?` and compared through `.UtcDateTime`, so it must be the server's own
+    value, with the `Z`; a hand-made value without it binds as host-local time. This is in tests/README.md, with no
+    code change.
+  - D6: `flagReason` is a non-null string, with `!` on the `TOP 1` subquery as To review's has, since a flagged version
+    always has a reason (§5.8 step 4).
+  - D7: the answer records are one per file, `ReviewedRow.cs` and `ReviewedPage.cs`, as `ToReviewRow.cs` is.
+  - D8: the answer is `{items, hasMore}`, as §6.4 gives it; To review keeps its bare array.
+  - D9: `toReviewCount` is `FlagStatus = ToReview` alone, the enum inlined as a literal so it reads the filtered
+    index. It equals the To review list because a flag status other than None implies a submitted note and a To review
+    note always has a flagged version number, which the list's inner join relies on too. It is present for a manager (0
+    included) in `/me` and in the sign-in and setup answers, and omitted for a worker. The role comes from the claim in
+    `GetAsync` and from `user.Role` in `OfUserAsync`, through one helper. The badge shows the exact number, with no
+    cap, and nothing at 0.
+  - D10: place (A77). A push into Flagged drops the Reviewed pages, as Past notes does; a view switch, a click on the
+    nav link while on `/flagged`, and a pop keep them. Going back by the "Flagged" back link keeps them only because
+    `BackLink` calls `navigate(-1)` when the opener record's path is the previous entry (`BackLink.tsx`); a back-link
+    push happens only after a reload or a pasted address, where starting at the newest 30 is right. If `BackLink`
+    changes, `FlaggedPage.test.tsx`'s test that presses the back link fails.
+  - D11: window focus refetches every active `['reviews']` list on Flagged (`refetchReviewLists`), To review always
+    and Reviewed when shown. Refetching N loaded Reviewed pages asks for the N pages in turn; that is accepted for a
+    few managers and has no `maxPages`. `refetchOnWindowFocus` stays on `reviewedQuery` because TanStack's focus
+    manager listens to `visibilitychange` only, and the listener covers window focus.
+  - D12: when a refresh removes the focused row (either list) and focus is on `<body>` or null, focus goes to the row
+    now at its index, else the last row, else the `<h1>`, with `preventScroll`, through `focusRowInPlace`, which the
+    `sameIndex` fallback of Back now shares. After Mark reviewed and Back, both orders of refetch and return focus end
+    the same way.
+  - D13: the endpoint matrix keeps one row per method and route, so `GET /api/reviews` is still requested with
+    `status=toReview`; Reviewed has the same four callers as a theory in `ReviewListEndpointTests`. F03.03's feature
+    check is worded to match.
+  - D14: the build check is text only, through `Repository.Root()`: a denylist over every package id in the props, the
+    csproj and the two `package.json` files (Azure.Communication.Email the one exception); the set of `.cs` files that
+    name the sender or a mail library must equal an exact list, which is also the positive control; the mail
+    libraries only in `Platform/Email`; and in the three user handlers the `IEmailSender` parameter only as the first
+    argument of `SetupLinkEmail.SendAsync`. Substring matching is a coarse check by nature, and the test says so.
+  - D15: `navLink` in Vitest takes a string or a regular expression and stays scoped to the Main navigation; the e2e
+    specs use `flaggedItem(page)`, whose pattern is `/^Flagged(, \d+ to review)?$/`, so it never matches the note's
+    "Flagged" back link. Stubs leave `toReviewCount` undefined.
+  - D16: no two-session e2e. A `Header` test serves `/me` as 3, 4 after a screen change and 5 after a window focus;
+    the real run proves a second manager's number after a worker's submit; the two-device check is step 106.
+  - D17: the owner question on "when a page loads" (app-shell.md open question 3) is not blocking; it is built as
+    specified, `refreshMe` on every location key, which `useRefreshMe` already did.
+- No table, column, migration, package or route. The Reviewed reason is the latest flagged `NoteVersion` at or below the
+  review's version, exact because only a flagged version whose base was unflagged or had another reason raises a flag;
+  `Note.FlaggedVersionNumber` is not used for it, as a re-flag overwrites it (A15). Both reads write nothing, not even
+  an audit event (A28).
+- Hand-offs closed (23 October 2026): T11's, the view switch and "To review (n)", Reviewed and *The note*'s "either
+  Flagged list", flagged.md *Loading and errors* and *Back and place* for both lists, and the badge half of *To review
+  list*'s last bullet; and T16's, `toReviewCount` on `me`, the "(n)" and the badge dropping after Mark reviewed (and
+  moving after Save changes), S03.01.02's last criterion, S03.02.02's third (the Reviewed list uses `msg.reviewedBy` with
+  `format.dateTime`, A74) and the label-in-name and `aria-disabled` items of flagged.md's checklist. F03.03's feature
+  checks are ticked.
+- The stories (23 October 2026): S03.03.02 to S03.03.05 are done with every criterion ticked. S03.03.01, S03.01.01,
+  S03.01.02 and S03.02.02, which waited on T19's badge and Reviewed list, are done too. flagged.md's *Accessibility
+  checklist* items that the runs prove are ticked: the landmarks, the badge's name, the ViewLinks names and
+  `aria-current`, label in name, native controls, focus never to `<body>` and `aria-disabled`; the *Screen reader* and
+  *Visual* items wait for the by-hand pass. app-shell.md's *Badge* block is ticked.
+- Docs (23 October 2026): design.md §6.2 (the `toReviewCount` predicate), §6.4 (`reviewId`, `beforeId`, `reviewedBy`
+  as a string, the reason source and the tie order) and §13's A77 (the assumed defaults: a fresh visit starts at the
+  newest 30; reviews of one millisecond are never skipped or repeated; the count is exactly the To review rows);
+  flagged.md components 3, 5 and 6 as built; app-shell.md 2c as built; tests/README.md has the Reviewed answer, the
+  cursor and the build check (v1).
+- By hand: steps 106 to 113 of ops/first-use-in-test.md (two managers on two devices, the F03.03 flow, a re-flag after a
+  review, Show older on a patchy connection, Back to the 10th row, the focused row reviewed by the other manager, the
+  three screen readers, 320 px and forced colours on real hardware), and the before-and-after notes on steps 56 and 57
+  (T11) and 84 (T16, whose "Once T19 is in test" is now present tense).
 
 ### Plan
 
@@ -5177,7 +5254,17 @@ each screen change or window focus with no polling, and the badge and the (n) bo
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The server (#86; S03.03.02 and S03.03.03 on the server, design.md §6.2 and §6.4): `status=reviewed` with the pair
+      cursor, `ReviewedRow` and `ReviewedPage`, `toReviewCount` on `Me`, and `MessagingOutOfScopeTests`; integration
+      tests on SQL Server.
+- [x] The Flagged menu badge (#87; S03.03.03 in the SPA): `NavItem`'s count, `msg.toReviewBadge`, the pill and its
+      tests.
+- [x] The SPA (#88; S03.03.02, S03.03.04 and S03.03.05 in the SPA): the view switch, `reviewedQuery`, the Reviewed list
+      with Show older, `useFocusKeptInList` and `focusRowInPlace`, copy; Vitest, and Playwright's `flagged.spec.ts`.
+- [x] Docs and the real run (#89): the real run's menu number before and after the submit; design.md §6.2, §6.4 and
+      §13's A77; flagged.md and app-shell.md as built; this task's Notes; the stories, F03.03's feature checks,
+      coverage.md and the checklist ticks; ops/first-use-in-test.md's steps 106 to 113 and the notes on steps 56, 57
+      and 84.
 
 ---
 

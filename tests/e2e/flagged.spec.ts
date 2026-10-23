@@ -898,6 +898,8 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
     await main(device).getByRole('button', { name: 'Use a passkey (recommended)' }).click();
     await expect(rows(device)).toHaveText([janeCitizen.name]);
   }
+  // Nothing is flagged yet, so neither manager's menu word carries a number.
+  await expect(flaggedItem(page)).toHaveAccessibleName('Flagged');
 
   // The second manager opens Flagged before the submit: the app's empty list.
   const empty = secondManager.waitForResponse(isToReview);
@@ -959,6 +961,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   // then the same row, over it, from the list asked for again.
   await navItem(secondManager, 'Today').click();
   await expect(rows(secondManager)).toHaveText([janeCitizen.name]);
+  await expect(flaggedItem(secondManager)).toHaveAccessibleName(/^Flagged ?, 1 to review$/);
   const asked = await holdNext(secondManager, toReviewRequests);
   await flaggedItem(secondManager).click();
   const again = await asked();

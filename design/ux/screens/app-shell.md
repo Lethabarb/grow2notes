@@ -282,6 +282,11 @@ DOM order equals visual order everywhere. Sizes and colours are foundations.md t
   for errors such as "Not saved" (invariant I11), and the pill must look different from the row-level "Flagged" tag
   (amber). One focus ring wraps the label and the pill together.
 - Never echoed in the title, favicon, app badge, Today header or account panel.
+- As built (T19): `NavItem` takes an optional `count`, which `Header` passes to the Flagged item only, from
+  `me.toReviewCount`; at 0 or absent the link holds the word alone. The pill has no live region, role, title or
+  animation. `useRefreshMe` already asks for `/me` on every screen change, on window focus and on the session clock, so
+  the number follows Mark reviewed and Save changes without new refresh code, and a failed refresh keeps the last
+  number. The open question on when a page loads is built as specified here (`tasks.md` T19, decision D17).
 
 **2d. Account button and panel** → [app-shell-nav.md](../components/app-shell-nav.md)
 
@@ -741,13 +746,14 @@ Consistent Navigation · 3.2.4 Consistent Identification · 3.3.1 Error Identifi
 - [ ] A worker opening any manager URL gets "Page not found" with title "Grow2Notes – Page not found".
 
 **Badge**
-- [ ] With `toReviewCount` 3, the Flagged link's accessible name is "Flagged, 3 to review" (checked with Testing
+- [x] With `toReviewCount` 3, the Flagged link's accessible name is "Flagged, 3 to review" (checked with Testing
   Library `getByRole('link', { name: 'Flagged, 3 to review' })`), and the digit is not read twice.
-- [ ] With 0, the link's name is "Flagged" and no pill is rendered.
-- [ ] With 104, the pill shows "104" (no cap).
-- [ ] The badge element has no `aria-live`, `role`, `title`, animation or transition.
-- [ ] After Mark reviewed succeeds, the badge and the "To review (n)" tab show the same number without a reload.
-- [ ] A failed `/me` refresh leaves the previous number on screen.
+- [x] With 0, the link's name is "Flagged" and no pill is rendered.
+- [x] With 104, the pill shows "104" (no cap).
+- [x] The badge element has no `aria-live`, `role`, `title`, animation or transition.
+- [x] After Mark reviewed succeeds, the badge and the "To review (n)" tab show the same number without a reload.
+- [x] A failed `/me` refresh leaves the previous number on screen.
+  (23 October 2026, T19: `Header.test.tsx`, and `FlaggedPage.test.tsx` for the number after Mark reviewed.)
 
 **Refresh**
 - [ ] One `GET /api/auth/me` is sent per trigger: start-up, each `location.key` change, window `focus`, page becoming
