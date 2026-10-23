@@ -5074,7 +5074,7 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 - [x] Version history in the SPA (#83; S02.07.01 and S02.07.02 in the SPA, version-history.md): `versionQueries.ts`,
       pages A and B inside `ManagerOnly`, `PastDayLine` and `Tag`'s past-day kind, the read view's past-day byline and
       Version history link, `LinkRowList`'s `reversed`; Vitest, and Playwright's `version-history.spec.ts`.
-- [x] Write past-day note in the SPA (S02.08.01 and S02.08.02 in the SPA, participants.md C, note-form.md *Kinds of
+- [x] Write past-day note in the SPA (#84; S02.08.01 and S02.08.02 in the SPA, participants.md C, note-form.md *Kinds of
       note*): `WritePastDayNotePage` and its route inside `ManagerOnly`, its links on participant detail and Past
       notes, the form's past-day notice, `dayBefore`, `melbourneDay` and `useBackTo`'s fallback; Vitest, and
       Playwright's `past-day-note.spec.ts`, with the Tab stops of `participants.spec.ts` and `past-notes.spec.ts`
