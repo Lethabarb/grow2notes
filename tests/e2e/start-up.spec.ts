@@ -212,7 +212,7 @@ test('/api/auth/me is asked once at start-up, per nav link and per focus, and ne
   const steps: [link: string, pageName: string][] = [
     ['Today', 'Today'],
     ['Flagged', 'Flagged notes'],
-    ['Report', 'Page not found'],
+    ['Report', 'Daily report'],
     ['Manage', 'Manage'],
   ];
   let count = 1;

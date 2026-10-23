@@ -96,7 +96,7 @@ jobs:
       # The format tests again in WebKit, Safari's engine, whose time-zone data can differ from Node's, and in a zone
       # behind UTC, which vitest.webkit.config.ts sets for the browser (microcopy.md §8). The SPA's own playwright
       # package installs the WebKit build that its version drives; not cached, for the reason given at Install
-      # Chromium for Playwright.
+      # Chromium, Firefox and WebKit for Playwright.
       - name: Install WebKit for Playwright
         working-directory: src/grow2notes-spa
         run: npx playwright install --with-deps webkit
@@ -205,11 +205,12 @@ jobs:
         working-directory: tests/e2e
         run: npm run typecheck
 
-      # Not cached: Playwright's CI guide advises against it, because restoring the browsers takes about as long as
-      # downloading them, and the system packages that --with-deps installs cannot be cached.
-      - name: Install Chromium for Playwright
+      # Chromium runs every spec; Firefox and WebKit run the report download's, whose save step differs between
+      # engines. Not cached: Playwright's CI guide advises against it, because restoring the browsers takes about as
+      # long as downloading them, and the system packages that --with-deps installs cannot be cached.
+      - name: Install Chromium, Firefox and WebKit for Playwright
         working-directory: tests/e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox webkit
 
       # Running the bundle here also proves it works before a deploy depends on it. The container's certificate is
       # self-signed, hence TrustServerCertificate.

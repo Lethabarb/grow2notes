@@ -44,3 +44,11 @@ describe("note.in_progress_by_other's words (note-form.md *States*)", () => {
     );
   });
 });
+
+describe("report.no_notes's words (daily-report.md *States*)", () => {
+  it('name the day in words', () => {
+    expect(apiErrorCopy['report.no_notes']({ y: 2026, m: 10, d: 1 })).toBe(
+      `No submitted notes for Thursday 1${nbsp}October 2026.`,
+    );
+  });
+});

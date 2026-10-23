@@ -280,6 +280,22 @@ describe('Flagged', () => {
   });
 });
 
+describe('Daily report', () => {
+  it("opens today's from a manager's Report link, not Page not found, with Report marked", async () => {
+    serveMe(manager);
+    const router = renderApp('/');
+    await settle();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Report' }));
+    await settle();
+
+    expect(router.state.location.pathname).toBe(`/reports/daily/${manager.today}`);
+    expect(pageHeading()).toHaveAccessibleName('Daily report');
+    expect(document.title).toBe('Grow2Notes – Daily report');
+    expect(currentItems()).toEqual(['Report page']);
+  });
+});
+
 // A note's version history, both of whose pages are manager screens, and where it sits.
 const versionHistoryPath = `/participants/${participants[0].id}/notes/2026-09-30/versions`;
 // Write past-day note, a manager screen too.
@@ -288,7 +304,7 @@ const pastDayNotePath = `/manage/participants/${participants[0].id}/past-day-not
 describe('Page not found', () => {
   it.each([
     { me: worker, path: '/flagged' },
-    { me: manager, path: '/reports/daily/2026-10-01' },
+    { me: worker, path: '/reports/daily/2026-10-01' },
     { me: manager, path: '/no-such-page' },
     { me: worker, path: '/no-such-page' },
     { me: worker, path: '/manage' },
@@ -298,17 +314,6 @@ describe('Page not found', () => {
   ])('shows at $path for a $me.role, with the nav still there and no item current', async ({ me, path }) => {
     serveMe(me);
     renderApp(path);
-    await settle();
-
-    expectPageNotFound();
-  });
-
-  it("opens from a manager's Report link, until its screen is built", async () => {
-    serveMe(manager);
-    renderApp('/');
-    await settle();
-
-    fireEvent.click(screen.getByRole('link', { name: 'Report' }));
     await settle();
 
     expectPageNotFound();

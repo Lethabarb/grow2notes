@@ -7,7 +7,8 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
   the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
   items, Guide prompts, Today and its unfinished drafts, the note form and Discard, someone else's draft, and Flagged's
-  To review list, with axe accessibility checks, run against the published app.
+  To review list, and the Report screen's downloads (also in Firefox and WebKit), with axe accessibility checks, run
+  against the published app.
 
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
@@ -104,7 +105,7 @@ export App__Origin=http://localhost:5000
 export E2E_APP_DIR="$PWD/artifacts/app"
 cd tests/e2e
 npm ci
-npx playwright install chromium
+npx playwright install chromium firefox webkit
 npm run typecheck
 npm test
 ```

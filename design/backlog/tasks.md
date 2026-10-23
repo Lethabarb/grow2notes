@@ -4705,7 +4705,7 @@ and shown the newer version, so nothing is silently overwritten.
 
 ```yaml
 id: T15
-status: doing
+status: done
 release: R1
 lane: B
 size: M
@@ -4732,6 +4732,52 @@ with no drafts, discarded drafts or counts. The PDF embeds its font, so every ch
 - A character DejaVu Sans cannot draw, such as an emoji, shows as U+FFFD in the PDF only, and the Word file keeps it
   (design.md A59, answering the plan's question 3).
 - Opening the files in Edge, Acrobat and Word is a by-hand check on ops/first-use-in-test.md.
+- Built (24 October 2026). The decisions where design.md was silent or the plan chose between two readings:
+  - A78 to A81 and D88. A78: the shared save step, `apiFile` and `download()`, which T17's download hook wraps and
+    T21's export reuses. A79: the Submitted line always shows the Melbourne day and time of version 1, so a note first
+    submitted on a later day already shows its own date; this already meets S04.01.04's submitted-next-day marker, and
+    T20 adds no other wording. A80: `filename` and `filename*`. A81: only characters DejaVu Sans maps in the Basic
+    Multilingual Plane print in the PDF, every other one as U+FFFD, and the Word file keeps the text. D88: the owner
+    approved DejaVu Sans 2.37 ("use a free font"), kept with its licence at `Features/Reports/Fonts`.
+  - Non-blocking owner question on A81: the owner may prefer the font's own map, which also prints DejaVu's characters
+    beyond the Basic Multilingual Plane, such as U+1F600. It is a one-line change in `DejaVuSans.Draws`. The default
+    keeps A59's example, an emoji typed on a phone, true.
+  - Sizes where design.md is silent. Word: Arial 11 pt, 6 pt after each paragraph, language en-AU, Title 20 pt, Heading
+    1 14 pt bold, Heading 2 12 pt bold, goals a real list with no visible marker, indented 284 twips. PDF: DejaVu Sans
+    11 pt, Title 18 pt bold, Heading 1 14 pt bold with a 0.5 pt rule above it, which is the rule between notes and also
+    sits under the title block, Heading 2 11 pt bold, ticks indented 5 mm. Word has no rule, as §11.5's Word column
+    asks for none.
+  - Keep with next: only Heading 1 and Heading 2 keep with the next paragraph, in both files. §11.5 asks only that the
+    participant's heading stays with the lines below it, so the "Written by" line has no block kind of its own.
+  - The PDF text match compares word order only (PdfPig words, whitespace and no-break spaces normalised), so wrapping
+    and glyph spacing cannot make it flaky. `PdfReportTests` adds one baseline check that line breaks and a blank line
+    are kept.
+  - The file's words ("Daily progress notes", "As at", "Exported by", "Written by", "Submitted", "Goals", "Guided
+    notes", "No goals set") are C# constants in `ReportLayout`, outside `src/copy`, so the SPA's copy guards do not
+    check them; review checks them against §11.3.
+  - The Report screen is wrapped in `PageStatus`, so that the shared `Button`'s default `announceBusy` has a status
+    region to write to; T17 sets `announceBusy` to false when it adds the download status line. A 403 from the export
+    calls `refreshMe()`, as the Review panel does, so that a manager whose role has changed gets Page not found. A
+    `:date` that is not yyyy-MM-dd sends nothing and shows the something-went-wrong line, until T17's arrival rules
+    replace it. A `filename*` that does not decode falls back to `filename`, then to the name the page chose.
+  - The two buttons are not forced to one width (daily-report.md component 6 says "same width"): `ButtonGroup` and
+    `Button` size them as everywhere else, stacked full width on a phone and by their labels from 40rem. T17 owns the
+    screen's layout and can add a width rule then.
+  - Firefox and WebKit run `report-download.spec.ts` only, through two `testMatch`-scoped projects; CI's e2e job
+    installs both browsers, and `tests/README.md` says so. `report.spec.ts` runs in Chromium alone.
+  - WebKit would not load the app in CI's first run: the app's Content Security Policy has
+    `upgrade-insecure-requests` (§9.7), and WebKit upgrades `http://localhost` requests under it to a port with no TLS,
+    which Chromium and Firefox do not. The download spec serves its page without that directive (`serveOverHttp` in
+    `tests/e2e/report.ts`); the app's policy is unchanged, as production is HTTPS only. This is the cause the CI log
+    points to, not one confirmed from the trace.
+  - A design.md edit beyond the plan's list: §11.3's Submitted row now says what A79 says, as it had said the date
+    shows only on a later day.
+  - No table, column, index, grant or migration; the latest migration stays `20261023003611_AddNoteReview`.
+  - R28: the full T15 diff was read for the parent company's name, and so were the files that the .NET tests produce,
+    through their assertions and the CI logs. It is not an automated check; the by-hand step 117 reads the files too.
+- By hand: steps 114 to 119 of ops/first-use-in-test.md (the PDF in Edge and Acrobat; the Word file in desktop Word and
+  mobile Word; both files' text and properties for the parent company's name; the Report screen at 375 px, by
+  keyboard and with a screen reader). The results are pending and are recorded here once they are in.
 
 ### Plan
 
@@ -4771,7 +4817,14 @@ Planned 24 October 2026.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The file engine (#91; S04.01.01 and S04.01.02 on the server): the font and its licence, packages, `ReportDates`,
+      the block types, `WordReport` and `PdfReport`; unit tests for dates, the Word styles and the PDF font.
+- [x] The endpoint (#92; design.md §6.5): `DailyReportModel`, `ReportLayout`, `GET /api/reports/daily/{date}/export`
+      with its audit event and `ErrorCode.NoNotes`; integration tests on SQL Server, the Word and PDF text match, the
+      endpoint matrix row and the audit-before-send test.
+- [x] The Report screen and the docs (#93; the SPA of both stories): `apiFile`, `download()`, `DailyReportPage` and its
+      route; Vitest, Playwright's `report-download.spec.ts` in three browsers and `report.spec.ts`; A78 to A81, D88,
+      this task's Notes, the two stories, coverage.md's E04 rows and ops/first-use-in-test.md's steps 114 to 119.
 
 ---
 
@@ -6129,7 +6182,8 @@ only the tasks named. Everything else still open in the specs is built as they s
 defaults, which the owner may overturn:
 
 - **Q1. The test email sender** (T01): design.md A58, the free Azure-managed azurecomm.net domain in test.
-- **Q3. PDF characters the font lacks** (T15): design.md A59, the replacement mark U+FFFD in the PDF only.
+- **Q3. PDF characters the font lacks** (T15): design.md A59, the replacement mark U+FFFD in the PDF only, read as A81
+  (T15): only characters in the font's Basic Multilingual Plane print.
 - **Q4. A record export's To date after today** (T21): design.md A60, accepted as sent.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy

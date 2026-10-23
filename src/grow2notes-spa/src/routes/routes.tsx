@@ -10,6 +10,7 @@ import { VersionPage } from '../features/notes/VersionPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { WritePastDayNotePage } from '../features/participants/WritePastDayNotePage.tsx';
+import { DailyReportPage } from '../features/reports/DailyReportPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
 import { EditUserPage } from '../features/users/EditUserPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
@@ -122,6 +123,7 @@ export const routes: AppRoute[] = [
                 element: <FlaggedPage />,
                 handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
               },
+              { path: 'reports/daily/:date', element: <DailyReportPage />, handle: { pageName: pageName.dailyReport } },
               // Both pages of a note's version history (version-history.md *Routes*), whose rows are page A's return
               // points. React Router ranks these static segments above any param, so none takes them for a date.
               {

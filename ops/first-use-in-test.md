@@ -963,3 +963,35 @@ manager ticked and a made-up reason, so that the managers have three to review; 
      in the menu not cut off. On a Windows laptop with a contrast theme on, look for the current view link's bar, the
      badge's outline, the focus ring and the Show older button all visible. (flagged.md *Visual and device*, on real
      hardware.)
+
+### Daily report as Word and PDF, once T15 is in test
+
+These steps hold T15's by-hand checks ([tasks.md](../design/backlog/tasks.md), T15's Notes). None of them holds a story
+open. Steps 20 and 21 already cover the downloads on phones and the screen readers on the finished Report screen, so
+these do not repeat them. They need a manager, the worker of step 18 and a day with three submitted notes on made-up
+participants, one with an accented name such as `Zoë Sample`, and every word typed is made up (A35). In one note's
+Guided notes type curly quotes, a dash, three dots, two lines with a blank line between them and a phone emoji; tick one
+goal and leave one unticked. Open Report from the menu, which opens today's date, and download both files for that day.
+
+114. Open the PDF in Microsoft Edge and then in Adobe Acrobat Reader. Look for the participants in family-name order,
+     the ticks and empty boxes as drawn shapes, the curly quotes, the dash and the accents, the line breaks and the
+     blank line kept, and a replacement mark in place of the phone emoji. In each, open Document Properties and look
+     for DejaVu Sans listed as embedded. (S04.01.02; design.md §11.5, A59 and A81.)
+115. Open the Word file in desktop Word on Windows. Open the Navigation pane and look for each participant as a heading.
+     Look for the ticks and empty boxes showing, the goals as a list with no bullet, the Guided notes' line breaks and
+     blank line kept, and the phone emoji as written. (S04.01.01; design.md §11.5.)
+116. Open the Word file in Word on a phone. Look for the same words in the same order, the ticks showing and the line
+     breaks kept. (S04.01.01.)
+117. In each file, look through the text, then File > Info in Word and Document Properties in Edge or Acrobat, including
+     the PDF's document information, for the parent company's name anywhere. Look for none. (D42, D72.)
+118. On a phone at 375 px wide, open Report: look for the heading "Daily report" and the two buttons one above the
+     other, no sideways scroll, and nothing cut off with the text set larger. With only the keyboard on the laptop, Tab
+     from the heading to Download Word and then Download PDF, look for the focus ring on each, and press Enter on one
+     and look for the file to save and focus to stay on the button. (daily-report.md *Visual and device* and
+     *Accessibility checklist*, keyboard items.)
+119. With NVDA and Chrome on the laptop, if you have it to hand, press Download Word on a day with notes, then press it
+     on a day without any, and look for the buttons read by name, "Daily report, heading level 1" on arrival and, for
+     the day without notes, "No submitted notes for" and that day read once. (daily-report.md *Accessibility
+     checklist*, Screen reader items, for T15's part.)
+
+Record the results in T15's Notes.

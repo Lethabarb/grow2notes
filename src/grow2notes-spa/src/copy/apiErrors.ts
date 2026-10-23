@@ -1,4 +1,4 @@
-import { stamp, type Ymd } from './format.ts';
+import { dateLong, stamp, type Ymd } from './format.ts';
 
 /**
  * The API's error codes that the app words (design.md §6.9). A story that words a code adds it here, with its words
@@ -13,6 +13,7 @@ export type ApiErrorCode =
   | 'note.participant_archived'
   | 'note.past_date_manager_only'
   | 'note.version_conflict'
+  | 'report.no_notes'
   | 'review.not_current'
   | 'user.email_in_use';
 
@@ -74,6 +75,8 @@ export const apiErrorCopy = {
    * form's dead end in its top bar, as an autosave of the submitted note meets it too.
    */
   'note.version_conflict': 'This note was changed on another device or tab.',
+  /** A day with no submitted notes (daily-report.md *States*, design.md §4.7), with the day in words. */
+  'report.no_notes': (noteDate: Ymd) => `No submitted notes for ${dateLong(noteDate)}.`,
   /**
    * Mark reviewed's `409`, when its refetch of the note could not say why (participant-notes.md *States*): the note
    * has changed, or was already reviewed, so the person checks the latest version first.

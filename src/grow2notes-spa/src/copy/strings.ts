@@ -7,6 +7,8 @@ export const strings = {
   mainNavigation: 'Main',
   /** The main navigation's items (app-shell.md component 2b), in design.md §4.0's words. */
   navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
+  /** The Report screen's Download buttons (daily-report.md component 6), Word first, and the busy label. */
+  report: { downloadWord: 'Download Word', downloadPdf: 'Download PDF', downloading: 'Downloading…' },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
   /** The Account panel's Sign out button (component 2d). */
