@@ -4891,7 +4891,7 @@ the design.md §5.8 flag rules for later versions, and one panel.
 - [x] The SPA (#79; S03.02.01 to S03.02.03 and S03.02.02 in the SPA): the To review and Reviewed tags and Past notes
       tags, the read view's status lines, `ReviewPanel` and its conflicts, `toReviewForNoteQuery`, copy, limits and
       error codes; Vitest, and Playwright's `review.spec.ts` on `notesStore`'s reviews and flag rules.
-- [x] Docs (V4PR): this task's Notes; design.md §6.3, §6.4 and §13's A73 and A74; the four stories and F03.01's and
+- [x] Docs (#80): this task's Notes; design.md §6.3, §6.4 and §13's A73 and A74; the four stories and F03.01's and
       F03.02's feature checks; flagged.md's checklist; ops/first-use-in-test.md's steps 77 to 84; the stale "every
       caller" lines of status-tags.md, note-form.md, today.md and tests/README.md; coverage.md's E03 rows.
 
