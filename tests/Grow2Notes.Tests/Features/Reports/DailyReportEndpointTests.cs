@@ -4,6 +4,7 @@ using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -17,9 +18,10 @@ namespace Grow2Notes.Tests.Features.Reports;
 /// (<see cref="TestSignIn"/>): the file's type and name, the headers every API answer has, and the one
 /// <c>report.downloaded</c> event it writes before it sends the file; and what it refuses without one: a caller who is
 /// not a manager, a format that is not exactly <c>docx</c> or <c>pdf</c>, a date that is not a date, and a day with no
-/// submitted note in the caller's organisation. Each test adds an organisation of its own
-/// (<see cref="TestOrganisations"/>), so that the organisation's audit events are the test's alone. What the files say
-/// is covered by <see cref="DailyReportTextMatchTests"/>, and who may call by the endpoint matrix.
+/// submitted note in the caller's organisation. <c>GET /api/reports/daily/{date}/has-notes</c> is covered too: it
+/// agrees with the export about which days have notes, and it writes no event. Each test adds an organisation of its
+/// own (<see cref="TestOrganisations"/>), so that the organisation's audit events are the test's alone. What the
+/// files say is covered by <see cref="DailyReportTextMatchTests"/>, and who may call by the endpoint matrix.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
@@ -190,6 +192,93 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
         Assert.Empty(await EventsOfAsync(organisation));
     }
 
+    // §6.5: the has-notes check says true for a day with a submitted note, in exactly the two properties, and, as it
+    // reads and does not export, it writes no event.
+    [Fact]
+    public async Task A_manager_hears_that_a_day_with_a_submitted_note_has_notes_and_no_event_is_written()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        await SubmitANoteAsync(organisation, NoteDate);
+        using var client = factory.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        using var response = await client.GetAsync(
+            $"/api/reports/daily/{Date}/has-notes", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        var body = JsonNode.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!
+            .AsObject();
+        Assert.Equal(2, body.Count);
+        Assert.Equal(Date, (string)body["date"]!);
+        Assert.True((bool)body["hasNotes"]!);
+        Assert.Empty(await EventsOfAsync(organisation));
+    }
+
+    // §6.5: the check and the export agree about a note whose participant is archived and whose author is deactivated,
+    // as the note is a record of what happened.
+    [Fact]
+    public async Task A_note_of_an_archived_participant_by_a_deactivated_author_counts_for_both_endpoints()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        var participant = await factory.Services.AddParticipantAsync(organisation, archived: true);
+        await factory.Services.AddSubmittedAsync(
+            organisation,
+            new(participant.Id, NoteDate, organisation.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        await DeactivateAsync(organisation.WorkerId);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(new FakeTimeProvider(Now)));
+        using var client = app.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        using var hasNotes = await client.GetAsync(
+            $"/api/reports/daily/{Date}/has-notes", TestContext.Current.CancellationToken);
+        using var export = await client.GetAsync(
+            $"/api/reports/daily/{Date}/export?format=docx", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, hasNotes.StatusCode);
+        var body = JsonNode.Parse(await hasNotes.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!;
+        Assert.True((bool)body["hasNotes"]!);
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+    }
+
+    // §2: a worker has no part in the report, and a request with no session has none at all. Neither reads anything or
+    // writes an event.
+    [Theory]
+    [InlineData(false, HttpStatusCode.Unauthorized)]
+    [InlineData(true, HttpStatusCode.Forbidden)]
+    public async Task A_caller_who_is_not_a_manager_gets_no_answer_to_has_notes_and_no_event(
+        bool isWorker, HttpStatusCode expected)
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        await SubmitANoteAsync(organisation, NoteDate);
+        using var client = factory.CreateHttpsClient();
+        if (isWorker)
+        {
+            client.SignInAs(organisation.WorkerId);
+        }
+
+        using var response = await client.GetAsync(
+            $"/api/reports/daily/{Date}/has-notes", TestContext.Current.CancellationToken);
+
+        Assert.Equal(expected, response.StatusCode);
+        Assert.Empty(await EventsOfAsync(organisation));
+    }
+
+    // The isodate route constraint (§6.1): a segment that is not a real date matches no route.
+    [Theory]
+    [InlineData("2026-02-29")]
+    [InlineData("2026-13-45")]
+    public async Task A_has_notes_date_that_is_not_a_date_gets_404(string date)
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        using var response = await client.GetAsync(
+            $"/api/reports/daily/{date}/has-notes", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await EventsOfAsync(organisation));
+    }
+
     // §5.3: the event is committed before the file is sent, so a download whose event cannot be written sends no file.
     [Fact]
     public async Task A_download_whose_event_cannot_be_written_gets_500_and_no_file()
@@ -221,6 +310,7 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
             new(participant.Id, noteDate, organisation.WorkerId, StartedAtUtc, SubmittedAtUtc));
     }
 
+    // The export says report.no_notes and the has-notes check says false, for the same day.
     private static async Task AssertNoNotesAsync(HttpClient client, string date, string format)
     {
         using var response = await client.GetAsync(
@@ -229,6 +319,29 @@ public sealed class DailyReportEndpointTests(Grow2NotesFactory factory) : IClass
         var body = await response.ReadProblemAsync(HttpStatusCode.NotFound);
         Assert.Equal("report.no_notes", JsonNode.Parse(body)!["code"]!.GetValue<string>());
         Assert.Null(response.Content.Headers.ContentDisposition);
+
+        using var check = await client.GetAsync(
+            $"/api/reports/daily/{date}/has-notes", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, check.StatusCode);
+        var answer = JsonNode.Parse(await check.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))!
+            .AsObject();
+        Assert.Equal(2, answer.Count);
+        Assert.Equal(date, (string)answer["date"]!);
+        Assert.False((bool)answer["hasNotes"]!);
+    }
+
+    // The user deactivated as deactivation leaves them (§8.6), through the app's UserManager. The organisation is the
+    // test's own, so its worker is the test's to change.
+    private async Task DeactivateAsync(Guid userId)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await users.FindByIdAsync(userId.ToString());
+        Assert.NotNull(user);
+        user.Status = UserStatus.Deactivated;
+        user.DeactivatedAtUtc = SubmittedAtUtc.AddHours(1);
+        var updated = await users.UpdateAsync(user);
+        Assert.True(updated.Succeeded, string.Join(" ", updated.Errors.Select(error => error.Code)));
     }
 
     // Every event of the organisation, read in SQL so that the query filter, which would need a tenant, does not decide
