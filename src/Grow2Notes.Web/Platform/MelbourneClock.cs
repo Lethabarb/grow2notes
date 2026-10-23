@@ -13,9 +13,12 @@ internal sealed class MelbourneClock(TimeProvider timeProvider)
     public DateOnly Today() => DateOf(timeProvider.GetUtcNow().UtcDateTime);
 
     /// <summary>
-    /// The Melbourne calendar date of <paramref name="utc"/>, a stored UTC time. A value of unspecified kind is read as
-    /// UTC too, which <see cref="TimeZoneInfo.ConvertTime(DateTime, TimeZoneInfo)"/> would not do.
+    /// The Melbourne wall-clock time of <paramref name="utc"/>, a stored UTC time. A value of unspecified kind is read
+    /// as UTC too, which <see cref="TimeZoneInfo.ConvertTime(DateTime, TimeZoneInfo)"/> would not do.
     /// </summary>
-    public static DateOnly DateOf(DateTime utc) =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, Melbourne));
+    public static DateTime InMelbourne(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, Melbourne);
+
+    /// <summary>The Melbourne calendar date of <paramref name="utc"/>, read as <see cref="InMelbourne"/> reads it.
+    /// </summary>
+    public static DateOnly DateOf(DateTime utc) => DateOnly.FromDateTime(InMelbourne(utc));
 }
