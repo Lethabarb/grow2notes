@@ -35,4 +35,28 @@ public sealed class ReviewListOrderTests
             ") AS [n1] ON [n].[Id] = [n1].[NoteId] AND [n].[FlaggedVersionNumber] = [n1].[VersionNumber]", sql);
         Assert.EndsWith("ORDER BY [n1].[CreatedAtUtc], [n].[Id]", sql);
     }
+
+    // The Reviewed list's order is the review's time, then its ID, both newest first, and its cursor compares the ID in
+    // SQL, which only a translation of CompareTo gives: client evaluation would throw, not return a wrong page. The
+    // reason is the version number's highest flagged version at or below the review's, one row of a subquery. The
+    // aliases are EF Core's, so the checks read the columns, not the aliases.
+    [Fact]
+    public async Task The_Reviewed_list_is_newest_first_by_Id_too_with_a_translated_cursor_and_a_TOP_1_reason()
+    {
+        await using var app = new AppWithoutDatabase("Production");
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var before = (new DateTime(2026, 10, 4, 23, 42, 0, DateTimeKind.Utc), Guid.NewGuid());
+        string sql;
+
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(Guid.NewGuid()))
+        {
+            sql = ReviewListEndpoint.ReviewedInListOrder(db, before).ToQueryString();
+        }
+
+        Assert.Matches(@"(?s)ORDER BY \S*\[ReviewedAtUtc\] DESC, \S*\[Id\] DESC\s*$", sql);
+        Assert.Matches(@"\[ReviewedAtUtc\] < @", sql);
+        Assert.Matches(@"\[Id\] < @", sql);
+        Assert.Matches(@"(?s)SELECT TOP\(1\) .*ORDER BY \S*\[VersionNumber\] DESC", sql);
+    }
 }

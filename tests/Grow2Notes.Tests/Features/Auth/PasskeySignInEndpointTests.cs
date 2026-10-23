@@ -79,8 +79,16 @@ public sealed class PasskeySignInEndpointTests : IClassFixture<Grow2NotesFactory
                 ("today", "2026-10-10"),
             ];
             var me = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+            var properties = me.EnumerateObject().ToList();
             Assert.Equal(
-                expected, me.EnumerateObject().Select(property => (property.Name, property.Value.GetString())));
+                expected, properties.Take(5).Select(property => (property.Name, property.Value.GetString())));
+
+            // A manager's answer ends with the count of notes in To review, which GET /api/auth/me's tests prove; a
+            // worker's has none.
+            (string Name, JsonValueKind Kind)[] expectedCount =
+                role == UserRole.Manager ? [("toReviewCount", JsonValueKind.Number)] : [];
+            Assert.Equal(
+                expectedCount, properties.Skip(5).Select(property => (property.Name, property.Value.ValueKind)));
         }
     }
 

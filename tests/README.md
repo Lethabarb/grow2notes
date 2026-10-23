@@ -1243,6 +1243,38 @@ logs. `Grow2Notes.Tests/Features/Users/InviteUserEndpointTests.cs` is the exampl
 token in the logs (`RecordedLog.Holds`) looks for it escaped too, as a link holds it, since its base64 almost always has
 a `+`, `/` or `=` in it.
 
+### The Reviewed list, the To review count and the messaging build check
+
+- `GET /api/reviews?status=reviewed` answers `{items, hasMore}`: at most 30 reviews, newest first (`ReviewedAtUtc`, then
+  the review's `Id`, both descending, the `Id` in SQL Server's `uniqueidentifier` order), one item per `NoteReview` row.
+  An item holds `reviewId`, `participantId`, `givenName`, `familyName`, `noteDate`, `authorDisplayName`, `flagReason`
+  (the whole reason of the flag the review cleared: the latest flagged version at or below the reviewed one),
+  `reviewedBy` (the reviewer's display name, a string), `reviewedAtUtc` and `comment`.
+  `Grow2Notes.Tests/Features/Reviews/ReviewListEndpointTests.cs` shows each.
+- The next page is asked for with `&before={reviewedAtUtc}&beforeId={reviewId}` of the last item, both or neither
+  (one alone is a `400`). The cursor is exclusive, so no review is skipped or repeated, even among reviews of one
+  millisecond. `before` is bound as a `DateTimeOffset`, so a test sends the server's own value, which ends in `Z`: a
+  value typed by hand without the `Z` binds as the host's local time. A test that needs every page walks them as the
+  screen does (`ReviewedPagesAsync`), and a test that needs to know every review of an organisation, such as the
+  paging tests' 61 and 33, adds an organisation of its own with `services.AddOrganisationAsync()`
+  (`Grow2Notes.Tests/Fixtures/TestOrganisations.cs`) and its reviews with `services.AddReviewAsync(…)`
+  (`TestNotes.cs`), because the seeded organisations' reviews are shared with other tests. A test never assumes .NET's
+  `Guid` order for reviews of one millisecond: SQL Server's differs.
+- Who may call it is not a row of the endpoint matrix, which keeps one row per endpoint (`GET /api/reviews` is still
+  called with `status=toReview`). `ReviewListEndpointTests` has the same four callers as a theory instead: signed out
+  `401`, A's worker `403`, A's manager `200` with A's review, B's manager `200` with none of A's.
+- `GET /api/auth/me`, and the answers of the passkey and TOTP sign-ins and of setup completion, which all go through
+  `MeEndpoint.OfUserAsync`, carry `toReviewCount` for a manager, `0` included, and leave the key out for a worker. It
+  is the number of the organisation's notes with `FlagStatus` To review, so it equals the length of the To review
+  list. A test of the count adds an organisation of its own, as above, because other tests flag notes in A.
+- `Grow2Notes.Tests/Platform/MessagingOutOfScopeTests.cs` is the build check for the scope line on messaging. It reads
+  the repository as text: no package ID in `Directory.Packages.props`, a `.csproj` or the two `package.json` files names
+  SMS, push, SMTP, mail or another messaging service, except `Azure.Communication.Email`; the `.cs` files of the web
+  project that name `IEmailSender` or a mail library are exactly the listed set; the mail libraries are named only in
+  `Platform/Email`; and the three handlers that issue a setup link use the sender only as the first argument of
+  `SetupLinkEmail.SendAsync`. A change that adds a sender, or a legitimate use of the email package, changes the list in
+  that test in the same change. Matching by name is coarse by nature.
+
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
