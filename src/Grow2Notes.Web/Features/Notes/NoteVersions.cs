@@ -38,13 +38,14 @@ internal sealed class NoteVersions(
     /// Saves <paramref name="request"/> as version <c>base + 1</c> of <paramref name="participantId"/>'s note for
     /// <paramref name="noteDate"/> (§5.8): Submit at base 0, of <paramref name="actor"/>'s own draft, or Save changes
     /// at the note's current version, of their pending edit. One conditional update moves the note's current version
-    /// to the new one; at base 0 it also moves the note to Submitted, with now its first submitted time, and, when it
-    /// is flagged, to To review with version 1 its flagged version (§5.8's flag rules), and for later versions it
-    /// writes no flag (T16). The version has the request's text and flag, a reason only while flagged, the groups of
-    /// the working copy's snapshot, Every note first, each picked as the request says, and its goals and common items,
-    /// in its order and with its wording (A3), each ticked as the request says, those of a group that is not picked
-    /// unticked, and the actor as its creator. The actor's working copy is deleted (§5.6), and <c>note.submitted</c>
-    /// or <c>note.edited</c> is written, with the version number and no text.
+    /// to the new one; at base 0 it also moves the note to Submitted, with now its first submitted time. When the
+    /// version is flagged and its base was not, or had another reason, it also moves the note to To review with this
+    /// version its flagged version (§5.8's flag rules), and otherwise leaves both as they are. The version has the
+    /// request's text and flag, a reason only while flagged, the groups of the working copy's snapshot, Every note
+    /// first, each picked as the request says, and its goals and common items, in its order and with its wording (A3),
+    /// each ticked as the request says, those of a group that is not picked unticked, and the actor as its creator. The
+    /// actor's working copy is deleted (§5.6), and <c>note.submitted</c> or <c>note.edited</c> is written, with the
+    /// version number and no text.
     /// </summary>
     /// <param name="actor">Who saves.</param>
     /// <param name="participantId">The note's participant.</param>
@@ -157,12 +158,26 @@ internal sealed class NoteVersions(
 
         var now = StoredTime.UtcNow(timeProvider);
 
-        // §5.8 step 5. ExecuteUpdate bypasses the save interceptors, which is why only this header update uses it; it
-        // still applies the tenant query filter. A draft has no flag status (§3.6), so version 1 meets the flag rules
-        // from None: their first row puts a flagged one in To review, and their last leaves an unflagged one None, its
-        // flagged version null. The flag rules of later versions are T16's, so a Save changes leaves them as they are.
         var baseVersion = request.BaseVersion;
         var versionNumber = baseVersion + 1;
+
+        // The flag rules (§5.8) read the base version and the request, never the note's flag status. The base version
+        // is append-only, and the update below commits only while it is still the current one.
+        var raisesFlag = request.IsFlagged;
+        if (raisesFlag && baseVersion >= 1)
+        {
+            var previous = await db.NoteVersions
+                .Where(v => v.NoteId == note.Id && v.VersionNumber == baseVersion)
+                .Select(v => new { v.IsFlagged, v.FlagReason })
+                .SingleAsync(cancellationToken);
+            raisesFlag = !previous.IsFlagged
+                || !string.Equals(previous.FlagReason, request.FlagReason, StringComparison.Ordinal);
+        }
+
+        // §5.8 step 5. ExecuteUpdate bypasses the save interceptors, which is why only this header update uses it; it
+        // still applies the tenant query filter. A draft has no flag status (§3.6), and a flag that is raised puts the
+        // note in To review whatever its status was; one that is not leaves its status and flagged version as they
+        // are, so an unflagged save never takes a note out of To review.
         var advanced = await db.Notes
             .Where(n => n.Id == note.Id
                 && n.CurrentVersionNumber == baseVersion
@@ -175,11 +190,12 @@ internal sealed class NoteVersions(
                     {
                         set.SetProperty(n => n.Status, NoteStatus.Submitted)
                             .SetProperty(n => n.FirstSubmittedAtUtc, now);
-                        if (request.IsFlagged)
-                        {
-                            set.SetProperty(n => n.FlagStatus, FlagStatus.ToReview)
-                                .SetProperty(n => n.FlaggedVersionNumber, versionNumber);
-                        }
+                    }
+
+                    if (raisesFlag)
+                    {
+                        set.SetProperty(n => n.FlagStatus, FlagStatus.ToReview)
+                            .SetProperty(n => n.FlaggedVersionNumber, versionNumber);
                     }
                 },
                 cancellationToken);
@@ -250,7 +266,7 @@ internal sealed class NoteVersions(
             new JsonObject { ["versionNumber"] = versionNumber },
             cancellationToken);
 
-        // Read back, as the note's flag status is the one stored, which an edit leaves as it was.
+        // Read back, as the note's flag status is the one stored, which the flag rules or another manager's review set.
         var stored = (await VersionOfKeyAsync(idempotencyKey, cancellationToken))!.Saved;
         return NoteVersionResult.Added(stored);
     }
