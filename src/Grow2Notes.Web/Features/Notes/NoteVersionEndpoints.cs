@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
@@ -11,7 +12,7 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <c>POST /api/participants/{participantId}/notes/{noteDate}/versions</c> (design.md §6.3), through
 /// <see cref="NoteVersions"/>: saves version 1 of the signed-in user's own draft, Submit, or the next version of a
 /// submitted note, Save changes, from a <see cref="NoteVersionRequest"/> and its <c>Idempotency-Key</c> header, and
-/// answers <c>{versionNumber, createdAtUtc, flagStatus}</c>, <c>201</c>, or <c>200</c> for a retry with a key that a
+/// answers <c>{versionNumber, createdAtUtc, flagStatus?}</c>, <c>201</c>, or <c>200</c> for a retry with a key that a
 /// version of the note already has, which changes nothing. Otherwise it answers <c>404</c> for a participant not in the
 /// organisation or no live note; <c>409 note.in_progress_by_other</c>, with the author's name and start time, for
 /// another user's draft; <c>403 note.not_editable</c> for a submitted note that a worker did not write;
@@ -49,14 +50,22 @@ internal static class NoteVersionEndpoints
             NoteVersionRequest request,
             ClaimsPrincipal user,
             IOptions<IdentityOptions> identityOptions,
+            Grow2NotesDbContext db,
             NoteVersions versions,
             CancellationToken cancellationToken)
     {
+        var actor = Actor.InApp(user, identityOptions.Value);
         var result = await versions.SaveAsync(
-            Actor.InApp(user, identityOptions.Value), participantId, noteDate, idempotencyKey, request,
-            cancellationToken);
+            actor, participantId, noteDate, idempotencyKey, request, cancellationToken);
         if (result.Saved is { } saved)
         {
+            // Only a manager sees the flag status, so a worker cannot learn that their note was reviewed. Here, so that
+            // it covers a retry as well as a save.
+            if (!await StoredRole.IsManagerAsync(db, actor, cancellationToken))
+            {
+                saved = saved with { FlagStatus = null };
+            }
+
             return result.Created ? TypedResults.Created((string?)null, saved) : TypedResults.Ok(saved);
         }
 

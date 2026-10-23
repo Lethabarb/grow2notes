@@ -65,9 +65,9 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
     // The goals in the snapshot's order, which a manager has changed since the draft started, the ticks the body's, a
     // goal ID sent twice ticking it once, and the flag's reason with it, which puts the note in To review with
-    // version 1 its flagged version (§5.8's flag rules), as the answer says. The clock's time has a part of a
-    // millisecond, which the datetime2(3) columns cannot hold, so the time answered is the time stored. The event holds
-    // the version number alone, no note text (§5.3, §9.5).
+    // version 1 its flagged version (§5.8's flag rules), which the worker's answer does not say (it is a manager's
+    // alone). The clock's time has a part of a millisecond, which the datetime2(3) columns cannot hold, so the time
+    // answered is the time stored. The event holds the version number alone, no note text (§5.3, §9.5).
     [Fact]
     public async Task The_author_s_submit_makes_exactly_version_1_its_goal_rows_the_header_s_change_and_one_event()
     {
@@ -110,7 +110,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.Equal((1, submittedAtUtc, "ToReview"), await AnswerAsync(response));
+        Assert.Equal((1, submittedAtUtc, (string?)null), await AnswerAsync(response));
         Assert.Equal(
             new NoteRow(
                 (byte)NoteStatus.Submitted, 1, submittedAtUtc, (byte)FlagStatus.ToReview, 1, NoteDate, StartedAtUtc,
@@ -141,8 +141,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
             (after.Notes, after.Drafts, after.Versions, after.VersionItems));
     }
 
-    // design.md §5.3: the reason is null unless the version is flagged, whatever the body holds. The note stays None,
-    // as the answer says.
+    // design.md §5.3: the reason is null unless the version is flagged, whatever the body holds. The note stays None.
     [Fact]
     public async Task An_unflagged_submit_stores_no_reason()
     {
@@ -153,7 +152,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
             client, participantId, NoteDate, Guid.NewGuid(), Body("Jane made toast.", false, "Jane seemed unwell."));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal("None", (await AnswerAsync(response)).FlagStatus);
+        Assert.Equal((byte)FlagStatus.None, (await StoredNoteAsync(noteId)).FlagStatus);
         var version = Assert.Single(await StoredVersionsAsync(noteId));
         Assert.Equal((false, null), (version.IsFlagged, version.FlagReason));
     }
@@ -210,7 +209,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
     }
 
     // A retry after a lost answer, with the key of the first try and a body changed since, which it does not save
-    // (design.md §5.8 step 3): its flag included, so the note stays None, as the answer says.
+    // (design.md §5.8 step 3): its flag included, so the note stays None.
     [Fact]
     public async Task A_retry_with_the_same_key_answers_200_with_the_version_and_changes_nothing()
     {
@@ -233,10 +232,10 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         Assert.Equal("Jane made toast.", Assert.Single(await StoredVersionsAsync(noteId)).Narrative);
     }
 
-    // The key finds the version, so a retry answers the note's flag status as it is now, not as the first try left it
-    // (T11's Notes): here after a manager's review, set by hand until T16 adds Mark reviewed.
+    // The flag status is a manager's alone, so a worker's answer, a retry's too, carries none, though a manager has
+    // reviewed the note since: the worker cannot learn of the review from it.
     [Fact]
-    public async Task A_retry_answers_the_note_s_flag_status_as_it_is_now()
+    public async Task A_workers_flagged_submit_and_its_retry_carry_no_flag_status_even_after_a_review()
     {
         var (participantId, noteId) = await AddDraftOfTheWorkerAsync();
         var key = Guid.NewGuid();
@@ -249,9 +248,49 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         using var retry = await SubmitAsync(
             client, participantId, NoteDate, key, Body("Jane made toast.", true, "Jane seemed unwell."));
 
+        Assert.Equal((HttpStatusCode.Created, (string?)null), (first.StatusCode, saved.FlagStatus));
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+        Assert.Equal(saved, await AnswerAsync(retry));
+    }
+
+    // A manager has it: the status the save left, and, for a retry, the status as it is now.
+    [Fact]
+    public async Task A_managers_flagged_submit_carries_the_flag_status_and_its_retry_the_status_as_it_is_now()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await factory.Services.AddDraftAsync(
+            seeded.A,
+            new(participant.Id, NoteDate, seeded.A.ManagerId, StartedAtUtc, Narrative: "Jane", SavedAtUtc: SavedAtUtc));
+        var key = Guid.NewGuid();
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        using var first = await SubmitAsync(
+            client, participant.Id, NoteDate, key, Body("Jane made toast.", true, "Jane seemed unwell."));
+        var saved = await AnswerAsync(first);
+        await ReviewByHandAsync(noteId);
+
+        using var retry = await SubmitAsync(
+            client, participant.Id, NoteDate, key, Body("Jane made toast.", true, "Jane seemed unwell."));
+
         Assert.Equal((HttpStatusCode.Created, "ToReview"), (first.StatusCode, saved.FlagStatus));
         Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
         Assert.Equal(saved with { FlagStatus = "Reviewed" }, await AnswerAsync(retry));
+    }
+
+    // A worker's Save changes on a note that a manager has reviewed answers no flag status either.
+    [Fact]
+    public async Task A_workers_save_changes_on_a_reviewed_note_carries_no_flag_status()
+    {
+        var (participantId, noteId, _) = await AddSubmittedNoteAsync();
+        await ReviewByHandAsync(noteId);
+        using var client = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        await BeginEditAsync(client, participantId, Guid.NewGuid(), EditBody(1, "Jane made toast and tea."));
+
+        using var response = await SubmitAsync(
+            client, participantId, NoteDate, Guid.NewGuid(), EditBody(1, "Jane made toast and tea."));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var saved = await AnswerAsync(response);
+        Assert.Equal((2, (string?)null), (saved.VersionNumber, saved.FlagStatus));
     }
 
     // Two tries with one key at once, as when the screen sends its submit again while its first try is still on its
@@ -514,7 +553,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var submittedAtUtc = BeforeMidnight.AddMinutes(3).UtcDateTime;
-        Assert.Equal((1, submittedAtUtc, "None"), await AnswerAsync(response));
+        Assert.Equal((1, submittedAtUtc, (string?)null), await AnswerAsync(response));
         var noteId = await LiveNoteIdAsync(participant.Id, NoteDate);
         var note = await StoredNoteAsync(noteId);
         Assert.Equal(
@@ -540,7 +579,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var submittedAtUtc = On2OctoberAt412.UtcDateTime;
-        Assert.Equal((1, submittedAtUtc, "None"), await AnswerAsync(response));
+        Assert.Equal((1, submittedAtUtc, (string?)null), await AnswerAsync(response));
         var noteId = await LiveNoteIdAsync(participant.Id, EarlierDay);
         var note = await StoredNoteAsync(noteId);
         Assert.Equal(
@@ -1295,18 +1334,19 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 
-    // The answer, {versionNumber, createdAtUtc, flagStatus} alone.
+    // The answer, {versionNumber, createdAtUtc} and, for a manager alone, flagStatus (null here when it is left out).
     private static async Task<(int VersionNumber, DateTime CreatedAtUtc, string? FlagStatus)> AnswerAsync(
         HttpResponseMessage response)
     {
         var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var hasFlagStatus = answer.TryGetProperty("flagStatus", out var flagStatus);
         Assert.Equal(
-            ["versionNumber", "createdAtUtc", "flagStatus"],
+            hasFlagStatus ? ["versionNumber", "createdAtUtc", "flagStatus"] : ["versionNumber", "createdAtUtc"],
             answer.EnumerateObject().Select(property => property.Name));
         return (
             answer.GetProperty("versionNumber").GetInt32(),
             answer.GetProperty("createdAtUtc").GetDateTime(),
-            answer.GetProperty("flagStatus").GetString());
+            hasFlagStatus ? flagStatus.GetString() : null);
     }
 
     // The columns that an UPDATE's SET clause sets, in its order.
