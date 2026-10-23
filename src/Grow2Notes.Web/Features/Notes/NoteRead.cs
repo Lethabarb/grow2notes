@@ -23,7 +23,8 @@ internal sealed record NoteRead(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadLastEdit? LastEdit,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadVersion? Current,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FlagStatus = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<NoteReadReview>? Reviews = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<NoteReadReview>? Reviews = null);
 
 /// <summary>
 /// Who wrote a note or reviewed it: their ID, which the screen compares with the signed-in user's, and their display

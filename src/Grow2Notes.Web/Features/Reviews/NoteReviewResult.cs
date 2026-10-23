@@ -1,9 +1,9 @@
 namespace Grow2Notes.Web.Features.Reviews;
 
 /// <summary>
-/// What <see cref="NoteReviews.ReviewAsync"/> did with a Mark reviewed: reviewed the note (<see cref="ReviewedAtUtc"/>),
-/// found it not in To review at that version (<see cref="IsNotCurrent"/>), or found no note. The last two write
-/// nothing.
+/// What <see cref="NoteReviews.ReviewAsync"/> did with a Mark reviewed: reviewed the note
+/// (<see cref="ReviewedAtUtc"/>), found it not in To review at that version (<see cref="IsNotCurrent"/>), or found no
+/// note. The last two write nothing.
 /// </summary>
 internal sealed record NoteReviewResult
 {
