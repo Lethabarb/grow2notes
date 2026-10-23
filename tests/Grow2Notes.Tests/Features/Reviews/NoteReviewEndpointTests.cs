@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -21,8 +22,10 @@ namespace Grow2Notes.Tests.Features.Reviews;
 /// for a stale version, a note already reviewed, a draft and a note never flagged, <c>422 validation.failed</c> for a
 /// comment over 500 characters or a version below 1, <c>404</c> for a participant not in the caller's organisation
 /// (§9.2) or a day with no live note, and a <c>403</c> for a worker. A manager may review a note they wrote (A73), and
-/// a note of an archived participant. The tests add their own participants, users and notes (tests/README.md). The
-/// endpoint matrix covers who may call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// a note of an archived participant. A Save changes that flags a reviewed note again puts it back in To review and
+/// leaves the earlier review as it was (S03.01.02). The tests add their own participants, users and notes
+/// (tests/README.md). The endpoint matrix covers who may call it, and <see cref="SignedOutTests"/> what a signed-out
+/// caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class NoteReviewEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -363,6 +366,60 @@ public sealed class NoteReviewEndpointTests(Grow2NotesFactory factory, SqlServer
                 reviews[1].GetProperty("comment").ValueKind));
     }
 
+    // S03.01.02 and S03.02.02 end to end: a note reviewed at version 1, then flagged again with another reason by a
+    // manager's Save changes, is in To review at version 2 with the first review as it was, and once reviewed again
+    // gives a manager flagStatus Reviewed and both reviews, newest first. The clock moves on between the steps, as
+    // the reviews are ordered by their times.
+    [Fact]
+    public async Task A_reflag_by_an_edit_keeps_the_earlier_review_and_the_next_review_is_listed_first()
+    {
+        var clock = new FakeTimeProvider(ReviewedAt);
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await AddFlaggedAsync(participant.Id, seeded.A.WorkerId);
+        await factory.Services.AddPendingEditAsync(seeded.A, noteId, seeded.A.ManagerId, EditedAtUtc);
+        using var client = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        using (var reviewed = await ReviewAsync(client, participant.Id, 1, "Called Sam's mum."))
+        {
+            Assert.Equal(HttpStatusCode.Created, reviewed.StatusCode);
+        }
+
+        var firstReview = Assert.Single(await StoredReviewsAsync(noteId));
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using (var saved = await SaveChangesAsync(client, participant.Id, 1, "Jane seemed worse."))
+        {
+            Assert.Equal(HttpStatusCode.Created, saved.StatusCode);
+        }
+
+        Assert.Equal((FlagStatus.ToReview, 2, 2), await StoredFlagAsync(noteId));
+        Assert.Equal([firstReview], await StoredReviewsAsync(noteId));
+        clock.Advance(TimeSpan.FromMinutes(1));
+
+        using (var reviewedAgain = await ReviewAsync(client, participant.Id, 2, "Booked the GP."))
+        {
+            Assert.Equal(HttpStatusCode.Created, reviewedAgain.StatusCode);
+        }
+
+        var note = await client.GetFromJsonAsync<JsonElement>(
+            NotePath(participant.Id), TestContext.Current.CancellationToken);
+        Assert.Equal("Reviewed", note.GetProperty("flagStatus").GetString());
+        var reviews = note.GetProperty("reviews").EnumerateArray().ToList();
+        Assert.Equal(
+            [(2, "Booked the GP."), (1, "Called Sam's mum.")],
+            reviews.Select(review =>
+                (review.GetProperty("versionNumber").GetInt32(), review.GetProperty("comment").GetString())));
+        Assert.All(reviews, review =>
+        {
+            var reviewedBy = review.GetProperty("reviewedBy");
+            Assert.Equal(seeded.A.ManagerId, reviewedBy.GetProperty("id").GetGuid());
+            Assert.False(string.IsNullOrEmpty(reviewedBy.GetProperty("displayName").GetString()));
+        });
+        Assert.True(
+            reviews[0].GetProperty("reviewedAtUtc").GetDateTimeOffset()
+            > reviews[1].GetProperty("reviewedAtUtc").GetDateTimeOffset());
+    }
+
     private static string NotePath(Guid participantId) =>
         string.Create(CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{NoteDate:yyyy-MM-dd}");
 
@@ -373,6 +430,29 @@ public sealed class NoteReviewEndpointTests(Grow2NotesFactory factory, SqlServer
         HttpClient client, Guid participantId, int versionNumber, string? comment) =>
         await client.PostWithTokenAsync(
             ReviewsPath(participantId), await client.FetchTokenAsync(), new { versionNumber, comment });
+
+    // Save changes at the base given, flagged with the reason, as the SPA sends it: over HTTPS, with the caller's
+    // antiforgery token and a key of its own.
+    private static async Task<HttpResponseMessage> SaveChangesAsync(
+        HttpClient client, Guid participantId, int baseVersion, string flagReason)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{NotePath(participantId)}/versions")
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion,
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
+                isFlagged = true,
+                flagReason,
+            }),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
 
     // A 409 review.not_current (design.md §6.9).
     private static async Task ReadNotCurrentAsync(HttpResponseMessage response)

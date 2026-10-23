@@ -596,8 +596,10 @@ prompts. Its `serve(page, me)` answers the page's requests for a header, a histo
   `pickedGroupIds` or `tickedCommonItemIds` as a save does; and otherwise version `baseVersion + 1`: at 0, version 1,
   its goals from the snapshot with the ticks sent, its shown groups with the picks and ticks sent, the draft gone, and
   the note in To review, with version 1 as its flagged version, when it is flagged (design.md §5.8 step 5); at a later
-  base, the note's current version replaced, last changed by the caller at the store's time, with the author, the flag
-  status and the flagged version left as they are until T16, and the caller's pending edit gone. Each is answered
+  base, the note's current version replaced, last changed by the caller at the store's time, with the author kept, the
+  flag status and the flagged version left as they are unless the version is flagged and its base version was not, or
+  had another reason, which puts the note in To review with this version as its flagged version (design.md §5.8's
+  flag rules), and the caller's pending edit gone. Each is answered
   `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`;
 - and each Discard, with the checks of T12's Notes in their order: `404` for no participant or a day with no note;
   `409 note.not_a_draft` for a submitted note or a day whose draft is discarded already; a `403` problem with no `code`

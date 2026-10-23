@@ -926,9 +926,10 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
     }
 
     // Save changes (design.md §5.8, S02.06.01 and S02.06.02): a manager's pending edit of the worker's note, saved at
-    // its base, 1, is version 2, written by the manager, while the note keeps its author, status, first submitted time
-    // and flag status, which a flag on the version leaves as it was until T16. The manager's working copy goes and the
-    // worker's, their own, stays; one note.edited event holds the version number and no text.
+    // its base, 1, is version 2, written by the manager, while the note keeps its author, status and first submitted
+    // time; its flag, over an unflagged version 1, puts the note in To review with version 2 its flagged version
+    // (S03.01.02). The manager's working copy goes and the worker's, their own, stays; one note.edited event holds the
+    // version number and no text.
     [Fact]
     public async Task A_manager_s_save_changes_makes_version_2_by_the_manager_and_keeps_the_author_and_the_other_copy()
     {
@@ -947,8 +948,15 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var saved = await AnswerAsync(response);
-        Assert.Equal((2, "None"), (saved.VersionNumber, saved.FlagStatus));
-        Assert.Equal(note with { CurrentVersionNumber = 2 }, await StoredNoteAsync(noteId));
+        Assert.Equal((2, "ToReview"), (saved.VersionNumber, saved.FlagStatus));
+        Assert.Equal(
+            note with
+            {
+                CurrentVersionNumber = 2,
+                FlagStatus = (byte)FlagStatus.ToReview,
+                FlaggedVersionNumber = 2,
+            },
+            await StoredNoteAsync(noteId));
         var versions = await StoredVersionsAsync(noteId);
         Assert.Equal(first, versions[0]);
         var second = versions[1];
@@ -972,14 +980,20 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
             (after.Notes, after.Drafts, after.Versions));
     }
 
-    // design.md §5.8 step 5: a later version's one header update sets the current version alone, leaving the status,
-    // the first submitted time and the flag as they are. Read from the command as sent.
-    [Fact]
-    public async Task The_header_s_update_of_a_later_version_sets_the_current_version_alone()
+    // design.md §5.8 step 5: a later version's one header update sets the current version, and the flag status and
+    // flagged version only when the version raises the flag, leaving the status and the first submitted time as they
+    // are. Read from the command as sent.
+    [Theory]
+    [InlineData(false, new[] { "CurrentVersionNumber" })]
+    [InlineData(true, new[] { "CurrentVersionNumber", "FlagStatus", "FlaggedVersionNumber" })]
+    public async Task The_header_s_update_of_a_later_version_sets_the_flag_only_when_it_is_raised(
+        bool flagged, string[] columns)
     {
         var (participantId, noteId, _) = await AddSubmittedNoteAsync();
         using var worker = factory.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
-        var content = EditBody(1, "Jane made toast and tea.", true, "Jane seemed unwell.");
+        var content = flagged
+            ? EditBody(1, "Jane made toast and tea.", true, "Jane seemed unwell.")
+            : EditBody(1, "Jane made toast and tea.");
         await BeginEditAsync(worker, participantId, Guid.NewGuid(), content);
         var updates = new RecordsTheHeaderUpdatesOf(noteId);
         await using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -989,7 +1003,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         using var response = await SubmitAsync(client, participantId, NoteDate, Guid.NewGuid(), content);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal(["CurrentVersionNumber"], SetColumns(Assert.Single(updates.Commands)));
+        Assert.Equal(columns, SetColumns(Assert.Single(updates.Commands)));
     }
 
     // R10 and A69: a Save changes with nothing changed is still a version.
