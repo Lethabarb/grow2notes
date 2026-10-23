@@ -162,7 +162,7 @@ The layout is the same for every role that can see it. Workers never see any of 
 1. Reached by the "Write past-day note" link (a link to its own URL, per primary-actions.md). Managers only. The route renders no field for an archived participant and shows the participant's archived read-only banner instead (3.7). The banner component owns that copy.
 2. The field starts **empty**. `max` = the day before `me.today`. No `min` (see Open questions).
 3. **Continue** validates (form-validation.md one-field pattern): show the inline error, set `aria-invalid`, and focus the field. Nothing turns red before Continue is pressed.
-4. If valid: navigate (push) to the note route for that participant and date (for example `/participants/{id}/notes/2026-09-28`). That route fetches the note and decides what opens: the existing note (read view, own draft, or a manager's read-only view of someone else's draft) or a new past-day form with the banner "Past-day note for Mon 28 Sep 2026, written on 1 Oct." (4.3). This page never decides from cached data.
+4. If valid: navigate (replace, as built in T18, so that Back and the note's back link skip this page) to the note route for that participant and date (for example `/participants/{id}/notes/2026-09-28`). That route fetches the note and decides what opens: the existing note (read view, own draft, or a manager's read-only view of someone else's draft) or a new past-day form with the banner "Past-day note for Mon 28 Sep 2026, written on 1 Oct." (4.3). This page never decides from cached data.
 5. The server still refuses a future date (`422 note.future_date`). The note form owns that message.
 
 **Participant record export (4.12)**
@@ -484,9 +484,9 @@ function WritePastDayNote({ participant }: { participant: { id: string; givenNam
 ## Open questions
 
 1. **Export "From" default.** Design 4.12 pre-fills From with "the participant's first note", but no endpoint in §6 returns that date. One of the existing responses would need a `firstNoteDate`, or the default needs restating. Not decided here.
-2. **Earliest date.** Neither the report nor the past-day field has a `min`. Dates before go-live are covered by the Word records (A39). The owner may want a lower bound, but the design specifies none, so none is set.
+2. **Earliest date.** Neither the report nor the past-day field has a `min`. Dates before go-live are covered by the Word records (A39). The owner may want a lower bound, but the design specifies none, so none is set. Answered as built (T18): none, and no warning for a date long ago (design.md A75).
 3. **Date of birth control.** Decided here as three text boxes because form-validation.md deferred it. Confirm it fits the participant-detail form spec.
-4. **To verify on real devices before M4 closes:** current Chrome/Edge/Firefox/Safari `change` timing while typing; iOS empty-field collapse and centred value; whether iOS sets a value as soon as its picker opens on an empty field (the past-day page would then show "Note date must be in the past" for today, which is still correct); native field announcements with NVDA + Chrome, JAWS + Chrome, VoiceOver on iOS and macOS, and TalkBack; Dragon with the past-day field.
+4. **To verify on real devices before M4 closes:** current Chrome/Edge/Firefox/Safari `change` timing while typing; iOS empty-field collapse and centred value; whether iOS sets a value as soon as its picker opens on an empty field (the past-day page would then show "Note date must be in the past" for today, which is still correct); native field announcements with NVDA + Chrome, JAWS + Chrome, VoiceOver on iOS and macOS, and TalkBack; Dragon with the past-day field. These checks are in ops/first-use-in-test.md's section for T18; a very old date and a typed four-digit year are among them.
 5. **App-shell hook.** app-shell-nav.md's arrival-focus tracker needs the `inScreen` exception described above.
 
 ---

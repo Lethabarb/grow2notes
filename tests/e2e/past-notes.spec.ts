@@ -726,13 +726,13 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Shift+Tab', [names[28]]);
     await expectNothingKept(page, 'Jane', 'Citizen', priya, 'Note number');
 
-    // A manager's Edit participant, between the back link and the rows.
+    // A manager's Write past-day note and Edit participant, between the back link and the rows.
     await serveMe(page, manager);
     await store.serve(page, manager);
     await page.goto(pastNotesAddress(jane.id));
     await heading(page).focus();
-    await expectStops(page, 'Tab', ['Edit participant', names[0]]);
-    await expectStops(page, 'Shift+Tab', ['Edit participant', 'Today']);
+    await expectStops(page, 'Tab', ['Write past-day note', 'Edit participant', names[0]]);
+    await expectStops(page, 'Shift+Tab', ['Edit participant', 'Write past-day note', 'Today']);
   });
 }
 

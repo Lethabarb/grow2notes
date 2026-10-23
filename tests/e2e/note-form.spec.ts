@@ -727,6 +727,11 @@ test('the in-progress dead end, for today and for an earlier day, and the archiv
   await expect(deadEnd(page)).toHaveText(alexOnEarlierDay);
   await expect(alert(page)).toHaveText(alexOnEarlierDay);
   await expect(saveStatus(page)).toHaveText('Not saved');
+  // The past-day notice makes the page long enough for typing to scroll it, and the sticky top bar then covers part of
+  // the Past notes link, which axe reads as a target too small to hit. Axe reads the page as opened, from its top.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0);
+  });
   await expectAxeToPass(page);
 
   // Jane archived between the form opening and its first change.

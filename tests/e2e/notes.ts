@@ -88,6 +88,8 @@ export type SubmittedNote = {
    * has a version 2; none, one version, otherwise.
    */
   lastEdit?: { by: string; atUtc: string };
+  /** The groups it picked, from the store's, with every item unticked; none by default. */
+  pickedGroupIds?: string[];
 };
 
 /** The version in a note's `FlaggedVersionNumber` (design.md §5.3): its reason and when it was saved. */
@@ -110,6 +112,8 @@ type HeldDraft = StartedBy & {
   savedAtUtc: string;
   lastClientId: string;
   lastSeq: number;
+  /** Whether a manager started it on a later day than its date; not unless set, as only that save sets it. */
+  isPastDayNote?: boolean;
 };
 
 /**
@@ -162,6 +166,8 @@ type HeldSubmitted = StartedBy & {
   reviews: StoredReview[];
   /** Who saved the current version, and when, once it is version 2 or later; `null` while it is version 1. */
   lastEdit: { by: string; atUtc: string } | null;
+  /** Whether a manager started it on a later day than its date; not unless set. */
+  isPastDayNote?: boolean;
 };
 
 /** Whether `me` may edit a submitted note: its author, or a manager (design.md §2, D19). */
@@ -404,7 +410,8 @@ export function notesStore({
     const key = `${participantId}/${noteDate}`;
     const held = submitted.get(key);
     if (held !== undefined && headers.has(participantId)) {
-      const { authorDisplayName, firstSubmittedAtUtc, narrative, isFlagged, flagReason, goals: ticks } = held;
+      const { authorDisplayName, startedAtUtc, firstSubmittedAtUtc, narrative, isFlagged, flagReason } = held;
+      const { goals: ticks, isPastDayNote = false } = held;
       const author = { id: held.authorUserId, displayName: authorDisplayName };
       const current = {
         versionNumber: held.currentVersionNumber,
@@ -417,7 +424,8 @@ export function notesStore({
       const edit = held.lastEdit === null ? { isEdited: false } : { isEdited: true, lastEdit: held.lastEdit };
       // A manager alone is given the review status and every review, newest first.
       const review = me.role === 'Manager' ? { flagStatus: held.flagStatus, reviews: held.reviews } : {};
-      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, ...edit, ...review, current } };
+      const header = { status: 'Submitted', author, startedAtUtc, firstSubmittedAtUtc, isPastDayNote };
+      return { json: { ...header, ...edit, ...review, current } };
     }
 
     const draft = drafts.get(key);
@@ -426,13 +434,14 @@ export function notesStore({
     }
 
     const { authorDisplayName, startedAtUtc, snapshot, ticked, narrative, isFlagged, flagReason } = draft;
+    const { isPastDayNote = false } = draft;
     const goalsTicked = snapshot.map(({ id, text }) => ({ text, isTicked: ticked.includes(id) }));
     const shown = readGroupsOf(draft.groups, draft.picked, draft.tickedItems);
     const content =
       me.role === 'Manager'
         ? { current: { narrative, isFlagged, flagReason, goals: goalsTicked, commonItemGroups: shown } }
         : {};
-    return { json: { status: 'Draft', authorDisplayName, startedAtUtc, ...content } };
+    return { json: { status: 'Draft', authorDisplayName, startedAtUtc, isPastDayNote, ...content } };
   }
 
   /**
@@ -520,12 +529,25 @@ export function notesStore({
       listsVersion: versionOf(listed, commonItemGroups),
       guidePrompts: prompts,
       goals: listed.map((goal) => ({ ...goal, isTicked: false })),
-      commonItemGroups: formGroupsOf(commonItemGroups, [], []),
+      commonItemGroups: formGroupsOf(commonItemGroups, startingPicks(participantId, noteDate), []),
       narrative: '',
       isFlagged: false,
       flagReason: null,
     };
     return { json };
+  }
+
+  /**
+   * The groups a new note starts with picked (design.md §5.5): those of the participant's latest submitted note dated
+   * before the new note's date, that the organisation still offers.
+   */
+  function startingPicks(participantId: string, noteDate: string): string[] {
+    const earlier = [...submitted]
+      .filter(([key]) => key.startsWith(`${participantId}/`) && key.slice(-10) < noteDate)
+      .sort(([a], [b]) => b.localeCompare(a))[0]?.[1];
+    return commonItemGroups
+      .filter((group) => group.isEveryNote !== true && group.items.length > 0 && earlier?.picked.includes(group.id))
+      .map(({ id }) => id);
   }
 
   /**
@@ -627,6 +649,8 @@ export function notesStore({
       savedAtUtc,
       lastClientId: sent.clientId,
       lastSeq: sent.seq,
+      // Only a manager gets this far with an earlier day, and the store's saves are all made on its day.
+      isPastDayNote: noteDate < today,
     });
     return { status: 201, json: { savedAtUtc } };
   }
@@ -818,6 +842,7 @@ export function notesStore({
         authorDisplayName: working.authorDisplayName,
         startedAtUtc: working.startedAtUtc,
         firstSubmittedAtUtc: savedAtUtc,
+        isPastDayNote: working.isPastDayNote,
         idempotencyKey,
         currentVersionNumber: 1,
         lastEdit: null,
@@ -1230,6 +1255,7 @@ export function notesStore({
       const flagStatus = added.flagStatus ?? flag.flagStatus;
       const edited = firstFlagReason !== undefined || added.lastEdit !== undefined;
       const listed = (added.goals ?? []).map((goal, index) => ({ ...goal, id: goal.id ?? `goal-${index + 1}` }));
+      const picked = added.pickedGroupIds ?? [];
       if (flagStatus === 'ToReview' && flag.flaggedVersion === null) {
         throw new Error('A note in To review has a flagged version: give it a flagReason or a firstFlagReason.');
       }
@@ -1242,13 +1268,13 @@ export function notesStore({
         idempotencyKey: randomUUID(),
         currentVersionNumber: edited ? 2 : 1,
         snapshot: listed.map(({ id, text }) => ({ id, text })),
-        groups: [],
+        groups: picked.length === 0 ? [] : [...commonItemGroups],
         ticked: listed.filter((goal) => goal.isTicked).map(({ id }) => id),
-        picked: [],
+        picked,
         tickedItems: [],
         narrative: added.narrative ?? '',
         goals: listed.map(({ text, isTicked }) => ({ text, isTicked })),
-        commonItemGroups: [],
+        commonItemGroups: readGroupsOf(picked.length === 0 ? [] : commonItemGroups, picked, []),
         isFlagged: flagReason !== null,
         flagReason,
         flagStatus,

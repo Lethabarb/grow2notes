@@ -69,6 +69,31 @@ describe("the earlier-day notice's words", () => {
   });
 });
 
+// note-form.md *Kinds of note*, and participants.md C4, word for word.
+describe("the past-day note's words", () => {
+  it('say the note date, then the day it was written, in the place of the earlier-day notice', () => {
+    expect(msg.pastDayNotice('Monday 28 September 2026', 'Thursday 1 October 2026')).toBe(
+      'Past-day note for Monday 28 September 2026, written on Thursday 1 October 2026.',
+    );
+  });
+
+  it("say an archived participant's page has no new notes, by their full name", () => {
+    expect(msg.noNewNotesArchived('Jane Citizen')).toBe(
+      'Jane Citizen is archived, so no new notes can be written for them.',
+    );
+  });
+
+  it("give Write past-day note's field and messages", () => {
+    expect(strings.pastDayNote).toEqual({
+      noteDate: 'Note date',
+      hint: 'A date before today',
+      continue: 'Continue',
+      enterTheNoteDate: 'Enter the note date',
+      mustBeInThePast: 'Note date must be in the past',
+    });
+  });
+});
+
 // participant-notes.md *Read view* › Status lines, word for word.
 describe("the read view's lines", () => {
   it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {

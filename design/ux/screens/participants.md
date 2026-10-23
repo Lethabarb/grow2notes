@@ -478,7 +478,7 @@ Data: `GET /api/participants/{participantId}` (`{id, givenName, familyName, stat
 [`text-and-date-inputs.md`](../components/text-and-date-inputs.md), [`form-validation.md`](../components/form-validation.md)
 - A one-field `<form noValidate onSubmit>`. Label "Note date" (P), hint "A date before today" (P), one native
   `<input type="date" max={yesterday}>`, where `yesterday` is `me.today` minus one day using UTC string arithmetic in
-  `dates.ts` (never the device clock). No `min`, **no default value**, `autoComplete="off"`, text at 18 px, at least
+  `format.ts`'s `dayBefore` (never the device clock). No `min`, **no default value**, `autoComplete="off"`, text at 18 px, at least
   48 px tall, `max-inline-size: 12em`. [Convention: GOV.UK dates pattern, a calendar suits a chosen recent date,
   https://design-system.service.gov.uk/patterns/dates/; Research: NN/g, https://www.nngroup.com/articles/date-input/]
 - `max` is only a hint for the picker: iOS ignores it (WebKit bug 225639, open) and desktop typing gets past it, so
@@ -491,6 +491,13 @@ Data: `GET /api/participants/{participantId}` (`{id, givenName, familyName, stat
 "Jane Citizen is archived, so no new notes can be written for them." in the notice style, with no Restore (Restore lives
 on the participant's page). Reached only through an old link or Back, because the link is hidden for archived
 participants.
+
+As built (T18): `WritePastDayNotePage` (src/features/participants), at `/manage/participants/{id}/past-day-note` inside
+`ManagerOnly`, so a worker gets Page not found and no request is sent. The caption in the `<h1>` is followed by
+`Pause`, the visually hidden comma that lint requires for words in JSX. A year of five or more digits, which a browser
+lets a person type, is "Note date must be in the past". Continue replaces the page's history entry (see the table
+above). The link sits with Past notes in Actions, in a `ButtonGroup`, and goes with Archive participant and comes back
+with Restore. There is no earliest date, and no warning for one long ago (design.md A75).
 
 ### Shared foundations and formats
 
@@ -686,8 +693,8 @@ Notes on these interactions:
 | Pick or type a date | Nothing is checked yet; no change event acts on half-typed dates | Stays | Native field output only |
 | **Continue** with an empty, incomplete, today or future date | Inline error, `aria-invalid`, 4 px bar | The field | Label, "invalid", "Error: Enter the note date" (or "…must be in the past") |
 | Fix the value | Error cleared the moment the value is valid (re-checked on each change once in error) | Stays | Nothing |
-| **Continue** with a valid past date | `navigate('/participants/{id}/notes/2026-09-28')` (push). That route fetches and decides: the existing note (read view, own draft, or a read-only draft with Discard) or a new past-day form with the past-day banner (design 3.8, 4.3). Nothing is created until the first change. | The note screen's heading | Via focus |
-| Back from the note form | Returns to an empty past-day page | `<h1>` | Via focus |
+| **Continue** with a valid past date | `navigate('/participants/{id}/notes/2026-09-28', { replace: true })`, as built (T18): it replaces this page's own entry, so that the note's back link names the screen that opened this page and pops to it. That route fetches and decides: the existing note (read view, own draft, or a read-only draft with Discard) or a new past-day form with the past-day banner (design 3.8, 4.3). Nothing is created until the first change. | The note screen's heading | Via focus |
+| Back from the note form | As built (T18): skips the date page and returns to the screen that opened it, "Participant" or "Past notes", as the note's back link does; with no opener, Today | That screen's heading | Via focus |
 
 ### Live regions on these views
 
