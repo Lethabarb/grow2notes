@@ -35,10 +35,16 @@ const cancel = (page: Page) => main(page).getByRole('button', { name: /^(Cancel|
 // The Review panel: its section, found by its heading, the comment box, Mark reviewed, the alert above the button and,
 // once the form has gone, the line that focus moves to.
 const panelHeading = (page: Page) => main(page).getByRole('heading', { level: 2, name: 'Review', exact: true });
-const panel = (page: Page) => main(page).locator('section').filter({ has: panelHeading(page) });
+// `has` is matched inside each section, so its heading is rooted at the page and not at <main>.
+const panel = (page: Page) =>
+  main(page)
+    .locator('section')
+    .filter({ has: page.getByRole('heading', { level: 2, name: 'Review', exact: true }) });
 const comment = (page: Page) => main(page).getByRole('textbox', { name: 'Comment (optional)', exact: true });
 const markReviewed = (page: Page) =>
   main(page).getByRole('button', { name: /^(Mark reviewed|Marking reviewed…)$/ });
+// FieldError's text starts with a hidden "Error:", so the message is found by its id.
+const commentError = (page: Page) => main(page).locator('#review-comment-error');
 const requestAlert = (page: Page) => main(page).locator('form [role="alert"]');
 const record = (page: Page) => panel(page).locator('p[tabindex="-1"]');
 const whileOpen = (page: Page) =>
@@ -168,14 +174,15 @@ test('a comment over 500 characters is refused with a message and focus on the b
   await comment(page).fill('x'.repeat(501));
   await markReviewed(page).click();
 
-  await expect(main(page).getByText('Comment must be 500 characters or less', { exact: true })).toBeVisible();
+  await expect(commentError(page)).toBeVisible();
+  await expect(commentError(page)).toContainText('Comment must be 500 characters or less');
   await expect(comment(page)).toHaveAttribute('aria-invalid', 'true');
   await expect(comment(page)).toBeFocused();
   expect(store.reviewRequests).toEqual([]);
   await expectAxeToPass(page);
 
   await comment(page).fill('x'.repeat(500));
-  await expect(main(page).getByText('Comment must be 500 characters or less', { exact: true })).toHaveCount(0);
+  await expect(commentError(page)).toHaveCount(0);
   await expect(comment(page)).not.toHaveAttribute('aria-invalid', 'true');
 });
 
@@ -237,6 +244,7 @@ test('a note edited since it was opened shows the new text, keeps the comment, a
   const store = flaggedNote();
   await openFromFlagged(page, store);
   await comment(page).fill('Will check both.');
+  // Version 2 stands in for a later one: either way the next press must name the version the page now shows.
   store.editElsewhere(jane.id, noteDate, joSmith.displayName, { narrative: 'Jane stayed in, then ate lunch.' });
 
   await markReviewed(page).click();
