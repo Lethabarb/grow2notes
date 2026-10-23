@@ -4996,7 +4996,7 @@ the design.md §5.8 flag rules for later versions, and one panel.
 
 ```yaml
 id: T17
-status: new
+status: doing
 release: R1
 lane: B
 size: L
@@ -5028,6 +5028,36 @@ each download is preparing, ready or failed.
 
 - Builds the download hook that T21's export reuses, and adds the date controls to T15's Report screen.
 - Saving the file on real phones is a by-hand check on ops/first-use-in-test.md (from S04.02.05).
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: a manager steps or types to any day up to today, sees plainly when a day has no submitted notes, and is
+  told whether each download is preparing, ready or failed. No table, column, migration or index.
+- Design: one read-only endpoint, `GET /api/reports/daily/{date}/has-notes` (manager only, `{date, hasNotes}`, no
+  count). The Report route becomes `reports/daily/:date?` with the arrival rules in the page (no date or a future
+  date goes to today; an unreal date or one before 1900 is Page not found). Native date field committed on Enter,
+  blur or a 750 ms pause; Previous and Next day are links that push history; Next day on today is the unavailable
+  link look. Has-notes is a TanStack query refetched on window focus; a 404 `report.no_notes` on a download writes
+  the empty answer into its cache.
+- Domain: `DailyReportModel.HasNotesAsync` over a private `SubmittedOn` that `ReadAsync` shares, so it is false
+  exactly when the export would answer 404. Response record `DailyReportHasNotes(Date, HasNotes)`. No audit event.
+- Reuse: `MapDailyReportEndpoint`, `Policies.Manager`, the `isodate` constraint, `Button` busy and unavailable
+  handling, `FieldGroup`, `useDelayed`, `useMe`, `dayBefore`, `handle.screenKey`, the e2e report helpers. New shared
+  pieces: `useDownload` (T21 reuses it), `useOnWindowFocus`, `hasNotesQuery`, `dayAfter` and `isIsoDate`.
+- Decisions where design.md is silent: A82 has-notes is unaudited and only the export writes `report.downloaded`; A83
+  no business lower bound, with a 1900 floor so a half-typed year never commits, Page not found before it, and
+  Previous day always available. R42 (unreal date gets the isodate 404) is a Note only. No D number.
+- Tests: server theories prove has-notes agrees with the export; matrix row; Vitest for the page, hook, routes and
+  format helpers; Playwright for the states, keyboard, history and layout. Local checks are compile and lint only.
+
+### Verticals
+
+- v1: Has-notes endpoint: server, tests, matrix row; depends_on: none; R17 R18 R36 R37
+- v2: Report screen SPA, useDownload, e2e, by-hand steps and the design record; depends_on: v1;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R15 R16 R19 R20 R21 R22 R23 R24 R25 R26 R27 R28 R29 R30
+  R31 R32 R33 R34 R35 R38 R39 R40 R41 R42 R43
 
 ### Steps
 
