@@ -18,5 +18,11 @@ export default defineConfig({
     extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' },
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // The report download's save step is the one thing here that differs between engines (daily-report.md), so only its
+    // fully mocked spec runs in these two.
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testMatch: 'report-download.spec.ts' },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testMatch: 'report-download.spec.ts' },
+  ],
 });
