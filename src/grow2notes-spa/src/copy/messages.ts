@@ -110,6 +110,8 @@ export const msg = {
    * Reviewed list alike.
    */
   reviewedBy: (displayName: string) => `by ${displayName} on`,
+  /** The Flagged item's hidden text after its word and badge, so that the name reads "Flagged, 3 to review". */
+  toReviewBadge: (count: number) => `, ${count} to review`,
   /** A review's comment, after its line (participant-notes.md component 4), as written. */
   reviewComment: (comment: string) => `Comment: ${comment}`,
   /** A Mark reviewed that failed, in the alert above its button: "Not marked reviewed: no connection. Try again." */

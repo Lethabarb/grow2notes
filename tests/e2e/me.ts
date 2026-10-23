@@ -9,6 +9,8 @@ export type Me = {
   organisationName: string;
   /** The date in Melbourne on the server (A33). */
   today: string;
+  /** The notes waiting for review, which a manager's answer has (design.md §6.2); left out, there is no badge. */
+  toReviewCount?: number;
 };
 
 // A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
@@ -26,6 +28,13 @@ export const manager: Me = {
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };
+
+/**
+ * The Flagged item of the main navigation, whatever its count: with notes to review the badge's hidden text follows the
+ * word, "Flagged, 3 to review", with a space before the comma where the browser puts one between the flex items.
+ */
+export const flaggedItem = (page: Page) =>
+  page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /^Flagged ?(, \d+ to review)?$/ });
 
 /**
  * Answers each `GET /api/auth/me` that the page sends from now on with `me`, in the browser, so that the request never

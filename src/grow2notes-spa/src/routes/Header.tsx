@@ -133,7 +133,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
         <NavItem item="today" to="/" mark={mark} />
         {isManager && (
           <>
-            <NavItem item="flagged" to="/flagged" mark={mark} />
+            <NavItem item="flagged" to="/flagged" mark={mark} count={me.toReviewCount} />
             <NavItem item="report" to={`/reports/daily/${me.today}`} mark={mark} />
             <NavItem item="manage" to="/manage" mark={mark} />
           </>
@@ -232,11 +232,17 @@ function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; op
  * One item of the main navigation: a plain `Link`, not React Router's `NavLink`, which would say "page" on a page
  * inside a section, where component 2b's table says "true".
  */
-function NavItem({ item, to, mark }: { item: NavItemKey; to: string; mark: Mark | undefined }) {
+function NavItem({ item, to, mark, count }: { item: NavItemKey; to: string; mark: Mark | undefined; count?: number }) {
   return (
     <li>
       <Link to={to} className={styles.navLink} aria-current={mark?.item === item ? mark.current : undefined}>
         {strings.navItem[item]}
+        {count !== undefined && count > 0 && (
+          <>
+            <span aria-hidden="true" className={styles.badge}>{count}</span>
+            <span className="visually-hidden">{msg.toReviewBadge(count)}</span>
+          </>
+        )}
       </Link>
     </li>
   );
