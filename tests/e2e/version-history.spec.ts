@@ -332,7 +332,8 @@ test('a version address that is not a whole number from 1 is Page not found, and
   await serveNote(page, edited);
   const sent = recordRequests(page);
 
-  for (const segment of ['0', '02', '1.5', 'abc']) {
+  // '1.5' is left to the unit test: the server answers a dotted path itself, as a file, before the SPA loads.
+  for (const segment of ['0', '02', 'abc']) {
     await page.goto(`${listAddress}/${segment}`);
     await expect(heading(page)).toHaveText('Page not found');
   }
