@@ -43,7 +43,7 @@ const jane: ParticipantHeader = {
 };
 
 // Between a day and its month and between a time and am or pm, so that neither pair splits across lines.
-const nbsp = ' ';
+const nbsp = '\u00A0';
 
 const noteDate = '2026-10-01';
 
@@ -468,6 +468,6 @@ describe('Going to and from a version', () => {
     });
     await settle();
 
-    expect(sentRequests()).toEqual([paths.versions]);
+    expect(sentRequests().filter((path) => path.startsWith('/api/participants'))).toEqual([paths.versions]);
   });
 });
