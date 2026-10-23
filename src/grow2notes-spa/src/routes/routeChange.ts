@@ -211,9 +211,9 @@ export type BackTo = { to: string; label: BackLabel };
  * The back link of a screen with several openers (app-shell.md component 3a), such as a note's or Past notes': to the
  * screen that opened it, named by `labels` after its back key, when that screen is the entry before; otherwise, as
  * after a reload, from a pasted address or in a new tab, or from an opener that `labels` does not name, to `fallback`,
- * Today unless a screen gives another, as Write past-day note gives Participant. As the screen first renders, the shell's rule has not yet followed the push or
- * replace that brought it, so the opener is worked out as `follow` will record it: for a push, the entry still on
- * screen; for a replace, the opener of the entry it replaces.
+ * Today unless a screen gives another, as Write past-day note gives Participant. As the screen first renders, the
+ * shell's rule has not yet followed the push or replace that brought it, so the opener is worked out as `follow` will
+ * record it: for a push, the entry still on screen; for a replace, the opener of the entry it replaces.
  */
 export function useBackTo(
   labels: Partial<Record<BackKey, BackLabel>>,

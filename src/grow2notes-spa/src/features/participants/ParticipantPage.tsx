@@ -314,9 +314,9 @@ type ParticipantProps =
  * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and
  * the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Past notes, a
  * link styled as a secondary button, then Write past-day note, which an archived participant has not, then, after a
- * rule, Archive participant; T21 adds Export record after them. Nothing is checked before Save, which checks every field in page order and sends
- * nothing while one fails; once a field shows a message, each edit checks it again. A `201` shows "Saved 4:12 pm" from
- * its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's goals query, as they have none,
+ * rule, Archive participant; T21 adds Export record after them. Nothing is checked before Save, which checks every
+ * field in page order and sends nothing while one fails; once a field shows a message, each edit checks it again. A
+ * `201` shows "Saved 4:12 pm" from its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's goals query, as they have none,
  * rather than fetching it, and replaces the address with the participant's, in the screen. A save of a participant who
  * exists is a `PUT` with their version as `If-Match`, whose `200` shows "Saved 4:12 pm" and the saved name as the
  * `<h1>`, and whose `412` says that someone else changed the details, the fields kept as typed. Focus stays on Save.

@@ -128,11 +128,12 @@ type NoteFormProps = {
 
 /**
  * The note form (note-form.md components 2, 4, 5, 7, 8 and 10 to 14): the error summary after a press of Submit note
- * that its checks refused, then the page's `<h1>`; the past-day notice, on a past-day note, in edit mode too, which takes
- * the place of the earlier-day notice, on a draft saved before the form opened,
- * never on a new note, saved since or not, as note-form.md's *Kinds of note* are set as the form loads, while it is
- * dated before `me.today`, so that it just appears, unannounced, once `me` gives a day that has passed midnight with
- * the form open (status-messages.md *Per-screen notes*); and the Past notes link; then, in a `<form noValidate>`, the
+ * that its checks refused, then the page's `<h1>`; the past-day notice, on a manager's new note of an earlier day, on a
+ * saved past-day draft and in edit mode, which takes the place of the earlier-day notice; else the earlier-day notice,
+ * on a draft saved before the form opened, never on a new note, saved since or not, as note-form.md's *Kinds of note*
+ * are set as the form loads, while it is dated before `me.today`, so that it just appears, unannounced, once `me`
+ * gives a day that has passed midnight with the form open (status-messages.md *Per-screen notes*); and the Past notes
+ * link; then, in a `<form noValidate>`, the
  * lists-changed notice's live region, there and empty from the first render, as a screen reader may not announce
  * words written into one added with them; Goals, its goals and ticks in this page's state, from the draft's; Common
  * items, its groups, picks and ticks in this page's state too, the picks as copied by the template or saved; Guided

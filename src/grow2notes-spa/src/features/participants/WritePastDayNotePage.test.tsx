@@ -92,6 +92,14 @@ function sentRequests(): string[] {
   return fetchMock.mock.calls.map(([path, init]) => `${init?.method ?? 'GET'} ${path as string}`);
 }
 
+/**
+ * The requests about participants, once each. The shell also refreshes `['me']` on mount, which this page's tests are
+ * not about, so it is left out.
+ */
+function participantRequests(): string[] {
+  return [...new Set(sentRequests().filter((request) => request.includes('/api/participants/')))];
+}
+
 /** Answers Jane's header with `participant`, and, for the note at `noteDate`, no note and a new note's form. */
 function serveJane(participant: ParticipantHeader = jane, noteDate = '2026-09-28') {
   serve(paths.header, json(participant));
@@ -228,7 +236,7 @@ describe('Write past-day note', () => {
     await openPage();
     enter('2026-09-28');
 
-    expect(new Set(sentRequests())).toEqual(new Set([`GET ${paths.header}`]));
+    expect(participantRequests()).toEqual([`GET ${paths.header}`]);
   });
 
   it.each([
@@ -305,7 +313,7 @@ describe('Write past-day note', () => {
     ).toBeVisible();
     expect(within(main()).queryByLabelText('Note date')).toBeNull();
     expect(within(main()).queryByRole('button')).toBeNull();
-    expect(new Set(sentRequests())).toEqual(new Set([`GET ${paths.header}`]));
+    expect(participantRequests()).toEqual([`GET ${paths.header}`]);
   });
 
   it('shows Page not found for a participant not in the organisation', async () => {
@@ -322,7 +330,7 @@ describe('Write past-day note', () => {
     await settle();
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName('Page not found');
-    expect(sentRequests().filter((request) => request.includes('/participants/'))).toEqual([]);
+    expect(participantRequests()).toEqual([]);
   });
 });
 

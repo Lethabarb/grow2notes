@@ -104,10 +104,12 @@ function Loaded({ participant }: { participant: ParticipantHeader }) {
   return (
     <>
       <PageHeading>
-        <span className={noteStyles.caption} translate="no">
-          {name}
-        </span>
-        <Pause />{' '}
+        {/* The pause sits inside the block caption: a block is spaced from its neighbours in the accessible name, which
+            would read "Jane Citizen , Write past-day note" with the comma outside it. */}
+        <span className={noteStyles.caption}>
+          <span translate="no">{name}</span>
+          <Pause />
+        </span>{' '}
         {pageName.writePastDayNote}
       </PageHeading>
       <div className={styles.body}>
