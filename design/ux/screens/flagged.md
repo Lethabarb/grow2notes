@@ -478,8 +478,8 @@ is checked before sending) · 4.1.2 Name, Role, Value · 4.1.3 Status Messages.
       is "To review (3)"; with 0 rows "To review (0)"; if the first load failed it stays "To review".
 - [ ] "Reviewed" never shows a count.
 - [ ] The "(n)" equals the number of To review rows, and after Mark reviewed the badge and the "(n)" both drop by 1
-      when the list next shows. (23 October 2026, T16 refreshes `me` and the review lists after Mark reviewed; the badge
-      and the "(n)" are T19's, as `me` has no `toReviewCount` yet.)
+      when the list next shows. (23 October 2026, T16 refreshes `me` and the review lists after Mark reviewed; T19
+      adds `toReviewCount` and the "(n)", proven by FlaggedPage.test.tsx and Header.test.tsx.)
 
 **To review list**
 - [ ] Rows are in the API's order (oldest first); the client does not re-sort.

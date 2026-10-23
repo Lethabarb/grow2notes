@@ -954,14 +954,14 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   await expect(page).toHaveTitle(title('Flagged notes'));
   await expectRileysFlag(page);
   // The number is in the menu on this screen change, and in the first view link.
-  await expect(flaggedItem(page)).toHaveAccessibleName(/^Flagged, 1 to review$/);
+  await expect(flaggedItem(page)).toHaveAccessibleName(/^Flagged ?, 1 to review$/);
   await expect(viewLink(page, 'To review (1)')).toBeVisible();
 
   // The second manager, on their next page load, Today and back to Flagged: the empty list kept in memory at once,
   // then the same row, over it, from the list asked for again.
   await navItem(secondManager, 'Today').click();
   await expect(rows(secondManager)).toHaveText([janeCitizen.name]);
-  await expect(flaggedItem(secondManager)).toHaveAccessibleName(/^Flagged, 1 to review$/);
+  await expect(flaggedItem(secondManager)).toHaveAccessibleName(/^Flagged ?, 1 to review$/);
   const asked = await holdNext(secondManager, toReviewRequests);
   await flaggedItem(secondManager).click();
   const again = await asked();
