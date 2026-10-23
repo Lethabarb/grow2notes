@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Auth;
+using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -15,7 +17,9 @@ namespace Grow2Notes.Tests.Features.Auth;
 /// <c>GET /api/auth/me</c> (design.md §6.2), called with the session cookie alone after the cookie sign-in
 /// (<see cref="CookieSignIn"/>), on a fake clock (<see cref="TestClock"/>) that moves a second before the call, as a
 /// later request of the session: the user's own ID, display name and role, their organisation's name, and the date in
-/// Melbourne, as JSON in camelCase that is never stored (§6.1). The endpoint matrix covers who may call it, and
+/// Melbourne, as JSON in camelCase that is never stored (§6.1); for a manager, the number of the organisation's notes
+/// in To review, which the tests count in an organisation of their own (<see cref="TestOrganisations"/>), as other
+/// tests flag notes in the seeded ones; for a worker, no such property. The endpoint matrix covers who may call it, and
 /// <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -67,15 +71,86 @@ public sealed class MeEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
         Assert.Equal("2026-10-10", me.GetProperty("today").GetString());
     }
 
-    // design.md §6.2's five, in its order; E03 adds toReviewCount, for managers only.
+    // design.md §6.2's five, in its order, and toReviewCount for a manager: the organisation's notes in To review, two,
+    // and not the reviewed note, the unflagged one, the draft, the discarded draft or B's flagged note.
     [Fact]
-    public async Task A_manager_s_answer_has_the_five_properties_and_no_toReviewCount()
+    public async Task A_manager_s_answer_has_six_properties_and_toReviewCount_counts_only_their_notes_in_To_review()
     {
-        var me = await GetMeAsync(seeded.A.ManagerId);
+        var organisation = await AddOrganisationWithNotesAsync();
+
+        var me = await GetMeAsync(organisation.ManagerId);
+
+        Assert.Equal(
+            ["userId", "displayName", "role", "organisationName", "today", "toReviewCount"],
+            me.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(2, me.GetProperty("toReviewCount").GetInt32());
+    }
+
+    // 0 is sent, not left out: only a worker has no count.
+    [Fact]
+    public async Task A_manager_with_no_note_in_To_review_gets_toReviewCount_0()
+    {
+        var organisation = await app.Services.AddOrganisationAsync();
+
+        var me = await GetMeAsync(organisation.ManagerId);
+
+        Assert.Equal(0, me.GetProperty("toReviewCount").GetInt32());
+    }
+
+    // The Flagged link's count and the To review list agree, as only a submitted note has a flag status and a note in
+    // To review always has a flagged version.
+    [Fact]
+    public async Task The_count_equals_the_length_of_the_To_review_list()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var organisation = await AddOrganisationWithNotesAsync();
+        using var client = app.CreateHttpsClient().SignInAs(organisation.ManagerId);
+
+        var list = await client.GetFromJsonAsync<JsonElement>("/api/reviews?status=toReview", cancellationToken);
+        var me = await GetMeAsync(organisation.ManagerId);
+
+        Assert.Equal(list.GetArrayLength(), me.GetProperty("toReviewCount").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_worker_s_answer_has_the_five_properties_and_no_toReviewCount()
+    {
+        var organisation = await AddOrganisationWithNotesAsync();
+
+        var me = await GetMeAsync(organisation.WorkerId);
 
         Assert.Equal(
             ["userId", "displayName", "role", "organisationName", "today"],
             me.EnumerateObject().Select(property => property.Name));
+    }
+
+    // Setup and the sign-in endpoints answer with OfUserAsync, inside the user's tenant as they do, so the count is the
+    // same there as in this endpoint's answer.
+    [Fact]
+    public async Task The_sign_in_and_setup_answer_carries_the_count_for_a_manager_and_none_for_a_worker()
+    {
+        var organisation = await AddOrganisationWithNotesAsync();
+
+        Assert.Equal(2, (await OfUserAsync(organisation, organisation.ManagerId)).ToReviewCount);
+        Assert.Null((await OfUserAsync(organisation, organisation.WorkerId)).ToReviewCount);
+    }
+
+    // The status is compared with a literal, so the query is a seek on the filtered index (OrganisationId, FlagStatus)
+    // WHERE FlagStatus = 1, which a parameter would not match. Writing the SQL opens no connection.
+    [Fact]
+    public async Task The_notes_in_To_review_compare_FlagStatus_with_the_literal_1()
+    {
+        await using var noDatabase = new AppWithoutDatabase("Production");
+        await using var scope = noDatabase.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        string sql;
+
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(Guid.NewGuid()))
+        {
+            sql = MeEndpoint.ToReviewNotes(db).ToQueryString();
+        }
+
+        Assert.Matches(@"\[FlagStatus\] = (CAST\()?1\b", sql);
     }
 
     [Fact]
@@ -90,6 +165,71 @@ public sealed class MeEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
+
+    // An organisation of its own with two notes in To review, and, none of them counted, a reviewed note, an unflagged
+    // one, a draft, a discarded draft, and a flagged note in the seeded organisation B.
+    private async Task<SeededOrganisation> AddOrganisationWithNotesAsync()
+    {
+        var services = app.Services;
+        var organisation = await services.AddOrganisationAsync();
+        var noteDate = new DateOnly(2026, 10, 2);
+        var startedAtUtc = new DateTime(2026, 10, 1, 23, 14, 0, DateTimeKind.Utc);
+        var submittedAtUtc = new DateTime(2026, 10, 2, 6, 42, 0, DateTimeKind.Utc);
+
+        for (var i = 0; i < 2; i++)
+        {
+            await services.AddSubmittedAsync(
+                organisation, Submitted((await services.AddParticipantAsync(organisation)).Id, organisation));
+        }
+
+        await services.AddSubmittedAsync(
+            organisation,
+            Submitted((await services.AddParticipantAsync(organisation)).Id, organisation, FlagStatus.Reviewed));
+        await services.AddSubmittedAsync(
+            organisation,
+            Submitted((await services.AddParticipantAsync(organisation)).Id, organisation, FlagStatus.None));
+        await services.AddDraftAsync(
+            organisation,
+            new((await services.AddParticipantAsync(organisation)).Id, noteDate, organisation.WorkerId, startedAtUtc));
+        var discarded = await services.AddDraftAsync(
+            organisation,
+            new((await services.AddParticipantAsync(organisation)).Id, noteDate, organisation.WorkerId, startedAtUtc));
+        await services.DiscardAsync(organisation, discarded, submittedAtUtc);
+        await services.AddSubmittedAsync(
+            seeded.B, Submitted((await services.AddParticipantAsync(seeded.B)).Id, seeded.B));
+        return organisation;
+
+        // Flagged, so in To review, unless the status given says otherwise: None is unflagged.
+        TestSubmittedNote Submitted(Guid participantId, SeededOrganisation owner, FlagStatus? flagStatus = null) =>
+            new(
+                participantId,
+                noteDate,
+                owner.WorkerId,
+                startedAtUtc,
+                submittedAtUtc,
+                IsFlagged: flagStatus != FlagStatus.None,
+                FlagReason: flagStatus == FlagStatus.None ? null : "Jane seemed unwell.",
+                FlagStatus: flagStatus);
+    }
+
+    // What the sign-in and setup endpoints answer with, for the user of the ID given, read inside their tenant as those
+    // endpoints do.
+    private async Task<Me> OfUserAsync(SeededOrganisation organisation, Guid userId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var user = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>()
+            .FindByIdAsync(userId.ToString());
+        Assert.NotNull(user);
+
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
+        {
+            return await MeEndpoint.OfUserAsync(
+                user,
+                scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>(),
+                scope.ServiceProvider.GetRequiredService<MelbourneClock>(),
+                TestContext.Current.CancellationToken);
+        }
+    }
 
     // Signs a new client in with the cookie, then moves the clock, so that its next request is a later one of the
     // session, which the session check rebuilds the principal for (tests/README.md).

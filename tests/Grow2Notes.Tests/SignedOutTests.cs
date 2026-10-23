@@ -90,12 +90,13 @@ public sealed class SignedOutTests : IAsyncDisposable
         Assert.Null(response.Headers.Location);
     }
 
-    // The To review list's own Manager policy (design.md §6.4) challenges a request with no session as the /api/admin
+    // The reviews list's own Manager policy (design.md §6.4) challenges a request with no session as the /api/admin
     // group's does, before the endpoint, which would need the database that is not here, so before its status is read.
     [Theory]
     [InlineData("/api/reviews?status=toReview")]
+    [InlineData("/api/reviews?status=reviewed")]
     [InlineData("/api/reviews")]
-    public async Task The_To_review_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
+    public async Task The_reviews_list_with_no_session_gets_a_401_problem_that_is_never_stored(string path)
     {
         using var client = app.CreateHttpsClient();
 
