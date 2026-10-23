@@ -744,7 +744,7 @@ export function notesStore({
       }
 
       const { versionNumber, createdAtUtc } = version;
-      return { status: 200, json: { versionNumber, createdAtUtc, flagStatus: held.flagStatus } };
+      return { status: 200, json: { versionNumber, createdAtUtc, ...flagStatusOf(me, held.flagStatus) } };
     }
 
     if (sent.baseVersion !== (held?.currentVersionNumber ?? 0)) {
@@ -800,7 +800,7 @@ export function notesStore({
         ...flag,
       });
       drafts.delete(key);
-      return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, flagStatus: flag.flagStatus } };
+      return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, ...flagStatusOf(me, flag.flagStatus) } };
     }
 
     // A version over the current one: the note's author, flag status and flagged version are the first version's,
@@ -810,7 +810,12 @@ export function notesStore({
       lastEdit: { by: me.displayName, atUtc: savedAtUtc },
     });
     edits.delete(editKey(key, me));
-    return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, flagStatus: held.flagStatus } };
+    return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, ...flagStatusOf(me, held.flagStatus) } };
+  }
+
+  /** The flag status in a version answer, for a manager alone: a worker never learns it. */
+  function flagStatusOf(me: Me, flagStatus: string) {
+    return me.role === 'Manager' ? { flagStatus } : {};
   }
 
   /**

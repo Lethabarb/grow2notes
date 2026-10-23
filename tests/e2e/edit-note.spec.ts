@@ -410,11 +410,7 @@ test('a lost answer to Save changes, tried again with nothing typed, makes one v
   await saveChanges(page).click();
   const answer = await retried;
   expect(answer.status()).toBe(200);
-  expect(await answer.json()).toEqual({
-    versionNumber: 2,
-    createdAtUtc: '2026-10-01T06:12:00.000Z',
-    flagStatus: 'None',
-  });
+  expect(await answer.json()).toEqual({ versionNumber: 2, createdAtUtc: '2026-10-01T06:12:00.000Z' });
   await expect(page).toHaveURL(address);
   await expect(readText(page)).toHaveText(editedText);
   expect(store.submits).toHaveLength(2);
