@@ -3,8 +3,9 @@ import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { breakfast, bus, goals, serveGoals } from './goals.ts';
 import { savedPrompts } from './guidePrompts.ts';
+import { expectStops, ring } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
-import { shownText } from './layout.ts';
+import { shownText, systemColour } from './layout.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
 import { notesStore, type NoteGroup, type NotesStore } from './notes.ts';
 import { ben, jane, participants, serveParticipants } from './participants.ts';
@@ -306,4 +307,67 @@ test('a worker has no link to it, and typing its address gives Page not found, w
   await expect(page).toHaveTitle(title('Page not found'));
   expect((await sent()).filter((request) => request.includes('/api/participants'))).toEqual([]);
   await expectAxeToPass(page);
+});
+
+/**
+ * Presses Tab until Continue has focus, from the Note date field. The browser's date field has a stop for each part
+ * of the date, which stay one element, so that the number of presses is the browser's.
+ */
+async function tabToContinue(page: Page) {
+  for (let presses = 0; presses < 8; presses += 1) {
+    if (await continueButton(page).evaluate((button) => button === document.activeElement)) {
+      return;
+    }
+
+    await page.keyboard.press('Tab');
+  }
+
+  await expect(continueButton(page)).toBeFocused();
+}
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: the back link, Note date, Continue, the error, then the back link`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await open(page, emptyStore(), participantAddress(jane.id));
+    await writePastDayNote(page).click();
+    await expect(heading(page)).toBeFocused();
+
+    // The back link before <main>, then Note date, then Continue, and no other stop.
+    await expectStops(page, 'Shift+Tab', ['Participant']);
+    await expectStops(page, 'Tab', ['Note date']);
+    await expect(noteDateField(page)).toBeFocused();
+    await tabToContinue(page);
+    await expect(continueButton(page)).toHaveCSS('outline-style', 'solid');
+    await expect(continueButton(page)).toHaveCSS('outline-width', '3px');
+
+    // Enter on Continue with the date empty: the message above the field, the field focused, and the page still here.
+    await page.keyboard.press('Enter');
+    await expect(dateError(page)).toHaveText('Error: Enter the note date');
+    await expect(noteDateField(page)).toBeFocused();
+    await expect(page).toHaveURL(pastDayAddress(jane.id));
+
+    // Enter on the back link returns to the participant.
+    await expectStops(page, 'Shift+Tab', ['Participant']);
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(participantAddress(jane.id));
+    await expect(heading(page)).toHaveText('Jane Citizen');
+  });
+}
+
+test('in forced colours, the ring is Highlight on the back link, Note date and Continue', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await open(page, emptyStore(), pastDayAddress(jane.id));
+  await expect(heading(page)).toHaveText('Jane Citizen, Write past-day note');
+  const highlight = await systemColour(page, 'Highlight');
+  expect(highlight).not.toBe(ring.colour);
+  const forcedRing = { ...ring, colour: highlight };
+
+  await heading(page).focus();
+  await expectStops(page, 'Shift+Tab', ['Participant'], forcedRing);
+  await expectStops(page, 'Tab', ['Note date'], forcedRing);
+  await tabToContinue(page);
+  await expect(continueButton(page)).toHaveCSS('outline-style', 'solid');
+  await expect(continueButton(page)).toHaveCSS('outline-color', highlight);
 });

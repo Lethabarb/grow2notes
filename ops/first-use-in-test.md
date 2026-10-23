@@ -846,7 +846,9 @@ changing a word and a tick each time and flagging it once. Every word typed is m
     checklist.)
 92. On a real phone held upright at its usual text size, then with the text size at its largest, open the list and a
     version and look for no sideways scroll, each row at least a finger tall, and the Guided notes text wrapping with
-    its line breaks and spaces kept. (version-history.md's layout items on a real device.)
+    its line breaks and spaces kept. Then, on the laptop with a Windows contrast theme on, open the list and a version
+    and look for the focus ring at each Tab stop, each row's edge, and every box and tick on the version still drawn.
+    (version-history.md's layout items on a real device, and its forced-colours check.)
 93. As the passkey worker, type the list's address and a version's address, taken from account A's browser, into the
     address bar: look for Page not found for both, and the same for a version number that is not a whole number, such
     as `0`. As account A, type a version number the note does not have and look for Page not found too. (S02.07.01 and
@@ -858,8 +860,9 @@ changing a word and a tick each time and flagging it once. Every word typed is m
     notes in Actions). Look for the title "Grow2Notes – Write past-day note", the `<h1>` holding her name above the
     page's name and taking focus, and the field "Note date" empty, with "A date before today" under the label. Press
     Continue with it empty and look for "Enter the note date" above the field, the field focused and red-barred. Pick
-    today and press Continue: "Note date must be in the past". Pick yesterday: the message goes at once. (S02.08.01 and
-    participants.md C.)
+    today and press Continue: "Note date must be in the past". Pick yesterday: the message goes at once. Then, with a
+    Windows contrast theme on, Tab through the page and look for the focus ring on the back link, the field and
+    Continue. (S02.08.01 and participants.md C.)
 96. Press Continue with yesterday and look for the note's form with "Past-day note for {the date}, written on {today}."
     after the date and before Past notes, no "This draft is for" notice, and the back link "Participant". Press the
     back link and look for her participant page with no date page in between; press Write past-day note again,
@@ -876,7 +879,9 @@ changing a word and a tick each time and flagging it once. Every word typed is m
 99. A very old date: in Chrome type `01011999` into the field, or pick 1 January 1999, and press Continue. Look for the
     form of that date opening, with "Past-day note for Friday 1 January 1999, written on {today}.", and nothing
     breaking in the heading or the notice. Leave without typing, so that no draft is made. Then do the same in Edge and
-    on the iPhone. (A75: no earliest date, no warning.)
+    on the iPhone. Then type a year of two digits, such as `0019`, and look for the form opening with nothing breaking;
+    its weekday may be wrong, as the browser's date arithmetic reads a year from 0 to 99 as 1900 to 1999, which A75
+    accepts. (A75: no earliest date, no warning.)
 100. A typed year: in Chrome click into the year part of the field and type a fifth digit, such as `20261`, press
      Continue and look for "Note date must be in the past", not Page not found. Then type `2026` with a month and day
      after today, in Chrome, Edge and Firefox, and look for the same message. (Typed dates get past `max`, which is

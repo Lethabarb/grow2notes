@@ -5501,7 +5501,7 @@ describe('The read view of a submitted note', () => {
   });
 
   // participant-notes.md component 5, the action row, which holds Past notes alone for a worker who did not write the
-  // note, with Edit before it for the author and a manager, and T18 adds Version history.
+  // note, with Edit before it for the author and a manager, and Version history between them for a manager.
   it('has the Past notes link after the byline and the flag line, before Goals', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
@@ -5644,7 +5644,8 @@ describe('The read view of a submitted note', () => {
     expect(reads()).toBeGreaterThan(before);
   });
 
-  // participant-notes.md item 21; T16 adds a manager's review lines and panel, and T18 Version history.
+  // participant-notes.md item 21: a manager's action row holds Edit, Version history and Past notes, and T16 adds a
+  // manager's review lines and panel.
   it("has no Edit, Version history, To review, Reviewed or review panel in a worker's DOM, and no form", async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);

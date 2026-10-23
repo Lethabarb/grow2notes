@@ -522,8 +522,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     // design.md §3.3, §5.5 item 4: a manager's first save for an earlier day starts a past-day note with them as its
     // author, for a draft's header and, once submitted, the note, which says when it was started. The last case
-    // starts it at 12:30 am on the first day of daylight saving, 13:30 UTC, when a fixed UTC+10 would still say the day
-    // before.
+    // starts it at 12:30 am on 5 October, the day after daylight saving starts, 13:30 UTC on the 4th, when a fixed
+    // UTC+10 would still say the 4th.
     [Theory]
     [InlineData("2026-09-28", "2026-10-01T00:30:00Z")]
     [InlineData("2026-09-30", "2026-09-30T14:30:00Z")]

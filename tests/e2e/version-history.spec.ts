@@ -1,12 +1,13 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectStops, ring } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
-import { scrollsSideways, setTextTo200Percent, shownText } from './layout.ts';
+import { scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
 import { jane } from './participants.ts';
-import { recordRequests } from './requests.ts';
+import { holdNext, recordRequests } from './requests.ts';
 
 // A manager's version history, pages A and B, in the published app (S02.07.01, S02.07.02, S02.08.01, S02.08.02),
 // against version-history.md's criteria and the read view's past-day line, as T18 builds them. Each test answers
@@ -24,6 +25,23 @@ const rowLine = (page: Page, index: number) => main(page).getByRole('listitem').
 const versionHistoryLink = (page: Page) => main(page).getByRole('link', { name: 'Version history', exact: true });
 // A line under the <h1> or the currency line, found by what it starts with.
 const lineStarting = (page: Page, start: RegExp) => main(page).locator('p').filter({ hasText: start });
+// The region's line, beside the page's visually hidden status region.
+const loadLine = (page: Page) => main(page).locator('p[role="status"]:not(.visually-hidden)');
+
+/** The names of the rows' links as Tab reaches them: each version and its description, as they show. */
+const rowNames = (page: Page) =>
+  rows(page).evaluateAll((links) => links.map((link) => (link as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
+
+/** How each tick icon is drawn, as it shows: the stroke of its box and, when it is ticked, of its tick. */
+const tickStrokes = (page: Page) =>
+  main(page)
+    .locator('ul[role="list"] svg')
+    .evaluateAll((icons) =>
+      icons.map((icon) => ({
+        box: getComputedStyle(icon.querySelector('rect')!).stroke,
+        tick: icon.querySelector('path') === null ? null : getComputedStyle(icon.querySelector('path')!).stroke,
+      })),
+    );
 
 const noteDate = manager.today;
 const noteAddress = `/participants/${jane.id}/notes/${noteDate}`;
@@ -382,4 +400,109 @@ test('at 320 px with text at 200%, neither page scrolls sideways', async ({ page
     await expect(heading(page)).toContainText(`Version ${n}`);
     expect(await scrollsSideways(page), `version ${n}, with a long saver, reason and text`).toBe(false);
   }
+});
+
+for (const width of [375, 1280]) {
+  test(`keyboard only at ${width} px: the back link, each version, a version's link, and back to its row`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await open(page, listAddress);
+    await expect(rows(page)).toHaveCount(3);
+    await heading(page).focus();
+
+    // Page A: the back link before <main>, then one stop for each version, newest first, and no other.
+    const names = await rowNames(page);
+    await expectStops(page, 'Shift+Tab', ['Note']);
+    await expectStops(page, 'Tab', [...names, 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [names[2], names[1]]);
+
+    // Enter opens version 2, its <h1> focused; its back link, then the link to the current version, and no other stop.
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(versionAddress(2));
+    await expect(heading(page)).toBeFocused();
+    await expectStops(page, 'Shift+Tab', ['Version history']);
+    await expectStops(page, 'Tab', ['version 3', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', ['version 3', 'Version history']);
+
+    // Enter on the back link returns to the list, focus on the row that was open.
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(listAddress);
+    await expect(rows(page).nth(1)).toBeFocused();
+    await expectStops(page, 'Tab', [names[2], 'outside the page']);
+  });
+}
+
+test('in forced colours, the ring is Highlight at each stop of both pages, and the boxes and ticks are drawn', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await open(page, listAddress);
+  await expect(rows(page)).toHaveCount(3);
+  const [highlight, canvasText] = await Promise.all([
+    systemColour(page, 'Highlight'),
+    systemColour(page, 'CanvasText'),
+  ]);
+  expect(highlight).not.toBe(ring.colour);
+  const forcedRing = { ...ring, colour: highlight };
+
+  await heading(page).focus();
+  const names = await rowNames(page);
+  await expectStops(page, 'Shift+Tab', ['Note'], forcedRing);
+  await expectStops(page, 'Tab', names, forcedRing);
+
+  // Enter on the last stop opens version 1: two goals, one ticked, and the outing's one item, ticked.
+  await page.keyboard.press('Enter');
+  await expect(heading(page)).toHaveText(`Version 1 ${janesHeading}`);
+  await expect(heading(page)).toBeFocused();
+  await expectStops(page, 'Shift+Tab', ['Version history'], forcedRing);
+  await expectStops(page, 'Tab', ['version 3'], forcedRing);
+  expect(await tickStrokes(page), 'the box of each tick icon, and the tick of each ticked one').toEqual([
+    { box: canvasText, tick: canvasText },
+    { box: canvasText, tick: null },
+    { box: canvasText, tick: canvasText },
+  ]);
+});
+
+test('both pages, while they load and when they do not, pass axe', async ({ page }) => {
+  await serveMe(page, manager);
+  await serveNote(page, edited);
+  const own = `/api/participants/${jane.id}/notes/${noteDate}/versions`;
+  const listRequest = (url: URL) => url.pathname === own;
+  const versionRequest = (url: URL) => url.pathname === `${own}/2`;
+  const refuse = (route: Route) => route.abort('internetdisconnected');
+
+  // A, waiting: the loading line after 1 s and no row.
+  const heldList = await holdNext(page, listRequest);
+  await page.goto(listAddress);
+  const waitingList = await heldList();
+  await expect(loadLine(page)).toHaveText('Loading version history…');
+  await expect(rows(page)).toHaveCount(0);
+  await expectAxeToPass(page);
+  await waitingList.fallback();
+  await expect(rows(page)).toHaveCount(3);
+
+  // B, waiting.
+  const heldVersion = await holdNext(page, versionRequest);
+  await page.goto(versionAddress(2));
+  const waitingVersion = await heldVersion();
+  await expect(loadLine(page)).toHaveText('Loading version 2…');
+  await expectAxeToPass(page);
+  await waitingVersion.fallback();
+  await expect(heading(page)).toHaveText(`Version 2 ${janesHeading}`);
+
+  // A, failed: the sentence, the page's name as the <h1>, and Try again.
+  await page.route(listRequest, refuse);
+  await page.goto(listAddress);
+  await expect(loadLine(page)).toHaveText('Version history did not load: no connection. Try again.');
+  await expect(main(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expectAxeToPass(page);
+  await page.unroute(listRequest, refuse);
+
+  // B, failed.
+  await page.route(versionRequest, refuse);
+  await page.goto(versionAddress(2));
+  await expect(loadLine(page)).toContainText('did not load: no connection. Try again.');
+  await expect(main(page).getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expectAxeToPass(page);
 });
