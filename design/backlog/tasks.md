@@ -4949,7 +4949,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T18
-status: new
+status: doing
 release: R1
 lane: C
 size: M
@@ -4993,6 +4993,35 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   (NoteVersionEndpointsTests). The past-day notice wins over T12's earlier-day notice (note-form.md component 4), which
   NoteForm.tsx shows on a saved draft dated before `me.today`, so a manager's past-day draft shows this task's alone
   (S02.03.03's dated Note).
+
+### Plan
+
+- Outcome: no table, column, migration or write path. Past-day creation (T08), the earlier-day title (T12) and the
+  shared note address (T09/T12) are reused and only tested; R21, R24 and R25 need no new server code.
+- Server: `MelbourneClock.DateOf` (through `ConvertTimeFromUtc`, so an Unspecified kind reads as UTC); `LiveNote`
+  gains `NoteDate` and `IsPastDayNote`. `GET {base}` gains `isPastDayNote` on every answer, `startedAtUtc` on a
+  submitted note and `versionCount` (= current number) for a manager. Two manager-only reads, `GET {base}/versions`
+  and `/versions/{n}`, in their own endpoint class; `createdBy` is `{id, displayName}`; a missing number is a 404
+  from a version-row lookup before the content read. Neither read writes an audit entry.
+- SPA: `versionQueries.ts` (list refetches on focus, a version is static), Version history and Version pages inside
+  `ManagerOnly`, a shared `PastDayLine` and `Tag` kind `pastDay`, `LinkRowList reversed`, the read view's byline and
+  Version history link, `WritePastDayNotePage`, the Write past-day note links, and the past-day notice that wins over
+  the earlier-day one. Continue replaces its history entry, so the note's back link names and pops to the opener.
+- Reuse: `LiveNote.FindAsync`, `NoteVersionContent`, `NoteSnapshot.ShownGroups`, `NoteReadAuthor`, `Policies.Manager`,
+  `LoadRegion`, `ReadSections`, `FlagLine`, `LinkRow`, `useBackTo`, the shell's replace handling.
+- Decisions where design.md is silent: no earliest past-day date and no long-ago warning (A75); version pages show
+  the current name and date (A76); R12 (a version's Location on the POST) is not built, as one answer serves both
+  roles; `isPastDayNote` also on a draft's header; version rows use `LinkRow`, not `ChronoList`; `dayBefore` lives in
+  `format.ts`; page B treats a number at or above the list's highest as current; no guard on `Note.CreatedAtUtc`.
+
+### Verticals
+
+- v1: Server: past-day flag, version count and the two manager-only version endpoints; depends_on: none;
+  R10 R11 R12 R24 R25 R28
+- v2: SPA: Version history list and version pages, past-day line and Tag kind; depends_on: v1;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R13 R14 R15 R26 R27
+- v3: SPA: Write past-day note page, links, form notice and back link; T18 backlog, design.md section 13 and ops;
+  depends_on: v1 v2; R16 R17 R18 R19 R20 R21 R22 R23 R29 R30
 
 ### Steps
 
