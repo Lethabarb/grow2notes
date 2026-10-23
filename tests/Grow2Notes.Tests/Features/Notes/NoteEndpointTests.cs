@@ -563,7 +563,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     // R22: a worker's draft started at 11:50 pm on its date and submitted after midnight is not a past-day note, as it
     // is the first change that counts and not the submit, and a worker can only start a note for today. The second case
-    // is the last night of standard time.
+    // is 11:50 pm AEDT, 10 minutes before the first midnight after the change.
     [Theory]
     [InlineData("2026-10-01", "2026-10-01T13:50:00Z", "2026-10-01T14:10:00Z")]
     [InlineData("2026-10-04", "2026-10-04T12:50:00Z", "2026-10-04T13:10:00Z")]
