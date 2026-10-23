@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Grow2Notes.Tests.Fixtures;
 
 namespace Grow2Notes.Tests.Platform;
@@ -105,9 +106,6 @@ public sealed partial class MessagingOutOfScopeTests
     [GeneratedRegex(@"\bIEmailSender\s+(\w+)")]
     private static partial Regex SenderParameter();
 
-    [GeneratedRegex(@"<Package(?:Version|Reference)[^>]*?Include=""([^""]+)""")]
-    private static partial Regex PackageElement();
-
     private static string WebRoot() => Path.Combine(Repository.Root(), "src", "Grow2Notes.Web");
 
     // The package IDs of the .NET packages, central and referenced, and of the SPA's and the end-to-end tests' npm
@@ -120,10 +118,9 @@ public sealed partial class MessagingOutOfScopeTests
         foreach (var file in new[] { Path.Combine(root, "Directory.Packages.props") }
             .Concat(Files(root, ".csproj")))
         {
-            var text = File.ReadAllText(file);
-            var found = PackageElement().Matches(text).Select(match => match.Groups[1].Value).ToList();
+            var found = PackageElements(file);
             ids.AddRange(found);
-            read.Add($"{System.IO.Path.GetRelativePath(root, file)} {text.Length} chars {found.Count} ids");
+            read.Add($"{System.IO.Path.GetRelativePath(root, file)} {found.Count} ids");
         }
 
         foreach (var file in new[] { "src/grow2notes-spa/package.json", "tests/e2e/package.json" })
@@ -140,6 +137,16 @@ public sealed partial class MessagingOutOfScopeTests
 
         return (ids, string.Join("; ", read));
     }
+
+    // The package IDs a props or project file names, read as XML. A pattern over the text found none on the CI runner,
+    // so the files are parsed rather than matched.
+    private static List<string> PackageElements(string file) =>
+    [
+        .. XDocument.Load(file).Descendants()
+            .Where(element => element.Name.LocalName is "PackageVersion" or "PackageReference")
+            .Select(element => (string?)element.Attribute("Include"))
+            .OfType<string>(),
+    ];
 
     // Each .cs file of the web project as its path relative to the project, with / between folders, and its text.
     private static IEnumerable<(string Path, string Text)> WebSources() =>
