@@ -553,13 +553,16 @@ review, as T09 left every flag status as it was, so these steps flag a note of t
     the worker's name, "flagged" and the time of the submit, and "Reason:" with the reason. Open the row on each and
     look for the note as written, the flag line with the reason, and "Flagged" as the back link; press it and look for
     the list again, with the row still there. (design.md §14 M3 *Done when* bullet 1, the list half, on real devices;
-    S03.03.01.)
+    S03.03.01.) Before T19 the Flagged link was the word alone and the screen had no view links. Once T19 is in test,
+    the link reads "Flagged, 1 to review" on the next screen change, and the first view link reads "To review (1)"
+    above the list; look for both too.
 57. On the laptop as account A with NVDA and Chrome, then on the iPhone as account B with VoiceOver and Safari, then on
     the Android phone as account B with TalkBack and Chrome, choose Flagged while step 56's note is still there. Look
     for: the arrival read as "Flagged notes, heading level 1"; the row read as the participant's name and the date,
     then "link", then the worker's name and "flagged" with the time; the Reason line read when reading on; and, once
     the row is open, the back link read as "Flagged". (flagged.md *Visual and device*, the manual pass, for what T11
-    builds.)
+    builds.) Before T19 the arrival was the heading and the row alone. Once T19 is in test, the heading is followed by
+    "Flagged notes, navigation" and the current view link, and step 112 holds those words.
 
 ### Autosave through a lost signal, another device and the session's end, once T10 is in test
 
@@ -807,9 +810,10 @@ can be flagged again after a review by a manager's edit, as step 84 does.
     With account B already on Flagged in another window, and without reloading it, return to that tab and look for the
     note in To review. Open it as account A and look for the To review tag, the Review panel with an empty box and the
     earlier review no longer shown as the note's state. Review it again, then edit it, untick the flag and save: look
-    for the note still in To review, "Flag removed in a later edit" and the earlier reason. Once T19 is in test, also
-    look for the badge and "To review (n)" counting it without a reload. (S03.01.02 end to end; the badge and the count
-    are S03.03.03's.)
+    for the note still in To review, "Flag removed in a later edit" and the earlier reason. Look too for the badge
+    ("Flagged, 1 to review" in the menu) and "To review (1)" counting it, on the screen change after the edit and
+    without a reload of the other window. (S03.01.02 end to end; the badge and the count are S03.03.03's, in test since
+    T19. Before T19 this sentence began "Once T19 is in test, also look for…", as the menu showed no number.)
 85. Open a note from Flagged and look for the back link "Flagged". Press Edit and look for the same label above the
     form; press Cancel and look for the read view with "Flagged" again; press Edit and Save changes, look for "Flagged"
     once more, and press it to return to the Flagged list. (flagged.md component 7's second bullet.)
@@ -909,3 +913,53 @@ changing a word and a tick each time and flagging it once. Every word typed is m
 105. On the laptop, reload the date page and look for its back link reading "Participant"; press Continue with
      yesterday and look for the note's back link reading "Today", as nothing in the app opened the date page. Then open
      the note's address from a pasted link and look for "Today" too. (note-form.md's back-link fallback.)
+
+### Reviewed list and badge, once T19 is in test
+
+These steps hold T19's by-hand checks ([tasks.md](../design/backlog/tasks.md), T19's Notes). None of them holds a story
+open. They need account A and account B, both managers (step 13), the passkey worker of step 18, the kit of steps 26 to
+28, and a made-up participant with two goals. T19 adds no table or migration, so the database check of step 26 needs no
+new row. The worker submits several notes for today, on different made-up participants or days, each with Flag for
+manager ticked and a made-up reason, so that the managers have three to review; every word typed is made up (A35).
+
+106. With account A on the laptop in Chrome and account B on the Android phone in Chrome, both on Today, have the worker
+     submit a flagged note on the iPhone. Without touching either screen, look for the Flagged link in the menu with no
+     number on both; then choose Today on each, and look for "Flagged, 1 to review" in the menu on the next screen. Have
+     the worker submit a second flagged note, put the laptop's window behind another, and bring it back: look for the
+     number going to 2 on the focus, with no other change. Open Flagged on the phone and look for "To review (2)" and
+     two rows. Leave both screens untouched for 10 minutes and look at the network list of the laptop's developer
+     tools for no request. (S03.03.03's second criterion on real devices; app-shell.md's *Refresh*.)
+107. With three notes to review, as account A, mark one reviewed with a comment of two lines. Look for the menu number
+     going down by one on the screen after, "To review (2)" on Flagged, the row gone, and the note reading "Reviewed by"
+     your name, "on" and the date and time. Choose Reviewed and look for the row with the participant, the date, the
+     author, "reviewed by" your name "on" the date and time, "Reason:" with the first line of the reason and "Comment:"
+     with both lines. As account B, look for the same on the phone, and for the menu reading "Flagged, 2 to review".
+     Review the other two and look for the menu word alone, "To review (0)" and "No flagged notes to review.". (The
+     F03.03 flow end to end in test; design.md §14 M3 *Done when* bullets 1 and 2.)
+108. As account A, edit a reviewed note, change its reason and save. Look for the note back in To review with the new
+     reason, the number up by one, and Reviewed still holding the earlier row with the earlier reason. Review it again
+     and look for two rows for the note in Reviewed, the newer first, each with its own reason. (S03.03.02's third
+     criterion and A15, with real data.)
+109. On the Android phone, over a patchy connection (walk to a weak spot, or throttle it), with 31 or more reviews, open
+     Reviewed and press Show older. Look for the button not repeating on a second press, "Loading older notes…" if it
+     takes more than a second, and, with airplane mode on, the rows kept, focus on the button and the sentence that
+     older notes did not load; turn it off, press again, and look for focus on the first new row and the button gone
+     when no more are left. (S03.03.04 and flagged.md's Show older items, with a real connection.)
+110. On the laptop, then on the phone, show 60 Reviewed rows with Show older, scroll to the 10th, open its note and
+     press the browser's Back, then again with the back link "Flagged". Look for the 60 rows still there, the scroll
+     where it was and focus on the 10th row's link. Reload and look for the newest 30 only. (S03.03.05; A77.)
+111. With account A on Flagged and focus on a row (Tab to its link), have account B review that note on the phone.
+     Return to the laptop's window and look for the row gone and focus on the row now in its place, or on the last row,
+     or on the heading when the list is empty, and not at the page's start. (S03.03.05's criterion, with real people.)
+112. On the laptop as account A with NVDA and Chrome, then on the iPhone as account B with VoiceOver and Safari, then on
+     the Android phone as account B with TalkBack and Chrome, with three to review, move through the menu and look for
+     "Flagged, 3 to review" read once, not "3" twice. Choose Flagged and look for "Flagged notes, heading level 1", then
+     "Flagged notes, navigation", the two links with "To review (3)" as the current page, and "Reviewed". Choose
+     Reviewed and look for it as the current page, then a row read as the name and date, "link", and the author and
+     "reviewed by" description. (flagged.md *Accessibility checklist*, the Screen reader items, and *Visual and
+     device*; app-shell.md's *Badge*.)
+113. On a real phone, set the text to its largest and the page 320 px wide if the browser allows, and look at Flagged,
+     both views, with a long name and a long reason: no sideways scroll, the two view links on two rows, and the badge
+     in the menu not cut off. On a Windows laptop with a contrast theme on, look for the current view link's bar, the
+     badge's outline, the focus ring and the Show older button all visible. (flagged.md *Visual and device*, on real
+     hardware.)
