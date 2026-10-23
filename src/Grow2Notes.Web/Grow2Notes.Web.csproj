@@ -9,13 +9,22 @@
     <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Keys" />
     <PackageReference Include="Azure.Identity" />
     <PackageReference Include="Azure.Monitor.OpenTelemetry.AspNetCore" />
+    <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <!-- For the dotnet ef tool only (design.md §10.4, §10.6); nothing the app or the tests run uses it. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="PDFsharp-MigraDoc" />
     <PackageReference Include="QRCoder" />
+  </ItemGroup>
+
+  <!-- The font the PDF embeds. The Bitstream Vera licence must travel with the font, so both files go into the
+       assembly together. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Features\Reports\Fonts\DejaVuSans.ttf" LogicalName="DejaVuSans.ttf" />
+    <EmbeddedResource Include="Features\Reports\Fonts\LICENSE" LogicalName="DejaVuSans.LICENSE" />
   </ItemGroup>
 
   <ItemGroup>

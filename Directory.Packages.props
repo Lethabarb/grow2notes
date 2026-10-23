@@ -15,6 +15,7 @@
          Azure.Identity would put a second copy of every credential type in the app. -->
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
+    <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
     <!-- The 6.1 line that EF Core 10's SQL Server provider uses; it keeps managed-identity authentication built in
@@ -22,6 +23,7 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageVersion Include="PDFsharp-MigraDoc" Version="6.2.4" />
     <PackageVersion Include="QRCoder" Version="1.8.0" />
   </ItemGroup>
 
@@ -41,6 +43,9 @@
          mode, which takes `dotnet test Grow2Notes.slnx` as written. The plain xunit.v3 package brings in Microsoft
          Testing Platform v2, which stops dotnet test in that mode. -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <!-- Reads the text of the PDF files back (Apache-2.0). The package id is PdfPig; UglyToad.PdfPig on the feed has
+         no stable release. -->
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
     <PackageVersion Include="Testcontainers.MsSql" Version="4.15.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.1" />
