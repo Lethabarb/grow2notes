@@ -180,8 +180,8 @@ test("a worker's /manage shows Page not found, which passes the WCAG 2.2 AA chec
 type Step = { region: 'banner' | 'main'; link: string; path: string; pageName: string; current?: string };
 
 // Each role's header links, then, for the manager, each Manage link, going back to Manage through the nav between
-// them. Flagged opens its To review list (S03.03.01), which marks Flagged. Until it is built, Report opens Page not
-// found (S00.05.01's second criterion), which marks no item, though component 2b's table marks Report at its address.
+// them. Flagged opens its To review list (S03.03.01), which marks Flagged. Report opens the Daily report (S04.01.01),
+// which marks Report (component 2b's table).
 // Participants and Users open their lists (S01.02.01, S00.06.01), Common items its groups (S01.03.01) and Guide prompts
 // its editor (S01.04.01), child pages of Manage, which mark Manage.
 const walks: { me: Me; steps: Step[] }[] = [
@@ -198,7 +198,13 @@ const walks: { me: Me; steps: Step[] }[] = [
       { region: 'banner', link: 'Grow2Notes', path: '/', pageName: 'Today', current: 'Today' },
       { region: 'banner', link: 'Today', path: '/', pageName: 'Today', current: 'Today' },
       { region: 'banner', link: 'Flagged', path: '/flagged', pageName: 'Flagged notes', current: 'Flagged' },
-      { region: 'banner', link: 'Report', path: `/reports/daily/${manager.today}`, pageName: 'Page not found' },
+      {
+        region: 'banner',
+        link: 'Report',
+        path: `/reports/daily/${manager.today}`,
+        pageName: 'Daily report',
+        current: 'Report',
+      },
       ...[
         ['Participants', '/manage/participants'],
         ['Common items', '/manage/common-items'],

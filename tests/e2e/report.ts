@@ -53,3 +53,25 @@ export function recordExports(page: Page): string[] {
   });
   return sent;
 }
+
+/**
+ * Serves the Report screen's page without `upgrade-insecure-requests` in its Content Security Policy, so that WebKit
+ * loads the app over the plain HTTP that the end-to-end run uses. WebKit upgrades `http://localhost` requests under
+ * that directive, to a port that has no TLS, where Chromium and Firefox leave them alone; production is HTTPS only.
+ */
+export async function serveOverHttp(page: Page): Promise<void> {
+  await page.route(
+    (url) => url.pathname === reportAddress,
+    async (route) => {
+      const response = await route.fetch();
+      const policy = response.headers()['content-security-policy'] ?? '';
+      await route.fulfill({
+        response,
+        headers: {
+          ...response.headers(),
+          'content-security-policy': policy.replace(/;?\s*upgrade-insecure-requests/, ''),
+        },
+      });
+    },
+  );
+}

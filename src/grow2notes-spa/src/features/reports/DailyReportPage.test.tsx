@@ -228,6 +228,16 @@ describe('the Report screen', () => {
       expect(pdf()).not.toHaveAttribute('aria-disabled');
     });
 
+    it('asks who is signed in after a 403, so that a manager who is one no longer gets Page not found', async () => {
+      fetchMock.mockImplementation(problem(403));
+      open();
+
+      await press(word());
+      await settle();
+
+      expect(requests()).toEqual([exportPath('docx'), '/api/auth/me']);
+    });
+
     it('says nothing for a 401, which the session flow has', async () => {
       fetchMock.mockImplementation(problem(401));
       open();

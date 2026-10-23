@@ -4765,6 +4765,11 @@ with no drafts, discarded drafts or counts. The PDF embeds its font, so every ch
     screen's layout and can add a width rule then.
   - Firefox and WebKit run `report-download.spec.ts` only, through two `testMatch`-scoped projects; CI's e2e job
     installs both browsers, and `tests/README.md` says so. `report.spec.ts` runs in Chromium alone.
+  - WebKit would not load the app in CI's first run: the app's Content Security Policy has
+    `upgrade-insecure-requests` (§9.7), and WebKit upgrades `http://localhost` requests under it to a port with no TLS,
+    which Chromium and Firefox do not. The download spec serves its page without that directive (`serveOverHttp` in
+    `tests/e2e/report.ts`); the app's policy is unchanged, as production is HTTPS only. This is the cause the CI log
+    points to, not one confirmed from the trace.
   - A design.md edit beyond the plan's list: §11.3's Submitted row now says what A79 says, as it had said the date
     shows only on a later day.
   - No table, column, index, grant or migration; the latest migration stays `20261023003611_AddNoteReview`.
