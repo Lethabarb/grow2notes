@@ -157,7 +157,7 @@ public sealed class NoteReviewEndpointTests(Grow2NotesFactory factory, SqlServer
         await AssertNothingChangedAsync(noteId, before, FlagStatus.ToReview);
     }
 
-    // The limit applies to the comment as sent, so 500 characters with spaces round them are over it only if sent so.
+    // The limit applies to the comment as sent, before it is trimmed: 501 characters are refused, 500 are kept.
     [Fact]
     public async Task A_comment_of_501_characters_is_a_422_under_comment_and_one_of_500_is_reviewed()
     {

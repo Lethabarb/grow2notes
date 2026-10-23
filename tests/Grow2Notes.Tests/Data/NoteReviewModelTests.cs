@@ -84,9 +84,9 @@ public sealed class NoteReviewModelTests
 
         (string Principal, string Columns, string PrincipalKey, bool IsRequired, DeleteBehavior OnDelete)[] expected =
         [
+            (nameof(Note), "OrganisationId, NoteId", "OrganisationId, Id", true, DeleteBehavior.Restrict),
             (nameof(ApplicationUser), "OrganisationId, ReviewedByUserId", "OrganisationId, Id", true,
                 DeleteBehavior.Restrict),
-            (nameof(Note), "OrganisationId, NoteId", "OrganisationId, Id", true, DeleteBehavior.Restrict),
         ];
         Assert.Equal(
             expected,
