@@ -334,8 +334,9 @@ function TodayRow({ p, href }: { p: TodayParticipant; href: string }) {
 **Participant notes history, list (4.4)**
 - Meta line: `Submitted · Alex P.` then the tags in order, for example `[Flagged] [To review] [Edited]`. A Draft row shows `Draft · Alex P.` and never a tag.
 - Workers never get To review or Reviewed, because the API doesn't send `flagStatus` to them.
-- Submit's answer (`POST {base}/versions`) carries `flagStatus` to every caller, a worker included (T11); the form reads
-  it only to refresh `me` after a flag, and shows no tag from it.
+- Submit's answer (`POST {base}/versions`) carries `flagStatus` to a manager alone (T11 sent it to every caller; T16
+  changed that, design.md §6.3), so a worker never learns that a note was reviewed; the form reads it only to refresh
+  `me` after a flag, and shows no tag from it.
 - **Show older** loads more rows below. New rows use the same component and need no announcement beyond the button's own behaviour.
 
 **Read view (4.4)**

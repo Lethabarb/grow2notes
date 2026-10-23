@@ -600,7 +600,11 @@ prompts. Its `serve(page, me)` answers the page's requests for a header, a histo
   flag status and the flagged version left as they are unless the version is flagged and its base version was not, or
   had another reason, which puts the note in To review with this version as its flagged version (design.md §5.8's
   flag rules), and the caller's pending edit gone. Each is answered
-  `201 {versionNumber, createdAtUtc, flagStatus}`, its `flagStatus` `ToReview` or `None`;
+  `201 {versionNumber, createdAtUtc}` and, for a manager alone, a `flagStatus` (`ToReview`, `Reviewed` or `None`);
+- and each Mark reviewed, `POST {base}/reviews`: `403` for a worker; `422` for a comment over 500 characters or a
+  version below 1; `404` for no note; `409 review.not_current` for a note that is not To review or whose current version
+  is not the one sent; and otherwise `201 {reviewedAtUtc}`, the note Reviewed and the review, with the comment trimmed,
+  first in its `reviews`;
 - and each Discard, with the checks of T12's Notes in their order: `404` for no participant or a day with no note;
   `409 note.not_a_draft` for a submitted note or a day whose draft is discarded already; a `403` problem with no `code`
   for a worker who did not start the draft; and otherwise `204`, the draft, its content kept, gone from every answer
@@ -617,7 +621,7 @@ discarded, each with who discarded it, `todayNotes(me)` each participant's note 
 `serveMyDrafts`.
 `addSubmitted(participantId, noteDate, note)` puts a submitted note in it, its author someone else unless given their
 user ID, flagged when given a reason, and then in To review, as Submit leaves it, unless its `flagStatus` is set by
-hand, as T16 will set it; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
+hand; with `firstFlagReason`, it is in To review on a flagged version 1 with that reason, under a
 version 2 that Save changes saved, flagged with `flagReason` or not flagged without one, as it is, at version 2, with
 a `lastEdit`; its goals may carry IDs, for its pending edits' forms;
 `daysAfter(date, days)` gives the dates of a run of them. Eight more do what someone else does while a page is open:

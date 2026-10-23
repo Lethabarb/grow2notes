@@ -306,9 +306,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 1 | The required flag reason | F03.01 | S02.03.02 (builds the field and the rule) | Hand-off resolved |
 | 2 | The To review list (oldest first) and badge | F03.03 | | "Oldest first" is by the flagged version's time, then note ID, settled by T11 on 19 October 2026 (design.md §6.4, S03.03.01 Notes) |
 | 3 | The Reviewed tab | F03.03 | | |
-| 4 | Mark reviewed with an optional comment | F03.02 | | |
-| 5 | The re-review rule (A15) | F03.01 | | |
-| 6 | Audit of every review | F03.02 | | |
+| 4 | Mark reviewed with an optional comment | F03.02 | | Built in T16 (23 October 2026) |
+| 5 | The re-review rule (A15) | F03.01 | | Built in T16 (23 October 2026); its badge half is T19's |
+| 6 | Audit of every review | F03.02 | | Built in T16 (23 October 2026) |
 
 **design.md §14 M3 Done when**
 
@@ -316,7 +316,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | A flagged note shows in the list and badge for every manager on their next page load | F03.03 | | |
 | 2 | A reviewed note leaves the list and shows "Reviewed by … on …" on the note and in the report | F03.03 | S03.02.02 (on the note), S04.01.04 (in the report) | See *Rows to watch* |
-| 3 | A flag removed by a later edit stays in To review until reviewed | F03.01 | | |
+| 3 | A flag removed by a later edit stays in To review until reviewed | F03.01 | | Built in T16 (23 October 2026) |
 | 4 | Workers get `403` on the review endpoints | F03.03 | F03.02 (the review endpoint's own test) | |
 | 5 | The codebase has no email, SMS or push dependency apart from setup-link email | F03.03 | | |
 
