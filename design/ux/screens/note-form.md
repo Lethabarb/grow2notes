@@ -432,6 +432,10 @@ would be new copy and a slow read shows nothing new.
   `me.today`, never on a new note, saved since or not, so that on today's draft kept open past midnight it appears,
   unannounced, once `me` gives the new day (status-messages.md *Per-screen notes*). A pending edit is saved as its form
   opens too, so T14 keeps the notice, and More actions, off its form.
+- As built (T18): the past-day notice is the same `Notice`, in the same place, in edit mode too. `NotePage` works out the
+  day written (`pastDayWrittenOn`) from the note as the page first loaded it: for a new note, today, when a manager
+  opens a date before it; for a saved draft or an edit, the Melbourne day of its `startedAtUtc` when `isPastDayNote`.
+  It replaces the earlier-day notice, so one shows. Both dates are `dateLong`.
 
 ### 5. Past notes link: design.md §4.4 ("the 'Past notes' link in the note form and read view")
 
@@ -1345,7 +1349,9 @@ Each is recorded once, with the evidence in the cited component file.
 3. **"Editing submitted note (version 2)"**: is the number the version being edited (assumed here) or the version Save
    changes will create?
 4. **Derived back-link labels** "Participant" and "Past notes" for past-day notes; edit mode returns to the read view's
-   back destination.
+   back destination. **Answered as built (T18):** the past-day page's Continue replaces its own history entry, so the
+   note's back link takes the date page's opener, "Participant" or "Past notes", and pops to it, and Back skips the
+   date page; with no opener (a pasted address or a reload) it reads "Today".
 5. **Proposed strings:** the four field errors; the dialog busy and failure lines; "Not saved" while a banner blocks;
    the archived-participant refusal; the version-conflict line and summary; the Discard dialog body lines;
    "More actions"; "Saving changes…", "Cancelling…", "Changes not saved: …", "Not cancelled: …", "Not discarded: …";

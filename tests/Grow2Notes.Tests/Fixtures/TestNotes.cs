@@ -193,14 +193,31 @@ internal static class TestNotes
     /// The test gives the flagged version, as §5.8's flag rules set it or, to show that a reason is read from that
     /// version alone, against them.
     /// </remarks>
-    public static async Task AddVersion2Async(
+    public static Task AddVersion2Async(
         this IServiceProvider services,
         SeededOrganisation organisation,
         Guid noteId,
         DateTime savedAtUtc,
         string? flagReason,
         int flaggedVersionNumber,
-        IReadOnlyList<TestVersionGroup>? groups = null)
+        IReadOnlyList<TestVersionGroup>? groups = null) =>
+        services.AddVersionAsync(
+            organisation, noteId, 2, savedAtUtc, flagReason, flaggedVersionNumber, groups, organisation.ManagerId);
+
+    /// <summary>
+    /// Adds version <paramref name="versionNumber"/>, the one after the note's current version, as
+    /// <see cref="AddVersion2Async"/> adds version 2, written by <paramref name="savedByUserId"/>.
+    /// </summary>
+    public static async Task AddVersionAsync(
+        this IServiceProvider services,
+        SeededOrganisation organisation,
+        Guid noteId,
+        int versionNumber,
+        DateTime savedAtUtc,
+        string? flagReason,
+        int flaggedVersionNumber,
+        IReadOnlyList<TestVersionGroup>? groups,
+        Guid savedByUserId)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var scope = services.CreateAsyncScope();
@@ -208,17 +225,17 @@ internal static class TestNotes
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
         {
             var note = await db.Notes.SingleAsync(n => n.Id == noteId, cancellationToken);
-            note.CurrentVersionNumber = 2;
+            note.CurrentVersionNumber = versionNumber;
             note.FlaggedVersionNumber = flaggedVersionNumber;
             var version = new NoteVersion
             {
                 OrganisationId = organisation.OrganisationId,
                 NoteId = noteId,
-                VersionNumber = 2,
+                VersionNumber = versionNumber,
                 Narrative = "Jane made toast. Then a walk to the shops.",
                 IsFlagged = flagReason is not null,
                 FlagReason = flagReason,
-                CreatedByUserId = organisation.ManagerId,
+                CreatedByUserId = savedByUserId,
                 CreatedAtUtc = savedAtUtc,
                 IdempotencyKey = Guid.NewGuid(),
             };

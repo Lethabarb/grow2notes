@@ -210,17 +210,20 @@ export type BackTo = { to: string; label: BackLabel };
 /**
  * The back link of a screen with several openers (app-shell.md component 3a), such as a note's or Past notes': to the
  * screen that opened it, named by `labels` after its back key, when that screen is the entry before; otherwise, as
- * after a reload, from a pasted address or in a new tab, or from an opener that `labels` does not name, to Today, the
- * default of the screens that use it. As the screen first renders, the shell's rule has not yet followed the push or
- * replace that brought it, so the opener is worked out as `follow` will record it: for a push, the entry still on
- * screen; for a replace, the opener of the entry it replaces.
+ * after a reload, from a pasted address or in a new tab, or from an opener that `labels` does not name, to `fallback`,
+ * Today unless a screen gives another, as Write past-day note gives Participant. As the screen first renders, the
+ * shell's rule has not yet followed the push or replace that brought it, so the opener is worked out as `follow` will
+ * record it: for a push, the entry still on screen; for a replace, the opener of the entry it replaces.
  */
-export function useBackTo(labels: Partial<Record<BackKey, BackLabel>>): BackTo {
+export function useBackTo(
+  labels: Partial<Record<BackKey, BackLabel>>,
+  fallback: BackTo = { to: '/', label: pageName.today },
+): BackTo {
   const { key } = useLocation();
   const action = useNavigationType();
   const opener = openerAsRendered(key, action);
   const label = opener?.backKey === undefined ? undefined : labels[opener.backKey];
-  return opener === undefined || label === undefined ? { to: '/', label: pageName.today } : { to: opener.path, label };
+  return opener === undefined || label === undefined ? fallback : { to: opener.path, label };
 }
 
 /** `openerBefore(key)`, also before the shell's rule has followed the push or replace that reached the entry. */

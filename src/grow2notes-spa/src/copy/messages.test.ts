@@ -69,6 +69,31 @@ describe("the earlier-day notice's words", () => {
   });
 });
 
+// note-form.md *Kinds of note*, and participants.md C4, word for word.
+describe("the past-day note's words", () => {
+  it('say the note date, then the day it was written, in the place of the earlier-day notice', () => {
+    expect(msg.pastDayNotice('Monday 28 September 2026', 'Thursday 1 October 2026')).toBe(
+      'Past-day note for Monday 28 September 2026, written on Thursday 1 October 2026.',
+    );
+  });
+
+  it("say an archived participant's page has no new notes, by their full name", () => {
+    expect(msg.noNewNotesArchived('Jane Citizen')).toBe(
+      'Jane Citizen is archived, so no new notes can be written for them.',
+    );
+  });
+
+  it("give Write past-day note's field and messages", () => {
+    expect(strings.pastDayNote).toEqual({
+      noteDate: 'Note date',
+      hint: 'A date before today',
+      continue: 'Continue',
+      enterTheNoteDate: 'Enter the note date',
+      mustBeInThePast: 'Note date must be in the past',
+    });
+  });
+});
+
 // participant-notes.md *Read view* › Status lines, word for word.
 describe("the read view's lines", () => {
   it("name the author as stored in the byline, and give the flag's reason after the form's label", () => {
@@ -249,5 +274,35 @@ describe("a submitted note's edit mode (note-form.md *Kinds of note*, component 
       body: 'Only the person who wrote it, or a manager, can edit it.',
       readTheNote: 'Read the note',
     });
+  });
+});
+
+// version-history.md *Copy on this screen*, word for word.
+describe("the version history's words", () => {
+  it('name a version, its link, its loading line and the current version', () => {
+    expect(msg.version(3)).toBe('Version 3');
+    expect(msg.versionLink(3)).toBe('version 3');
+    expect(msg.loadingVersion(2)).toBe('Loading version 2…');
+    expect(msg.currentVersionIs(3)).toBe('The current version is version 3.');
+    expect(strings.versionHistory.loading).toBe('Loading version history…');
+  });
+
+  it("say who saved a version, with the comma that the time follows, and the suffix of a manager's save", () => {
+    expect(msg.submittedBy('Priya Nair')).toBe('Submitted by Priya Nair,');
+    expect(msg.savedBy('Sam Lee (manager)')).toBe('Saved by Sam Lee (manager),');
+    expect(strings.versionHistory.managerSuffix).toBe(' (manager)');
+  });
+
+  it('say whether a version is the current one, and that a note with one version has not been edited', () => {
+    expect(strings.versionHistory.thisIsCurrent).toBe('This is the current version.');
+    expect(
+      `${strings.versionHistory.earlier} ${msg.versionLink(3)}${strings.versionHistory.fullStop}`,
+    ).toBe('This is an earlier version. The current version is version 3.');
+    expect(strings.versionHistory.notEdited).toBe('Not edited since submit');
+  });
+
+  it('say that a manager wrote a past-day note, after its tag', () => {
+    expect(strings.tag.pastDay).toBe('Past-day note');
+    expect(msg.pastDayWrittenBy('Jo Smith')).toBe('written by Jo Smith (manager) on');
   });
 });

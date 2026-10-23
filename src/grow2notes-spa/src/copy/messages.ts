@@ -63,6 +63,11 @@ export const msg = {
    */
   earlierDayDraft: (noteDate: string) => `${msg.draftIsFor(noteDate)} Submitting it now keeps that date.`,
   /**
+   * The note form's notice on a manager's past-day note (note-form.md *Kinds of note*), in the place of the earlier-day
+   * notice: the note's date and the day it was written, both in `dateLong`.
+   */
+  pastDayNotice: (noteDate: string, writtenOn: string) => `Past-day note for ${noteDate}, written on ${writtenOn}.`,
+  /**
    * A Discard that failed (note-form.md *States* › *Discard dialog*): in the dialog's alert line, or above Submit note
    * when a browser closed the dialog while its request was out.
    */
@@ -109,6 +114,23 @@ export const msg = {
   reviewComment: (comment: string) => `Comment: ${comment}`,
   /** A Mark reviewed that failed, in the alert above its button: "Not marked reviewed: no connection. Try again." */
   notMarkedReviewed: (cause: Cause): string => msg.notDone('marked reviewed', cause),
+  /** A version's number, as its row's link and its page's caption (version-history.md *Copy on this screen*). */
+  version: (versionNumber: number) => `Version ${versionNumber}`,
+  /** The link to the current version, in page B's line for an earlier version, with the full stop after it. */
+  versionLink: (versionNumber: number) => `version ${versionNumber}`,
+  /** Page B's loading line, and what its failure sentence says did not load, which is the version's caption. */
+  loadingVersion: (versionNumber: number) => `Loading version ${versionNumber}…`,
+  /** Page A's sentence under its heading, from the highest number in the list, the screen's only source for it. */
+  currentVersionIs: (versionNumber: number) => `The current version is version ${versionNumber}.`,
+  /** Page B's saved-by line for version 1, with the comma that the time follows and the name with any suffix. */
+  submittedBy: (displayName: string) => `Submitted by ${displayName},`,
+  /** Page B's saved-by line for a later version, with the comma that the time follows and the name with any suffix. */
+  savedBy: (displayName: string) => `Saved by ${displayName},`,
+  /**
+   * The past-day line after its tag (status-tags.md, microcopy.md): who wrote the note, always a manager, as only a
+   * manager can write a note for an earlier day, then the time of the note's start, from `format.dateTime()`.
+   */
+  pastDayWrittenBy: (displayName: string) => `written by ${displayName} (manager) on`,
   /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
   noNotesYet: (name: string) => `No notes yet for ${name}.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */
@@ -190,6 +212,8 @@ export const msg = {
   participantArchived: (name: string) =>
     `${name} is archived, so this page is read-only. They are not on Today and no new notes can be written for them. `
     + 'Their past notes are kept.',
+  /** Write past-day note's whole page for an archived participant (participants.md C4), with their full name. */
+  noNewNotesArchived: (name: string) => `${name} is archived, so no new notes can be written for them.`,
   /**
    * A Send invite or a Resend invite that failed, above its button, and a refusal that names no field of Invite user's
    * (users.md *States*).

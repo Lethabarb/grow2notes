@@ -3043,7 +3043,8 @@ past notes.
     `tickedGoalIds`, the ticks a set. A conditional update that changes no row looks for the key again, so that a
     retry that raced its own first try gets `200`, and otherwise answers the version conflict. There is no date or
     archive check: §5.5 item 4's rules apply only when a note is created, and a draft already started can still be
-    submitted (§3.7). The `201` names no `Location`, as a version's own address is a manager's, from T18.
+    submitted (§3.7). The `201` names no `Location`: the save answers a worker and a manager alike, and a version's
+    address is a manager's (T18's Notes).
     `note.submitted`'s `Details` are `{"versionNumber": 1}`.
   - Submit leaves `FlagStatus` and `FlaggedVersionNumber` as they are: §5.8 step 5's flag rules, the `201`'s
     `flagStatus` and the `refreshMe()` after it are T11's (S03.01.01).
@@ -4949,7 +4950,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T18
-status: new
+status: done
 release: R1
 lane: C
 size: M
@@ -4983,8 +4984,8 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   archived participant, waits for this task (S02.04.02's fourth criterion, its dated Note). `GET {base}` gains
   `isPastDayNote` and `versionCount`, and the read view its past-day line, Version history between T14's Edit and Past
   notes in its action row, and the Past-day note kind of `Tag`; the form's back link gains "Participant" through
-  `useBackTo`. The `201` of `POST {base}/versions` names no `Location`, as a version's own address, a manager's, comes
-  with this task.
+  `useBackTo`. R12 (a `Location` on the `201` of `POST {base}/versions`) is not built: design.md §6.3 names none, and
+  one answer serves both roles while a version's address answers managers only.
 - From T11 (19 October 2026): the version rows reuse what T11 built for To review, with its tests: `ChronoList`'s
   whole mode, with `older` left out, and `MetaLine` with no status word (`statusFirst` false), as only version 1's meta
   line starts with one (status-tags.md *Where it's used*).
@@ -4993,10 +4994,95 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   (NoteVersionEndpointsTests). The past-day notice wins over T12's earlier-day notice (note-form.md component 4), which
   NoteForm.tsx shows on a saved draft dated before `me.today`, so a manager's past-day draft shows this task's alone
   (S02.03.03's dated Note).
+- Built in v1 (23 October 2026): `Note.CreatedAtUtc` never changes after insert, because `isPastDayNote` and the
+  past-day line's time derive from it. No code writes it after the insert, so the append-only interceptor needs no
+  guard. `GET {base}` has never sent design.md §6.3's `noteId` and `noteDate`, and still does not, as the address
+  holds both. The two version reads use the `Manager` policy, which reads the session's role claim, where `GET {base}`
+  reads the stored role.
+- Decided in the design (23 October 2026), where design.md or the UX specs are silent or say otherwise:
+  - `createdBy` on both version reads is `{id, displayName}`, not a name, because the pages compare its `id` with the
+    author's for "(manager)"; design.md §6.3 says so. `isPastDayNote` is on every `GET {base}` answer, a draft's header
+    and a worker's too, which is one rule where a role split would be two. `versionCount` is the note's
+    `CurrentVersionNumber`, as versions have no gaps, so no `COUNT` runs; the SPA does not read it, because page A takes
+    the current number from the version list (D71).
+  - The two version reads are in their own class, `NoteVersionHistoryEndpoints`, because `NoteVersionEndpoints`' summary
+    describes a fallback-policy `POST`. A number past the note's last is a 404 from a version-row lookup that also
+    gives `createdBy` and `createdAtUtc`, before the content read, whose `SingleAsync` would throw.
+    `MelbourneClock.DateOf` uses `ConvertTimeFromUtc`, so a `DateTime` of unspecified kind reads as UTC. No migration:
+    the snapshot is unchanged.
+  - R12 is not built (above). Page B treats a number at or above the list's highest as the current version, where
+    version-history.md holds it in loading until the list includes it; the list refetches on focus, so the line
+    corrects itself. Version rows are `LinkRow`s, not `ChronoList`, which departs from T11's hand-off: the list is
+    never empty, as that is a 404, so its empty sentence would never show.
+- Built in v3 (23 October 2026), where participants.md, note-form.md and date-navigation.md differ or say nothing:
+  - Continue replaces the date page's history entry (`navigate(…, { replace: true })`), where participants.md had a
+    push that Back undoes to an empty date page. The shell already gives a replacing entry the opener of the entry it
+    replaces, so the note's back link names "Participant" or "Past notes" and pops to it, as note-form.md requires of a
+    back link's label, and Back skips the date page. Opened with no opener, the note's back link is "Today",
+    note-form.md's fallback; the date page's own back link falls back to "Participant" (participants.md C1) through
+    `useBackTo`'s new optional fallback. This settles note-form.md open question 4 and the "Participant" label that
+    the T09 Note promised.
+  - The past-day notice gives both dates in `dateLong`, with the full day and month, as the story's sentence does,
+    where design.md §4.3 sketches abbreviations. It takes the place of the earlier-day notice, in edit mode too, so
+    only one shows. For a new note, a manager opening a date before today, "written on" is today; for a saved draft or
+    an edit, it is the Melbourne day of `startedAtUtc` (`melbourneDay`, beside `dateTime` in `format.ts`).
+  - The date page's `<h1>` holds the participant's name as a caption, as participants.md C2 says, where
+    date-navigation.md puts the name outside it. Its hidden comma is `Pause`, which lint requires for words in JSX.
+    `dayBefore` is in `format.ts` beside `parseDateOnly`, not in a new `dates.ts`. A year of five or more digits, which
+    a browser lets a person type, is "Note date must be in the past", as it sorts before 2026 as text.
+  - The archived sentence is participants.md C4's, "(P)" and approved by D67; the other copy is S02.08.01's.
+  - "Write past-day note" sits with Past notes in a `ButtonGroup` on participant detail and with Edit participant on a
+    manager's Past notes, so that two links as wide as buttons do not touch. Playwright's `notesStore` now gives
+    `startedAtUtc` and `isPastDayNote` on a note and a draft header, set only by a creating save for an earlier day, and
+    starts a new note with the groups its participant's latest earlier note picked, as the server does.
+
+### Plan
+
+- Outcome: no table, column, migration or write path. Past-day creation (T08), the earlier-day title (T12) and the
+  shared note address (T09/T12) are reused and only tested; R21, R24 and R25 need no new server code.
+- Server: `MelbourneClock.DateOf` (through `ConvertTimeFromUtc`, so an Unspecified kind reads as UTC); `LiveNote`
+  gains `NoteDate` and `IsPastDayNote`. `GET {base}` gains `isPastDayNote` on every answer, `startedAtUtc` on a
+  submitted note and `versionCount` (= current number) for a manager. Two manager-only reads, `GET {base}/versions`
+  and `/versions/{n}`, in their own endpoint class; `createdBy` is `{id, displayName}`; a missing number is a 404
+  from a version-row lookup before the content read. Neither read writes an audit entry.
+- SPA: `versionQueries.ts` (list refetches on focus, a version is static), Version history and Version pages inside
+  `ManagerOnly`, a shared `PastDayLine` and `Tag` kind `pastDay`, `LinkRowList reversed`, the read view's byline and
+  Version history link, `WritePastDayNotePage`, the Write past-day note links, and the past-day notice that wins over
+  the earlier-day one. Continue replaces its history entry, so the note's back link names and pops to the opener.
+- Reuse: `LiveNote.FindAsync`, `NoteVersionContent`, `NoteSnapshot.ShownGroups`, `NoteReadAuthor`, `Policies.Manager`,
+  `LoadRegion`, `ReadSections`, `FlagLine`, `LinkRow`, `useBackTo`, the shell's replace handling.
+- Decisions where design.md is silent: no earliest past-day date and no long-ago warning (A75); version pages show
+  the current name and date (A76); R12 (a version's Location on the POST) is not built, as one answer serves both
+  roles; `isPastDayNote` also on a draft's header; version rows use `LinkRow`, not `ChronoList`; `dayBefore` lives in
+  `format.ts`; page B treats a number at or above the list's highest as current; no guard on `Note.CreatedAtUtc`.
+
+### Verticals
+
+- v1: Server: past-day flag, version count and the two manager-only version endpoints; depends_on: none;
+  R10 R11 R12 R24 R25 R28
+- v2: SPA: Version history list and version pages, past-day line and Tag kind; depends_on: v1;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R13 R14 R15 R26 R27
+- v3: SPA: Write past-day note page, links, form notice and back link; T18 backlog, design.md section 13 and ops;
+  depends_on: v1 v2; R16 R17 R18 R19 R20 R21 R22 R23 R29 R30
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The server (#82; S02.07.01, S02.07.02, S02.08.02 on the server, design.md §5.3, §6.3 and §10.6):
+      `MelbourneClock.DateOf`, `LiveNote`'s `NoteDate` and `IsPastDayNote`, `isPastDayNote`, `startedAtUtc` and
+      `versionCount` on `GET {base}`, the manager-only `GET {base}/versions` and `/versions/{n}` in
+      `NoteVersionHistoryEndpoints`, the endpoint matrix, and design.md §6.3; integration tests on SQL Server.
+- [x] Version history in the SPA (#83; S02.07.01 and S02.07.02 in the SPA, version-history.md): `versionQueries.ts`,
+      pages A and B inside `ManagerOnly`, `PastDayLine` and `Tag`'s past-day kind, the read view's past-day byline and
+      Version history link, `LinkRowList`'s `reversed`; Vitest, and Playwright's `version-history.spec.ts`.
+- [x] Write past-day note in the SPA (#84; S02.08.01 and S02.08.02 in the SPA, participants.md C, note-form.md *Kinds of
+      note*): `WritePastDayNotePage` and its route inside `ManagerOnly`, its links on participant detail and Past
+      notes, the form's past-day notice, `dayBefore`, `melbourneDay` and `useBackTo`'s fallback; Vitest, and
+      Playwright's `past-day-note.spec.ts`, with the Tab stops of `participants.spec.ts` and `past-notes.spec.ts`
+      and `notesStore` updated.
+- [x] Docs: this task's Notes; design.md §13's A75 and A76; as-built lines in participants.md, note-form.md,
+      participant-notes.md and date-navigation.md; ops/first-use-in-test.md's section for T18, steps 86 onwards, and
+      step 76's clause; S02.07.01, S02.07.02, S02.08.01 and S02.08.02 done, and the criteria of S01.02.04, S02.02.02,
+      S02.03.03 and S02.04.02 that wait for this task ticked.
 
 ---
 

@@ -31,6 +31,7 @@ import type {
   SubmittedNote,
 } from './noteQueries.ts';
 import notePage from './NotePage.module.css';
+import pastNotesLink from './PastNotesLink.module.css';
 import readView from './ReadView.module.css';
 
 // jsdom does not navigate, so the full page load of Sign out, and of another person's sign-in, is a stand-in that
@@ -270,6 +271,7 @@ const aDraft = json({
   status: 'Draft',
   authorDisplayName: 'Casey Nguyen',
   startedAtUtc: '2026-09-30T23:05:00Z',
+  isPastDayNote: false,
 } satisfies NoteAnswer);
 
 /**
@@ -279,7 +281,7 @@ const aDraft = json({
  */
 function serveAlexsDraft(startedAtUtc: string, noteDate = '2026-10-01', current?: DraftRead) {
   serveNote(jane, startedBy(startedAtUtc), noteDate);
-  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc };
+  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc, isPastDayNote: false };
   serve(paths(jane, noteDate).note, json(current === undefined ? header : { ...header, current }));
 }
 
@@ -319,7 +321,11 @@ type SubmittedOptions = {
   commonItemGroups?: ReadGroup[];
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
   reason?: string;
+  /** When the note was started, 3:00 pm that day unless given. */
+  startedAtUtc?: string;
   firstSubmittedAtUtc?: string;
+  /** Whether a manager wrote the note on a later day than its date; not unless given. */
+  isPastDayNote?: boolean;
   /** Who saved the current version, and when, for a note edited since it was submitted; none for one that was not. */
   lastEdit?: { by: string; atUtc: string };
   /** The note's author, Priya Nair, another worker, unless given. */
@@ -342,7 +348,9 @@ function submittedNote({
   ],
   commonItemGroups = [],
   reason,
+  startedAtUtc = '2026-10-01T05:00:00Z',
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
+  isPastDayNote = false,
   lastEdit,
   author = { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
   versionNumber = lastEdit === undefined ? 1 : 2,
@@ -354,7 +362,9 @@ function submittedNote({
   return {
     status: 'Submitted',
     author,
+    startedAtUtc,
     firstSubmittedAtUtc,
+    isPastDayNote,
     current: { versionNumber, narrative, goals, commonItemGroups, ...flag },
     ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };
@@ -5394,6 +5404,43 @@ describe('The read view of a submitted note', () => {
     );
   });
 
+  // A manager wrote it on Saturday 3 October for Thursday 1 October (design.md D35, A11): the past-day line takes the
+  // byline's place, and the submitted time follows it on a line of its own.
+  it('shows the past-day line, then Submitted, in place of Written by, for a past-day note', async () => {
+    const jo = { id: 'b7a1c0de-0000-4000-8000-000000000003', displayName: 'Jo Smith' };
+    serveSubmitted(
+      jane,
+      submittedNote({
+        author: jo,
+        isPastDayNote: true,
+        startedAtUtc: '2026-10-03T00:14:00Z',
+        firstSubmittedAtUtc: '2026-10-03T00:40:00Z',
+      }),
+    );
+    renderApp(paths(jane).page);
+    await settle();
+
+    const [pastDay, submitted] = statusLines();
+    expect(pastDay.textContent).toBe(
+      `Past-day note, written by Jo Smith (manager) on Sat 3${nbsp}Oct 2026, 10:14${nbsp}am`,
+    );
+    expect(within(pastDay).getByText('Past-day note')).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    expect(pastDay.querySelector('time')).toHaveAttribute('datetime', '2026-10-03T00:14:00Z');
+    expect(follows(pastDay, pageHeading())).toBe(true);
+    expect(shown(submitted)).toBe(`Submitted Sat 3${nbsp}Oct 2026, 10:40${nbsp}am`);
+    expect(submitted.querySelector('time')).toHaveAttribute('datetime', '2026-10-03T00:40:00Z');
+    expect(follows(submitted, pastDay)).toBe(true);
+    expect(main()).not.toHaveTextContent('Written by');
+  });
+
+  it('shows no past-day line for a note written on its own day', async () => {
+    serveSubmitted(jane);
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(main()).not.toHaveTextContent('Past-day note');
+  });
+
   it('shows Flagged, then the reason as written, in the text colour, on a flagged note alone', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Mentioned pain in his left knee\nafter the walk.' }));
     renderApp(paths(jane).page);
@@ -5454,7 +5501,7 @@ describe('The read view of a submitted note', () => {
   });
 
   // participant-notes.md component 5, the action row, which holds Past notes alone for a worker who did not write the
-  // note, with Edit before it for the author and a manager, and T18 adds Version history.
+  // note, with Edit before it for the author and a manager, and Version history between them for a manager.
   it('has the Past notes link after the byline and the flag line, before Goals', async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
@@ -5597,7 +5644,8 @@ describe('The read view of a submitted note', () => {
     expect(reads()).toBeGreaterThan(before);
   });
 
-  // participant-notes.md item 21; T16 adds a manager's review lines and panel, and T18 Version history.
+  // participant-notes.md item 21: a manager's action row holds Edit, Version history and Past notes, and T16 adds a
+  // manager's review lines and panel.
   it("has no Edit, Version history, To review, Reviewed or review panel in a worker's DOM, and no form", async () => {
     serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
     renderApp(paths(jane).page);
@@ -6046,12 +6094,51 @@ describe('The read view, for a note that the viewer may edit', () => {
     expect(router.state.historyAction).toBe('REPLACE');
   });
 
-  it('puts Edit first for a manager, on a note that another wrote', async () => {
+  it('puts Edit, Version history and Past notes, in that order, in the action row of a manager', async () => {
     serveSubmitted(jane);
     renderApp(paths(jane).page, manager);
     await settle();
 
-    expect(within(main()).getAllByRole('link').map((link) => link.textContent)).toEqual(['Edit', 'Past notes']);
+    const links = within(main()).getAllByRole('link');
+    expect(links.map((link) => link.textContent)).toEqual(['Edit', 'Version history', 'Past notes']);
+    expect(links[1]).toHaveAttribute('href', `${paths(jane).page}/versions`);
+    expect(links[1]).toHaveClass(pastNotesLink.link);
+    expect(follows(links[1], links[0])).toBe(true);
+  });
+
+  it('shows a manager Version history on a note with one version too', async () => {
+    serveSubmitted(jane, submittedNote({ versionNumber: 1 }));
+    renderApp(paths(jane).page, manager);
+    await settle();
+
+    expect(within(main()).getByRole('link', { name: 'Version history' })).toHaveAttribute(
+      'href',
+      `${paths(jane).page}/versions`,
+    );
+  });
+
+  it('opens the version list from Version history, pushing an entry', async () => {
+    serveSubmitted(jane);
+    const { router } = renderApp(paths(jane).page, manager);
+    await settle();
+    const saved = {
+      versionNumber: 1,
+      createdBy: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+    };
+    serve(`${paths(jane).note}/versions`, json([{ ...saved, createdAtUtc: '2026-10-01T06:42:00Z' }]));
+
+    await press(within(main()).getByRole('link', { name: 'Version history' }));
+
+    expect(router.state.location.pathname).toBe(`${paths(jane).page}/versions`);
+    expect(router.state.historyAction).toBe('PUSH');
+  });
+
+  it('shows a worker who wrote the note no Version history', async () => {
+    serveSubmitted(jane, editedNote());
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(within(main()).queryByRole('link', { name: 'Version history' })).toBeNull();
   });
 
   it('shows no Edit to a worker who did not write the note', async () => {
@@ -7213,5 +7300,177 @@ describe('The Review panel', () => {
     expect(window.localStorage).toHaveLength(0);
     expect(window.sessionStorage).toHaveLength(0);
     expect(document.title).not.toContain('Not decided');
+  });
+});
+
+// A manager's past-day note (T18; note-form.md *Kinds of note*, participants.md C): the form's notice, which takes the
+// earlier-day notice's place, and the back link of the note that the Write past-day note page's Continue replaced its
+// own entry with. Today in Melbourne is Thursday 1 October 2026.
+
+/** The past-day notice's words on a note of Monday 28 September 2026, written on Thursday 1 October. */
+const pastDayWords = `Past-day note for Monday 28${nbsp}September 2026, written on Thursday 1${nbsp}October 2026.`;
+
+/** The past-day notice, found by its words, if it shows. */
+function pastDayNotice(): HTMLElement | null {
+  return within(main()).queryByText(/^Past-day note for /)?.closest<HTMLElement>(`.${noticeStyles.notice}`) ?? null;
+}
+
+describe("A past-day note's form", () => {
+  it("shows the notice on a manager's new note of an earlier day, in place of the earlier-day one", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    renderApp(paths(participant, '2026-09-28').page, manager);
+    await settle();
+
+    const notice = pastDayNotice()!;
+    expect(notice.textContent).toBe(pastDayWords);
+    expect(follows(notice, pageHeading())).toBe(true);
+    expect(notice.closest('form')).toBeNull();
+    expect(earlierDayNotice()).toBeNull();
+  });
+
+  it("shows no notice on a worker's form of an earlier day, as only a manager writes one", async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    renderApp(paths(participant, '2026-09-28').page, worker);
+    await settle();
+
+    expect(guidedNotes()).toBeInTheDocument();
+    expect(pastDayNotice()).toBeNull();
+  });
+
+  it('shows the notice alone on a saved past-day draft, the day written being its start in Melbourne', async () => {
+    const participant = freshParticipant();
+    const { note } = paths(participant, '2026-09-28');
+    serveNote(participant, json(savedDraft()), '2026-09-28');
+    // 9:30 am on 1 October in Melbourne, but still 30 September in UTC.
+    serve(
+      note,
+      json({
+        status: 'Draft',
+        authorDisplayName: manager.displayName,
+        startedAtUtc: '2026-09-30T23:30:00Z',
+        isPastDayNote: true,
+      } satisfies DraftNote),
+    );
+    renderApp(paths(participant, '2026-09-28').page, manager);
+    await settle();
+
+    expect(pastDayNotice()?.textContent).toBe(pastDayWords);
+    expect(earlierDayNotice()).toBeNull();
+    expect(within(main()).getAllByText(/^(?:Past-day note for|This draft is for) /)).toHaveLength(1);
+  });
+
+  it('keeps the earlier-day notice on a saved draft of an earlier day that is not a past-day note', async () => {
+    const participant = freshParticipant();
+    const { note } = paths(participant, '2026-09-30');
+    serveNote(participant, json(savedEarlier()), '2026-09-30');
+    serve(
+      note,
+      json({
+        status: 'Draft',
+        authorDisplayName: worker.displayName,
+        startedAtUtc: '2026-09-29T23:05:00Z',
+        isPastDayNote: false,
+      } satisfies DraftNote),
+    );
+    renderApp(paths(participant, '2026-09-30').page, worker);
+    await settle();
+
+    expect(earlierDayNotice()?.textContent).toBe(earlierDayWords);
+    expect(pastDayNotice()).toBeNull();
+  });
+
+  it('shows the notice in edit mode of a past-day note, and no earlier-day notice', async () => {
+    const participant = freshParticipant();
+    const page = paths(participant, '2026-09-28');
+    serve(page.header, json(participant));
+    serve(page.note, json(editedNote({ isPastDayNote: true, startedAtUtc: '2026-09-30T23:30:00Z' })));
+    serve(page.draft, json(editDraft({ isSaved: true, savedAtUtc: '2026-10-01T00:40:00Z' })));
+    renderApp(page.edit, manager);
+    await settle();
+
+    expect(pastDayNotice()?.textContent).toBe(pastDayWords);
+    expect(earlierDayNotice()).toBeNull();
+    expect(follows(pastDayNotice()!, pageHeading())).toBe(true);
+  });
+
+  it('asks "Submit the note for" the name, with its date, once a manager has written the note', async () => {
+    await openOwnNote('2026-09-28', template(), manager);
+    await write();
+
+    await press(submitButton());
+
+    expect(openConfirmation()).toHaveAccessibleName('Submit the note for Jane Citizen');
+    expect(openConfirmation()).toHaveAccessibleDescription(
+      `Monday 28${nbsp}September 2026 Flagged for manager: No`,
+    );
+  });
+});
+
+/** Enters `value` in the Write past-day note page's Note date field, and presses Continue. */
+async function continueWith(value: string) {
+  fireEvent.change(within(main()).getByLabelText('Note date'), { target: { value } });
+  await press(within(main()).getByRole('button', { name: 'Continue' }));
+  await settle();
+}
+
+describe('The back link of a past-day note that Continue replaced the date page with', () => {
+  it('reads Participant when participant detail opened the date page, and pops back to it', async () => {
+    const participant = freshParticipant();
+    serve(
+      '/api/admin/participants?includeArchived=true',
+      json([{ ...participant, dateOfBirth: '1987-03-07', rowVersion: 'AAAAAAAAB9E=' }]),
+    );
+    serve(`/api/admin/participants/${participant.id}/goals?includeArchived=true`, json([]));
+    serveNote(participant, json(template()), '2026-09-28');
+    const { router } = renderApp(`/manage/participants/${participant.id}`, manager);
+    await settle();
+    await press(within(main()).getByRole('link', { name: 'Write past-day note' }));
+    expect(router.state.location.pathname).toBe(`/manage/participants/${participant.id}/past-day-note`);
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.location.pathname).toBe(paths(participant, '2026-09-28').page);
+    expect(router.state.historyAction).toBe('REPLACE');
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Participant');
+    expect(back).toHaveAttribute('href', `/manage/participants/${participant.id}`);
+    await press(back);
+    expect(router.state.location.pathname).toBe(`/manage/participants/${participant.id}`);
+    expect(router.state.historyAction).toBe('POP');
+  });
+
+  it('reads Past notes when Past notes opened the date page, and pops back to it', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    serve(`/api/participants/${participant.id}/notes`, json({ notes: [], hasMore: false }));
+    const { router } = renderApp(`/participants/${participant.id}/notes`, manager);
+    await settle();
+    await press(within(main()).getByRole('link', { name: 'Write past-day note' }));
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.historyAction).toBe('REPLACE');
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Past notes');
+    expect(back).toHaveAttribute('href', `/participants/${participant.id}/notes`);
+    await press(back);
+    expect(router.state.location.pathname).toBe(`/participants/${participant.id}/notes`);
+    expect(router.state.historyAction).toBe('POP');
+  });
+
+  it('reads Today when nothing in the app opened the date page, as after a reload', async () => {
+    const participant = freshParticipant();
+    serveNote(participant, json(template()), '2026-09-28');
+    const { router } = renderApp(`/manage/participants/${participant.id}/past-day-note`, manager);
+    await settle();
+
+    await continueWith('2026-09-28');
+
+    expect(router.state.location.pathname).toBe(paths(participant, '2026-09-28').page);
+    const back = within(pageBar()).getByRole('link');
+    expect(back).toHaveAccessibleName('Today');
+    expect(back).toHaveAttribute('href', '/');
   });
 });

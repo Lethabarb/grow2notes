@@ -19,4 +19,20 @@ public sealed class MelbourneClockTests
 
         Assert.Equal(DateOnly.Parse(expectedToday, CultureInfo.InvariantCulture), clock.Today());
     }
+
+    // Midnight in Melbourne is 14:00 UTC before daylight saving starts on 4 October 2026 and 13:00 UTC after. A stored
+    // time of unspecified kind is read as UTC too, not as the machine's local time.
+    [Theory]
+    [InlineData("2026-09-30T13:59:00", "2026-09-30")]
+    [InlineData("2026-09-30T14:00:00", "2026-10-01")]
+    [InlineData("2026-10-04T12:59:00", "2026-10-04")]
+    [InlineData("2026-10-04T13:00:00", "2026-10-05")]
+    public void DateOf_is_the_Melbourne_date_of_a_UTC_time_of_either_kind(string utc, string expectedDate)
+    {
+        var unspecified = DateTime.Parse(utc, CultureInfo.InvariantCulture);
+        var expected = DateOnly.Parse(expectedDate, CultureInfo.InvariantCulture);
+
+        Assert.Equal(expected, MelbourneClock.DateOf(DateTime.SpecifyKind(unspecified, DateTimeKind.Utc)));
+        Assert.Equal(expected, MelbourneClock.DateOf(DateTime.SpecifyKind(unspecified, DateTimeKind.Unspecified)));
+    }
 }

@@ -220,6 +220,8 @@ Each entry names the component spec, then the settings for this screen only. Sha
      (`export-form.md`). **Edit participant** goes to participant detail (4.8).
    - They render with the identity block, even when the list is empty (`empty-loading-error.md`).
    - As built (T09): **Edit participant** alone, under the `<h1>`; T18 adds Write past-day note and T21 Export record.
+   - As built (T18): **Write past-day note** before **Edit participant**, in one `ButtonGroup`, for a manager and an
+     active participant; a worker or an archived participant has none. T21 adds Export record.
 
 5. **Chronological list, paged** → [`chronological-list.md`](../components/chronological-list.md)
    - Mode: **paged**, 30 per page, newest first by note date, `useInfiniteQuery` on

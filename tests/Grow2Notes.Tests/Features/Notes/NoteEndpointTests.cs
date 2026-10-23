@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -12,6 +13,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Grow2Notes.Tests.Features.Notes;
 
@@ -42,10 +44,9 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
 
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
-    // design.md §6.3's fields that these tasks give, in its order, and nothing more: no versionCount, as T18 adds it.
-    // A manager has the flag status and the reviews after the version, and a worker neither, even on a note To
-    // review. The text keeps its line breaks, and the reason is the flagged version's. A note with one version is not
-    // edited, and has no last edit.
+    // design.md §6.3's fields, in its order. A manager has the flag status, the reviews and the number of versions
+    // after the version, and a worker none of them, even on a note To review. The text keeps its line breaks, and the
+    // reason is the flagged version's. A note with one version is not edited, and has no last edit.
     [Fact]
     public async Task A_submitted_note_gives_a_worker_and_a_manager_its_author_submitted_time_and_current_version()
     {
@@ -68,19 +69,25 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var manager = await ReadAsync(Caller.ManagerOfA, participant.Id);
 
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current", "flagStatus", "reviews"],
+            [
+                "status", "author", "startedAtUtc", "firstSubmittedAtUtc", "isPastDayNote", "isEdited", "current",
+                "flagStatus", "reviews", "versionCount",
+            ],
             manager.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(1, manager.GetProperty("versionCount").GetInt32());
         Assert.Equal("ToReview", manager.GetProperty("flagStatus").GetString());
         Assert.Equal(0, manager.GetProperty("reviews").GetArrayLength());
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
+            ["status", "author", "startedAtUtc", "firstSubmittedAtUtc", "isPastDayNote", "isEdited", "current"],
             worker.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Submitted", worker.GetProperty("status").GetString());
         var writtenBy = worker.GetProperty("author");
         Assert.Equal(["id", "displayName"], writtenBy.EnumerateObject().Select(property => property.Name));
         Assert.Equal(author, writtenBy.GetProperty("id").GetGuid());
         Assert.Equal("Priya Nair", writtenBy.GetProperty("displayName").GetString());
+        Assert.Equal("2026-09-30T23:14:00Z", worker.GetProperty("startedAtUtc").GetString());
         Assert.Equal("2026-10-01T06:42:00Z", worker.GetProperty("firstSubmittedAtUtc").GetString());
+        Assert.False(worker.GetProperty("isPastDayNote").GetBoolean());
         Assert.False(worker.GetProperty("isEdited").GetBoolean());
         var current = worker.GetProperty("current");
         Assert.Equal(
@@ -146,7 +153,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         foreach (var worker in new[] { viaWorker, viaNamedManager })
         {
             Assert.Equal(
-                ["status", "author", "firstSubmittedAtUtc", "isEdited", "current"],
+                ["status", "author", "startedAtUtc", "firstSubmittedAtUtc", "isPastDayNote", "isEdited", "current"],
                 worker.EnumerateObject().Select(property => property.Name));
             Assert.DoesNotContain("Sam", worker.GetRawText(), StringComparison.Ordinal);
         }
@@ -171,7 +178,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var note = await ReadAsync(Caller.WorkerOfA, participant.Id);
 
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "isEdited", "lastEdit", "current"],
+            [
+                "status", "author", "startedAtUtc", "firstSubmittedAtUtc", "isPastDayNote", "isEdited", "lastEdit",
+                "current",
+            ],
             note.EnumerateObject().Select(property => property.Name));
         Assert.Equal(seeded.A.WorkerId, note.GetProperty("author").GetProperty("id").GetGuid());
         Assert.True(note.GetProperty("isEdited").GetBoolean());
@@ -262,7 +272,8 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             var note = await ReadAsync(client, participant.Id);
 
             Assert.Equal(
-                """{"status":"Draft","authorDisplayName":"Alex P.","startedAtUtc":"2026-09-30T23:14:00Z"}""",
+                "{\"status\":\"Draft\",\"authorDisplayName\":\"Alex P.\",\"startedAtUtc\":\"2026-09-30T23:14:00Z\","
+                + "\"isPastDayNote\":false}",
                 note.GetRawText());
         }
     }
@@ -305,7 +316,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         var note = await ReadAsync(manager, participant.Id);
 
         Assert.Equal(
-            ["status", "authorDisplayName", "startedAtUtc", "current"],
+            ["status", "authorDisplayName", "startedAtUtc", "isPastDayNote", "current"],
             note.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Draft", note.GetProperty("status").GetString());
         Assert.Equal("Alex P.", note.GetProperty("authorDisplayName").GetString());
@@ -382,7 +393,10 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var note = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
         Assert.Equal(
-            ["status", "author", "firstSubmittedAtUtc", "isEdited", "current", "flagStatus", "reviews"],
+            [
+                "status", "author", "startedAtUtc", "firstSubmittedAtUtc", "isPastDayNote", "isEdited", "current",
+                "flagStatus", "reviews", "versionCount",
+            ],
             note.EnumerateObject().Select(property => property.Name));
         Assert.Equal("Submitted", note.GetProperty("status").GetString());
         Assert.Equal("Alex P.", note.GetProperty("author").GetProperty("displayName").GetString());
@@ -438,6 +452,143 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
         Assert.False(response.Headers.Contains("ETag"));
+    }
+
+    // design.md §6.3, R11: a manager's submitted note says how many versions it has, which is its current version's
+    // number, here 3 after two edits, and a worker's says nothing of it. A draft has no versions to count.
+    [Fact]
+    public async Task A_manager_alone_gets_the_number_of_versions_of_a_submitted_note_and_a_draft_has_none()
+    {
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        var draft = await factory.Services.AddParticipantAsync(seeded.A);
+        var noteId = await factory.Services.AddSubmittedAsync(seeded.A, new(
+            participant.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc, SubmittedAtUtc));
+        for (var versionNumber = 2; versionNumber <= 3; versionNumber++)
+        {
+            await factory.Services.AddVersionAsync(
+                seeded.A,
+                noteId,
+                versionNumber,
+                SubmittedAtUtc.AddHours(versionNumber),
+                flagReason: null,
+                flaggedVersionNumber: 1,
+                groups: null,
+                seeded.A.ManagerId);
+        }
+
+        await factory.Services.AddDraftAsync(seeded.A, new(draft.Id, NoteDate, seeded.A.WorkerId, StartedAtUtc));
+
+        var manager = await ReadAsync(Caller.ManagerOfA, participant.Id);
+        var worker = await ReadAsync(Caller.WorkerOfA, participant.Id);
+
+        Assert.Equal(3, manager.GetProperty("versionCount").GetInt32());
+        Assert.False(worker.TryGetProperty("versionCount", out _));
+        Assert.False((await ReadAsync(Caller.ManagerOfA, draft.Id)).TryGetProperty("versionCount", out _));
+        Assert.False((await ReadAsync(Caller.WorkerOfA, draft.Id)).TryGetProperty("versionCount", out _));
+        Assert.False(manager.GetProperty("current").TryGetProperty("createdBy", out _));
+        Assert.False(manager.GetProperty("current").TryGetProperty("createdAtUtc", out _));
+    }
+
+    // design.md §3.3, R21: a note is a past-day note when its first change came on a later Melbourne day than its date.
+    // The edges are Melbourne midnight, 14:00 UTC before daylight saving starts on 4 October 2026 and 13:00 UTC after,
+    // for a draft's header and a submitted note, whoever reads them.
+    [Theory]
+    [InlineData("2026-09-30", "2026-09-30T13:59:00Z", false)]
+    [InlineData("2026-09-30", "2026-09-30T14:00:00Z", true)]
+    [InlineData("2026-10-04", "2026-10-04T12:59:00Z", false)]
+    [InlineData("2026-10-04", "2026-10-04T13:00:00Z", true)]
+    public async Task A_note_started_after_Melbourne_midnight_of_its_date_is_a_past_day_note_whoever_reads_it(
+        string noteDate, string startedAt, bool isPastDayNote)
+    {
+        var date = DateOnly.Parse(noteDate, CultureInfo.InvariantCulture);
+        var startedAtUtc = DateTimeOffset.Parse(startedAt, CultureInfo.InvariantCulture).UtcDateTime;
+        var drafted = await factory.Services.AddParticipantAsync(seeded.A);
+        var submitted = await factory.Services.AddParticipantAsync(seeded.A);
+        await factory.Services.AddDraftAsync(seeded.A, new(drafted.Id, date, seeded.A.ManagerId, startedAtUtc));
+        await factory.Services.AddSubmittedAsync(seeded.A, new(
+            submitted.Id, date, seeded.A.ManagerId, startedAtUtc, startedAtUtc.AddHours(3)));
+
+        foreach (var caller in new[] { Caller.WorkerOfA, Caller.ManagerOfA })
+        {
+            using var client = ClientFor(caller);
+            foreach (var participant in new[] { drafted, submitted })
+            {
+                var note = await ReadAsync(client, participant.Id, date);
+
+                Assert.Equal(isPastDayNote, note.GetProperty("isPastDayNote").GetBoolean());
+            }
+        }
+    }
+
+    // design.md §3.3, §5.5 item 4: a manager's first save for an earlier day starts a past-day note with them as its
+    // author, for a draft's header and, once submitted, the note, which says when it was started. The last case
+    // starts it at 12:30 am on 5 October, the day after daylight saving starts, 13:30 UTC on the 4th, when a fixed
+    // UTC+10 would still say the 4th.
+    [Theory]
+    [InlineData("2026-09-28", "2026-10-01T00:30:00Z")]
+    [InlineData("2026-09-30", "2026-09-30T14:30:00Z")]
+    [InlineData("2026-10-04", "2026-10-04T13:30:00Z")]
+    public async Task A_manager_s_first_save_for_an_earlier_day_makes_a_past_day_note_that_stays_one_when_submitted(
+        string noteDate, string now)
+    {
+        var date = DateOnly.Parse(noteDate, CultureInfo.InvariantCulture);
+        var startedAt = DateTimeOffset.Parse(now, CultureInfo.InvariantCulture);
+        await using var app = factory.WithWebHostBuilder(
+            builder => builder.UseClock(new FakeTimeProvider(startedAt)));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var manager = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        using var worker = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        await StartAsync(manager, participant.Id, date);
+
+        foreach (var client in new[] { manager, worker })
+        {
+            var draft = await ReadAsync(client, participant.Id, date);
+
+            Assert.Equal("Draft", draft.GetProperty("status").GetString());
+            Assert.True(draft.GetProperty("isPastDayNote").GetBoolean());
+        }
+
+        await SubmitAsync(manager, participant.Id, date);
+
+        foreach (var client in new[] { manager, worker })
+        {
+            var note = await ReadAsync(client, participant.Id, date);
+
+            Assert.Equal("Submitted", note.GetProperty("status").GetString());
+            Assert.True(note.GetProperty("isPastDayNote").GetBoolean());
+            Assert.Equal(seeded.A.ManagerId, note.GetProperty("author").GetProperty("id").GetGuid());
+            Assert.Equal(startedAt.UtcDateTime, note.GetProperty("startedAtUtc").GetDateTime());
+        }
+    }
+
+    // R22: a worker's draft started at 11:50 pm on its date and submitted after midnight is not a past-day note, as it
+    // is the first change that counts and not the submit, and a worker can only start a note for today. The second case
+    // is 11:50 pm AEDT, 10 minutes before the first midnight after the change.
+    [Theory]
+    [InlineData("2026-10-01", "2026-10-01T13:50:00Z", "2026-10-01T14:10:00Z")]
+    [InlineData("2026-10-04", "2026-10-04T12:50:00Z", "2026-10-04T13:10:00Z")]
+    public async Task A_worker_s_draft_started_before_midnight_and_submitted_after_it_is_not_a_past_day_note(
+        string noteDate, string startedAt, string submittedAt)
+    {
+        var date = DateOnly.Parse(noteDate, CultureInfo.InvariantCulture);
+        var clock = new FakeTimeProvider(DateTimeOffset.Parse(startedAt, CultureInfo.InvariantCulture));
+        await using var app = factory.WithWebHostBuilder(builder => builder.UseClock(clock));
+        var participant = await factory.Services.AddParticipantAsync(seeded.A);
+        using var worker = app.CreateHttpsClient().SignInAs(Caller.WorkerOfA, seeded);
+        using var manager = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+        await StartAsync(worker, participant.Id, date);
+        Assert.False((await ReadAsync(manager, participant.Id, date)).GetProperty("isPastDayNote").GetBoolean());
+        clock.SetUtcNow(DateTimeOffset.Parse(submittedAt, CultureInfo.InvariantCulture));
+
+        await SubmitAsync(worker, participant.Id, date);
+
+        foreach (var client in new[] { manager, worker })
+        {
+            var note = await ReadAsync(client, participant.Id, date);
+
+            Assert.Equal("Submitted", note.GetProperty("status").GetString());
+            Assert.False(note.GetProperty("isPastDayNote").GetBoolean());
+        }
     }
 
     // design.md §5.4 lists no event for reading (A28), and reading a draft makes no working copy of it.
@@ -579,7 +730,7 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             CommonItemGroups(manager.GetProperty("current")));
         Assert.DoesNotContain("Showered", manager.GetRawText(), StringComparison.Ordinal);
         Assert.Equal(
-            ["status", "authorDisplayName", "startedAtUtc"],
+            ["status", "authorDisplayName", "startedAtUtc", "isPastDayNote"],
             worker.EnumerateObject().Select(property => property.Name));
     }
 
@@ -649,16 +800,70 @@ public sealed class NoteEndpointTests(Grow2NotesFactory factory, SqlServerFixtur
             .SingleAsync(TestContext.Current.CancellationToken);
     }
 
-    private static string PathOf(Guid participantId) => $"/api/participants/{participantId}/notes/2026-10-01";
+    private static string PathOf(Guid participantId) => PathOf(participantId, NoteDate);
 
-    private static async Task<JsonElement> ReadAsync(HttpClient client, Guid participantId)
+    private static string PathOf(Guid participantId, DateOnly noteDate) =>
+        string.Create(CultureInfo.InvariantCulture, $"/api/participants/{participantId}/notes/{noteDate:yyyy-MM-dd}");
+
+    private static Task<JsonElement> ReadAsync(HttpClient client, Guid participantId) =>
+        ReadAsync(client, participantId, NoteDate);
+
+    private static async Task<JsonElement> ReadAsync(HttpClient client, Guid participantId, DateOnly noteDate)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        using var response = await client.GetAsync(PathOf(participantId), cancellationToken);
+        using var response = await client.GetAsync(PathOf(participantId, noteDate), cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+    }
+
+    // The note's first save, as the form sends it: from a page that has not saved the note before, with the template's
+    // lists' version, nothing ticked and some text.
+    private static async Task StartAsync(HttpClient client, Guid participantId, DateOnly noteDate)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var draftPath = PathOf(participantId, noteDate) + "/draft";
+        var form = await client.GetFromJsonAsync<JsonElement>(draftPath, cancellationToken);
+        using var started = await client.PutWithTokenAsync(
+            draftPath,
+            await client.FetchTokenAsync(),
+            new
+            {
+                clientId = Guid.NewGuid(),
+                seq = 1,
+                listsVersion = form.GetProperty("listsVersion").GetString(),
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            },
+            ifMatch: null);
+        Assert.Equal(HttpStatusCode.Created, started.StatusCode);
+    }
+
+    // Submit of the caller's own draft, as the screen sends it, with a key of its own.
+    private static async Task SubmitAsync(HttpClient client, Guid participantId, DateOnly noteDate)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, PathOf(participantId, noteDate) + "/versions")
+        {
+            Content = JsonContent.Create(new
+            {
+                baseVersion = 0,
+                narrative = "Jane made toast.",
+                tickedGoalIds = Array.Empty<Guid>(),
+                pickedGroupIds = Array.Empty<Guid>(),
+                tickedCommonItemIds = Array.Empty<Guid>(),
+                isFlagged = false,
+                flagReason = (string?)null,
+            }),
+        };
+        request.Headers.Add(AntiforgeryTokens.Header, await client.FetchTokenAsync());
+        request.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
     // Over HTTPS, as the SPA calls the /api group (tests/README.md).

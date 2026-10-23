@@ -10,6 +10,12 @@ internal sealed class MelbourneClock(TimeProvider timeProvider)
     // from the tz database; Windows maps it through ICU, so the app must not use invariant globalization.
     private static readonly TimeZoneInfo Melbourne = TimeZoneInfo.FindSystemTimeZoneById("Australia/Melbourne");
 
-    public DateOnly Today() =>
-        DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), Melbourne).DateTime);
+    public DateOnly Today() => DateOf(timeProvider.GetUtcNow().UtcDateTime);
+
+    /// <summary>
+    /// The Melbourne calendar date of <paramref name="utc"/>, a stored UTC time. A value of unspecified kind is read as
+    /// UTC too, which <see cref="TimeZoneInfo.ConvertTime(DateTime, TimeZoneInfo)"/> would not do.
+    /// </summary>
+    public static DateOnly DateOf(DateTime utc) =>
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, Melbourne));
 }

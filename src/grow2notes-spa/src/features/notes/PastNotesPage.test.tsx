@@ -156,7 +156,9 @@ function serveSubmittedNote(noteDate = '2026-10-01') {
   const note: SubmittedNote = {
     status: 'Submitted',
     author: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+    startedAtUtc: `${daysBefore(noteDate, 0)}T06:00:00Z`,
     firstSubmittedAtUtc: `${daysBefore(noteDate, 0)}T06:42:00Z`,
+    isPastDayNote: false,
     isEdited: false,
     current: {
       versionNumber: 1,
@@ -535,8 +537,8 @@ describe('Past notes once loaded', () => {
     expect(backLink()).toHaveAttribute('href', '/');
   });
 
-  // participant-notes.md items 4 and 11: the manager's actions, there even with no notes; Write past-day note and
-  // Export record come with T18 and T21.
+  // participant-notes.md items 4 and 11: the manager's actions, there even with no notes; Export record comes with
+  // T21.
   it("gives a manager Edit participant, a button-styled link to the participant's page, after the <h1>", async () => {
     servePastNotes();
     await openPastNotes(manager);
@@ -546,6 +548,25 @@ describe('Past notes once loaded', () => {
     expect(edit.className).toMatch(/button/);
     expect(pageHeading().compareDocumentPosition(edit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(edit.compareDocumentPosition(list()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('gives a manager Write past-day note before Edit participant, for the date page, unless archived', async () => {
+    servePastNotes();
+    await openPastNotes(manager);
+
+    const links = within(main()).getAllByRole('link').slice(0, 2);
+    expect(links.map((link) => link.textContent)).toEqual(['Write past-day note', 'Edit participant']);
+    expect(links[0]).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
+    expect(links[0].className).toMatch(/button/);
+  });
+
+  it('gives a manager no Write past-day note for an archived participant, but Edit participant', async () => {
+    serve(paths.header, json({ ...jane, status: 'Archived' }));
+    serve(paths.history, json(page(first30, true)));
+    await openPastNotes(manager);
+
+    expect(within(main()).queryByRole('link', { name: 'Write past-day note' })).toBeNull();
+    expect(within(main()).getByRole('link', { name: 'Edit participant' })).toBeInTheDocument();
   });
 
   it('gives a worker no manager action, the first row straight after the <h1>', async () => {
@@ -567,7 +588,7 @@ describe('Past notes once loaded', () => {
       expect(within(main()).queryByRole('list')).toBeNull();
       expect(within(main()).queryByRole('button')).toBeNull();
       expect(within(main()).queryAllByRole('link').map((link) => link.textContent)).toEqual(
-        me.role === 'Manager' ? ['Edit participant'] : [],
+        me.role === 'Manager' ? ['Write past-day note', 'Edit participant'] : [],
       );
     },
   );

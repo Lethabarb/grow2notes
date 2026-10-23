@@ -6,10 +6,13 @@ import { Tag } from '../../components/Tag.tsx';
 import { TickListRead, type TickedItem } from '../../components/TickListRead.tsx';
 import { dateTime, parseDateOnly, stamp } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
+import { pageName } from '../../copy/pageNames.ts';
 import { Pause } from '../../copy/Pause.tsx';
 import { Sep } from '../../copy/Sep.tsx';
 import { strings } from '../../copy/strings.ts';
 import type { ReadGroup, SubmittedNote } from './noteQueries.ts';
+import { PastDayLine } from './PastDayLine.tsx';
+import pastNotesLinkStyles from './PastNotesLink.module.css';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import styles from './ReadView.module.css';
 import { ReviewPanel } from './ReviewPanel.tsx';
@@ -35,7 +38,9 @@ type ReadViewProps = {
  * and for a manager, never shown disabled, which opens the edit form in this entry's place, and the Past notes link;
  * then its sections; then, for a manager, the Review panel, only when the note was To review as the page opened, so
  * that it stays for the visit, through the refetch that shows the note Reviewed, and a note that was already Reviewed
- * has none (participant-notes.md component 8). T18 adds the past-day line and Version history.
+ * has none (participant-notes.md component 8). On a past-day note, which a manager wrote on a later day than its date,
+ * the byline is the past-day line and then "Submitted 4:42 pm" on a line of its own. A manager's actions also hold the
+ * Version history link, between Edit and Past notes, on every submitted note, even one with a single version.
  */
 export function ReadView({ heading, participantId, note, noteDate, removedFlagReason }: ReadViewProps) {
   const { author, firstSubmittedAtUtc, current } = note;
@@ -48,12 +53,22 @@ export function ReadView({ heading, participantId, note, noteDate, removedFlagRe
     <>
       {heading}
       <div className={styles.lines}>
-        <p className={styles.line}>
-          {msg.writtenBy(author.displayName)}
-          <Sep />
-          {strings.readView.submitted}{' '}
-          <time dateTime={firstSubmittedAtUtc}>{stamp(firstSubmittedAtUtc, day)}</time>
-        </p>
+        {note.isPastDayNote ? (
+          <>
+            <PastDayLine author={author} startedAtUtc={note.startedAtUtc} />
+            <p className={styles.line}>
+              {strings.readView.submitted}{' '}
+              <time dateTime={firstSubmittedAtUtc}>{stamp(firstSubmittedAtUtc, day)}</time>
+            </p>
+          </>
+        ) : (
+          <p className={styles.line}>
+            {msg.writtenBy(author.displayName)}
+            <Sep />
+            {strings.readView.submitted}{' '}
+            <time dateTime={firstSubmittedAtUtc}>{stamp(firstSubmittedAtUtc, day)}</time>
+          </p>
+        )}
         {note.isEdited && (
           <p className={styles.line}>
             <Tag kind="edited" />
@@ -92,6 +107,13 @@ export function ReadView({ heading, participantId, note, noteDate, removedFlagRe
           <Link to={`/participants/${participantId}/notes/${noteDate}/edit`} replace className={buttonClass()}>
             {strings.readView.edit}
           </Link>
+        )}
+        {me.role === 'Manager' && (
+          <p className={pastNotesLinkStyles.line}>
+            <Link className={pastNotesLinkStyles.link} to={`/participants/${participantId}/notes/${noteDate}/versions`}>
+              {pageName.versionHistory}
+            </Link>
+          </p>
         )}
         <PastNotesLink participantId={participantId} />
       </div>

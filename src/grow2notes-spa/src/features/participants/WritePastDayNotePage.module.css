@@ -1,0 +1,18 @@
+/* The reading column (participants.md C): 40rem, left-aligned, on a phone the whole width. */
+.column {
+  max-inline-size: var(--measure);
+}
+
+/* The notice or the form, under the <h1>. */
+.body {
+  margin-block-start: var(--space-5);
+}
+
+/* A date is at most ten characters, so the field is not as wide as its column (participants.md C3). */
+.input {
+  max-inline-size: 12em;
+}
+
+.submit {
+  margin-block-start: var(--space-5);
+}

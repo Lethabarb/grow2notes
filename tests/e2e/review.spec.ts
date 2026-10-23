@@ -368,12 +368,14 @@ test('the back label stays Flagged across Edit, Cancel and Save changes', async 
   await expect(backLink(page, 'Flagged')).toBeVisible();
 });
 
-test('keyboard only: the back link, Edit, Past notes, the comment, then Mark reviewed', async ({ page }) => {
+test('keyboard only: the back link, Edit, Version history, Past notes, the comment, Mark reviewed', async ({
+  page,
+}) => {
   const store = flaggedNote();
   await openFromFlagged(page, store);
 
   await expectStops(page, 'Shift+Tab', ['Flagged']);
-  await expectStops(page, 'Tab', ['Edit', 'Past notes', 'Comment (optional)', 'Mark reviewed']);
+  await expectStops(page, 'Tab', ['Edit', 'Version history', 'Past notes', 'Comment (optional)', 'Mark reviewed']);
   await expect(pastNotesLink(page)).toBeVisible();
 });
 

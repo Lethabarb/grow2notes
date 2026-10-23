@@ -14,8 +14,9 @@ namespace Grow2Notes.Web.Features.Notes;
 /// draft's header, its status, who started it and when, which tells the shared note address to open the form or to
 /// say whose draft it is (note-form.md *Routes*, §4.2), with its author's working copy, read-only, for a manager alone,
 /// by the role as stored (§3.4, §4.2's "Someone else's draft"); or a submitted note's current version, the same for a
-/// worker and a manager; or <c>404</c> for no live note, a discarded draft included (§5.5 item 1), and for a
-/// participant not in the organisation, another organisation's included (§9.2).
+/// worker and a manager, bar the flag status, the reviews and the number of versions, which are a manager's; or
+/// <c>404</c> for no live note, a discarded draft included (§5.5 item 1), and for a participant not in the
+/// organisation, another organisation's included (§9.2).
 /// </summary>
 /// <remarks>
 /// It has no policy of its own, so the fallback policy admits any signed-in Worker or Manager, and a request with no
@@ -80,6 +81,7 @@ internal static class NoteEndpoint
             Author: null,
             note.CreatedAtUtc,
             FirstSubmittedAtUtc: null,
+            note.IsPastDayNote,
             IsEdited: null,
             LastEdit: null,
             Current: null);
@@ -118,14 +120,17 @@ internal static class NoteEndpoint
             note.Status.ToString(),
             AuthorDisplayName: null,
             new(note.AuthorUserId, note.AuthorDisplayName),
-            StartedAtUtc: null,
+            note.CreatedAtUtc,
             note.FirstSubmittedAtUtc,
+            note.IsPastDayNote,
             isEdited,
             lastEdit,
             NoteReadVersion.Of(
                 note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason),
             isManager ? note.FlagStatus.ToString() : null,
-            isManager ? await ReviewsAsync(db, note, cancellationToken) : null);
+            isManager ? await ReviewsAsync(db, note, cancellationToken) : null,
+            // Versions are numbered 1 to the current number with no gap (§5.8), so no count is needed.
+            isManager ? note.CurrentVersionNumber : null);
     }
 
     private static async Task<IReadOnlyList<NoteReadReview>> ReviewsAsync(

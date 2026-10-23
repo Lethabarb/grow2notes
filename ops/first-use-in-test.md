@@ -750,7 +750,7 @@ word typed into a note is made up (A35). The editing is on the notes that steps 
     not saved: no connection. Try again.", open the edit form again, change a word, wait for "Saved", press Save
     changes and turn on airplane mode at once, so that the request fails or its answer is lost; this is timing-
     dependent and may take a few tries. Then turn airplane mode off and press Save changes again with nothing typed:
-    look for the read view and, once T18's Version history exists, for exactly one new version, not two. (S02.06.01's
+    look for the read view and, in the note's Version history, for exactly one new version, not two. (S02.06.01's
     second criterion and A69, with the retry's key.)
 
 ### Mark reviewed and re-flag, once T16 is in test
@@ -813,3 +813,99 @@ can be flagged again after a review by a manager's edit, as step 84 does.
 85. Open a note from Flagged and look for the back link "Flagged". Press Edit and look for the same label above the
     form; press Cancel and look for the read view with "Flagged" again; press Edit and Save changes, look for "Flagged"
     once more, and press it to return to the Flagged list. (flagged.md component 7's second bullet.)
+
+### Version history and past-day notes, once T18 is in test
+
+These steps hold T18's by-hand checks ([tasks.md](../design/backlog/tasks.md), T18's Notes), in two parts: Version
+history, steps 86 to 94, and Write past-day note, steps 95 to 105. They need account A, a manager, the passkey worker
+of step 18, the kit of steps 26 to 28, and a made-up participant with two goals, such as `Jane Citizen`, whose archived
+state is changed in step 104. For the first part, the worker submits a note for today, and account A edits it twice,
+changing a word and a tick each time and flagging it once. Every word typed is made up (A35).
+
+86. The database, as in step 26: run `infra/sql/check-database.sql` for test after T18's deploy. Look for PASS on every
+    row, with no new table or migration named, as T18 adds no table, column or write path.
+87. On the laptop in Chrome, as account A, open the edited note and look for Version history between Edit and Past
+    notes in the row, and no such link when you sign in as the worker. Press it and look for the `<h1>` "Version
+    history Jane Citizen" with the note's date, "The current version is version 3.", and three rows, newest first, each
+    a link "Version n" with who saved it and when, "(manager)" after account A's name and not after the worker's, and
+    "Submitted" on version 1 alone. (S02.07.01 and version-history.md's page A, with real people.)
+88. Open version 2 and look for its own picked groups and its own flag, and the line "This is an earlier version. The
+    current version is version 3." with a working link to version 3, which says "This is the current version." Press
+    the back link, and then, on a second visit, Back in the browser: look for the list at the place it was left, the
+    row opened focused, and no Restore, Edit or Mark reviewed anywhere. (S02.07.02 and version-history.md's page B.)
+89. With the list open in one tab, edit the note in another and save, then return to the first tab and look for the new
+    version in the list without a reload. Then open a version in the first tab, edit and save in the other, and look,
+    on returning to the list, for the same. (The list refetches on focus; a version never changes.)
+90. On the iPhone with VoiceOver, open the list and a version: look for the heading read as "Version history", the
+    name and the day, then "heading level 1"; each row read as a link, "Version 3", with its description; the commas
+    pausing between the name and the time; and the way "Thu" and "Oct" are spoken, which the spec marks unverified.
+    Repeat with NVDA and Chrome on the laptop. (version-history.md's screen-reader checklist; no automated test hears
+    a speech engine.)
+91. On the Android phone with TalkBack and Chrome, repeat step 90 with the list and version 2. Write down how the
+    abbreviated day and month are spoken and whether the rows are easy to land on. (The third platform of the same
+    checklist.)
+92. On a real phone held upright at its usual text size, then with the text size at its largest, open the list and a
+    version and look for no sideways scroll, each row at least a finger tall, and the Guided notes text wrapping with
+    its line breaks and spaces kept. Then, on the laptop with a Windows contrast theme on, open the list and a version
+    and look for the focus ring at each Tab stop, each row's edge, and every box and tick on the version still drawn.
+    (version-history.md's layout items on a real device, and its forced-colours check.)
+93. As the passkey worker, type the list's address and a version's address, taken from account A's browser, into the
+    address bar: look for Page not found for both, and the same for a version number that is not a whole number, such
+    as `0`. As account A, type a version number the note does not have and look for Page not found too. (S02.07.01 and
+    S02.07.02's access criteria, with real sessions.)
+94. As account A, open the list and a version of the past-day note that step 97 makes, and look for the line
+    "Past-day note" on both, with "written by {name} (manager) on" and the date and time. With the screen reader of
+    step 90, listen for it as one sentence: "Past-day note, written by …". (version-history.md's past-day line.)
+95. On the laptop in Chrome, as account A, open Participants, then Jane Citizen, then Write past-day note (after Past
+    notes in Actions). Look for the title "Grow2Notes – Write past-day note", the `<h1>` holding her name above the
+    page's name and taking focus, and the field "Note date" empty, with "A date before today" under the label. Press
+    Continue with it empty and look for "Enter the note date" above the field, the field focused and red-barred. Pick
+    today and press Continue: "Note date must be in the past". Pick yesterday: the message goes at once. Then, with a
+    Windows contrast theme on, Tab through the page and look for the focus ring on the back link, the field and
+    Continue. (S02.08.01 and participants.md C.)
+96. Press Continue with yesterday and look for the note's form with "Past-day note for {the date}, written on {today}."
+    after the date and before Past notes, no "This draft is for" notice, and the back link "Participant". Press the
+    back link and look for her participant page with no date page in between; press Write past-day note again,
+    continue, and press Back in the browser: look for the same. Open Past notes, press Write past-day note there,
+    continue, and look for the back link "Past notes". (S02.08.02, and note-form.md open question 4 as built.)
+97. Type some words in the form of step 96, wait for "Saved", press Submit note and look for the confirmation titled
+    "Submit the note for" with the date, then confirm. Open the note and look for the line "Past-day note" with your
+    name and "(manager)", the day and time it was written, and then "Submitted" with its time, and no "Written by".
+    Open its Version history and look for the same line. (S02.08.02's third and fifth criteria.)
+98. On a date that already has a submitted note, press Continue and look for its read view with Edit; on a date with
+    your own draft, the form; on a date with the worker's draft, the read-only draft with Discard draft. Then, on a
+    past-day note you wrote, press Edit and look for the same "Past-day note for…" notice above the form and no "This
+    draft is for" notice. (S02.08.01's second criterion with real notes.)
+99. A very old date: in Chrome type `01011999` into the field, or pick 1 January 1999, and press Continue. Look for the
+    form of that date opening, with "Past-day note for Friday 1 January 1999, written on {today}.", and nothing
+    breaking in the heading or the notice. Leave without typing, so that no draft is made. Then do the same in Edge and
+    on the iPhone. Then type a year of two digits, such as `0019`, and look for the form opening with nothing breaking;
+    its weekday may be wrong, as the browser's date arithmetic reads a year from 0 to 99 as 1900 to 1999, which A75
+    accepts. (A75: no earliest date, no warning.)
+100. A typed year: in Chrome click into the year part of the field and type a fifth digit, such as `20261`, press
+     Continue and look for "Note date must be in the past", not Page not found. Then type `2026` with a month and day
+     after today, in Chrome, Edge and Firefox, and look for the same message. (Typed dates get past `max`, which is
+     only a hint.)
+101. On the iPhone in Safari, open the page and tap the field: look for the phone's own picker, which lets you pick
+     today or a day after it despite `max`. Pick one, close the picker, press Continue and look for "Note date must be
+     in the past" with the field focused. Look too for the text at least as large as the page's, the page not zooming
+     in, and the value not centred oddly in the field. (date-navigation.md's iOS items.)
+102. With NVDA and Chrome, VoiceOver and iOS Safari, and TalkBack and Chrome, tab to the field and look for "Note date",
+     "A date before today" read as its description, and the type of control; press Continue empty and look for "Error:
+     Enter the note date" read, with focus in the field. With Dragon or Voice Access, try to say a date into the field
+     and write down what happens. (participants.md and date-navigation.md's checks; Dragon could not use date inputs
+     in 2019.)
+103. The daylight-saving and midnight check: Melbourne's clock decides "written on", so set the laptop's time zone to
+     another, such as UTC, and write a past-day note at about 12:30 am Melbourne time, which is still the day before in
+     UTC. Look for "written on" naming Melbourne's day in the notice, after the first save too, and the read view's
+     line giving the same day with the Melbourne time. Repeat on the night of a change of clocks, the first Sunday of
+     April or October (4 April 2027 is the next), once for a note started shortly before midnight and once shortly
+     after it. (`format.melbourneDay` and the server's `DateOf`, with a real clock.)
+104. Archive Jane Citizen: look for Write past-day note gone from her participant page and from her Past notes, with
+     Past notes and Edit participant still there. Type the date page's address by hand and look for "Jane Citizen is
+     archived, so no new notes can be written for them." with no field. Restore her and look for the link back. As the
+     worker, look for no such link on Past notes, and Page not found at the typed address. (S01.02.04's Write past-day
+     note check and S02.08.01's first criterion.)
+105. On the laptop, reload the date page and look for its back link reading "Participant"; press Continue with
+     yesterday and look for the note's back link reading "Today", as nothing in the app opened the date page. Then open
+     the note's address from a pasted link and look for "Today" too. (note-form.md's back-link fallback.)

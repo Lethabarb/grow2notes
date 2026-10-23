@@ -19,6 +19,12 @@ export function parseDateOnly(dateOnly: string): Ymd {
   return { y, m, d };
 }
 
+/** The day before an ISO date, "2026-09-30" for "2026-10-01", worked out in UTC so that no device zone can move it. */
+export function dayBefore(isoDate: string): string {
+  const { y, m, d } = parseDateOnly(isoDate);
+  return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
+}
+
 // Read in UTC, which has no offset to move the date, so the day is the same whatever zone the device is in.
 const dayName = ({ y, m, d }: Ymd) => days[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 const monthName = ({ m }: Ymd) => months[m - 1];
@@ -56,6 +62,12 @@ function inMelbourne(utcIso: string): Moment {
   const parts = melbourne.formatToParts(new Date(utcIso));
   const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
   return { y: part('year'), m: part('month'), d: part('day'), h: part('hour'), min: part('minute') };
+}
+
+/** The Melbourne calendar day of a time in UTC, for "written on" (the day, not the time of it). */
+export function melbourneDay(utcIso: string): Ymd {
+  const { y, m, d } = inMelbourne(utcIso);
+  return { y, m, d };
 }
 
 function timeOf({ h, min }: Moment): string {

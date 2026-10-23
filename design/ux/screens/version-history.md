@@ -435,6 +435,33 @@ function VersionRow({ v, authorId }: { v: VersionSummary; authorId: string }) {
 
 ---
 
+## As built (T18)
+
+- Files: `src/features/notes/VersionHistoryPage.tsx` (A), `VersionPage.tsx` (B, a thin wrapper that checks the number
+  against `^[1-9][0-9]*$`, else renders Page not found with no request, around an inner page), `versionQueries.ts` and
+  `PastDayLine.tsx`. Both routes are children of `ManagerOnly`, A with `returnFocus: {}` and `backKey: 'versionHistory'`,
+  B with a page name only.
+- Rows are `LinkRow`s with `look: 'date'` in a `LinkRowList ordered reversed`, not `ChronoList`: the list can never be
+  empty (the API answers `404` for a note with no versions to show), so `ChronoList`'s empty sentence would never show.
+  A's meta line passes `statusFirst` for version 1 alone, so that "Submitted" is the only bold word.
+- **The current version is the highest number in the version list, and B treats any number at or above it as current.**
+  This replaces the *Data and queries* rule that holds B in its loading state until the list includes n. The list is
+  fetched afresh as B opens and again on window focus, so a line that was ahead of the list corrects itself silently,
+  and the API's `404` is the only authority on a number the note does not have.
+- A calls `useReturnFocusReady` once none of its three queries is pending, so that a failed load is ready too, as the
+  hook requires, and not once all have data.
+- B's saved-by, past-day and Flagged lines are in `ReadView.module.css`'s `.lines`: 16 px, in the secondary colour, as
+  Conflicts resolved 19 and component 5 of page B say for the saved-by line; the reason keeps the text colour.
+- The trailing full stop of B's "This is an earlier version. The current version is version 3." is
+  `strings.versionHistory.fullStop`, as the lint rule keeps words out of JSX.
+- `staleTime: 'static'` on a version is supported by the installed TanStack Query (5.104.1). A failed version load is
+  fetched again by Try again, which calls `refetch()` on the failed query. `NoteForm`'s `removeQueries` after Save
+  changes and the Review panel's prefix invalidation reach the list and the versions through the `['notes', p, d]`
+  prefix; the list also opts in to `refetchOnWindowFocus`, which app-shell.md lists.
+- A past-day note shows the same line, `PastDayLine`, on the read view, in the byline's place, and on A and B.
+
+---
+
 ## Conflicts resolved
 
 1. **B's heading.**

@@ -164,7 +164,9 @@ const newNote: Draft = {
 const alexsSubmittedNote: SubmittedNote = {
   status: 'Submitted',
   author: { id: '6f3a8c10-0000-4000-8000-000000000002', displayName: 'Alex P.' },
+  startedAtUtc: '2026-10-01T06:00:00Z',
   firstSubmittedAtUtc: '2026-10-01T06:12:00Z',
+  isPastDayNote: false,
   isEdited: false,
   current: {
     versionNumber: 1,
@@ -197,7 +199,7 @@ function serveMyDraftOf(
 ) {
   const { id, givenName, familyName } = participant;
   const base = `/api/participants/${id}/notes/${noteDate}`;
-  const started = { authorDisplayName: worker.displayName, startedAtUtc: '2026-09-29T23:05:00Z' };
+  const started = { authorDisplayName: worker.displayName, startedAtUtc: '2026-09-29T23:05:00Z', isPastDayNote: false };
   const saved = { isSaved: true, narrative: 'Went to the library.', savedAtUtc: '2026-09-29T23:42:00Z' };
   serve(`/api/participants/${id}`, json({ id, givenName, familyName, status } satisfies ParticipantHeader));
   serve(base, json({ status: 'Draft', ...started } satisfies NoteAnswer));
@@ -821,6 +823,7 @@ describe('Today, opening a row', () => {
         status: 'Draft',
         authorDisplayName: 'Alex P.',
         startedAtUtc: '2026-09-30T23:14:00Z',
+        isPastDayNote: false,
       } satisfies NoteAnswer),
       problem(409, {
         code: 'note.in_progress_by_other',

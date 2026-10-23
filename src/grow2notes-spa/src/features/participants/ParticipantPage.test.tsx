@@ -1279,6 +1279,11 @@ function pastNotesLink(): HTMLElement {
   return within(actionsSection()!).getByRole('link', { name: 'Past notes' });
 }
 
+/** Write past-day note, the second of the links in an active participant's Actions. */
+function pastDayNoteLink(): HTMLElement {
+  return within(actionsSection()!).getByRole('link', { name: 'Write past-day note' });
+}
+
 /** Expects Actions to hold Past notes alone, as an archived participant's page has it, with no Archive participant. */
 function expectPastNotesAlone() {
   const actions = actionsSection()!;
@@ -1343,7 +1348,8 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  // participants.md B7: the links to other screens first, Past notes alone until T18 and T21 add theirs, then a rule.
+  // participants.md B7: the links to other screens first, Past notes and Write past-day note until T21 adds Export
+  // record, then a rule.
   it('is in Actions under Details, after Past notes and a rule, its empty alert above it, in Tab order', async () => {
     await openJane();
 
@@ -1352,15 +1358,17 @@ describe('Archive participant', () => {
     expect(within(actions).getByRole('heading', { level: 2 })).toHaveAccessibleName('Actions');
     expect(follows(detailsSection(), actions)).toBe(true);
     expect(within(actions).getAllByRole('button')).toEqual([button]);
-    expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink()]);
+    expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink(), pastDayNoteLink()]);
     expect(button).toHaveAttribute('type', 'button');
     expect(archiveAlert()).toBeEmptyDOMElement();
-    expect(follows(pastNotesLink(), archiveAlert())).toBe(true);
+    expect(follows(pastDayNoteLink(), archiveAlert())).toBe(true);
     expect(follows(archiveAlert(), button)).toBe(true);
     expect(archiveAlert().parentElement).toBe(button.parentElement);
     expect(archiveAlert().parentElement).toHaveClass(styles.archive);
     expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
-    expect(nextTabStop(pastNotesLink())).toBe(button);
+    expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
+    expect(nextTabStop(pastDayNoteLink())).toBe(button);
+    expect(pastDayNoteLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
     expect(notice()).toBeNull();
     expect(backLink()).toHaveAttribute('href', '/manage/participants');
   });
@@ -1374,7 +1382,8 @@ describe('Archive participant', () => {
     await save();
 
     expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
-    expect(nextTabStop(pastNotesLink())).toBe(archiveButton());
+    expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
+    expect(nextTabStop(pastDayNoteLink())).toBe(archiveButton());
   });
 
   it(
@@ -1655,6 +1664,25 @@ describe("An archived participant's page", () => {
 
     expect(corrections().map(({ ifMatch }) => ifMatch)).toEqual(['"AAAAAAAAB+M="']);
     expect(saveStatus()).toHaveTextContent('Saved');
+  });
+
+  // S01.02.04: no new notes for an archived participant, so no way to start one, past-day notes included.
+  it('takes Write past-day note away with Archive participant, and brings it back with Restore', async () => {
+    await openJane();
+    expect(pastDayNoteLink()).toBeInTheDocument();
+    serve('POST', archivePath, noContent);
+    serve('GET', listPath, json([janeArchived, priya]));
+
+    await press(archiveButton());
+
+    expect(within(actionsSection()!).queryByRole('link', { name: 'Write past-day note' })).toBeNull();
+    serve('POST', restorePath, noContent);
+    serve('GET', listPath, json([janeRestored, priya]));
+
+    await press(restoreButton());
+
+    expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
+    expect(pastDayNoteLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
   });
 
   it.each([

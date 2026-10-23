@@ -203,6 +203,22 @@ function MadeUpOpened() {
   );
 }
 
+/** A screen with several openers whose fallback is not Today, as Write past-day note's is Participant. */
+function MadeUpFallback() {
+  const back = useBackTo(
+    { participants: pageName.participants },
+    { to: '/made-up/participants/9', label: pageName.participant },
+  );
+  backLinksRendered.push(`${back.label} ${back.to}`);
+
+  return (
+    <>
+      <BackLink to={back.to}>{back.label}</BackLink>
+      <PageHeading>Fallback</PageHeading>
+    </>
+  );
+}
+
 /** Flagged notes, with its `?view=` switch. */
 function MadeUpFlagged() {
   const [search] = useSearchParams();
@@ -287,6 +303,7 @@ const madeUp: AppRoute[] = [
   },
   { path: 'made-up/notes/:id', element: <MadeUpNote />, handle: { pageName: pageName.note } },
   { path: 'made-up/opened/:id', element: <MadeUpOpened />, handle: { pageName: pageName.note } },
+  { path: 'made-up/fallback', element: <MadeUpFallback />, handle: { pageName: pageName.writePastDayNote } },
   { path: 'made-up/flagged', element: <MadeUpFlagged />, handle: { pageName: pageName.flaggedNotes } },
   { path: 'made-up/participants/:id', element: <MadeUpParticipant />, handle: { pageName: pageName.participant } },
   { path: 'made-up/report', element: <MadeUpReport />, handle: reportHandle },
@@ -1204,5 +1221,24 @@ describe('the back link of a screen with several openers', () => {
     await settle();
 
     expect(new Set(backLinksRendered)).toEqual(new Set(['Today /']));
+  });
+
+  it('goes to the fallback a screen gives, in place of Today, when nothing in the app opened it', async () => {
+    const router = renderApp('/made-up/fallback');
+    await settle();
+
+    expect(new Set(backLinksRendered)).toEqual(new Set(['Participant /made-up/participants/9']));
+    expect(router.state.location.pathname).toBe('/made-up/fallback');
+  });
+
+  it('still goes to the opener that its labels name, when it has a fallback', async () => {
+    serve(listPath, json(['1', '2']));
+    const router = renderApp('/made-up/list');
+    await settle();
+
+    await act(() => router.navigate('/made-up/fallback'));
+    await settle();
+
+    expect(backLinksRendered.at(-1)).toBe('Participants /made-up/list');
   });
 });
