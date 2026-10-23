@@ -44,12 +44,14 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                 "DENY DELETE ON dbo.CommonItemGroup",
                 "DENY DELETE ON dbo.Goal",
                 "DENY DELETE ON dbo.Note",
+                "DENY DELETE ON dbo.NoteReview",
                 "DENY DELETE ON dbo.NoteVersion",
                 "DENY DELETE ON dbo.NoteVersionGroup",
                 "DENY DELETE ON dbo.NoteVersionItem",
                 "DENY DELETE ON dbo.Organisation",
                 "DENY DELETE ON dbo.Participant",
                 "DENY UPDATE ON dbo.AuditEvent",
+                "DENY UPDATE ON dbo.NoteReview",
                 "DENY UPDATE ON dbo.NoteVersion",
                 "DENY UPDATE ON dbo.NoteVersionGroup",
                 "DENY UPDATE ON dbo.NoteVersionItem",
@@ -66,6 +68,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     [InlineData("CommonItemGroup")]
     [InlineData("CommonItem")]
     [InlineData("Note")]
+    [InlineData("NoteReview")]
     [InlineData("NoteVersion")]
     [InlineData("NoteVersionGroup")]
     [InlineData("NoteVersionItem")]
@@ -85,6 +88,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
 
     [Theory]
     [InlineData("AuditEvent")]
+    [InlineData("NoteReview")]
     [InlineData("NoteVersion")]
     [InlineData("NoteVersionGroup")]
     [InlineData("NoteVersionItem")]
