@@ -50,6 +50,17 @@ export type VersionPost = { idempotencyKey: string | undefined; body: VersionBod
 /** A note's flag status, as the API names it (design.md §5.3), which Submit's answer and a manager's history carry. */
 export type FlagStatus = 'None' | 'ToReview' | 'Reviewed';
 
+/** A review as the store keeps it and a manager's `GET {base}` lists it (design.md §6.3): newest first. */
+export type StoredReview = {
+  versionNumber: number;
+  reviewedBy: { id: string; displayName: string };
+  reviewedAtUtc: string;
+  comment: string | null;
+};
+
+/** A Mark reviewed that the page sent: its JSON body (design.md §6.4). */
+export type ReviewBody = { versionNumber: number; comment: string | null };
+
 /** A submitted note to put in the store, as `addSubmitted` takes it: who wrote it, when, and its version 1. */
 export type SubmittedNote = {
   authorDisplayName: string;
@@ -67,8 +78,10 @@ export type SubmittedNote = {
    * and reads as version 2, with `flagReason`, if any, as its own.
    */
   firstFlagReason?: string;
-  /** Set by hand, as T16 will set it; by default `ToReview` for a note with a flagged version, as Submit leaves it. */
+  /** Set by hand; by default `ToReview` for a note with a flagged version, as Submit leaves it. */
   flagStatus?: FlagStatus;
+  /** Its reviews, newest first, for a note given the `Reviewed` status by hand; none by default. */
+  reviews?: StoredReview[];
   /**
    * Who saved the note's current version, and when, for a note that has been edited: it then reads as version 2 with
    * the Edited line. By default its author, when it was first submitted, for a note with a `firstFlagReason`, which
@@ -145,6 +158,8 @@ type HeldSubmitted = StartedBy & {
   flagReason: string | null;
   flagStatus: FlagStatus;
   flaggedVersion: FlaggedVersion | null;
+  /** Every review of the note, newest first. */
+  reviews: StoredReview[];
   /** Who saved the current version, and when, once it is version 2 or later; `null` while it is version 1. */
   lastEdit: { by: string; atUtc: string } | null;
 };
@@ -172,15 +187,20 @@ export const alexStarted: StartedBy = { authorDisplayName: 'Alex P.', startedAtU
 const savedAtFourTwelve = '2026-10-01T06:12:00.000Z';
 
 // A participant's header; their history; their note for a day, which the page reads first; its working copy, which
-// the form reads, autosave puts and Cancel deletes; its versions, which Submit and Save changes post to; and its
-// discard.
+// the form reads, autosave puts and Cancel deletes; its versions, which Submit and Save changes post to; its
+// discard; and its reviews, which Mark reviewed posts to.
 const headerPath = /^\/api\/participants\/([^/]+)$/;
 const historyPath = /^\/api\/participants\/([^/]+)\/notes$/;
 const notePath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)$/;
 const draftPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/draft$/;
 const versionsPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/versions$/;
 const discardPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/discard$/;
-const notePaths = [headerPath, historyPath, notePath, draftPath, versionsPath, discardPath];
+const reviewsPath = /^\/api\/participants\/([^/]+)\/notes\/([^/]+)\/reviews$/;
+const notePaths = [headerPath, historyPath, notePath, draftPath, versionsPath, discardPath, reviewsPath];
+
+/** Whether a request is for the To review list, `GET /api/reviews?status=toReview`. */
+const isToReviewList = (pathname: string, search: string) =>
+  pathname === '/api/reviews' && new URLSearchParams(search).get('status') === 'toReview';
 
 /** A page of a history, as design.md §6.1 *Lists* has it. */
 const pageSize = 30;
@@ -317,6 +337,7 @@ export function notesStore({
 }: StoreOptions) {
   let today = firstToday;
   let loseNextSubmitAnswer = false;
+  let loseNextReviewAnswer = false;
   const headers = new Map(participants.map(({ id, givenName, familyName, status }) => [
     id,
     { id, givenName, familyName, status },
@@ -329,6 +350,7 @@ export function notesStore({
   const discarded = new Map<string, DiscardedDraft[]>();
   const saves: DraftSave[] = [];
   const submits: VersionPost[] = [];
+  const reviewRequests: ReviewBody[] = [];
   const cancels: { participantId: string; noteDate: string; userId: string }[] = [];
 
   /** The key of `me`'s pending edit of the note at `noteKey`. */
@@ -373,7 +395,8 @@ export function notesStore({
   });
 
   /**
-   * The note at `{base}`, as `GET {base}` answers it to `me`: a submitted note's current version; a draft's header,
+   * The note at `{base}`, as `GET {base}` answers it to `me`: a submitted note's current version, with its flag
+   * status and reviews for a manager alone; a draft's header,
    * who started it and when, and, to a manager alone, its author's working copy in the same shape as a version, every
    * goal of its snapshot in order with its tick; or `404` for none, a discarded draft's day included.
    */
@@ -392,7 +415,9 @@ export function notesStore({
         commonItemGroups: held.commonItemGroups,
       };
       const edit = held.lastEdit === null ? { isEdited: false } : { isEdited: true, lastEdit: held.lastEdit };
-      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, ...edit, current } };
+      // A manager alone is given the review status and every review, newest first.
+      const review = me.role === 'Manager' ? { flagStatus: held.flagStatus, reviews: held.reviews } : {};
+      return { json: { status: 'Submitted', author, firstSubmittedAtUtc, ...edit, ...review, current } };
     }
 
     const draft = drafts.get(key);
@@ -796,6 +821,7 @@ export function notesStore({
         idempotencyKey,
         currentVersionNumber: 1,
         lastEdit: null,
+        reviews: [],
         ...content,
         ...flag,
       });
@@ -803,14 +829,65 @@ export function notesStore({
       return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, ...flagStatusOf(me, flag.flagStatus) } };
     }
 
-    // A version over the current one: the note's author, flag status and flagged version are the first version's,
-    // and are left as they are until T16 (S03.01.02) sets the flag's rules for later versions.
+    // A version over the current one, with the flag's rules of design.md §5.8: a flagged version raises the flag when
+    // the version before it was not flagged or had another reason, exactly, and else the note's flag status and flagged
+    // version are left as they are. An unflagged version never takes a note out of To review, and no review is touched.
+    const raisesFlag = sent.isFlagged && (!held.isFlagged || held.flagReason !== flagReason);
     Object.assign(held, content, {
       currentVersionNumber: versionNumber,
       lastEdit: { by: me.displayName, atUtc: savedAtUtc },
     });
+    if (raisesFlag) {
+      Object.assign(held, { flagStatus: 'ToReview', flaggedVersion: { flagReason, createdAtUtc: savedAtUtc } });
+    }
     edits.delete(editKey(key, me));
     return { status: 201, json: { versionNumber, createdAtUtc: savedAtUtc, ...flagStatusOf(me, held.flagStatus) } };
+  }
+
+  /**
+   * Mark reviewed, as `POST {base}/reviews` answers it (design.md §6.4): `403` for a worker; the body's checks; `404`
+   * for no participant or no live note; `409 review.not_current` for a note that is not To review at the version sent,
+   * a draft, a note never flagged or already reviewed included; and otherwise `201 {reviewedAtUtc}`, the note Reviewed
+   * and the review kept, its comment trimmed and null when blank.
+   */
+  function review(me: Me, participantId: string, noteDate: string, sent: ReviewBody) {
+    reviewRequests.push(sent);
+    if (me.role !== 'Manager') {
+      return forbidden;
+    }
+
+    if (!Number.isInteger(sent.versionNumber) || sent.versionNumber < 1) {
+      return refused('versionNumber');
+    }
+
+    if (sent.comment !== null && (typeof sent.comment !== 'string' || sent.comment.length > 500)) {
+      return refused('comment');
+    }
+
+    const key = `${participantId}/${noteDate}`;
+    const held = submitted.get(key);
+    if (!headers.has(participantId) || (held === undefined && !drafts.has(key))) {
+      return { status: 404 };
+    }
+
+    if (held?.flagStatus !== 'ToReview' || held.currentVersionNumber !== sent.versionNumber) {
+      return problem(409, 'review.not_current');
+    }
+
+    const comment = sent.comment === null || isBlank(sent.comment) ? null : sent.comment.trim();
+    reviewNote(held, { id: me.userId, displayName: me.displayName }, comment);
+    return { status: 201, json: { reviewedAtUtc: savedAtUtc } };
+  }
+
+  /** Puts a review of a note's current version on it, newest first, and the note Reviewed. */
+  function reviewNote(held: HeldSubmitted, reviewedBy: StoredReview['reviewedBy'], comment: string | null) {
+    held.flagStatus = 'Reviewed';
+    held.reviews.unshift({
+      versionNumber: held.currentVersionNumber,
+      reviewedBy,
+      reviewedAtUtc: savedAtUtc,
+      comment,
+    });
   }
 
   /** The flag status in a version answer, for a manager alone: a worker never learns it. */
@@ -856,6 +933,39 @@ export function notesStore({
     return { json: { notes, hasMore: rows.length > pageSize } };
   }
 
+  /**
+   * The To review list as `GET /api/reviews?status=toReview` answers it (design.md §6.4), as the store stands when it is
+   * asked: each submitted note in To review, an archived participant's too, with its participant's ID and names, its
+   * date, its author, the reason and time of its flagged version, its current version's number and whether that version
+   * is not flagged; the oldest flag first, then by participant and date, in place of the note's ID.
+   */
+  function toReviewRows(): ToReviewRow[] {
+    return [...submitted]
+      .flatMap(([key, held]) => {
+        const header = headers.get(key.slice(0, -11));
+        if (header === undefined || held.flagStatus !== 'ToReview' || held.flaggedVersion === null) {
+          return [];
+        }
+
+        return [{
+          participantId: header.id,
+          givenName: header.givenName,
+          familyName: header.familyName,
+          noteDate: key.slice(-10),
+          authorDisplayName: held.authorDisplayName,
+          flagReason: held.flaggedVersion.flagReason,
+          flaggedAtUtc: held.flaggedVersion.createdAtUtc,
+          currentVersionNumber: held.currentVersionNumber,
+          flagRemovedLater: !held.isFlagged,
+        }];
+      })
+      .sort(
+        (a, b) =>
+          Date.parse(a.flaggedAtUtc) - Date.parse(b.flaggedAtUtc)
+          || `${a.participantId}/${a.noteDate}`.localeCompare(`${b.participantId}/${b.noteDate}`),
+      );
+  }
+
   /** The answer to one request of the page's, as `me`'s. */
   function answer(me: Me, method: string, url: URL, body: () => unknown, idempotencyKey: string | undefined) {
     const { pathname } = url;
@@ -885,6 +995,11 @@ export function notesStore({
       return discard(me, discardedOf, discardedDate);
     }
 
+    const [, reviewedOf, reviewedDate = ''] = reviewsPath.exec(pathname) ?? [];
+    if (reviewedOf !== undefined) {
+      return review(me, reviewedOf, reviewedDate, body() as ReviewBody);
+    }
+
     const [, participantId = '', noteDate = ''] = draftPath.exec(pathname) ?? [];
     if (!headers.has(participantId)) {
       return { status: 404 };
@@ -902,15 +1017,21 @@ export function notesStore({
   return {
     /**
      * Answers `page`'s requests for a participant's header, history and notes from now on as `me`'s, each `latencyMs`
-     * after it is sent, as on a slow network. A later call overrides it, as Playwright tries the latest route first.
+     * after it is sent, as on a slow network, and, to a manager, the To review list that a To review note's read view
+     * asks for. A later call overrides it, as Playwright tries the latest route first.
      */
     serve: (page: Page, me: Me, { latencyMs = 0 } = {}) =>
       page.route(
-        ({ pathname }) => notePaths.some((path) => path.test(pathname)),
+        ({ pathname, search }) => notePaths.some((path) => path.test(pathname)) || isToReviewList(pathname, search),
         async (route: Route) => {
           const request = route.request();
           await wait(latencyMs);
           const url = new URL(request.url());
+          if (isToReviewList(url.pathname, url.search)) {
+            await route.fulfill(me.role === 'Manager' ? { json: toReviewRows() } : forbidden);
+            return;
+          }
+
           const answered = answer(
             me,
             request.method(),
@@ -925,6 +1046,13 @@ export function notesStore({
             return;
           }
 
+          if (reviewsPath.test(url.pathname) && loseNextReviewAnswer) {
+            // The review is kept, as the server kept it, but its answer never reaches the page.
+            loseNextReviewAnswer = false;
+            await route.abort('internetdisconnected');
+            return;
+          }
+
           await route.fulfill(answered);
         },
       ),
@@ -934,6 +1062,8 @@ export function notesStore({
     submits,
     /** Every Cancel that the pages sent, in order, whatever it was answered. */
     cancels,
+    /** Every Mark reviewed that the pages sent, in order, whatever it was answered. */
+    reviewRequests,
     /** `me`'s pending edit of a participant's note for a day, as the last save left it, if they have one. */
     pendingEdit: (participantId: string, noteDate: string, me: Me) =>
       edits.get(editKey(`${participantId}/${noteDate}`, me)),
@@ -1085,6 +1215,7 @@ export function notesStore({
         isFlagged: draft.isFlagged,
         flagReason: draft.flagReason,
         lastEdit: null,
+        reviews: [],
         ...flagOf(draft.flagReason, savedAtUtc),
       });
       drafts.delete(key);
@@ -1122,6 +1253,7 @@ export function notesStore({
         flagReason,
         flagStatus,
         flaggedVersion: flag.flaggedVersion,
+        reviews: added.reviews ?? [],
         lastEdit: edited
           ? (added.lastEdit ?? { by: added.authorDisplayName, atUtc: added.firstSubmittedAtUtc })
           : null,
@@ -1184,43 +1316,38 @@ export function notesStore({
       });
     },
     /**
-     * The To review list as `GET /api/reviews?status=toReview` answers it (design.md §6.4), as the store stands when
-     * it is asked, for `serveReviews`: each submitted note in To review, an archived participant's too, with its
-     * participant's ID and names, its date, its author, the reason and time of its flagged version, its current
-     * version's number and whether that version is not flagged; the oldest flag first, then by participant and date,
-     * in place of the note's ID.
+     * Marks a participant's note for a day reviewed at its current version, as another manager, named `reviewedBy`,
+     * does from another page, with `comment`, if any: the note is then Reviewed, and the page that has it open meets
+     * `409 review.not_current` when it presses Mark reviewed.
      */
-    toReview: (): ToReviewRow[] =>
-      [...submitted]
-        .flatMap(([key, held]) => {
-          const header = headers.get(key.slice(0, -11));
-          if (header === undefined || held.flagStatus !== 'ToReview' || held.flaggedVersion === null) {
-            return [];
-          }
+    reviewElsewhere: (
+      participantId: string,
+      noteDate: string,
+      reviewedBy: StoredReview['reviewedBy'],
+      comment: string | null = null,
+    ) => {
+      const held = submitted.get(`${participantId}/${noteDate}`);
+      if (held?.flagStatus !== 'ToReview') {
+        throw new Error('No submitted note in To review is held.');
+      }
 
-          return [{
-            participantId: header.id,
-            givenName: header.givenName,
-            familyName: header.familyName,
-            noteDate: key.slice(-10),
-            authorDisplayName: held.authorDisplayName,
-            flagReason: held.flaggedVersion.flagReason,
-            flaggedAtUtc: held.flaggedVersion.createdAtUtc,
-            currentVersionNumber: held.currentVersionNumber,
-            flagRemovedLater: !held.isFlagged,
-          }];
-        })
-        .sort(
-          (a, b) =>
-            Date.parse(a.flaggedAtUtc) - Date.parse(b.flaggedAtUtc)
-            || `${a.participantId}/${a.noteDate}`.localeCompare(`${b.participantId}/${b.noteDate}`),
-        ),
+      reviewNote(held, reviewedBy, comment);
+    },
+    /** The To review list, as `serveReviews` gives it, worked out when it is asked. */
+    toReview: toReviewRows,
     /**
      * Keeps the version that the next Submit makes, as the server does, but aborts its answer, as a phone that loses
      * its signal while the answer is on its way.
      */
     loseNextSubmitAnswer: () => {
       loseNextSubmitAnswer = true;
+    },
+    /**
+     * Keeps the review that the next Mark reviewed makes, as the server does, but aborts its answer, as a phone that
+     * loses its signal while the answer is on its way.
+     */
+    loseNextReviewAnswer: () => {
+      loseNextReviewAnswer = true;
     },
   };
 }

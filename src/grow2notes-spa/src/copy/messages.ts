@@ -107,7 +107,7 @@ export const msg = {
   reviewedBy: (displayName: string) => `by ${displayName} on`,
   /** A review's comment, after its line (participant-notes.md component 4), as written. */
   reviewComment: (comment: string) => `Comment: ${comment}`,
-  /** A Mark reviewed that failed, in the alert above its button, such as "Not marked reviewed: no connection. Try again." */
+  /** A Mark reviewed that failed, in the alert above its button: "Not marked reviewed: no connection. Try again." */
   notMarkedReviewed: (cause: Cause): string => msg.notDone('marked reviewed', cause),
   /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
   noNotesYet: (name: string) => `No notes yet for ${name}.`,

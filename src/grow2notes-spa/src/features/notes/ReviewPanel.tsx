@@ -210,7 +210,11 @@ export function ReviewPanel({ participantId, noteDate, versionNumber }: ReviewPa
     );
   }
 
-  const describedBy = [error === undefined ? undefined : `${commentId}-error`, `${commentId}-hint`, `${commentId}-limit`];
+  const describedBy = [
+    error === undefined ? undefined : `${commentId}-error`,
+    `${commentId}-hint`,
+    `${commentId}-limit`,
+  ];
   return (
     <section>
       <h2>{strings.review.heading}</h2>
