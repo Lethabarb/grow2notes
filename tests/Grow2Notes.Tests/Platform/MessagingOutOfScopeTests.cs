@@ -48,10 +48,10 @@ public sealed partial class MessagingOutOfScopeTests
     [Fact]
     public void No_package_is_a_messaging_service_and_Azure_Communication_Email_is_the_only_email_package()
     {
-        var packages = PackageIds();
+        var (packages, sources) = PackageIds();
 
         // The check finds the package that is allowed, so it reads the files that name packages.
-        Assert.Contains(EmailPackage, packages);
+        Assert.True(packages.Contains(EmailPackage), $"{EmailPackage} was not found. Read: {sources}");
         Assert.DoesNotContain(
             packages,
             id => id != EmailPackage && Denylist.Any(word => id.Contains(word, StringComparison.OrdinalIgnoreCase)));
@@ -111,15 +111,19 @@ public sealed partial class MessagingOutOfScopeTests
     private static string WebRoot() => Path.Combine(Repository.Root(), "src", "Grow2Notes.Web");
 
     // The package IDs of the .NET packages, central and referenced, and of the SPA's and the end-to-end tests' npm
-    // dependencies.
-    private static List<string> PackageIds()
+    // dependencies, with a line on what was read for the failure message of a check that finds nothing.
+    private static (List<string> Ids, string Sources) PackageIds()
     {
         var root = Repository.Root();
         List<string> ids = [];
+        List<string> read = [$"root {root}"];
         foreach (var file in new[] { Path.Combine(root, "Directory.Packages.props") }
             .Concat(Files(root, ".csproj")))
         {
-            ids.AddRange(PackageElement().Matches(File.ReadAllText(file)).Select(match => match.Groups[1].Value));
+            var text = File.ReadAllText(file);
+            var found = PackageElement().Matches(text).Select(match => match.Groups[1].Value).ToList();
+            ids.AddRange(found);
+            read.Add($"{System.IO.Path.GetRelativePath(root, file)} {text.Length} chars {found.Count} ids");
         }
 
         foreach (var file in new[] { "src/grow2notes-spa/package.json", "tests/e2e/package.json" })
@@ -134,7 +138,7 @@ public sealed partial class MessagingOutOfScopeTests
             }
         }
 
-        return ids;
+        return (ids, string.Join("; ", read));
     }
 
     // Each .cs file of the web project as its path relative to the project, with / between folders, and its text.

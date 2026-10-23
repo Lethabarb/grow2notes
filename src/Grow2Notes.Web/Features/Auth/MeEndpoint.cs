@@ -47,7 +47,7 @@ internal static class MeEndpoint
     /// has a flag status and a note in To review always has a flagged version. The status is compared with a literal,
     /// so the query reads the filtered index.
     /// </summary>
-    public static IQueryable<Note> ToReviewNotes(Grow2NotesDbContext db) =>
+    internal static IQueryable<Note> ToReviewNotes(Grow2NotesDbContext db) =>
         db.Notes.Where(n => n.FlagStatus == FlagStatus.ToReview);
 
     private static async Task<Ok<Me>> GetAsync(
