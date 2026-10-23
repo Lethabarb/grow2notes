@@ -99,6 +99,16 @@ export const msg = {
    * there with the reason up to its first line break (flagged.md item 4): the reason, after the form's label for it.
    */
   flagReason: (reason: string) => `${strings.note.reason}: ${reason}`,
+  /**
+   * Who reviewed a note, after the Reviewed tag or word and before the date and time, from `format.dateTime()`
+   * (design.md A74): "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", on the read view, the panel's record and the
+   * Reviewed list alike.
+   */
+  reviewedBy: (displayName: string) => `by ${displayName} on`,
+  /** A review's comment, after its line (participant-notes.md component 4), as written. */
+  reviewComment: (comment: string) => `Comment: ${comment}`,
+  /** A Mark reviewed that failed, in the alert above its button, such as "Not marked reviewed: no connection. Try again." */
+  notMarkedReviewed: (cause: Cause): string => msg.notDone('marked reviewed', cause),
   /** Past notes with no live note (design.md §4.4 *States*), with the participant's full name, as stored. */
   noNotesYet: (name: string) => `No notes yet for ${name}.`,
   /** A setup request's failure (sign-in.md *Setup*), above the button that sent it, which sends it again. */

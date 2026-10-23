@@ -13,6 +13,7 @@ export type ApiErrorCode =
   | 'note.participant_archived'
   | 'note.past_date_manager_only'
   | 'note.version_conflict'
+  | 'review.not_current'
   | 'user.email_in_use';
 
 /** What the in-progress sentence names: the server's author and start time, and what the note form knows. */
@@ -73,6 +74,12 @@ export const apiErrorCopy = {
    * form's dead end in its top bar, as an autosave of the submitted note meets it too.
    */
   'note.version_conflict': 'This note was changed on another device or tab.',
+  /**
+   * Mark reviewed's `409`, when its refetch of the note could not say why (participant-notes.md *States*): the note
+   * has changed, or was already reviewed, so the person checks the latest version first.
+   */
+  'review.not_current':
+    'This note has changed or was already reviewed. Check the latest version before marking it reviewed.',
   /** The Email address field's message on Invite user (users.md *States*, microcopy.md's words). */
   'user.email_in_use':
     'Another account already uses this email address. Use a different one, or find the person in the Users list.',

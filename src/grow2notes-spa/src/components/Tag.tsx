@@ -4,12 +4,14 @@ import styles from './Tag.module.css';
 /**
  * Each kind of tag, its words and its tone (status-tags.md *The mapping*), here alone, so that no screen gives a tag
  * words or a colour of its own: Flagged, in the attention tone, on a submitted note whose current version is flagged,
- * and Edited, in the neutral tone, on one with more than one version. T16 adds To review and Reviewed, and T18
- * Past-day note.
+ * Edited, in the neutral tone, on one with more than one version, and, to a manager, To review, in the attention tone,
+ * and Reviewed, in the neutral. T18 adds Past-day note.
  */
 const tags = {
   flagged: { words: strings.tag.flagged, tone: 'attention' },
   edited: { words: strings.tag.edited, tone: 'neutral' },
+  toReview: { words: strings.tag.toReview, tone: 'attention' },
+  reviewed: { words: strings.tag.reviewed, tone: 'neutral' },
 } as const;
 
 export type TagKind = keyof typeof tags;

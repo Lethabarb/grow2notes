@@ -1,0 +1,23 @@
+/*
+ * Four rows tall, as rows={4} sets it, and resized by its corner, where the shared text box grows with its text and
+ * never shrinks below six lines. Two classes, so that it outranks the shared rule whichever stylesheet comes first.
+ */
+.form .field {
+  min-block-size: 0;
+  resize: vertical;
+  field-sizing: fixed;
+}
+
+/* A record's lines (participant-notes.md component 8): no more margin than the lines need. */
+.record p {
+  margin: 0 0 var(--space-2);
+}
+
+/*
+ * What the manager typed, the comment of a record and the comment that was not saved: exactly as written, with every
+ * space and line break kept, and a long pasted link wrapped rather than make the page scroll sideways.
+ */
+.written {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

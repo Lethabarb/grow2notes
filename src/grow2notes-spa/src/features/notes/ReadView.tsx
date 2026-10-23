@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { useMe } from '../../api/me.ts';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { Tag } from '../../components/Tag.tsx';
 import { TickListRead, type TickedItem } from '../../components/TickListRead.tsx';
-import { parseDateOnly, stamp } from '../../copy/format.ts';
+import { dateTime, parseDateOnly, stamp } from '../../copy/format.ts';
 import { msg } from '../../copy/messages.ts';
 import { Pause } from '../../copy/Pause.tsx';
 import { Sep } from '../../copy/Sep.tsx';
@@ -12,6 +12,7 @@ import { strings } from '../../copy/strings.ts';
 import type { ReadGroup, SubmittedNote } from './noteQueries.ts';
 import { PastNotesLink } from './PastNotesLink.tsx';
 import styles from './ReadView.module.css';
+import { ReviewPanel } from './ReviewPanel.tsx';
 
 type ReadViewProps = {
   /** The note's identity `<h1>`, the participant's name and the note date, as the form shows it. */
@@ -19,6 +20,8 @@ type ReadViewProps = {
   participantId: string;
   note: SubmittedNote;
   noteDate: string;
+  /** For a manager's note that is To review though its current version is not flagged, why it was flagged. */
+  removedFlagReason?: string;
 };
 
 /**
@@ -27,14 +30,18 @@ type ReadViewProps = {
  * "Written by Priya Nair · Submitted 4:42 pm", the time alone when the note was submitted on its own date in
  * Melbourne, else with its date (microcopy.md §3, *Reference day*); then, only when the note has more than one
  * version, the Edited line, the Edited tag and, after a pause, who saved the current version and when; then, only when
- * that version is flagged, the Flagged tag and the reason after a pause; then the actions, Edit first, only for the
- * note's author and for a manager, never shown disabled, which opens the edit form in this entry's place, and the Past
- * notes link; then its sections. T16 adds a manager's review lines and panel, and T18 the past-day line and Version
- * history.
+ * that version is flagged, the Flagged tag and the reason after a pause; then, for a manager alone, the review lines:
+ * To review, or Reviewed with who and when and the comment; then the actions, Edit first, only for the note's author
+ * and for a manager, never shown disabled, which opens the edit form in this entry's place, and the Past notes link;
+ * then its sections; then, for a manager, the Review panel, only when the note was To review as the page opened, so
+ * that it stays for the visit, through the refetch that shows the note Reviewed, and a note that was already Reviewed
+ * has none (participant-notes.md component 8). T18 adds the past-day line and Version history.
  */
-export function ReadView({ heading, participantId, note, noteDate }: ReadViewProps) {
+export function ReadView({ heading, participantId, note, noteDate, removedFlagReason }: ReadViewProps) {
   const { author, firstSubmittedAtUtc, current } = note;
   const me = useMe();
+  const [reviewing] = useState(() => note.flagStatus === 'ToReview');
+  const review = note.flagStatus === 'Reviewed' ? note.reviews?.[0] : undefined;
   const day = parseDateOnly(noteDate);
   const canEdit = me.role === 'Manager' || author.id === me.userId;
   return (
@@ -55,6 +62,30 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
           </p>
         )}
         <FlagLine current={current} />
+        {note.flagStatus === 'ToReview' && (
+          <p className={styles.line}>
+            <Tag kind="toReview" />
+            {!current.isFlagged && (
+              <>
+                <Pause /> {strings.flagged.flagRemovedLater}
+              </>
+            )}
+          </p>
+        )}
+        {note.flagStatus === 'ToReview' && !current.isFlagged && removedFlagReason !== undefined && (
+          <p className={`${styles.line} ${styles.written}`}>{msg.flagReason(removedFlagReason)}</p>
+        )}
+        {review !== undefined && (
+          <>
+            <p className={styles.line}>
+              <Tag kind="reviewed" /> {msg.reviewedBy(review.reviewedBy.displayName)}{' '}
+              <time dateTime={review.reviewedAtUtc}>{dateTime(review.reviewedAtUtc)}</time>
+            </p>
+            {review.comment !== null && (
+              <p className={`${styles.line} ${styles.written}`}>{msg.reviewComment(review.comment)}</p>
+            )}
+          </>
+        )}
       </div>
       <div className={styles.actions}>
         {canEdit && (
@@ -69,6 +100,11 @@ export function ReadView({ heading, participantId, note, noteDate }: ReadViewPro
         commonItemGroups={current.commonItemGroups}
         narrative={current.narrative}
       />
+      {reviewing && (
+        <div className={styles.section}>
+          <ReviewPanel participantId={participantId} noteDate={noteDate} versionNumber={current.versionNumber} />
+        </div>
+      )}
     </>
   );
 }

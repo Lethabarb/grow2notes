@@ -12,4 +12,5 @@ export const limits = {
   groupName: 200,
   guidedNotes: 20_000,
   flagReason: 200,
+  reviewComment: 500,
 } as const;

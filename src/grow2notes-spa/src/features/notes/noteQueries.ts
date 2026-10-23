@@ -49,17 +49,31 @@ export type Draft = {
  */
 export type DraftAnswer = { draft: Draft } | { startedBy: StartedBy };
 
+/** Where a note stands in review, the API's `FlagStatus` name (design.md §5.3), which only a manager is given. */
+export type FlagStatus = 'None' | 'ToReview' | 'Reviewed';
+
+/** A manager's review of a note, as `GET {base}` lists it (design.md §6.3): the version reviewed, who and when. */
+export type NoteReview = {
+  versionNumber: number;
+  reviewedBy: { id: string; displayName: string };
+  reviewedAtUtc: string;
+  comment: string | null;
+};
+
 /**
  * A submitted note, as `GET {base}` gives it to anyone signed in (design.md §6.3): its author's id and display name as
  * stored, when it was first submitted, in UTC, and its current version: its number, the Guided notes text as written,
  * every goal of its snapshot, in the snapshot's order, and the flag, with its reason, which a flagged version always
  * has and an unflagged one never (design.md §5.3, §5.8 step 4). A note with more than one version is edited, and says
- * who saved the current one and when.
+ * who saved the current one and when. To a manager alone, it also gives its review status and every review, newest
+ * first; a worker's answer has neither key.
  */
 export type SubmittedNote = {
   status: 'Submitted';
   author: { id: string; displayName: string };
   firstSubmittedAtUtc: string;
+  flagStatus?: FlagStatus;
+  reviews?: NoteReview[];
   current: { versionNumber: number; narrative: string; goals: TickedItem[]; commonItemGroups: ReadGroup[] } & (
     | { isFlagged: true; flagReason: string }
     | { isFlagged: false; flagReason: null }
