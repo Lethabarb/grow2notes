@@ -20,6 +20,12 @@ internal sealed class ErrorCode
     public static readonly ErrorCode NotEditable = new(StatusCodes.Status403Forbidden, "note.not_editable");
 
     /// <summary>
+    /// A daily report was asked for a date with no submitted notes in the caller's organisation, including any future
+    /// date (§6.5). No file is made and no audit event is written.
+    /// </summary>
+    public static readonly ErrorCode NoNotes = new(StatusCodes.Status404NotFound, "report.no_notes");
+
+    /// <summary>
     /// Another user started this participant's note for that day (§3.2), and only they can open or save its draft
     /// (§6.3). It includes <c>{authorDisplayName, startedAtUtc}</c>.
     /// </summary>

@@ -76,7 +76,7 @@ internal static class MeEndpoint
 
     // An organisation is the tenant, not tenant-owned, so no query filter keeps this to the tenant's row: the query
     // names it.
-    private static Task<string> OrganisationNameAsync(
+    internal static Task<string> OrganisationNameAsync(
         Grow2NotesDbContext db, Guid organisationId, CancellationToken cancellationToken) =>
         db.Organisations
             .Where(organisation => organisation.Id == organisationId)
