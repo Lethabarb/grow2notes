@@ -3,7 +3,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import type { Page, Request, Route } from '@playwright/test';
 import type { Me } from './me.ts';
 import type { AdminParticipant } from './participants.ts';
-import type { ToReviewRow } from './reviews.ts';
+import { isReviewedList, reviewedPage, type ReviewedRow, type ToReviewRow } from './reviews.ts';
 import type { DraftsOf, MyDraft, NoteOf } from './today.ts';
 
 /** A goal on the note form: its ID and its wording, as the manager's list or a draft's snapshot holds it. */
@@ -352,6 +352,9 @@ export function notesStore({
   const drafts = new Map<string, HeldDraft>();
   const submitted = new Map<string, HeldSubmitted>();
   const edits = new Map<string, PendingEdit>();
+  // Every review made, as the Reviewed list gives it: a review's ID counts up, so that of two made in the same
+  // millisecond, the later is the newer, as the API's tie-break has it.
+  const reviewLog: ReviewedRow[] = [];
   const versionKeys = new Map<string, SavedVersion>();
   const discarded = new Map<string, DiscardedDraft[]>();
   const saves: DraftSave[] = [];
@@ -900,12 +903,33 @@ export function notesStore({
     }
 
     const comment = sent.comment === null || isBlank(sent.comment) ? null : sent.comment.trim();
-    reviewNote(held, { id: me.userId, displayName: me.displayName }, comment);
+    reviewNote(key, held, { id: me.userId, displayName: me.displayName }, comment);
     return { status: 201, json: { reviewedAtUtc: savedAtUtc } };
   }
 
-  /** Puts a review of a note's current version on it, newest first, and the note Reviewed. */
-  function reviewNote(held: HeldSubmitted, reviewedBy: StoredReview['reviewedBy'], comment: string | null) {
+  /**
+   * Puts a review of a note's current version on it, newest first, and the note Reviewed, and on the Reviewed list
+   * with the reason of the flag that it clears.
+   */
+  function reviewNote(
+    key: string,
+    held: HeldSubmitted,
+    reviewedBy: StoredReview['reviewedBy'],
+    comment: string | null,
+  ) {
+    const header = headers.get(key.slice(0, -11))!;
+    reviewLog.push({
+      reviewId: `5e1d9c3b-6a47-4f28-8b10-${String(reviewLog.length + 1).padStart(12, '0')}`,
+      participantId: header.id,
+      givenName: header.givenName,
+      familyName: header.familyName,
+      noteDate: key.slice(-10),
+      authorDisplayName: held.authorDisplayName,
+      flagReason: held.flaggedVersion!.flagReason,
+      reviewedBy: reviewedBy.displayName,
+      reviewedAtUtc: savedAtUtc,
+      comment,
+    });
     held.flagStatus = 'Reviewed';
     held.reviews.unshift({
       versionNumber: held.currentVersionNumber,
@@ -1043,17 +1067,31 @@ export function notesStore({
     /**
      * Answers `page`'s requests for a participant's header, history and notes from now on as `me`'s, each `latencyMs`
      * after it is sent, as on a slow network, and, to a manager, the To review list that a To review note's read view
-     * asks for. A later call overrides it, as Playwright tries the latest route first.
+     * asks for and the Reviewed list, 30 at a time after the review that `before` and `beforeId` name. A later call
+     * overrides it, as Playwright tries the latest route first.
      */
     serve: (page: Page, me: Me, { latencyMs = 0 } = {}) =>
       page.route(
-        ({ pathname, search }) => notePaths.some((path) => path.test(pathname)) || isToReviewList(pathname, search),
+        (url) =>
+          notePaths.some((path) => path.test(url.pathname))
+          || isToReviewList(url.pathname, url.search)
+          || isReviewedList(url),
         async (route: Route) => {
           const request = route.request();
           await wait(latencyMs);
           const url = new URL(request.url());
           if (isToReviewList(url.pathname, url.search)) {
             await route.fulfill(me.role === 'Manager' ? { json: toReviewRows() } : forbidden);
+            return;
+          }
+
+          if (isReviewedList(url)) {
+            const { searchParams } = url;
+            await route.fulfill(
+              me.role === 'Manager'
+                ? { json: reviewedPage(reviewLog, searchParams.get('before'), searchParams.get('beforeId')) }
+                : forbidden,
+            );
             return;
           }
 
@@ -1352,12 +1390,13 @@ export function notesStore({
       reviewedBy: StoredReview['reviewedBy'],
       comment: string | null = null,
     ) => {
-      const held = submitted.get(`${participantId}/${noteDate}`);
+      const key = `${participantId}/${noteDate}`;
+      const held = submitted.get(key);
       if (held?.flagStatus !== 'ToReview') {
         throw new Error('No submitted note in To review is held.');
       }
 
-      reviewNote(held, reviewedBy, comment);
+      reviewNote(key, held, reviewedBy, comment);
     },
     /** The To review list, as `serveReviews` gives it, worked out when it is asked. */
     toReview: toReviewRows,
