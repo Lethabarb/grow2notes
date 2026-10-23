@@ -15,6 +15,7 @@ import { parseDateOnly } from '../../copy/format.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { useBackTo } from '../../routes/routeChange.ts';
+import { toReviewForNoteQuery } from '../flagged/toReviewQuery.ts';
 import { fullName } from '../participants/participantsQuery.ts';
 import {
   draftQuery,
@@ -86,6 +87,16 @@ function Note({ participantId, noteDate, editing }: NoteProps) {
   const submitted = !editing && !formOpen && note.data?.status === 'Submitted' ? note.data : undefined;
   const formNeeded = editing ? note.data?.status === 'Submitted' : note.data !== undefined && submitted === undefined;
   const draft = useQuery({ ...draftQuery(participantId, noteDate), enabled: formNeeded });
+  // A manager's To review note asks for the To review list once it has loaded, for the reason of a flag that a later
+  // edit removed, which the read view waits for only when it is needed; it is asked for in every case, so that it is
+  // there if a refetch within the visit shows the flag removed, and the read view, with its Review panel, never
+  // unmounts to wait for it.
+  const toReviewNote = submitted?.flagStatus === 'ToReview';
+  const lookup = useQuery({ ...toReviewForNoteQuery, enabled: toReviewNote });
+  const lookupNeeded = toReviewNote && !submitted.current.isFlagged && !lookup.isError;
+  const removedFlagReason = lookup.isError
+    ? undefined
+    : lookup.data?.find((row) => row.participantId === participantId && row.noteDate === noteDate)?.flagReason;
   // At the shared address, a form's read that finds the note submitted between the two reads, as a pending edit's, or
   // as refused to this person, sends the page to read the note again, and show its read view.
   const answeredAsEdit = draft.data !== undefined && 'draft' in draft.data && draft.data.draft.baseVersion > 0;
@@ -119,7 +130,12 @@ function Note({ participantId, noteDate, editing }: NoteProps) {
       </PageBar>
       <div className={textBox.column}>
         <LoadRegion
-          queries={formNeeded && !readsSubmitted ? [participant, note, draft] : [participant, note]}
+          queries={[
+            participant,
+            note,
+            ...(formNeeded && !readsSubmitted ? [draft] : []),
+            ...(lookupNeeded ? [lookup] : []),
+          ]}
           loading={strings.note.loading}
           what={strings.note.theNote}
           fallbackHeading={pageName.note}
@@ -146,6 +162,7 @@ function Note({ participantId, noteDate, editing }: NoteProps) {
                 participantId={participantId}
                 note={submitted}
                 noteDate={noteDate}
+                removedFlagReason={removedFlagReason}
               />
             )
           }

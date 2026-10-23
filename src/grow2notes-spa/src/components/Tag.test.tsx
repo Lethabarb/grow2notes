@@ -45,4 +45,23 @@ describe('Tag', () => {
       expect(tag).not.toHaveAttribute(attribute);
     }
   });
+
+  it('is To review in the attention tone and Reviewed in the neutral tone, as plain text', () => {
+    render(
+      <p>
+        <Tag kind="toReview" /> <Tag kind="reviewed" />
+      </p>,
+    );
+
+    const toReview = screen.getByText('To review');
+    expect(toReview).toHaveClass(styles.tag, styles.attention);
+    const reviewed = screen.getByText('Reviewed');
+    expect(reviewed).toHaveClass(styles.tag, styles.neutral);
+    for (const tag of [toReview, reviewed]) {
+      expect(tag.tagName).toBe('SPAN');
+      for (const attribute of ['role', 'aria-label', 'tabindex', 'title']) {
+        expect(tag).not.toHaveAttribute(attribute);
+      }
+    }
+  });
 });

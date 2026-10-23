@@ -9,7 +9,7 @@ import { createQueryClient } from '../../api/queryClient.ts';
 import tagStyles from '../../components/Tag.module.css';
 import { routes } from '../../routes/routes.tsx';
 import type { TodayList } from '../today/todayQuery.ts';
-import type { Draft, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
+import type { Draft, FlagStatus, ParticipantHeader, SubmittedNote } from './noteQueries.ts';
 import type { PastNote } from './pastNotesQuery.ts';
 
 // A memory router of the app's routes.
@@ -76,6 +76,11 @@ function submitted(noteDate: string, authorDisplayName = 'Alex P.', isFlagged = 
     isEdited,
     isFlagged,
   };
+}
+
+/** `note`, a submitted one, as a manager's list holds it, with the `flagStatus` that only a manager's rows have. */
+function withFlagStatus(note: PastNote, flagStatus: FlagStatus): PastNote {
+  return { ...note, flagStatus } as PastNote;
 }
 
 /** `count` submitted notes, one a day, newest first, from `newest`. */
@@ -476,6 +481,49 @@ describe('Past notes once loaded', () => {
     expect(edited).toHaveAccessibleDescription(/^Submitted ?, Alex P\. ?, Edited$/);
     expect(plain).toHaveAccessibleDescription('Submitted, Alex P.');
     expect(within(list()).getAllByText('Edited')).toHaveLength(2);
+  });
+
+  // design.md §6.3: only a manager's rows hold flagStatus, so only they show To review or Reviewed, after Flagged.
+  it("shows To review or Reviewed after Flagged and before Edited on a manager's rows, never on a draft", async () => {
+    const draft = {
+      noteDate: '2026-09-28',
+      status: 'Draft',
+      authorDisplayName: 'Sam Lee',
+      currentVersionNumber: 0,
+      isEdited: false,
+      isFlagged: false,
+    };
+    servePastNotes(
+      [
+        withFlagStatus(submitted('2026-10-01', 'Alex P.', true, true), 'ToReview'),
+        withFlagStatus(submitted('2026-09-30', 'Alex P.', false, true), 'Reviewed'),
+        withFlagStatus(submitted('2026-09-29', 'Alex P.'), 'ToReview'),
+        withFlagStatus(submitted('2026-09-27', 'Alex P.'), 'None'),
+        draft as unknown as PastNote,
+      ],
+      false,
+    );
+    await openPastNotes(manager);
+
+    const [both, reviewed, removed, none, drafted] = rowLinks();
+    expect(both).toHaveAccessibleDescription(/^Submitted ?, Alex P\. ?, Flagged ?, To review ?, Edited$/);
+    const tags = within(document.getElementById(both.getAttribute('aria-describedby')!)!);
+    expect(tags.getByText('To review')).toHaveClass(tagStyles.tag, tagStyles.attention);
+    expect(reviewed).toHaveAccessibleDescription(/^Submitted ?, Alex P\. ?, Reviewed ?, Edited$/);
+    const reviewedTags = within(document.getElementById(reviewed.getAttribute('aria-describedby')!)!);
+    expect(reviewedTags.getByText('Reviewed')).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    // A later edit that removed the flag leaves the note To review.
+    expect(removed).toHaveAccessibleDescription('Submitted, Alex P., To review');
+    expect(none).toHaveAccessibleDescription('Submitted, Alex P.');
+    expect(drafted).toHaveAccessibleDescription('Draft, Sam Lee');
+  });
+
+  it("shows neither To review nor Reviewed on a worker's rows, whose list holds no flagStatus", async () => {
+    servePastNotes([submitted('2026-10-01', 'Alex P.', true, true), submitted('2026-09-30')], false);
+    await openPastNotes();
+
+    expect(within(list()).queryByText('To review')).toBeNull();
+    expect(within(list()).queryByText('Reviewed')).toBeNull();
   });
 
   it('has a static top bar, with the back link to Today, when nothing in the app opened it', async () => {

@@ -85,11 +85,20 @@ type LoadedProps = {
   isManager: boolean;
 };
 
-/** A row's tags, in the order status-tags.md gives them: Flagged, then Edited. A draft has neither. */
+/**
+ * A row's tags, in the order status-tags.md gives them: Flagged, then To review or Reviewed, which only a manager's
+ * rows have as only they hold `flagStatus`, then Edited. A draft has none.
+ */
 function tagsOf(note: PastNote): TagKind[] {
   const tags: TagKind[] = [];
   if (note.status === 'Submitted' && note.isFlagged) {
     tags.push('flagged');
+  }
+
+  if (note.status === 'Submitted' && note.flagStatus === 'ToReview') {
+    tags.push('toReview');
+  } else if (note.status === 'Submitted' && note.flagStatus === 'Reviewed') {
+    tags.push('reviewed');
   }
 
   if (note.status === 'Submitted' && note.isEdited) {
@@ -104,8 +113,8 @@ function tagsOf(note: PastNote): TagKind[] {
  * stored, never translated; for a manager alone, Edit participant, there even with no notes; then the notes, newest
  * first, 30 at a time with Show older, or "No notes yet for Jane Citizen.". Each row's link names the note's date
  * alone and opens the note, which shows what this person may see of it, as the list cannot tell; its status and author
- * describe it, and Flagged too on a submitted note whose current version is flagged, then Edited when it has more than
- * one version, never on a draft.
+ * describe it, and Flagged too on a submitted note whose current version is flagged, then, on a manager's list, To
+ * review or Reviewed, then Edited when it has more than one version, never on a draft.
  */
 function Loaded({ participant, notes, isManager }: LoadedProps) {
   const name = fullName(participant);
