@@ -15,6 +15,7 @@ internal sealed record LiveNote(
     NoteStatus Status,
     Guid AuthorUserId,
     DateTime CreatedAtUtc,
+    DateOnly NoteDate,
     string AuthorDisplayName,
     DateTime? FirstSubmittedAtUtc,
     int CurrentVersionNumber,
@@ -41,9 +42,16 @@ internal sealed record LiveNote(
             where n.ParticipantId == participantId && n.NoteDate == noteDate
             join author in db.Users on n.AuthorUserId equals author.Id
             select new LiveNote(
-                n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, author.DisplayName, n.FirstSubmittedAtUtc,
-                n.CurrentVersionNumber, n.FlagStatus))
+                n.Id, n.Status, n.AuthorUserId, n.CreatedAtUtc, n.NoteDate, author.DisplayName,
+                n.FirstSubmittedAtUtc, n.CurrentVersionNumber, n.FlagStatus))
         .SingleOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// Whether the note was started on a later Melbourne day than its date, which only a manager can do (D35): derived
+    /// on every read from <see cref="CreatedAtUtc"/> and never stored. A worker's draft that crosses midnight is not
+    /// one, so the first submitted time is never used.
+    /// </summary>
+    public bool IsPastDayNote => MelbourneClock.DateOf(CreatedAtUtc) > NoteDate;
 
     /// <summary>
     /// Who started the note and when, when it is a draft that another user than <paramref name="actor"/> started,

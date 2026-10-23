@@ -160,6 +160,17 @@ internal static class EndpointMatrix
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}", Unauthorized, OK, OK,
             NotFound, ANoteSubmittedInA),
 
+        // A submitted note's versions (§6.3), for managers. Each call lists the versions of a note that its request
+        // first adds to A, submitted by A's worker, so A's manager gets the one version and A's worker 403. B's manager
+        // does not find the participant (§9.2). Reading writes nothing (A28).
+        new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
+            Forbidden, OK, NotFound, TheVersionsOfANoteSubmittedInA),
+
+        // One version of it (§6.3), for managers, the same way.
+        new(Get,
+            "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions/{versionNumber:int:min(1)}",
+            Unauthorized, Forbidden, OK, NotFound, VersionOneOfANoteSubmittedInA),
+
         // A participant's history (§6.3), for every signed-in user, at A's seeded participant, whose notes no test
         // starts (tests/README.md), so each of A's users gets an empty page, and reading writes nothing (A28). B's
         // manager does not find the participant (§9.2).
@@ -454,9 +465,19 @@ internal static class EndpointMatrix
         };
     }
 
-    // Today's note of a participant whom the request first adds to A, submitted by A's worker, as Submit leaves it. Its
-    // times are made up (A35).
-    private static async Task<HttpRequestMessage> ANoteSubmittedInA(EndpointCall call)
+    private static Task<HttpRequestMessage> ANoteSubmittedInA(EndpointCall call) => ASubmittedNoteInA(call, "");
+
+    // The same note's versions.
+    private static Task<HttpRequestMessage> TheVersionsOfANoteSubmittedInA(EndpointCall call) =>
+        ASubmittedNoteInA(call, "/versions");
+
+    // The same note's version 1.
+    private static Task<HttpRequestMessage> VersionOneOfANoteSubmittedInA(EndpointCall call) =>
+        ASubmittedNoteInA(call, "/versions/1");
+
+    // Today's note of a participant whom the request first adds to A, submitted by A's worker, as Submit leaves it, at
+    // its address and the suffix. Its times are made up (A35).
+    private static async Task<HttpRequestMessage> ASubmittedNoteInA(EndpointCall call, string addressSuffix)
     {
         var a = call.Seeded.A;
         var participant = await call.Services.AddParticipantAsync(a);
@@ -472,7 +493,8 @@ internal static class EndpointMatrix
         return new HttpRequestMessage(
             call.Method,
             string.Create(
-                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}"));
+                CultureInfo.InvariantCulture,
+                $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}{addressSuffix}"));
     }
 
     // A's seeded participant's note form for today.

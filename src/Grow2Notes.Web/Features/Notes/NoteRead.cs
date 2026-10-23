@@ -8,10 +8,10 @@ namespace Grow2Notes.Web.Features.Notes;
 /// <see cref="AuthorDisplayName"/>, and when, <see cref="StartedAtUtc"/>, the note's <c>CreatedAtUtc</c>, by the names
 /// that <c>409 note.in_progress_by_other</c> gives them, and to a manager alone its author's working copy as
 /// <see cref="Current"/>; and, for a submitted note, its author, its first submitted time, whether it has been edited,
-/// who last edited it and when, and its current version. A pending edit never shows here. Each member that the note
-/// does not have, or the caller may not see, is left out: a manager alone gets a submitted note's <c>flagStatus</c> and
-/// its <c>reviews</c>, newest first. The rest of §6.3's shape comes with what uses it: T18 adds <c>isPastDayNote</c>
-/// and <c>versionCount</c>.
+/// who last edited it and when, and its current version. Either shape says whether the note is a past-day note, one
+/// started on a later day than its date, and a submitted note says when it was started. A pending edit never shows
+/// here. Each member that the note does not have, or the caller may not see, is left out: a manager alone gets a
+/// submitted note's <c>flagStatus</c>, its <c>reviews</c>, newest first, and its <c>versionCount</c>.
 /// </summary>
 internal sealed record NoteRead(
     string Status,
@@ -19,12 +19,14 @@ internal sealed record NoteRead(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadAuthor? Author,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? StartedAtUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? FirstSubmittedAtUtc,
+    bool IsPastDayNote,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsEdited,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadLastEdit? LastEdit,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadVersion? Current,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FlagStatus = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    IReadOnlyList<NoteReadReview>? Reviews = null);
+    IReadOnlyList<NoteReadReview>? Reviews = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? VersionCount = null);
 
 /// <summary>
 /// Who wrote a note or reviewed it: their ID, which the screen compares with the signed-in user's, and their display
@@ -50,7 +52,8 @@ internal sealed record NoteReadLastEdit(string By, DateTime AtUtc);
 /// (§6.3): the version's number, left out for a working copy; its Guided notes text, as written; whether it is flagged,
 /// and <see cref="FlagReason"/>, which is <c>null</c> unless it is, and is written so, and which a flagged draft may
 /// not have yet, as only Submit needs one (§3.4); and every goal of its snapshot, in the snapshot's order; and its
-/// <see cref="CommonItemGroups"/>.
+/// <see cref="CommonItemGroups"/>. A version that <c>GET {base}/versions/{versionNumber}</c> answers also says who
+/// saved it and when.
 /// </summary>
 internal sealed record NoteReadVersion(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? VersionNumber,
@@ -60,6 +63,14 @@ internal sealed record NoteReadVersion(
     IReadOnlyList<NoteReadItem> Goals,
     IReadOnlyList<NoteReadGroup> CommonItemGroups)
 {
+    /// <summary>Who saved the version, which only a version read from its own address says.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NoteReadAuthor? CreatedBy { get; init; }
+
+    /// <summary>When the version was saved, which only a version read from its own address says.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTime? CreatedAtUtc { get; init; }
+
     /// <summary>
     /// The version or working copy that <paramref name="snapshot"/> and the text and flag make: every goal in the
     /// snapshot's order, and the groups it shows.

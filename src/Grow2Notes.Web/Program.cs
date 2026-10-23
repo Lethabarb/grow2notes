@@ -376,6 +376,7 @@ var api = app.MapApiGroup()
     .MapNoteHistoryEndpoint()
     .MapNoteDraftEndpoints()
     .MapNoteVersionEndpoints()
+    .MapNoteVersionHistoryEndpoints()
     .MapNoteDiscardEndpoint()
     .MapNoteReviewEndpoint()
     .MapReviewListEndpoint();

@@ -563,7 +563,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
 
     // design.md §3.3 and §3.4 *Earlier-day drafts*: a worker's draft started on 30 September is still theirs to submit
     // on 2 October. Version 1 keeps the note date, and its submitted time is the real one, which GET {base} gives for
-    // the read view to show beside the date (§4.4). Whether GET {base} calls it a past-day note is T18's.
+    // the read view to show beside the date (§4.4). It is not a past-day note, as it was started on its date.
     [Fact]
     public async Task A_worker_s_draft_started_on_30_September_and_submitted_on_2_October_keeps_its_date()
     {
@@ -591,6 +591,7 @@ public sealed partial class NoteVersionEndpointsTests(Grow2NotesFactory factory,
         Assert.Equal(
             ("Submitted", "2026-10-02T06:12:00Z"),
             (read.GetProperty("status").GetString(), read.GetProperty("firstSubmittedAtUtc").GetString()));
+        Assert.False(read.GetProperty("isPastDayNote").GetBoolean());
     }
 
     // design.md §3.7: "A draft already started can still be submitted" once its participant is archived, and on a
