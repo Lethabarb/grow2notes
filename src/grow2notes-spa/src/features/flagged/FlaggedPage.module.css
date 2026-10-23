@@ -7,3 +7,8 @@
 .noteDate {
   display: block;
 }
+
+/* A review's comment keeps the line breaks that it was written with. */
+.comment {
+  white-space: pre-wrap;
+}
