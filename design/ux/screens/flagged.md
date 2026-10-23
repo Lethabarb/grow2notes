@@ -186,8 +186,12 @@ follows the component spec as written, except where "Conflicts resolved" says ot
   survives forced colours). Other item: link colour, underlined. Equal widths. Never disabled, never sticky, no
   animation. 48 px tall. At 200% text the two items wrap onto two rows rather than scroll sideways.
 - Focus stays on the activated link after switching. No live announcement.
-- As built (T11), not yet: the screen is the `<h1>` and the To review list until T19 adds the view switch and
-  Reviewed, so `/flagged?view=reviewed`, like any `view`, shows To review, with Flagged current.
+- As built (T19): the screen is the `<h1>`, `ViewLinks` and the shown view's list, with the options `/flagged` (the
+  default, value null) and `/flagged?view=reviewed`; `useView` replaces any other `view` with the default, as
+  Participants does. The first label is `msg.toReviewView(n)` once `toReviewQuery` has data, "To review" before that
+  and after a failed first load, and the last number is kept through a failed refresh; "Reviewed" never has a number.
+  A switch is a search-only change, so the page is not remounted, focus stays on the activated link and the loaded
+  Reviewed pages are kept. The title stays "Flagged notes" on both views, and the Flagged nav item is current on both.
 
 ### 4. To review list
 
@@ -227,10 +231,11 @@ follows the component spec as written, except where "Conflicts resolved" says ot
 [`../components/chronological-list.md`](../components/chronological-list.md) (`ChronoList`, **paged** mode)
 
 - Data: `GET /api/reviews?status=reviewed&before=` (6.4), newest first, 30 at a time, `hasMore`.
-  `useInfiniteQuery` with key `['reviews', 'reviewed']`, cursor = last row's `reviewedAtUtc`. Enabled only when the
-  Reviewed view is shown; then kept in memory.
-- React key and place-keeping key (`data-return-key`): `participantId + '/' + noteDate + '/' + reviewedAtUtc`. A
-  note reviewed twice (A15) appears twice in this list, so participant and date alone are not unique.
+  `useInfiniteQuery` with key `['reviews', 'reviewed']`, cursor = last row's `reviewedAtUtc` with its `reviewId`
+  (`beforeId`), which orders two reviews of one millisecond (design.md §6.4). Enabled only when the Reviewed view is
+  shown; then kept in memory.
+- React key and place-keeping key (`data-return-key`): the row's `reviewId`. A note reviewed twice (A15) appears twice
+  in this list, so participant and date alone are not unique, and the ID is exact and simpler than a joined string.
 - **Row link:** the same as To review (name, `dateLong` note date). Two rows for the same note link to the same
   place, which is fine under SC 2.4.4.
 - **Meta line:** `{authorDisplayName} · reviewed by {reviewedBy} on {dateTime(reviewedAtUtc)}`, always with the
@@ -275,6 +280,12 @@ follows the component spec as written, except where "Conflicts resolved" says ot
 - **Screen-specific override:** the To review list query keeps `refetchOnWindowFocus: true` and refetches on mount
   (`staleTime: 0`), so the "(n)" and the badge refresh on the same triggers (4.6, 6.8). The Reviewed query does the
   same; TanStack refetches its loaded pages in order and stable keys keep the DOM nodes.
+- As built (T19): `reviewedQuery` (`src/features/flagged`) is an infinite query on `['reviews', 'reviewed']` with
+  `gcTime` of 30 minutes, and the window-focus listener refetches every active `['reviews']` list, To review always
+  and Reviewed when it is shown. A push into the screen (the menu, another screen, a back link pushed after a
+  reload) drops the Reviewed pages so that a fresh visit starts at the newest 30 (A77); a view switch, Back and the
+  "Flagged" back link, which goes back one entry, keep them. When a refresh removes the row that had focus, focus
+  goes to the row now at its place, else the last row, else the `<h1>` (`useFocusKeptInList`).
 
 ### 7. Back link (review view)
 
@@ -393,27 +404,31 @@ Never live: the badge, the "(n)" in the tab label, tags, rows.
       by headings, https://webaim.org/projects/screenreadersurvey10/
 
 **Landmarks**
-- [ ] `header` (banner), `nav aria-label="Main"`, `nav aria-labelledby="page-heading"` (ViewLinks, read as "Flagged
+- [x] `header` (banner), `nav aria-label="Main"`, `nav aria-labelledby="page-heading"` (ViewLinks, read as "Flagged
       notes, navigation"), `main`. No `section` or `form` with an accessible name, so no extra region or form
       landmarks.
 
 **Names and labels**
-- [ ] Badge link name "Flagged, 3 to review" (visually hidden text, no `aria-label`); "Flagged" at 0.
-- [ ] ViewLinks names are exactly the visible text ("To review (3)", "Reviewed"); `aria-current="page"` on one only.
+- [x] Badge link name "Flagged, 3 to review" (visually hidden text, no `aria-label`); "Flagged" at 0.
+      (23 October 2026, T19: `Header.test.tsx` and the real run in `flagged.spec.ts`.)
+- [x] ViewLinks names are exactly the visible text ("To review (3)", "Reviewed"); `aria-current="page"` on one only.
+      (23 October 2026, T19: `FlaggedPage.test.tsx`.)
 - [x] Row link name is only the participant name and note date; the meta line is its `aria-describedby`.
-- [ ] Every accessible name starts with its visible words (SC 2.5.3), so "click Mark reviewed", "click Reviewed",
+- [x] Every accessible name starts with its visible words (SC 2.5.3), so "click Mark reviewed", "click Reviewed",
       "click Show older" work with voice control. (23 October 2026, T16: Mark reviewed's part is proven, its name being
-      its visible words; T19 ticks the item whole with Reviewed and Show older.)
+      its visible words; 23 October 2026, T19: Reviewed and Show older too, the item whole.)
 
 **Keyboard**
-- [ ] Every control is a native `<a href>` or `<button>`; no `role="tab"`, no arrow-key model, no roving tabindex,
+- [x] Every control is a native `<a href>` or `<button>`; no `role="tab"`, no arrow-key model, no roving tabindex,
       no positive tabindex.
 - [x] Enter in the comment makes a new line; no key handlers on the textarea (IME and dictation safe). (23 October 2026,
       T16: `NotePage.test.tsx`; dictation is a by-hand check, ops/first-use-in-test.md.)
-- [ ] Focus never falls to `<body>`: after Show older, Try again, Back to the list, and when a refresh removes the
+- [x] Focus never falls to `<body>`: after Show older, Try again, Back to the list, and when a refresh removes the
       focused row (the note's own cases are in participant-notes.md).
-- [ ] No button is ever `disabled`; busy uses `aria-disabled`. (23 October 2026, T16: Mark reviewed's part is proven by
-      `NotePage.test.tsx`; T19 ticks the item whole with Show older and Try again.)
+      (23 October 2026, T19: `FlaggedPage.test.tsx`.)
+- [x] No button is ever `disabled`; busy uses `aria-disabled`. (23 October 2026, T16: Mark reviewed's part is proven by
+      `NotePage.test.tsx`; 23 October 2026, T19: Show older and Try again too, in `FlaggedPage.test.tsx`, the item
+      whole.)
 
 **Screen reader**
 - [ ] Arrival: "Flagged notes, heading level 1"; then "Flagged notes, navigation, list, 2 items, To review (3),
@@ -463,8 +478,8 @@ is checked before sending) · 4.1.2 Name, Role, Value · 4.1.3 Status Messages.
       is "To review (3)"; with 0 rows "To review (0)"; if the first load failed it stays "To review".
 - [ ] "Reviewed" never shows a count.
 - [ ] The "(n)" equals the number of To review rows, and after Mark reviewed the badge and the "(n)" both drop by 1
-      when the list next shows. (23 October 2026, T16 refreshes `me` and the review lists after Mark reviewed; the badge
-      and the "(n)" are T19's, as `me` has no `toReviewCount` yet.)
+      when the list next shows. (23 October 2026, T16 refreshes `me` and the review lists after Mark reviewed; T19
+      adds `toReviewCount` and the "(n)", proven by FlaggedPage.test.tsx and Header.test.tsx.)
 
 **To review list**
 - [ ] Rows are in the API's order (oldest first); the client does not re-sort.

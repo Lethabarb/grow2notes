@@ -5,7 +5,7 @@ import { expectStops } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, scrollsSideways, shownText } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
-import { manager, serveMe } from './me.ts';
+import { flaggedItem, manager, serveMe } from './me.ts';
 import { notesStore, type NotesStore } from './notes.ts';
 import { jane, participants } from './participants.ts';
 
@@ -16,8 +16,6 @@ import { jane, participants } from './participants.ts';
 
 const main = (page: Page) => page.getByRole('main');
 const heading = (page: Page) => main(page).getByRole('heading', { level: 1 });
-const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
-const navItem = (page: Page, name: string) => nav(page).getByRole('link', { name, exact: true });
 // The back link, in the shell's bar between <header> and <main>, labelled by the screen that opened the page.
 const backLink = (page: Page, label: string) =>
   page.locator('#page-bar').getByRole('link', { name: label, exact: true });
@@ -330,7 +328,7 @@ test('a manager’s edit of a Reviewed note with a changed reason puts it in To 
   await expect(statusLine(page, /^To review/)).toBeVisible();
   await expect(panelHeading(page)).toBeVisible();
   expect(store.submitted(jane.id, noteDate)?.flagStatus).toBe('ToReview');
-  await navItem(page, 'Flagged').click();
+  await flaggedItem(page).click();
   await expect(rows(page)).toHaveCount(1);
   await expect(main(page)).toContainText(`Reason: ${changedReason}`);
 

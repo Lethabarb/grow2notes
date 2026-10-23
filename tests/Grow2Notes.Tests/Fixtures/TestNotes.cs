@@ -318,6 +318,41 @@ internal static class TestNotes
     }
 
     /// <summary>
+    /// Adds a review of version <paramref name="versionNumber"/> of the note of ID <paramref name="noteId"/> in
+    /// <paramref name="organisation"/> by <paramref name="reviewedByUserId"/> at <paramref name="reviewedAtUtc"/>,
+    /// through the app's context under its tenant, and gives its ID. It adds the row alone, as the Reviewed list's
+    /// paging tests need many reviews at times of their own, and leaves the note's flag status as it is.
+    /// </summary>
+    public static async Task<Guid> AddReviewAsync(
+        this IServiceProvider services,
+        SeededOrganisation organisation,
+        Guid noteId,
+        int versionNumber,
+        Guid reviewedByUserId,
+        DateTime reviewedAtUtc,
+        string? comment = null)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        var review = new NoteReview
+        {
+            OrganisationId = organisation.OrganisationId,
+            NoteId = noteId,
+            VersionNumber = versionNumber,
+            ReviewedByUserId = reviewedByUserId,
+            ReviewedAtUtc = reviewedAtUtc,
+            Comment = comment,
+        };
+        db.NoteReviews.Add(review);
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisation.OrganisationId))
+        {
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        return review.Id;
+    }
+
+    /// <summary>
     /// Discards the note of ID <paramref name="noteId"/> in <paramref name="organisation"/> at
     /// <paramref name="discardedAtUtc"/>, through the app's context under its tenant, as its manager's Discard draft
     /// leaves it (design.md §5.5 item 5): the note kept, with its working copy, and the day freed.

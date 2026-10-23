@@ -519,13 +519,18 @@ export const strings = {
    * The Flagged screen's To review list (flagged.md item 4 and *States*), whose failure sentence starts with the page
    * name, "Flagged notes did not load: …": the region's loading line (L2); the word before a row's flag time, as in
    * "Priya Nair · flagged 4:42 pm"; a row's line when a later edit removed the flag (L5); and the sentence in place of
-   * an empty list (L6), design.md §4.6's.
+   * an empty list (L6), design.md §4.6's. The Reviewed list's are the same four: its loading line, the word before a
+   * review's time, what its failure sentence says did not load, "Reviewed notes", and its empty sentence.
    */
   flagged: {
     loading: 'Loading flagged notes…',
     flagged: 'flagged',
     flagRemovedLater: 'Flag removed in a later edit',
     noneToReview: 'No flagged notes to review.',
+    reviewed: 'reviewed',
+    loadingReviewed: 'Loading reviewed notes…',
+    reviewedNotes: 'Reviewed notes',
+    noneReviewed: 'No reviewed notes yet.',
   },
   /**
    * A paged list's Show older (chronological-list.md *Exact copy*), one set for every paged list of notes: the button;

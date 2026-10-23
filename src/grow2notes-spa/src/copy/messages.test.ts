@@ -113,6 +113,9 @@ describe("the read view's lines", () => {
     expect(strings.tag.reviewed).toBe('Reviewed');
     expect(msg.reviewedBy('Jo Smith')).toBe('by Jo Smith on');
     expect(msg.reviewComment('Called her mum.')).toBe('Comment: Called her mum.');
+    expect(msg.toReviewBadge(3)).toBe(', 3 to review');
+    expect(msg.toReviewView(3)).toBe('To review (3)');
+    expect(msg.toReviewView(0)).toBe('To review (0)');
     expect(msg.notMarkedReviewed('offline')).toBe('Not marked reviewed: no connection. Try again.');
     expect(msg.notMarkedReviewed('server')).toBe('Not marked reviewed: something went wrong. Try again.');
     expect(msg.tooLong(strings.review.comment, 500)).toBe('Comment must be 500 characters or less');

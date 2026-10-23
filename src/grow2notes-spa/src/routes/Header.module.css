@@ -113,6 +113,21 @@
   text-decoration: none;
 }
 
+/* The count of notes to review: a real border, so that forced colours draw the pill's outline. */
+.badge {
+  min-inline-size: 1.5em;
+  margin-inline-start: var(--space-1);
+  padding: 0 0.4em;
+  border: var(--border-divider) solid transparent;
+  border-radius: 999px;
+  background: var(--colour-badge);
+  color: var(--colour-on-badge);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 /* Bold and a bar, not colour alone (SC 1.4.1); a real border on the current item only shows in forced colours. */
 .navLink[aria-current] {
   padding-block-end: 0;

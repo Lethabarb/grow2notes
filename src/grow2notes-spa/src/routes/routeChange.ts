@@ -298,9 +298,23 @@ function arrive(to: Entry, pop: boolean): void {
  * `<h1>`, as when the list did not load.
  */
 function returnFocus({ row, fallback }: Waiting): void {
-  const rows = returnRows();
-  const opened = rows.find((element) => element.dataset.returnKey === row.key);
-  const target = opened ?? (fallback === 'sameIndex' ? (rows.at(row.index) ?? rows.at(-1)) : undefined);
+  const opened = returnRows().find((element) => element.dataset.returnKey === row.key);
+  if (opened !== undefined) {
+    focusInsteadOfHeading(opened, { preventScroll: true });
+  } else if (fallback === 'sameIndex') {
+    focusRowInPlace(row.index);
+  } else {
+    focusPageHeading({ preventScroll: true });
+  }
+}
+
+/**
+ * Focuses the row now at `index` in the list, else the last row, else the `<h1>`, without scrolling: the one rule for
+ * "the row now in its place", for a pop back to a list whose opened row has gone and for a refresh that removes the
+ * row that had focus.
+ */
+export function focusRowInPlace(index: number): void {
+  const target = returnRows().at(index) ?? returnRows().at(-1);
   if (target === undefined) {
     focusPageHeading({ preventScroll: true });
   } else {

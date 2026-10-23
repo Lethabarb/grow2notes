@@ -39,7 +39,16 @@ internal static class MeEndpoint
             user.DisplayName,
             user.Role.ToString(),
             await OrganisationNameAsync(db, user.OrganisationId, cancellationToken),
-            clock.Today());
+            clock.Today(),
+            await ToReviewCountAsync(db, user.Role.ToString(), cancellationToken));
+
+    /// <summary>
+    /// The notes in To review of the tenant's organisation, which are the To review list's, as only a submitted note
+    /// has a flag status and a note in To review always has a flagged version. The status is compared with a literal,
+    /// so the query reads the filtered index.
+    /// </summary>
+    internal static IQueryable<Note> ToReviewNotes(Grow2NotesDbContext db) =>
+        db.Notes.Where(n => n.FlagStatus == FlagStatus.ToReview);
 
     private static async Task<Ok<Me>> GetAsync(
         ClaimsPrincipal user,
@@ -50,13 +59,20 @@ internal static class MeEndpoint
         CancellationToken cancellationToken)
     {
         var claimTypes = identityOptions.Value.ClaimsIdentity;
+        var role = ClaimValue(user, claimTypes.RoleClaimType);
         return TypedResults.Ok(new Me(
             Guid.Parse(ClaimValue(user, claimTypes.UserIdClaimType)),
             ClaimValue(user, Grow2NotesClaimsFactory.DisplayNameClaimType),
-            ClaimValue(user, claimTypes.RoleClaimType),
+            role,
             await OrganisationNameAsync(db, tenant.OrganisationId, cancellationToken),
-            clock.Today()));
+            clock.Today(),
+            await ToReviewCountAsync(db, role, cancellationToken)));
     }
+
+    // Only a manager sees the Flagged link's count, so a worker's costs no query.
+    private static async Task<int?> ToReviewCountAsync(
+        Grow2NotesDbContext db, string role, CancellationToken cancellationToken) =>
+        role == nameof(UserRole.Manager) ? await ToReviewNotes(db).CountAsync(cancellationToken) : null;
 
     // An organisation is the tenant, not tenant-owned, so no query filter keeps this to the tenant's row: the query
     // names it.
