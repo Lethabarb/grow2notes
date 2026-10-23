@@ -41,7 +41,7 @@ internal static class NoteVersionEndpoints
         return api;
     }
 
-    // A version's own address is a manager's, from T18, so a 201 names no Location.
+    // The 201 names no Location: the save answers a worker and a manager alike, and a version's address is a manager's.
     private static async Task<Results<Created<NoteVersionSaved>, Ok<NoteVersionSaved>, NotFound, ProblemHttpResult>>
         PostAsync(
             Guid participantId,

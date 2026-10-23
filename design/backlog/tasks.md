@@ -3043,7 +3043,8 @@ past notes.
     `tickedGoalIds`, the ticks a set. A conditional update that changes no row looks for the key again, so that a
     retry that raced its own first try gets `200`, and otherwise answers the version conflict. There is no date or
     archive check: §5.5 item 4's rules apply only when a note is created, and a draft already started can still be
-    submitted (§3.7). The `201` names no `Location`, as a version's own address is a manager's, from T18.
+    submitted (§3.7). The `201` names no `Location`: the save answers a worker and a manager alike, and a version's
+    address is a manager's (T18's Notes).
     `note.submitted`'s `Details` are `{"versionNumber": 1}`.
   - Submit leaves `FlagStatus` and `FlaggedVersionNumber` as they are: §5.8 step 5's flag rules, the `201`'s
     `flagStatus` and the `refreshMe()` after it are T11's (S03.01.01).
@@ -4983,8 +4984,8 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   archived participant, waits for this task (S02.04.02's fourth criterion, its dated Note). `GET {base}` gains
   `isPastDayNote` and `versionCount`, and the read view its past-day line, Version history between T14's Edit and Past
   notes in its action row, and the Past-day note kind of `Tag`; the form's back link gains "Participant" through
-  `useBackTo`. The `201` of `POST {base}/versions` names no `Location`, as a version's own address, a manager's, comes
-  with this task.
+  `useBackTo`. R12 (a `Location` on the `201` of `POST {base}/versions`) is not built: design.md §6.3 names none, and
+  one answer serves both roles while a version's address answers managers only.
 - From T11 (19 October 2026): the version rows reuse what T11 built for To review, with its tests: `ChronoList`'s
   whole mode, with `older` left out, and `MetaLine` with no status word (`statusFirst` false), as only version 1's meta
   line starts with one (status-tags.md *Where it's used*).
@@ -4993,6 +4994,11 @@ write and submit a forgotten note for a past date, which shows when and by whom 
   (NoteVersionEndpointsTests). The past-day notice wins over T12's earlier-day notice (note-form.md component 4), which
   NoteForm.tsx shows on a saved draft dated before `me.today`, so a manager's past-day draft shows this task's alone
   (S02.03.03's dated Note).
+- Built in v1 (23 October 2026): `Note.CreatedAtUtc` never changes after insert, because `isPastDayNote` and the
+  past-day line's time derive from it. No code writes it after the insert, so the append-only interceptor needs no
+  guard. `GET {base}` has never sent design.md §6.3's `noteId` and `noteDate`, and still does not, as the address
+  holds both. The two version reads use the `Manager` policy, which reads the session's role claim, where `GET {base}`
+  reads the stored role.
 
 ### Plan
 

@@ -353,6 +353,7 @@ test('signed in for real, an invited worker meets the in-progress sentence, anot
     status: 'Draft',
     authorDisplayName: invite.displayName,
     startedAtUtc: expect.any(String),
+    isPastDayNote: false,
   });
   const problem = await refused;
   expect(problem.status()).toBe(409);
@@ -2411,6 +2412,7 @@ test('signed in for real at 375 px, a worker discards and starts again; a manage
     status: 'Draft',
     authorDisplayName: riley.displayName,
     startedAtUtc: expect.any(String),
+    isPastDayNote: false,
     current: {
       narrative: sentence,
       isFlagged: true,
