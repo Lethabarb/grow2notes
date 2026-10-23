@@ -31,7 +31,7 @@ const fetchToReview = ({ signal }: { signal: AbortSignal }) =>
  * The `['reviews', 'toReview']` query (flagged.md item 4 and component 6): the whole list, oldest flag first, in the
  * API's order. Fetched again on every mount, as `staleTime: 0` has it, and as the page becomes visible, as app-shell.md
  * lists it among the opt-ins to `refetchOnWindowFocus`, which the query client turns off; Flagged adds the window's
- * `focus` through `refetchToReview()`, as the badge refreshes on both (flagged.md *Interactions and focus*).
+ * `focus` through `refetchReviewLists()`, as the badge refreshes on both (flagged.md *Interactions and focus*).
  */
 export const toReviewQuery = queryOptions({
   queryKey: toReviewKey,
@@ -56,10 +56,11 @@ export const toReviewForNoteQuery = queryOptions({
 });
 
 /**
- * Fetches the To review list that shows again, as TanStack does as the page becomes visible, sharing a request already
- * out, so that the window's `focus` and `visibilitychange`, which come together as a person returns to the tab, send
- * one request between them.
+ * Fetches the reviews lists that show again, as TanStack does as the page becomes visible: To review always, and
+ * Reviewed while it is shown, as a query not in use is not active. It shares a request already out, so that the
+ * window's `focus` and `visibilitychange`, which come together as a person returns to the tab, send one request
+ * between them.
  */
-export function refetchToReview(queryClient: QueryClient): Promise<void> {
-  return queryClient.refetchQueries({ queryKey: toReviewKey, type: 'active' }, { cancelRefetch: false });
+export function refetchReviewLists(queryClient: QueryClient): Promise<void> {
+  return queryClient.refetchQueries({ queryKey: ['reviews'], type: 'active' }, { cancelRefetch: false });
 }
