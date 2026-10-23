@@ -270,6 +270,7 @@ const aDraft = json({
   status: 'Draft',
   authorDisplayName: 'Casey Nguyen',
   startedAtUtc: '2026-09-30T23:05:00Z',
+  isPastDayNote: false,
 } satisfies NoteAnswer);
 
 /**
@@ -279,7 +280,7 @@ const aDraft = json({
  */
 function serveAlexsDraft(startedAtUtc: string, noteDate = '2026-10-01', current?: DraftRead) {
   serveNote(jane, startedBy(startedAtUtc), noteDate);
-  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc };
+  const header: DraftNote = { status: 'Draft', authorDisplayName: 'Alex P.', startedAtUtc, isPastDayNote: false };
   serve(paths(jane, noteDate).note, json(current === undefined ? header : { ...header, current }));
 }
 
@@ -319,7 +320,11 @@ type SubmittedOptions = {
   commonItemGroups?: ReadGroup[];
   /** The flag's reason, for a note flagged for a manager; none for one that is not. */
   reason?: string;
+  /** When the note was started, 3:00 pm that day unless given. */
+  startedAtUtc?: string;
   firstSubmittedAtUtc?: string;
+  /** Whether a manager wrote the note on a later day than its date; not unless given. */
+  isPastDayNote?: boolean;
   /** Who saved the current version, and when, for a note edited since it was submitted; none for one that was not. */
   lastEdit?: { by: string; atUtc: string };
   /** The note's author, Priya Nair, another worker, unless given. */
@@ -342,7 +347,9 @@ function submittedNote({
   ],
   commonItemGroups = [],
   reason,
+  startedAtUtc = '2026-10-01T05:00:00Z',
   firstSubmittedAtUtc = '2026-10-01T06:42:00Z',
+  isPastDayNote = false,
   lastEdit,
   author = { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
   versionNumber = lastEdit === undefined ? 1 : 2,
@@ -354,7 +361,9 @@ function submittedNote({
   return {
     status: 'Submitted',
     author,
+    startedAtUtc,
     firstSubmittedAtUtc,
+    isPastDayNote,
     current: { versionNumber, narrative, goals, commonItemGroups, ...flag },
     ...(lastEdit === undefined ? { isEdited: false } : { isEdited: true, lastEdit }),
   };

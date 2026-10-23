@@ -5,6 +5,8 @@ import { FlaggedPage } from '../features/flagged/FlaggedPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { NotePage } from '../features/notes/NotePage.tsx';
 import { PastNotesPage } from '../features/notes/PastNotesPage.tsx';
+import { VersionHistoryPage } from '../features/notes/VersionHistoryPage.tsx';
+import { VersionPage } from '../features/notes/VersionPage.tsx';
 import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
@@ -118,6 +120,18 @@ export const routes: AppRoute[] = [
                 path: 'flagged',
                 element: <FlaggedPage />,
                 handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
+              },
+              // Both pages of a note's version history (version-history.md *Routes*), whose rows are page A's return
+              // points. React Router ranks these static segments above any param, so none takes them for a date.
+              {
+                path: 'participants/:participantId/notes/:noteDate/versions',
+                element: <VersionHistoryPage />,
+                handle: { pageName: pageName.versionHistory, returnFocus: {}, backKey: 'versionHistory' },
+              },
+              {
+                path: 'participants/:participantId/notes/:noteDate/versions/:versionNumber',
+                element: <VersionPage />,
+                handle: { pageName: pageName.versionHistory },
               },
               { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
               {

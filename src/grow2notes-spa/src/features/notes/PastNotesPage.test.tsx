@@ -156,7 +156,9 @@ function serveSubmittedNote(noteDate = '2026-10-01') {
   const note: SubmittedNote = {
     status: 'Submitted',
     author: { id: 'b7a1c0de-0000-4000-8000-000000000001', displayName: 'Priya Nair' },
+    startedAtUtc: `${daysBefore(noteDate, 0)}T06:00:00Z`,
     firstSubmittedAtUtc: `${daysBefore(noteDate, 0)}T06:42:00Z`,
+    isPastDayNote: false,
     isEdited: false,
     current: {
       versionNumber: 1,

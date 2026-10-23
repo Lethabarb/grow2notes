@@ -1,0 +1,14 @@
+/* Page B's line that says whether this is the current version (version-history.md component 4): bold, in the text. */
+.currency {
+  font-weight: 700;
+}
+
+/*
+ * The link to the current version, on a hit area about 44 px tall (A32) that leaves the line spacing as it was: padding
+ * that a negative margin of the same size takes back.
+ */
+.link {
+  display: inline-block;
+  padding-block: 0.5625rem;
+  margin-block: -0.5625rem;
+}
