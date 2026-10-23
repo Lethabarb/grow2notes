@@ -4705,7 +4705,7 @@ and shown the newer version, so nothing is silently overwritten.
 
 ```yaml
 id: T15
-status: new
+status: doing
 release: R1
 lane: B
 size: M
@@ -4732,6 +4732,42 @@ with no drafts, discarded drafts or counts. The PDF embeds its font, so every ch
 - A character DejaVu Sans cannot draw, such as an emoji, shows as U+FFFD in the PDF only, and the Word file keeps it
   (design.md A59, answering the plan's question 3).
 - Opening the files in Edge, Acrobat and Word is a by-hand check on ops/first-use-in-test.md.
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: no table, column, migration or index. One manager-only endpoint,
+  `GET /api/reports/daily/{date}/export?format=docx|pdf`, and a first Report screen with two buttons.
+- Design: one `DailyReportModel` read model feeds `ReportLayout`, which gives six block kinds (Title, Subtitle,
+  Heading1, Heading2, Line, Tick). `WordReport` (OpenXml) and `PdfReport` (PDFsharp-MigraDoc, DejaVu Sans 2.37
+  embedded with its licence) map the same blocks, so the files cannot drift. `ReportLayout.NoteBody` is the note block
+  T21 reuses and T20 extends. Bytes are built in memory and sent with `TypedResults.File`; nothing is stored.
+- Domain: `DailyReportModel` and `DailyReportNote` are read models with no table. Submitted notes of the date at their
+  current version, ordered by family name, given name, then participant id; archived participants and deactivated
+  authors included. `ErrorCode.NoNotes` (404 `report.no_notes`) for an empty day. One `report.downloaded` audit event
+  per 200, written before the file is sent, none on a refusal.
+- Reuse: `NoteVersionContent.ReadAsync` and `NoteReadVersion.Of`, `MeEndpoint.OrganisationNameAsync` (made internal),
+  `IAuditWriter`, `ReviewListEndpoint`'s manager mapping, `MelbourneClock` (new `InMelbourne`), the SPA `exchange`,
+  `Button` busy handling, `msg.notDone` and `dateLong`.
+- SPA: `apiFile` in `api.ts` and `download.ts` (the shared save step, A78); `DailyReportPage` with both buttons, a
+  `:date` shape guard, abort on unmount and one failure line. The date field, status lines and has-notes check stay in
+  T17.
+- Decisions where design.md is silent: A78 shared save step; A79 the Submitted line always carries the Melbourne day and
+  time ('Thu 1 Oct, 4:42 pm'), so the submitted-next-day marker of S04.01.04 is already met; A80 filename and
+  filename*; A81 only characters DejaVu Sans maps in the BMP print in the PDF, others print U+FFFD (non-blocking owner
+  question), Word keeps the text; D88 records the owner's DejaVu Sans approval. Only Heading1 and Heading2 keep with
+  the next paragraph. The PDF text match is word order only, plus one line-break unit check. The file's words are C#
+  constants in `ReportLayout`, so review checks them against §11.3.
+- Tests: Word and PDF text match from one fixture day, font coverage, dates, endpoint and matrix rows, audit before
+  send, Vitest for `apiFile`, `download` and the page, Playwright (download spec in Chromium, Firefox and WebKit).
+
+### Verticals
+
+- v1: Server: font, packages, dates, block types, Word and PDF renderers; depends_on: none; R08 R09 R10 R11 R12 R26
+- v2: Server: read model, layout, export endpoint, audit, endpoint tests; depends_on: v1;
+  R01 R02 R03 R04 R05 R06 R07 R13 R14 R15 R16 R17 R18 R19 R20 R25 R27 R29 R32
+- v3: SPA: Report screen, save step, e2e, and all T15 docs; depends_on: v2; R21 R22 R23 R24 R28 R30 R31
 
 ### Steps
 
