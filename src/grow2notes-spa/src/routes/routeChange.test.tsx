@@ -534,7 +534,7 @@ describe('a new screen', () => {
     { link: 'Grow2Notes', heading: /^Today/ },
     { link: 'Today', heading: /^Today/ },
     { link: 'Flagged', heading: /^Flagged notes$/ },
-    { link: 'Report', heading: /^Page not found$/ },
+    { link: 'Report', heading: /^Daily report$/ },
     { link: 'Manage', heading: /^Manage$/ },
   ])("from the nav link $link focuses the new screen's <h1> and scrolls to the top", async ({ link, heading }) => {
     serve(usersPath, json(people));

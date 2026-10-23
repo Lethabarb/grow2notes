@@ -10,7 +10,7 @@ const exportPath = (format: string) => `/api/reports/daily/2026-10-01/export?for
 const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
 
 // Between a day and its month (microcopy.md §3).
-const nbsp = ' ';
+const nbsp = String.fromCodePoint(0xa0);
 
 const fetchMock = vi.fn<typeof fetch>();
 const createObjectURL = vi.fn<(blob: Blob) => string>();
@@ -160,22 +160,25 @@ describe('the Report screen', () => {
     it('makes both buttons aria-disabled, sends nothing more, and shows "Downloading…" at 400 ms', async () => {
       fetchMock.mockImplementation(noAnswer);
       open();
+      // The busy label takes the button's name once it shows, so the buttons are held from before the press.
+      const wordButton = word();
+      const pdfButton = pdf();
 
-      await press(word());
+      await press(wordButton);
 
-      expect(word()).toHaveAttribute('aria-disabled', 'true');
-      expect(pdf()).toHaveAttribute('aria-disabled', 'true');
-      expect(word()).not.toHaveAttribute('data-busy');
+      expect(wordButton).toHaveAttribute('aria-disabled', 'true');
+      expect(pdfButton).toHaveAttribute('aria-disabled', 'true');
+      expect(wordButton).not.toHaveAttribute('data-busy');
       await act(() => vi.advanceTimersByTimeAsync(399));
-      expect(word()).not.toHaveAttribute('data-busy');
+      expect(wordButton).not.toHaveAttribute('data-busy');
       await act(() => vi.advanceTimersByTimeAsync(1));
-      expect(word()).toHaveAttribute('data-busy');
-      expect(word()).toHaveTextContent('Downloading…');
-      expect(pdf()).not.toHaveAttribute('data-busy');
-      expect(pdf()).not.toHaveTextContent('Downloading…');
+      expect(wordButton).toHaveAttribute('data-busy');
+      expect(wordButton).toHaveTextContent('Downloading…');
+      expect(pdfButton).not.toHaveAttribute('data-busy');
+      expect(pdfButton).not.toHaveTextContent('Downloading…');
 
-      await press(pdf());
-      await press(word());
+      await press(pdfButton);
+      await press(wordButton);
 
       expect(requests()).toEqual([exportPath('docx')]);
     });
@@ -183,12 +186,13 @@ describe('the Report screen', () => {
     it('keeps focus where it was', async () => {
       fetchMock.mockImplementation(noAnswer);
       open();
-      pdf().focus();
+      const pdfButton = pdf();
+      pdfButton.focus();
 
-      await press(pdf());
+      await press(pdfButton);
 
-      expect(pdf()).toHaveFocus();
-      expect(pdf()).toHaveTextContent('Downloading…');
+      expect(pdfButton).toHaveFocus();
+      expect(pdfButton).toHaveTextContent('Downloading…');
     });
 
     it('gives the buttons back once the file is saved', async () => {
