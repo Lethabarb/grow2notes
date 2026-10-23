@@ -4,6 +4,7 @@ using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Participants;
+using Grow2Notes.Web.Features.Reports;
 using Grow2Notes.Web.Features.Reviews;
 using Grow2Notes.Web.Features.Today;
 using Grow2Notes.Web.Features.Users;
@@ -379,7 +380,8 @@ var api = app.MapApiGroup()
     .MapNoteVersionHistoryEndpoints()
     .MapNoteDiscardEndpoint()
     .MapNoteReviewEndpoint()
-    .MapReviewListEndpoint();
+    .MapReviewListEndpoint()
+    .MapDailyReportEndpoint();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()

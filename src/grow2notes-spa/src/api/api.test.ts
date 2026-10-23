@@ -4,6 +4,7 @@ import type * as SessionModule from './session.ts';
 
 // A fresh copy of the wrapper for each test, as it keeps the antiforgery token from one request to the next.
 let api: typeof ApiModule.api;
+let apiFile: typeof ApiModule.apiFile;
 let apiWithHeaders: typeof ApiModule.apiWithHeaders;
 let ApiError: typeof ApiModule.ApiError;
 let classify: typeof ApiModule.classify;
@@ -127,7 +128,9 @@ function listen() {
 
 beforeEach(async () => {
   vi.resetModules();
-  ({ api, apiWithHeaders, ApiError, classify, isNotEditable, isNotFound, prepareChanges } = await import('./api.ts'));
+  ({ api, apiFile, apiWithHeaders, ApiError, classify, isNotEditable, isNotFound, prepareChanges } = await import(
+    './api.ts'
+  ));
   ({ onSessionEnded, signInCount } = await import('./session.ts'));
   vi.useFakeTimers();
   vi.stubGlobal('fetch', fetchMock);
@@ -901,6 +904,97 @@ describe('apiWithHeaders', () => {
 
     await vi.advanceTimersByTimeAsync(1);
     await expect(request).rejects.toStrictEqual(new ApiError(0));
+  });
+});
+
+describe('apiFile', () => {
+  const exportPath = '/api/reports/daily/2026-10-01/export?format=docx';
+  const bytes = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff, 0x80, 0x7f]);
+
+  /** Like `fetch` to a server that sends a `200` and part of a file, then nothing more, until the signal aborts. */
+  function stalledFile(_input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes);
+        const signal = init?.signal;
+        signal?.addEventListener('abort', () => {
+          controller.error(signal.reason);
+        });
+      },
+    });
+    return Promise.resolve(new Response(body, { status: 200 }));
+  }
+
+  it('sends a GET with no antiforgery token, and gives the bytes intact with the headers of a 2xx answer', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(bytes, {
+        status: 200,
+        headers: { 'Content-Disposition': 'attachment; filename=daily-notes_2026-10-01.docx' },
+      }),
+    );
+
+    const file = await apiFile(exportPath);
+
+    expect(new Uint8Array(await file.body.arrayBuffer())).toEqual(bytes);
+    expect(file.headers.get('Content-Disposition')).toBe('attachment; filename=daily-notes_2026-10-01.docx');
+    const request = sentRequest();
+    expect(request.path).toBe(exportPath);
+    expect(request.method).toBe('GET');
+    expect([...request.headers]).toEqual([]);
+  });
+
+  it('throws ApiError with the code of a problem, as api() does', async () => {
+    serve(problem(404, { code: 'report.no_notes' }));
+
+    await expect(apiFile(exportPath)).rejects.toStrictEqual(new ApiError(404, 'report.no_notes'));
+  });
+
+  it('raises the session-ended event for a 401, as api() does', async () => {
+    const ended = listen();
+    serve(problem(401));
+
+    await expect(apiFile(exportPath)).rejects.toStrictEqual(new ApiError(401));
+    expect(ended).toHaveBeenCalledOnce();
+  });
+
+  it('fails with status 0 when fetch rejects', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(apiFile(exportPath)).rejects.toStrictEqual(new ApiError(0));
+  });
+
+  it('fails with status 0 when the body stalls, after timeoutMs and not before', async () => {
+    fetchMock.mockImplementation(stalledFile);
+    const { request, settled } = track(apiFile(exportPath, { timeoutMs: 30_000 }));
+
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(settled()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).rejects.toStrictEqual(new ApiError(0));
+  });
+
+  it('waits 10 seconds when timeoutMs is not given', async () => {
+    fetchMock.mockImplementation(noAnswer);
+    const { request, settled } = track(apiFile(exportPath));
+
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(settled()).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).rejects.toStrictEqual(new ApiError(0));
+  });
+
+  it("rethrows the caller's abort as it came", async () => {
+    fetchMock.mockImplementation(stalledFile);
+    const caller = new AbortController();
+    const reason = new DOMException('The page was left.', 'AbortError');
+    const { request } = track(apiFile(exportPath, { signal: caller.signal }));
+    await vi.advanceTimersByTimeAsync(0);
+
+    caller.abort(reason);
+
+    await expect(request).rejects.toBe(reason);
   });
 });
 

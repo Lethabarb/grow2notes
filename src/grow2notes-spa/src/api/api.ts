@@ -81,12 +81,14 @@ const signIns = new Set([
 // promise of its request, so that changes sent together wait on one request.
 let antiforgeryToken: Promise<string> | undefined;
 
-type Answer = {
+type Answer<B> = {
   response: Response;
-  text: string;
+  body: B;
   /** `signInCount()` as the request went, which says which session cookie it carried. */
   signInsWhenSent: number;
 };
+
+const readText = (response: Response) => response.text();
 
 // A `2xx` answer: its JSON, or nothing when it has no body, and its headers.
 type Reply<T> = { body: T; headers: Headers };
@@ -156,8 +158,9 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
       },
       timeoutMs,
       signal,
+      readText,
     );
-  const { response, text, signInsWhenSent } = method === 'GET' ? await send() : await sendChange(send);
+  const { response, body: text, signInsWhenSent } = method === 'GET' ? await send() : await sendChange(send);
 
   if (response.ok) {
     if (signIns.has(path)) {
@@ -169,13 +172,50 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
     return { body: (text === '' ? undefined : JSON.parse(text)) as T, headers: response.headers };
   }
 
-  // Not for a request sent before the newest sign-in, which went with the cookie from before, so that its 401 neither
-  // ends the clock nor shows the signed-out view over the new session (T01's Notes).
+  throw refusal(path, response, text, signInsWhenSent);
+}
+
+// The error for an answer that was not `2xx`. A 401 that means the session has ended raises the event first: not for a
+// request sent before the newest sign-in, which went with the cookie from before, so that its 401 neither ends the
+// clock nor shows the signed-out view over the new session (T01's Notes).
+function refusal(path: string, response: Response, text: string, signInsWhenSent: number): ApiError {
   if (response.status === 401 && endsSession(path) && signInsWhenSent === signInCount()) {
     sessionEnded();
   }
 
-  throw failure(response.status, text, retryAfterMs(response));
+  return failure(response.status, text, retryAfterMs(response));
+}
+
+/**
+ * Fetches a file with a `GET`, as `api()` does, and gives the `Blob` of its `2xx` answer with its headers, such as the
+ * `Content-Disposition` that names the file. Fails as `api()` does: `ApiError` with status `0` when no whole answer
+ * came within `timeoutMs`, and the problem's code otherwise; a caller's abort is rethrown as it came.
+ */
+export function apiFile(
+  path: string,
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<{ body: Blob; headers: Headers }> {
+  const call = requestFile(path, options);
+  holdWhile(call);
+  return call;
+}
+
+async function requestFile(
+  path: string,
+  { timeoutMs = defaultTimeoutMs, signal }: { timeoutMs?: number; signal?: AbortSignal },
+): Promise<{ body: Blob; headers: Headers }> {
+  const { response, body, signInsWhenSent } = await exchange(
+    path,
+    { method: 'GET' },
+    timeoutMs,
+    signal,
+    async (answer): Promise<Blob | string> => (answer.ok ? await answer.blob() : await answer.text()),
+  );
+  if (typeof body === 'string') {
+    throw refusal(path, response, body, signInsWhenSent);
+  }
+
+  return { body, headers: response.headers };
 }
 
 export type Failure = 'offline' | 'signedOut' | 'server';
@@ -229,10 +269,10 @@ export function prepareChanges(): void {
  * Sends a change with the antiforgery token. A `400` with no `code` is how the `/api` filter refuses a missing or
  * stale token, so such a change is sent once more, with the same body and a fresh token.
  */
-async function sendChange(send: (token: string) => Promise<Answer>): Promise<Answer> {
+async function sendChange(send: (token: string) => Promise<Answer<string>>): Promise<Answer<string>> {
   const token = heldToken();
   const answer = await send(await token);
-  if (answer.response.status !== 400 || failure(400, answer.text).code !== undefined) {
+  if (answer.response.status !== 400 || failure(400, answer.body).code !== undefined) {
     return answer;
   }
 
@@ -264,9 +304,9 @@ function forgetToken(token: Promise<string>): void {
 // From the SPA's own origin, as the endpoint refuses a request from another (AntiforgeryEndpoint), and with a timeout
 // of its own. A request that fails fails its change with its own status.
 async function requestToken(): Promise<string> {
-  const { response, text } = await exchange(antiforgeryPath, { method: 'GET' }, defaultTimeoutMs, undefined);
+  const { response, body } = await exchange(antiforgeryPath, { method: 'GET' }, defaultTimeoutMs, undefined, readText);
   if (!response.ok) {
-    throw failure(response.status, text);
+    throw failure(response.status, body);
   }
 
   const token = response.headers.get(antiforgeryHeader);
@@ -278,17 +318,18 @@ async function requestToken(): Promise<string> {
 }
 
 /**
- * Sends the request and reads its whole body, or throws `ApiError` with status `0` when `fetch` or the reading
- * rejects, or the body is not all read after `timeoutMs`, so that an answer that stalls half-way fails too. An abort
- * by the caller's own `signal` is rethrown as it came. A request answered with anything but a `401` is activity to
- * the session clock, as the server accepted it.
+ * Sends the request and reads its whole body with `read`, or throws `ApiError` with status `0` when `fetch` or the
+ * reading rejects, or the body is not all read after `timeoutMs`, so that an answer that stalls half-way fails too. An
+ * abort by the caller's own `signal` is rethrown as it came. A request answered with anything but a `401` is activity
+ * to the session clock, as the server accepted it.
  */
-async function exchange(
+async function exchange<B>(
   path: string,
   init: RequestInit,
   timeoutMs: number,
   signal: AbortSignal | undefined,
-): Promise<Answer> {
+  read: (response: Response) => Promise<B>,
+): Promise<Answer<B>> {
   signal?.throwIfAborted();
 
   // Neither AbortSignal.timeout, which Vitest's fake timers cannot drive, nor AbortSignal.any, which Safari has only
@@ -312,7 +353,7 @@ async function exchange(
       requestAccepted(sentAt);
     }
 
-    return { response, text: await response.text(), signInsWhenSent };
+    return { response, body: await read(response), signInsWhenSent };
   } catch (error) {
     if (signal?.aborted) {
       throw error;
