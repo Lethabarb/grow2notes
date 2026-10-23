@@ -70,6 +70,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Note.Discarded] = test => test.DiscardDraftAsync(),
         [AuditEventTypes.Note.Submitted] = test => test.SubmitNoteAsync(),
         [AuditEventTypes.Note.Edited] = test => test.EditNoteAsync(),
+        [AuditEventTypes.Note.Reviewed] = test => test.ReviewNoteAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
@@ -1140,6 +1141,43 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             noteId,
             participant.Id,
             new JsonObject { ["versionNumber"] = 2 }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>note.reviewed</c>: A's manager marks reviewed today's note of a participant added for the row, which the row
+    /// adds as Submit leaves it, with version 1 written by A's worker and flagged with a reason, with
+    /// <c>POST {base}/reviews</c>, which records the manager as the actor, the note as the entity and its participant
+    /// as the participant, and the version number alone in <c>Details</c>, so no note text and no comment (design.md
+    /// §5.3, §9.5, A28).
+    /// </summary>
+    private async Task<WrittenEvent> ReviewNoteAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        var today = factory.Services.GetRequiredService<MelbourneClock>().Today();
+        var noteId = await factory.Services.AddSubmittedAsync(a, new(
+            participant.Id,
+            today,
+            a.WorkerId,
+            new DateTime(2026, 10, 18, 0, 0, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 18, 6, 0, 0, DateTimeKind.Utc),
+            IsFlagged: true,
+            FlagReason: "Jane seemed unwell."));
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+        using var response = await client.PostWithTokenAsync(
+            string.Create(
+                CultureInfo.InvariantCulture, $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}/reviews"),
+            await client.FetchTokenAsync(),
+            new { versionNumber = 1, comment = "Called Sam's mum." });
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        return new(
+            AuditEventTypes.Note.Reviewed,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Note,
+            noteId,
+            participant.Id,
+            new JsonObject { ["versionNumber"] = 1 }.ToJsonString());
     }
 
     /// <summary>

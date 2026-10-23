@@ -4834,6 +4834,10 @@ or changes its reason sends the note back to To review; removing the tick never 
   - `me` has no `toReviewCount` yet, so the badge and "To review (n)" dropping by one after Mark reviewed, and rising
     after a re-flag, are T19's (S03.03.03, flagged.md's *View switch and count*). T16 still calls `refreshMe()` after
     its own review, and its tests assert that `/api/auth/me` is requested and that the row has left To review.
+  - Review fixes (23 October 2026): `note.reviewed` has its row in the shared audit-events test (`AuditEventsTests`,
+    `ReviewNoteAsync`), so T24's guard finds none missing; `SignedOutTests` has the signed-out `POST .../reviews`; and
+    the panel's success and failure work sits in the `useMutation` options, which TanStack Query still runs when the
+    manager leaves the page while the press is out, where `mutate`'s own callbacks would be dropped.
 - Hand-offs closed (23 October 2026): T11's, the panel, flagged.md component 7's label across Edit, Save changes and
   Cancel (`review.spec.ts`), and `['reviews']` fetched again with `refreshMe()` after Mark reviewed and after Save
   changes; T11's F03.01 feature check, now ticked, as `FlagRulesTests` holds rows for version 1 and for later versions

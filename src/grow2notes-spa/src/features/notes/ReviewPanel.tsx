@@ -69,9 +69,17 @@ export function ReviewPanel({ participantId, noteDate, versionNumber }: ReviewPa
   const button = useRef<HTMLButtonElement>(null);
   // The line that focus moves to once the form has gone.
   const focusTarget = useRef<HTMLParagraphElement>(null);
+  // The callbacks are the mutation's own, not `mutate`'s, which TanStack Query drops when the panel unmounts: a manager
+  // who follows a link while the press is out still gets the lists and the note refreshed.
   const { mutate } = useMutation({
     mutationFn: (sent: Sent) =>
       api<{ reviewedAtUtc: string }>(`${noteBase(participantId, noteDate)}/reviews`, { method: 'POST', body: sent }),
+    onSuccess: ({ reviewedAtUtc }, sent) => {
+      reviewed({ displayName: me.displayName, atUtc: reviewedAtUtc, comment: sent.comment });
+    },
+    onError: (failure, sent) => {
+      void failed(failure, sent);
+    },
   });
 
   useEffect(() => {
@@ -103,15 +111,7 @@ export function ReviewPanel({ participantId, noteDate, versionNumber }: ReviewPa
     setAlert(undefined);
     setBusy(true);
     const trimmed = text.trim();
-    const sent = { versionNumber, comment: trimmed === '' ? null : trimmed };
-    mutate(sent, {
-      onSuccess: ({ reviewedAtUtc }) => {
-        reviewed({ displayName: me.displayName, atUtc: reviewedAtUtc, comment: sent.comment });
-      },
-      onError: (failure) => {
-        void failed(failure, sent);
-      },
-    });
+    mutate({ versionNumber, comment: trimmed === '' ? null : trimmed });
   }
 
   function reviewed(review: Shown) {
