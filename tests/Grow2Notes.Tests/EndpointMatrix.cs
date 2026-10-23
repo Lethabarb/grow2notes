@@ -222,6 +222,12 @@ internal static class EndpointMatrix
         new(Get,       "/api/reviews",           Unauthorized, Forbidden, OK,     OK,
             ToReviewAfterANoteFlaggedInA, HoldsTheNoteFlaggedInAForAsManagerAlone),
 
+        // The daily report (§6.5), outside /api/admin with the Manager policy of its own, so for managers alone. Each
+        // call first submits a note in A on a day that no test seeds in B, so A's manager gets the file and B's manager
+        // gets 404 for a day with no notes of B's (§5.9 item 7).
+        new(Get,       "/api/reports/daily/{date:isodate}/export", Unauthorized, Forbidden, OK, NotFound,
+            TheDailyReportOfANoteSubmittedInA),
+
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
@@ -495,6 +501,24 @@ internal static class EndpointMatrix
             string.Create(
                 CultureInfo.InvariantCulture,
                 $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}{addressSuffix}"));
+    }
+
+    // The daily report of 3 August 2026, as a Word file, asked for once the request has added to A a participant of its
+    // own, because a participant has one live note a day, with a note submitted by A's worker, as Submit leaves it. No
+    // test seeds a note of B's on that day. Its times are made up (A35).
+    private static async Task<HttpRequestMessage> TheDailyReportOfANoteSubmittedInA(EndpointCall call)
+    {
+        var a = call.Seeded.A;
+        var participant = await call.Services.AddParticipantAsync(a);
+        await call.Services.AddSubmittedAsync(
+            a,
+            new(
+                participant.Id,
+                new DateOnly(2026, 8, 3),
+                a.WorkerId,
+                new DateTime(2026, 8, 3, 1, 14, 0, DateTimeKind.Utc),
+                new DateTime(2026, 8, 3, 6, 42, 0, DateTimeKind.Utc)));
+        return new HttpRequestMessage(call.Method, "/api/reports/daily/2026-08-03/export?format=docx");
     }
 
     // A's seeded participant's note form for today.
