@@ -4742,7 +4742,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T16
-status: new
+status: doing
 release: R1
 lane: A
 size: L
@@ -4787,6 +4787,37 @@ or changes its reason sends the note back to To review; removing the tick never 
   items of flagged.md's *Accessibility checklist* that its runs prove whole (T11's Notes, step 6's checklist), and
   leaves to this task the Review view's headings and Enter in the comment, and, with T19, the label-in-name item's
   Mark reviewed and the `aria-disabled` item's Mark reviewed. This task ticks each once its runs prove the whole item.
+
+### Plan
+
+Planned 23 October 2026. One new append-only table (`NoteReview`), one endpoint, a manager's review fields on two reads,
+the design.md §5.8 flag rules for later versions, and one panel.
+
+- Outcome: a manager marks a To review note reviewed (one conditional update on `Note`, a `NoteReview` row and one
+  `note.reviewed` audit row in one transaction). A stale or repeated press gets 409 `review.not_current`.
+- Domain: `NoteReview` (tenant-owned, append-only, migration `AddNoteReview` with DENY UPDATE, DELETE). `LiveNote`
+  gains `FlagStatus`; `NoteRead` gains `flagStatus` and `reviews` for a manager only. `NoteVersionSaved.flagStatus`
+  becomes manager-only (the review's must-fix; overrides T11's "to every caller" in §6.3).
+- Flag rules: every save decides from the request and the base `NoteVersion` only; a flagged save whose base was
+  unflagged or had a different reason (ordinal) sets To review at the new version, inside the existing guarded update.
+- SPA: Tag kinds, status lines on the read view, Past notes tags, `ReviewPanel` (unsent comment kept in memory only),
+  `toReviewForNoteQuery` (own key, `gcTime` 0) for a removed flag's reason.
+- Reuse: `NoteDiscard` shape, `Policies.Manager`, `StoredRole.IsManagerAsync`, `NoteReadAuthor`, `Button`,
+  `RequestAlert`, `CharacterCount`, `FieldError`, `NoteForm.leaveEditMode`'s invalidations.
+- Decisions where design.md is silent: any manager may review any flagged note, including their own (A73); one
+  formatter "Reviewed by {name} on {date, time}" everywhere (A74); the panel shows only for To review at first render
+  (participant-notes.md item 8 wins over R13); no Idempotency-Key (the conditional update gives one row); no date or
+  archive check on review; badge and "To review (n)" drops are T19's because `me` has no `toReviewCount` yet.
+
+### Verticals
+
+- v1: Server: NoteReview table, Mark reviewed endpoint, manager-only review data on reads; depends_on: none;
+  R01 R02 R04 R05 R06 R07 R12
+- v2: Server: flag rules for later versions (re-flag after an edit); depends_on: v1; R19 R20 R21 R22 R23
+- v3: SPA: review status on read view and Past notes, Review panel, e2e; depends_on: v1;
+  R03 R08 R09 R10 R11 R13 R14 R15 R16 R17 R18 R24 R25 R26 R27 R28
+- v4: Docs and backlog: A73, A74, design.md §6.3, T16 Notes, stories, flagged.md, by-hand checks;
+  depends_on: v1 v2 v3; R30
 
 ### Steps
 
