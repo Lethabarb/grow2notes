@@ -35,7 +35,7 @@ internal static partial class ReportText
     /// <paramref name="text"/> with each no-break space as a space and each run of white space as one space, so that a
     /// line wrapped at a different place compares equal.
     /// </summary>
-    public static string Normalised(string text) => WhiteSpace().Replace(text.Replace(' ', ' '), " ").Trim();
+    public static string Normalised(string text) => WhiteSpace().Replace(text.Replace('\u00A0', ' '), " ").Trim();
 
     private static string ParagraphText(Paragraph paragraph) => string.Concat(paragraph.Descendants<OpenXmlElement>()
         .Select(element => element switch

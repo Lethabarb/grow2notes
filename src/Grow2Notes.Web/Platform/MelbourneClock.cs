@@ -18,7 +18,8 @@ internal sealed class MelbourneClock(TimeProvider timeProvider)
     /// </summary>
     public static DateTime InMelbourne(DateTime utc) => TimeZoneInfo.ConvertTimeFromUtc(utc, Melbourne);
 
-    /// <summary>The Melbourne calendar date of <paramref name="utc"/>, read as <see cref="InMelbourne"/> reads it.
+    /// <summary>
+    /// The Melbourne calendar date of <paramref name="utc"/>, read as <see cref="InMelbourne"/> reads it.
     /// </summary>
     public static DateOnly DateOf(DateTime utc) => DateOnly.FromDateTime(InMelbourne(utc));
 }

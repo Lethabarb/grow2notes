@@ -111,7 +111,7 @@ internal static class WordReport
             }
             else
             {
-                valid.Append(XmlConvert.IsXmlChar(text[i]) ? text[i] : '�');
+                valid.Append(XmlConvert.IsXmlChar(text[i]) ? text[i] : '\uFFFD');
             }
         }
 

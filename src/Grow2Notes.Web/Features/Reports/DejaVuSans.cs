@@ -18,7 +18,9 @@ internal static class DejaVuSans
     // Ranges of code points, in the order the font lists them.
     private static readonly (uint First, uint Last)[] Ranges = ReadRanges(Bytes);
 
-    /// <summary>Whether the font has a glyph for <paramref name="rune"/>, in the Basic Multilingual Plane only (A81).
+    /// <summary>
+    /// Whether the font has a glyph for <paramref name="rune"/>, in the Basic Multilingual Plane only (A81). This is
+    /// the one place that limit is applied.
     /// </summary>
     public static bool Draws(Rune rune) =>
         rune.Value <= LastBasicMultilingualPlane && Ranges.Any(r => r.First <= rune.Value && rune.Value <= r.Last);
@@ -29,7 +31,7 @@ internal static class DejaVuSans
         var drawable = new StringBuilder(text.Length);
         foreach (var rune in text.EnumerateRunes())
         {
-            drawable.Append(Draws(rune) ? rune.ToString() : "�");
+            drawable.Append(Draws(rune) ? rune.ToString() : "\uFFFD");
         }
 
         return drawable.ToString();
@@ -73,7 +75,7 @@ internal static class DejaVuSans
             var group = groups[(16 + (12 * i))..];
             var glyph = BinaryPrimitives.ReadUInt32BigEndian(group[8..]);
             var first = BinaryPrimitives.ReadUInt32BigEndian(group) + (glyph == 0 ? 1u : 0u);
-            var last = Math.Min(BinaryPrimitives.ReadUInt32BigEndian(group[4..]), LastBasicMultilingualPlane);
+            var last = BinaryPrimitives.ReadUInt32BigEndian(group[4..]);
             if (first <= last)
             {
                 ranges.Add((first, last));

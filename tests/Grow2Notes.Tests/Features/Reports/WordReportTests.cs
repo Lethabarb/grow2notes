@@ -128,6 +128,6 @@ public sealed class WordReportTests
     {
         var docx = Render(new ReportBlock(ReportBlockKind.Line, "a\u0001b"));
 
-        Assert.Equal(["a�b"], ReportText.WordParagraphs(docx));
+        Assert.Equal(["a\uFFFDb"], ReportText.WordParagraphs(docx));
     }
 }

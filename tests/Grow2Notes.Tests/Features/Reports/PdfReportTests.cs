@@ -9,11 +9,12 @@ public sealed class PdfReportTests
 {
     private const string Phone = "\U0001F4DD";
     private const string Smile = "\U0001F600";
+    private const string Replacement = "\uFFFD";
 
     private static readonly string[] Lines =
     [
-        "Boxes ☐ ☑ and � and quotes ‘ ’ “ ”",
-        "Dashes – — and … and a middle dot · and a no-break space",
+        "Boxes ☐ ☑ and \uFFFD and quotes ‘ ’ “ ”",
+        "Dashes – — and … and a middle dot · and a no-break\u00A0space",
         "Names é è ë ï ö ü ā ē ī ō ū ñ ç",
         $"Emoji {Phone} and {Smile} end",
     ];
@@ -50,7 +51,7 @@ public sealed class PdfReportTests
     [Fact]
     public void The_text_is_the_input_with_each_emoji_replaced_by_the_replacement_character()
     {
-        var expected = string.Join(' ', Lines).Replace(Phone, "�").Replace(Smile, "�");
+        var expected = string.Join(' ', Lines).Replace(Phone, Replacement).Replace(Smile, Replacement);
 
         var actual = string.Join(' ', ReportText.PdfWords(Render()));
 
@@ -66,6 +67,15 @@ public sealed class PdfReportTests
 
         Assert.InRange(page.Width, 594, 596);
         Assert.InRange(page.Height, 841, 843);
+    }
+
+    // U+0009 has no glyph, so a tab that reached the font would print as the replacement character.
+    [Fact]
+    public void A_tab_is_a_tab_stop_and_not_a_replacement_character()
+    {
+        var pdf = PdfReport.Render([new ReportBlock(ReportBlockKind.Line, "Go\tOn")]);
+
+        Assert.Equal(["Go", "On"], ReportText.PdfWords(pdf));
     }
 
     [Fact]

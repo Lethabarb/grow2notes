@@ -10,7 +10,7 @@ namespace Grow2Notes.Web.Features.Reports;
 internal static class ReportDates
 {
     // Between a day and its month and between a time and am or pm, so that neither pair splits across two lines.
-    private const char Nbsp = ' ';
+    private const char Nbsp = '\u00A0';
 
     private static readonly string[] Days =
         ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
