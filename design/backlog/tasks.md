@@ -5090,7 +5090,7 @@ write and submit a forgotten note for a past date, which shows when and by whom 
 
 ```yaml
 id: T19
-status: new
+status: doing
 release: R1
 lane: A
 size: M
@@ -5142,6 +5142,38 @@ each screen change or window focus with no polling, and the badge and the (n) bo
   `aria-disabled` items of flagged.md's checklist, which carry a dated note that Mark reviewed's part is proven. The
   Reviewed list uses `msg.reviewedBy` with `format.dateTime` (A74), "reviewed by Sam Lee on Fri 2 Oct 2026, 9:30 am", in
   place of chronological-list.md's row without "on"; S03.02.02's third criterion is ticked when it does.
+
+### Plan
+
+- Outcome: no table, column, migration, route or package. One read (`status=reviewed` on `GET /api/reviews`), one
+  count (`toReviewCount` on `Me`), a view switch, the badge and one focus rule.
+- Server: `ReviewListEndpoint` gains `status=reviewed`: `{items, hasMore}`, at most 30, ordered `ReviewedAtUtc` DESC
+  then `Id` DESC, with an exclusive compound cursor (`before` = last `reviewedAtUtc`, `beforeId` = its `reviewId`;
+  both or neither, else 400). Items carry `reviewId`, `reviewedBy` as a plain display name, and the whole flag reason.
+  The reason is the latest flagged `NoteVersion` at or below the review's version (exact, as a review needs
+  ToReview), so no schema change. `Me.ToReviewCount` (`int?`, omitted for a worker) from
+  `FlagStatus == ToReview`, built once in `MeEndpoint` for `/me`, sign-in and setup answers. A text-only build check
+  (`MessagingOutOfScopeTests`) bans SMS and push packages and any email sender but the setup link.
+- SPA: `reviewedQuery.ts` (infinite query, `dropReviewed`), `FlaggedPage` with `ViewLinks` ("To review (n)" from the
+  To review query, "Reviewed"), Reviewed rows through `ChronoList` paged mode, `LinkRow` and `MetaLine`;
+  `useFocusKeptInList` and `focusRowInPlace` (also used by the `sameIndex` fallback) for a refresh that removes the
+  focused row; `refetchToReview` becomes `refetchReviewLists`; the Header badge (`NavItem` count, name "Flagged, 3 to
+  review", exact digits, no cap, no live region).
+- Reuse: `ChronoList`, `LoadRegion`, `ViewLinks`/`useView`, `pastNotesQuery`'s shape and drop on push,
+  `NoteHistoryEndpoint`'s paging, `useRefreshMe` (no new plumbing), `msg.reviewedBy` with `format.dateTime`.
+- Decisions where design.md is silent: compound cursor so pages never exceed 30 across a same-millisecond tie;
+  `reviewId` is the React key and return key; a push into Flagged drops the Reviewed pages while a view switch or pop
+  keeps them (A77); window focus refetches every active `['reviews']` list; the endpoint matrix keeps one row per
+  route and Reviewed gets a four-caller theory; the badge count equals the To review rows exactly.
+
+### Verticals
+
+- v1: Server: Reviewed list read, `toReviewCount` on Me, and the messaging build check; depends_on: none;
+  R06 R07 R17 R22 R23 R24
+- v2: SPA: the Flagged menu badge; depends_on: v1; R18 R19 R21
+- v3: SPA: view switch, the Reviewed list with Show older, focus and place; depends_on: v1 v2;
+  R01 R02 R03 R04 R05 R08 R09 R10 R11 R12 R13 R14 R15 R16 R20 R25 R26
+- v4: End-to-end real-app run, design docs as built, and backlog bookkeeping; depends_on: v2 v3; R27 R28
 
 ### Steps
 
