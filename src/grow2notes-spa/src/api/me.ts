@@ -16,6 +16,8 @@ export type Me = {
   organisationName: string;
   /** The date in Melbourne on the server, such as "2026-10-01", which every "today" in the SPA uses (A33). */
   today: string;
+  /** The notes waiting for review, for the Flagged item's badge; sent to a manager only (design.md §6.2). */
+  toReviewCount?: number;
 };
 
 /**

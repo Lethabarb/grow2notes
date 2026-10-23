@@ -238,7 +238,7 @@ function line(): HTMLElement {
 }
 
 /** The link named `name` in the main navigation. */
-function navLink(name: string): HTMLElement {
+function navLink(name: string | RegExp): HTMLElement {
   return within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name });
 }
 

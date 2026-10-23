@@ -6,7 +6,7 @@ import { expectStops, ring } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, expectAtLeast, scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
-import { manager, serveMe, worker } from './me.ts';
+import { flaggedItem, manager, serveMe, worker } from './me.ts';
 import { notesStore, type NotesStore } from './notes.ts';
 import { jane, madeUpParticipant, participants } from './participants.ts';
 import { holdNext } from './requests.ts';
@@ -161,7 +161,7 @@ test('To review loading, with rows, empty and failed, each passing axe; Page not
   const first = await held();
   await expect(heading(page)).toHaveText('Flagged notes');
   await expect(page).toHaveTitle(title('Flagged notes'));
-  await expect(navItem(page, 'Flagged')).toHaveAttribute('aria-current', 'page');
+  await expect(flaggedItem(page)).toHaveAttribute('aria-current', 'page');
   await expect(loadLine(page)).toBeEmpty();
   await expect(loadLine(page)).toHaveText('Loading flagged notes…');
   await expect(rows(page)).toHaveCount(0);
@@ -246,7 +246,7 @@ test('To review loading, with rows, empty and failed, each passing axe; Page not
     await page.goto(address);
     await expect(heading(page)).toHaveText('Page not found');
     await expect(page).toHaveTitle(title('Page not found'));
-    await expect(navItem(page, 'Flagged')).toHaveCount(0);
+    await expect(flaggedItem(page)).toHaveCount(0);
   }
   await expectAxeToPass(page);
 });
@@ -337,10 +337,10 @@ test('in forced colours, Flagged keeps its bar, and the ring is Highlight at eac
   const forcedRing = { ...ring, colour: highlight };
 
   // The current item's bar is a real border, which forced colours keep, in the link's colour.
-  await expect(navItem(page, 'Flagged')).toHaveAttribute('aria-current', 'page');
-  await expect(navItem(page, 'Flagged')).toHaveCSS('border-bottom-style', 'solid');
-  await expect(navItem(page, 'Flagged')).toHaveCSS('border-bottom-width', '4px');
-  await expect(navItem(page, 'Flagged')).toHaveCSS('border-bottom-color', linkText);
+  await expect(flaggedItem(page)).toHaveAttribute('aria-current', 'page');
+  await expect(flaggedItem(page)).toHaveCSS('border-bottom-style', 'solid');
+  await expect(flaggedItem(page)).toHaveCSS('border-bottom-width', '4px');
+  await expect(flaggedItem(page)).toHaveCSS('border-bottom-color', linkText);
 
   await heading(page).focus();
   const names = await rowNames(page);
@@ -351,6 +351,36 @@ test('in forced colours, Flagged keeps its bar, and the ring is Highlight at eac
   await expect(heading(page)).toBeFocused();
   await expectStops(page, 'Shift+Tab', ['Flagged'], forcedRing);
   await expectNothingKept(page, ...madeUp);
+});
+
+test('with 3 to review, the Flagged badge keeps its border in forced colours, and the header passes axe', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  const store = threeFlags();
+  await serveFlagged(page, store);
+  await serveMe(page, { ...manager, toReviewCount: 3 });
+  await page.goto('/flagged');
+  await expect(rows(page)).toHaveCount(3);
+
+  await expect(flaggedItem(page)).toHaveAccessibleName(/^Flagged ?, 3 to review$/);
+  const pill = flaggedItem(page).locator('[aria-hidden="true"]');
+  await expect(pill).toHaveText('3');
+  await expect(pill).toHaveCSS('border-top-style', 'solid');
+  await expect(pill).toHaveCSS('border-top-width', '1px');
+  await expect(pill).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+  await expectAxeToPass(page);
+});
+
+test('with no flags, Flagged shows its sentence alone, with no list and no badge', async ({ page }) => {
+  await serveFlagged(page, notesStore({ today: manager.today, participants }));
+  await serveMe(page, { ...manager, toReviewCount: 0 });
+  await page.goto('/flagged');
+
+  await expect(noneToReview(page)).toBeVisible();
+  await expect(main(page).getByRole('list')).toHaveCount(0);
+  await expect(flaggedItem(page)).toHaveAccessibleName('Flagged');
+  await expect(flaggedItem(page).locator('span')).toHaveCount(0);
 });
 
 for (const width of [375, 1280]) {
@@ -459,7 +489,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
 
   // The second manager opens Flagged before the submit: the app's empty list.
   const empty = secondManager.waitForResponse(isToReview);
-  await navItem(secondManager, 'Flagged').click();
+  await flaggedItem(secondManager).click();
   const emptyAnswer = await empty;
   expect(emptyAnswer.status()).toBe(200);
   expect(await emptyAnswer.json()).toEqual([]);
@@ -502,7 +532,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   // The first manager, choosing Flagged, sees the flag: the name, the date, "Riley Sample · flagged" and the time, and
   // the reason, from the app's own list.
   const listed = page.waitForResponse(isToReview);
-  await navItem(page, 'Flagged').click();
+  await flaggedItem(page).click();
   expect((await listed).status()).toBe(200);
   await expect(heading(page)).toBeFocused();
   await expect(page).toHaveTitle(title('Flagged notes'));
@@ -513,7 +543,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   await navItem(secondManager, 'Today').click();
   await expect(rows(secondManager)).toHaveText([janeCitizen.name]);
   const asked = await holdNext(secondManager, toReviewRequests);
-  await navItem(secondManager, 'Flagged').click();
+  await flaggedItem(secondManager).click();
   const again = await asked();
   await expect(noneToReview(secondManager)).toBeVisible();
   await again.fallback();
@@ -537,7 +567,7 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   await expectNothingKept(page, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason);
 
   // The worker, who has no Flagged item, meets Page not found at its address.
-  await expect(navItem(phone, 'Flagged')).toHaveCount(0);
+  await expect(flaggedItem(phone)).toHaveCount(0);
   await phone.goto('/flagged');
   await expect(heading(phone)).toHaveText('Page not found');
   await expect(phone).toHaveTitle(title('Page not found'));

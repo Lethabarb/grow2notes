@@ -341,6 +341,107 @@ describe('Header', () => {
   });
 });
 
+describe('the badge on the Flagged item', () => {
+  /** The Flagged link in the main navigation, by its name, which is "Flagged" or "Flagged, N to review". */
+  function flaggedLink(name: string): HTMLElement {
+    return within(screen.getByRole('navigation', { name: 'Main' })).getByRole('link', { name });
+  }
+
+  it('names the link "Flagged, 3 to review", with the digit in a hidden pill and the words in hidden text', async () => {
+    serveMe(() => ({ ...manager, toReviewCount: 3 }));
+    renderShell('/');
+    await settle();
+
+    const link = flaggedLink('Flagged, 3 to review');
+    const pill = within(link).getByText('3');
+
+    expect(pill).toHaveAttribute('aria-hidden', 'true');
+    expect(within(link).getByText(', 3 to review')).toHaveClass('visually-hidden');
+    expect(link).toHaveAttribute('href', '/flagged');
+  });
+
+  it.each([{ count: 0 }, { count: undefined }])('shows the word alone for a count of $count', async ({ count }) => {
+    serveMe(() => ({ ...manager, toReviewCount: count }));
+    renderShell('/');
+    await settle();
+
+    const link = flaggedLink('Flagged');
+
+    expect(link).toHaveTextContent(/^Flagged$/);
+    expect(link.querySelector('span')).toBeNull();
+  });
+
+  it('shows the exact number, with no cap', async () => {
+    serveMe(() => ({ ...manager, toReviewCount: 104 }));
+    renderShell('/');
+    await settle();
+
+    expect(within(flaggedLink('Flagged, 104 to review')).getByText('104')).toBeInTheDocument();
+  });
+
+  it('gives the pill no aria-live, role or title', async () => {
+    serveMe(() => ({ ...manager, toReviewCount: 3 }));
+    renderShell('/');
+    await settle();
+
+    const pill = within(flaggedLink('Flagged, 3 to review')).getByText('3');
+
+    for (const attribute of ['aria-live', 'role', 'title']) {
+      expect(pill).not.toHaveAttribute(attribute);
+    }
+  });
+
+  it('gives a worker, whose answer has no count, no pill', async () => {
+    serveMe(() => worker);
+    renderShell('/');
+    await settle();
+
+    expect(screen.queryByRole('link', { name: /^Flagged/ })).toBeNull();
+    expect(screen.getByRole('banner').querySelector('span[aria-hidden]')).toBeNull();
+  });
+
+  it('keeps the number it had when a refresh fails', async () => {
+    serveMe(() => ({ ...manager, toReviewCount: 3 }));
+    const { client } = renderShell('/');
+    await settle();
+    expect(flaggedLink('Flagged, 3 to review')).toBeInTheDocument();
+
+    fetchMock.mockImplementation(() => Promise.reject(new TypeError('Failed to fetch')));
+    act(() => {
+      refreshMe(client).catch(() => undefined);
+    });
+    // Past the query client's one silent retry.
+    await act(() => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(flaggedLink('Flagged, 3 to review')).toBeInTheDocument();
+  });
+
+  it('follows /me on a screen change and on window focus, and sends nothing else while idle', async () => {
+    let count = 3;
+    serveMe(() => ({ ...manager, toReviewCount: count }));
+    const { router } = renderShell('/');
+    await settle();
+    expect(flaggedLink('Flagged, 3 to review')).toBeInTheDocument();
+
+    count = 4;
+    await act(() => router.navigate('/flagged'));
+    await settle();
+    expect(flaggedLink('Flagged, 4 to review')).toBeInTheDocument();
+
+    count = 5;
+    act(() => {
+      window.dispatchEvent(new FocusEvent('focus'));
+    });
+    await settle();
+    expect(flaggedLink('Flagged, 5 to review')).toBeInTheDocument();
+
+    const sent = fetchMock.mock.calls.length;
+    await act(() => vi.advanceTimersByTimeAsync(10 * 60_000));
+
+    expect(fetchMock.mock.calls).toHaveLength(sent);
+  });
+});
+
 describe('the Account button and panel', () => {
   /** Renders the shell at `path` for `me`, and gives the Account button once /me has answered. */
   async function renderAccount(me: Me, path = '/') {
