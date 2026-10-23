@@ -25,6 +25,8 @@ const backLink = (page: Page, label: string) =>
 const link = (page: Page, name: string) => main(page).getByRole('link', { name, exact: true });
 const writePastDayNote = (page: Page) => link(page, 'Write past-day note');
 const noteDateField = (page: Page) => main(page).getByLabel('Note date', { exact: true });
+// The message carries FieldError's visually hidden "Error: " prefix.
+const dateError = (page: Page) => main(page).locator('#past-day-date-error');
 const continueButton = (page: Page) => main(page).getByRole('button', { name: 'Continue', exact: true });
 const saveStatus = (page: Page) => page.locator('#save-status');
 const box = (page: Page) => main(page).getByRole('textbox', { name: '3. Guided notes' });
@@ -149,7 +151,7 @@ test('Participants, a participant, Write past-day note: the title, the focused <
   // Today is not a past date: the message above the field, with the field focused, and no request sent.
   const sent = recordRequests(page);
   await continueWith(page, manager.today);
-  await expect(main(page).getByText('Note date must be in the past', { exact: true })).toBeVisible();
+  await expect(dateError(page)).toHaveText('Error: Note date must be in the past');
   await expect(noteDateField(page)).toHaveAttribute('aria-invalid', 'true');
   await expect(noteDateField(page)).toBeFocused();
   await expect(page).toHaveURL(pastDayAddress(jane.id));
@@ -157,10 +159,10 @@ test('Participants, a participant, Write past-day note: the title, the focused <
 
   // Fixing the date clears the message, and a date left empty has its own.
   await noteDateField(page).fill('2026-09-30');
-  await expect(main(page).getByText('Note date must be in the past', { exact: true })).toHaveCount(0);
+  await expect(dateError(page)).toHaveCount(0);
   await noteDateField(page).fill('');
   await continueButton(page).click();
-  await expect(main(page).getByText('Enter the note date', { exact: true })).toBeVisible();
+  await expect(dateError(page)).toHaveText('Error: Enter the note date');
   await expect(noteDateField(page)).toBeFocused();
   expect((await sent()).filter((request) => request.includes('/notes/'))).toEqual([]);
 });
