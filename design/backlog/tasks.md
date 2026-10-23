@@ -4845,9 +4845,10 @@ or changes its reason sends the note back to To review; removing the tick never 
 - flagged.md's *Accessibility checklist* (23 October 2026): the Review view's headings and Enter in the comment are
   ticked. The label-in-name and `aria-disabled` items carry a dated note that Mark reviewed's part is proven; T19 ticks
   them whole with Reviewed, Show older and Try again. The *Screen reader* items wait for the by-hand pass.
-- By hand: steps 77 to 84 of ops/first-use-in-test.md (NVDA with Chrome, VoiceOver with iOS Safari and TalkBack with
-  Android Chrome on the panel; a real phone at 375 px; two managers on two devices; an author editing while a manager
-  has the note open; a re-flag by an edit seen on Flagged; the back label after Edit, Save changes and Cancel).
+- By hand: steps 77 to 85 of ops/first-use-in-test.md (the database check; NVDA with Chrome, VoiceOver with iOS Safari
+  and TalkBack with Android Chrome on the panel; a real phone at 375 px; two managers on two devices; an author editing
+  while a manager has the note open; a re-flag by an edit seen on Flagged; the back label after Edit, Save changes and
+  Cancel).
 
 ### Plan
 
@@ -4892,7 +4893,7 @@ the design.md §5.8 flag rules for later versions, and one panel.
       tags, the read view's status lines, `ReviewPanel` and its conflicts, `toReviewForNoteQuery`, copy, limits and
       error codes; Vitest, and Playwright's `review.spec.ts` on `notesStore`'s reviews and flag rules.
 - [x] Docs (#80): this task's Notes; design.md §6.3, §6.4 and §13's A73 and A74; the four stories and F03.01's and
-      F03.02's feature checks; flagged.md's checklist; ops/first-use-in-test.md's steps 77 to 84; the stale "every
+      F03.02's feature checks; flagged.md's checklist; ops/first-use-in-test.md's steps 77 to 85; the stale "every
       caller" lines of status-tags.md, note-form.md, today.md and tests/README.md; coverage.md's E03 rows.
 
 ---
