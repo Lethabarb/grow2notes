@@ -9,8 +9,9 @@ namespace Grow2Notes.Web.Features.Notes;
 /// that <c>409 note.in_progress_by_other</c> gives them, and to a manager alone its author's working copy as
 /// <see cref="Current"/>; and, for a submitted note, its author, its first submitted time, whether it has been edited,
 /// who last edited it and when, and its current version. A pending edit never shows here. Each member that the note
-/// does not have, or the caller may not see, is left out. The rest of §6.3's shape comes with what uses it: T16 adds a
-/// manager's <c>flagStatus</c> and <c>reviews</c>, and T18 <c>isPastDayNote</c> and <c>versionCount</c>.
+/// does not have, or the caller may not see, is left out: a manager alone gets a submitted note's <c>flagStatus</c> and
+/// its <c>reviews</c>, newest first. The rest of §6.3's shape comes with what uses it: T18 adds <c>isPastDayNote</c>
+/// and <c>versionCount</c>.
 /// </summary>
 internal sealed record NoteRead(
     string Status,
@@ -20,12 +21,22 @@ internal sealed record NoteRead(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTime? FirstSubmittedAtUtc,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? IsEdited,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadLastEdit? LastEdit,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadVersion? Current);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] NoteReadVersion? Current,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? FlagStatus = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<NoteReadReview>? Reviews = null);
 
 /// <summary>
-/// Who wrote a note: their ID, which the screen compares with the signed-in user's, and their display name as stored.
+/// Who wrote a note or reviewed it: their ID, which the screen compares with the signed-in user's, and their display
+/// name as stored.
 /// </summary>
 internal sealed record NoteReadAuthor(Guid Id, string DisplayName);
+
+/// <summary>
+/// A manager's review of a note (design.md §6.3): the number of the version they reviewed, who reviewed it, when, and
+/// their comment as stored, or <c>null</c> when they left none.
+/// </summary>
+internal sealed record NoteReadReview(
+    int VersionNumber, NoteReadAuthor ReviewedBy, DateTime ReviewedAtUtc, string? Comment);
 
 /// <summary>
 /// Who saved an edited note's current version, by their display name as stored, and when, the version's

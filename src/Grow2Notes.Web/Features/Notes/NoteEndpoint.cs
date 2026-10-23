@@ -63,9 +63,14 @@ internal static class NoteEndpoint
             return TypedResults.NotFound();
         }
 
-        return TypedResults.Ok(note.Status == NoteStatus.Draft
-            ? DraftHeader(note)
-            : await SubmittedAsync(db, note, cancellationToken));
+        if (note.Status == NoteStatus.Draft)
+        {
+            return TypedResults.Ok(DraftHeader(note));
+        }
+
+        var isManager = await StoredRole.IsManagerAsync(
+            db, Actor.InApp(user, identityOptions.Value), cancellationToken);
+        return TypedResults.Ok(await SubmittedAsync(db, note, isManager, cancellationToken));
     }
 
     private static NoteRead DraftHeader(LiveNote note) =>
@@ -98,9 +103,10 @@ internal static class NoteEndpoint
 
     // The version's own goal and common item rows, in their places, which keep the snapshot's order and wording (§5.3,
     // A3). A group shows when it is Every note or picked and has an item row, the rule that ShownGroups applies to a
-    // working copy. A note is edited once it has a version after the first, whose creator and time are its last edit.
+    // working copy. A note is edited once it has a version after the first, whose creator and time are its last edit. A
+    // manager alone also gets its flag status and every review of it, newest first (§6.3).
     private static async Task<NoteRead> SubmittedAsync(
-        Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken)
+        Grow2NotesDbContext db, LiveNote note, bool isManager, CancellationToken cancellationToken)
     {
         var content = await NoteVersionContent.ReadAsync(
             db, note.Id, note.CurrentVersionNumber, cancellationToken);
@@ -117,6 +123,22 @@ internal static class NoteEndpoint
             isEdited,
             lastEdit,
             NoteReadVersion.Of(
-                note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason));
+                note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason),
+            isManager ? note.FlagStatus.ToString() : null,
+            isManager ? await ReviewsAsync(db, note, cancellationToken) : null);
     }
+
+    private static async Task<IReadOnlyList<NoteReadReview>> ReviewsAsync(
+        Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken) =>
+        await (
+            from review in db.NoteReviews.AsNoTracking()
+            where review.NoteId == note.Id
+            join reviewer in db.Users on review.ReviewedByUserId equals reviewer.Id
+            orderby review.ReviewedAtUtc descending
+            select new NoteReadReview(
+                review.VersionNumber,
+                new NoteReadAuthor(reviewer.Id, reviewer.DisplayName),
+                review.ReviewedAtUtc,
+                review.Comment))
+        .ToListAsync(cancellationToken);
 }

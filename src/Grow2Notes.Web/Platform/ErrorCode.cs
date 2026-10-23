@@ -54,6 +54,12 @@ internal sealed class ErrorCode
     /// </summary>
     public static readonly ErrorCode TakenOver = new(StatusCodes.Status409Conflict, "draft.taken_over");
 
+    /// <summary>
+    /// A Mark reviewed on a note that is not in To review at the version the manager had open (§6.4): already reviewed,
+    /// including by a retried press, edited since it was opened, a draft, or never flagged. It changes nothing.
+    /// </summary>
+    public static readonly ErrorCode ReviewNotCurrent = new(StatusCodes.Status409Conflict, "review.not_current");
+
     /// <summary>The email already belongs to an account, in any organisation and any letter case (A27).</summary>
     public static readonly ErrorCode EmailInUse = new(StatusCodes.Status409Conflict, "user.email_in_use");
 
