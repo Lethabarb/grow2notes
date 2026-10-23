@@ -14,6 +14,7 @@ import type { TickedItem } from '../../components/TickListRead.tsx';
 import { fullPageLoad } from '../../routes/fullPageLoad.ts';
 import { disarmUnloadGuard, rearmUnloadGuard } from '../../routes/leaveGuard.ts';
 import { routes } from '../../routes/routes.tsx';
+import type { ToReviewNote } from '../flagged/toReviewQuery.ts';
 import type { TodayList, TodayNote, TodayParticipant } from '../today/todayQuery.ts';
 import type { VersionSaved } from './NoteForm.tsx';
 import type {
@@ -22,7 +23,9 @@ import type {
   DraftItem,
   DraftNote,
   DraftRead,
+  FlagStatus,
   NoteAnswer,
+  NoteReview,
   ParticipantHeader,
   ReadGroup,
   SubmittedNote,
@@ -6668,5 +6671,547 @@ describe('The version-conflict notice', () => {
     await settle();
 
     expect(conflictNotice()).toHaveTextContent(newerText);
+  });
+});
+
+// Mark reviewed (participant-notes.md component 8 and *States*, review-panel.md): a manager's review lines on the read
+// view, and the Review panel. Each test has a participant of its own, as the panel keeps an unsent comment by note in
+// memory for as long as the page lives.
+
+const toReviewPath = '/api/reviews?status=toReview';
+
+/** Jo Smith, a manager who reviews a note before the signed-in manager does. */
+const joSmith = { id: 'e1d2c3b4-0000-4000-8000-0000000000aa', displayName: 'Jo Smith' };
+
+/** 9:30 am on Friday 2 October in Melbourne, still in standard time (UTC+10). */
+const reviewedAtUtc = '2026-10-01T23:30:00Z';
+const reviewedAt = `Fri 2${nbsp}Oct 2026, 9:30${nbsp}am`;
+
+/** A review of version 1 by Jo Smith, at 9:30 am on Friday 2 October, with no comment unless given another. */
+function review(overrides: Partial<NoteReview> = {}): NoteReview {
+  return { versionNumber: 1, reviewedBy: joSmith, reviewedAtUtc, comment: null, ...overrides };
+}
+
+/** The manager's own review of version 1, as the note lists it once the manager's press has landed. */
+function myReview(comment: string | null = null): NoteReview {
+  return review({ reviewedBy: { id: manager.userId, displayName: manager.displayName }, comment });
+}
+
+/** A note as a manager gets it from `GET {base}`: with its `flagStatus` and its reviews, newest first. */
+function managersNote(
+  flagStatus: FlagStatus,
+  options: SubmittedOptions = {},
+  reviews: NoteReview[] = [],
+): SubmittedNote {
+  return { ...submittedNote(options), flagStatus, reviews };
+}
+
+/** A row of the To review list for `participant`'s note of 1 October, whose flag a later edit has removed. */
+function toReviewRow(participant: ParticipantHeader, flagReason: string): ToReviewNote {
+  return {
+    participantId: participant.id,
+    givenName: participant.givenName,
+    familyName: participant.familyName,
+    noteDate: '2026-10-01',
+    authorDisplayName: 'Priya Nair',
+    flagReason,
+    flaggedAtUtc: '2026-10-01T06:42:00Z',
+    flagRemovedLater: true,
+  };
+}
+
+/** Mark reviewed's `201`, with the time the review was stored. */
+function reviewCreated(at = reviewedAtUtc): Answer {
+  return () =>
+    Promise.resolve(
+      new Response(JSON.stringify({ reviewedAtUtc: at }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+}
+
+/** Mark reviewed's `409`, for a note that is no longer To review at the version sent. */
+const notCurrent = problem(409, { code: 'review.not_current' });
+
+/** Every Mark reviewed sent, in order: its path and its body as JSON. */
+function reviewPosts(): { path: string; body: Record<string, unknown> }[] {
+  return fetchMock.mock.calls
+    .filter(([path, init]) => init?.method === 'POST' && (path as string).endsWith('/reviews'))
+    .map(([path, init]) => ({
+      path: path as string,
+      body: JSON.parse(init!.body as string) as Record<string, unknown>,
+    }));
+}
+
+/** How many times `GET /api/auth/me` has been sent. */
+function meRequests(): number {
+  return sentRequests().filter((request) => request === `GET ${mePath}`).length;
+}
+
+type ReviewSetup = {
+  note?: SubmittedNote;
+  /** The To review list, which a manager's To review note reads for the reason of a flag that was removed. */
+  lookup?: Answer;
+  review?: Answer;
+};
+
+/**
+ * Serves a participant of its own, Jane Citizen, with Priya Nair's note of 1 October as `note`, flagged for a manager
+ * and To review unless given another, and Mark reviewed's `review` answer; opens the read view as Jordan Ellis, the
+ * manager. Gives the participant, the router and the client.
+ */
+async function openReview({ note, lookup, review: answer }: ReviewSetup = {}) {
+  const participant = freshParticipant();
+  serveSubmitted(participant, note ?? managersNote('ToReview', { reason: 'Jane seemed unwell.' }));
+  serve(toReviewPath, lookup ?? json([]));
+  answers.set(`POST ${paths(participant).note}/reviews`, answer ?? reviewCreated());
+  const opened = renderApp(paths(participant).page, manager);
+  await settle();
+  return { participant, ...opened };
+}
+
+/** The Review panel's comment box, found by its label. */
+function comment(): HTMLTextAreaElement {
+  return within(main()).getByRole('textbox', { name: 'Comment (optional)' });
+}
+
+/** Mark reviewed. */
+function markReviewed(): HTMLElement {
+  return within(main()).getByRole('button', { name: 'Mark reviewed' });
+}
+
+/** Types `value` into the comment box, as one input. */
+function typeComment(value: string) {
+  fireEvent.input(comment(), { target: { value } });
+}
+
+/** What each of the read view's lines starts with: its tag, if it has one, else its first word. */
+function lineStarts(): string[] {
+  return statusLines().map(
+    (each) => each.querySelector(`.${tagStyles.tag}`)?.textContent ?? shown(each).split(' ')[0],
+  );
+}
+
+describe("The read view's review lines", () => {
+  it('shows a worker no review status, comment or panel, as the API gives a worker none of them', async () => {
+    serveSubmitted(jane, submittedNote({ reason: 'Jane seemed unwell.' }));
+    renderApp(paths(jane).page);
+    await settle();
+
+    expect(lineStarts()).toEqual(['Written', 'Flagged']);
+    expect(main()).not.toHaveTextContent(/To review|Reviewed|Comment/);
+    expect(within(main()).queryByRole('heading', { name: 'Review' })).toBeNull();
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+    expect(within(main()).queryByRole('button', { name: 'Mark reviewed' })).toBeNull();
+    expect(sentRequests()).not.toContain(`GET ${toReviewPath}`);
+  });
+
+  it('shows a manager the To review tag after Flagged, and the Review panel under the sections', async () => {
+    await openReview();
+
+    expect(lineStarts()).toEqual(['Written', 'Flagged', 'To review']);
+    const tag = within(statusLines()[2]).getByText('To review');
+    expect(tag).toHaveClass(tagStyles.tag, tagStyles.attention);
+    const heading = within(main()).getByRole('heading', { level: 2, name: 'Review' });
+    expect(follows(heading, section('3. Guided notes'))).toBe(true);
+    expect(comment()).toHaveAccessibleDescription(
+      'Shown in the daily report and record exports, and cannot be changed later You can enter up to 500 characters',
+    );
+    expect(within(main()).getAllByText('You can enter up to 500 characters')).toHaveLength(2);
+    expect(markReviewed()).not.toHaveAttribute('aria-disabled');
+    expect(comment()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('says To review, then Flag removed in a later edit and the reason, for a note whose flag a later edit removed', async () => {
+    const participant = freshParticipant();
+    serveSubmitted(participant, managersNote('ToReview'));
+    serve(toReviewPath, json([toReviewRow(participant, 'Jane seemed unwell.\nShe was pale.')]));
+    renderApp(paths(participant).page, manager);
+    await settle();
+
+    const [, removed, reason] = statusLines();
+    expect(removed.textContent).toBe('To review, Flag removed in a later edit');
+    expect(within(removed).getByText('To review')).toHaveClass(tagStyles.attention);
+    expect(reason.textContent).toBe('Reason: Jane seemed unwell.\nShe was pale.');
+    expect(reason).toHaveClass(readView.written);
+    expect(lineStarts()).toEqual(['Written', 'To review', 'Reason:']);
+  });
+
+  // review issue 2: a Flagged list kept from before may hold another reason, or none, for this note.
+  it('shows nothing of the note until the To review lookup has answered, whatever the Flagged list holds', async () => {
+    const participant = freshParticipant();
+    serveSubmitted(participant, managersNote('ToReview'));
+    const late = held(json([toReviewRow(participant, 'The reason now')]));
+    serve(toReviewPath, late.answer);
+    serve(mePath, json(manager));
+    const client = createQueryClient();
+    client.setQueryData(meQuery.queryKey, manager);
+    client.setQueryData(['reviews', 'toReview'], [toReviewRow(participant, 'A reason kept from before')]);
+    const router = createMemoryRouter(routes, {
+      initialEntries: [{ ...parsePath(paths(participant).page), key: crypto.randomUUID() }],
+    });
+    show(router, client);
+
+    await settle();
+    expect(within(main()).queryByRole('heading')).toBeNull();
+    expect(main()).not.toHaveTextContent(/Priya Nair|reason/);
+
+    late.release();
+    await settle();
+    expect(main()).toHaveTextContent('Reason: The reason now');
+    expect(main()).not.toHaveTextContent('kept from before');
+  });
+
+  it('leaves out the Reason line alone when the To review lookup fails, keeping the rest and the panel', async () => {
+    await openReview({ note: managersNote('ToReview'), lookup: problem(500) });
+    await wait(2_000);
+
+    expect(pageHeading()).toBeInTheDocument();
+    expect(lineStarts()).toEqual(['Written', 'To review']);
+    expect(statusLines()[1].textContent).toBe('To review, Flag removed in a later edit');
+    expect(main()).not.toHaveTextContent('Reason:');
+    expect(comment()).toBeInTheDocument();
+  });
+
+  it('shows Reviewed, who and when, and the latest review’s comment, and no panel, on a note that opens Reviewed', async () => {
+    const reviews = [
+      review({ versionNumber: 2, comment: 'Followed up with the GP.\nAll fine.' }),
+      review({
+        versionNumber: 1,
+        reviewedBy: { id: 'f2e3d4c5-0000-4000-8000-0000000000bb', displayName: 'Alex Park' },
+        reviewedAtUtc: '2026-09-30T23:30:00Z',
+        comment: 'An earlier comment.',
+      }),
+    ];
+    await openReview({
+      note: managersNote(
+        'Reviewed',
+        { reason: 'Jane seemed unwell.', lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' } },
+        reviews,
+      ),
+    });
+
+    expect(lineStarts()).toEqual(['Written', 'Edited', 'Flagged', 'Reviewed', 'Comment:']);
+    const [, , , reviewed, notes] = statusLines();
+    expect(within(reviewed).getByText('Reviewed')).toHaveClass(tagStyles.tag, tagStyles.neutral);
+    expect(shown(reviewed)).toBe(`Reviewed by Jo Smith on ${reviewedAt}`);
+    expect(reviewed.querySelector('time')).toHaveAttribute('datetime', reviewedAtUtc);
+    expect(notes.textContent).toBe('Comment: Followed up with the GP.\nAll fine.');
+    expect(notes).toHaveClass(readView.written);
+    expect(main()).not.toHaveTextContent('An earlier comment.');
+    // participant-notes.md component 8 wins over review-panel.md: a note that opens Reviewed has no panel.
+    expect(within(main()).queryByRole('heading', { name: 'Review' })).toBeNull();
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+    expect(within(main()).queryByRole('button', { name: 'Mark reviewed' })).toBeNull();
+  });
+
+  it('leaves the comment line out of a Reviewed note whose review has none', async () => {
+    await openReview({ note: managersNote('Reviewed', {}, [review()]) });
+
+    expect(lineStarts()).toEqual(['Written', 'Reviewed']);
+  });
+
+  it('shows no tag on a note that was never flagged', async () => {
+    await openReview({ note: managersNote('None') });
+
+    expect(lineStarts()).toEqual(['Written']);
+    expect(within(main()).queryByRole('heading', { name: 'Review' })).toBeNull();
+  });
+
+  it('follows the daily report’s order: Edited, Flagged, then To review', async () => {
+    await openReview({
+      note: managersNote('ToReview', {
+        reason: 'Jane seemed unwell.',
+        lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' },
+      }),
+    });
+
+    expect(lineStarts()).toEqual(['Written', 'Edited', 'Flagged', 'To review']);
+  });
+});
+
+describe('The Review panel', () => {
+  it('refuses 501 characters, sending nothing, and clears the message once the text fits', async () => {
+    await openReview();
+    typeComment('x'.repeat(501));
+
+    await pressAndWait(markReviewed());
+
+    expect(reviewPosts()).toEqual([]);
+    expect(within(main()).getByText('Comment must be 500 characters or less')).toBeInTheDocument();
+    expect(comment()).toHaveAttribute('aria-invalid', 'true');
+    expect(comment()).toHaveFocus();
+    expect(comment()).toHaveAccessibleDescription(/^Error: Comment must be 500 characters or less /);
+
+    typeComment('x'.repeat(500));
+
+    expect(within(main()).queryByText('Comment must be 500 characters or less')).toBeNull();
+    expect(comment()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('sends the version on the screen and the comment trimmed, its inner line breaks kept', async () => {
+    const edited = { by: 'Jo Smith', atUtc: '2026-10-01T07:03:00Z' };
+    const { participant } = await openReview({ note: managersNote('ToReview', { lastEdit: edited, reason: 'x' }) });
+    typeComment('  Called Sam’s mum.\nGP booked.  ');
+
+    await pressAndWait(markReviewed());
+
+    expect(reviewPosts()).toEqual([
+      {
+        path: `${paths(participant).note}/reviews`,
+        body: { versionNumber: 2, comment: 'Called Sam’s mum.\nGP booked.' },
+      },
+    ]);
+  });
+
+  it('sends a blank comment as null', async () => {
+    await openReview();
+    typeComment('   \n  ');
+
+    await pressAndWait(markReviewed());
+
+    expect(reviewPosts().map(({ body }) => body)).toEqual([{ versionNumber: 1, comment: null }]);
+  });
+
+  it('makes a new line on Enter in the comment, which sends nothing and is not cancelled', async () => {
+    await openReview();
+    typeComment('First line.');
+
+    const proceeded = fireEvent.keyDown(comment(), { key: 'Enter' });
+    await settle();
+
+    expect(proceeded).toBe(true);
+    expect(reviewPosts()).toEqual([]);
+  });
+
+  it('goes aria-disabled at once with the comment read-only, and says Marking reviewed… after 400 ms', async () => {
+    const request = held(reviewCreated());
+    await openReview({ review: request.answer });
+    typeComment('Fine.');
+
+    await press(markReviewed());
+
+    const button = markReviewed();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(comment()).toHaveAttribute('readonly');
+    await wait(397);
+    expect(button).not.toHaveAttribute('data-busy');
+    await wait(2);
+    expect(button).toHaveAttribute('data-busy', 'true');
+    expect(button).toHaveTextContent('Marking reviewed…');
+    expect(main()).not.toHaveTextContent('Saving');
+    await press(button);
+    expect(reviewPosts()).toHaveLength(1);
+
+    request.release();
+    await wait(50);
+  });
+
+  it('shows the focused record and comment on success, and asks for the note, the lists and me again', async () => {
+    const { participant, client } = await openReview();
+    const invalidated = vi.spyOn(client, 'invalidateQueries');
+    const meBefore = meRequests();
+    typeComment('Called her mum.');
+    // The note as the refetch finds it once the review has landed.
+    serve(
+      paths(participant).note,
+      json(managersNote('Reviewed', { reason: 'Jane seemed unwell.' }, [myReview('Called her mum.')])),
+    );
+
+    await pressAndWait(markReviewed());
+
+    const record = document.activeElement as HTMLElement;
+    expect(record.tagName).toBe('P');
+    expect(record.textContent).toBe(`Reviewed by Jordan Ellis on ${reviewedAt}`);
+    expect(within(main()).getAllByText('Comment: Called her mum.')).toHaveLength(2);
+    expect(within(main()).queryByRole('textbox')).toBeNull();
+    expect(within(main()).queryByRole('button', { name: 'Mark reviewed' })).toBeNull();
+    expect(invalidated).toHaveBeenCalledWith({ queryKey: ['notes', participant.id, '2026-10-01'] });
+    expect(invalidated).toHaveBeenCalledWith({ queryKey: ['reviews'] });
+    expect(invalidated).toHaveBeenCalledWith({ queryKey: ['pastNotes', participant.id], exact: true });
+    expect(meRequests()).toBeGreaterThan(meBefore);
+    // The panel stays for the visit, through the refetch that shows the note Reviewed.
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Review' })).toBeInTheDocument();
+    expect(lineStarts()).toEqual(['Written', 'Flagged', 'Reviewed', 'Comment:']);
+  });
+
+  it('leaves the comment line out of a record whose comment was blank', async () => {
+    await openReview();
+
+    await pressAndWait(markReviewed());
+
+    expect(document.activeElement).toHaveTextContent(/^Reviewed by Jordan Ellis on/);
+    expect(within(main()).queryByText(/^Comment:/)).toBeNull();
+  });
+
+  it.each([
+    ['no connection', noConnection, 'Not marked reviewed: no connection. Try again.'],
+    ['a server failure', problem(500), 'Not marked reviewed: something went wrong. Try again.'],
+  ] as const)(
+    'says so above the button for %s, keeping the comment and focus, and sending nothing again',
+    async (_cause, fail, words) => {
+      await openReview({ review: fail });
+      typeComment('Fine.');
+
+      await pressAndWait(markReviewed());
+
+      expect(requestAlert().textContent).toBe(words);
+      expect(markReviewed()).toHaveFocus();
+      expect(markReviewed()).not.toHaveAttribute('aria-disabled');
+      expect(comment()).toHaveValue('Fine.');
+      expect(comment()).not.toHaveAttribute('readonly');
+      await wait(5_000);
+      expect(reviewPosts()).toHaveLength(1);
+    },
+  );
+
+  it('asks for me again and says something went wrong for a 403', async () => {
+    await openReview({ review: problem(403) });
+    const meBefore = meRequests();
+
+    await pressAndWait(markReviewed());
+
+    expect(meRequests()).toBeGreaterThan(meBefore);
+    expect(requestAlert().textContent).toBe('Not marked reviewed: something went wrong. Try again.');
+  });
+
+  it('shows the server’s message under the comment for a 422', async () => {
+    await openReview({
+      review: problem(422, { errors: { comment: ['Comment must be 500 characters or less'] } }),
+    });
+
+    await pressAndWait(markReviewed());
+
+    expect(within(main()).getByText('Comment must be 500 characters or less')).toBeInTheDocument();
+    expect(comment()).toHaveAttribute('aria-invalid', 'true');
+    expect(comment()).toHaveFocus();
+  });
+
+  it('shows the record of a manager who reviewed first, with the comment that was not saved, focused on the message', async () => {
+    const { participant } = await openReview({ review: notCurrent });
+    typeComment('Looks fine to me.\nNo action.');
+    serve(
+      paths(participant).note,
+      json(managersNote('Reviewed', { reason: 'Jane seemed unwell.' }, [review({ comment: 'Already followed up.' })])),
+    );
+
+    await pressAndWait(markReviewed());
+
+    const message = within(main()).getByText('This note was marked reviewed while you had it open.');
+    expect(message).toHaveFocus();
+    const panel = message.closest('section')!;
+    expect(within(panel).getByText(/^Reviewed by Jo Smith on/, { selector: 'p' }).textContent).toBe(
+      `Reviewed by Jo Smith on ${reviewedAt}`,
+    );
+    expect(within(panel).getByText('Comment: Already followed up.')).toBeInTheDocument();
+    const notSaved = within(panel).getByText('Your comment was not saved:');
+    expect(follows(notSaved, message)).toBe(true);
+    expect(within(panel).getByText(/^Looks fine to me\./).textContent).toBe('Looks fine to me.\nNo action.');
+    expect(within(panel).queryByRole('textbox')).toBeNull();
+  });
+
+  it('shows no unsaved comment under the record of a manager who reviewed first, when none was typed', async () => {
+    const { participant } = await openReview({ review: notCurrent });
+    serve(paths(participant).note, json(managersNote('Reviewed', {}, [review()])));
+
+    await pressAndWait(markReviewed());
+
+    expect(within(main()).getByText('This note was marked reviewed while you had it open.')).toHaveFocus();
+    expect(within(main()).queryByText('Your comment was not saved:')).toBeNull();
+  });
+
+  it('shows the newer version, keeps the comment, and sends the new version on the next press, when edited since', async () => {
+    const edited = managersNote('ToReview', {
+      reason: 'Jane seemed unwell.',
+      narrative: 'Jane made toast, then felt dizzy.',
+      lastEdit: { by: 'Jo Smith', atUtc: '2026-10-01T08:10:00Z' },
+    });
+    const { participant } = await openReview({ review: inTurn(notCurrent, reviewCreated()) });
+    typeComment('Will check both.');
+    serve(paths(participant).note, json(edited));
+
+    await pressAndWait(markReviewed());
+
+    expect(narrative().textContent).toBe('Jane made toast, then felt dizzy.');
+    expect(requestAlert().textContent).toBe(
+      'This note was edited after you opened it. Read the latest version, then mark it reviewed.',
+    );
+    expect(comment()).toHaveValue('Will check both.');
+    expect(markReviewed()).toHaveFocus();
+    expect(markReviewed()).not.toHaveAttribute('aria-disabled');
+    expect(lineStarts()).toEqual(['Written', 'Edited', 'Flagged', 'To review']);
+
+    await pressAndWait(markReviewed());
+
+    expect(reviewPosts().map(({ body }) => body)).toEqual([
+      { versionNumber: 1, comment: 'Will check both.' },
+      { versionNumber: 2, comment: 'Will check both.' },
+    ]);
+    expect(document.activeElement).toHaveTextContent(/^Reviewed by Jordan Ellis on/);
+  });
+
+  it('shows success for a press whose answer was lost, when the note is found reviewed by this manager at that version', async () => {
+    const { participant } = await openReview({ review: inTurn(noConnection, notCurrent) });
+    typeComment('Fine.');
+
+    await pressAndWait(markReviewed());
+    expect(requestAlert().textContent).toBe('Not marked reviewed: no connection. Try again.');
+    serve(
+      paths(participant).note,
+      json(managersNote('Reviewed', { reason: 'Jane seemed unwell.' }, [myReview('Fine.')])),
+    );
+    await pressAndWait(markReviewed());
+
+    expect(document.activeElement).toHaveTextContent(/^Reviewed by Jordan Ellis on/);
+    expect(within(main()).getAllByText('Comment: Fine.').length).toBeGreaterThan(0);
+    expect(within(main()).queryByText('This note was marked reviewed while you had it open.')).toBeNull();
+    expect(reviewPosts()).toHaveLength(2);
+  });
+
+  it('says the note has changed or was already reviewed when it cannot be read again', async () => {
+    const { participant } = await openReview({ review: notCurrent });
+    typeComment('Fine.');
+    serve(paths(participant).note, noConnection);
+
+    await press(markReviewed());
+    await wait(2_000);
+    await settle();
+
+    expect(requestAlert().textContent).toBe(
+      'This note has changed or was already reviewed. Check the latest version before marking it reviewed.',
+    );
+    expect(comment()).toHaveValue('Fine.');
+    expect(markReviewed()).toHaveFocus();
+  });
+
+  it('brings an unsent comment back after Edit and Cancel, and keeps it out of storage, the address and the title', async () => {
+    const participant = freshParticipant();
+    const { draft } = paths(participant);
+    serveSubmitted(participant, managersNote('ToReview', { reason: 'Jane seemed unwell.' }));
+    serve(toReviewPath, json([]));
+    serve(draft, json(editDraft({ baseVersion: 1 })));
+    serveCancel(draft, noContent);
+    const { router } = renderApp(paths(participant).page, manager);
+    await settle();
+    typeComment('Not decided yet.');
+
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(0);
+    expect(router.state.location.search + router.state.location.hash).toBe('');
+    expect(router.state.location.state).toBeNull();
+    expect(JSON.stringify(window.history.state)).not.toContain('Not decided');
+    expect(document.title).not.toContain('Not decided');
+
+    await press(editLink());
+    await settle();
+    expect(main().querySelector('form')).not.toBeNull();
+    await pressAndWait(cancelButton());
+
+    expect(router.state.location.pathname).toBe(paths(participant).page);
+    expect(comment()).toHaveValue('Not decided yet.');
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(0);
+    expect(document.title).not.toContain('Not decided');
   });
 });
