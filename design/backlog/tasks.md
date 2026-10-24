@@ -5361,7 +5361,7 @@ each screen change or window focus with no polling, and the badge and the (n) bo
 
 ```yaml
 id: T20
-status: new
+status: doing
 release: R1
 lane: C
 size: M
@@ -5389,6 +5389,34 @@ footer with "Page n of N" on every page, and file properties holding only the ti
   and the automated test that a 20-note day downloads in under 10 seconds in each format. Timings on real devices go on
   ops/first-use-in-test.md.
 - Settles the report's "Reviewed by" wording as the specs give it. Builds on T15's report model.
+
+### Plan
+
+- Outcome: server-only. T15's pipeline (model, layout, one document, Word and PDF) gains every marker, common items by
+  group, the running header, the confidential footer with "Page n of N" and the title and organisation properties. No
+  endpoint, migration, SPA or e2e change; `DailyReportEndpoint.cs` is left to T17.
+- Design: `ReportLayout.DailyReport` returns a new `ReportDocument` (title, organisation, footer, blocks) that both
+  renderers print from. `NoteBody` follows the design.md 11.3 layout example: byline (or past-day byline), Edited, flag
+  line, To review or Reviewed by, Comment, Goals, Common items (a Heading 3 per group, ticks beneath), Guided notes.
+  Word: Header and Footer styles, titlePg, PAGE and NUMPAGES fields, Company property. PDF: different first page,
+  page fields, Info title and subject.
+- Domain: `DailyReportNote` gains `PastDayWrittenAtUtc`, `LastEdit` and `Flag` (`DailyReportFlag`: reason, optional
+  review). Flag is keyed on `FlagStatus`; the reason comes from the version at `FlaggedVersionNumber`.
+- Reuse: `NoteSnapshot.ShownGroups` (D47, A3), `LatestVersion.FindAsync`, the reviews query moved from `NoteEndpoint`
+  to `NoteReadReview.NewestFirstAsync`, `LiveNote.IsPastDay` extracted, `ReportDates.DateTimeWithYear`, T15's helpers.
+- Decisions where design.md is silent (assumed defaults A82 to A86, renumbered after T17 or T23): Reviewed and Edited
+  lines always dated with the year; marker order follows the layout example; the past-day byline keeps
+  "Submitted" on its line; title "Daily progress notes: date", organisation in Word Company and PDF Subject; "no
+  counts" means no counts across notes. CI timing ceiling of 10 s goes in Notes only. No migration.
+
+### Verticals
+
+- v1: Report furniture: document record, running header, footer, properties, Heading 3 rendering; depends_on: none;
+  R14 R15 R16 R17 R19
+- v2: Note content: markers and common items by group, with the F04.01 fixture day; depends_on: v1;
+  R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R18 R22
+- v3: 20-note timing check, assumed defaults, design docs, by-hand steps and backlog close-out; depends_on: v2;
+  R20 R21 R23 R24 R25 R26 R27 R28 R29 R30 R31 R32 R33
 
 ### Steps
 
