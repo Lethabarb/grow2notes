@@ -1,3 +1,4 @@
+using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Reports;
 
 namespace Grow2Notes.Tests.Features.Reports;
@@ -32,5 +33,40 @@ public sealed class ReportLayoutTests
         var exportedBy = Assert.Single(subtitles, text => text.StartsWith("Exported by ", StringComparison.Ordinal));
         var asAt = Assert.Single(subtitles, text => text.StartsWith("As at ", StringComparison.Ordinal));
         Assert.Contains(exportedBy["Exported by ".Length..] + ", " + asAt["As at ".Length..] + ".", document.Footer);
+    }
+
+    [Fact]
+    public void A_reviewed_note_whose_flag_was_removed_and_whose_review_has_no_comment()
+    {
+        // Version 2 is unflagged, the review is of version 1 and the reviewer left no comment.
+        var review = new NoteReadReview(
+            1,
+            new NoteReadAuthor(Guid.NewGuid(), "Jo Smith"),
+            new DateTime(2026, 10, 1, 8, 30, 0, DateTimeKind.Utc),
+            null);
+        var note = new DailyReportNote(
+            "Zoë Adams",
+            "Priya Nair",
+            null,
+            new DateTime(2026, 10, 1, 6, 42, 0, DateTimeKind.Utc),
+            new NoteReadVersion(2, "Text", false, null, [], []),
+            null,
+            new DailyReportFlag("Seemed tired all day.", review));
+
+        var lines = ReportLayout.NoteBody(note)
+            .Where(block => block.Kind == ReportBlockKind.Line)
+            .Select(block => block.Text)
+            .ToList();
+
+        Assert.Equal(
+            [
+                $"Written by Priya Nair · Submitted Thu 1{Nbsp}Oct, 4:42{Nbsp}pm",
+                "Flagged for manager: \"Seemed tired all day.\" (flag removed in a later edit)",
+                $"Reviewed by Jo Smith on Thu 1{Nbsp}Oct 2026, 6:30{Nbsp}pm",
+                "No goals set",
+                "No common items set",
+                "Text",
+            ],
+            lines);
     }
 }

@@ -287,7 +287,8 @@ internal static class TestNotes
     /// <paramref name="organisation"/>, a submitted note that <see cref="AddSubmittedAsync"/> added, through the app's
     /// context under its tenant, as T14's first save of an edit will leave one (design.md §5.3, §5.6): a working copy
     /// on <paramref name="baseVersionNumber"/>, its base, version 1 unless the test gives another, with no snapshot rows
-    /// and made-up text, from a made-up page, started and last saved at <paramref name="savedAtUtc"/>.
+    /// and made-up text, from a made-up page, started and last saved at <paramref name="savedAtUtc"/>, flagged with
+    /// <paramref name="flagReason"/>, or not flagged when that is <see langword="null"/>.
     /// </summary>
     public static async Task AddPendingEditAsync(
         this IServiceProvider services,
@@ -295,7 +296,8 @@ internal static class TestNotes
         Guid noteId,
         Guid editorUserId,
         DateTime savedAtUtc,
-        int baseVersionNumber = 1)
+        int baseVersionNumber = 1,
+        string? flagReason = null)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
@@ -306,6 +308,8 @@ internal static class TestNotes
             OrganisationId = organisation.OrganisationId,
             BaseVersionNumber = baseVersionNumber,
             Narrative = "Jane made toast.",
+            IsFlagged = flagReason is not null,
+            FlagReason = flagReason,
             LastClientId = Guid.NewGuid(),
             LastSeq = 1,
             CreatedAtUtc = savedAtUtc,
