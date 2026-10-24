@@ -174,11 +174,19 @@ key that view G shows: `authenticatorCode(key)` from `e2e/authenticatorCode.ts` 
 a wrong code is the right key's code for a step ten minutes away. `e2e/authenticatorCode.spec.ts` checks the helper
 against RFC 6238's test values, and the password path's tests in `e2e/setup.spec.ts` are the example.
 
-Every request that a test's browser sends says that it came over HTTPS: `playwright.config.ts` sets
-`extraHTTPHeaders` to `{ 'X-Forwarded-Proto': 'https' }` for every test, as every signed-out page sends a change
-through the SPA's `api()` wrapper, sign-in asking for passkey options as it shows. The antiforgery, enrolment and
-session cookies are `Secure`, so the app issues them only on a request that is HTTPS, as the forwarded scheme makes a
-request from loopback, where CI's run serves `http://localhost`; Chromium keeps a `Secure` cookie from `localhost`.
+Every request that a test's browser sends says that it came over HTTPS: `e2e/fixtures.ts` gives every test, and
+every `secondDevice` and `thirdDevice`, `extraHTTPHeaders` of `clientHeaders()`, which holds `X-Forwarded-Proto: https`,
+as every signed-out page sends a change through the SPA's `api()` wrapper, sign-in asking for passkey options as it
+shows. The antiforgery, enrolment and session cookies are `Secure`, so the app issues them only on a request that is
+HTTPS, as the forwarded scheme makes a request from loopback, where CI's run serves `http://localhost`; Chromium keeps
+a `Secure` cookie from `localhost`.
+
+`clientHeaders()` also gives each browser context a random forwarded client address of its own, from `2001:db8::/32`,
+which RFC 3849 reserves for documents, so that the app's rate limits (design.md §9.9) count each context as a client of
+its own, as each person's phone is, and not every test and device as one, which would soon be refused. The sign-in and
+setup limit is 30 requests a minute for each address, so a test that adds sign-ins to one context counts them: a
+sign-in page view asks for passkey options once, and a password sign-in sends the password and the code. A test that
+makes its own browser context, with `browser.newContext()`, passes `extraHTTPHeaders: clientHeaders()` to it.
 
 ### Answering `/api/auth/me`
 
@@ -887,6 +895,15 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
   show what a signed-out caller gets. For the same reason it keeps the app's own email sender, the console one, as
   local development has (below).
+- The rate limits (design.md §9.9) are lifted in both hosts, `Grow2NotesFactory` and `AppWithoutDatabase`: every test
+  of a suite calls one host, and all its clients have the same null address, so with the design's numbers the suite
+  would soon be refused. `TestRateLimits.LiftRateLimits()` replaces the `RateLimitPermits` service, which is the only
+  place the app takes its limits from, so no setting changes them in production, with permits that no test reaches.
+  A test of a limit builds a host of its own with `factory.WithWebHostBuilder`, puts `RateLimitPermits.Design` back
+  with `services.AddSingleton(RateLimitPermits.Design)`, and calls from an address it chooses with
+  `services.AddClientAddressHeader()`, which takes the remote address from an `X-Test-Client-Address` header.
+  `Grow2Notes.Tests/Platform/RateLimitsTests.cs` is the example. Its counts are the design's numbers written out, never
+  read from the permits.
 - A test that reads what is written to standard output puts a writer of its own in its place with `Console.SetOut`,
   and the old one back in a `finally`, in `[Collection<StandardOutputCollection>]`, which xUnit runs on its own, after
   every collection that runs in parallel, so nothing else writes to it meanwhile. It hosts its app with
