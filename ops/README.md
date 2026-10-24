@@ -10,6 +10,8 @@ Runbooks for the developer (design.md §7.3).
   first sign-in there (owner, 12 October 2026).
 - `retention-and-destruction.md`, with `retention-list.sql` and `retention-destroy.sql`: the yearly retention task.
 - `audit-extraction.md`, with `find-ids.sql` and `audit-extract.sql`: extracting audit records for a manager.
+- `security-review.md`: the OWASP ASVS 5.0.0 level 1 and 2 self-review, the findings register and the ZAP results
+  (design.md §14 M6); the operator fills in the ZAP section (`first-use-in-test.md` step 141).
 
 The `.sql` files are run with `sqlcmd` as the SQL Entra admin, and CI runs each one on made-up data. `find-ids.sql`
 looks up the IDs that the others take.
