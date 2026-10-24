@@ -150,7 +150,7 @@ public sealed class PdfReportTests
         using var document = PdfDocument.Open(PdfReport.Render(report));
 
         var information = document.Information;
-        Assert.Equal(report.Title, information.Title);
+        Assert.Equal(ReportText.Normalised(report.Title), information.Title);
         Assert.Equal(report.OrganisationName, information.Subject);
         Assert.True(string.IsNullOrEmpty(information.Author));
         Assert.True(string.IsNullOrEmpty(information.Keywords));

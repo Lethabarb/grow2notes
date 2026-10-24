@@ -22,7 +22,8 @@ internal static class PdfReport
     public static byte[] Render(ReportDocument report)
     {
         var document = new Document();
-        document.Info.Title = report.Title;
+        // PDF text strings read byte A0 as the euro sign, so the title's no-break space becomes an ordinary one.
+        document.Info.Title = report.Title.Replace('\u00A0', ' ');
         document.Info.Subject = report.OrganisationName;
         DefineStyles(document);
 
