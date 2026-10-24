@@ -2557,11 +2557,12 @@ lets workers write only today's note, using the Melbourne date.
     whoever sends it (design.md §6.3: "Draft: only the author"). This is the usual way to meet it, more often than a
     race: a form opened before the other's first save, a stale tab, or a manager saving on a worker's draft. With no
     live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order (T24, A97),
-    `422 note.future_date`, `422 note.past_date_manager_only` and `422 note.participant_archived`; the `listsVersion`,
-    which a missing one never matches, else `409 note.lists_changed`; and each ticked ID in the template, else
-    `422 validation.failed` under `tickedGoalIds`. A manager's first save for an earlier day creates the note, as §5.5 item 4 says, and T18
-    builds its screens. A save on the caller's own draft reads no `listsVersion` and checks the ticked IDs against
-    the stored snapshot. Ticks are a set, so an ID sent twice is one tick.
+    `422 note.participant_archived`, `422 note.future_date` and `422 note.past_date_manager_only`; the
+    `listsVersion`, which a missing one never matches, else `409 note.lists_changed`; and each ticked ID in the
+    template, else `422 validation.failed` under `tickedGoalIds`. A manager's first save for an earlier day creates
+    the note, as §5.5 item 4 says, and T18 builds its screens. A save on the caller's own draft reads no
+    `listsVersion` and checks the ticked IDs against the stored snapshot. Ticks are a set, so an ID sent twice is
+    one tick.
   - The unique index's error 2601 or 2627 on a creating `PUT` reads the live note again: the caller's own takes this
     save as an update (S02.02.07's same user on two devices), and anyone else's is the same `409`, which
     `GET {base}/draft` gives for another person's draft too.
@@ -2894,8 +2895,8 @@ lets workers write only today's note, using the Melbourne date.
 - [x] One note per participant per day, the date rules and the lists check (S02.02.07's other criteria;
       S02.02.03's second criterion; note-form.md items 17, for goals, and 18; design.md §3.2, §3.3, §5.5 items
       3 and 4, §5.7 *New draft*): the creating `PUT`'s checks in the order of Notes, each creating nothing,
-      `422 note.future_date`, `422 note.past_date_manager_only`, `422 note.participant_archived` and
-      `409 note.lists_changed` (the archived refusal now comes first: T24, A97), added to `ErrorCode`; and the
+      `422 note.participant_archived`, `422 note.future_date`, `422 note.past_date_manager_only` and
+      `409 note.lists_changed` (T24, A97 put the archived refusal first), added to `ErrorCode`; and the
       unique index's error taken as Notes say. Integration
       tests on SQL Server: a worker's first save for yesterday and for tomorrow, and a manager's for tomorrow, refused,
       and a manager's for yesterday creating the note with them as author; on a `TestClock`, a worker's template read
@@ -5873,6 +5874,10 @@ report or export.
   detail or goal changes to an archived participant is not added. The code and tests cite the rule, not the number, so a
   renumber touches only design.md (§5.5 item 4, the §13 row and the intro's A-range), this file and S05.03.01's
   Notes. A95 and A96 were taken by T25 (24 October 2026), so this is A97.
+- ops/security-review.md rows 1.2.4, 2.3.4, 8.2.2, 13.2.2, 16.2.5, 16.3.1 and 16.4.2 and the §9.4 and §9.5 lines cite
+  files that T24 changes
+  (`NoteDrafts.cs`, `RuntimeRoleTests.cs`, `TelemetryCanaryTests.cs`, `AuditEventsTests.cs`). They were re-read and
+  none changes: the moved return touches neither the raw SQL nor the author binding, and the tests only add coverage.
 - One row for each sign-in event type, through the password path (R01): `auth.signin_succeeded`, `auth.signin_failed`,
   `auth.mfa_failed`, `auth.locked_out`, `auth.signed_out` and `auth.setup_completed`. The other triggers of those events
   (passkey, code step, passkey setup) already have exact-entry assertions in `PasskeySignInEndpointTests`,
@@ -5892,7 +5897,7 @@ report or export.
   `NoteVersionHistoryEndpointsTests`.
 - R15, the app identity's role check in Azure: done on 9 October 2026 under S00.02.02 (F00.02's notes), which found it a
   direct member of `grow2notes_runtime` only. It is not repeated.
-- R10: the MCP events join the shared audit-events test in Release 2 (T38; mcp-server.md §9), not now.
+- R10: the MCP events join the shared audit-events test in Release 2 (T32, S07.02.03; mcp-server.md §9), not now.
 - "Tested in the test environment" (S05.03.x) is read as CI on the SQL Server container plus the existing by-hand steps
   in `ops/first-use-in-test.md` (15, 29 to 37 and 31's audit rows, 41, 45, 52, 104, and the archive screen-reader steps
   27 and 28). No step is added and nothing is sent to the deployed site.
