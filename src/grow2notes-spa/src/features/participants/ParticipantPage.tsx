@@ -313,8 +313,8 @@ type ParticipantProps =
  * Save, the `<h1>`, then Details, a form of the given and family names and the date of birth, with no `name` on any
  * field, so that nothing it holds can reach an address, and Save, with the alert above it for a request that failed and
  * the save status beside it; then, once the participant exists, their Goals, and Actions, which holds Past notes, a
- * link styled as a secondary button, then Write past-day note, which an archived participant has not, then, after a
- * rule, Archive participant; T21 adds Export record after them. Nothing is checked before Save, which checks every
+ * link styled as a secondary button, then Write past-day note, which an archived participant has not, then Export
+ * record, then, after a rule, Archive participant. Nothing is checked before Save, which checks every
  * field in page order and sends nothing while one fails; once a field shows a message, each edit checks it again. A
  * `201` shows "Saved 4:12 pm" from its `Date`, makes the name the `<h1>`, puts an empty list in the new participant's
  * goals query, as they have none, rather than fetching it, and replaces the address with the participant's, in the
@@ -324,7 +324,7 @@ type ParticipantProps =
  *
  * An archived participant's page is read-only (participants.md B3, *Archive and Restore*): the archived notice under
  * the `<h1>`, with Restore, then Details as a summary list, their goals as text alone, and Actions with Past notes
- * alone, as an archived participant's notes are kept (design.md §3.7). Archive participant, with no dialog, turns the
+ * and Export record, as an archived participant's notes are kept (design.md §3.7). Archive participant, with no dialog, turns the
  * page read-only, dropping what was typed (participants.md open question 3), and focuses the notice, as its button has
  * gone; Restore turns it back into the form, filled in afresh, and focuses the `<h1>`. A press refused as stale reads
  * the list again: when that finds the status changed already, by someone else, the page simply shows it, as that
@@ -634,6 +634,9 @@ function Participant({ participant, onAdded }: ParticipantProps) {
                 {pageName.writePastDayNote}
               </Link>
             )}
+            <Link to={`/manage/participants/${known.id}/export`} className={buttonClass()}>
+              {pageName.exportRecord}
+            </Link>
           </ButtonGroup>
           {!archived && (
             <div className={styles.archive}>

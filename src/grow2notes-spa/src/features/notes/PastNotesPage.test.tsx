@@ -40,6 +40,7 @@ const jane: ParticipantHeader = {
   givenName: 'Jane',
   familyName: 'Citizen',
   status: 'Active',
+  firstNoteDate: null,
 };
 
 // Between a day and its month, so that the two never split across lines (microcopy.md §3).
@@ -537,8 +538,7 @@ describe('Past notes once loaded', () => {
     expect(backLink()).toHaveAttribute('href', '/');
   });
 
-  // participant-notes.md items 4 and 11: the manager's actions, there even with no notes; Export record comes with
-  // T21.
+  // participant-notes.md items 4 and 11: the manager's actions, there even with no notes.
   it("gives a manager Edit participant, a button-styled link to the participant's page, after the <h1>", async () => {
     servePastNotes();
     await openPastNotes(manager);
@@ -550,23 +550,33 @@ describe('Past notes once loaded', () => {
     expect(edit.compareDocumentPosition(list()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('gives a manager Write past-day note before Edit participant, for the date page, unless archived', async () => {
+  it('gives a manager Write past-day note, Export record, then Edit participant, unless archived', async () => {
     servePastNotes();
     await openPastNotes(manager);
 
-    const links = within(main()).getAllByRole('link').slice(0, 2);
-    expect(links.map((link) => link.textContent)).toEqual(['Write past-day note', 'Edit participant']);
+    const links = within(main()).getAllByRole('link').slice(0, 3);
+    expect(links.map((link) => link.textContent)).toEqual([
+      'Write past-day note',
+      'Export record',
+      'Edit participant',
+    ]);
     expect(links[0]).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
+    expect(links[1]).toHaveAttribute('href', `/manage/participants/${jane.id}/export`);
     expect(links[0].className).toMatch(/button/);
+    expect(links[1].className).toMatch(/button/);
+    expect(links[1].parentElement).toBe(links[0].parentElement);
+    expect(links[2].parentElement).toBe(links[0].parentElement);
   });
 
-  it('gives a manager no Write past-day note for an archived participant, but Edit participant', async () => {
+  it('gives a manager Export record and Edit participant, but no Write past-day note, when archived', async () => {
     serve(paths.header, json({ ...jane, status: 'Archived' }));
     serve(paths.history, json(page(first30, true)));
     await openPastNotes(manager);
 
     expect(within(main()).queryByRole('link', { name: 'Write past-day note' })).toBeNull();
-    expect(within(main()).getByRole('link', { name: 'Edit participant' })).toBeInTheDocument();
+    const links = within(main()).getAllByRole('link').slice(0, 2);
+    expect(links.map((link) => link.textContent)).toEqual(['Export record', 'Edit participant']);
+    expect(links[0]).toHaveAttribute('href', `/manage/participants/${jane.id}/export`);
   });
 
   it('gives a worker no manager action, the first row straight after the <h1>', async () => {
@@ -574,6 +584,7 @@ describe('Past notes once loaded', () => {
     await openPastNotes(worker);
 
     expect(within(main()).queryByRole('link', { name: 'Edit participant' })).toBeNull();
+    expect(within(main()).queryByRole('link', { name: 'Export record' })).toBeNull();
     expect(main()).not.toHaveTextContent(/Edit participant|Write past-day note|Export record/);
   });
 
@@ -588,7 +599,7 @@ describe('Past notes once loaded', () => {
       expect(within(main()).queryByRole('list')).toBeNull();
       expect(within(main()).queryByRole('button')).toBeNull();
       expect(within(main()).queryAllByRole('link').map((link) => link.textContent)).toEqual(
-        me.role === 'Manager' ? ['Write past-day note', 'Edit participant'] : [],
+        me.role === 'Manager' ? ['Write past-day note', 'Export record', 'Edit participant'] : [],
       );
     },
   );

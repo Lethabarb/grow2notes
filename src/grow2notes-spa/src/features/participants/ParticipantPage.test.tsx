@@ -1284,10 +1284,16 @@ function pastDayNoteLink(): HTMLElement {
   return within(actionsSection()!).getByRole('link', { name: 'Write past-day note' });
 }
 
-/** Expects Actions to hold Past notes alone, as an archived participant's page has it, with no Archive participant. */
-function expectPastNotesAlone() {
+/** Export record, the last of the links in Actions. */
+function exportLink(): HTMLElement {
+  return within(actionsSection()!).getByRole('link', { name: 'Export record' });
+}
+
+/** Expects Actions to hold Past notes then Export record, as an archived participant's page has it, with no Archive. */
+function expectPastNotesAndExport() {
   const actions = actionsSection()!;
-  expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink()]);
+  expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink(), exportLink()]);
+  expect(exportLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/export`);
   expect(within(actions).queryAllByRole('button')).toEqual([]);
   expect(within(actions).queryByRole('alert')).toBeNull();
 }
@@ -1348,8 +1354,7 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  // participants.md B7: the links to other screens first, Past notes and Write past-day note until T21 adds Export
-  // record, then a rule.
+  // participants.md B7: the links to other screens first, Past notes, Write past-day note and Export record, then a rule.
   it('is in Actions under Details, after Past notes and a rule, its empty alert above it, in Tab order', async () => {
     await openJane();
 
@@ -1358,17 +1363,19 @@ describe('Archive participant', () => {
     expect(within(actions).getByRole('heading', { level: 2 })).toHaveAccessibleName('Actions');
     expect(follows(detailsSection(), actions)).toBe(true);
     expect(within(actions).getAllByRole('button')).toEqual([button]);
-    expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink(), pastDayNoteLink()]);
+    expect(within(actions).getAllByRole('link')).toEqual([pastNotesLink(), pastDayNoteLink(), exportLink()]);
     expect(button).toHaveAttribute('type', 'button');
     expect(archiveAlert()).toBeEmptyDOMElement();
-    expect(follows(pastDayNoteLink(), archiveAlert())).toBe(true);
+    expect(follows(exportLink(), archiveAlert())).toBe(true);
     expect(follows(archiveAlert(), button)).toBe(true);
     expect(archiveAlert().parentElement).toBe(button.parentElement);
     expect(archiveAlert().parentElement).toHaveClass(styles.archive);
     expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
     expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
-    expect(nextTabStop(pastDayNoteLink())).toBe(button);
+    expect(nextTabStop(pastDayNoteLink())).toBe(exportLink());
+    expect(nextTabStop(exportLink())).toBe(button);
     expect(pastDayNoteLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
+    expect(exportLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/export`);
     expect(notice()).toBeNull();
     expect(backLink()).toHaveAttribute('href', '/manage/participants');
   });
@@ -1383,7 +1390,8 @@ describe('Archive participant', () => {
 
     expect(nextTabStop(addGoalButton())).toBe(pastNotesLink());
     expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
-    expect(nextTabStop(pastDayNoteLink())).toBe(archiveButton());
+    expect(nextTabStop(pastDayNoteLink())).toBe(exportLink());
+    expect(nextTabStop(exportLink())).toBe(archiveButton());
   });
 
   it(
@@ -1419,7 +1427,7 @@ describe('Archive participant', () => {
       expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
       expect(within(main()).queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
       expect(within(main()).queryByRole('button', { name: 'Archive participant' })).not.toBeInTheDocument();
-      expectPastNotesAlone();
+      expectPastNotesAndExport();
       expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
       expect(document.title).toBe('Grow2Notes – Participant');
       expect(router.state.location.pathname).toBe(`/manage/participants/${jane.id}`);
@@ -1497,7 +1505,7 @@ describe('Archive participant', () => {
     expect(requests().slice(-2)).toEqual([`POST ${archivePath}`, `GET ${listPath}`]);
     expect(notice()).toHaveFocus();
     expect(restoreAlert()).toBeEmptyDOMElement();
-    expectPastNotesAlone();
+    expectPastNotesAndExport();
     expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
   });
 
@@ -1608,10 +1616,11 @@ describe("An archived participant's page", () => {
       ['Date of birth', `7${nbsp}March 1987`],
     ]);
     expect(within(main()).queryByRole('textbox')).not.toBeInTheDocument();
-    // Actions keeps the links that an archived participant keeps: Past notes, as T21 adds Export record.
+    // Actions keeps the links that an archived participant keeps: Past notes and Export record.
     expect(within(actionsSection()!).getByRole('heading', { level: 2 })).toHaveAccessibleName('Actions');
-    expectPastNotesAlone();
+    expectPastNotesAndExport();
     expect(nextTabStop(restoreButton())).toBe(pastNotesLink());
+    expect(nextTabStop(pastNotesLink())).toBe(exportLink());
     expect(backLink()).toHaveAttribute('href', '/manage/participants?view=archived');
     expect(document.title).toBe('Grow2Notes – Participant');
   });
@@ -1682,6 +1691,7 @@ describe("An archived participant's page", () => {
     await press(restoreButton());
 
     expect(nextTabStop(pastNotesLink())).toBe(pastDayNoteLink());
+    expect(nextTabStop(pastDayNoteLink())).toBe(exportLink());
     expect(pastDayNoteLink()).toHaveAttribute('href', `/manage/participants/${jane.id}/past-day-note`);
   });
 
