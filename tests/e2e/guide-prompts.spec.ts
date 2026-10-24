@@ -1,8 +1,8 @@
-import { AxeBuilder } from '@axe-core/playwright';
 import type { Locator, Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test as base } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import { expectNothingToMove, expectTextAt7To1, expectToFit, spaceTextOut } from './foundations.ts';
 import {
   conflictAnswer,
   failPrompts,
@@ -16,7 +16,7 @@ import {
   servePrompts,
   serveSaves,
 } from './guidePrompts.ts';
-import { boxOf } from './layout.ts';
+import { boxOf, setTextTo200Percent, systemColour } from './layout.ts';
 import { failMe, manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
 import { signInInPlaceAs } from './signedOut.ts';
@@ -1297,108 +1297,8 @@ const loadFailed = 'The guide prompts did not load: no connection. Try again.';
  */
 async function expectAccessible(page: Page) {
   await expectAxeToPass(page);
-  const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast-enhanced']).analyze();
-  expect(violations.flatMap(({ nodes }) => nodes.map(({ target }) => target.join(' '))), 'Text below 7:1').toEqual([]);
-  const moving = await page.evaluate(() =>
-    [...document.querySelectorAll('*')]
-      .filter((element) => {
-        const { animationName, transitionDuration } = getComputedStyle(element);
-        return animationName !== 'none' || transitionDuration.split(', ').some((duration) => parseFloat(duration) > 0);
-      })
-      .map((element) => element.localName),
-  );
-  expect(moving, 'Elements with an animation or a transition').toEqual([]);
-}
-
-/**
- * Text at 200%: Chromium's default text size at 32 px, where it is 16, which makes the body's 18 px 36 (S00.05.01's
- * Notes). At 320 px wide, it also stands for 400% zoom at 1280 px (guide-prompts.md *Accessibility runs*).
- */
-async function setTextTo200Percent(page: Page) {
-  const devTools = await page.context().newCDPSession(page);
-  await devTools.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-}
-
-/**
- * WCAG's text spacing (SC 1.4.12), on every element, as its bookmarklet sets it: lines 1.5 times the text apart,
- * paragraphs 2 times, letters 0.12 times and words 0.16 times. Through a constructed stylesheet, which the page's
- * Content Security Policy allows, as it refuses a `<style>` element.
- */
-async function spaceTextOut(page: Page) {
-  await page.evaluate(() => {
-    const spacing = new CSSStyleSheet();
-    spacing.replaceSync(
-      '* { line-height: 1.5 !important; letter-spacing: 0.12em !important; word-spacing: 0.16em !important; }'
-        + ' p { margin-block-end: 2em !important; }',
-    );
-    document.adoptedStyleSheets = [...document.adoptedStyleSheets, spacing];
-  });
-}
-
-/**
- * Expects the page as it is to fit the window's width (SC 1.4.10): no sideways scroll; no element, and no line of an
- * element's own text, reaching past the window's sides or past its element's; no element cutting off what it holds,
- * but for a box that scrolls up and down, as the dialog may; and the field showing all its text, as it grows with it.
- * Words hidden on purpose by a clip, as the visually hidden ones and the skip link are, are left out.
- */
-async function expectToFit(page: Page, state: string) {
-  const problems = await page.evaluate(() => {
-    const windowWidth = document.documentElement.clientWidth;
-    const found: string[] = [];
-    if (document.documentElement.scrollWidth > windowWidth) {
-      found.push('the page scrolls sideways');
-    }
-
-    const named = (element: Element) => `<${element.localName}> "${(element.textContent ?? '').trim().slice(0, 40)}"`;
-    const clipped = (element: Element | null): boolean =>
-      element !== null && (getComputedStyle(element).clipPath !== 'none' || clipped(element.parentElement));
-    for (const element of document.body.querySelectorAll('*')) {
-      const style = getComputedStyle(element);
-      if (element.getClientRects().length === 0 || style.visibility !== 'visible' || clipped(element)) {
-        continue;
-      }
-
-      const box = element.getBoundingClientRect();
-      if (box.left < -1 || box.right > windowWidth + 1) {
-        found.push(`${named(element)} reaches past the window`);
-      }
-
-      if (
-        (style.overflowX !== 'visible' && element.scrollWidth > element.clientWidth + 1)
-        || (['hidden', 'clip'].includes(style.overflowY) && element.scrollHeight > element.clientHeight + 1)
-        || (element.localName === 'textarea' && element.scrollHeight > element.clientHeight + 1)
-      ) {
-        found.push(`${named(element)} cuts off what it holds`);
-      }
-
-      for (const node of element.childNodes) {
-        if (node.nodeType !== Node.TEXT_NODE || (node.textContent ?? '').trim() === '') {
-          continue;
-        }
-
-        const text = document.createRange();
-        text.selectNodeContents(node);
-        if ([...text.getClientRects()].some(({ left, right }) => left < box.left - 1 || right > box.right + 1)) {
-          found.push(`the text of ${named(element)} reaches past it`);
-        }
-      }
-    }
-
-    return found;
-  });
-  expect(problems, state).toEqual([]);
-}
-
-/** The colour that a system colour, such as `Highlight`, takes under the forced colours that the page emulates. */
-function systemColour(page: Page, keyword: string): Promise<string> {
-  return page.evaluate((colour) => {
-    const probe = document.createElement('span');
-    probe.style.color = colour;
-    document.body.append(probe);
-    const { color } = getComputedStyle(probe);
-    probe.remove();
-    return color;
-  }, keyword);
+  await expectTextAt7To1(page);
+  await expectNothingToMove(page);
 }
 
 /** Expects the element's border on `side` to be drawn: solid, `width` wide, and in a colour that shows. */
@@ -1563,9 +1463,8 @@ test('at 320 px, with text at 200% and spaced out, nothing scrolls sideways or i
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await setTextTo200Percent(page);
   await openWith(page);
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await setTextTo200Percent(page);
   await spaceTextOut(page);
   await expectToFit(page, 'With the prompts');
 
@@ -1594,12 +1493,11 @@ test('at 320 px, with text at 200% and spaced out, a failed load fits, its sente
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await setTextTo200Percent(page);
   await serveMe(page, manager);
   await failPrompts(page);
   await page.goto(address);
   await expect(statusLine(page)).toHaveText(loadFailed);
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await setTextTo200Percent(page);
   await spaceTextOut(page);
   await expectToFit(page, 'Load failed');
 

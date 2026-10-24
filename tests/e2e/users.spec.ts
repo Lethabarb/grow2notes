@@ -2,7 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
-import { boxOf } from './layout.ts';
+import { boxOf, setTextTo200Percent } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
 import { alex, chris, failUsers, jo, kim, madeUpUser, people, sam, serveUsers } from './users.ts';
@@ -102,16 +102,6 @@ async function pointIn(row: Locator, part: 'name' | 'email' | 'status' | 'chevro
       return middleOf({ ...name, left: name.right, right: chevron.left });
     }
   }
-}
-
-/**
- * Text at 200%: Chromium's default text size at 32 px, where it is 16, which makes the body's 18 px 36 (S00.05.01's
- * Notes).
- */
-async function setTextTo200Percent(page: Page) {
-  const devTools = await page.context().newCDPSession(page);
-  await devTools.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
 }
 
 /**
