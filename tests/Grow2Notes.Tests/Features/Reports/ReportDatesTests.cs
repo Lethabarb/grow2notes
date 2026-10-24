@@ -16,6 +16,12 @@ public sealed class ReportDatesTests
         Assert.Equal($"Thursday 1{Nbsp}October 2026", ReportDates.DateLong(new DateOnly(2026, 10, 1)));
     }
 
+    [Fact]
+    public void DateWithYear_is_the_short_day_and_month_with_the_year()
+    {
+        Assert.Equal($"Thu 1{Nbsp}Oct 2026", ReportDates.DateWithYear(new DateOnly(2026, 10, 1)));
+    }
+
     // 23:14 UTC on 1 October is 9:14 am on 2 October in Melbourne, before daylight saving starts on 4 October.
     [Fact]
     public void DateTimeWithYear_is_the_Melbourne_day_with_its_year_and_time()
