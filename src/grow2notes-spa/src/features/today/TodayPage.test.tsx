@@ -140,7 +140,8 @@ function problem(status: number, includes: Record<string, unknown> = {}): Answer
  */
 function serveNoteOf(participant: TodayParticipant, note: Answer, draft?: Answer) {
   const { id, givenName, familyName } = participant;
-  serve(`/api/participants/${id}`, json({ id, givenName, familyName, status: 'Active' } satisfies ParticipantHeader));
+  const header = { id, givenName, familyName, status: 'Active', firstNoteDate: null } satisfies ParticipantHeader;
+  serve(`/api/participants/${id}`, json(header));
   serve(`/api/participants/${id}/notes/2026-10-01`, note);
   if (draft !== undefined) {
     serve(`/api/participants/${id}/notes/2026-10-01/draft`, draft);
@@ -201,7 +202,8 @@ function serveMyDraftOf(
   const base = `/api/participants/${id}/notes/${noteDate}`;
   const started = { authorDisplayName: worker.displayName, startedAtUtc: '2026-09-29T23:05:00Z', isPastDayNote: false };
   const saved = { isSaved: true, narrative: 'Went to the library.', savedAtUtc: '2026-09-29T23:42:00Z' };
-  serve(`/api/participants/${id}`, json({ id, givenName, familyName, status } satisfies ParticipantHeader));
+  const header = { id, givenName, familyName, status, firstNoteDate: null } satisfies ParticipantHeader;
+  serve(`/api/participants/${id}`, json(header));
   serve(base, json({ status: 'Draft', ...started } satisfies NoteAnswer));
   serve(`${base}/draft`, json({ ...newNote, ...saved } satisfies Draft));
 }

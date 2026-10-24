@@ -25,6 +25,27 @@ export const strings = {
       pdf: 'Preparing the PDF file… Keep this page open.',
     },
   },
+  /** The Export record screen's labels, hints, buttons and field errors (record-export.md). */
+  exportRecord: {
+    participant: 'Participant',
+    fromDate: 'From date',
+    toDate: 'To date',
+    format: 'Format',
+    pdf: 'PDF',
+    pdfHint: 'For printing and filing',
+    word: 'Word',
+    wordHint: 'Can be edited, so use it if you need to remove anything before handing it over',
+    includeHistory: 'Include earlier versions of edited notes',
+    includeHistoryHint:
+      'Adds each earlier version in full, which can include corrected wording or another person’s information',
+    export: 'Export',
+    exporting: 'Exporting…',
+    enterFromDate: 'Enter the From date',
+    enterToDate: 'Enter the To date',
+    choosePdfOrWord: 'Choose PDF or Word',
+    tooManyExports: 'Not exported: too many exports in the last minute. Wait a minute, then try again.',
+    theForm: 'The export form',
+  },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
   /** The Account panel's Sign out button (component 2d). */

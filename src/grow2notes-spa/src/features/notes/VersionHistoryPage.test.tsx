@@ -40,6 +40,7 @@ const jane: ParticipantHeader = {
   givenName: 'Jane',
   familyName: 'Citizen',
   status: 'Active',
+  firstNoteDate: null,
 };
 
 // Between a day and its month and between a time and am or pm, so that neither pair splits across lines.

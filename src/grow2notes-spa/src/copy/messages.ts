@@ -1,4 +1,4 @@
-import { count } from './format.ts';
+import { count, datePlain, type Ymd } from './format.ts';
 import type { PageName } from './pageNames.ts';
 import { strings, type Cause } from './strings.ts';
 
@@ -49,6 +49,11 @@ export const msg = {
   noteSubmitted: (name: string) => `Note for ${name} submitted`,
   /** The Report screen's line once a file is saved (daily-report.md), with the name it was saved under. */
   fileReady: (fileName: string) => `${fileName} is ready. Look in your downloads.`,
+  /** The Export record screen's To date error (record-export.md), with the From date as entered. */
+  toNotBeforeFrom: (from: Ymd) => `To date must be the same as or after ${datePlain(from)}`,
+  /** The Export record screen's line for a range with no submitted notes, with the dates that were sent. */
+  noNotesInRange: (name: string, from: Ymd, to: Ymd) =>
+    `No submitted notes for ${name} between ${datePlain(from)} and ${datePlain(to)}.`,
   /**
    * The Discard dialog (note-form.md component 15, confirm-dialog.md's dialog 2): its title and its confirming button,
    * each with the participant's full name; its body's line for a draft dated before today, with the note date in

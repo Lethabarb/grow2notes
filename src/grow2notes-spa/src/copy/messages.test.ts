@@ -315,3 +315,38 @@ describe("the version history's words", () => {
     expect(msg.pastDayWrittenBy('Jo Smith')).toBe('written by Jo Smith (manager) on');
   });
 });
+
+// record-export.md *States* and *Validation*: dates in datePlain, with a no-break space between day and month.
+describe("Export record's words", () => {
+  const nbsp = String.fromCodePoint(0xa0);
+
+  it('say that the To date is before the From date, with the From date as entered', () => {
+    expect(msg.toNotBeforeFrom({ y: 2026, m: 1, d: 1 })).toBe(
+      `To date must be the same as or after 1${nbsp}January 2026`,
+    );
+  });
+
+  it('say that the range has no submitted notes, naming the participant and both dates', () => {
+    expect(msg.noNotesInRange('Jane Citizen', { y: 2026, m: 1, d: 1 }, { y: 2026, m: 10, d: 1 })).toBe(
+      `No submitted notes for Jane Citizen between 1${nbsp}January 2026 and 1${nbsp}October 2026.`,
+    );
+  });
+
+  it('say that an export was not done, and why', () => {
+    expect(msg.notDone('exported', 'offline')).toBe('Not exported: no connection. Try again.');
+    expect(msg.notDone('exported', 'server')).toBe('Not exported: something went wrong. Try again.');
+  });
+
+  it('never call an export a download, as the glossary keeps that word for the Report screen', () => {
+    const words = [
+      ...Object.values(strings.exportRecord),
+      msg.toNotBeforeFrom({ y: 2026, m: 1, d: 1 }),
+      msg.noNotesInRange('Jane Citizen', { y: 2026, m: 1, d: 1 }, { y: 2026, m: 10, d: 1 }),
+      msg.notDone('exported', 'offline'),
+      msg.notDone('exported', 'server'),
+    ];
+    for (const text of words) {
+      expect(text).not.toMatch(/download/i);
+    }
+  });
+});

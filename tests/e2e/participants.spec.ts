@@ -82,7 +82,7 @@ const archive = (page: Page) => main(page).getByRole('button', { name: 'Archive 
 const archiveAlert = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('alert');
 const actionLinks = (page: Page) => main(page).getByRole('region', { name: 'Actions' }).getByRole('link');
 // An active participant's Actions, in Tab order: its links, then Archive participant (participants.md B7).
-const actionStops = ['Past notes', 'Write past-day note', 'Archive participant'];
+const actionStops = ['Past notes', 'Write past-day note', 'Export record', 'Archive participant'];
 const restore = (page: Page) => main(page).getByRole('button', { name: 'Restore', exact: true });
 // The archived notice's words (participants.md B3); the notice holds them, then Restore with its alert above it.
 const archivedWords = (name: string) =>
@@ -562,6 +562,7 @@ for (const width of [375, 1280]) {
     // The date of birth corrected.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Export record',
       'Write past-day note',
       'Past notes',
       ...[...addForm].reverse(),
@@ -605,6 +606,7 @@ for (const width of [375, 1280]) {
     // and before Actions while the section is open.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Export record',
       'Write past-day note',
       'Past notes',
       ...[...addForm].reverse(),
@@ -616,9 +618,10 @@ for (const width of [375, 1280]) {
     await expect(goalButton(page, 'Restore', archivedLater)).toBeFocused();
     await expect(archivedSection(page)).toHaveAttribute('open', '');
     const goalStops = [...rowStops(kept), ...addForm, 'Archived goals'];
-    await expectStops(page, 'Tab', ['Past notes', 'Write past-day note', 'Archive participant', 'outside the page']);
+    await expectStops(page, 'Tab', [...actionStops, 'outside the page']);
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Export record',
       'Write past-day note',
       'Past notes',
       rowName('Restore', archivedLater),
@@ -630,7 +633,7 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Tab', goalStops);
     await page.keyboard.press('Enter');
     await expect(archivedSection(page)).not.toHaveAttribute('open');
-    await expectStops(page, 'Tab', ['Past notes', 'Write past-day note', 'Archive participant']);
+    await expectStops(page, 'Tab', ['Past notes', 'Write past-day note', 'Export record', 'Archive participant']);
 
     // Archived: the notice takes focus, then an archived participant's page has the back link, Restore, the Archived
     // goals summary, as its goals are text alone, and Past notes.
@@ -638,8 +641,15 @@ for (const width of [375, 1280]) {
     await page.keyboard.press('Enter');
     expect((await archived).status()).toBe(204);
     await expect.poll(() => whereFocusIs(page)).toContain(archivedWords(siobhan.name));
-    await expectStops(page, 'Tab', ['Restore', 'Archived goals', 'Past notes', 'outside the page']);
-    await expectStops(page, 'Shift+Tab', ['Past notes', 'Archived goals', 'Restore', 'Participants', 'Manage']);
+    await expectStops(page, 'Tab', ['Restore', 'Archived goals', 'Past notes', 'Export record', 'outside the page']);
+    await expectStops(page, 'Shift+Tab', [
+      'Export record',
+      'Past notes',
+      'Archived goals',
+      'Restore',
+      'Participants',
+      'Manage',
+    ]);
     await expectStops(page, 'Tab', ['Participants', 'Restore']);
 
     // Restored: the <h1> takes focus, and the form, the goal's buttons, the add form and Archive participant are back.
@@ -652,6 +662,7 @@ for (const width of [375, 1280]) {
     // Back to the list, where they are now to be found: Find a participant, then Clear while it holds text.
     await expectStops(page, 'Shift+Tab', [
       'Archive participant',
+      'Export record',
       'Write past-day note',
       'Past notes',
       ...[...form, ...goalStops].reverse(),
@@ -890,7 +901,7 @@ test("a participant's page saved, stale, refused, archived and restored, each pa
   await archive(page).click();
   await expect.poll(() => whereFocusIs(page)).toContain(archivedWords('Jane Citizen'));
   await expect(main(page).getByRole('definition')).toHaveText(['Jane', 'Citizen', '8 March 1987']);
-  await expect(actionLinks(page)).toHaveText(['Past notes']);
+  await expect(actionLinks(page)).toHaveText(['Past notes', 'Export record']);
   await expect(archive(page)).toHaveCount(0);
   await expectAxeToPass(page);
 
@@ -920,15 +931,16 @@ test("an archived participant's page, a page that did not load and an unknown ID
   await serveGoals(page, []);
 
   // Opened on an archived participant: the notice there as plain content, which takes no focus, and Actions with Past
-  // notes alone.
+  // notes and Export record.
   await page.goto(`/manage/participants/${ben.id}`);
   await expect(heading(page)).toHaveText('Ben Archer');
   await expect(noticeWords(page)).toHaveText(archivedWords('Ben Archer'));
   await expect(noticeWords(page).locator('xpath=../..')).not.toHaveAttribute('tabindex');
   await expect(noticeWords(page).locator('xpath=../..')).not.toBeFocused();
   await expect(main(page).getByRole('definition')).toHaveText(['Ben', 'Archer', '7 March 1987']);
-  await expect(actionLinks(page)).toHaveText(['Past notes']);
-  await expect(actionLinks(page)).toHaveAttribute('href', `/participants/${ben.id}/notes`);
+  await expect(actionLinks(page)).toHaveText(['Past notes', 'Export record']);
+  await expect(actionLinks(page).first()).toHaveAttribute('href', `/participants/${ben.id}/notes`);
+  await expect(actionLinks(page).last()).toHaveAttribute('href', `/manage/participants/${ben.id}/export`);
   await expect(archive(page)).toHaveCount(0);
   await expect(backLink(page)).toHaveAttribute('href', '/manage/participants?view=archived');
   await expectAxeToPass(page);
@@ -1104,7 +1116,7 @@ test('in forced colours, the focus ring shows in Highlight at each stop, and una
   );
   await page.keyboard.press('Enter');
   await expectStops(page, 'Tab', [rowName('Restore', washing.text), rowName('Restore', shop.text)], forcedRing);
-  await expectStops(page, 'Tab', ['Past notes', 'Write past-day note', 'Archive participant'], forcedRing);
+  await expectStops(page, 'Tab', actionStops, forcedRing);
 
   // Move up on the first goal and Move down on the last, unavailable: GrayText words and dashed GrayText borders, where
   // the others keep theirs (list-editor.md *States*).
