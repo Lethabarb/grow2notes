@@ -986,8 +986,9 @@ goal and leave one unticked. Open Report from the menu, which opens today's date
      the PDF's document information, for the parent company's name anywhere. Look for none. (D42, D72.)
 118. On a phone at 375 px wide, open Report: look for the heading "Daily report" and the two buttons one above the
      other, no sideways scroll, and nothing cut off with the text set larger. With only the keyboard on the laptop, Tab
-     from the heading to Download Word and then Download PDF, look for the focus ring on each, and press Enter on one
-     and look for the file to save and focus to stay on the button. (daily-report.md *Visual and device* and
+     to Download Word and then Download PDF, look for the focus ring on each, and press Enter on one and look for the
+     file to save and focus to stay on the button. (T17 puts the date field and the two step links before the buttons;
+     step 120 checks that order.) (daily-report.md *Visual and device* and
      *Accessibility checklist*, keyboard items.)
 119. With NVDA and Chrome on the laptop, if you have it to hand, press Download Word on a day with notes, then press it
      on a day without any, and look for the buttons read by name, "Daily report, heading level 1" on arrival and, for
@@ -995,3 +996,24 @@ goal and leave one unticked. Open Report from the menu, which opens today's date
      checklist*, Screen reader items, for T15's part.)
 
 Record the results in T15's Notes.
+
+### Report screen: choose a day and know what happened, once T17 is in test
+
+These steps hold T17's by-hand checks ([tasks.md](../design/backlog/tasks.md), T17's Notes). None of them holds a story
+open. Steps 20 and 21 already cover saving the files on phones, the date pickers and the screen readers, so these do
+not repeat them. They need a manager, the worker of step 18 and made-up participants (A35).
+
+120. On a real phone at 375 px wide, open Report: look for the date field at the full width of the screen, Previous day
+     and Next day side by side under it, and Next day with a dashed border on today. Set the text larger and look for
+     nothing cut off and no sideways scroll. On the laptop with only the keyboard, Tab from the heading and look for
+     the order the date field, Previous day, Next day, Download Word and Download PDF, with a visible focus ring on
+     each. (S04.02.01 to S04.02.03; daily-report.md *Visual and device* and *Accessibility checklist*, keyboard items.)
+121. As a manager in test, open Report on a day with no submitted notes and leave it open: look for "No submitted notes
+     for" that day and both download buttons dashed. As the worker, on another device, submit a note for that day. Back
+     in the manager's window, click into the window and look for the sentence to become the day's date and both
+     buttons to become available, with no reload. Then download both formats and look in the audit log for one
+     `report.downloaded` entry for each press, and none from opening the screen or stepping between days. Last, type a
+     date a few weeks back, slowly, and record whether the pause of three quarters of a second before the page moves to
+     it feels right (daily-report.md open question 3). (S04.02.03 and S04.02.04; design.md A82.)
+
+Record the results in T17's Notes.
