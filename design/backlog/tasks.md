@@ -5059,7 +5059,9 @@ each download is preparing, ready or failed.
     with no failure line.
   - The 750 ms pause is an effect keyed on the draft and the address date, so a new address (a step, Back or Forward)
     or leaving clears it and a stale value can never navigate again. One visit to the field adds one history entry,
-    and later commits in it replace that entry.
+    and later commits in it replace that entry. A visit ends when the field is blurred and focus is not back on it a
+    moment later, not on a focus event: Chromium fires focus events between the parts of its date field, and again
+    after each re-render, so a rule on focus pushed a second entry (found by `report.spec.ts` in CI).
   - Previous day and Next day are one `<a>` in both states, so focus stays on Next day when a step arrives on today.
     The unavailable look is the shared button's `data-unavailable`. The route shares `screenKey: 'dailyReport'`, so
     the shell skips the heading focus and the scroll reset for every report date, and nothing is written to
