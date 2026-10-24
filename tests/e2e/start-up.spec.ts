@@ -1,6 +1,8 @@
 import type { Locator, Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectStops, tabTo } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { answerMe, failMe, holdMe, manager, serveMe, worker } from './me.ts';
 import { notesStore } from './notes.ts';
 import { serveHasNotes } from './report.ts';
@@ -238,4 +240,58 @@ test('/api/auth/me is asked once at start-up, per nav link and per focus, and ne
   // No timer asks again (design.md §6.8).
   await page.clock.runFor('30:00');
   await expectSent(count);
+});
+
+/**
+ * Takes focus out of the page backwards, from wherever it is, so that the next Tab starts at the skip link. A crash
+ * page's <h1> may have taken focus, which a plain Tab would leave behind.
+ */
+const startAgain = (page: Page) => tabTo(page, 'outside the page', 'Shift+Tab');
+
+// app-shell.md *Tab order*: "Signed out / starting up: Skip to main content → <main> content", so, with a message,
+// Try again; the crash page under the nav keeps the nav and Account before its link.
+test('Could not connect has Try again as its one stop after the skip link, and passes the foundations', async ({
+  page,
+}) => {
+  test.slow();
+  await failMe(page, 'no connection');
+  await page.goto('/');
+  await expect(heading(page)).toHaveText('Could not connect to Grow2Notes');
+
+  await expectStops(page, 'Tab', ['Skip to main content', 'Try again']);
+  await expectFoundationsToPass(page);
+});
+
+test('There is a problem has Try again as its one stop after the skip link, and passes the foundations', async ({
+  page,
+}) => {
+  test.slow();
+  await failMe(page, 503);
+  await page.goto('/');
+  await expect(heading(page)).toHaveText('There is a problem with Grow2Notes');
+
+  await expectStops(page, 'Tab', ['Skip to main content', 'Try again']);
+  await expectFoundationsToPass(page);
+});
+
+test('the crash page under the nav has its nav, Account and Go to Today as stops, and passes the foundations', async ({
+  page,
+}) => {
+  test.slow();
+  await answerMe(page, { ...worker, today: 20261001 });
+  await page.goto('/');
+  await expect(heading(page)).toHaveText('There is a problem with Grow2Notes');
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', ['Skip to main content', 'Grow2Notes', 'Today', 'Account', 'Go to Today']);
+  await expectFoundationsToPass(page);
+});
+
+test("the shell's crash page has Go to Today as its one stop after the skip link", async ({ page }) => {
+  await answerMe(page, null);
+  await page.goto('/');
+  await expect(heading(page)).toHaveText('There is a problem with Grow2Notes');
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', ['Skip to main content', 'Go to Today']);
 });

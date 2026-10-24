@@ -3,6 +3,7 @@ import { addJaneWithTwoGoals, janeCitizen } from './addParticipant.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf } from './layout.ts';
 import { isDraftSaveRequest } from './notes.ts';
@@ -330,6 +331,32 @@ test('with no connection, the open warning says so and counts on, and passes axe
   await expect(heading(page)).toHaveText(oneMinute);
   await expect(statusLine(page)).toHaveText(noConnection);
   await expect(warning(page)).toBeVisible();
+});
+
+test('the open warning passes axe and the foundations, while the page behind it asks nothing of the app', async ({
+  page,
+  invite,
+  authenticator,
+}) => {
+  test.slow();
+  const idle = await signInThroughSetup(page, invite, authenticator);
+  await idle.runTo('28:00');
+  await expect(staySignedIn(page)).toBeFocused();
+
+  // Focus coming back into the page asks the app again, as the Tab test above shows, and its 200s would close the
+  // warning, as they start the session clock afresh. Left unanswered, they keep it open through the sweep's Tab out of
+  // the page and back.
+  const unanswered: Route[] = [];
+  for (const pattern of ['**/api/auth/me', '**/api/today', '**/api/me/drafts']) {
+    await page.route(pattern, (route) => {
+      unanswered.push(route);
+    });
+  }
+
+  // On the real clock, which axe's own timers need: the warning counts down the 2 minutes it has left while it runs.
+  await page.clock.resume();
+  await expectAxeToPass(page);
+  await expectFoundationsToPass(page);
 });
 
 test('at 320 px with text at 200%, the warning wraps and scrolls inside itself, with no sideways scroll', async ({

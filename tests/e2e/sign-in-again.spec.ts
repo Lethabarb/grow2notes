@@ -3,6 +3,8 @@ import type { Page, Request, Response } from '@playwright/test';
 import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
+import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus } from './goals.ts';
 import { failMe, manager, serveMe, worker } from './me.ts';
 import { notesStore } from './notes.ts';
@@ -105,22 +107,27 @@ async function expectInviteKept(page: Page, person: { displayName: string; email
 }
 
 /**
- * The element that has focus: outside the page, the page itself, or the element by its id, or, for one with none,
- * its own words, those of a button's first part.
+ * Alex Park's page for me.ts's manager, answered in the browser, with a Resend invite that meets a 401, pressed: view C
+ * over the page, which hides. Gives the hidden back link and a function that counts the resends sent.
  */
-const focused = (page: Page) =>
-  page.evaluate(() => {
-    const element = document.activeElement;
-    if (!document.hasFocus()) {
-      return 'outside the page';
-    }
+async function showViewCOverAlexsPage(page: Page) {
+  await serveMe(page, manager);
+  await serveUsers(page, people);
+  await answerSetupLinks(page, { status: 401 });
+  const resendsSent = countRequests(page, isSetupLink);
+  await page.goto(`/manage/users/${alex.id}`);
+  await expect(heading(page)).toHaveText(alex.displayName);
+  const backLink = pageBar(page).getByRole('link', { name: 'Users' });
+  await expect(backLink).toBeVisible();
 
-    if (element === null || element === document.body) {
-      return 'the page itself';
-    }
+  // The session has gone, so that /api/auth/me answers 401 too, as the window's focus asks it again below.
+  await failMe(page, 401);
+  await main(page).getByRole('button', { name: 'Resend invite' }).click();
 
-    return element.id || ((element.firstElementChild ?? element).textContent ?? '');
-  });
+  await expectSignedOutAt(page, page.url());
+  await expect(backLink).toBeHidden();
+  return { backLink, resendsSent };
+}
 
 test('signed in for real, a 401 over a half-filled Invite user shows view C, and the passkey brings it back', async ({
   page,
@@ -222,32 +229,13 @@ test('another person signing in on view C over Invite user reloads to their Toda
 test("on a user's page, a Resend invite's 401 shows view C over the hidden back link, never sent again", async ({
   page,
 }) => {
-  await serveMe(page, manager);
-  await serveUsers(page, people);
-  await answerSetupLinks(page, { status: 401 });
-  const resendsSent = countRequests(page, isSetupLink);
-  await page.goto(`/manage/users/${alex.id}`);
-  await expect(heading(page)).toHaveText(alex.displayName);
-  const backLink = pageBar(page).getByRole('link', { name: 'Users' });
-  await expect(backLink).toBeVisible();
-
-  // The session has gone, so that /api/auth/me answers 401 too, as the window's focus asks it again below.
-  await failMe(page, 401);
-  await main(page).getByRole('button', { name: 'Resend invite' }).click();
-
-  await expectSignedOutAt(page, page.url());
-  await expect(backLink).toBeHidden();
+  const { backLink, resendsSent } = await showViewCOverAlexsPage(page);
   // From the <h1>, Tab goes through view C's controls, out of the page, and back by the skip link, never to the back
   // link or the hidden page.
-  const stops: string[] = [];
-  for (let stop = 0; stop < 7; stop += 1) {
-    await page.keyboard.press('Tab');
-    stops.push(await focused(page));
-  }
-  expect(stops).toEqual([
+  await expectStops(page, 'Tab', [
     'Sign in with a passkey',
-    'signed-out-email',
-    'signed-out-password',
+    'Email address',
+    'Password',
     'Continue',
     'outside the page',
     'Skip to main content',
@@ -274,6 +262,13 @@ test("on a user's page, a Resend invite's 401 shows view C over the hidden back 
   expect(await resendsSent()).toBe(1);
 });
 
+
+test('view C over a user’s page passes the foundations', async ({ page }) => {
+  test.slow();
+  await showViewCOverAlexsPage(page);
+
+  await expectFoundationsToPass(page);
+});
 // An edit's request that meets the end of the session (S02.06.01, note-form.md *Session*): view C over the hidden form,
 // nothing said above the buttons, and the request never sent again once the same person signs in.
 for (const press of ['Save changes', 'Cancel'] as const) {
