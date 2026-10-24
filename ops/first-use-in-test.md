@@ -1167,11 +1167,11 @@ person, and none of them holds a story open. Run the by-hand accessibility steps
 
 1. Keyboard only, on the laptop: step 143.
 2. Screen readers: steps 21 and 22, then the screen-reader steps of the screens, in the order of the screens: 4, 9, 10,
-   12 to 14, 18, 27, 28, 32 to 34, 37, 41, 45, 47, 48, 52, 55, 57, 62, 66, 69, 74, 75, 78 to 80, 90, 91, 102, 112, 119
-   and 137.
+   11, 12 to 14, 17, 18, 27, 28, 32 to 34, 37, 41, 45, 47, 48, 52, 55, 57, 62, 65, 66, 69, 74, 75, 78 to 80, 90, 91, 94,
+   102, 112, 119 and 137.
 3. Guide prompts, with screen readers and the phones' back gesture: steps 24 and 25.
-4. Real devices: step 20, then the device steps of the screens: 40, 44, 49, 50, 54, 68, 70, 81, 92, 101, 113, 118, 127,
-   134 to 136 and 139, then the go-live device check, step 144.
+4. Real devices: step 20, then the device steps of the screens: 35, 40, 44, 49, 50, 54, 68, 70, 81, 92, 101, 113, 118,
+   125, 127, 134 to 136 and 139, then the go-live device check, step 144.
 5. Text size and zoom: step 145.
 6. Contrast, page darkening and motion: step 146.
 7. Outdoors: step 147.

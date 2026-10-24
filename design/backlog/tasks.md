@@ -6113,8 +6113,7 @@ sideways at 320 px.
   push to `main`, which tests the build that `deploy.yml` then deploys to test, is the one for the build in test; one
   automated keyboard-only run of each section 4.13 flow, at 1280x800 in Chromium, meets "on a laptop with the keyboard
   only". A98 is the next free number on `main` when this was written (T25 took A95 and A96, and T24 A97). The owner may
-  overturn it. The other choices below are test method and are
-  recorded only here.
+  overturn it. The other choices below are test method and are recorded only here.
 - What the automated pass proves, and where:
   - Each section 4.13 flow, keyboard only, in the published app, signed in for real, at 1280x800: `key-flows.spec.ts`,
     two tests with one `test.step` to a flow, named as the section names it. The CI report therefore has a result for
