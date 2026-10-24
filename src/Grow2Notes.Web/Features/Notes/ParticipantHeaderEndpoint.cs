@@ -34,7 +34,13 @@ internal static class ParticipantHeaderEndpoint
             .AsNoTracking()
             .Where(participant => participant.Id == participantId)
             .Select(participant => new ParticipantHeader(
-                participant.Id, participant.GivenName, participant.FamilyName, participant.Status.ToString()))
+                participant.Id,
+                participant.GivenName,
+                participant.FamilyName,
+                participant.Status.ToString(),
+                db.Notes
+                    .Where(n => n.ParticipantId == participant.Id && n.Status == NoteStatus.Submitted)
+                    .Min(n => (DateOnly?)n.NoteDate)))
             .SingleOrDefaultAsync(cancellationToken);
         return header is null ? TypedResults.NotFound() : TypedResults.Ok(header);
     }
