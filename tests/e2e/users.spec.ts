@@ -2,6 +2,7 @@ import type { Locator, Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { boxOf, setTextTo200Percent } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
@@ -330,15 +331,28 @@ test('with no connection, the list fails within 2 s, then says still, and a Try 
   await expect(statusLine(page)).toBeEmpty();
 });
 
+// An 80-character address, the longest the Users screens are checked with.
+const long = madeUpUser(
+  '6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52',
+  'Bartholomew Featherstonehaugh',
+  'bartholomew.featherstonehaugh-montgomery.support-coordinator-team-au@example.org',
+  'Active',
+);
+
+test('the list with an 80-character email passes axe and the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveUsers(page, [sam, long]);
+  await page.goto('/manage/users');
+  await expect(rowOf(page, long.displayName)).toBeVisible();
+  await expectAxeToPass(page);
+
+  await expectFoundationsToPass(page);
+});
+
 test('at 320 px and 200% text, an 80-character email wraps in its row and on its page, no sideways scroll', async ({
   page,
 }) => {
-  const long = madeUpUser(
-    '6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52',
-    'Bartholomew Featherstonehaugh',
-    'bartholomew.featherstonehaugh-montgomery.support-coordinator-team-au@example.org',
-    'Active',
-  );
   expect(long.email).toHaveLength(80);
   await serveMe(page, manager);
   await serveUsers(page, [sam, long]);

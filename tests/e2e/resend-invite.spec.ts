@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Page, Request, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectStops, tabTo } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { manager, serveMe } from './me.ts';
 import { holdNext } from './requests.ts';
 import { alex, answerSetupLinks, chris, jo, people, sam, serveUsers, setupLinks } from './users.ts';
@@ -240,3 +242,24 @@ for (const { cut, answer, sentence } of [
     expect(await ifMatches()).toHaveLength(1);
   });
 }
+
+// users.md *Focus order (Tab)* for the detail: the back link, Edit, Resend invite, then Deactivate. The Status row and
+// the notice add no stop.
+test("an Invited person's page has the back link, Edit, Resend invite and Deactivate in order", async ({ page }) => {
+  await openAlex(page);
+
+  await tabTo(page, page.locator('#page-bar').getByRole('link', { name: 'Users' }));
+  await expectStops(page, 'Tab', ['Edit', 'Resend invite', 'Deactivate']);
+});
+
+test("an Invited person's page, with the sentence that Resend invite gives, passes the foundations", async ({
+  page,
+}) => {
+  test.slow();
+  await answerSetupLinks(page, { sentAt: sentAt0512 });
+  await openAlex(page);
+  await resendInvite(page).click();
+  await expect(resendLine(page)).toHaveText(sentAt412pm);
+
+  await expectFoundationsToPass(page);
+});
