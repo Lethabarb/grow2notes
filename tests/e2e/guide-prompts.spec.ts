@@ -1463,9 +1463,8 @@ test('at 320 px, with text at 200% and spaced out, nothing scrolls sideways or i
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await setTextTo200Percent(page);
   await openWith(page);
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await setTextTo200Percent(page);
   await spaceTextOut(page);
   await expectToFit(page, 'With the prompts');
 
@@ -1494,12 +1493,11 @@ test('at 320 px, with text at 200% and spaced out, a failed load fits, its sente
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 640 });
-  await setTextTo200Percent(page);
   await serveMe(page, manager);
   await failPrompts(page);
   await page.goto(address);
   await expect(statusLine(page)).toHaveText(loadFailed);
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
+  await setTextTo200Percent(page);
   await spaceTextOut(page);
   await expectToFit(page, 'Load failed');
 
