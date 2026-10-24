@@ -136,11 +136,28 @@ function watchForCspViolations(page: Page): () => void {
 }
 
 /**
- * Gives `use` a device of its own: a page in a new browser context, which takes the test's options, its base URL and
- * headers among them, with none of the test page's cookies, under the same check of the policy, and its own phone.
+ * The headers that every request of a browser context sends, as App Service's front end sends them (design.md §9.9):
+ * the scheme and the client's address. The antiforgery, enrolment and session cookies are Secure, so the app issues
+ * them only on an HTTPS request (design.md §8.4, §9.8), and every signed-out page sends a change that needs the
+ * antiforgery token, as sign-in asks for passkey options as it shows. The tests reach the app over plain HTTP, so
+ * every request says that it came over HTTPS, which the app trusts from loopback; Chromium keeps Secure cookies from
+ * localhost. The address is a random one that RFC 3849 reserves for documents, so each context is a client of its own,
+ * as each person's phone is, to the rate limits that count a client by its address, which would otherwise count every
+ * test and device as one (tests/README.md).
+ */
+export function clientHeaders(): Record<string, string> {
+  const group = () => randomBytes(2).toString('hex');
+  const address = ['2001', 'db8', ...Array.from({ length: 6 }, group)].join(':');
+  return { 'X-Forwarded-Proto': 'https', 'X-Forwarded-For': address };
+}
+
+/**
+ * Gives `use` a device of its own: a page in a new browser context, with none of the test page's cookies, under the
+ * same check of the policy, with its own phone and its own client address. A context made here takes none of the
+ * test's options but those it is given, so it is given the headers.
  */
 async function useDevice(browser: Browser, use: (device: Device) => Promise<void>) {
-  const context = await browser.newContext();
+  const context = await browser.newContext({ extraHTTPHeaders: clientHeaders() });
   const page = await context.newPage();
   const expectNoViolations = watchForCspViolations(page);
   await use({ page, authenticator: await addVirtualAuthenticator(page) });
@@ -161,6 +178,10 @@ export const test = base.extend<{
   thirdDevice: Device;
   secondTab: Page;
 }>({
+  // Each test is a client of its own (clientHeaders()), in place of the headers that every test once shared.
+  extraHTTPHeaders: async ({}, use) => {
+    await use(clientHeaders());
+  },
   page: async ({ page }, use) => {
     const expectNoViolations = watchForCspViolations(page);
     await use(page);
