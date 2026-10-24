@@ -319,8 +319,9 @@ describe('Daily report', () => {
 
 // A note's version history, both of whose pages are manager screens, and where it sits.
 const versionHistoryPath = `/participants/${participants[0].id}/notes/2026-09-30/versions`;
-// Write past-day note, a manager screen too.
+// Write past-day note and Export record, manager screens too.
 const pastDayNotePath = `/manage/participants/${participants[0].id}/past-day-note`;
+const exportRecordPath = `/manage/participants/${participants[0].id}/export`;
 
 describe('Page not found', () => {
   it.each([
@@ -333,6 +334,7 @@ describe('Page not found', () => {
     { me: worker, path: versionHistoryPath },
     { me: worker, path: `${versionHistoryPath}/2` },
     { me: worker, path: pastDayNotePath },
+    { me: worker, path: exportRecordPath },
   ])('shows at $path for a $me.role, with the nav still there and no item current', async ({ me, path }) => {
     serveMe(me);
     renderApp(path);

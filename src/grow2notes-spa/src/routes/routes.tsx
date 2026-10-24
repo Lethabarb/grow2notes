@@ -11,6 +11,7 @@ import { ParticipantPage } from '../features/participants/ParticipantPage.tsx';
 import { ParticipantsPage } from '../features/participants/ParticipantsPage.tsx';
 import { WritePastDayNotePage } from '../features/participants/WritePastDayNotePage.tsx';
 import { DailyReportPage } from '../features/reports/DailyReportPage.tsx';
+import { ExportRecordPage } from '../features/reports/ExportRecordPage.tsx';
 import { TodayPage } from '../features/today/TodayPage.tsx';
 import { EditUserPage } from '../features/users/EditUserPage.tsx';
 import { InviteUserPage } from '../features/users/InviteUserPage.tsx';
@@ -163,6 +164,11 @@ export const routes: AppRoute[] = [
                 path: 'manage/participants/:participantId/past-day-note',
                 element: <WritePastDayNotePage />,
                 handle: { pageName: pageName.writePastDayNote },
+              },
+              {
+                path: 'manage/participants/:participantId/export',
+                element: <ExportRecordPage />,
+                handle: { pageName: pageName.exportRecord },
               },
               {
                 path: 'manage/common-items',
