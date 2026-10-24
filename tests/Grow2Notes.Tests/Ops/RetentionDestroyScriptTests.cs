@@ -125,24 +125,25 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
         await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(sqlServer, "RetentionDestroyRefuses", ct);
         var scenario = await SeedAsync(db);
         var good = Variables(scenario.A.OrganisationId, scenario.Participant, DateOfBirth, "destroy");
-        var refusals = new (string Case, string Name, string Value)[]
+        const string notIds = "must be IDs";
+        var refusals = new (string Case, string Name, string Value, string Message)[]
         {
-            ("not archived", "Participant", scenario.ActiveParticipant.ToString()),
-            ("other organisation", "Organisation", scenario.B.OrganisationId.ToString()),
-            ("unknown organisation", "Organisation", Guid.NewGuid().ToString()),
-            ("unknown participant", "Participant", Guid.NewGuid().ToString()),
-            ("wrong date of birth", "DateOfBirth", "2001-02-04"),
-            ("mode delete", "Mode", "delete"),
-            ("empty mode", "Mode", ""),
-            ("malformed participant", "Participant", "not-an-id"),
-            ("empty participant", "Participant", ""),
-            ("empty date of birth", "DateOfBirth", ""),
-            ("date not in full", "DateOfBirth", "2001-2-3"),
+            ("not archived", "Participant", scenario.ActiveParticipant.ToString(), "not Archived"),
+            ("other organisation", "Organisation", scenario.B.OrganisationId.ToString(), "no participant"),
+            ("unknown organisation", "Organisation", Guid.NewGuid().ToString(), "no organisation"),
+            ("unknown participant", "Participant", Guid.NewGuid().ToString(), "no participant"),
+            ("wrong date of birth", "DateOfBirth", "2001-02-04", "date of birth"),
+            ("mode delete", "Mode", "delete", notIds),
+            ("empty mode", "Mode", "", notIds),
+            ("malformed participant", "Participant", "not-an-id", notIds),
+            ("empty participant", "Participant", "", notIds),
+            ("empty date of birth", "DateOfBirth", "", notIds),
+            ("date not in full", "DateOfBirth", "2001-2-3", notIds),
         };
         var counts = await CountsAsync(db, ct);
         var audit = await AuditRowsAsync(db, ct);
 
-        foreach (var (name, variable, value) in refusals)
+        foreach (var (name, variable, value, message) in refusals)
         {
             var variables = new Dictionary<string, string>(good) { [variable] = value };
 
@@ -150,6 +151,7 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
                 () => OpsScripts.RunAsync(db.ConnectionString, "ops/retention-destroy.sql", variables, ct));
 
             Assert.True(refused.Number == 50000, $"Refusing {name}: error {refused.Number}, {refused.Message}");
+            Assert.True(refused.Message.Contains(message), $"Refusing {name}: {refused.Message}");
             Assert.Equal(counts, await CountsAsync(db, ct));
         }
 
@@ -312,7 +314,8 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
         var b = await db.Services.AddOrganisationAsync();
         var p = await db.Services.AddParticipantAsync(
             a, archived: true, givenName: "Pat", familyName: "Archer", dateOfBirth: new DateOnly(2001, 2, 3));
-        var other = await db.Services.AddParticipantAsync(a, givenName: "Quinn", familyName: "Other");
+        var other = await db.Services.AddParticipantAsync(a, givenName: "Quinn", familyName: "Other",
+            dateOfBirth: new DateOnly(2001, 2, 3));
         var group = await db.Services.AddGroupAsync(a.OrganisationId, new("Mornings", 1));
         var item = await db.Services.AddItemAsync(a.OrganisationId, group.Id, new("Make tea", 1));
         var goals = await db.Services.AddGoalsAsync(a, p.Id, new TestGoal("Goal one", 1), new TestGoal("Goal two", 2));

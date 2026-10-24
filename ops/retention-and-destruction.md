@@ -91,7 +91,7 @@ and Archived, in the order the app lists them (A5):
 | 7 years after last service | That date and 7 years, or blank |
 | Note before 18 | Yes when a note in any status is dated before their 18th birthday, otherwise No |
 | Turns 25 | Their 25th birthday, always shown |
-| May have ended | *No submitted note*; or Yes when the 7 years have passed and, if Note before 18 is Yes, so has the 25th birthday; or No |
+| May have ended | *No submitted note*; Yes when 7 years (and age 25, if Note before 18) have passed; else No |
 | Participant ID | The ID that `retention-destroy.sql` asks for |
 
 *Blank* is printed as `NULL` by `sqlcmd`. *May have ended* is only a prompt for the managers: it knows nothing of the

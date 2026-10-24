@@ -161,10 +161,11 @@ public sealed class RetentionListScriptTests(SqlServerFixture sqlServer)
     }
 
     [Theory]
-    [InlineData("00000000-0000-0000-0000-000000000001")]
-    [InlineData("not-an-id")]
-    [InlineData("")]
-    public async Task It_refuses_an_organisation_that_does_not_exist_or_is_not_an_ID(string organisation)
+    [InlineData("00000000-0000-0000-0000-000000000001", "no organisation")]
+    [InlineData("not-an-id", "must be an organisation ID")]
+    [InlineData("", "must be an organisation ID")]
+    public async Task It_refuses_an_organisation_that_does_not_exist_or_is_not_an_ID(
+        string organisation, string message)
     {
         var ct = TestContext.Current.CancellationToken;
         await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(
@@ -177,6 +178,7 @@ public sealed class RetentionListScriptTests(SqlServerFixture sqlServer)
             ct));
 
         Assert.Equal(50000, refused.Number);
+        Assert.Contains(message, refused.Message);
     }
 
     private static Task<IReadOnlyList<DataTable>> ListAsync(
