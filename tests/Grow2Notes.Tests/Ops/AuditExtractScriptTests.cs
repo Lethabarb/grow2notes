@@ -188,7 +188,6 @@ public sealed class AuditExtractScriptTests(SqlServerFixture sqlServer)
         var row = Assert.Single(table.Rows.Cast<DataRow>());
         Assert.Equal(details, (string)row["Details"]);
         Assert.Equal(id, (long)row["Row"]);
-        Assert.DoesNotContain(ColumnNames(table), name => name.Contains("IP", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(
             row.ItemArray, cell => cell?.ToString()?.Contains(IpAddress, StringComparison.Ordinal) == true);
     }

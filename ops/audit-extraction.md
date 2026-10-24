@@ -43,7 +43,7 @@ these columns:
 - **Why** is the reason in a few words, such as a complaint, a breach assessment or a manager's own check.
 - **Question and date range** is the question in words and the two dates.
 - **Script and values** names `ops/find-ids.sql` and `ops/audit-extract.sql` with the values given, without the extract.
-  The request covers `find-ids.sql` too: do not run it for anything else.
+  The request covers the `find-ids.sql` run made for it.
 
 ## When to run it
 
