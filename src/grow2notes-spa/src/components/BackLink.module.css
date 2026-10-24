@@ -10,6 +10,8 @@
   min-inline-size: var(--target-min);
   padding-inline-end: var(--space-2);
   font-weight: 700;
+  /* A single long word, "Participants" at 200% text with spacing, wraps in the link rather than reach past a phone. */
+  overflow-wrap: anywhere;
 }
 
 /* Its own size whatever the label's length, as a label that wraps at 200% text would otherwise squeeze it. */

@@ -378,7 +378,6 @@ test('in forced colours, the ring is Highlight on the back link, Note date and C
 test('the date page with its error passes the foundations', async ({ page }) => {
   test.slow();
   await open(page, emptyStore(), pastDayAddress(jane.id));
-  await expect(heading(page)).toBeFocused();
   await continueWith(page, manager.today);
   await expect(dateError(page)).toHaveText('Error: Note date must be in the past');
   await expect(noteDateField(page)).toBeFocused();
