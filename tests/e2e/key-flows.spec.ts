@@ -86,6 +86,14 @@ async function expectFocusOn(page: Page, target: Locator) {
 }
 
 /**
+ * Expects the open dialog's title to have the focus, which it takes as the dialog opens, with no ring, as it is not a
+ * control (confirm-dialog.md *Behaviour*).
+ */
+async function expectTitleFocused(page: Page) {
+  await expect(dialogTitle(page)).toBeFocused();
+}
+
+/**
  * Runs axe at both widths with focus where it is, and expects focus to be on the same element afterwards, as a harness
  * that hides a focused control at a phone's width, or moves focus when the window is resized, would take it away.
  */
@@ -126,7 +134,7 @@ async function tick(page: Page, target: Locator) {
 async function submitByKeyboard(page: Page, name: string) {
   await tabTo(page, submitNote(page));
   await page.keyboard.press('Enter');
-  await expectFocusOn(page, dialogTitle(page));
+  await expectTitleFocused(page);
   await expect(dialog(page)).toHaveAccessibleName(new RegExp(name));
   await expectAxeKeepingFocus(page);
   await tabTo(page, dialogButton(page, `Submit note for ${name}`));
@@ -325,7 +333,7 @@ test('a worker and a manager, keyboard only', async ({
     await expect(moreActions(phone)).toHaveAttribute('aria-expanded', 'true');
     await tabTo(phone, discardDraft(phone));
     await phone.keyboard.press('Enter');
-    await expectFocusOn(phone, dialogTitle(phone));
+    await expectTitleFocused(phone);
     await expectAxeKeepingFocus(phone);
     await tabTo(phone, dialogButton(phone, `Discard draft for ${ravi.name}`));
     await phone.keyboard.press('Enter');
@@ -468,7 +476,7 @@ test('a worker and a manager, keyboard only', async ({
     await expectAxeKeepingFocus(page);
     await tabTo(page, button(page, 'Reset sign-in'));
     await page.keyboard.press('Enter');
-    await expectFocusOn(page, dialogTitle(page));
+    await expectTitleFocused(page);
     await expect(dialog(page)).toHaveAccessibleName(`Reset sign-in for ${riley.displayName}?`);
     await expectAxeKeepingFocus(page);
     await tabTo(page, dialogButton(page, `Reset sign-in for ${riley.displayName}`));
