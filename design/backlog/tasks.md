@@ -5828,7 +5828,7 @@ log, and breach response, which links to the audit runbook rather than repeating
 
 ```yaml
 id: T24
-status: new
+status: doing
 release: R1
 lane: A
 size: M
@@ -5860,6 +5860,35 @@ report or export.
 
 - Completes the shared audit-events test that T02 started, and adds a guard that fails the build if an event type has no
   test row or an append-only table lacks its denies. Reuses T04's session-revocation helper.
+
+### Plan
+
+- Outcome: test and guard work with one small app change (R17). No migration, snapshot change, endpoint, SPA change or
+  by-hand step. A gap a new test exposes is fixed in the same vertical with that test and recorded in the Notes.
+- Design: V1 adds the 9 missing rows to the shared audit-events test (all 41 event types then have one), a Docker-free
+  guard in `AuditTypesTests` (rows and constants must match both ways) and two note-text canaries in
+  `TelemetryCanaryTests`. V2 gives `RuntimeRoleTests` one table vocabulary (`AppendOnly`, `NeverDeleted`, derived
+  `DeleteDenied` and `UpdateDenied`), a model-only guard for `IAppendOnly` tables, and role inserts for `NoteReview`
+  and insert-then-delete for `AspNetUserPasskeys`. V3 moves the archived-participant refusal first in
+  `NoteDrafts.StartRefusalAsync` and adds `PastRecordsTests`: three facts (archive and restore a participant; archive a
+  goal, item and group; deactivate and reactivate a worker), each in an organisation of its own under a frozen clock.
+  V4 is docs.
+- Domain: none new. The WITHOUT LOGIN user under EXECUTE AS is kept (R14).
+- Reuse: `AuditEventsTests` rows and `WrittenEvent`, `PasswordSignIn`, `SetupLinks`, `CookieSignIn`,
+  `AdminCommandRuns`, `SignedInDevices` (T04), `AppWithoutDatabase`, `ProblemResponse`, `ReportText`, and the data
+  fixtures. Cut re-tests stay where they were built.
+- Decisions where design.md is silent: A95 an archived participant is refused first (`note.participant_archived`, on any
+  date and for either role), which reverses T08's order; renumber on rebase if T25 or T26 land an A-number first.
+  "Tested in the test environment" is read as CI on the SQL Server container plus the existing by-hand steps.
+
+### Verticals
+
+- v1: Audit completeness: 9 rows, row guard, note-text canary; depends_on: none; R01 R02 R03 R04 R05 R06 R09
+- v2: Append-only permissions: derived table lists, IAppendOnly guard, review and passkey role writes; depends_on: none;
+  R11 R12 R13 R14
+- v3: Archived refusal first, plus PastRecordsTests for archive, restore and deactivate; depends_on: none; R16 R17 R18
+  R19 R20 R21 R22 R23 R24 R25 R26 R27 R28 R29 R30
+- v4: Docs: A95, §5.5 item 4, tests README, T24 and story notes, coverage.md; depends_on: v1 v2 v3; R31 R07 R08 R10 R15
 
 ### Steps
 
