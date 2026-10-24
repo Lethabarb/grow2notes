@@ -128,7 +128,7 @@ The same screen on **today, with no submitted notes yet** (design.md §4.7 empty
   `--space-3`; between the two download buttons the shared `ButtonGroup` gap (1rem). Empty live regions take no space
   (`:empty { margin: 0 }`, never `display: none`).
 - Tap targets: field, step links and download buttons all `--target-button`, `max(3rem, 48px)`.
-- **Step links fit test:** each link is `flex: 1 1 10rem` with a `--space-3` (0.75 rem) gap, so at 375 px "‹ Previous day" and "Next day ›" share a row,
+- **Step links fit test:** each link is `flex: 1 1 10rem`, with a `--space-3` (0.75 rem) gap, so at 375 px "‹ Previous day" and "Next day ›" share a row,
   and at 320 px or 200% text they stack full width, still in DOM order. A label never wraps inside a half-width button
   and nothing scrolls sideways (SC 1.4.10). Their inline padding is `--space-3` (12 px), not the shared 20 px, so the
   pair fits on one row at 375 px [Opinion: arithmetic at 18 px bold; check on a device]. The basis of 10 rem (160 px)
@@ -259,7 +259,7 @@ Specs: [date-navigation.md](../components/date-navigation.md), [empty-loading-er
 
 Specs: [primary-actions.md](../components/primary-actions.md), [microcopy.md](../components/microcopy.md).
 
-- `<RequestAlert>` (`<div role="alert">`, no id: nothing refers to it), always in the DOM, above the download status line and the
+- `<RequestAlert>` (a `<div role="alert">` with no id), always in the DOM, above the download status line and the
   download buttons (the shared order for action failures, as on Export record: alert, status, buttons). Empty and
   spaceless until a download fails.
 - Text: one sentence in the microcopy.md "Action failed" shape, bold, `--colour-error` (8.1:1); no icon, no box. The

@@ -345,7 +345,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | The Report screen (4.7) | F04.02 | S04.01.01 (the first Report screen) | The first Report screen with both download buttons is built in T15 (24 October 2026); T17 adds the date field, the status lines, the has-notes check and the empty state |
+| 1 | The Report screen (4.7) | F04.02 | S04.01.01 (the first Report screen) | The first Report screen with both download buttons is built in T15 (24 October 2026); T17 adds the date field, the status lines, the has-notes check and the empty state (24 October 2026) |
 | 2 | Everything in §11.1–11.5: the shared report model | F04.01 | | The model, the title block, goals and Guided notes are built in T15 (24 October 2026); common items, markers, the header, footer and properties are T20's |
 | 3 | The PDFsharp-MigraDoc renderer | F04.01 | | Built in T15 (24 October 2026); T20 extends it |
 | 4 | The Open XML SDK renderer | F04.01 | | Built in T15 (24 October 2026); T20 extends it |
@@ -363,16 +363,16 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 6 | Common items show the Every note group and the picked groups only, by group name in the configured order, each item ticked or not ticked; groups not picked do not appear (D47) | F04.01 | | |
 | 7 | No drafts and no counts appear in either file | F04.01 | | Built in T15 (24 October 2026) for the title block, goals and Guided notes; T20 extends the fixture day |
 | 8 | A day with no submitted notes, including a future date, returns `404 report.no_notes` and no file | F04.01 | | Built in T15 (24 October 2026) |
-| 9 | Workers get `403` | F04.02 | F04.01 (the export endpoint's test) | |
+| 9 | Workers get `403` | F04.02 | F04.01 (the export endpoint's test) | Built in T17 (24 October 2026) for has-notes: the endpoint matrix row and `DailyReportEndpointTests`; a worker sees Page not found on every report address |
 
 **ux/screens/daily-report.md**
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | `daily-report.md › Routing and access` | F04.02 | | |
-| 2 | `daily-report.md › Date field and stepping` | F04.02 | | |
-| 3 | `daily-report.md › Has-notes and the empty day` | F04.02 | | |
-| 4 | `daily-report.md › Downloads` | F04.02 | S04.01.01 (the Word half) | Both buttons, the save step and the busy and failure lines are built in T15 (24 October 2026); the status lines are T17's |
+| 1 | `daily-report.md › Routing and access` | F04.02 | | Built in T17 (24 October 2026): the optional date, the arrival rules, the role guard and the device clock; the by-hand pass is ops steps 120 and 121 |
+| 2 | `daily-report.md › Date field and stepping` | F04.02 | | Built in T17 (24 October 2026): the field, Previous day and Next day, history and focus, and the midnight case |
+| 3 | `daily-report.md › Has-notes and the empty day` | F04.02 | | Built in T17 (24 October 2026): the has-notes endpoint (v1) and the check, the empty-day sentence and the unavailable buttons |
+| 4 | `daily-report.md › Downloads` | F04.02 | S04.01.01 (the Word half) | Both buttons, the save step and the busy and failure lines are built in T15 (24 October 2026); the status lines are built in T17 (24 October 2026) |
 | 5 | `daily-report.md › Copy and layout` | DoD | | |
 | 6 | `daily-report.md › Real devices, test environment with the production CSP (M4)` | F04.02 | S06.02.04 (the M6 re-run) | |
 
