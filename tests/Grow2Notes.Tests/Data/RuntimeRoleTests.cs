@@ -1,16 +1,35 @@
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
 /// The database role <c>grow2notes_runtime</c>, of which the app's database identity is a member (design.md §5.8,
 /// §10.6). The migrations give it its grants and denies, so the database refuses the changes and deletes that the app's
-/// code must never make. A migration that adds a deny adds it to these tests too.
+/// code must never make. <see cref="AppendOnly"/> and <see cref="NeverDeleted"/> are the one place a table is named
+/// here: a new append-only table goes in <see cref="AppendOnly"/>, a new never-deleted table goes in
+/// <see cref="NeverDeleted"/>, and the migration that adds the table adds its denies. A guard fails while an
+/// <see cref="IAppendOnly"/> entity's table is missing from <see cref="AppendOnly"/>, the exact-permission test fails
+/// until the migration adds the denies, and the error-229 theories prove them.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
 {
+    // Denied UPDATE and DELETE: history that is only ever added to (design.md §5.1, Deletes; §5.8).
+    private static readonly string[] AppendOnly =
+        ["AuditEvent", "NoteReview", "NoteVersion", "NoteVersionGroup", "NoteVersionItem"];
+
+    // Denied DELETE only: rows that are archived or deactivated, never deleted. Disjoint from AppendOnly.
+    private static readonly string[] NeverDeleted =
+        ["AspNetUsers", "CommonItem", "CommonItemGroup", "Goal", "Note", "Organisation", "Participant"];
+
+    public static TheoryData<string> DeleteDenied { get; } = [.. AppendOnly, .. NeverDeleted];
+
+    public static TheoryData<string> UpdateDenied { get; } = [.. AppendOnly];
+
     [Fact]
     public async Task The_role_is_a_member_of_db_datareader_and_db_datawriter()
     {
@@ -36,42 +55,14 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
             ORDER BY 1;
             """);
 
-        Assert.Equal(
-            [
-                "DENY DELETE ON dbo.AspNetUsers",
-                "DENY DELETE ON dbo.AuditEvent",
-                "DENY DELETE ON dbo.CommonItem",
-                "DENY DELETE ON dbo.CommonItemGroup",
-                "DENY DELETE ON dbo.Goal",
-                "DENY DELETE ON dbo.Note",
-                "DENY DELETE ON dbo.NoteReview",
-                "DENY DELETE ON dbo.NoteVersion",
-                "DENY DELETE ON dbo.NoteVersionGroup",
-                "DENY DELETE ON dbo.NoteVersionItem",
-                "DENY DELETE ON dbo.Organisation",
-                "DENY DELETE ON dbo.Participant",
-                "DENY UPDATE ON dbo.AuditEvent",
-                "DENY UPDATE ON dbo.NoteReview",
-                "DENY UPDATE ON dbo.NoteVersion",
-                "DENY UPDATE ON dbo.NoteVersionGroup",
-                "DENY UPDATE ON dbo.NoteVersionItem",
-            ],
-            permissions);
+        // Ordinal, because the query's ORDER BY follows the database collation.
+        var expected = AppendOnly.Concat(NeverDeleted).Select(table => $"DENY DELETE ON dbo.{table}")
+            .Concat(AppendOnly.Select(table => $"DENY UPDATE ON dbo.{table}"));
+        Assert.Equal(expected.Order(StringComparer.Ordinal), permissions.Order(StringComparer.Ordinal));
     }
 
     [Theory]
-    [InlineData("Organisation")]
-    [InlineData("AspNetUsers")]
-    [InlineData("AuditEvent")]
-    [InlineData("Participant")]
-    [InlineData("Goal")]
-    [InlineData("CommonItemGroup")]
-    [InlineData("CommonItem")]
-    [InlineData("Note")]
-    [InlineData("NoteReview")]
-    [InlineData("NoteVersion")]
-    [InlineData("NoteVersionGroup")]
-    [InlineData("NoteVersionItem")]
+    [MemberData(nameof(DeleteDenied))]
     public async Task A_member_of_the_role_gets_error_229_for_a_delete(string table)
     {
         await AsMemberOfTheRoleAsync(async session =>
@@ -87,11 +78,7 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     }
 
     [Theory]
-    [InlineData("AuditEvent")]
-    [InlineData("NoteReview")]
-    [InlineData("NoteVersion")]
-    [InlineData("NoteVersionGroup")]
-    [InlineData("NoteVersionItem")]
+    [MemberData(nameof(UpdateDenied))]
     public async Task A_member_of_the_role_gets_error_229_for_an_update(string table)
     {
         await AsMemberOfTheRoleAsync(async session =>
@@ -103,6 +90,21 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
 
             Assert.Equal(229, error.Number);
         });
+    }
+
+    [Fact]
+    public async Task Every_IAppendOnly_entity_s_table_is_in_the_append_only_list()
+    {
+        // Building the app's model opens no connection (ModelTenancyTests does the same).
+        await using var app = new AppWithoutDatabase("Production");
+        await using var scope = app.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+
+        var tables = db.Model.GetEntityTypes()
+            .Where(entity => typeof(IAppendOnly).IsAssignableFrom(entity.ClrType))
+            .Select(entity => entity.GetTableName()!);
+
+        Assert.Equal(AppendOnly.Order(StringComparer.Ordinal), tables.Order(StringComparer.Ordinal));
     }
 
     [Fact]
@@ -125,14 +127,15 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
     }
 
     [Fact]
-    public async Task A_member_of_the_role_can_read_add_and_change_rows_and_delete_an_authenticator_key_and_a_draft()
+    public async Task
+        A_member_of_the_role_can_read_add_and_change_rows_and_delete_an_authenticator_key_a_passkey_and_a_draft()
     {
         await AsMemberOfTheRoleAsync(async session =>
         {
             // A denied statement fails the whole call with error 229, naming the permission and the table. The
-            // authenticator key and the draft are among the rows the app does delete: in a sign-in reset, and as the
-            // note's first version is saved, as here: the header moves on, the version and its rows are added, and the
-            // working copy is deleted (design.md §5.1, Deletes; §5.8).
+            // authenticator key, the passkeys and the draft are among the rows the app does delete: in a sign-in
+            // reset, and as the note's first version is saved, as here: the header moves on, the version and its rows
+            // are added, and the working copy is deleted (design.md §5.1, Deletes; §5.8).
             var row = await session.ReadRowAsync("""
                 DECLARE @organisationId uniqueidentifier = NEWID(), @userId uniqueidentifier = NEWID(),
                         @participantId uniqueidentifier = NEWID(), @goalId uniqueidentifier = NEWID(),
@@ -190,6 +193,12 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                      [GroupPosition], [Text], [IsTicked])
                 VALUES (@versionId, 1, 0, @organisationId, @goalId, NULL, NULL, N'Added', 1),
                        (@versionId, 2, 0, @organisationId, NULL, @itemId, 0, N'Added', 0);
+                INSERT INTO [dbo].[NoteReview]
+                    ([Id], [OrganisationId], [NoteId], [VersionNumber], [ReviewedByUserId], [ReviewedAtUtc], [Comment])
+                VALUES (NEWID(), @organisationId, @noteId, 1, @userId, SYSUTCDATETIME(), NULL);
+                INSERT INTO [dbo].[AspNetUserPasskeys] ([CredentialId], [UserId], [Data])
+                VALUES (CONVERT(varbinary(1024), NEWID()), @userId, N'{}');
+                DELETE FROM [dbo].[AspNetUserPasskeys] WHERE [UserId] = @userId;
                 DELETE FROM [dbo].[AspNetUserTokens] WHERE [UserId] = @userId;
                 DELETE FROM [dbo].[NoteDraft] WHERE [NoteId] = @noteId;
 
@@ -202,14 +211,16 @@ public sealed class RuntimeRoleTests(SqlServerFixture sqlServer)
                        (SELECT n.[Status] FROM [dbo].[Note] AS n WHERE n.[Id] = @noteId),
                        (SELECT v.[VersionNumber] FROM [dbo].[NoteVersion] AS v WHERE v.[NoteId] = @noteId),
                        (SELECT COUNT(*) FROM [dbo].[NoteVersionItem] AS i WHERE i.[NoteVersionId] = @versionId),
-                       (SELECT COUNT(*) FROM [dbo].[NoteDraft] AS d WHERE d.[NoteId] = @noteId)
+                       (SELECT COUNT(*) FROM [dbo].[NoteDraft] AS d WHERE d.[NoteId] = @noteId),
+                       (SELECT COUNT(*) FROM [dbo].[NoteReview] AS r WHERE r.[NoteId] = @noteId),
+                       (SELECT COUNT(*) FROM [dbo].[AspNetUserPasskeys] AS k WHERE k.[UserId] = u.[Id])
                 FROM [dbo].[AspNetUsers] AS u
                 JOIN [dbo].[Organisation] AS o ON o.[Id] = u.[OrganisationId]
                 WHERE u.[Id] = @userId;
                 """);
 
             Assert.Equal(
-                ["Changed", "Changed", 0, "Changed", "Changed", "Changed", "Changed", (byte)1, 1, 2, 0], row);
+                ["Changed", "Changed", 0, "Changed", "Changed", "Changed", "Changed", (byte)1, 1, 2, 0, 1, 0], row);
         });
     }
 
