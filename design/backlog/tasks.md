@@ -5870,7 +5870,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T25
-status: new
+status: doing
 release: R1
 lane: B
 size: M
@@ -5902,6 +5902,38 @@ open.
 - The export limit (design.md §9.9, 10 a minute for each user) attaches to the export route only, never to the
   `/reports` group or to `GET /api/reports/daily/{date}/has-notes`, which the Report screen asks on every step and every
   time the window takes focus and which falls under the general limit (T17's Notes).
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: the four design.md §9.9 limits answer `429` with `Retry-After: 60`; Dependabot is configured; a committed
+  ASVS 5.0.0 level 1 and 2 review record exists with no High or Critical finding open. No migration, audit event,
+  error code, endpoint or screen change.
+- Design: the built-in ASP.NET Core rate limiter (no package). Three named fixed one-minute policies: `sign-in` (30 a
+  minute per client address, on a new `MapSignInGroup` holding the ten sign-in and setup endpoints), `export` (10 a
+  minute per user, on both export routes so they share one count) and `general` (300 a minute per user, or per address
+  when signed out, on the `/api` group). The account row (10 a minute for the password step by trimmed normalised
+  email, and for the code step by pending two-factor user) is a singleton `AccountRateLimiter` called inside the two
+  endpoints. `UseRateLimiter` sits straight after `UseAuthorization`, so a 429 gets the §9.7 headers, no-store and
+  problem details from the existing middleware.
+- Domain: in-memory only. `RateLimitPermits` (DI-only, `Design` = 30, 10, 10, 300) is the test seam; production cannot
+  change it. Policy names are public constants for T38.
+- Reuse: status code pages, security and cache header middleware, forwarded-headers setup, `Policies.cs` pattern,
+  Identity's email normaliser, existing test fixtures, `useAutosave` test harness, e2e `fixtures.ts`.
+- Decisions where design.md is silent: A95 how the limits count; A96 which requests each limit covers (antiforgery is
+  under the general limit); severity scale Critical to Informational; Dependabot groups minor and patch only. Open
+  owner notes (none blocking): the repository is public, CodeQL and secret scanning stay cut, and about 10 sign-ins a
+  minute from one shared office address.
+- Tests: `RateLimitsTests` (one per row, forwarded address, design numbers), a header test for the 429, a steady-typing
+  autosave test, and a per-context forwarded address in e2e. Test hosts lift the limits.
+
+### Verticals
+
+- v1: Rate limits: the four §9.9 rows, test seams and tests; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R22 R24 R25 R26 R27 R31
+- v2: Security review record, Dependabot, by-hand steps, design and backlog updates; depends_on: v1;
+  R14 R15 R16 R17 R18 R19 R20 R21 R23 R28 R29 R30 R32
 
 ### Steps
 
