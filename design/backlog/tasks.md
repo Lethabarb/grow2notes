@@ -5650,7 +5650,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T23
-status: new
+status: doing
 release: R1
 lane: D
 size: M
@@ -5675,6 +5675,34 @@ log, and breach response, which links to the audit runbook rather than repeating
 
 - Owner question Q5 holds one line (where the destruction log and the retention list are kept), and Q7 shapes the
   restore drill runbook.
+
+### Plan
+
+- Outcome: four runbooks (audit extraction, retention and destruction, restore drill, breach response) plus
+  `ops/restore-log.md` and six SQL scripts that CI runs on made-up data. No app code, endpoint, migration, audit event
+  type, Limits value, SPA or `ci.yml` change.
+- Design: each script is one batch with `$(Name)` variables in quoted literals, validated with `TRY_CONVERT`, refusals
+  as `THROW 50000`, Melbourne times shown with their offset. A test helper `OpsScripts` runs the files as sqlcmd would.
+  Scripts: `find-ids`, `audit-extract` (three questions, `any` sentinel), `retention-list`, `retention-destroy`
+  (one participant per run, Mode preview or destroy, date of birth must match, archived only, one transaction),
+  `restore-check`, `restore-note`.
+- Domain: none. A scope-guard test requires every dbo table to be listed as destroyed or kept by retention.
+- Reuse: `SqlServerFixture`, the `TestOrganisations`, `TestParticipants`, `TestNotes` fixtures, the header and SET block
+  of `check-database.sql`, the section shape of `ops/break-glass.md`.
+- Decisions where design.md is silent: A82 (Q5) log and list kept in the provider's records storage; A83 (Q7) drill
+  checks before go-live; A84 how the retention list reads the rule (NoteDate, not CreatedAtUtc); A85 audit request
+  record in the provider's records storage, not `ops/` (departs from S05.04.02 c3; the criterion stays unticked). The
+  extract leaves out the IP address.
+
+### Verticals
+
+- v1: Test: OpsScripts helper, participant date of birth, find-ids.sql; depends_on: none
+- v2: Audit extraction runbook and audit-extract.sql; depends_on: v1; R13 R14 R15 R16 R17 R18 R19 R20
+- v3: Retention runbook, retention-list.sql and retention-destroy.sql; depends_on: v1; R01 R02 R03 R04 R05 R06 R07 R08
+  R09 R10 R11 R12
+- v4: Restore drill runbook, restore-check.sql, restore-note.sql, restore log; depends_on: v1; R21 R22 R23 R24 R25 R26
+  R27 R28
+- v5: Breach runbook and shared doc close-out; depends_on: v2 v3 v4; R29 R30 R31 R32 R33 R34 R35 R36 R37 R38 R39 R40 R41
 
 ### Steps
 
