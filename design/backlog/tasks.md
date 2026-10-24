@@ -5602,7 +5602,8 @@ choose, to answer an access or correction request. The form says what to fix and
   (the same-day wording) is not built.
 - The `429` line, "Not exported: too many exports in the last minute. Wait a minute, then try again.", and its handling
   are built and tested with a mocked `429`. The server's limit of 10 a minute does not exist yet: T25 (S06.01.05) must
-  attach it to this route, `GET /api/reports/participants/{participantId}/export`, beside the daily report's.
+  attach it to this route, `GET /api/reports/participants/{participantId}/export`, beside the daily report's. T25 did
+  (#115, 24 October 2026): the two routes share one limit.
 - Speed. Generation is synchronous and in memory, with the daily report's per-note reads. A year with history costs
   about 1,600 round trips: 3 for each version read, plus the edit, summary and review reads. Earlier versions are read
   only when asked, and a note's reviews only when one of its earlier versions was flagged. If the deployed time is too
@@ -5870,7 +5871,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T25
-status: new
+status: done
 release: R1
 lane: B
 size: M
@@ -5902,10 +5903,79 @@ open.
 - The export limit (design.md §9.9, 10 a minute for each user) attaches to the export route only, never to the
   `/reports` group or to `GET /api/reports/daily/{date}/has-notes`, which the Report screen asks on every step and every
   time the window takes focus and which falls under the general limit (T17's Notes).
+- Built (24 October 2026). The decisions where design.md was silent are assumed defaults A95 (how the limits count)
+  and A96 (which requests each limit covers), the next free numbers on `main` when this was written; if T24 or T26
+  lands an A-number first, these are renumbered at the rebase. Each is the owner's to overturn.
+- The rate limits (#115) are the built-in limiter with no package, and the CI run of that pull request is the evidence
+  for S06.01.05: `RateLimitsTests` has a test for each row, for the forwarded address, for the shared export count and
+  for autosave under the 300, and `SecurityHeadersTests` has the 429's headers. A 429 is problem details with no
+  design.md §6.9 code and carries `Retry-After: 60`. Nothing was run locally.
+- The review record is `ops/security-review.md`: the ASVS 5.0.0 level 1 and 2 self-review (70 level 1 and 183 level 2
+  requirements read from the standard, a row for each; the standard has 345 in all, and the 92 at level 3 are out of
+  scope), the check of design.md §8 and §9, the findings register and the ZAP section. **Open High/Critical: none.**
+  There are 25 findings: 1 Medium, open for the owner, 17 Low and 7 Informational, each with a decision. No finding is
+  High or Critical, so no bug story was filed and nothing under `infra/` was edited.
+- Owner notes, none blocking:
+  1. The repository is public, where design.md §9.11, §10.4 and S06.01.03's Note assume a private one (A92 already
+     treats it as public). The review is committed as S06.01.01 requires, with no secrets, identifiers, names or
+     participant data; F-25 records that `infra/bootstrap.bicep` holds the public GitHub identifiers of the account and
+     the repository, which the project's no-IDs rule would otherwise forbid. Should a public repository keep that?
+  2. CodeQL and secret scanning are free on a public repository. They stay cut unless the owner turns them on, which is
+     a GitHub setting done by hand.
+  3. Shared-office capacity (A96): about 10 sign-ins a minute from one shared address. Should §9.9's 30 be raised for
+     larger offices? Step 142 is the case to watch.
+  4. F-1 (Medium): sign-out does not invalidate a copied session cookie. Accept it, or have sign-out rotate the
+     person's security stamp, which signs them out of every device.
+  5. F-23: the repository's GitHub settings that are not files (fork pull-request approval, the `test` and `prod`
+     environments' branch rules, the default token permission) were not read; the owner looks at them in GitHub.
+- Dependabot: `.github/dependabot.yml` has four weekly entries (NuGet at `/`, npm at `/src/grow2notes-spa`, npm at
+  `/tests/e2e`, GitHub Actions at `/`), each with one group of minor and patch updates, so a major version arrives as a
+  pull request of its own, and a `chore(scope)` commit prefix so the titles are Conventional Commits. Alerts are a
+  GitHub setting, step 140.
+- Real-site results are pending: ops/first-use-in-test.md steps 140 to 142 (Dependabot alerts, the ZAP baseline, and
+  the two-device check that the limits key on the real client). Record them here, and the ZAP results in
+  `ops/security-review.md`.
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: the four design.md §9.9 limits answer `429` with `Retry-After: 60`; Dependabot is configured; a committed
+  ASVS 5.0.0 level 1 and 2 review record exists with no High or Critical finding open. No migration, audit event,
+  error code, endpoint or screen change.
+- Design: the built-in ASP.NET Core rate limiter (no package). Three named fixed one-minute policies: `sign-in` (30 a
+  minute per client address, on a new `MapSignInGroup` holding the ten sign-in and setup endpoints), `export` (10 a
+  minute per user, on both export routes so they share one count) and `general` (300 a minute per user, or per address
+  when signed out, on the `/api` group). The account row (10 a minute for the password step by trimmed normalised
+  email, and for the code step by pending two-factor user) is a singleton `AccountRateLimiter` called inside the two
+  endpoints. `UseRateLimiter` sits straight after `UseAuthorization`, so a 429 gets the §9.7 headers, no-store and
+  problem details from the existing middleware.
+- Domain: in-memory only. `RateLimitPermits` (DI-only, `Design` = 30, 10, 10, 300) is the test seam; production cannot
+  change it. Policy names are public constants for T38.
+- Reuse: status code pages, security and cache header middleware, forwarded-headers setup, `Policies.cs` pattern,
+  Identity's email normaliser, existing test fixtures, `useAutosave` test harness, e2e `fixtures.ts`.
+- Decisions where design.md is silent: A95 how the limits count; A96 which requests each limit covers (antiforgery is
+  under the general limit); severity scale Critical to Informational; Dependabot groups minor and patch only. Open
+  owner notes (none blocking): the repository is public, CodeQL and secret scanning stay cut, and about 10 sign-ins a
+  minute from one shared office address.
+- Tests: `RateLimitsTests` (one per row, forwarded address, design numbers), a header test for the 429, a steady-typing
+  autosave test, and a per-context forwarded address in e2e. Test hosts lift the limits.
+
+### Verticals
+
+- v1: Rate limits: the four §9.9 rows, test seams and tests; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R22 R24 R25 R26 R27 R31
+- v2: Security review record, Dependabot, by-hand steps, design and backlog updates; depends_on: v1;
+  R14 R15 R16 R17 R18 R19 R20 R21 R23 R28 R29 R30 R32
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Rate limits (#115; v1): `RateLimits`, `RateLimitPermits` and `AccountRateLimiter`, `MapSignInGroup`,
+      `UseRateLimiter` after `UseAuthorization`, the lifted limits in the test hosts, and `RateLimitsTests`, the 429
+      header test, the steady-typing autosave test and a forwarded address for each e2e browser context.
+- [x] Review and Dependabot (v2): `.github/dependabot.yml`, `ops/security-review.md` and its entry in `ops/README.md`,
+      A95 and A96 with the §9.9 sentence, ops/first-use-in-test.md's steps 140 to 142, the stories S06.01.01 to
+      S06.01.03 and S06.01.05, and this task's Notes.
 
 ---
 

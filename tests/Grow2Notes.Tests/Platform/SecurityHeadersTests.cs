@@ -1,5 +1,8 @@
 using System.Net;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Platform;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Grow2Notes.Tests.Platform;
 
@@ -69,6 +72,24 @@ public sealed class SecurityHeadersTests(Grow2NotesFactory factory, SqlServerFix
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
+        AssertCarriesTheHeadersOfDesignMd(response);
+    }
+
+    // The first response of the rate limiter (design.md §9.9): one permit for each of the four limits, so the second
+    // call of a signed-out client to the antiforgery endpoint is over the general limit. The limiter sits inside the
+    // header middleware, so its bare 429 gets the headers like any other response.
+    [Fact]
+    public async Task A_429_of_a_rate_limit_carries_the_headers_of_design_md_9_7_once_each_with_their_values()
+    {
+        await using var limited = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(
+            services => services.AddSingleton(new RateLimitPermits(1, 1, 1, 1))));
+        using var client = limited.CreateClient(new() { BaseAddress = new(BaseAddress), AllowAutoRedirect = false });
+        using var first = await client.GetAsync("/api/auth/antiforgery", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.NoContent, first.StatusCode);
+
+        using var response = await client.GetAsync("/api/auth/antiforgery", TestContext.Current.CancellationToken);
+
+        await response.ReadProblemAsync(HttpStatusCode.TooManyRequests);
         AssertCarriesTheHeadersOfDesignMd(response);
     }
 

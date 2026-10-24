@@ -203,6 +203,9 @@ builder.Services.AddPolicies();
 // Antiforgery, whose token the /api group's filter checks on every request that changes something (design.md §9.8).
 builder.Services.AddApiGroup();
 
+// The limits of design.md §9.9.
+builder.Services.AddRateLimits();
+
 // A note's address names its date as yyyy-MM-dd (design.md §6.1), and an address with any other gets the unknown
 // path's 404.
 builder.Services.Configure<RouteOptions>(
@@ -275,8 +278,8 @@ builder.Services.AddScoped<SignOutAllCommand>();
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
 // App Service guidance gives for the front end, as IPv4-mapped networks, since the app's dual-stack socket gives IPv4
-// addresses in that form, and as plain IPv4 too, in case a socket gives them so; so audit events, and later the rate
-// limits, key on the real client (design.md §9.9). The link-local range is trusted too, because Linux App Service's
+// addresses in that form, and as plain IPv4 too, in case a socket gives them so; so audit events and the rate limits
+// key on the real client (design.md §9.9). The link-local range is trusted too, because Linux App Service's
 // container sees the front-end hop from it (such as 169.254.130.1); it is not routable from outside the host, so no
 // client can reach the app from it to send the headers itself.
 // ForwardLimit keeps its default of 1: only the last X-Forwarded-For entry, the one the front end added, is used, and
@@ -347,6 +350,11 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// After the forwarded headers and authentication, so its keys, the client's address and the user, are the real ones,
+// and after authorization, so the 401 and 403 that it answers use no permit. Inside the header middleware and the
+// status code pages, so a 429 gets the headers of design.md §9.7 and problem details like any other bare error status.
+app.UseRateLimiter();
+
 // The Vite build in wwwroot, served from the same origin as the API (design.md §7.2). Like the SPA's page below, it is
 // for everyone: a signed-out user gets the sign-in page.
 app.MapStaticAssets().AllowAnonymous();
@@ -361,15 +369,6 @@ var api = app.MapApiGroup()
     .MapMeEndpoint()
     .MapLogoutEndpoint()
     .MapPingEndpoint()
-    .MapSetupStartEndpoint()
-    .MapSetupAuthenticatorEndpoints()
-    .MapSetupPasswordEndpoint()
-    .MapSetupPasskeyOptionsEndpoint()
-    .MapSetupPasskeyEndpoint()
-    .MapPasskeyOptionsEndpoint()
-    .MapPasskeySignInEndpoint()
-    .MapPasswordSignInEndpoint()
-    .MapTotpSignInEndpoint()
     .MapTodayEndpoint()
     .MapMyDraftsEndpoint()
     .MapParticipantHeaderEndpoint()
@@ -383,6 +382,18 @@ var api = app.MapApiGroup()
     .MapReviewListEndpoint()
     .MapDailyReportEndpoint()
     .MapParticipantExportEndpoint();
+
+// The sign-in and setup endpoints have their own limit, by the client's address, in place of the /api group's.
+api.MapSignInGroup()
+    .MapSetupStartEndpoint()
+    .MapSetupAuthenticatorEndpoints()
+    .MapSetupPasswordEndpoint()
+    .MapSetupPasskeyOptionsEndpoint()
+    .MapSetupPasskeyEndpoint()
+    .MapPasskeyOptionsEndpoint()
+    .MapPasskeySignInEndpoint()
+    .MapPasswordSignInEndpoint()
+    .MapTotpSignInEndpoint();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()

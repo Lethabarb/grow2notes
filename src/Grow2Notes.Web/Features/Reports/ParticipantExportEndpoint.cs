@@ -38,7 +38,8 @@ internal static class ParticipantExportEndpoint
     public static RouteGroupBuilder MapParticipantExportEndpoint(this RouteGroupBuilder api)
     {
         api.MapGet("/reports/participants/{participantId:guid}/export", ExportAsync)
-            .RequireAuthorization(Policies.Manager);
+            .RequireAuthorization(Policies.Manager)
+            .RequireRateLimiting(RateLimits.Export);
         return api;
     }
 

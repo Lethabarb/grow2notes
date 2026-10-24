@@ -338,6 +338,25 @@ describe('A save', () => {
   });
 });
 
+describe('Typing steadily', () => {
+  // design.md §9.9 allows 300 requests a minute for each user, autosave's included.
+  it("for five minutes sends at most 30 saves a minute, far under the server's 300", async () => {
+    const { type } = renderAutosave();
+    const start = Date.now();
+
+    for (let second = 1; second <= 300; second++) {
+      type('x'.repeat(second));
+      await wait(1_000);
+    }
+
+    for (let minute = 0; minute < 5; minute++) {
+      const saves = sentSaves.filter(({ at }) => Math.floor((at - start) / 60_000) === minute);
+      expect(saves.length).toBeGreaterThanOrEqual(1);
+      expect(saves.length).toBeLessThanOrEqual(30);
+    }
+  });
+});
+
 describe('A pending edit', () => {
   /** A read of the draft that answers `draft`, as the server does. */
   function serveDraft(draft: Draft) {

@@ -1123,3 +1123,37 @@ phones and screen readers; these cover the Export record screen, which is a diff
      the line until you decide. (record-export.md open question 6; file-download.md.)
 
 Record the results in T21's Notes (S05.01.04).
+
+### Security review and rate limits, once T25 is in test
+
+140. In the repository's Settings, under Code security, turn on Dependabot alerts. Then open Insights, Dependency graph,
+     Dependabot and look for the four entries of `.github/dependabot.yml`, NuGet at `/`, npm at `/src/grow2notes-spa`,
+     npm at `/tests/e2e` and GitHub Actions at `/`, with no error beside any of them. After the first weekly run, look
+     for at most one grouped `chore(deps)` pull request for each entry, and for any new major version as a pull request
+     of its own. (S06.01.03; design.md §9.11.)
+141. The ZAP baseline scan, on your own machine with your own copy of ZAP, against the test site only, with no
+     credentials and no ZAP sign-in. Run it twice: once on the site root with the AJAX spider (`-j`), for the pages a
+     signed-out visitor sees, and once on `/api/auth/me` signed out, for an `/api` response. If most of a report's
+     requests were answered `429`, the scan is incomplete: wait a minute and run it again with the spider slowed. Keep
+     each raw report yourself, because it can hold cookie or token values. In `ops/security-review.md`'s ZAP section
+     write what was covered (the targets, the two passes, the number of URLs and the number of `429` answers), and each
+     alert as fixed, accepted with a reason, or a false positive. Look for no High alert open; take any High to the
+     developer as a bug. No alert about a missing Strict-Transport-Security, Content-Security-Policy or
+     X-Content-Type-Options header, or about a cookie without Secure, confirms ASVS rows 3.3.1, 3.4.1, 3.4.3 and 3.4.4
+     of `ops/security-review.md`; an alert on any of them is a finding to decide. Write down no address, ID, email,
+     cookie or token. (S06.01.02; design.md §14 M6; the Server header and the cookie, cache and header alerts are
+     decided here, as `ops/security-review.md` says.)
+142. The rate limits key on the real client, with two devices on different networks: the laptop on the office network
+     and a phone on mobile data, nobody signed in. First look at step 15's result: the audit `IpAddress` was your own
+     address and not a private or `169.254.` one. If it was not, stop and tell the developer, because every person would
+     then share one count. On the laptop, in Chrome with the Network panel open, open the setup page with a made-up
+     user and token in its address, which sends one `POST /api/auth/setup/start` (`SetupPage.tsx` sends one for each
+     load) and shows "This link has expired". Select that request and press R 29 times to replay it, which makes 30 in
+     the minute. Then open the made-up link once more. Look for "Too many tries. Wait 1 minute, then try again.", and
+     for the request answering `429` with `Retry-After: 60`. While that is showing, open the same made-up link on the
+     phone on mobile data and look for "This link has expired", not "Too many tries". A minute later the laptop shows
+     "This link has expired" again. People on one network share one count of 30 a minute, by design, so a shared office
+     is the case to watch: about 3 requests for each password sign-in means about 10 sign-ins a minute from one office
+     address (design.md A96). Write down no link. (S06.01.05; design.md §9.9, A95, A96.)
+
+Record the results in T25's Notes (S06.01.01, S06.01.02, S06.01.03 and S06.01.05).
