@@ -10,9 +10,11 @@ using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
+using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,8 +31,9 @@ namespace Grow2Notes.Tests.Platform;
 /// a participant's given and family names, which the app's own endpoint adds, saving them with their audit event, and
 /// since T05 the text of a goal that the app's own endpoint adds to them, saved with its own, and since T08 the Guided
 /// notes of their note's first save, which starts the note with its own, and since T09 the reason it flags the note
-/// with, and the Guided notes and reason it submits the note with, which writes its own. The app runs with telemetry
-/// on, as in Azure, and everything it writes or sends goes to a sink here.
+/// with, and the Guided notes and reason it submits the note with, which writes its own; and, since T24, the note's
+/// text and flag reason in no audit entry's Details. The app runs with telemetry on, as in Azure, and everything it
+/// writes or sends goes to a sink here.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -50,6 +53,12 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     private static readonly DateTime TimeUtc = new(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
 
     private static readonly string Canary = $"canary-{Guid.NewGuid():N}";
+
+    // The note's text and its flag's reason, each its own, so a failure names the field that leaked. Both hold Canary,
+    // so the checks of the logs, telemetry and responses cover them.
+    private static readonly string NarrativeCanary = $"{Canary}-narrative";
+
+    private static readonly string FlagReasonCanary = $"{Canary}-flag-reason";
 
     [Fact]
     public async Task A_canary_in_request_bodies_and_SQL_error_text_appears_in_no_log_telemetry_or_response()
@@ -93,12 +102,12 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
                 clientId = Guid.NewGuid(),
                 seq = 1,
                 listsVersion = form.GetProperty("listsVersion").GetString(),
-                narrative = Canary,
+                narrative = NarrativeCanary,
                 tickedGoalIds = Array.Empty<Guid>(),
                 pickedGroupIds = Array.Empty<Guid>(),
                 tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = true,
-                flagReason = Canary,
+                flagReason = FlagReasonCanary,
             },
             ifMatch: null);
         Assert.Equal(HttpStatusCode.Created, noteStarted.StatusCode);
@@ -109,18 +118,27 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
             Content = JsonContent.Create(new
             {
                 baseVersion = 0,
-                narrative = Canary,
+                narrative = NarrativeCanary,
                 tickedGoalIds = Array.Empty<Guid>(),
                 pickedGroupIds = Array.Empty<Guid>(),
                 tickedCommonItemIds = Array.Empty<Guid>(),
                 isFlagged = true,
-                flagReason = Canary,
+                flagReason = FlagReasonCanary,
             }),
         };
         submit.Headers.Add(AntiforgeryTokens.Header, await manager.FetchTokenAsync());
         submit.Headers.Add(NoteVersionEndpoints.IdempotencyKeyHeader, Guid.NewGuid().ToString());
         using var noteSubmitted = await manager.SendAsync(submit, cancellationToken);
         Assert.Equal(HttpStatusCode.Created, noteSubmitted.StatusCode);
+
+        // The note's own entries, which the check asks for by type, so it does not pass by reading nothing. The shared
+        // canary is not looked for here: participant.created and goal.created record the names and the goal's text as
+        // their new values, by design (A28).
+        var noteEntries = await AuditEntriesAboutAsync(app, participantId);
+        Assert.Contains(AuditEventTypes.Note.DraftStarted, noteEntries.Select(entry => entry.EventType));
+        Assert.Contains(AuditEventTypes.Note.Submitted, noteEntries.Select(entry => entry.EventType));
+        Assert.DoesNotContain(noteEntries, entry => HoldsCanary(entry, NarrativeCanary));
+        Assert.DoesNotContain(noteEntries, entry => HoldsCanary(entry, FlagReasonCanary));
 
         // The app answered each failing request with a 500 problem, whose body the check below looks in too, as it does
         // in the added participant's and goal's, and the started and submitted note's.
@@ -226,6 +244,23 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
         });
     }
 
+    // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen.
+    private static async Task<List<AuditEntry>> AuditEntriesAboutAsync(
+        WebApplicationFactory<Program> app, Guid participantId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
+            .SqlQuery<AuditEntry>($"""
+                SELECT [EventType], [Details]
+                FROM [AuditEvent]
+                WHERE [ParticipantId] = {participantId}
+                """)
+            .ToListAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static bool HoldsCanary(AuditEntry entry, string canary) =>
+        entry.Details?.Contains(canary, StringComparison.OrdinalIgnoreCase) == true;
+
     private static bool IsFailingRequest(Activity span) =>
         span.Kind == ActivityKind.Server && span.GetTagItem("url.path") is TruncationPath or DuplicateEmailPath;
 
@@ -244,6 +279,8 @@ public sealed class TelemetryCanaryTests(Grow2NotesFactory factory, SqlServerFix
     }
 
     private sealed record CanaryRequest(string Value);
+
+    private sealed record AuditEntry(string EventType, string? Details);
 
     /// <summary>Every place the app writes to or sends to, each in memory.</summary>
     private sealed class Sinks
