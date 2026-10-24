@@ -16,7 +16,9 @@ internal static class ClientAddressHeader
 {
     public const string Name = "X-Test-Client-Address";
 
-    /// <summary>Makes the app that is built from <paramref name="services"/> read the address from the header.</summary>
+    /// <summary>
+    /// Makes the app that is built from <paramref name="services"/> read the address from the header.
+    /// </summary>
     public static IServiceCollection AddClientAddressHeader(this IServiceCollection services) =>
         services.AddSingleton<IStartupFilter>(new Filter());
 

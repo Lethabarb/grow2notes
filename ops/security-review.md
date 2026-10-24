@@ -107,7 +107,7 @@ bug story was filed and no file under `infra/` was edited. Counts: Medium 1; Low
 | Shared-office capacity | F-19. |
 | Setup's code step | F-21. |
 | The fixed SQL password in CI and the test guide | F-9 (the value is not repeated here). |
-| Idle per-key limiters | No finding: the built-in limiter drops a window that has gone idle, and a key is made only after the address limit lets the request through. |
+| Idle per-key limiters | No finding: the built-in limiter drops a window that has gone idle, and a key is made only after the address limit lets the request through, and the password step's key is cut to the email column's size (256), so a key cannot be large. |
 | The public repository's workflows | Checked in section 4.3: no finding beyond F-9, F-10 and F-23. |
 
 ## 4. Controls of design.md §8 and §9

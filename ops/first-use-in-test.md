@@ -1138,8 +1138,11 @@ Record the results in T21's Notes (S05.01.04).
      each raw report yourself, because it can hold cookie or token values. In `ops/security-review.md`'s ZAP section
      write what was covered (the targets, the two passes, the number of URLs and the number of `429` answers), and each
      alert as fixed, accepted with a reason, or a false positive. Look for no High alert open; take any High to the
-     developer as a bug. Write down no address, ID, email, cookie or token. (S06.01.02; design.md §14 M6; the Server
-     header and the cookie, cache and header alerts are decided here, as `ops/security-review.md` says.)
+     developer as a bug. No alert about a missing Strict-Transport-Security, Content-Security-Policy or
+     X-Content-Type-Options header, or about a cookie without Secure, confirms ASVS rows 3.3.1, 3.4.1, 3.4.3 and 3.4.4
+     of `ops/security-review.md`; an alert on any of them is a finding to decide. Write down no address, ID, email,
+     cookie or token. (S06.01.02; design.md §14 M6; the Server header and the cookie, cache and header alerts are
+     decided here, as `ops/security-review.md` says.)
 142. The rate limits key on the real client, with two devices on different networks: the laptop on the office network
      and a phone on mobile data, nobody signed in. First look at step 15's result: the audit `IpAddress` was your own
      address and not a private or `169.254.` one. If it was not, stop and tell the developer, because every person would

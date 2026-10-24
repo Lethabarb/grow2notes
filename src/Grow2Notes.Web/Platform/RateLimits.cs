@@ -29,7 +29,9 @@ internal static class RateLimits
     /// <summary>The policy of the two export endpoints, which share one count for each user.</summary>
     public const string Export = "export";
 
-    /// <summary>The policy of every other API endpoint: for each user, or for each client address if signed out.</summary>
+    /// <summary>
+    /// The policy of every other API endpoint: for each user, or for each client address if signed out.
+    /// </summary>
     public const string General = "general";
 
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);

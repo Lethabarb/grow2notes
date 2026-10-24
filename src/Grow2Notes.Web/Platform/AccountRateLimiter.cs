@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Grow2Notes.Web.Data;
 
 namespace Grow2Notes.Web.Platform;
 
@@ -20,10 +21,15 @@ internal sealed class AccountRateLimiter(RateLimitPermits permits) : IDisposable
     /// Uses a permit of the account with <paramref name="normalisedEmail"/>, known or not, so that an unknown email is
     /// counted like a known one. It says whether there was one.
     /// </summary>
-    public bool TryAcquirePasswordStep(string normalisedEmail) =>
+    public bool TryAcquirePasswordStep(string normalisedEmail)
+    {
         // Trimmed because SQL Server's comparison ignores trailing spaces, so the account is found with or without them
-        // (leading spaces only merge emails that find no account).
-        TryAcquire("password:" + normalisedEmail.Trim());
+        // (leading spaces only merge emails that find no account). Cut to the column's size because the limiter keeps
+        // each key for the window and the request's email has no other bound; no account's email is longer, so the
+        // cut merges only emails that find no account.
+        var email = normalisedEmail.Trim();
+        return TryAcquire("password:" + email[..Math.Min(email.Length, Limits.Email)]);
+    }
 
     /// <summary>Uses a permit of the user whose password step is done, and says whether there was one.</summary>
     public bool TryAcquireCodeStep(Guid userId) => TryAcquire("code:" + userId);

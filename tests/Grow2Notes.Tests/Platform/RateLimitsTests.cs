@@ -111,6 +111,26 @@ public sealed class RateLimitsTests(Grow2NotesFactory factory, SqlServerFixture 
         Assert.Equal(HttpStatusCode.Unauthorized, unknown.StatusCode);
     }
 
+    // The limiter keeps each key for the window, so the key is cut to the size of an email column: two emails that
+    // differ only after that share a count.
+    [Fact]
+    public async Task The_password_step_counts_emails_that_differ_only_beyond_the_column_size_as_one()
+    {
+        await using var host = Limited();
+        using var client = host.CreateHttpsClient();
+        client.DefaultRequestHeaders.Add(ClientAddressHeader.Name, "198.51.100.3");
+        var prefix = new string('a', 256);
+
+        for (var i = 0; i < 10; i++)
+        {
+            using var response = await client.SendPasswordAsync($"{prefix}{i}@example.org", PasswordSignIn.Password);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        using var eleventh = await client.SendPasswordAsync($"{prefix}10@example.org", PasswordSignIn.Password);
+        await AssertRefusedAsync(eleventh);
+    }
+
     // A code that is badly formed fails before Identity reads it, so the answer never depends on the clock, and it
     // counts towards no lockout.
     [Fact]
@@ -169,7 +189,8 @@ public sealed class RateLimitsTests(Grow2NotesFactory factory, SqlServerFixture 
         Assert.NotEqual(HttpStatusCode.TooManyRequests, otherExport.StatusCode);
     }
 
-    // The autosave's PUT has no token here, so the group's filter would answer it 400 if the limiter did not come first.
+    // The autosave's PUT has no token here, so the group's filter would answer it 400 if the limiter did not come
+    // first.
     [Fact]
     public async Task Everything_else_allows_300_a_minute_for_each_user_autosave_included()
     {
