@@ -17,11 +17,21 @@ public sealed partial class AuditTypesTests
 {
     [Fact]
     public void The_event_type_constants_are_exactly_the_events_of_design_md_5_4() =>
-        AssertSameNames("event type", EventTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEventTypes)));
+        AssertSameNames(
+            "event type", "design.md", EventTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEventTypes)));
+
+    [Fact]
+    public void Every_event_type_constant_has_a_row_in_the_shared_audit_events_test_and_every_row_a_constant() =>
+        AssertSameNames(
+            "event type",
+            "AuditEventsTests' rows",
+            new(AuditEventsTests.RowEventTypes, StringComparer.Ordinal),
+            ConstantsIn(typeof(AuditEventTypes)));
 
     [Fact]
     public void The_entity_type_constants_are_exactly_the_entity_types_of_design_md_5_3() =>
-        AssertSameNames("entity type", EntityTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEntityTypes)));
+        AssertSameNames(
+            "entity type", "design.md", EntityTypesIn(DesignMd.Read()), ConstantsIn(typeof(AuditEntityTypes)));
 
     [Fact]
     public void Every_event_type_fits_the_EventType_column() =>
@@ -153,21 +163,22 @@ public sealed partial class AuditTypesTests
         .. type.GetNestedTypes().SelectMany(ConstantsIn),
     ];
 
-    private static void AssertSameNames(string kind, SortedSet<string> design, List<string> constants)
+    private static void AssertSameNames(
+        string kind, string source, SortedSet<string> named, List<string> constants)
     {
         string[] differences =
         [
-            .. design.Except(constants, StringComparer.Ordinal)
-                .Select(name => $"- {name}: in design.md, but no constant has it"),
-            .. constants.Except(design, StringComparer.Ordinal).Order(StringComparer.Ordinal)
-                .Select(name => $"- {name}: a constant, but not in design.md"),
+            .. named.Except(constants, StringComparer.Ordinal)
+                .Select(name => $"- {name}: in {source}, but no constant has it"),
+            .. constants.Except(named, StringComparer.Ordinal).Order(StringComparer.Ordinal)
+                .Select(name => $"- {name}: a constant, but not in {source}"),
             .. constants.GroupBy(name => name, StringComparer.Ordinal).Where(group => group.Count() > 1)
                 .Select(group => $"- {group.Key}: the value of {group.Count()} constants"),
         ];
 
         if (differences.Length > 0)
         {
-            Assert.Fail($"The {kind} constants differ from design.md:\n{string.Join('\n', differences)}");
+            Assert.Fail($"The {kind} constants differ from {source}:\n{string.Join('\n', differences)}");
         }
     }
 
