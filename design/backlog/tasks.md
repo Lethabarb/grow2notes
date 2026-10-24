@@ -6069,7 +6069,7 @@ Planned 24 October 2026.
 
 ```yaml
 id: T26
-status: doing
+status: done
 release: R1
 lane: C
 size: M
@@ -6101,6 +6101,99 @@ sideways at 320 px.
 - Orders the by-hand accessibility steps on ops/first-use-in-test.md into one sequence (screen readers, real devices,
   zoom, contrast and forced colours, the five-worker words check), starting from the steps the cut stories moved there.
   Whether they hold go-live is owner question Q12.
+- Built (24 October 2026) as five pull requests into `feat/t26-accessibility-pass`: v1 (#114) the shared helpers, v2
+  (#118) the key flows, v3 (#117) and v4 (#131) the foundations calls and the audit additions, and v5 (#134) the 320 px
+  check and these documents. T26 adds no endpoint, entity, migration, audit event, screen, route, setting or copy key:
+  `Data/Migrations` still ends at `20261023003611_AddNoteReview`. Nothing was run locally (compile and lint only); the
+  CI Playwright run is the evidence: run 40107581139 on #134 passed at commit bcadaad, whose last code commit is
+  "test(a11y): put the window and scroll back after the 320 px check", after a rebase onto `main` with T24 in it. The
+  run on the commit that carries these Notes cannot be known when they are written.
+- The decision where design.md was silent is the assumed default A98, *Accessibility evidence*: the CI run on the pull
+  request is the automated evidence for "against the release candidate in the test environment", and the run on the
+  push to `main`, which tests the build that `deploy.yml` then deploys to test, is the one for the build in test; one
+  automated keyboard-only run of each section 4.13 flow, at 1280x800 in Chromium, meets "on a laptop with the keyboard
+  only". A98 is the next free number on `main` when this was written (T25 took A95 and A96, and T24 A97). The owner may
+  overturn it. The other choices below are test method and are recorded only here.
+- What the automated pass proves, and where:
+  - Each section 4.13 flow, keyboard only, in the published app, signed in for real, at 1280x800: `key-flows.spec.ts`,
+    two tests with one `test.step` to a flow, named as the section names it. The CI report therefore has a result for
+    each: `a manager, keyboard only` holds Forgotten note, Daily report and Access request; `a worker and a manager,
+    keyboard only` holds Wrong participant, Write today's note, Correct a note, Flag and Lost phone. Every stop passed
+    shows the ring and none traps focus (`tabTo`); the focus landing is asserted before each axe run.
+  - Foundations on every screen (lang, 7:1 text, nothing moves, nothing pinned, a ring on every stop in normal and
+    forced colours, nothing cut off at 320x800, 320x200 and 640x400 with 200% text and WCAG 1.4.12 spacing):
+    `expectFoundationsToPass`, called from each screen's own spec in its fullest state and in each dialog, as the v3 and
+    v4 pull requests list screen by screen.
+  - No sideways scroll at 320 px in every state that axe checks: `expectAxeToPass` in `axe.ts` now begins with that
+    check, so every later task that adds a state with `expectAxeToPass` inherits it (tests/README.md).
+- Audit additions per screen (a screen's checks that no spec proved, added to that screen's own spec):
+  - Shell: Tab walks of the worker and manager headers with Account open. Start-up: walks of Could not connect, There is
+    a problem and the crash pages. Session warning: axe, which it had not had. Sign-in: walks of views A, B and A with
+    its error summary. Sign-in again: view C's walk as `expectStops`. Setup: walks of views D to G. Users with a long
+    address: axe, which it had not had. Invite user and Edit user: `expectStops` walks in place of ad hoc id walks. An
+    Invited person's page: a Tab walk.
+  - Today: the Submitted banner's edge under forced colours. Report: axe in S5, S8, S12, S13 and S16, browser Back with
+    focus on a download button (the one of the five never-on-body cases that was missing), and the unavailable buttons
+    of S4 under forced colours. Flagged: the ring's offset and inset (view link 2 px; To review row link `::after` 3 px
+    solid, offset -3 px), once for every screen, as both come from global rules.
+- Corrected facts. Guide prompts' seven axe states were already covered (the dossier's count of 4 counted the helper
+  once). Today's Load failed, Flagged's first-load and Show older errors and Export record's failed state were also
+  already covered, so v4's list of states left for the owner overstated the gap. Flagged's slow Show older (L8) and
+  "Flag removed in a later edit" line (L5) were not checked separately, and no fault is known.
+- Silent-screen choices, the simplest option taken: a walk of a view that focuses its `<h1>` on showing starts from the
+  skip link by taking focus out of the page backwards; stops are named as `focusStop` reads them; the session warning is
+  held open for the sweep by leaving its refreshes unanswered. Dialogs: the pre-decided fallback (a sweep inside a modal
+  dialog ends at its first stop) was not needed. A native date field is reached by Tab and given its value with `fill`,
+  whatever the browser's locale; its calendar button is rung by the browser, so `tabTo` does not expect the page's ring
+  there. Access request's From defaults to yesterday's note, so it is asserted and not filled. Correct a note is done by
+  the manager (Version history is a manager's link); both back links pop, so the final landing is Jane's row on Today.
+  Lost phone: the manager's Reset sign-in is the flow, `resetSignIn` stands for the emailed link and makes a second,
+  newer one, and the worker sets up again on `thirdDevice` while `secondDevice`, reloaded, shows view A. Wrong
+  participant's submitted half (edit it to the correct content, then write the other participant's note) is the same
+  keyboard path as Correct a note plus Write today's note, so it is not repeated. A run that crosses Melbourne midnight
+  may fail once; accepted. The read view's `<h1>` ring takes base.css's 2 px, where note-read-view.md names 4 px: as
+  built, for the planner to decide.
+- A filled single-line field at 320 px and 200% text scrolls its value inside itself, as in every browser, and
+  `expectToFit` counts that as cutting off what it holds. Accepted, not excluded: a test that calls it at that size
+  empties the field first, as Edit user's does (tests/README.md).
+- The 320 px check was the last to land, after a rebase onto `main`. Its first run found no sideways scroll at 320 px
+  at any call of `expectAxeToPass`, so no SPA file changed for it. It did fail two states of the note form (a
+  group picked, and the dead end after midnight) on axe's `target-size` rule at 375 px or 1280 px, which the reflow
+  had changed; `expectAxeToPass` therefore puts the window and the scroll back as the test left them before its
+  axe runs (tests/README.md).
+- Faults that CI showed, fixed in the component at fault: the shared back link now wraps a long label
+  (`BackLink.module.css`, `overflow-wrap: anywhere`), which reaches every screen with one. No token, breakpoint or
+  wording changed. Test helpers: `expectToFit` measures each word, and `tabTo` does not expect the page's ring on a date
+  field's calendar button.
+- No removals: no per-screen test asserts nothing but 320 px sideways scroll, since each also checks 200% text or
+  layout.
+- Readability (a one-off run: a script in the scratchpad, never committed, that downloaded nothing; no wording was
+  changed and nothing gates the build). It read 480 strings from `src/copy` (`strings.ts`, `messages.ts`,
+  `pageNames.ts`, `apiErrors.ts`), with a template's slots read as one short word. The JSX under `src/features` and
+  `src/routes` holds no words, only 14 identifiers and paths. Sentences over 20 words: 0. Messages over 2 sentences: 6.
+  Flesch-Kincaid grade above Year 7, on the 169 strings of 5 words or more, with vowel groups for syllables: 18, one of
+  them a fragment that the run split in two. It is a smoke alarm only (microcopy.md §8): a short string
+  moves the grade a great deal. Owner wording questions, worker-facing first:
+  - Over 2 sentences, worker: `signIn.failed` ("Sign-in failed. Check your details and try again. After 5 failed
+    attempts, sign-in pauses for 15 minutes."; the words are design.md's own).
+  - Grade above 7, worker: `savedIsKept` ("Anything already saved is kept."), `editingSubmittedNote` (its slot reads as
+    a long word, so probably a false alarm) and the API error `note.not_a_draft` ("This draft has already been
+    submitted or discarded.").
+  - Over 2 sentences, manager: `setup.authenticatorApp.intro`, `setup.authenticatorApp.thisPhone`,
+    `guidePrompts.conflict`, `listEditor.item.help` and `rowChangedWhileEditing`.
+  - Grade above 7, manager: the Export record words (`wordHint`, `includeHistory`, `includeHistoryHint`),
+    `emailFormat`, `oneTimeCode.label`, `setup.password`, `setup.authenticatorApp` (`heading`, `getApp`, `qrAlt`),
+    `users.roleHint.Manager`, `users.lastManagerNotice`, `review.commentHint` and the API errors `review.not_current`
+    and `user.email_in_use`.
+- Q12 (do the by-hand accessibility checks hold go-live?) is open and affects T28 only.
+- A criterion that needs a real device or a person stays unticked until a by-hand run proves it. S06.02.01's two
+  criteria are ticked on green CI (F06.02, with the CI run named); S06.02.02's stay unticked until steps 143 to 147 and
+  the steps that their order paragraph cites are run and recorded here.
+- The Dragon 1-second save is not built: it is added only if step 22's by-hand run shows that dictation skips input
+  events.
+- Real-site results are pending: ops/first-use-in-test.md steps 143 to 147, in the order that its section *Accessibility
+  pass on the finished app* gives, with steps 20 to 25 in their places. Record the results here, for each item and each
+  device (S06.02.01, S06.02.02).
 
 ### Plan
 
@@ -6118,10 +6211,10 @@ Planned 24 October 2026.
 - Reuse: `expectAxeToPass`, `expectStops`, `expectFocusAt`, `layout.ts` helpers, `signInThroughSetup`,
   `addJaneWithTwoGoals`, `inviteThroughThePage`, the fixtures and each spec's own open helpers. `spaceTextOut` and
   `expectToFit` move out of guide-prompts.spec.ts so each exists once.
-- Decisions where the design is silent: evidence is the CI Playwright run (A95); yesterday comes from the server's
+- Decisions where the design is silent: evidence is the CI Playwright run (A98); yesterday comes from the server's
   today, never the device clock; Lost phone sets up again on `thirdDevice`; a fault CI shows is fixed in the shared
   component at fault, with no token or wording change; the readability check is a one-off run recorded here; the
-  Dragon 1-second save is not built; by-hand steps 140 to 144 are added to ops/first-use-in-test.md with one order
+  Dragon 1-second save is not built; by-hand steps 143 to 147 are added to ops/first-use-in-test.md with one order
   paragraph.
 
 ### Verticals
@@ -6133,12 +6226,20 @@ Planned 24 October 2026.
   R02 R04
 - v4: Today, notes, Flagged, Report, Participants, settings and Export record: audit additions, foundations calls, SPA
   fixes; depends_on: v1; R01 R07 R11 R14 R15
-- v5: 320 px check in `expectAxeToPass`, readability run, A95, ops steps 140 to 144, Notes, F06.02, tests/README.md;
+- v5: 320 px check in `expectAxeToPass`, readability run, A98, ops steps 143 to 147, Notes, F06.02, tests/README.md;
   depends_on: v1 v2 v3 v4; R05 R16 R17 R18 R19 R20 R21 R22 R24 R25 R26
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Shared helpers (#114; v1): `tabTo` in `focus.ts` and `foundations.ts` with `expectFoundationsToPass`; the
+      guide-prompts, common-items and users specs switched to them.
+- [x] Key flows (#118; v2): `key-flows.spec.ts`, the eight section 4.13 flows by keyboard alone, and
+      `addParticipantWithGoals`.
+- [x] Foundations and audit for the shell, sign-in, note form and Users screens (#117; v3).
+- [x] Foundations and audit for Today, the notes, Flagged, Report, Participants, settings and Export record (#131; v4),
+      and the shared back link's fix.
+- [x] 320 px check and documents (#134; v5): `expectAxeToPass`, the readability run, A98, ops steps 143 to 147,
+      these Notes, F06.02 and tests/README.md.
 
 ---
 

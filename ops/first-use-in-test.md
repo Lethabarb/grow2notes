@@ -152,8 +152,9 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
 ### Later, once the note form and the Report screen are in test
 
 These steps hold the by-hand checks of four stories cut on 14 October 2026 (D87, [tasks.md](../design/backlog/tasks.md)
-*Cut stories*); T26 orders them with the other by-hand accessibility steps. Besides the kit in *Before you start*,
-they need an Android phone with Chrome, Samsung Internet and TalkBack, and Dragon on the laptop if you have it.
+*Cut stories*); the section *Accessibility pass on the finished app* orders them with the other by-hand
+accessibility steps. Besides the kit in *Before you start*, they need an Android phone with Chrome, Samsung Internet
+and TalkBack, and Dragon on the laptop if you have it.
 
 20. As a manager, on the Report screen, download a day's Word file and PDF on each of iPhone Safari, iPhone Chrome,
     Android Chrome and Samsung Internet. Look for each file saved. On the iPhone, choose a future date in the picker
@@ -1157,3 +1158,62 @@ Record the results in T21's Notes (S05.01.04).
      address (design.md A96). Write down no link. (S06.01.05; design.md §9.9, A95, A96.)
 
 Record the results in T25's Notes (S06.01.01, S06.01.02, S06.01.03 and S06.01.05).
+
+### Accessibility pass on the finished app, once T26 is in test
+
+These steps hold the by-hand checks of S06.02.01 and S06.02.02 ([tasks.md](../design/backlog/tasks.md), T26's Notes).
+CI's Playwright run proves what a browser can (design.md A98); these steps need a real device, a screen reader or a
+person, and none of them holds a story open. Run the by-hand accessibility steps in this order, once T26 is in test:
+
+1. Keyboard only, on the laptop: step 143.
+2. Screen readers: steps 21 and 22, then the screen-reader steps of the screens, in the order of the screens: 4, 9, 10,
+   11, 12 to 14, 17, 18, 27, 28, 32 to 34, 37, 41, 45, 47, 48, 52, 55, 57, 62, 65, 66, 69, 74, 75, 78 to 80, 90, 91, 94,
+   102, 112, 119 and 137.
+3. Guide prompts, with screen readers and the phones' back gesture: steps 24 and 25.
+4. Real devices: step 20, then the device steps of the screens: 35, 40, 44, 49, 50, 54, 68, 70, 81, 92, 101, 113, 118,
+   125, 127, 134 to 136 and 139, then the go-live device check, step 144.
+5. Text size and zoom: step 145.
+6. Contrast, page darkening and motion: step 146.
+7. Outdoors: step 147.
+8. Last, the five-worker words check: step 23, which the managers arrange.
+
+Steps 20 to 25 keep their numbers because the stories' Notes cite them. Besides the kit in *Before you start*, these
+steps need the Android phone, with Chrome, Samsung Internet and TalkBack. Everything typed is made up (A35).
+
+143. Keyboard only, on the laptop. In test, in Chrome, put the mouse and the trackpad aside. As a manager and as a
+     worker, do each flow of design.md §4.13 with made-up data, using only the keyboard: Forgotten note, Daily report,
+     Access request, Wrong participant, Write today's note, Correct a note, Flag and Lost phone. Look for a focus ring
+     at every stop, including inside banners and dialogs; for focus never stuck, so that Tab always moves on and
+     Shift+Tab goes back; and for focus, after each screen change, on the banner, the error summary, the row returned
+     to or the `<h1>`, as the screen's file says. Write down the result for each flow. (S06.02.01's keyboard
+     criterion by hand; foundations.md manual test 8; design.md A98's cross-check of
+     `tests/e2e/key-flows.spec.ts`.)
+144. The go-live device check. On the iPhone, with Gmail, Outlook and Apple Mail, and on the Android phone, with Gmail,
+     Outlook and the phone's own mail app, invite one made-up account for each app, to the testing mailbox, minding the
+     limit of 5 emails a minute and 10 an hour (*Before you start*). Open each setup link in the app that received it
+     and try Use a passkey (recommended) in the app's own browser. Write down, for each phone and each app, whether a
+     passkey was made, refused or not offered, and, if it was not made, whether opening the link in the phone's
+     browser fixed it. (S06.02.02; sign-in.md *Layout and accessibility*, the go-live device check.)
+145. Text size and zoom. On the laptop in Chrome, set the zoom to 200% and then to 400%, then back to 100% with the
+     browser's font size at 32. On the iPhone, set Larger Text to its largest, and set Safari's page zoom to 200%. On
+     the Android phone, set the font size and the display size to their largest. On each phone, look at each screen
+     upright, and the note form in landscape. Go through Today, a note with Flag for manager ticked and a Reason, the
+     Submit dialog, Past notes, Flagged, Report, Participants and a participant, Common items, Guide prompts, Users
+     with a long address, and Export record. Look for nothing cut off, nothing overlapping and nothing scrolling
+     sideways. On the note form, in the largest text, say "Tap" and a goal's words with Voice Control or Voice Access
+     and look for its box ticking; tap a goal's box in Safari and look for the focus ring on it; and, in Chrome, use
+     Translate on the note form and look for the participant's name unchanged. (foundations.md manual tests 1 to 3;
+     note-form.md *Manual test passes (M6)*: Voice Control, zoom, landscape, page translation; S06.02.02.)
+146. Contrast, page darkening and motion. On the laptop, turn on the Windows contrast theme Night sky, then Desert, and
+     in Edge and in Chrome Tab through a note with ticks and a flag, the Submit dialog, Today with its banner and
+     tags, Flagged with its tags and the badge in the menu, and the Report screen on a day with no notes. Look for
+     every tick, tag border, badge, banner edge, unavailable button and focus ring. On the Android phone, turn on dark
+     mode with page darkening, in Chrome and in Samsung Internet, and open Today, a note, Report and Users: look for
+     pages that are usable and, on setup's authenticator view, the QR code not inverted. Reaching that view needs a
+     fresh invite. On each device, with reduced motion on, look for nothing moving. (foundations.md manual tests 4 to
+     6; status-tags.md, tag borders in forced colours; S06.02.02.)
+147. Outdoors. On each real phone, outdoors, at its automatic brightness, open a note on the note form. Look for the
+     placeholder, the status lines, the tick state and the focus ring: can each be seen? Write down, for each phone,
+     what could not. (foundations.md manual test 7; note-form.md *Manual test passes (M6)*.)
+
+Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each device.
