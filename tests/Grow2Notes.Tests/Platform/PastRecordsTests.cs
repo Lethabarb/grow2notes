@@ -22,8 +22,8 @@ namespace Grow2Notes.Tests.Platform;
 /// deactivated, and every note, report and export written before it reads as it did, while what the change must end
 /// does end. Each test adds an organisation of its own, with its users and participants, and changes none of the
 /// seeded rows. The tests that compare a record before and after run on a clock that stands still, so that the
-/// report's "As at" line and the export's "Exported by" line are equal, and whole texts are compared. The archived
-/// participant's refusal of a new note is T24's A95: it comes before the date rules.
+/// report's "As at" line and the export's "Exported by" line are equal, and whole texts are compared. A new note for an
+/// archived participant is refused first, whatever the date or role (§5.5 item 4).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -350,7 +350,9 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
-    // Whether the participant is in the day's list, as the SPA's Find a participant filters that list.
+    // Whether the participant is in the day's list. TodayPage filters exactly this list in memory for Find a
+    // participant (matchesName over list.participants) and no search endpoint exists, so a participant missing here
+    // is missing from Today and from its search.
     private static async Task<bool> OnTodayAsync(HttpClient client, Guid participantId)
     {
         using var today = JsonDocument.Parse(await BodyAsync(client, "/api/today"));
