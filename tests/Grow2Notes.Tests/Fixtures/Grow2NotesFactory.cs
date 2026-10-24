@@ -43,6 +43,7 @@ public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicati
         builder.ConfigureTestServices(services =>
         {
             services.AddTestSignIn();
+            services.LiftRateLimits();
             RecordingEmailSender.ReplaceAppSender(services);
         });
     }

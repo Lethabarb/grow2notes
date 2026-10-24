@@ -13,7 +13,8 @@ namespace Grow2Notes.Web.Platform;
 /// same user, in the <see cref="AntiforgeryHeader"/> header, with the cookie that holds its other half. A body that is
 /// not JSON gets a <c>415</c>, as minimal APIs answer one they would read as JSON, and a request without a valid token
 /// a <c>400</c>, ASP.NET Core's status for a failed check; neither has a design.md §6.9 code. Inside it, the
-/// <c>/api/admin</c> group holds the managers' endpoints (<see cref="MapAdminGroup"/>).
+/// <c>/api/admin</c> group holds the managers' endpoints (<see cref="MapAdminGroup"/>), and an empty-prefix group the
+/// sign-in and setup endpoints (<see cref="MapSignInGroup"/>).
 /// </summary>
 /// <remarks>
 /// Both checks cover every method but GET, HEAD, OPTIONS and TRACE, which antiforgery leaves unchecked, so every POST,
@@ -56,12 +57,14 @@ internal static class ApiGroup
 
     /// <summary>
     /// Maps the <c>/api</c> group, whose filter refuses a request that changes something unless any body it has is JSON
-    /// and it sends a valid token.
+    /// and it sends a valid token, and whose endpoints share the <see cref="RateLimits.General"/> limit unless one has
+    /// a limit of its own.
     /// </summary>
     public static RouteGroupBuilder MapApiGroup(this IEndpointRouteBuilder endpoints)
     {
         var api = endpoints.MapGroup("/api");
         api.AddEndpointFilter(RefuseUnlessJsonWithTokenAsync);
+        api.RequireRateLimiting(RateLimits.General);
 
         // Minimal APIs mark an endpoint that reads a JSON body as accepting JSON only, so routing passes it over for a
         // request with another Content-Type, such as a form post, and the unknown-path catch-all answers 404. Without
@@ -86,6 +89,15 @@ internal static class ApiGroup
     /// </summary>
     public static RouteGroupBuilder MapAdminGroup(this RouteGroupBuilder api) =>
         api.MapGroup("/admin").RequireAuthorization(Policies.Manager);
+
+    /// <summary>
+    /// Maps the group inside <paramref name="api"/>, the <c>/api</c> group that <see cref="MapApiGroup"/> returns, that
+    /// holds the sign-in and setup endpoints, which share the <see cref="RateLimits.SignIn"/> limit in place of the
+    /// group's (design.md §9.9). It adds no path; and, being inside the <c>/api</c> group, each endpoint keeps that
+    /// group's filter.
+    /// </summary>
+    public static RouteGroupBuilder MapSignInGroup(this RouteGroupBuilder api) =>
+        api.MapGroup(string.Empty).RequireRateLimiting(RateLimits.SignIn);
 
     private static async ValueTask<object?> RefuseUnlessJsonWithTokenAsync(
         EndpointFilterInvocationContext context, EndpointFilterDelegate next)

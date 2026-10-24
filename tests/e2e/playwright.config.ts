@@ -12,12 +12,7 @@ export default defineConfig({
   use: {
     // CI sets E2E_BASE_URL to where it runs the published app; the default is where tests/README.md starts it.
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:5000',
-    // The antiforgery, enrolment and session cookies are Secure, so the app issues them only on an HTTPS request
-    // (design.md §8.4, §9.8), and every signed-out page sends a change that needs the antiforgery token, as sign-in
-    // asks for passkey options as it shows. The tests reach the app over plain HTTP, so every request says that it came
-    // over HTTPS, as App Service's front end says it, which the app trusts from loopback; Chromium keeps Secure cookies
-    // from localhost.
-    extraHTTPHeaders: { 'X-Forwarded-Proto': 'https' },
+    // The headers that every request sends are fixtures.ts's clientHeaders(), set there for each test and each device.
     trace: 'retain-on-failure',
   },
   projects: [
