@@ -17,6 +17,13 @@ public sealed class ReportDatesTests
     }
 
     [Fact]
+    public void DatePlain_is_the_day_the_month_in_full_and_the_year_with_no_weekday()
+    {
+        Assert.Equal($"1{Nbsp}January 2026", ReportDates.DatePlain(new DateOnly(2026, 1, 1)));
+        Assert.Equal($"30{Nbsp}September 2026", ReportDates.DatePlain(new DateOnly(2026, 9, 30)));
+    }
+
+    [Fact]
     public void DateWithYear_is_the_short_day_and_month_with_the_year()
     {
         Assert.Equal($"Thu 1{Nbsp}Oct 2026", ReportDates.DateWithYear(new DateOnly(2026, 10, 1)));

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const saveSpecs = ['report-download.spec.ts', 'record-export-download.spec.ts'];
+
 export default defineConfig({
   // A test.only left in by mistake would otherwise skip every other test and still pass the run.
   forbidOnly: !!process.env.CI,
@@ -20,9 +22,9 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    // The report download's save step is the one thing here that differs between engines (daily-report.md), so only its
-    // fully mocked spec runs in these two.
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testMatch: 'report-download.spec.ts' },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testMatch: 'report-download.spec.ts' },
+    // A report download's save step is the one thing here that differs between engines (daily-report.md,
+    // record-export.md), so only the specs that check it, fully mocked, run in these two.
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, testMatch: saveSpecs },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, testMatch: saveSpecs },
   ],
 });

@@ -25,6 +25,9 @@ internal static class ReportDates
     public static string DateLong(DateOnly date) =>
         $"{Days[(int)date.DayOfWeek]} {date.Day}{Nbsp}{Months[date.Month - 1]} {date.Year}";
 
+    /// <summary>"1 January 2026".</summary>
+    public static string DatePlain(DateOnly date) => $"{date.Day}{Nbsp}{Months[date.Month - 1]} {date.Year}";
+
     /// <summary>"Thu 1 Oct 2026".</summary>
     public static string DateWithYear(DateOnly date) => $"{DayAndMonth(date)} {date.Year}";
 

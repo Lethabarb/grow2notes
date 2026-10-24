@@ -1074,3 +1074,52 @@ hold made-up data (A35), including a made-up participant that you archive for th
      request. (S06.03.02.)
 
 Record the results in T23's Notes.
+
+### Export a participant's record, once T21 is in test
+
+These steps hold T21's by-hand checks ([tasks.md](../design/backlog/tasks.md), T21's Notes). None of them holds a story
+open. They need a manager and made-up participants (A35). Steps 20 and 21 already cover the Report screen on the same
+phones and screen readers; these cover the Export record screen, which is a different page.
+
+133. In test, choose the largest made-up record there: one participant with a year of submitted notes if one exists,
+     otherwise the one with the most. Export a one-day range as Word once to warm up the database and the server. Then,
+     on the laptop, tick Include earlier versions and export that whole record as Word and as PDF. Time each from
+     pressing Export to the file being handed over. Record each time, the date range, how many notes the record has and
+     how many were edited, and whether the "Exporting…" button and the preparing line held steady the whole time. This
+     is the M5 timing for the deployed site; CI's timing test only shows the code is fast in one process. If a time is
+     near 30 seconds, tell the developer: the fix is three batched reads, still in one request. If the test site holds
+     less than a year of notes, write down how much it does hold, so the owner can decide whether a made-up year is
+     needed. (S05.01.04; design.md §14 M5, A93, A94.)
+134. On iPhone Safari, iPhone Chrome, Android Chrome and Samsung Internet, as a manager, export a record as Word and as
+     PDF. Do it for a short range and for one that takes more than 10 seconds (the year of step 133, with earlier
+     versions, if it takes that long). Look for each file saved or offered for saving, with its name
+     `participant-record_{from}_to_{to}` and the format, and the line "{name} is ready. Look in your downloads." If a
+     browser cannot save the slow one, tell the developer: the plain-link contingency in file-download.md is then built
+     for this screen only. (S05.01.04; record-export.md *Real devices*.)
+135. On the iPhone and on the Android phone, open each date field. Look for the system date picker to open and to set
+     the value, and for the page not to zoom when a field takes focus. Look for a To date before the From date to show
+     its error once you press Export, and for a To date after today to be sent. (S05.01.04; record-export.md *Real
+     devices*.)
+136. On each manager's laptop, open Export record and look at both dates: they should read day first, then month (the
+     browser's language set to English (Australia)). Write down each manager, browser and what the dates showed. Do
+     this again at go-live. (S05.01.04; record-export.md *Real devices*.)
+137. With VoiceOver on the iPhone (Safari) and TalkBack on the Android phone (Chrome), go through the Export record
+     screen: the heading, the two dates, the Format group, the box and its hint, and Export. Then hear each of these
+     read once, as written: the error summary and its links, the preparing line during a slow export, the ready line,
+     the "No submitted notes for … between … and …." line for an empty range, and the failure line when the phone is in
+     airplane mode. (S05.01.04; record-export.md *Accessibility checklist*, *Real devices*.)
+138. Open one PDF and one Word file by eye, each with earlier versions, for a participant who has an edited note, a
+     flagged and reviewed note and a past-day note. Look for the title block in order (the title, the name, the date
+     of birth, the range, the organisation, who exported it and when, and "Earlier versions: included"), a first-level
+     heading for each date, the note blocks as in the daily report, and under each edited note "Earlier versions"
+     with each "Version n" heading below it, newest first, each with its own flag, reviews and text. In Word, look at
+     the Navigation pane for the dates, "Earlier versions" and the versions at three levels. Open the file properties
+     and look for only the title and the organisation, with no participant's name and no author. Search the text and
+     the properties of each file for the parent company's name and look for none. Export once without earlier versions
+     and look for no "Earlier versions" anywhere. (S05.01.01 and S05.01.03; design.md §11.6, A93.)
+139. Open the Report screen and the Export record screen on a phone, and download one file from each. Look at the
+     sentence after each: "{name} is ready. Look in your downloads." Decide whether to approve it on both screens or
+     to show nothing on both, and tell the developer: either is a change in the copy module. Both screens ship with
+     the line until you decide. (record-export.md open question 6; file-download.md.)
+
+Record the results in T21's Notes (S05.01.04).

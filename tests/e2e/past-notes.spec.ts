@@ -471,12 +471,13 @@ test('Past notes loading, listed, Show older loading, failed and ended, empty, f
   await expect(page).toHaveTitle(title('Page not found'));
   await expectAxeToPass(page);
 
-  // A worker sees no Edit participant.
+  // A worker sees no Edit participant and no Export record.
   await serveMe(page, worker);
   await store.serve(page, worker);
   await page.goto(pastNotesAddress(jane.id));
   await expect(rows(page)).toHaveCount(30);
   await expect(editParticipant(page)).toHaveCount(0);
+  await expect(main(page).getByRole('link', { name: 'Export record', exact: true })).toHaveCount(0);
   await expectNothingKept(page, 'Jane', 'Citizen', 'Ravi', priya, 'Sam Lee');
 });
 
@@ -726,13 +727,13 @@ for (const width of [375, 1280]) {
     await expectStops(page, 'Shift+Tab', [names[28]]);
     await expectNothingKept(page, 'Jane', 'Citizen', priya, 'Note number');
 
-    // A manager's Write past-day note and Edit participant, between the back link and the rows.
+    // A manager's Write past-day note, Export record and Edit participant, between the back link and the rows.
     await serveMe(page, manager);
     await store.serve(page, manager);
     await page.goto(pastNotesAddress(jane.id));
     await heading(page).focus();
-    await expectStops(page, 'Tab', ['Write past-day note', 'Edit participant', names[0]]);
-    await expectStops(page, 'Shift+Tab', ['Edit participant', 'Write past-day note', 'Today']);
+    await expectStops(page, 'Tab', ['Write past-day note', 'Export record', 'Edit participant', names[0]]);
+    await expectStops(page, 'Shift+Tab', ['Edit participant', 'Export record', 'Write past-day note', 'Today']);
   });
 }
 

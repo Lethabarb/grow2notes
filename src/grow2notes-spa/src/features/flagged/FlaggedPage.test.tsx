@@ -395,7 +395,7 @@ function notePage(row: Pick<ToReviewNote, 'participantId' | 'noteDate'>): string
  */
 function serveNote(row: ToReviewAnswer, flagStatus?: FlagStatus) {
   const { participantId: id, givenName, familyName } = row;
-  const participant: ParticipantHeader = { id, givenName, familyName, status: 'Active' };
+  const participant: ParticipantHeader = { id, givenName, familyName, status: 'Active', firstNoteDate: null };
   const flag = row.flagRemovedLater
     ? ({ isFlagged: false, flagReason: null } as const)
     : ({ isFlagged: true, flagReason: row.flagReason } as const);

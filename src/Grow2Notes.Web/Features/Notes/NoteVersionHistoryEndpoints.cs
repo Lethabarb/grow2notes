@@ -46,7 +46,7 @@ internal static class NoteVersionHistoryEndpoints
             return TypedResults.NotFound();
         }
 
-        return TypedResults.Ok(await Summaries(db, note.Id, versionNumber: null).ToListAsync(cancellationToken));
+        return TypedResults.Ok(await NoteVersionSummary.Query(db, note.Id, versionNumber: null).ToListAsync(cancellationToken));
     }
 
     // The summary row comes first: it tells a number the note has from one it does not, which the content read, with a
@@ -64,7 +64,8 @@ internal static class NoteVersionHistoryEndpoints
             return TypedResults.NotFound();
         }
 
-        var summary = await Summaries(db, note.Id, versionNumber).SingleOrDefaultAsync(cancellationToken);
+        var summary = await NoteVersionSummary.Query(db, note.Id, versionNumber)
+            .SingleOrDefaultAsync(cancellationToken);
         if (summary is null)
         {
             return TypedResults.NotFound();
@@ -80,17 +81,4 @@ internal static class NoteVersionHistoryEndpoints
                 CreatedAtUtc = summary.CreatedAtUtc,
             });
     }
-
-    // The filters and the order come before the projection, as EF cannot translate them on a record that a select
-    // builds.
-    private static IQueryable<NoteVersionSummary> Summaries(Grow2NotesDbContext db, Guid noteId, int? versionNumber) =>
-        from version in db.NoteVersions.AsNoTracking()
-        where version.NoteId == noteId && (versionNumber == null || version.VersionNumber == versionNumber)
-        join creator in db.Users on version.CreatedByUserId equals creator.Id
-        orderby version.VersionNumber descending
-        select new NoteVersionSummary(
-            version.VersionNumber,
-            new NoteReadAuthor(creator.Id, creator.DisplayName),
-            version.CreatedAtUtc,
-            version.IsFlagged);
 }

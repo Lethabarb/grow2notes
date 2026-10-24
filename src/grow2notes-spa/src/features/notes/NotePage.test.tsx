@@ -69,18 +69,21 @@ const jane: ParticipantHeader = {
   givenName: 'Jane',
   familyName: 'Citizen',
   status: 'Active',
+  firstNoteDate: null,
 };
 const priya: ParticipantHeader = {
   id: '6b2e8d4a-0f37-4c95-a1d6-3e9f7b5c2a80',
   givenName: 'Priya',
   familyName: 'Kumar',
   status: 'Active',
+  firstNoteDate: null,
 };
 const zara: ParticipantHeader = {
   id: '1f7c3a9e-5d21-4b48-8e6f-0a2c4d7b9e13',
   givenName: 'Zara',
   familyName: 'Ali',
   status: 'Active',
+  firstNoteDate: null,
 };
 
 /** A goal of Jane's, or a common item, unticked. */

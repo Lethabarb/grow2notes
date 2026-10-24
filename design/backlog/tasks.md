@@ -5559,7 +5559,7 @@ footer with "Page n of N" on every page, and file properties holding only the ti
 
 ```yaml
 id: T21
-status: new
+status: done
 release: R1
 lane: B
 size: L
@@ -5593,10 +5593,82 @@ choose, to answer an access or correction request. The form says what to fix and
 - From T09 (19 October 2026): participant-notes.md item 11's Export record on a manager's Past notes, before Edit
   participant (S02.04.02's fourth criterion), and an archived participant's Export record, after Past notes in its
   Actions (S01.02.04), wait for this task, each with its dated Note.
+- Built (24 October 2026). The decisions where design.md was silent are assumed defaults A93 (the file layout, with the
+  earlier-version blocks and their own reviews) and A94 (the request rules, the check order and the audit entity). The
+  plan called them A89 and A90 and the ops steps 129 on; T23 landed A89 to A92 and steps 129 to 132 first, so they were
+  renumbered. Each is the owner's to overturn.
+- Open question 6 (the ready line on both download screens) is built as the daily report ships it, "{name} is ready.
+  Look in your downloads."; the owner confirms or removes it on both screens at go-live (ops step 139). Open question 4
+  (the same-day wording) is not built.
+- The `429` line, "Not exported: too many exports in the last minute. Wait a minute, then try again.", and its handling
+  are built and tested with a mocked `429`. The server's limit of 10 a minute does not exist yet: T25 (S06.01.05) must
+  attach it to this route, `GET /api/reports/participants/{participantId}/export`, beside the daily report's.
+- Speed. Generation is synchronous and in memory, with the daily report's per-note reads. A year with history costs
+  about 1,600 round trips: 3 for each version read, plus the edit, summary and review reads. Earlier versions are read
+  only when asked, and a note's reviews only when one of its earlier versions was flagged. If the deployed time is too
+  slow, the planned fix is three batched reads (every version row of the range, then their groups, then their items),
+  still synchronous and in memory. It is not built.
+- CI timing check: `ParticipantExportTimingTests` seeds a made-up year (A35) of 365 notes, edits, flags and reviews with
+  per-row seeders outside the stopwatch, warms the host with a one-day export, and times a Word and a PDF export with
+  earlier versions through the real endpoint against a 30 second ceiling. It passed on #108 and on #109 (1,909 tests
+  green each time), so both formats took under 30 s on a shared build machine. The exact times are not in the CI log,
+  because `dotnet test` prints no output for a passing test and ci.yml sets no logger; they are in the test output
+  only. The owner can add `--logger "console;verbosity=normal"` to the Test step if the numbers are wanted, which is
+  outside T21's files. This is evidence of correctness and in-process speed. The deployed one-year timing is the M5
+  evidence and is ops step 133; it does not hold T21 open (owner, 12 October 2026).
+- Known gap: the test environment holds only the notes that people have written there. Step 133 records the largest
+  made-up record in test and its size; if that is under a year, the owner decides whether a seeded year is needed,
+  which would be a later task. No seeding tool is built.
+- The client's date check is stricter than the server's: `isIsoDate` refuses years 0000 to 0099, which the server
+  accepts. This is accepted, with no lower date limit on the inputs. Also simplified: a `422` maps by key to the
+  screen's own words and any other key shows the generic failure; the no-notes sentence is plain text with no `<time>`
+  elements; and the status line's styles are copied from the Report screen, not shared.
+- Checks present: the matrix row (`EndpointMatrix.cs`: anonymous `401`, worker `403`, another organisation's manager
+  `404`); permissions (`A_caller_who_is_not_a_manager_gets_no_file_and_no_event`); organisation scoping
+  (`A_participant_who_is_not_in_the_organisation_gets_a_plain_404_and_no_event` and the header test for another
+  organisation's notes); audit (`A_manager_gets_the_file_with_its_headers_and_one_audit_event`,
+  `The_event_records_whether_earlier_versions_were_asked_for` and the `500` when the write fails); privacy
+  (`The_logs_hold_no_note_content_and_no_name`, the properties check in `ParticipantExportTextMatchTests`, and the
+  header tests showing no date of birth). Nothing was run locally; CI is the evidence.
+- S02.02.02's header criterion and participants.md's data line named the old header shape, so both now name
+  `firstNoteDate`, and S02.02.02 is done. The T09 and T18 "As built" notes in participant-notes.md now say that T21
+  built Export record.
+- Real-device and laptop results are pending: ops/first-use-in-test.md steps 133 to 139. Record them here.
+
+### Plan
+
+Planned 24 October 2026. No migration, library, download or owner question.
+
+- Outcome: `GET /api/reports/participants/{participantId}/export?from&to&format&includeHistory`, manager-only, and an
+  Export record screen at `/manage/participants/:participantId/export` with links on Participant detail and Past notes.
+- Design: one synchronous in-memory request. Checks run in order: query validation (422 keyed `from`, `to`, `format`),
+  participant lookup (plain 404), notes (404 `report.no_notes`), render, one `participant.exported` audit row, file.
+  `includeHistory` is a `bool?`; a malformed value gets the binder's 400.
+- Domain: read models `ParticipantExportModel`, `ParticipantExportNote` and `ParticipantExportVersion` (with its own
+  reviews); `ParticipantHeader.FirstNoteDate` computed on read (D80). Nothing is stored.
+- Reuse: `NoteBody` for each current block, with `VersionBody` extracted from it for earlier versions; the daily
+  report's note read, extracted as `DailyReportModel.ReadNotesAsync`; `ReportFile` moved out of the daily endpoint;
+  `NoteVersionSummary.Query` moved from the history endpoints; T17's `useDownload` and T15's `download()`.
+- Decisions where the design is silent: A93 (file layout) and A94 (request rules and audit entity), numbered after
+  T23's A89 to A92 (planned as A89 and A90).
+
+### Verticals
+
+- v1: Server: export endpoint, layout, `firstNoteDate`, server tests incl. one-year timing; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R27 R28 R29 R33
+- v2: SPA: Export record screen, route, links, client handling, e2e; depends_on: v1;
+  R15 R16 R17 R18 R19 R20 R21 R22 R23 R24 R25 R26 R30 R31 R32
+- v3: Docs: A93, A94, stories, T21 Notes, ops steps from 133; depends_on: v1, v2; R34 R35
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Server (#108; v1): the export endpoint and its checks, `ReportLayout.ParticipantRecord` with `VersionBody`,
+      `firstNoteDate` on the participant header, `ReportFile`, `DailyReportModel.ReadNotesAsync` and
+      `NoteVersionSummary.Query`, with the endpoint, text-match, layout, header, matrix and one-year timing tests.
+- [x] SPA (#109; v2): the Export record screen and route, the links on Participant detail and Past notes, the client's
+      checks and failure handling, the new copy, and the Vitest and Playwright tests.
+- [x] Docs (v3): A93 and A94, §6.5 and §11.6, the stories S05.01.01 to S05.01.04, S02.04.02, S01.02.04 and S02.02.02,
+      the As built notes, this task's Notes and ops/first-use-in-test.md's steps 133 to 139.
 
 ---
 
