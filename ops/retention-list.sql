@@ -1,4 +1,4 @@
--- The yearly list for the retention task (design.md §10.9, A29, A89): every participant of one organisation,
+-- The yearly list for the retention task (design.md §10.9, A29, A91): every participant of one organisation,
 -- Active and Archived, with the dates that decide whether the periods for keeping their records may have ended, so that
 -- the managers can decide. It only reads: the Organisation, Participant and Note tables, for the organisation given. It
 -- writes nothing. It lists the participants and decides nothing: the managers' written decision is what permits a

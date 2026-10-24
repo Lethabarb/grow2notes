@@ -1,4 +1,4 @@
--- Checks a database after a restore (design.md §10.7, A88): which migration it is on, how recent its audit events and
+-- Checks a database after a restore (design.md §10.7, A90): which migration it is on, how recent its audit events and
 -- note versions are, which note holds the latest version, how many rows each table has, and whether the database is
 -- sound (DBCC CHECKDB). It only reads: the __EFMigrationsHistory, AuditEvent and NoteVersion tables, the names of the
 -- tables, and the pages of the database for CHECKDB. It takes no variables and writes nothing, so it is the same

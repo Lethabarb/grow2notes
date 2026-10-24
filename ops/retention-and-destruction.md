@@ -25,7 +25,7 @@ These come from the NDIS Act s 45B, APP 11.2, and HPP 4.2 and 4.3 of the Health 
 
 ### How the list reads each period
 
-This is the reading that design.md [A89](../design/design.md#13-assumed-defaults) records. The owner may overturn it.
+This is the reading that design.md [A91](../design/design.md#13-assumed-defaults) records. The owner may overturn it.
 
 - **Last service** is the latest note date of a note that is Submitted. A draft or a discarded note is not a service.
 - **A note written under 18** is a note in any status, drafts and discarded notes included, dated before the
@@ -41,7 +41,7 @@ This is the reading that design.md [A89](../design/design.md#13-assumed-defaults
 
 The yearly list, the destruction log (HPP 4.3) and the saved output of every preview and destroy run name people. They
 are kept in the provider's own records storage, in a place the managers choose, and never in this repository (design.md
-[A87](../design/design.md#13-assumed-defaults)). The repository holds the layouts and the roles only. The operator
+[A89](../design/design.md#13-assumed-defaults)). The repository holds the layouts and the roles only. The operator
 writes each output straight to that place, keeps no local copy, and tells the managers it is there. The app sends
 nothing: it emails no one, and the report is a download (D30, D43).
 
@@ -143,7 +143,7 @@ Then add one row to the destruction log, kept in the records storage, from resul
 
 | Name | Period covered from | Period covered to | Date of deletion |
 |---|---|---|---|
-| *Name* | *Period from* | *Period to*, or *no notes* when it is blank | *Date of deletion* |
+| *Name* | *Period from* | *Period to*, or *no notes* when it prints `NULL` | *Date of deletion* |
 
 ### What it writes and prints
 
@@ -154,7 +154,7 @@ because the foreign keys have no cascade: `NoteVersionItem`, `NoteVersionGroup`,
 It prints two result sets:
 
 1. **Outcome** (*Preview: nothing was deleted* or *Destroyed*), **Name** (given name, then family name), **Period from**
-   and **Period to** (the earliest and the latest note date in any status, blank when there are no notes) and **Date of
+   and **Period to** (the earliest and the latest note date in any status, `NULL` when there are no notes) and **Date of
    deletion** (today in Melbourne). These are the values of the log row.
 2. **Table** and **Rows**: the rows deleted from each table, in the order above.
 

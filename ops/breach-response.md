@@ -8,7 +8,7 @@ preserve evidence and prepare in advance. The operator commands it uses are in
 break-glass.md as far as they fit.
 
 The names of people, contact details, extracts and filled-in records are never written in this file, which is in a
-public repository. They live in the provider's own records storage ([A87](../design/design.md#13-assumed-defaults)).
+public repository. They live in the provider's own records storage ([A89](../design/design.md#13-assumed-defaults)).
 
 ## The legal position
 
@@ -35,7 +35,7 @@ Done once, before go-live, and kept true:
 - The operator gives the provider its contact details in writing, and the provider keeps them in its records storage
   with its own plan.
 - The managers choose the place in their records storage for this file's records, and for the request record, and
-  confirm that the operator can reach it ([A87](../design/design.md#13-assumed-defaults)).
+  confirm that the operator can reach it ([A89](../design/design.md#13-assumed-defaults)).
 - The managers have read this file and [audit-extraction.md](audit-extraction.md), so that they know what the log
   can and cannot say.
 - The operator can sign in as the SQL Entra admin and open the SSH console, and has used `sqlcmd` (Go) with the

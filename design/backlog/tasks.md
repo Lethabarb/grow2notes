@@ -5673,33 +5673,34 @@ log, and breach response, which links to the audit runbook rather than repeating
 
 ### Notes
 
-- Owner questions Q5 and Q7 are answered by assumed defaults A87 (the destruction log and the yearly list are kept in
-  the provider's records storage) and A88 (the drill before go-live checks the configuration counts, the other rows and
-  `DBCC CHECKDB`), which the owner may overturn. A89 is how the retention list reads A29, and A90 is the audit request
-  record. T20 took A82 to A86 and steps 120 to 126 first, so these are numbered after them.
-- One identity: the "separate break-glass login" (§5.8) and the SQL Entra admin (§9.4) are one account, the Entra group
-  "Grow2Notes SQL admins" (D64). It is not in `grow2notes_runtime`, so the append-only denies do not apply to it,
-  and the tests connect as `sa` and do not prove them.
+- Owner questions Q5 and Q7 are answered by assumed defaults A89 (the destruction log and the yearly list are kept in
+  the provider's records storage) and A90 (the drill before go-live checks the configuration counts, the other rows and
+  `DBCC CHECKDB`), which the owner may overturn. A91 is how the retention list reads A29, and A92 is the audit request
+  record. T20 took A82 to A86 and steps 120 to 126, and T17 took A87 and A88 and steps 127 and 128, so these are
+  numbered after them.
+- One identity: the "separate break-glass login" (§5.8) and the SQL Entra admin (§9.4) are one account, the Entra
+  group "Grow2Notes SQL admins" (D64). It is not in `grow2notes_runtime`, so the append-only denies do not apply to
+  it, and the tests connect as `sa` and do not prove them.
 - `retention-destroy.sql` is the reviewed exception to §10.6's "no ad-hoc SQL against production" that §5.8, §9.4
   and A29 allow. It deletes one archived participant per run, checks the date of birth, and its preview mode rolls
   back. A test lists every dbo table as destroyed or kept, so a new table fails CI until someone decides which.
-- Finding for the owner, not blocking: `AuditEvent` rows stay after a destruction, as §5.3 requires. But `participant.*`
-  Details hold the given name, family name and date of birth, and `goal.*` Details hold goal wording, so those values
-  outlive a destruction, against S05.04.01's "IDs only". The first destruction is in 2033 at the earliest. Nothing
-  redacts them, because §5.3 forbids rewriting audit rows. The runbook says so.
-- A89 departs from R05's wording: a note written before 18 is found by its NoteDate, not by CreatedAtUtc. The app
+- Finding for the owner, not blocking: `AuditEvent` rows stay after a destruction, as §5.3 requires. But
+  `participant.*` Details hold the given name, family name and date of birth, and `goal.*` Details hold goal
+  wording, so those values outlive a destruction, against S05.04.01's "IDs only". The first destruction is in 2033 at
+  the earliest. Nothing redacts them, because §5.3 forbids rewriting audit rows. The runbook says so.
+- A91 departs from R05's wording: a note written before 18 is found by its NoteDate, not by CreatedAtUtc. The app
   refuses a future note date, so NoteDate is never later than the day written, and the reading can only keep records
   longer.
-- A90 departs from §9.4 and S05.04.02's third criterion ("in `ops/`"): the audit request record is kept in the
+- A92 departs from §9.4 and S05.04.02's third criterion ("in `ops/`"): the audit request record is kept in the
   provider's records storage, because even role-only rows in a public repository would show that an investigation
   or a breach is under way. That criterion stays unticked.
 - Judgment call: the four stories are marked done with their manager reads and the contact handover pending as
-  first-use steps 128 and 129 (S05.04.01 criterion 11, S05.04.02 criteria 3 and 8, S06.06.01 criteria 8 and 9, left
+  first-use steps 130 and 131 (S05.04.01 criterion 11, S05.04.02 criteria 3 and 8, S06.06.01 criteria 8 and 9, left
   unticked), because by-hand checks never hold a task open (this file's header rule), although the backlog README §9
   would have a document enabler wait for a manager to read it.
-- By hand: ops/first-use-in-test.md steps 127 to 130 (the run of every script in test, the manager reads, the contact
-  handover and records storage, and the first restore drill). T17 adds steps 127 and 128 on its own branch; whichever
-  lands second renumbers.
+- By hand: ops/first-use-in-test.md steps 129 to 132 (the run of every script in test, the manager reads, the contact
+  handover and records storage, and the first restore drill). T17 landed first with steps 127 and 128, so these
+  follow them.
 - Findings from `infra/`, for the owner, none changed here: `sql.bicep` sets only the 35-day point-in-time retention and
   no 12-month long-term policy (S06.03.01, T22); `locks.bicep` is not on main, so the rename in the failed-migration
   restore is unconfirmed; `bootstrap.bicep` has no Australia East resource group or identity rights, which the outage
@@ -5724,8 +5725,8 @@ log, and breach response, which links to the audit runbook rather than repeating
 - Domain: none. A scope-guard test requires every dbo table to be listed as destroyed or kept by retention.
 - Reuse: `SqlServerFixture`, the `TestOrganisations`, `TestParticipants`, `TestNotes` fixtures, the header and SET block
   of `check-database.sql`, the section shape of `ops/break-glass.md`.
-- Decisions where design.md is silent: A87 (Q5) log and list kept in the provider's records storage; A88 (Q7) drill
-  checks before go-live; A89 how the retention list reads the rule (NoteDate, not CreatedAtUtc); A90 audit request
+- Decisions where design.md is silent: A89 (Q5) log and list kept in the provider's records storage; A90 (Q7) drill
+  checks before go-live; A91 how the retention list reads the rule (NoteDate, not CreatedAtUtc); A92 audit request
   record in the provider's records storage, not `ops/` (departs from S05.04.02 c3; the criterion stays unticked). The
   extract leaves out the IP address.
 
@@ -5745,8 +5746,8 @@ log, and breach response, which links to the audit runbook rather than repeating
 - [x] Audit extraction (#99; v2): `ops/audit-extraction.md` and `audit-extract.sql`.
 - [x] Retention (#101; v3): `ops/retention-and-destruction.md`, `retention-list.sql` and `retention-destroy.sql`.
 - [x] Restore drill (#104; v4): `ops/restore-drill.md`, `restore-check.sql`, `restore-note.sql` and `restore-log.md`.
-- [x] Breach response and close-out (v5): `ops/breach-response.md`, A87 to A90, Q5 and Q7 answered, the four stories,
-      coverage.md and first-use steps 127 to 130.
+- [x] Breach response and close-out (v5): `ops/breach-response.md`, A89 to A92, Q5 and Q7 answered, the four stories,
+      coverage.md and first-use steps 129 to 132.
 
 
 ---
@@ -6416,9 +6417,9 @@ defaults, which the owner may overturn:
 **Answered on 24 October 2026.** The developer took the plan's suggested answers to two questions as assumed
 defaults (T23), which the owner may overturn:
 
-- **Q5. Where the HPP 4.3 destruction log and the yearly retention list are kept** (T23): design.md A87, the provider's
+- **Q5. Where the HPP 4.3 destruction log and the yearly retention list are kept** (T23): design.md A89, the provider's
   own records storage, in a place the managers choose, and never in the public repository.
-- **Q7. The restore test while production holds no notes before go-live** (T23): design.md A88, a drill that checks the
+- **Q7. The restore test while production holds no notes before go-live** (T23): design.md A90, a drill that checks the
   configuration counts, `restore-check.sql` and `DBCC CHECKDB` before go-live, and opens a known note at the first
   drill after go-live.
 

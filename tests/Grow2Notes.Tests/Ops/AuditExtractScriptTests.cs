@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Grow2Notes.Tests.Ops;
 
 /// <summary>
-/// <c>ops/audit-extract.sql</c>, which the operator runs to answer a manager's question from the audit log (A28, A90).
+/// <c>ops/audit-extract.sql</c>, which the operator runs to answer a manager's question from the audit log (A28, A92).
 /// Each test runs it on a migrated database of its own, with a second organisation whose rows must never come back,
 /// and with audit rows added through the app's context at an explicit time.
 /// </summary>

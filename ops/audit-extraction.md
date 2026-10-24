@@ -3,7 +3,7 @@
 The audit log has no screen in v1, so when a manager asks a question about it, the developer, as the operator, extracts
 the answer with `ops/audit-extract.sql` ([A28](../design/design.md#13-assumed-defaults)). This is a direct query on
 production data, so it is done the same way every time, from a request that is recorded first
-([A90](../design/design.md#13-assumed-defaults)). The script only reads. This file says what the log holds, how to
+([A92](../design/design.md#13-assumed-defaults)). The script only reads. This file says what the log holds, how to
 record a request, and when to run the script, what to have ready, how to run it and what it prints.
 
 ## What the log holds, and what it does not
@@ -32,7 +32,7 @@ the operator commands, which have no actor ([A28](../design/design.md#13-assumed
 ## The request record
 
 Before any query, add a row to the **request record**, kept in the provider's own records storage, in the place the
-managers chose for it ([A90](../design/design.md#13-assumed-defaults)). It is never in this repository, which is public:
+managers chose for it ([A92](../design/design.md#13-assumed-defaults)). It is never in this repository, which is public:
 even a row without names would show that an investigation or a breach is under way. One row for each request, with
 these columns:
 
@@ -153,5 +153,3 @@ who asked.
   that it failed and that the question is still open.
 - **A file with only the header:** the script ran, and nothing matched. Check the dates and the IDs against
   `find-ids.sql` before telling the manager there is nothing in the log.
-
-Release 2 adds the MCP server's events to the log (T38); this file does not cover them yet.

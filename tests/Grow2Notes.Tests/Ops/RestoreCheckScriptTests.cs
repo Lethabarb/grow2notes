@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Grow2Notes.Tests.Ops;
 
 /// <summary>
-/// <c>ops/restore-check.sql</c>, which the operator runs on a restored copy and on production (A88). Each test runs it
+/// <c>ops/restore-check.sql</c>, which the operator runs on a restored copy and on production (A90). Each test runs it
 /// on a migrated database of its own, so it knows every row that the script counts.
 /// </summary>
 [Collection<SqlServerCollection>]

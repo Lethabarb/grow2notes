@@ -1,5 +1,5 @@
 -- Destroys one archived participant's records, once the managers have decided in writing that the periods for keeping
--- them have ended (design.md §12 rows HPP 4.2 and 4.3, §10.9, A29, A89; ops/retention-and-destruction.md). It is the
+-- them have ended (design.md §12 rows HPP 4.2 and 4.3, §10.9, A29, A91; ops/retention-and-destruction.md). It is the
 -- one ops script that writes, and the one reviewed exception to "no ad-hoc SQL against production" (design.md §10.6).
 --
 -- It deletes the participant's rows from eight tables, in this order, in one transaction, scoped by the organisation:

@@ -29,7 +29,7 @@ deleted.
 - **Once a quarter** (design.md [§10.9](../design/design.md#109-routine-operations-developer)).
 - **After any release with a large migration,** the day it has been in production and the migration's effects are
   visible. Record the kind as *after a migration*.
-- **Before go-live,** the first drill, with the extra step 5 below (A88,
+- **Before go-live,** the first drill, with the extra step 5 below (A90,
   [design.md §13](../design/design.md#13-assumed-defaults)). Before there are notes the checks still prove that the
   restore works, the schema is complete and `DBCC CHECKDB` is clean.
 
@@ -276,8 +276,9 @@ Do not attach the restored data to anything that is not production's own app. St
 
 ## What the scripts read, and what they do not
 
-`restore-check.sql` and `restore-note.sql` are read-only, and CI proves it against a database set to read only. They
-read tables for their counts, times and one note's header and version metadata. They never show a note's text, and
-`restore-note.sql` shows a participant's name only because it is opening one named note for the operator. A copy made
-for evidence in a breach is a point-in-time copy made the same way, kept until the assessment ends and recorded in the
-breach decisions table (see [breach-response.md](breach-response.md)), never in [restore-log.md](restore-log.md).
+`restore-check.sql` and `restore-note.sql` are read-only. CI proves it for `restore-check.sql` against a database set
+to read only. They read tables for their counts, times and one note's header and version metadata. They never show
+a note's text, and `restore-note.sql` shows a participant's name only because it is opening one named note for the
+operator. A copy made for evidence in a breach is a point-in-time copy made the same way, kept until the assessment
+ends and recorded in the breach decisions table (see [breach-response.md](breach-response.md)), never in
+[restore-log.md](restore-log.md).

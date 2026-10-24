@@ -40,6 +40,7 @@ public sealed class OpsScriptsTests
     [InlineData("a b")]
     [InlineData("a;b")]
     [InlineData("a\"b")]
+    [InlineData("abc\n")]
     public void A_value_with_a_character_other_than_a_letter_a_digit_or_a_hyphen_is_refused(string value)
     {
         Assert.Throws<ArgumentException>(

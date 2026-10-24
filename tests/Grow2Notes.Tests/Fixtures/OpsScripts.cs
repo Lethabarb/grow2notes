@@ -20,7 +20,7 @@ internal static partial class OpsScripts
     [GeneratedRegex(@"\$\((?<name>[A-Za-z_][A-Za-z0-9_]*)\)")]
     private static partial Regex VariableToken();
 
-    [GeneratedRegex("^[A-Za-z0-9-]*$")]
+    [GeneratedRegex(@"^[A-Za-z0-9-]*\z")]
     private static partial Regex AllowedValue();
 
     /// <summary>
