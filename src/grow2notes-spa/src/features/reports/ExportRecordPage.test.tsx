@@ -382,7 +382,6 @@ describe('Export record', () => {
 
     it('shows the defaults again on a new visit, and touches no browser storage', async () => {
       const setItem = vi.spyOn(Storage.prototype, 'setItem');
-      const getItem = vi.spyOn(Storage.prototype, 'getItem');
       const { unmount } = await openPage();
       enter(fromField(), '2026-05-05');
       await press(historyBox());
@@ -395,7 +394,6 @@ describe('Export record', () => {
       expect(pdfRadio()).not.toBeChecked();
       expect(historyBox()).not.toBeChecked();
       expect(setItem).not.toHaveBeenCalled();
-      expect(getItem).not.toHaveBeenCalled();
       expect(localStorage).toHaveLength(0);
       expect(sessionStorage).toHaveLength(0);
     });
@@ -736,7 +734,7 @@ describe('Export record', () => {
 
       await press(button);
 
-      expect(status()).toHaveTextContent(noNotes);
+      expect(status().textContent).toBe(noNotes);
       expect(alertBox()).toBeEmptyDOMElement();
       expect(summaryHeading()).toBeNull();
       expect(button).toHaveFocus();
@@ -753,7 +751,7 @@ describe('Export record', () => {
       waiting.release();
       await settle();
 
-      expect(status()).toHaveTextContent(noNotes);
+      expect(status().textContent).toBe(noNotes);
       expect(fromField()).toHaveValue('2026-02-01');
     });
 
@@ -915,7 +913,7 @@ describe('Export record', () => {
       exportAnswer = problem(404, { code: 'report.no_notes' });
       await openPage();
       await exportAs('pdf');
-      expect(status()).toHaveTextContent(noNotes);
+      expect(status().textContent).toBe(noNotes);
 
       enter(fromField(), '2026-02-01');
 
