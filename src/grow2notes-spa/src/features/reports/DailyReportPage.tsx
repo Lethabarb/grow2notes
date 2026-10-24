@@ -222,8 +222,12 @@ function DailyReport({ date, today }: { date: string; today: string }) {
               autoComplete="off"
               aria-invalid={error !== undefined || undefined}
               aria-describedby={error === undefined ? 'report-date-status' : 'report-date-error'}
-              onFocus={() => {
-                pushedThisVisit.current = false;
+              onFocus={(event) => {
+                // The browser's date field has a focus stop for each part of the date. Moving between them is still
+                // one visit: the event's related target is then the field itself, retargeted out of its shadow tree.
+                if (!event.currentTarget.contains(event.relatedTarget)) {
+                  pushedThisVisit.current = false;
+                }
               }}
               onChange={(event) => {
                 const value = event.currentTarget.value;

@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
-import { expectStops } from './focus.ts';
+import { expectFocusAt, expectStops } from './focus.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, scrollsSideways, setTextTo200Percent } from './layout.ts';
 import { answerMe, manager, serveMe, worker } from './me.ts';
@@ -220,7 +220,19 @@ test('keyboard: Tab goes from the field through both steps to Download Word and 
   await open(page);
 
   await heading(page).focus();
-  await expectStops(page, 'Tab', ['Date', '‹ Previous day', 'Next day ›', 'Download Word', 'Download PDF']);
+  await expectStops(page, 'Tab', ['Date']);
+  // The browser's date field has a stop for each part of the date, which stay one element, so the number of presses
+  // is the browser's.
+  for (let presses = 0; presses < 8; presses += 1) {
+    if (await previousDay(page).evaluate((link) => link === document.activeElement)) {
+      break;
+    }
+
+    await page.keyboard.press('Tab');
+  }
+
+  await expectFocusAt(page, '‹ Previous day');
+  await expectStops(page, 'Tab', ['Next day ›', 'Download Word', 'Download PDF']);
   await expectStops(page, 'Shift+Tab', ['Download Word']);
 });
 

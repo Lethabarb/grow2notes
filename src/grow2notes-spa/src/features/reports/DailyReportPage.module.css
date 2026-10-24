@@ -7,9 +7,13 @@
   margin-block-start: var(--space-5);
 }
 
-/* The whole width on a phone, a date's width from 40rem. */
+/*
+ * The whole width on a phone, a date's width from 40rem. Its minimum width is 0, not auto: the date input's own width
+ * grows with the text size, and would otherwise hold the field wider than a 320 px screen (SC 1.4.10).
+ */
 .field {
   flex: 1 1 100%;
+  min-inline-size: 0;
 }
 
 @media (min-width: 40rem) {
