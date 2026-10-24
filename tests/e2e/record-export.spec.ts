@@ -90,10 +90,10 @@ test('an unticked Format and a To date before From show their errors, in the sum
   await expect(page).toHaveTitle('Error: Grow2Notes – Export record');
   await expect(summary(page)).toBeFocused();
   await expect(summary(page).getByRole('link')).toHaveText([
-    /^To date must be the same as or after 1\s January 2026$/,
+    /^To date must be the same as or after 1\sJanuary 2026$/,
     'Choose PDF or Word',
   ]);
-  await expect(page.locator('#export-to-error')).toHaveText(/To date must be the same as or after 1\s January 2026/);
+  await expect(page.locator('#export-to-error')).toHaveText(/To date must be the same as or after 1\sJanuary 2026/);
   await expect(toField(page)).toHaveAttribute('aria-invalid', 'true');
   await expect(page.locator('#export-format-error')).toContainText('Choose PDF or Word');
   await expectAxeToPass(page);
@@ -139,7 +139,7 @@ test('a range with no submitted notes says so, with the dates sent, not as a fai
   await exportButton(page).click();
 
   await expect(statusLine(page)).toHaveText(
-    /^No submitted notes for Jane Citizen between 1\s January 2026 and 1\s October 2026\.$/,
+    /^No submitted notes for Jane Citizen between 1\sJanuary 2026 and 1\sOctober 2026\.$/,
   );
   await expect(alertLine(page)).toBeEmpty();
   await expect(summary(page)).toHaveCount(0);

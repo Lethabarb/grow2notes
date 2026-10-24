@@ -18,8 +18,13 @@
   font-weight: 700;
 }
 
+/*
+ * One column that may shrink to the screen: a grid's automatic column would hold the width of its widest item, and
+ * the date field's own width grows with the text size, which at 200% would scroll a 320 px screen sideways (SC 1.4.10).
+ */
 .form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-5);
 }
 
