@@ -262,13 +262,13 @@ test("on a user's page, a Resend invite's 401 shows view C over the hidden back 
   expect(await resendsSent()).toBe(1);
 });
 
-
 test('view C over a user’s page passes the foundations', async ({ page }) => {
   test.slow();
   await showViewCOverAlexsPage(page);
 
   await expectFoundationsToPass(page);
 });
+
 // An edit's request that meets the end of the session (S02.06.01, note-form.md *Session*): view C over the hidden form,
 // nothing said above the buttons, and the request never sent again once the same person signs in.
 for (const press of ['Save changes', 'Cancel'] as const) {
