@@ -290,7 +290,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
 - 25 October 2026: closed out; merged in PR #56 (CI run 39036902576 and Deploy run 39037441225 on b56824c passed).
   S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, each with
   a Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
-  EmailSendingTests), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18. The after-deploy
+  `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18. The after-deploy
   step was not run (see it).
 
 ### Steps
