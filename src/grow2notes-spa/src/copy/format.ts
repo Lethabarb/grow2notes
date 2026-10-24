@@ -25,6 +25,25 @@ export function dayBefore(isoDate: string): string {
   return new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
 }
 
+/** The day after an ISO date, "2026-10-01" for "2026-09-30", worked out in UTC as `dayBefore` is. */
+export function dayAfter(isoDate: string): string {
+  const { y, m, d } = parseDateOnly(isoDate);
+  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+/**
+ * Whether `value` is a real calendar date written yyyy-MM-dd. The round trip through `Date.UTC` rejects "2026-02-29"
+ * and "2026-13-45", and years 0000 to 0099, which `Date.UTC` reads as 1900 to 1999.
+ */
+export function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const { y, m, d } = parseDateOnly(value);
+  return new Date(Date.UTC(y, m - 1, d)).toISOString().slice(0, 10) === value;
+}
+
 // Read in UTC, which has no offset to move the date, so the day is the same whatever zone the device is in.
 const dayName = ({ y, m, d }: Ymd) => days[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
 const monthName = ({ m }: Ymd) => months[m - 1];

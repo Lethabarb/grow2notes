@@ -32,6 +32,12 @@ describe("Submit's words", () => {
     expect(msg.noteSubmitted('Jane Citizen')).toBe('Note for Jane Citizen submitted');
   });
 
+  it('say that a downloaded file is ready, by its name', () => {
+    expect(msg.fileReady('daily-notes_2026-10-01.docx')).toBe(
+      'daily-notes_2026-10-01.docx is ready. Look in your downloads.',
+    );
+  });
+
   it('say that it was not submitted, and why, and that the draft is saved', () => {
     expect(msg.notSubmitted('offline')).toBe('Not submitted: no connection. Your draft is saved. Try again.');
     expect(msg.notSubmitted('server')).toBe('Not submitted: something went wrong. Your draft is saved. Try again.');

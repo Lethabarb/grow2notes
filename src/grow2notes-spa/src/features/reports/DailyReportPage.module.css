@@ -1,0 +1,58 @@
+/* The date field and the two step links (daily-report.md component 2): a row that wraps, so that nothing scrolls. */
+.dateRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-block-start: var(--space-5);
+}
+
+/* The whole width on a phone, a date's width from 40rem. */
+.field {
+  flex: 1 1 100%;
+}
+
+@media (min-width: 40rem) {
+  .field {
+    flex: 0 1 16rem;
+  }
+}
+
+.steps {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+/*
+ * A non-auto flex basis beats the button's phone width of 100%. Two of 10rem and a gap are 332 px, which fit the
+ * 343 px of content at 375 px, so the links share a row there, and not the 288 px at 320 px, where they stack.
+ */
+.step {
+  flex: 1 1 10rem;
+  padding-inline: var(--space-3);
+}
+
+.dateStatus {
+  margin: var(--space-3) 0 var(--section-gap);
+}
+
+.downloadStatus {
+  margin: 0 0 var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.downloadStatus:empty {
+  margin: 0;
+}
+
+.downloadStatus[data-preparing] {
+  color: var(--colour-text-secondary);
+}
+
+@media (min-width: 40rem) {
+  .download {
+    min-inline-size: 12rem;
+  }
+}

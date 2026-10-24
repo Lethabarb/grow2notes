@@ -47,6 +47,8 @@ export const msg = {
   notSubmitted: (cause: Cause): string => msg.notDone('submitted', cause, strings.note.draftIsSaved),
   /** Today's success banner after Submit (design.md §4.3), with the participant's full name, one phrase. */
   noteSubmitted: (name: string) => `Note for ${name} submitted`,
+  /** The Report screen's line once a file is saved (daily-report.md), with the name it was saved under. */
+  fileReady: (fileName: string) => `${fileName} is ready. Look in your downloads.`,
   /**
    * The Discard dialog (note-form.md component 15, confirm-dialog.md's dialog 2): its title and its confirming button,
    * each with the participant's full name; its body's line for a draft dated before today, with the note date in
