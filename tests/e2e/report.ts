@@ -28,12 +28,16 @@ export async function serveHasNotes(page: Page, emptyDays: readonly string[] = [
 }
 
 /**
- * Sets the date field's value as a person's change does. A script's plain assignment to a controlled input's `value` is
- * not seen by React as a change, so the setter is the prototype's, followed by the `input` event.
+ * Sets the date field's value as a person's change does, in the same visit to the field if it has focus already. A
+ * script's plain assignment to a controlled input's `value` is not seen by React as a change, so the setter is the
+ * prototype's, followed by the `input` event.
  */
 export async function enterDate(field: Locator, value: string): Promise<void> {
-  await field.focus();
   await field.evaluate((input: HTMLInputElement, typed) => {
+    if (document.activeElement !== input) {
+      input.focus();
+    }
+
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, typed);
     input.dispatchEvent(new Event('input', { bubbles: true }));
   }, value);

@@ -276,6 +276,9 @@ test('history: Previous day twice, then Back keeps focus and scroll, and the las
   await page.goto('/');
   await navReport(page).click();
   await expect(page).toHaveURL(reportAddress);
+  // The shell's arrival, its focus on the <h1>, is over before the page is scrolled.
+  await expect(heading(page)).toBeFocused();
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await page.evaluate(() => window.scrollTo(0, 80));
   expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
