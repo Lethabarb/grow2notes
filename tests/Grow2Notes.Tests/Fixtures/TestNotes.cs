@@ -206,7 +206,8 @@ internal static class TestNotes
 
     /// <summary>
     /// Adds version <paramref name="versionNumber"/>, the one after the note's current version, as
-    /// <see cref="AddVersion2Async"/> adds version 2, written by <paramref name="savedByUserId"/>.
+    /// <see cref="AddVersion2Async"/> adds version 2, written by <paramref name="savedByUserId"/>, with the text
+    /// <paramref name="narrative"/>.
     /// </summary>
     public static async Task AddVersionAsync(
         this IServiceProvider services,
@@ -217,7 +218,8 @@ internal static class TestNotes
         string? flagReason,
         int flaggedVersionNumber,
         IReadOnlyList<TestVersionGroup>? groups,
-        Guid savedByUserId)
+        Guid savedByUserId,
+        string narrative = "Jane made toast. Then a walk to the shops.")
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var scope = services.CreateAsyncScope();
@@ -232,7 +234,7 @@ internal static class TestNotes
                 OrganisationId = organisation.OrganisationId,
                 NoteId = noteId,
                 VersionNumber = versionNumber,
-                Narrative = "Jane made toast. Then a walk to the shops.",
+                Narrative = narrative,
                 IsFlagged = flagReason is not null,
                 FlagReason = flagReason,
                 CreatedByUserId = savedByUserId,

@@ -27,14 +27,6 @@ namespace Grow2Notes.Web.Features.Reports;
 /// </remarks>
 internal static class DailyReportEndpoint
 {
-    private const string Docx = "docx";
-
-    private const string Pdf = "pdf";
-
-    private const string DocxContentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-    private const string PdfContentType = "application/pdf";
-
     /// <summary>Maps the endpoint in the <c>/api</c> group, which <see cref="ApiGroup.MapApiGroup"/> returns.</summary>
     public static RouteGroupBuilder MapDailyReportEndpoint(this RouteGroupBuilder api)
     {
@@ -60,7 +52,7 @@ internal static class DailyReportEndpoint
         CancellationToken cancellationToken)
     {
         // The bare format, which the status code pages make problem details. The match is ordinal, so PDF is refused.
-        if (format is not (Docx or Pdf))
+        if (!ReportFile.IsFormat(format))
         {
             return TypedResults.BadRequest();
         }
@@ -73,10 +65,7 @@ internal static class DailyReportEndpoint
             return ErrorCode.NoNotes.Problem();
         }
 
-        var blocks = ReportLayout.DailyReport(model);
-        var (bytes, contentType) = format == Docx
-            ? (WordReport.Render(blocks), DocxContentType)
-            : (PdfReport.Render(blocks), PdfContentType);
+        var (bytes, contentType) = ReportFile.Render(ReportLayout.DailyReport(model), format);
         var fileDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
         await audit.WriteAsync(

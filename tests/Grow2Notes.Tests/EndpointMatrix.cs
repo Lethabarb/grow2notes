@@ -234,6 +234,12 @@ internal static class EndpointMatrix
         new(Get,       "/api/reports/daily/{date:isodate}/has-notes", Unauthorized, Forbidden, OK, OK,
             WhetherTheDayOfANoteSubmittedInAHasNotes, HasNotesForManagerOfAAlone),
 
+        // A participant's record (§6.5), outside /api/admin with the Manager policy of its own, so for managers alone.
+        // Each call first submits a note in A for a participant of its own, so A's manager gets the file and B's manager
+        // gets 404 for a participant who is not in B (§9.2).
+        new(Get,       "/api/reports/participants/{participantId:guid}/export", Unauthorized, Forbidden, OK, NotFound,
+            TheRecordOfAParticipantWithANoteSubmittedInA),
+
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
@@ -517,10 +523,28 @@ internal static class EndpointMatrix
     private static Task<HttpRequestMessage> WhetherTheDayOfANoteSubmittedInAHasNotes(EndpointCall call) =>
         ANoteSubmittedInAOn3August(call, "has-notes");
 
+    // A participant's record for 3 August 2026, as a Word file without earlier versions.
+    private static async Task<HttpRequestMessage> TheRecordOfAParticipantWithANoteSubmittedInA(EndpointCall call)
+    {
+        var participantId = await AddANoteSubmittedInAOn3August(call);
+        return new HttpRequestMessage(
+            call.Method,
+            $"/api/reports/participants/{participantId}/export"
+            + "?from=2026-08-03&to=2026-08-03&format=docx&includeHistory=false");
+    }
+
     // The daily report's address for 3 August 2026 and the path after the date, asked for once the request has added to
-    // A a participant of its own, because a participant has one live note a day, with a note submitted by A's worker,
-    // as Submit leaves it. No test seeds a note of B's on that day. Its times are made up (A35).
+    // A a participant of its own with a note submitted by A's worker.
     private static async Task<HttpRequestMessage> ANoteSubmittedInAOn3August(EndpointCall call, string path)
+    {
+        await AddANoteSubmittedInAOn3August(call);
+        return new HttpRequestMessage(call.Method, $"/api/reports/daily/2026-08-03/{path}");
+    }
+
+    // Adds to A a participant of its own, because a participant has one live note a day, with a note for 3 August 2026
+    // submitted by A's worker, as Submit leaves it, and gives the participant's ID. No test seeds a note of B's on that
+    // day. Its times are made up (A35).
+    private static async Task<Guid> AddANoteSubmittedInAOn3August(EndpointCall call)
     {
         var a = call.Seeded.A;
         var participant = await call.Services.AddParticipantAsync(a);
@@ -532,7 +556,7 @@ internal static class EndpointMatrix
                 a.WorkerId,
                 new DateTime(2026, 8, 3, 1, 14, 0, DateTimeKind.Utc),
                 new DateTime(2026, 8, 3, 6, 42, 0, DateTimeKind.Utc)));
-        return new HttpRequestMessage(call.Method, $"/api/reports/daily/2026-08-03/{path}");
+        return participant.Id;
     }
 
     // A's seeded participant's note form for today.

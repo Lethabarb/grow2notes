@@ -26,6 +26,19 @@ internal static partial class ReportText
     }
 
     /// <summary>
+    /// The text of each body paragraph of a Word file, as <see cref="WordParagraphs"/> reads it, with the ID of the
+    /// paragraph's style, which is <see langword="null"/> for a paragraph with none.
+    /// </summary>
+    public static IReadOnlyList<(string? Style, string Text)> WordStyledParagraphs(byte[] docx)
+    {
+        using var stream = new MemoryStream(docx);
+        using var document = WordprocessingDocument.Open(stream, false);
+        var body = document.MainDocumentPart!.Document!.Body!;
+        return [.. body.Elements<Paragraph>().Select(paragraph =>
+            (paragraph.ParagraphProperties?.ParagraphStyleId?.Val?.Value, ParagraphText(paragraph)))];
+    }
+
+    /// <summary>
     /// The words of the body of every page of a PDF file, in order, without the running header and the footer.
     /// </summary>
     public static IReadOnlyList<string> PdfWords(byte[] pdf)

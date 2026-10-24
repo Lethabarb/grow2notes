@@ -1,3 +1,5 @@
+using Grow2Notes.Web.Features.Notes;
+
 namespace Grow2Notes.Web.Features.Reports;
 
 /// <summary>
@@ -7,6 +9,24 @@ namespace Grow2Notes.Web.Features.Reports;
 internal static class ReportLayout
 {
     private const string DailyTitle = "Daily progress notes";
+
+    private const string RecordTitle = "Progress notes record";
+
+    private const string DateOfBirth = "Date of birth: ";
+
+    private const string To = " to ";
+
+    private const string EarlierVersionsIncluded = "Earlier versions: included";
+
+    private const string EarlierVersionsNotIncluded = "Earlier versions: not included";
+
+    private const string EarlierVersions = "Earlier versions";
+
+    private const string Version = "Version ";
+
+    private const string SavedBy = ": saved by ";
+
+    private const string SubmittedBy = ": submitted by ";
 
     private const string AsAt = "As at ";
 
@@ -88,6 +108,84 @@ internal static class ReportLayout
     }
 
     /// <summary>
+    /// A participant's record for a range of dates (design.md §11.6): the title block, which names the participant,
+    /// their date of birth, the range as the manager entered it, the organisation, who exported it and when, and
+    /// whether earlier versions are in it; then each note under its date, in the model's order. The running header, the
+    /// footer sentence and the properties hold the title and the organisation, never the participant's name.
+    /// </summary>
+    public static ReportDocument ParticipantRecord(ParticipantExportModel model)
+    {
+        var asAt = ReportDates.DateTimeWithYear(model.AsAtUtc);
+        var range = ReportDates.DatePlain(model.From) + To + ReportDates.DatePlain(model.To);
+        List<ReportBlock> blocks =
+        [
+            new(ReportBlockKind.Title, RecordTitle),
+            new(ReportBlockKind.Subtitle, model.ParticipantName),
+            new(ReportBlockKind.Subtitle, DateOfBirth + ReportDates.DatePlain(model.DateOfBirth)),
+            new(ReportBlockKind.Subtitle, range),
+            new(ReportBlockKind.Subtitle, model.OrganisationName),
+            new(ReportBlockKind.Subtitle, $"{ExportedBy}{model.ExportedBy}, {asAt}"),
+            new(
+                ReportBlockKind.Subtitle,
+                model.IncludesEarlierVersions ? EarlierVersionsIncluded : EarlierVersionsNotIncluded),
+        ];
+        foreach (var note in model.Notes)
+        {
+            blocks.Add(new(ReportBlockKind.Heading1, ReportDates.DateLong(note.NoteDate)));
+            blocks.AddRange(NoteBody(note.Note));
+            blocks.AddRange(EarlierVersionBlocks(note.EarlierVersions));
+        }
+
+        return new ReportDocument(
+            $"{RecordTitle}: {range}",
+            model.OrganisationName,
+            FooterStart + model.ExportedBy + ", " + asAt + FooterEnd,
+            blocks);
+    }
+
+    // The earlier versions sit under a heading of their own, newest first. Each version's own flag, reviews and
+    // comments come before its body, and its labels are plain lines, as the headings are the note's and the version's.
+    private static IEnumerable<ReportBlock> EarlierVersionBlocks(IReadOnlyList<ParticipantExportVersion> versions)
+    {
+        if (versions.Count == 0)
+        {
+            yield break;
+        }
+
+        yield return new(ReportBlockKind.Heading2, EarlierVersions);
+        foreach (var version in versions)
+        {
+            var summary = version.Summary;
+            yield return new(
+                ReportBlockKind.Heading3,
+                $"{Version}{summary.VersionNumber}{(summary.VersionNumber == 1 ? SubmittedBy : SavedBy)}"
+                + $"{summary.CreatedBy.DisplayName}, {ReportDates.DateTimeWithYear(summary.CreatedAtUtc)}");
+            if (version.Content.IsFlagged)
+            {
+                yield return new(
+                    ReportBlockKind.Line, $"{FlaggedStart}{version.Content.FlagReason}{FlaggedEnd}");
+            }
+
+            foreach (var review in version.Reviews)
+            {
+                yield return new(
+                    ReportBlockKind.Line,
+                    ReviewedBy + review.ReviewedBy.DisplayName + On
+                        + ReportDates.DateTimeWithYear(review.ReviewedAtUtc));
+                if (review.Comment is { Length: > 0 } comment)
+                {
+                    yield return new(ReportBlockKind.Line, Comment + comment);
+                }
+            }
+
+            foreach (var block in VersionBody(version.Content, ReportBlockKind.Line, ReportBlockKind.Line))
+            {
+                yield return block;
+            }
+        }
+    }
+
+    /// <summary>
     /// A note under its participant's name, in the order of design.md §11.3's layout example: who wrote it and when it
     /// was first submitted, with the day it was written for a past-day note; that it was edited, by whom and when; its
     /// flag, and whether a manager has reviewed it; its goals in the order of its version; its common items by group,
@@ -129,33 +227,48 @@ internal static class ReportLayout
             }
         }
 
-        yield return new(ReportBlockKind.Heading2, Goals);
-        if (note.Current.Goals.Count == 0)
+        foreach (var block in VersionBody(note.Current, ReportBlockKind.Heading2, ReportBlockKind.Heading3))
+        {
+            yield return block;
+        }
+    }
+
+    /// <summary>
+    /// A version's goals, its common items by group, as the version shows them, and its Guided notes exactly as
+    /// stored. The section labels are blocks of <paramref name="sectionKind"/> and the group names of
+    /// <paramref name="groupKind"/>, so a note's current version can use headings and an earlier version, which sits
+    /// under a heading of its own, plain lines.
+    /// </summary>
+    public static IEnumerable<ReportBlock> VersionBody(
+        NoteReadVersion version, ReportBlockKind sectionKind, ReportBlockKind groupKind)
+    {
+        yield return new(sectionKind, Goals);
+        if (version.Goals.Count == 0)
         {
             yield return new(ReportBlockKind.Line, NoGoals);
         }
 
-        foreach (var goal in note.Current.Goals)
+        foreach (var goal in version.Goals)
         {
             yield return new(ReportBlockKind.Tick, goal.Text, goal.IsTicked);
         }
 
-        yield return new(ReportBlockKind.Heading2, CommonItems);
-        if (note.Current.CommonItemGroups.Count == 0)
+        yield return new(sectionKind, CommonItems);
+        if (version.CommonItemGroups.Count == 0)
         {
             yield return new(ReportBlockKind.Line, NoCommonItems);
         }
 
-        foreach (var group in note.Current.CommonItemGroups)
+        foreach (var group in version.CommonItemGroups)
         {
-            yield return new(ReportBlockKind.Heading3, group.Name);
+            yield return new(groupKind, group.Name);
             foreach (var item in group.Items)
             {
                 yield return new(ReportBlockKind.Tick, item.Text, item.IsTicked);
             }
         }
 
-        yield return new(ReportBlockKind.Heading2, GuidedNotes);
-        yield return new(ReportBlockKind.Line, note.Current.Narrative);
+        yield return new(sectionKind, GuidedNotes);
+        yield return new(ReportBlockKind.Line, version.Narrative);
     }
 }
