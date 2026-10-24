@@ -3,6 +3,7 @@ import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus } from './goals.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, expectAtLeast, scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
@@ -1106,3 +1107,29 @@ for (const width of [375, 1280]) {
     await expectNothingKept(page, 'Jane', 'Citizen', 'Alex', 'Went to the shops', draftReason);
   });
 }
+
+// Past notes' and the read view's foundations (T26), each in a test of its own, as the call changes the text size and
+// spacing for good.
+test('Past notes with Show older passes the foundations', async ({ page }) => {
+  test.slow();
+  const store = manyNotes(31);
+  await serveMe(page, manager);
+  await store.serve(page, manager);
+  await page.goto(pastNotesAddress(jane.id));
+  await expect(rows(page)).toHaveCount(30);
+  await expect(showOlder(page)).toBeVisible();
+
+  await expectFoundationsToPass(page);
+});
+
+test('the read view of a flagged note passes the foundations', async ({ page }) => {
+  test.slow();
+  const store = janeAndRavi();
+  await serveMe(page, worker);
+  await store.serve(page, worker);
+  await page.goto(noteAddress(jane.id, worker.today));
+  await expect(heading(page)).toHaveText('Jane Citizen Thursday 1 October 2026');
+  await expect(flagLine(page)).toBeVisible();
+
+  await expectFoundationsToPass(page);
+});

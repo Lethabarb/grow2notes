@@ -4,6 +4,7 @@ import { expect, test } from './fixtures.ts';
 import { breakfast, bus, goals, serveGoals } from './goals.ts';
 import { savedPrompts } from './guidePrompts.ts';
 import { expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { shownText, systemColour } from './layout.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
@@ -370,4 +371,26 @@ test('in forced colours, the ring is Highlight on the back link, Note date and C
   await tabToContinue(page);
   await expect(continueButton(page)).toHaveCSS('outline-style', 'solid');
   await expect(continueButton(page)).toHaveCSS('outline-color', highlight);
+});
+
+// The date page's and the past-day form's foundations (T26), each in a test of its own, as the call changes the text
+// size and spacing for good. The top bar is the one element allowed to stay pinned, on a window taller than 30rem.
+test('the date page with its error passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, emptyStore(), pastDayAddress(jane.id));
+  await continueWith(page, manager.today);
+  await expect(dateError(page)).toHaveText('Error: Note date must be in the past');
+  await expect(noteDateField(page)).toBeFocused();
+
+  await expectFoundationsToPass(page);
+});
+
+test('the past-day form passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, emptyStore(), pastDayAddress(jane.id));
+  await continueWith(page, '2026-09-27');
+  await box(page).fill('Jane made toast.');
+  await expect(saveStatus(page)).toHaveText(savedAnyTime);
+
+  await expectFoundationsToPass(page, { topBar: true });
 });

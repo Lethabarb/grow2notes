@@ -2,7 +2,13 @@ import type { Locator, Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test as base } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
-import { expectNothingToMove, expectTextAt7To1, expectToFit, spaceTextOut } from './foundations.ts';
+import {
+  expectFoundationsToPass,
+  expectNothingToMove,
+  expectTextAt7To1,
+  expectToFit,
+  spaceTextOut,
+} from './foundations.ts';
 import {
   conflictAnswer,
   failPrompts,
@@ -1656,4 +1662,14 @@ test('keyboard alone: Enter in the field adds a line break, on Save saves, and T
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL('/manage');
   await expect(heading(page)).toHaveText('Manage');
+});
+
+// Guide prompts' foundations (T26), in a test of its own, as the call changes the text size and spacing for good. Its
+// other checks, at 320 px, at 200% text, spaced and in forced colours, stay in the tests above; this one adds the
+// pinned, language and ring sweeps over the Default state.
+test('the Default state passes the foundations', async ({ page }) => {
+  test.slow();
+  await openWith(page);
+
+  await expectFoundationsToPass(page);
 });

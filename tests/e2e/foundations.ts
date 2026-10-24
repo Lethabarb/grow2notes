@@ -101,9 +101,14 @@ export async function expectToFit(page: Page, state: string) {
           continue;
         }
 
-        const text = document.createRange();
-        text.selectNodeContents(node);
-        if ([...text.getClientRects()].some(({ left, right }) => left < box.left - 1 || right > box.right + 1)) {
+        // Word by word, as a space that ends a wrapped line of pre-wrap text hangs past the box without showing.
+        const reachesPast = [...(node.textContent ?? '').matchAll(/\S+/g)].some((word) => {
+          const text = document.createRange();
+          text.setStart(node, word.index);
+          text.setEnd(node, word.index + word[0].length);
+          return [...text.getClientRects()].some(({ left, right }) => left < box.left - 1 || right > box.right + 1);
+        });
+        if (reachesPast) {
           found.push(`the text of ${named(element)} reaches past it`);
         }
       }

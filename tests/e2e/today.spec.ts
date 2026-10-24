@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus } from './goals.ts';
 import { expectNothingKept } from './kept.ts';
 import {
@@ -913,3 +914,53 @@ for (const width of [375, 1280]) {
     await expectNothingKept(page, 'Jane', 'Ben', 'Archer', 'Ravi', 'Walked to the shop');
   });
 }
+
+test('in forced colours, the Submitted banner keeps its bar and border, in the text colour', async ({ page }) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  const store = notesStore({ today: worker.today, participants, goals: { [jane.id]: [breakfast, bus] } });
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, store.todayNotes(worker));
+  await store.serve(page, worker);
+  await page.goto('/');
+  await row(page, 'Jane Citizen').click();
+  await main(page).getByRole('textbox', { name: '3. Guided notes' }).pressSequentially('Went to the shops.');
+  await expect(page.locator('#save-status')).toHaveText('Saved 4:12 pm');
+  await main(page).getByRole('button', { name: 'Submit note', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Submit note for Jane Citizen' }).click();
+  await expect(banner(page)).toHaveText('Note for Jane Citizen submitted');
+
+  // The 6 px bar is a border, which forced colours keep, as is the rest of the edge, both in CanvasText.
+  const canvasText = await systemColour(page, 'CanvasText');
+  await expect(banner(page)).toHaveCSS('border-inline-start-style', 'solid');
+  await expect(banner(page)).toHaveCSS('border-inline-start-width', '6px');
+  await expect(banner(page)).toHaveCSS('border-inline-start-color', canvasText);
+  await expect(banner(page)).toHaveCSS('border-top-style', 'solid');
+  await expect(banner(page)).toHaveCSS('border-top-color', canvasText);
+  expect(parseFloat(await banner(page).evaluate((edge) => getComputedStyle(edge).borderTopWidth))).toBeGreaterThan(0);
+});
+
+// Today's foundations (T26): the worker's Ready, with Your unfinished drafts above a list that has a Submitted row, in
+// a test of its own, as the call changes the text size and spacing for good.
+test('a worker’s Ready with drafts and a Submitted row passes the foundations', async ({ page }) => {
+  test.slow();
+  const store = ownDrafts();
+  const draftNotes = store.todayNotes(worker);
+  await serveMe(page, worker);
+  await serveToday(page, worker.today, participants, (id) =>
+    id === ravi.id
+      ? todayNote({
+          status: 'Submitted',
+          authorDisplayName: worker.displayName,
+          isMine: true,
+          firstSubmittedAtUtc: at412,
+        })
+      : draftNotes(id),
+  );
+  await serveMyDrafts(page, () => [...store.myDrafts(worker)(), ravisEdit]);
+  await store.serve(page, worker);
+  await page.goto('/');
+  await expect(draftsHeading(page)).toBeVisible();
+  await expect.poll(() => shownText(listLine(page, 'Ravi de Silva'))).toBe('Submitted · You · 4:12 pm');
+
+  await expectFoundationsToPass(page);
+});

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Locator, Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
-import { expectStops, ring } from './focus.ts';
+import { expectStops, ring, tabTo } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, expectAtLeast, scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
@@ -1016,4 +1017,47 @@ test('signed in for real at 375 px, a worker’s flagged submit reaches both man
   await expect(phone).toHaveTitle(title('Page not found'));
   await expect(main(phone).getByText(janeCitizen.name)).toHaveCount(0);
   await expectNothingKept(phone, janeCitizen.givenName, janeCitizen.familyName, sentence, flagReason);
+});
+
+// The ring's geometry (foundations.md item 10, T26). Both come from global rules, base.css's :focus-visible and
+// LinkRow.module.css's, so this one screen proves them for every screen that has a view link or a row.
+test('the ring sits 2 px off a view link, and 3 px inside a To review row', async ({ page }) => {
+  await openFlagged(page, threeFlags());
+  await heading(page).focus();
+
+  await tabTo(page, viewLink(page, 'To review (3)'));
+  await expect(viewLink(page, 'To review (3)')).toHaveCSS('outline-offset', '2px');
+
+  const first = rows(page).first();
+  await tabTo(page, first);
+  const [pseudo, own] = await first.evaluate((link) => {
+    const after = getComputedStyle(link, '::after');
+    return [
+      { style: after.outlineStyle, width: after.outlineWidth, offset: after.outlineOffset },
+      getComputedStyle(link).outlineStyle,
+    ];
+  });
+  expect(own, 'the link itself draws no ring').toBe('none');
+  expect(pseudo, 'the ring on the row, drawn by the link’s ::after').toEqual({
+    style: 'solid',
+    width: '3px',
+    offset: '-3px',
+  });
+});
+
+// Flagged's foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+test('To review with its rows passes the foundations', async ({ page }) => {
+  test.slow();
+  await openFlagged(page, threeFlags());
+
+  await expectFoundationsToPass(page);
+});
+
+test('Reviewed with Show older passes the foundations', async ({ page }) => {
+  test.slow();
+  await openReviewed(page, reviewedRows(31));
+  await expect(rows(page)).toHaveCount(30);
+  await expect(showOlder(page)).toBeVisible();
+
+  await expectFoundationsToPass(page);
 });
