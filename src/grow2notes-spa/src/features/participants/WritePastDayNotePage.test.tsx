@@ -35,6 +35,7 @@ const jane: ParticipantHeader = {
   givenName: 'Jane',
   familyName: 'Citizen',
   status: 'Active',
+  firstNoteDate: null,
 };
 
 const paths = {
