@@ -1217,3 +1217,14 @@ steps need the Android phone, with Chrome, Samsung Internet and TalkBack. Everyt
      what could not. (foundations.md manual test 7; note-form.md *Manual test passes (M6)*.)
 
 Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each device.
+
+### The email sender's settings, once T01 is in test
+
+148. In the Azure portal, signed in with your own account, open the web app `app-grow2notes-test`, then Settings,
+     Environment variables. Look at the names only, without opening any value. Look for: `Email__Endpoint` and
+     `Email__SenderAddress` among them; and no setting, whatever its name, whose value is a Communication Services
+     connection string (it starts `endpoint=` and holds `accesskey=`) or an access key. Then open the test resource
+     group's Communication Services resource. Look for access keys turned off (local authentication disabled), and for
+     the Email service's Azure-managed domain showing SPF, DKIM and DMARC verified. Do not write any value down.
+     (S00.02.07's second criterion, its deployed half: its app half is `EmailSendingTests`, in CI. This is the read-only
+     check that T01's after-deploy step names for the Azure side.)
