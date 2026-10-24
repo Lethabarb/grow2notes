@@ -1,5 +1,5 @@
 -- Opens one note's record in a restored copy, or in production, so that the two can be compared (design.md §10.7,
--- A83): who and what the note is for, its status and current version, and when each version was saved, by whom, and
+-- A88): who and what the note is for, its status and current version, and when each version was saved, by whom, and
 -- how many items and how much text it has. It only reads: the Note, Participant, NoteVersion, NoteVersionItem and
 -- AspNetUsers tables, through the note's own organisation. It writes nothing. It never shows the text of a note: only
 -- the length of the guided notes, so a restored copy and production can be compared without reading what a participant

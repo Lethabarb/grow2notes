@@ -25,7 +25,7 @@ These come from the NDIS Act s 45B, APP 11.2, and HPP 4.2 and 4.3 of the Health 
 
 ### How the list reads each period
 
-This is the reading that design.md [A84](../design/design.md#13-assumed-defaults) records. The owner may overturn it.
+This is the reading that design.md [A89](../design/design.md#13-assumed-defaults) records. The owner may overturn it.
 
 - **Last service** is the latest note date of a note that is Submitted. A draft or a discarded note is not a service.
 - **A note written under 18** is a note in any status, drafts and discarded notes included, dated before the
@@ -41,7 +41,7 @@ This is the reading that design.md [A84](../design/design.md#13-assumed-defaults
 
 The yearly list, the destruction log (HPP 4.3) and the saved output of every preview and destroy run name people. They
 are kept in the provider's own records storage, in a place the managers choose, and never in this repository (design.md
-[A82](../design/design.md#13-assumed-defaults)). The repository holds the layouts and the roles only. The operator
+[A87](../design/design.md#13-assumed-defaults)). The repository holds the layouts and the roles only. The operator
 writes each output straight to that place, keeps no local copy, and tells the managers it is there. The app sends
 nothing: it emails no one, and the report is a download (D30, D43).
 
@@ -200,7 +200,7 @@ table is added that nobody has decided about, so that a table that holds partici
 A destroyed record stays in the Azure SQL backups until they expire: **35 days** in the point-in-time backups and up to
 **12 months** in the long-term backups (design.md [§10.7](../design/design.md#107-backups-and-tested-restore-a36)).
 Until then it is treated as beyond use: no one restores it for any purpose except a disaster. A copy made for a restore
-drill is deleted after the drill (`restore-drill.md`).
+drill is deleted after the drill ([restore-drill.md](restore-drill.md)).
 
 ## If the provider stops using Grow2Notes
 

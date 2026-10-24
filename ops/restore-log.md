@@ -4,8 +4,9 @@ One row for each restore drill and each real restore (ops/[restore-drill.md](res
 [§10.7](../design/design.md#107-backups-and-tested-restore-a36)). The operator adds the row when the work is done, by
 pull request.
 
-A row holds no note ID, no name and no address, only a date, the kind of restore, a time, a result and a role. A copy
-made as evidence for a breach is recorded in the breach decisions table (`breach-response.md`), and never here.
+A row holds no note ID, no name and no address, only a date, the kind of restore, a time, a result and a role.
+A copy made as evidence for a breach is recorded in the breach decisions table
+([breach-response.md](breach-response.md)), and never here.
 
 - **Date (UTC)** is the day the drill or the restore was done, as `yyyy-mm-dd`.
 - **Kind** is one of: `quarterly`, `yearly geo-restore`, `after a migration`, `failed-migration restore`, `outage`.

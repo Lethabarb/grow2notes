@@ -3,7 +3,7 @@
 The audit log has no screen in v1, so when a manager asks a question about it, the developer, as the operator, extracts
 the answer with `ops/audit-extract.sql` ([A28](../design/design.md#13-assumed-defaults)). This is a direct query on
 production data, so it is done the same way every time, from a request that is recorded first
-([A85](../design/design.md#13-assumed-defaults)). The script only reads. This file says what the log holds, how to
+([A90](../design/design.md#13-assumed-defaults)). The script only reads. This file says what the log holds, how to
 record a request, and when to run the script, what to have ready, how to run it and what it prints.
 
 ## What the log holds, and what it does not
@@ -13,10 +13,10 @@ The log's fields and its three indexes are in [design.md §5.3](../design/design
 edited, discarded), flag reviews, configuration and user changes, report downloads and participant record exports, and
 the operator commands, which have no actor ([A28](../design/design.md#13-assumed-defaults)).
 
-- **It does not hold reads.** Opening a note, a participant's history or a version history is never recorded, and an
-  autosave is not an event. So the log cannot say who read a note. For a breach, a misused account is assumed to have
-  exposed every participant's notes (D20, design.md §9.10): never tell a manager that the log shows that a note was
-  not read.
+- **It does not hold opening a note.** Opening a note, a participant's history or a version history is never
+  recorded, and an autosave is not an event. So the log cannot say who read a note. For a breach, a misused
+  account is assumed to have exposed every participant's notes (D20, design.md §9.10): never tell a manager that the
+  log shows that a note was not read. Report downloads and participant record exports are recorded.
 - **It holds no note text.** The Details column is metadata, but it is not only IDs. A participant event holds the
   participant's given name, family name and date of birth, a goal event holds the goal's wording, and a user event holds
   the person's email address and name. Those values stay in the log after a participant's records are destroyed (the
@@ -32,7 +32,7 @@ the operator commands, which have no actor ([A28](../design/design.md#13-assumed
 ## The request record
 
 Before any query, add a row to the **request record**, kept in the provider's own records storage, in the place the
-managers chose for it ([A85](../design/design.md#13-assumed-defaults)). It is never in this repository, which is public:
+managers chose for it ([A90](../design/design.md#13-assumed-defaults)). It is never in this repository, which is public:
 even a row without names would show that an investigation or a breach is under way. One row for each request, with
 these columns:
 
