@@ -5875,9 +5875,9 @@ report or export.
   renumber touches only design.md (§5.5 item 4, the §13 row and the intro's A-range), this file and S05.03.01's
   Notes. A95 and A96 were taken by T25 (24 October 2026), so this is A97.
 - ops/security-review.md rows 1.2.4, 2.3.4, 8.2.2, 13.2.2, 16.2.5, 16.3.1 and 16.4.2 and the §9.4 and §9.5 lines cite
-  files that T24 changes
-  (`NoteDrafts.cs`, `RuntimeRoleTests.cs`, `TelemetryCanaryTests.cs`, `AuditEventsTests.cs`). They were re-read and
-  none changes: the moved return touches neither the raw SQL nor the author binding, and the tests only add coverage.
+  files that T24 changes (`NoteDrafts.cs`, `RuntimeRoleTests.cs`, `TelemetryCanaryTests.cs`, `AuditEventsTests.cs`).
+  They were re-read and none changes: the moved return touches neither the raw SQL nor the author binding, and the
+  tests only add coverage.
 - One row for each sign-in event type, through the password path (R01): `auth.signin_succeeded`, `auth.signin_failed`,
   `auth.mfa_failed`, `auth.locked_out`, `auth.signed_out` and `auth.setup_completed`. The other triggers of those events
   (passkey, code step, passkey setup) already have exact-entry assertions in `PasskeySignInEndpointTests`,
