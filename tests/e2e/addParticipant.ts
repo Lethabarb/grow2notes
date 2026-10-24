@@ -12,15 +12,18 @@ const nav = (page: Page) => page.getByRole('navigation', { name: 'Main' });
 const rows = (page: Page) => main(page).locator('a[data-return-key]');
 
 /**
- * From Today with no participants, adds Jane Citizen through the empty state's Add participant, as a manager does, and
- * two goals on her page, then goes back to Today through the nav. Gives her ID.
+ * On Add participant, fills in `name` and a made-up birth date and saves, as a manager does, then adds each of `goals`
+ * on the page that follows, one after another. Ends on the new participant's page once the goal list holds them all.
+ * Gives their ID.
  */
-export async function addJaneWithTwoGoals(page: Page): Promise<string> {
-  await expect(main(page).getByText('No participants yet.', { exact: true })).toBeVisible();
-  await main(page).getByRole('link', { name: 'Add participant', exact: true }).click();
+export async function addParticipantWithGoals(
+  page: Page,
+  name: { givenName: string; familyName: string },
+  goals: readonly string[],
+): Promise<string> {
   await expect(heading(page)).toHaveText('Add participant');
-  await main(page).getByRole('textbox', { name: 'Given name', exact: true }).fill(janeCitizen.givenName);
-  await main(page).getByRole('textbox', { name: 'Family name', exact: true }).fill(janeCitizen.familyName);
+  await main(page).getByRole('textbox', { name: 'Given name', exact: true }).fill(name.givenName);
+  await main(page).getByRole('textbox', { name: 'Family name', exact: true }).fill(name.familyName);
   await main(page).getByRole('textbox', { name: 'Day', exact: true }).fill('7');
   await main(page).getByRole('textbox', { name: 'Month', exact: true }).fill('3');
   await main(page).getByRole('textbox', { name: 'Year', exact: true }).fill('1987');
@@ -32,10 +35,10 @@ export async function addJaneWithTwoGoals(page: Page): Promise<string> {
   const addAnswer = await added;
   expect(addAnswer.status()).toBe(201);
   const { id } = (await addAnswer.json()) as { id: string };
-  await expect(heading(page)).toHaveText(janeCitizen.name);
+  await expect(heading(page)).toHaveText(`${name.givenName} ${name.familyName}`);
 
   const goalsSection = main(page).getByRole('region', { name: 'Goals' });
-  for (const text of twoGoalTexts) {
+  for (const text of goals) {
     await goalsSection.getByRole('textbox', { name: 'New goal', exact: true }).fill(text);
     const posted = page.waitForResponse(
       (response) =>
@@ -46,7 +49,18 @@ export async function addJaneWithTwoGoals(page: Page): Promise<string> {
     expect((await posted).status()).toBe(201);
   }
 
-  await expect(goalsSection.locator('ol > li')).toHaveCount(2);
+  await expect(goalsSection.locator('ol > li')).toHaveCount(goals.length);
+  return id;
+}
+
+/**
+ * From Today with no participants, adds Jane Citizen through the empty state's Add participant, as a manager does, and
+ * two goals on her page, then goes back to Today through the nav. Gives her ID.
+ */
+export async function addJaneWithTwoGoals(page: Page): Promise<string> {
+  await expect(main(page).getByText('No participants yet.', { exact: true })).toBeVisible();
+  await main(page).getByRole('link', { name: 'Add participant', exact: true }).click();
+  const id = await addParticipantWithGoals(page, janeCitizen, twoGoalTexts);
   await nav(page).getByRole('link', { name: 'Today', exact: true }).click();
   await expect(rows(page)).toHaveText([janeCitizen.name]);
   return id;
