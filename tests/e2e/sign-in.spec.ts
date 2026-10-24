@@ -1,6 +1,9 @@
 import type { Locator, Page, Request } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectFocusAt, expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
+import { codeLabel } from './setupSignIn.ts';
 
 // Sign-in (sign-in.md): view A with a passkey, with Chromium's virtual authenticator in place of the device's passkey
 // prompt (fixtures.ts), and A's email and password form with its code step, view B. As every test here does, each also
@@ -309,4 +312,54 @@ test('at 320 px with text at 200%, neither the form nor the code step scrolls si
   await signInButton(page).click();
   await expect(summaryOf(page)).toBeFocused();
   expect(await contentWidth(page), 'view B with the summary').toBeLessThanOrEqual(320);
+});
+
+// sign-in.md *Focus order (Tab)*: A is the skip link, the passkey button, Email address, Password and Continue; after a
+// failure the summary's links come before them; B is the code field, which has focus as it shows, then Sign in.
+test('view A has its Tab order, a ring at each stop, and passes the foundations', async ({ page }) => {
+  test.slow();
+  await page.goto('/');
+  await expect(continueButton(page)).toBeVisible();
+
+  await expectStops(page, 'Tab', [
+    'Skip to main content',
+    'Sign in with a passkey',
+    'Email address',
+    'Password',
+    'Continue',
+  ]);
+  await expectFoundationsToPass(page);
+});
+
+test('view A with its error summary has the summary’s links first in Tab order, and passes the foundations', async ({
+  page,
+}) => {
+  test.slow();
+  await page.goto('/');
+  await continueButton(page).click();
+  await expect(summaryOf(page)).toBeFocused();
+
+  await expectStops(page, 'Tab', [
+    'Enter your email address',
+    'Enter your password',
+    'Sign in with a passkey',
+    'Email address',
+    'Password',
+    'Continue',
+  ]);
+  await expectFoundationsToPass(page);
+});
+
+test('the code step, view B, has its field focused, then Sign in, and passes the foundations', async ({ page }) => {
+  test.slow();
+  await acceptAnyPassword(page);
+  await page.goto('/');
+  await emailField(page).fill(email);
+  await passwordField(page).fill(password);
+  await continueButton(page).click();
+  await expect(codeField(page)).toBeFocused();
+
+  await expectFocusAt(page, codeLabel);
+  await expectStops(page, 'Tab', ['Sign in']);
+  await expectFoundationsToPass(page);
 });

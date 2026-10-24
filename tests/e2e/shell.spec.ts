@@ -2,6 +2,8 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { everyNote, serveCommonItems } from './commonItems.ts';
 import { expect, test } from './fixtures.ts';
+import { expectFocusAt, expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { savedPrompts, servePrompts } from './guidePrompts.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
 import { notesStore } from './notes.ts';
@@ -298,3 +300,60 @@ async function expectHeaderToWrap(page: Page, rows: number) {
   expect(layout.overlapping, 'overlapping targets').toEqual([]);
   expect(layout.scrollsSideways, 'sideways scroll').toBe(false);
 }
+
+// Each role's Tab order through the header after the skip link, with Sign out, which only the open Account panel adds,
+// right after Account's row (app-shell.md *Tab order*): the worker's nav comes before Account, the manager's after it.
+const tabOrder: Record<Me['role'], { toAccount: string[]; afterSignOut: string[] }> = {
+  Worker: { toAccount: ['Grow2Notes', 'Today', 'Account'], afterSignOut: [] },
+  Manager: { toAccount: ['Grow2Notes', 'Account'], afterSignOut: ['Today', 'Flagged', 'Report', 'Manage'] },
+};
+
+for (const me of [worker, manager]) {
+  test(`as a ${me.role.toLowerCase()}, Tab walks the header with a ring at each stop, Sign out after Account`, async ({
+    page,
+  }) => {
+    await serveMe(page, me);
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Account' })).toBeVisible();
+    const { toAccount, afterSignOut } = tabOrder[me.role];
+
+    await expectStops(page, 'Tab', ['Skip to main content', ...toAccount]);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#account-panel')).toBeVisible();
+    await expectFocusAt(page, 'Account');
+    await expectStops(page, 'Tab', ['Sign out', ...afterSignOut]);
+
+    // Escape from any stop in the header closes the panel and returns focus to Account (app-shell.md component 2d).
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#account-panel')).toBeHidden();
+    await expectFocusAt(page, 'Account');
+  });
+}
+
+test('the manager header, with the Account panel open, passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Account' }).click();
+  await expect(page.locator('#account-panel')).toBeVisible();
+
+  await expectFoundationsToPass(page);
+});
+
+test('the Manage page passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await page.goto('/manage');
+  await expect(page.getByRole('main').getByRole('link', { name: 'Users', exact: true })).toBeVisible();
+
+  await expectFoundationsToPass(page);
+});
+
+test("a worker's /manage, Page not found, passes the foundations", async ({ page }) => {
+  test.slow();
+  await serveMe(page, worker);
+  await page.goto('/manage');
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toHaveText('Page not found');
+
+  await expectFoundationsToPass(page);
+});

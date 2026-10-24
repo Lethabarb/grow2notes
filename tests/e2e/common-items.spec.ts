@@ -1,4 +1,3 @@
-import { AxeBuilder } from '@axe-core/playwright';
 import type { Locator, Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import {
@@ -22,6 +21,7 @@ import {
 } from './commonItems.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusAt, expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass, expectTextAt7To1 } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import {
   boxOf,
@@ -1480,21 +1480,16 @@ test('text is 7:1 against its background, and button borders, radio circles and 
   // Every text at 7:1, beyond what axe's AA rules check (common-items.md *Accessibility checklist*, *Visual*), by axe's
   // AAA rule, which holds large text, such as a heading, to 4.5:1: ready, with the archived sections open, and in an
   // item's edit form, with its Group radios, then its field error.
-  const expectTextAt7 = async (state: string) => {
-    const { violations } = await new AxeBuilder({ page }).withRules(['color-contrast-enhanced']).analyze();
-    const failing = violations.flatMap(({ nodes }) => nodes.map(({ target }) => target.join(' ')));
-    expect(failing, `text below 7:1, ${state}`).toEqual([]);
-  };
-  await expectTextAt7('ready');
+  await expectTextAt7To1(page, 'ready');
   await archivedSummary(page, 'Every note').click();
   await archivedGroupsSummary(page).click();
-  await expectTextAt7('with the archived sections open');
+  await expectTextAt7To1(page, 'with the archived sections open');
   await itemButton(page, 'Edit', meal.text).click();
-  await expectTextAt7('in an edit form');
+  await expectTextAt7To1(page, 'in an edit form');
   await editItem(page).fill('');
   await saveItem(page).click();
   await expect(editItem(page)).toHaveAttribute('aria-invalid', 'true');
-  await expectTextAt7('with a field error');
+  await expectTextAt7To1(page, 'with a field error');
   await cancelItem(page).click();
 
   // The help text, Every note's line, each group's name, which axe holds to 4.5:1 alone, and the unavailable labels, on
@@ -1538,4 +1533,29 @@ test('text is 7:1 against its background, and button borders, radio circles and 
   ]);
   expect(await contrastOf(groupButton(page, 'Archive', 'Community outing'), 'outline-color')).toBeGreaterThanOrEqual(3);
   await expectNothingKept(page, ...shownTexts, ...groupNames.slice(1));
+});
+
+// Common items' foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+test('three groups with the archived items and archived groups open pass the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+  await archivedSummary(page, 'Every note').click();
+  await archivedGroupsSummary(page).click();
+
+  await expectFoundationsToPass(page);
+});
+
+test('an item being edited, with its Group radios, passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+  await itemButton(page, 'Edit', paid.text).click();
+  await expect(radioRows(page).first()).toBeVisible();
+
+  await expectFoundationsToPass(page);
 });

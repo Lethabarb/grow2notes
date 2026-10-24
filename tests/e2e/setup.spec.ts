@@ -2,7 +2,10 @@ import type { Locator, Page, Route } from '@playwright/test';
 import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite } from './fixtures.ts';
+import { expectStops, tabTo } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { boxOf } from './layout.ts';
+import { codeLabel } from './setupSignIn.ts';
 
 const linkCheck = '**/api/auth/setup/start';
 
@@ -514,4 +517,65 @@ test('at 320 px with text at 200%, F and G fit, Show/Hide wraps under the field 
   expect(groups).toHaveLength(8);
   expect(groups.map(({ lines }) => lines)).toEqual(groups.map(() => 1));
   expect(new Set(groups.map(({ top }) => top)).size).toBeGreaterThan(1);
+});
+
+// sign-in.md *Focus order (Tab)* for setup. Each view takes focus on its <h1> as it shows, so a walk first takes focus
+// out of the page backwards, to start at the skip link, with a ring at every stop it passes.
+const startAgain = (page: Page) => tabTo(page, 'outside the page', 'Shift+Tab');
+
+test('view D, a link that was not checked, has Try again as its one stop after the skip link', async ({
+  page,
+  invite,
+}) => {
+  await page.route(linkCheck, (route) => route.abort('internetdisconnected'), { times: 1 });
+  await page.goto(invite.setupLink);
+  await expect(
+    page.getByRole('main').getByText('Your setup link was not checked: no connection. Try again.'),
+  ).toBeVisible();
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', ['Skip to main content', 'Try again']);
+});
+
+test('view E has the passkey button, then the password link, and passes the foundations', async ({ page, invite }) => {
+  test.slow();
+  await page.goto(invite.setupLink);
+  await expect(passwordLink(page)).toBeVisible();
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', [
+    'Skip to main content',
+    'Use a passkey (recommended)',
+    'Use a password and authenticator app',
+  ]);
+  await expectFoundationsToPass(page);
+});
+
+test('view F has the back link, the field, Show and Continue, and passes the foundations', async ({ page, invite }) => {
+  test.slow();
+  await openViewF(page, invite);
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', [
+    'Skip to main content',
+    'Set up your account',
+    'Create a password',
+    'Show',
+    'Continue',
+  ]);
+  await expectFoundationsToPass(page);
+});
+
+test('view G has the back link, the code field and Finish setup, and passes the foundations', async ({
+  page,
+  invite,
+}) => {
+  test.slow();
+  await openViewF(page, invite);
+  await passwordField(page).fill(password);
+  await continueToViewG(page);
+
+  await startAgain(page);
+  await expectStops(page, 'Tab', ['Skip to main content', 'Create a password', codeLabel, 'Finish setup']);
+  await expectFoundationsToPass(page);
 });

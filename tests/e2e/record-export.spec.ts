@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusAt, expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { expectAtLeast, scrollsSideways, setTextTo200Percent, systemColour } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
@@ -329,4 +330,23 @@ test('a worker sees Page not found, and no participant or export request is sent
   await expect(page).toHaveTitle('Grow2Notes – Page not found');
   await expect(main(page).getByRole('button', { name: 'Export' })).toHaveCount(0);
   expect((await sent()).filter((request) => /\/api\/(participants|reports)\//.test(request))).toEqual([]);
+});
+
+// Export record's foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+test('the default form passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page);
+  await expect(fromField(page)).toHaveValue(firstNoteDate);
+
+  await expectFoundationsToPass(page);
+});
+
+test('the exported state passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page);
+  await word(page).check();
+  await exportButton(page).click();
+  await expect(statusLine(page)).toHaveText(readyWords('docx'));
+
+  await expectFoundationsToPass(page);
 });

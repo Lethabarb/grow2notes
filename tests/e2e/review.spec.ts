@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { boxOf, scrollsSideways, shownText } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
@@ -396,4 +397,14 @@ test('at 375 px nothing scrolls sideways, Mark reviewed is as wide as the box, a
   await markReviewed(page).click();
   await expect(record(page)).toBeFocused();
   expect(await scrollsSideways(page), 'the record, with a comment of 500 unbroken characters').toBe(false);
+});
+
+// The read view with the Review panel's foundations (T26), in a test of its own, as the call changes the text size and
+// spacing for good.
+test('the read view with its Review panel passes the foundations', async ({ page }) => {
+  test.slow();
+  await openFromFlagged(page, flaggedNote());
+  await expect(markReviewed(page)).toBeVisible();
+
+  await expectFoundationsToPass(page);
 });

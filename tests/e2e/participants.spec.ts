@@ -2,6 +2,7 @@ import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops, ring, whereFocusIs } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import {
   breakfast,
   bus,
@@ -1379,4 +1380,50 @@ test("a worker meets Page not found at the list, Add participant and a participa
   // The browser reports a page's requests in the order that it sends them (tests/README.md).
   await page.evaluate(() => fetch('/healthz'));
   expect(adminRequests).toEqual([]);
+});
+
+// The Participants screens' foundations (T26), each in a test of its own, as the call changes the text size and spacing
+// for good.
+test('the Active list passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await page.goto('/manage/participants');
+  await expect(rows(page)).toHaveText(['Jane Citizen', 'Ravi de Silva']);
+
+  await expectFoundationsToPass(page);
+});
+
+test('the Archived view passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await page.goto('/manage/participants?view=archived');
+  await expect(rows(page)).toHaveText(['Ben Archer']);
+
+  await expectFoundationsToPass(page);
+});
+
+test('Add participant with its errors passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await page.goto('/manage/participants/new');
+  await save(page).click();
+  await expect.poll(() => whereFocusIs(page)).toMatch(/^There is a problem/);
+
+  await expectFoundationsToPass(page);
+});
+
+test("a participant's page with goals and Archived goals open passes the foundations", async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveParticipants(page, participants);
+  await serveGoals(page, goals);
+  await page.goto(`/manage/participants/${jane.id}`);
+  await expect(goalTexts(page)).toHaveText([breakfast.text, bus.text, sister.text]);
+  await archivedSummary(page).click();
+  await expect(archivedTexts(page)).toHaveText([washing.text, shop.text]);
+
+  await expectFoundationsToPass(page);
 });

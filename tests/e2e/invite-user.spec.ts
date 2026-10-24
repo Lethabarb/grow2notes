@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Locator, Page, Request, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test, type Invite, type VirtualAuthenticator } from './fixtures.ts';
+import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { manager, serveMe } from './me.ts';
 import { answerInvites, holdNextInvite, people, serveUsers } from './users.ts';
@@ -40,10 +42,6 @@ const somethingWentWrong = 'Not sent: something went wrong. Try again.';
 const isInvite = (request: Request) =>
   request.method() === 'POST' && new URL(request.url()).pathname === '/api/admin/users';
 const answersInvite = (response: Response) => isInvite(response.request());
-
-/** The id of the focused element, or, for one with none, its element name. */
-const focusedId = (page: Page) =>
-  page.evaluate(() => document.activeElement?.id || document.activeElement?.localName || '');
 
 /**
  * Counts the invites that the page sends from now on. Gives a function that gives the count once the browser has
@@ -241,12 +239,7 @@ test('Invite user opens with Worker chosen, both fields empty and no error, in T
   // The back link, Name, Email address, Role as one stop on the chosen radio, then Send invite (users.md *Focus
   // order*); the arrow keys move within Role and choose as they move.
   await pageBar(page).getByRole('link').focus();
-  const stops: string[] = [];
-  for (let stop = 0; stop < 4; stop += 1) {
-    await page.keyboard.press('Tab');
-    stops.push(await focusedId(page));
-  }
-  expect(stops).toEqual(['displayName', 'email', 'role-worker', 'button']);
+  await expectStops(page, 'Tab', ['Name', 'Email address', 'Worker', 'Send invite']);
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('ArrowDown');
   await expect(managerRadio(page)).toBeChecked();
@@ -367,4 +360,17 @@ test('while an invite is out, Send invite is busy, says "Sending…", and passes
   await expectAxeToPass(page);
   await route.abort('internetdisconnected');
   await expect(alertLine(page)).toHaveText('Not sent: no connection. Try again.');
+});
+
+test('the form with both messages and the summary passes the foundations', async ({ page }) => {
+  test.slow();
+  await openInviteUser(page);
+  await sendInvite(page).click();
+  await expect(summary(page)).toBeFocused();
+  await expectSummary(page, [
+    [enterName, '#displayName'],
+    [enterEmail, '#email'],
+  ]);
+
+  await expectFoundationsToPass(page);
 });

@@ -1,9 +1,10 @@
 import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
-import { expectFocusAt, expectStops } from './focus.ts';
+import { expectFocusAt, expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
-import { boxOf, scrollsSideways, setTextTo200Percent } from './layout.ts';
+import { boxOf, scrollsSideways, setTextTo200Percent, systemColour } from './layout.ts';
 import { answerMe, manager, serveMe, worker } from './me.ts';
 import {
   enterDate,
@@ -167,6 +168,7 @@ test('a future date and Enter shows the error and sends no request; Previous day
   await expect(fieldError(page)).toHaveText(/Date must be today or in the past$/);
   await expect(page).toHaveURL(reportAddress);
   expect(await checks()).toHaveLength(1);
+  await expectAxeToPass(page);
 
   await previousDay(page).click();
 
@@ -396,6 +398,87 @@ test('a worker sees Page not found at every report address, and no has-notes or 
     await expect(main(page).getByRole('button', { name: /^Download/ })).toHaveCount(0);
   }
 
+  await expectAxeToPass(page);
   expect((await sent()).filter((request) => /\/(export|has-notes)/.test(request))).toEqual([]);
   expect(exports).toEqual([]);
+});
+
+test('S5, S12 and S13: a check that failed, a server failure and too many downloads each pass axe', async ({
+  page,
+}) => {
+  await open(page);
+  // After the answer that `open` gave, as Playwright tries the latest route first; the next load asks again.
+  await page.route('**/api/reports/daily/*/has-notes', (route) => route.abort('internetdisconnected'));
+  await page.goto(reportAddress);
+
+  await expect(dateStatus(page)).toHaveText(/^Thursday 1\sOctober 2026$/);
+  await expect(button(page, 'Download Word')).not.toHaveAttribute('aria-disabled');
+  await expect(alertLine(page)).toBeEmpty();
+  await expectAxeToPass(page);
+
+  await page.route(isExport, (route) => route.fulfill({ status: 500 }));
+  await button(page, 'Download Word').click();
+  await expect(alertLine(page)).toHaveText('Not downloaded: something went wrong. Try again.');
+  await expect(button(page, 'Download Word')).toBeFocused();
+  await expectAxeToPass(page);
+
+  await page.route(isExport, (route) => route.fulfill({ status: 429 }));
+  await button(page, 'Download PDF').click();
+  await expect(alertLine(page)).toHaveText(
+    'Not downloaded: too many downloads in the last minute. Wait a minute, then try again.',
+  );
+  await expect(button(page, 'Download PDF')).toBeFocused();
+  await expectAxeToPass(page);
+});
+
+test('history: browser Back with focus on a download button keeps focus on it, never on the page', async ({ page }) => {
+  await open(page, previousDayAddress);
+  await previousDay(page).click();
+  await expect(page).toHaveURL('/reports/daily/2026-09-29');
+  await button(page, 'Download Word').focus();
+
+  await page.goBack();
+
+  await expect(page).toHaveURL(previousDayAddress);
+  await expect(button(page, 'Download Word')).toBeFocused();
+  await page.goForward();
+  await expect(page).toHaveURL('/reports/daily/2026-09-29');
+  await expect(button(page, 'Download Word')).toBeFocused();
+});
+
+test('in forced colours, an empty day’s unavailable buttons keep dashed GrayText borders and the ring', async ({
+  page,
+}) => {
+  await page.emulateMedia({ forcedColors: 'active' });
+  await open(page, reportAddress, [reportDay]);
+  const [highlight, grayText] = await Promise.all([systemColour(page, 'Highlight'), systemColour(page, 'GrayText')]);
+  expect(new Set([highlight, grayText, ring.colour]).size).toBe(3);
+
+  for (const name of ['Download Word', 'Download PDF']) {
+    await expect(button(page, name)).toHaveAttribute('aria-disabled', 'true');
+    await expect(button(page, name)).toHaveCSS('color', grayText);
+    await expect(button(page, name)).toHaveCSS('border-top-color', grayText);
+    await expect(button(page, name)).toHaveCSS('border-top-style', 'dashed');
+  }
+
+  await nextDay(page).focus();
+  await expectStops(page, 'Tab', ['Download Word', 'Download PDF'], { ...ring, colour: highlight });
+});
+
+// The Report screen's foundations (T26), each in a test of its own, as the call changes the text size and spacing for
+// good.
+test('S1, a day with notes, passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, previousDayAddress);
+  await expect(dateStatus(page)).toHaveText(/^Wednesday 30\sSeptember 2026$/);
+
+  await expectFoundationsToPass(page);
+});
+
+test('S4, an empty day with unavailable buttons, passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, reportAddress, [reportDay]);
+  await expect(dateStatus(page)).toHaveText(noNotes);
+
+  await expectFoundationsToPass(page);
 });

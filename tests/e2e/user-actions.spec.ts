@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { failMe, manager, serveMe } from './me.ts';
 import { holdNext, recordRequests } from './requests.ts';
@@ -668,3 +669,25 @@ test("signed in for real, a second manager makes the first's own page offer both
   await other.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Manage', exact: true }).click();
   await expect(other.getByRole('main').getByRole('heading', { level: 1 })).toHaveText(signedOutHeading);
 });
+
+// An Active worker's page and its two dialogs, each in a test of its own, as the foundations change the text size and
+// spacing for good.
+test("an Active worker's page passes the foundations", async ({ page }) => {
+  test.slow();
+  await openPage(page, jo);
+  await expect(pageButton(page, 'Reset sign-in')).toBeVisible();
+
+  await expectFoundationsToPass(page);
+});
+
+for (const { trigger, confirm } of dialogs) {
+  test(`the ${trigger} dialog passes the foundations`, async ({ page }) => {
+    test.slow();
+    await openPage(page, jo);
+    await pageButton(page, trigger).click();
+    await expect(dialogTitle(page)).toBeFocused();
+    await expect(dialogButton(page, confirm)).toBeVisible();
+
+    await expectFoundationsToPass(page);
+  });
+}

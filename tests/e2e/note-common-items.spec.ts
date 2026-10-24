@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus } from './goals.ts';
 import { scrollsSideways } from './layout.ts';
 import { serveMe, worker } from './me.ts';
@@ -206,4 +207,18 @@ test('the read view passes axe, and does not scroll sideways at 375 px', async (
   await expectAxeToPass(page);
   await page.setViewportSize({ width: 375, height: 812 });
   expect(await scrollsSideways(page), 'The read view with common items').toBe(false);
+});
+
+// The form's foundations (T26), in a test of its own, as the call changes the text size and spacing for good. The top
+// bar is the one element allowed to stay pinned to the window, on a window taller than 30rem.
+test('the form with both groups picked and their items passes the foundations', async ({ page }) => {
+  test.slow();
+  await openJanesNote(page);
+  await pickBox(page, outing.name).check();
+  await pickBox(page, personalCare.name).check();
+  await itemBox(page, trains.text).check();
+  await itemBox(page, showered.text).check();
+  await expect(itemBox(page, purchases.text)).toBeVisible();
+
+  await expectFoundationsToPass(page, { topBar: true });
 });

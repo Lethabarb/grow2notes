@@ -2,7 +2,8 @@ import type { Locator, Page } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { whereFocusIs } from './focus.ts';
-import { boxOf } from './layout.ts';
+import { expectFoundationsToPass } from './foundations.ts';
+import { boxOf, setTextTo200Percent } from './layout.ts';
 import { manager, serveMe, worker } from './me.ts';
 import { holdNext } from './requests.ts';
 import { alex, chris, failUsers, jo, kim, madeUpUser, people, sam, serveUsers } from './users.ts';
@@ -102,16 +103,6 @@ async function pointIn(row: Locator, part: 'name' | 'email' | 'status' | 'chevro
       return middleOf({ ...name, left: name.right, right: chevron.left });
     }
   }
-}
-
-/**
- * Text at 200%: Chromium's default text size at 32 px, where it is 16, which makes the body's 18 px 36 (S00.05.01's
- * Notes).
- */
-async function setTextTo200Percent(page: Page) {
-  const devTools = await page.context().newCDPSession(page);
-  await devTools.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
-  await expect(page.locator('body')).toHaveCSS('font-size', '36px');
 }
 
 /**
@@ -340,15 +331,28 @@ test('with no connection, the list fails within 2 s, then says still, and a Try 
   await expect(statusLine(page)).toBeEmpty();
 });
 
+// An 80-character address, the longest the Users screens are checked with.
+const long = madeUpUser(
+  '6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52',
+  'Bartholomew Featherstonehaugh',
+  'bartholomew.featherstonehaugh-montgomery.support-coordinator-team-au@example.org',
+  'Active',
+);
+
+test('the list with an 80-character email passes axe and the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveUsers(page, [sam, long]);
+  await page.goto('/manage/users');
+  await expect(rowOf(page, long.displayName)).toBeVisible();
+  await expectAxeToPass(page);
+
+  await expectFoundationsToPass(page);
+});
+
 test('at 320 px and 200% text, an 80-character email wraps in its row and on its page, no sideways scroll', async ({
   page,
 }) => {
-  const long = madeUpUser(
-    '6d2f8b1e-5a94-4c37-a1e6-9b4d0f7c3e52',
-    'Bartholomew Featherstonehaugh',
-    'bartholomew.featherstonehaugh-montgomery.support-coordinator-team-au@example.org',
-    'Active',
-  );
   expect(long.email).toHaveLength(80);
   await serveMe(page, manager);
   await serveUsers(page, [sam, long]);
