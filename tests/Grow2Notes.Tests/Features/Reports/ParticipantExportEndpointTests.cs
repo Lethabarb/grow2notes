@@ -139,7 +139,7 @@ public sealed class ParticipantExportEndpointTests(Grow2NotesFactory factory) : 
         Assert.Empty(await EventsOfAsync(organisation));
     }
 
-    // A90: every field error comes at once, under from, to and format alone, before anything is read, so a missing,
+    // §6.5: every field error comes at once, under from, to and format alone, before anything is read, so a missing,
     // incomplete or impossible date, a to before from and a format that is not exactly pdf or docx are all 422.
     [Theory]
     [InlineData("to=2026-10-31&format=pdf", "from")]
