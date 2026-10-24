@@ -5749,7 +5749,6 @@ log, and breach response, which links to the audit runbook rather than repeating
 - [x] Breach response and close-out (v5): `ops/breach-response.md`, A89 to A92, Q5 and Q7 answered, the four stories,
       coverage.md and first-use steps 129 to 132.
 
-
 ---
 
 ## T24 Audit and history proof

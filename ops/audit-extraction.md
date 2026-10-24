@@ -104,8 +104,9 @@ these columns:
      a spreadsheet opens. `sed -i 2d` removes the line of dashes that `sqlcmd` prints under the header.
    - Save the file in a folder that is not in the repository, and name it for the request, not for a person.
 4. **Check the file before it goes anywhere.** Open it and look for the header row; one line for each audit row, and no
-   row split over two lines; the Row column rising from top to bottom; and a long Details value complete, ending with
-   its closing brace. If the flags did not give that, correct this file by pull request.
+   row split over two lines; the Row column rising from top to bottom, apart from rows written in the same instant;
+   and a long Details value complete, ending with its closing brace. If the flags did not give that, correct this file
+   by pull request.
 5. **Put the file in the records storage** for the manager who asked, **delete the local copy,** and **delete the
    firewall rule.** Add *Run by* to the request record.
 
@@ -151,5 +152,8 @@ who asked.
 - **Any other exit code, or a file that fails the check in *Running it*:** the file is not to be used. Delete it and run
   the script again with the same values. If it fails again, do not hand over a part of the answer; tell the manager
   that it failed and that the question is still open.
+- **`sqlcmd` rejects `-W` together with `-y`:** drop `-W`. The cells then carry trailing spaces, which the file check
+  and `sed -i 2d` do not catch, so trim them before the file is handed over, and correct the command in this file by
+  pull request once a run in the test environment has shown which flags work.
 - **A file with only the header:** the script ran, and nothing matched. Check the dates and the IDs against
   `find-ids.sql` before telling the manager there is nothing in the log.

@@ -72,6 +72,25 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
         Assert.Equal(0, await CountAsync(db, "Note", "ParticipantId", scenario.Participant, ct));
         Assert.Equal(0, await CountAsync(db, "Goal", "ParticipantId", scenario.Participant, ct));
         Assert.Equal(audit, await AuditRowsAsync(db, ct));
+
+        var extract = await OpsScripts.RunAsync(
+            db.ConnectionString,
+            "ops/audit-extract.sql",
+            new Dictionary<string, string>
+            {
+                ["Organisation"] = scenario.A.OrganisationId.ToString(),
+                ["From"] = "2026-10-09",
+                ["To"] = "2026-10-09",
+                ["Participant"] = scenario.Participant.ToString(),
+                ["User"] = "any",
+            },
+            ct);
+        var rows = Assert.Single(extract).Rows.Cast<DataRow>().ToList();
+        Assert.Equal(2, rows.Count);
+        Assert.All(rows, row => Assert.Equal("(no longer on record)", row["Participant"]));
+        Assert.All(
+            rows,
+            row => Assert.Equal(scenario.Participant.ToString(), (string)row["Participant ID"], ignoreCase: true));
     }
 
     [Fact]
