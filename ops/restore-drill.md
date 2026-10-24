@@ -128,8 +128,8 @@ prints two result sets:
 the note (*Participant*, *Note date*, *Status*, *Current version*, *Author*), and its versions (*Version*, *Saved
 (Melbourne)* with its offset, *Saved by*, *Items*, *Guided notes length*).
 
-The output names a note and, from `restore-note.sql`, a participant and the people who saved its versions. It is read on the screen and not
-saved. The record of the drill is the row in `restore-log.md`, and it holds none of that.
+The output names a note and, from `restore-note.sql`, a participant and the people who saved its versions. It is read
+on the screen and not saved. The record of the drill is the row in `restore-log.md`, and it holds none of that.
 
 ### If it fails
 
