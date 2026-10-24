@@ -6069,7 +6069,7 @@ Planned 24 October 2026.
 
 ```yaml
 id: T26
-status: new
+status: doing
 release: R1
 lane: C
 size: M
@@ -6101,6 +6101,40 @@ sideways at 320 px.
 - Orders the by-hand accessibility steps on ops/first-use-in-test.md into one sequence (screen readers, real devices,
   zoom, contrast and forced colours, the five-worker words check), starting from the steps the cut stories moved there.
   Whether they hold go-live is owner question Q12.
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: test, documentation and audit work only. No endpoint, entity, migration, audit event, screen, route, setting
+  or copy key. Each design.md section 4.13 flow runs keyboard-only in Playwright with axe clean at each step, and every
+  axe state also proves no sideways scroll at 320 px.
+- Design: `tabTo` in focus.ts (ring at every stop, no trap); `tests/e2e/foundations.ts` with
+  `expectFoundationsToPass` (lang, 7:1 text, no motion, nothing pinned, ring sweep in normal and forced colours, fit at
+  320x800, 320x200 and 640x400 with 200% text and WCAG 1.4.12 spacing), called from each screen's own spec; a new
+  `key-flows.spec.ts` against the real app, two tests with one `test.step` per flow; a 320 px check added to
+  `expectAxeToPass`; a haiku audit of the 13 screen files against their specs, adding only what no spec proves.
+- Domain: none. No migration; Data/Migrations stays at `AddNoteReview`. The key flows use existing endpoints in CI only.
+- Reuse: `expectAxeToPass`, `expectStops`, `expectFocusAt`, `layout.ts` helpers, `signInThroughSetup`,
+  `addJaneWithTwoGoals`, `inviteThroughThePage`, the fixtures and each spec's own open helpers. `spaceTextOut` and
+  `expectToFit` move out of guide-prompts.spec.ts so each exists once.
+- Decisions where the design is silent: evidence is the CI Playwright run (A95); yesterday comes from the server's
+  today, never the device clock; Lost phone sets up again on `thirdDevice`; a fault CI shows is fixed in the shared
+  component at fault, with no token or wording change; the readability check is a one-off run recorded here; the
+  Dragon 1-second save is not built; by-hand steps 140 to 144 are added to ops/first-use-in-test.md with one order
+  paragraph.
+
+### Verticals
+
+- v1: Shared helpers `tabTo` and foundations.ts; three specs switched to them; depends_on: none; R06 R08 R09 R10 R12
+  R13
+- v2: The eight key flows by keyboard only (key-flows.spec.ts); depends_on: v1; R03 R23
+- v3: Shell, sign-in, note form and Users screens: audit additions, foundations calls, SPA fixes; depends_on: v1;
+  R02 R04
+- v4: Today, notes, Flagged, Report, Participants, settings and Export record: audit additions, foundations calls, SPA
+  fixes; depends_on: v1; R01 R07 R11 R14 R15
+- v5: 320 px check in `expectAxeToPass`, readability run, A95, ops steps 140 to 144, Notes, F06.02, tests/README.md;
+  depends_on: v1 v2 v3 v4; R05 R16 R17 R18 R19 R20 R21 R22 R24 R25 R26
 
 ### Steps
 
