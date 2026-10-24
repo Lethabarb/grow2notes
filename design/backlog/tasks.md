@@ -5650,7 +5650,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T23
-status: new
+status: done
 release: R1
 lane: D
 size: M
@@ -5673,12 +5673,81 @@ log, and breach response, which links to the audit runbook rather than repeating
 
 ### Notes
 
-- Owner question Q5 holds one line (where the destruction log and the retention list are kept), and Q7 shapes the
-  restore drill runbook.
+- Owner questions Q5 and Q7 are answered by assumed defaults A89 (the destruction log and the yearly list are kept in
+  the provider's records storage) and A90 (the drill before go-live checks the configuration counts, the other rows and
+  `DBCC CHECKDB`), which the owner may overturn. A91 is how the retention list reads A29, and A92 is the audit request
+  record. T20 took A82 to A86 and steps 120 to 126, and T17 took A87 and A88 and steps 127 and 128, so these are
+  numbered after them.
+- One identity: the "separate break-glass login" (§5.8) and the SQL Entra admin (§9.4) are one account, the Entra
+  group "Grow2Notes SQL admins" (D64). It is not in `grow2notes_runtime`, so the append-only denies do not apply to
+  it, and the tests connect as `sa` and do not prove them.
+- `retention-destroy.sql` is the reviewed exception to §10.6's "no ad-hoc SQL against production" that §5.8, §9.4
+  and A29 allow. It deletes one archived participant per run, checks the date of birth, and its preview mode rolls
+  back. A test lists every dbo table as destroyed or kept, so a new table fails CI until someone decides which.
+- Finding for the owner, not blocking: `AuditEvent` rows stay after a destruction, as §5.3 requires. But
+  `participant.*` Details hold the given name, family name and date of birth, and `goal.*` Details hold goal
+  wording, so those values outlive a destruction, against S05.04.01's "IDs only". The first destruction is in 2033 at
+  the earliest. Nothing redacts them, because §5.3 forbids rewriting audit rows. The runbook says so.
+- A91 departs from R05's wording: a note written before 18 is found by its NoteDate, not by CreatedAtUtc. The app
+  refuses a future note date, so NoteDate is never later than the day written, and the reading can only keep records
+  longer.
+- A92 departs from §9.4 and S05.04.02's third criterion ("in `ops/`"): the audit request record is kept in the
+  provider's records storage, because even role-only rows in a public repository would show that an investigation
+  or a breach is under way. That criterion stays unticked.
+- Judgment call: the four stories are marked done with their manager reads and the contact handover pending as
+  first-use steps 130 and 131 (S05.04.01 criterion 11, S05.04.02 criteria 3 and 8, S06.06.01 criteria 8 and 9, left
+  unticked), because by-hand checks never hold a task open (this file's header rule), although the backlog README §9
+  would have a document enabler wait for a manager to read it.
+- By hand: ops/first-use-in-test.md steps 129 to 132 (the run of every script in test, the manager reads, the contact
+  handover and records storage, and the first restore drill). T17 landed first with steps 127 and 128, so these
+  follow them.
+- Findings from `infra/`, for the owner, none changed here: `sql.bicep` sets only the 35-day point-in-time retention and
+  no 12-month long-term policy (S06.03.01, T22); `locks.bicep` is not on main, so the rename in the failed-migration
+  restore is unconfirmed; `bootstrap.bicep` has no Australia East resource group or identity rights, which the outage
+  redeploy needs.
+- R41, checked against main on 24 October 2026: deactivation (`UserDeactivation.cs`) rotates the security stamp and
+  writes `user.deactivated`; the note events are `note.draft_started`, `note.discarded`, `note.submitted`,
+  `note.edited` and `note.reviewed`; there is no read event. Report downloads and participant exports are recorded, so
+  the runbooks say the log does not record opening a note, not that no read is audited.
+- The runbooks hold no name, ID, email, address or Azure identifier beyond design.md §10.1's resource names, and no MCP
+  content (T38 adds it).
+
+### Plan
+
+- Outcome: four runbooks (audit extraction, retention and destruction, restore drill, breach response) plus
+  `ops/restore-log.md` and six SQL scripts that CI runs on made-up data. No app code, endpoint, migration, audit event
+  type, Limits value, SPA or `ci.yml` change.
+- Design: each script is one batch with `$(Name)` variables in quoted literals, validated with `TRY_CONVERT`, refusals
+  as `THROW 50000`, Melbourne times shown with their offset. A test helper `OpsScripts` runs the files as sqlcmd would.
+  Scripts: `find-ids`, `audit-extract` (three questions, `any` sentinel), `retention-list`, `retention-destroy`
+  (one participant per run, Mode preview or destroy, date of birth must match, archived only, one transaction),
+  `restore-check`, `restore-note`.
+- Domain: none. A scope-guard test requires every dbo table to be listed as destroyed or kept by retention.
+- Reuse: `SqlServerFixture`, the `TestOrganisations`, `TestParticipants`, `TestNotes` fixtures, the header and SET block
+  of `check-database.sql`, the section shape of `ops/break-glass.md`.
+- Decisions where design.md is silent: A89 (Q5) log and list kept in the provider's records storage; A90 (Q7) drill
+  checks before go-live; A91 how the retention list reads the rule (NoteDate, not CreatedAtUtc); A92 audit request
+  record in the provider's records storage, not `ops/` (departs from S05.04.02 c3; the criterion stays unticked). The
+  extract leaves out the IP address.
+
+### Verticals
+
+- v1: Test: OpsScripts helper, participant date of birth, find-ids.sql; depends_on: none
+- v2: Audit extraction runbook and audit-extract.sql; depends_on: v1; R13 R14 R15 R16 R17 R18 R19 R20
+- v3: Retention runbook, retention-list.sql and retention-destroy.sql; depends_on: v1; R01 R02 R03 R04 R05 R06 R07 R08
+  R09 R10 R11 R12
+- v4: Restore drill runbook, restore-check.sql, restore-note.sql, restore log; depends_on: v1; R21 R22 R23 R24 R25 R26
+  R27 R28
+- v5: Breach runbook and shared doc close-out; depends_on: v2 v3 v4; R29 R30 R31 R32 R33 R34 R35 R36 R37 R38 R39 R40 R41
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Test helper and `find-ids.sql` (#98; v1): `OpsScripts`, the participant's date of birth in `TestParticipants`.
+- [x] Audit extraction (#99; v2): `ops/audit-extraction.md` and `audit-extract.sql`.
+- [x] Retention (#101; v3): `ops/retention-and-destruction.md`, `retention-list.sql` and `retention-destroy.sql`.
+- [x] Restore drill (#104; v4): `ops/restore-drill.md`, `restore-check.sql`, `restore-note.sql` and `restore-log.md`.
+- [x] Breach response and close-out (v5): `ops/breach-response.md`, A89 to A92, Q5 and Q7 answered, the four stories,
+      coverage.md and first-use steps 129 to 132.
 
 ---
 
@@ -6309,18 +6378,14 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q3 and Q4 are answered (below). Each holds
-only the tasks named. Everything else still open in the specs is built as they say unless the owner says otherwise.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q3, Q4, Q5 and Q7 are answered (below).
+Each holds only the tasks named. Everything else still open in the specs is built as they say unless the owner says
+otherwise.
 
 - **Q2. The production domain (A38).** Blocks T22, and so T27 and T28. Suggested: pick a Grow2Notes domain now. It
   cannot be the parent company's domain or a subdomain of it, and it cannot change after the first real passkey.
-- **Q5. Where the HPP 4.3 destruction log and the yearly retention list are kept.** Blocks one line of T23.
-  Suggested: the provider's own records storage, named in the runbook and never in the public repository.
 - **Q6. The switch-over date, who runs staff onboarding, and whether to pilot.** Blocks T28. Suggested: the owner
   and the managers set the date, the managers run the 30-minute onboarding, and there is no pilot.
-- **Q7. The restore test while production holds no notes before go-live.** Shapes T23's restore drill runbook and
-  blocks T28. Suggested: before go-live, check the configuration rows, `restore-check.sql` and `DBCC CHECKDB`; open a
-  known note and its history at the first drill after go-live.
 - **Q8. How the first manager gets their setup link.** Bootstrap prints the link and sends no email. Blocks T27.
   Suggested: the operator gives the printed link to the first manager in person or by phone, with no code change.
 - **Q9. Is confirming inside the assistant enough for the four access tools?** (mcp-server.md §12 Q4, MA6.) Blocks
@@ -6347,6 +6412,15 @@ defaults, which the owner may overturn:
 - **Q3. PDF characters the font lacks** (T15): design.md A59, the replacement mark U+FFFD in the PDF only, read as A81
   (T15): only characters in the font's Basic Multilingual Plane print.
 - **Q4. A record export's To date after today** (T21): design.md A60, accepted as sent.
+
+**Answered on 24 October 2026.** The developer took the plan's suggested answers to two questions as assumed
+defaults (T23), which the owner may overturn:
+
+- **Q5. Where the HPP 4.3 destruction log and the yearly retention list are kept** (T23): design.md A89, the provider's
+  own records storage, in a place the managers choose, and never in the public repository.
+- **Q7. The restore test while production holds no notes before go-live** (T23): design.md A90, a drill that checks the
+  configuration counts, `restore-check.sql` and `DBCC CHECKDB` before go-live, and opens a known note at the first
+  drill after go-live.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
