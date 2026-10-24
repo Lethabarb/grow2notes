@@ -1,0 +1,53 @@
+# Grouped weekly version updates (design.md §9.11). Security alerts are a repository setting, not a file here
+# (ops/first-use-in-test.md). Each group takes minor and patch updates in one pull request, so a major version comes
+# as a pull request of its own. NuGet Audit, `npm audit` in ci.yml and the commit SHAs that pin the actions stay as
+# they are.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /src/grow2notes-spa
+    schedule:
+      interval: weekly
+    groups:
+      spa:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: npm
+    directory: /tests/e2e
+    schedule:
+      interval: weekly
+    groups:
+      e2e:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: [minor, patch]
+    commit-message:
+      prefix: chore
+      include: scope
