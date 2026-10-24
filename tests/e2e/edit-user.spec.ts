@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { Page, Request, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
+import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { failMe, manager, serveMe } from './me.ts';
 import { holdNext, recordRequests } from './requests.ts';
@@ -68,10 +70,6 @@ const emailInUse =
   'Another account already uses this email address. Use a different one, or find the person in the Users list.';
 
 const isSave = (request: Request) => request.method() === 'PUT';
-
-/** The id of the focused element, or, for one with none, its element name. */
-const focusedId = (page: Page) =>
-  page.evaluate(() => document.activeElement?.id || document.activeElement?.localName || '');
 
 /** Expects the summary to list these messages, each linked to the field with the id after its `#`. */
 async function expectSummary(page: Page, items: [message: string, href: string][]) {
@@ -140,12 +138,7 @@ test("Edit user opens on its <h1> with Jo Smith's values and the hint for someon
 
   // The back link, Name, Email address, Role as one stop on the chosen radio, then Save (users.md *Focus order*).
   await pageBar(page).getByRole('link').focus();
-  const stops: string[] = [];
-  for (let stop = 0; stop < 4; stop += 1) {
-    await page.keyboard.press('Tab');
-    stops.push(await focusedId(page));
-  }
-  expect(stops).toEqual(['displayName', 'email', 'role-worker', 'button']);
+  await expectStops(page, 'Tab', ['Name', 'Email address', 'Worker', 'Save']);
 
   // Back by the back link, one entry, as browser Back goes, to Jo Smith's page, its <h1> focused.
   await pageBar(page).getByRole('link').click();
@@ -526,4 +519,14 @@ test('signed in for real, a worker invited through Invite user is renamed and gi
   await expect(fact(page, 'Status')).toHaveText('Invited');
   await expectNothingKept(page, person.displayName, person.email, renamed.displayName, renamed.email);
   await expectAxeToPass(page);
+});
+
+test('the form passes the foundations', async ({ page }) => {
+  test.slow();
+  await openEdit(page, jo);
+  // A single-line field cannot wrap its value, so at 320 px and 200% text an address scrolls inside it, as in every
+  // browser, which expectToFit counts as cutting off what it holds. The foundations see the field empty.
+  await emailField(page).fill('');
+
+  await expectFoundationsToPass(page);
 });
