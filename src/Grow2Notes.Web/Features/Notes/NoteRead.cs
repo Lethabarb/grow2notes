@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using Grow2Notes.Web.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Grow2Notes.Web.Features.Notes;
 
@@ -39,7 +41,23 @@ internal sealed record NoteReadAuthor(Guid Id, string DisplayName);
 /// their comment as stored, or <c>null</c> when they left none.
 /// </summary>
 internal sealed record NoteReadReview(
-    int VersionNumber, NoteReadAuthor ReviewedBy, DateTime ReviewedAtUtc, string? Comment);
+    int VersionNumber, NoteReadAuthor ReviewedBy, DateTime ReviewedAtUtc, string? Comment)
+{
+    /// <summary>Every review of the note, newest first, as the read view and the daily report show them.</summary>
+    public static async Task<IReadOnlyList<NoteReadReview>> NewestFirstAsync(
+        Grow2NotesDbContext db, Guid noteId, CancellationToken cancellationToken) =>
+        await (
+            from review in db.NoteReviews.AsNoTracking()
+            where review.NoteId == noteId
+            join reviewer in db.Users on review.ReviewedByUserId equals reviewer.Id
+            orderby review.ReviewedAtUtc descending
+            select new NoteReadReview(
+                review.VersionNumber,
+                new NoteReadAuthor(reviewer.Id, reviewer.DisplayName),
+                review.ReviewedAtUtc,
+                review.Comment))
+        .ToListAsync(cancellationToken);
+}
 
 /// <summary>
 /// Who saved an edited note's current version, by their display name as stored, and when, the version's

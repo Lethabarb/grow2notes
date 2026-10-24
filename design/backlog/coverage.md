@@ -346,7 +346,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | The Report screen (4.7) | F04.02 | S04.01.01 (the first Report screen) | The first Report screen with both download buttons is built in T15 (24 October 2026); T17 adds the date field, the status lines, the has-notes check and the empty state |
-| 2 | Everything in §11.1–11.5: the shared report model | F04.01 | | The model, the title block, goals and Guided notes are built in T15 (24 October 2026); common items, markers, the header, footer and properties are T20's |
+| 2 | Everything in §11.1–11.5: the shared report model | F04.01 | | The model, the title block, goals and Guided notes are built in T15 (24 October 2026); common items, markers, the header, footer and properties are built in T20 (24 October 2026; A82 to A86) |
 | 3 | The PDFsharp-MigraDoc renderer | F04.01 | | Built in T15 (24 October 2026); T20 extends it |
 | 4 | The Open XML SDK renderer | F04.01 | | Built in T15 (24 October 2026); T20 extends it |
 | 5 | Audit entries for report downloads | F04.01 | | Built in T15 (24 October 2026): one `report.downloaded` event for each `200`, none for a refusal |
@@ -355,13 +355,13 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | An automated test confirms the PDF text and the Word text both match the stored notes | F04.01 | | Built in T15 (24 October 2026) for the title block, goals and Guided notes, the PDF by word order; T20 extends the fixture day |
+| 1 | An automated test confirms the PDF text and the Word text both match the stored notes | F04.01 | | Built in T15 (24 October 2026) for the title block, goals and Guided notes, the PDF by word order; T20 extended the fixture day to every marker and common item (24 October 2026) |
 | 2 | Every character in a rendered PDF exists in the embedded font, including ☐ and ☑ (automated test) | F04.01 | | A character the font lacks prints as U+FFFD in the PDF only (A59, 14 October 2026; S04.01.02 Notes), read as A81 (T15, 24 October 2026); built in T15 |
-| 3 | A day with 20 notes downloads in under 10 seconds | F04.01 | | |
+| 3 | A day with 20 notes downloads in under 10 seconds | F04.01 | | Built in T20 (24 October 2026): a CI test times both formats against 10 seconds (S04.01.06); real-device timings are ops/first-use-in-test.md steps 121 and 122, results pending |
 | 4 | The PDF opens in Edge and Acrobat; the Word file opens in desktop and mobile Word, with participant headings in the desktop Navigation pane | F04.01 | | Manual checks, ops/first-use-in-test.md steps 114 to 116 (T15); results pending |
-| 5 | Edited, flagged, reviewed, submitted-next-day and past-day notes each show the right marker | F04.01 | | |
-| 6 | Common items show the Every note group and the picked groups only, by group name in the configured order, each item ticked or not ticked; groups not picked do not appear (D47) | F04.01 | | |
-| 7 | No drafts and no counts appear in either file | F04.01 | | Built in T15 (24 October 2026) for the title block, goals and Guided notes; T20 extends the fixture day |
+| 5 | Edited, flagged, reviewed, submitted-next-day and past-day notes each show the right marker | F04.01 | | Built in T20 (24 October 2026; A82 to A84) |
+| 6 | Common items show the Every note group and the picked groups only, by group name in the configured order, each item ticked or not ticked; groups not picked do not appear (D47) | F04.01 | | Built in T20 (24 October 2026) |
+| 7 | No drafts and no counts appear in either file | F04.01 | | Built in T15 (24 October 2026) for the title block, goals and Guided notes; T20 extended the fixture day, and A86 reads "no counts" as none across notes (24 October 2026) |
 | 8 | A day with no submitted notes, including a future date, returns `404 report.no_notes` and no file | F04.01 | | Built in T15 (24 October 2026) |
 | 9 | Workers get `403` | F04.02 | F04.01 (the export endpoint's test) | |
 

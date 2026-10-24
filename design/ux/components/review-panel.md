@@ -645,8 +645,10 @@ the in-app list and badge (D18). All of these fit this panel as specified.
 ### Open questions (gaps in design.md, not tensions)
 
 1. **Which "Reviewed by" string?** M3 says the note and the report show "Reviewed by … on …". The report layout in
-   11.3 shows "Reviewed by Jo Smith, Fri 2 Oct 9:30 am". This spec uses "Reviewed by Jo Smith on Fri 2 Oct 2026,
-   9:30 am" on screen. Pick one string for the screen, the Reviewed list and the report.
+   11.3 showed "Reviewed by Jo Smith, Fri 2 Oct 9:30 am". This spec uses "Reviewed by Jo Smith on Fri 2 Oct 2026,
+   9:30 am" on screen. **Resolved 24 October 2026 (T20):** the screen, the Reviewed list and the report files all
+   read "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am"; A74 sets it on screen and A82 in the files, which put any
+   comment on the next line as "Comment: …".
 2. **The flag reason when the tick was removed.** For "Flag removed in a later edit", the current version has no
    reason. `GET {base}` returns only `current.flagReason`, so the read view above the panel may not be able to show
    what the manager is reviewing. Confirm that `flagStatus` (or `reviews`) carries the reason from the flagged version.

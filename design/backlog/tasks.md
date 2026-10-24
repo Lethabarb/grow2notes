@@ -5361,7 +5361,7 @@ each screen change or window focus with no polling, and the badge and the (n) bo
 
 ```yaml
 id: T20
-status: new
+status: done
 release: R1
 lane: C
 size: M
@@ -5389,10 +5389,82 @@ footer with "Page n of N" on every page, and file properties holding only the ti
   and the automated test that a 20-note day downloads in under 10 seconds in each format. Timings on real devices go on
   ops/first-use-in-test.md.
 - Settles the report's "Reviewed by" wording as the specs give it. Builds on T15's report model.
+- Built (24 October 2026). The decisions where design.md was silent are assumed defaults A82 to A86, each the owner's
+  to overturn:
+  - A82: the Reviewed line is always dated with the year, "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", and a
+    comment follows on the next line as "Comment: …" with its line breaks kept. This answers review-panel.md's open
+    question 1.
+  - A83: the Edited line is always dated with the year and keeps "by". microcopy.md's reference-day rule is for
+    screens, so it is unchanged; S04.01.04's fourth criterion was amended to say so.
+  - A84: a note's parts follow §11.3's layout example (byline, Edited, flag line, status, Comment, then Goals, Common
+    items, Guided notes). A past-day note keeps one byline, with " · Submitted …" on it. "(flag removed in a later
+    edit)" follows the quoted reason. The status and comment lines have no indent.
+  - A85: both files are titled "Daily progress notes: Thu 1 Oct 2026". The organisation is Word's Company and the
+    PDF's Subject. No person is an author.
+  - A86: "no counts" means no totals, counts of notes or statistics across notes. The version count in an Edited line
+    stays.
+  - The CI timing ceiling is not an assumed default. A day of 20 notes must download in under 10 s in each format,
+    against an expected time well under a second. The margin is safe on shared build machines, where other test
+    collections run at the same time.
+- Layout details where §11.5 is silent, which the owner may overturn: Word Heading 3 is 11 pt bold with 6 pt before and
+  keeps with the next paragraph (outline level 2); the PDF's group sub-heading is 11 pt bold italic, because its
+  Heading 2 is already 11 pt bold; a group's items reuse the tick block and its 5 mm indent; header and footer are 8 pt
+  in each file's body font; the PDF's header is 10 mm from the top and its footer 6 mm from the bottom, with the 20 mm
+  margins unchanged, and Word keeps 10 mm for both. A footer with a 100-character name is three lines, about 10 mm,
+  so it ends near 16 mm, inside the margin; a test checks that no body line meets it.
+- The Word footer's PAGE and NUMPAGES are `fldSimple` fields with no cached result. A stored "1" would make a viewer
+  that does not compute fields show "Page 1 of 1" on every page, which misstates a record, and a gap is less harmful.
+  Word, Word mobile, LibreOffice and Google Docs compute them. Ops step 125 looks at a phone preview that is not
+  Word; if a viewer the owner relies on shows blanks, the owner can ask for this to be revisited.
+- A Reviewed note with no review row, which no app path leaves, reads the newest review with `FirstOrDefault`, so it
+  shows "To review" and the day's download still works.
+- CI timing check: `DailyReportTimingTests` seeds a made-up day (A35) of 20 notes and times the first download of each
+  format, Word then PDF, through the real endpoint on a host that is already running. "Cold" is per test process: the
+  PDF's font is loaded once for the whole process, so if another collection has rendered a PDF first, its timing is
+  warm. The edited notes (every 5th) keep the fixture's short second-version text, as `AddVersionAsync` writes it.
+  CI timings: the test passed on the pull request's run (24 October 2026), so both formats took under 10 s on a
+  shared build machine. The exact times are not in the CI log, because `dotnet test` prints no output for a passing
+  test and ci.yml sets no logger; they are in the test output only. The owner can add `--logger
+  "console;verbosity=normal"` to the Test step if the numbers are wanted, which is outside T20's files.
+- Real-device timings (laptop and phone) are pending: ops/first-use-in-test.md steps 121 and 122. Record them here.
+
+### Plan
+
+- Outcome: server-only. T15's pipeline (model, layout, one document, Word and PDF) gains every marker, common items by
+  group, the running header, the confidential footer with "Page n of N" and the title and organisation properties. No
+  endpoint, migration, SPA or e2e change; `DailyReportEndpoint.cs` is left to T17.
+- Design: `ReportLayout.DailyReport` returns a new `ReportDocument` (title, organisation, footer, blocks) that both
+  renderers print from. `NoteBody` follows the design.md 11.3 layout example: byline (or past-day byline), Edited, flag
+  line, To review or Reviewed by, Comment, Goals, Common items (a Heading 3 per group, ticks beneath), Guided notes.
+  Word: Header and Footer styles, titlePg, PAGE and NUMPAGES fields, Company property. PDF: different first page,
+  page fields, Info title and subject.
+- Domain: `DailyReportNote` gains `PastDayWrittenAtUtc`, `LastEdit` and `Flag` (`DailyReportFlag`: reason, optional
+  review). Flag is keyed on `FlagStatus`; the reason comes from the version at `FlaggedVersionNumber`.
+- Reuse: `NoteSnapshot.ShownGroups` (D47, A3), `LatestVersion.FindAsync`, the reviews query moved from `NoteEndpoint`
+  to `NoteReadReview.NewestFirstAsync`, `LiveNote.IsPastDay` extracted, `ReportDates.DateTimeWithYear`, T15's helpers.
+- Decisions where design.md is silent (assumed defaults A82 to A86): Reviewed and Edited
+  lines always dated with the year; marker order follows the layout example; the past-day byline keeps
+  "Submitted" on its line; title "Daily progress notes: date", organisation in Word Company and PDF Subject; "no
+  counts" means no counts across notes. CI timing ceiling of 10 s goes in Notes only. No migration.
+
+### Verticals
+
+- v1: Report furniture: document record, running header, footer, properties, Heading 3 rendering; depends_on: none;
+  R14 R15 R16 R17 R19
+- v2: Note content: markers and common items by group, with the F04.01 fixture day; depends_on: v1;
+  R1 R2 R3 R4 R5 R6 R7 R8 R9 R10 R11 R12 R13 R18 R22
+- v3: 20-note timing check, assumed defaults, design docs, by-hand steps and backlog close-out; depends_on: v2;
+  R20 R21 R23 R24 R25 R26 R27 R28 R29 R30 R31 R32 R33
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The report furniture (#97; v1): `ReportDocument`, the running header, the confidential footer with page fields,
+      the title and organisation properties, and Heading 3 in both renderers.
+- [x] Note content (#100; v2): the markers and common items by group, the reviews query moved to `NoteReadReview`,
+      `LiveNote.IsPastDay`, and the F04.01 fixture day.
+- [x] The timing check and the docs (v3): `DailyReportTimingTests`, A82 to A86, §11.1, §11.3 and §11.5, F04.01's
+      stories, review-panel.md's open question 1, coverage.md's E04 rows, this task's Notes and
+      ops/first-use-in-test.md's steps 120 to 126.
 
 ---
 

@@ -995,3 +995,33 @@ goal and leave one unticked. Open Report from the menu, which opens today's date
      checklist*, Screen reader items, for T15's part.)
 
 Record the results in T15's Notes.
+
+### Daily report content, pages and timings, once T20 is in test
+
+These steps hold T20's by-hand checks ([tasks.md](../design/backlog/tasks.md), T20's Notes). None of them holds a story
+open. They need a manager, a worker and a made-up day of 20 submitted notes (A35): each note has three goals, Every note
+and two of three groups picked, and long Guided notes, about 2,000 characters. Make some notes flagged, one of them
+reviewed with a comment and one with its flag removed in a later edit, some edited, one a past-day note written by the
+manager and one submitted on the next day. Every word typed is made up. Download both files for that day.
+
+120. Prepare the day above in test: 20 participants with a note each, and the cases listed. Look for the Report screen
+     to offer both downloads for the day. (S04.01.06; design.md A35.)
+121. On a laptop, time each format from pressing the button to the saved file. Look for each under 10 seconds. Write
+     both times in T20's Notes. (S04.01.06; design.md §14 M4.)
+122. Do the same on a phone. If either is over 10 seconds, T20 fixes the speed and the check is repeated. Write the
+     times in T20's Notes. (S04.01.06.)
+123. Open the PDF in a PDF viewer. Look for no header on page 1, the running header "Daily progress notes: {date}"
+     from page 2, and on every page the footer with your name, page 1's "As at" time and a correct "Page n of N". Open
+     Document Properties and look for only the title and the organisation, with no author. (S04.01.05; design.md
+     §11.5, A85.)
+124. Open the Word file in desktop Word and then in Word on a phone. Look for the same header and footer, correct page
+     numbers on screen and when printed, each common item group as a Heading 3 in the Navigation pane, and File > Info
+     showing only the Title and the Company. (S04.01.03 and S04.01.05; design.md §11.5, A85.)
+125. Open the Word file in a phone preview that is not Word, such as iOS Files or Quick Look or an Android preview.
+     Look for whether the page numbers show, and write down what you see. (S04.01.05.)
+126. Read each marker and the common items in both files against the read view of the same notes: the past-day line,
+     the next-day Submitted time, Edited, the flag line with "(flag removed in a later edit)", "To review", "Reviewed
+     by … on …" with its "Comment: …", and the groups with their items. Search each file's text and properties for the
+     parent company's name and look for none. (S04.01.03 and S04.01.04; design.md §11.3, A82 to A84, D72.)
+
+Record the results in T20's Notes.
