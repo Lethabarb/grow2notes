@@ -381,7 +381,8 @@ var api = app.MapApiGroup()
     .MapNoteDiscardEndpoint()
     .MapNoteReviewEndpoint()
     .MapReviewListEndpoint()
-    .MapDailyReportEndpoint();
+    .MapDailyReportEndpoint()
+    .MapParticipantExportEndpoint();
 
 api.MapAdminGroup()
     .MapUserListEndpoint()

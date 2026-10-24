@@ -36,14 +36,41 @@ internal sealed record DailyReportModel(
         DateTime asAtUtc,
         CancellationToken cancellationToken)
     {
+        var rows = await ReadNotesAsync(db, SubmittedOn(db, noteDate), cancellationToken);
+        if (rows.Count == 0)
+        {
+            return null;
+        }
+
+        var organisationName = await MeEndpoint.OrganisationNameAsync(db, organisationId, cancellationToken);
+        var exportedBy = await db.Users
+            .Where(user => user.Id == exportedByUserId)
+            .Select(user => user.DisplayName)
+            .SingleAsync(cancellationToken);
+        return new(organisationName, noteDate, asAtUtc, exportedBy, [.. rows.Select(row => row.Note)]);
+    }
+
+    /// <summary>
+    /// Every note in <paramref name="submitted"/>, which holds submitted notes only, as the file shows it, ordered by
+    /// date, then participant. A report of one day and a record of one participant each have one order to keep, and
+    /// this one serves both.
+    /// </summary>
+    /// <remarks>
+    /// A past-day note is one started on a later day than its own date, so each row is compared with its own
+    /// <see cref="ReportNoteRead.NoteDate"/>.
+    /// </remarks>
+    public static async Task<IReadOnlyList<ReportNoteRead>> ReadNotesAsync(
+        Grow2NotesDbContext db, IQueryable<Note> submitted, CancellationToken cancellationToken)
+    {
         var rows = await (
-            from n in SubmittedOn(db, noteDate)
+            from n in submitted
             join participant in db.Participants on n.ParticipantId equals participant.Id
             join author in db.Users on n.AuthorUserId equals author.Id
-            orderby participant.FamilyName, participant.GivenName, participant.Id
+            orderby n.NoteDate, participant.FamilyName, participant.GivenName, participant.Id
             select new
             {
                 n.Id,
+                n.NoteDate,
                 n.CurrentVersionNumber,
                 n.CreatedAtUtc,
                 n.FlagStatus,
@@ -56,42 +83,37 @@ internal sealed record DailyReportModel(
                 participant.FamilyName,
                 author.DisplayName,
             }).ToListAsync(cancellationToken);
-        if (rows.Count == 0)
-        {
-            return null;
-        }
 
         // One context cannot run two reads at once, so each note's reads are made in turn.
-        var notes = new List<DailyReportNote>(rows.Count);
+        var notes = new List<ReportNoteRead>(rows.Count);
         foreach (var row in rows)
         {
             var content = await NoteVersionContent.ReadAsync(db, row.Id, row.CurrentVersionNumber, cancellationToken);
-            DateTime? pastDayWrittenAtUtc = LiveNote.IsPastDay(row.CreatedAtUtc, noteDate) ? row.CreatedAtUtc : null;
+            DateTime? pastDayWrittenAtUtc =
+                LiveNote.IsPastDay(row.CreatedAtUtc, row.NoteDate) ? row.CreatedAtUtc : null;
             var lastEdit = row.CurrentVersionNumber > 1
                 && await LatestVersion.FindAsync(db, row.Id, cancellationToken) is { } latest
                     ? new NoteReadLastEdit(latest.CreatedBy, latest.CreatedAtUtc)
                     : null;
             notes.Add(new(
-                $"{row.GivenName} {row.FamilyName}",
-                row.DisplayName,
-                pastDayWrittenAtUtc,
-                row.FirstSubmittedAtUtc,
-                NoteReadVersion.Of(
-                    row.CurrentVersionNumber,
-                    content.Snapshot,
-                    content.Narrative,
-                    content.IsFlagged,
-                    content.FlagReason),
-                lastEdit,
-                await FlagOfAsync(db, row.Id, row.FlagStatus, row.FlagReason, cancellationToken)));
+                row.Id,
+                row.NoteDate,
+                new DailyReportNote(
+                    $"{row.GivenName} {row.FamilyName}",
+                    row.DisplayName,
+                    pastDayWrittenAtUtc,
+                    row.FirstSubmittedAtUtc,
+                    NoteReadVersion.Of(
+                        row.CurrentVersionNumber,
+                        content.Snapshot,
+                        content.Narrative,
+                        content.IsFlagged,
+                        content.FlagReason),
+                    lastEdit,
+                    await FlagOfAsync(db, row.Id, row.FlagStatus, row.FlagReason, cancellationToken))));
         }
 
-        var organisationName = await MeEndpoint.OrganisationNameAsync(db, organisationId, cancellationToken);
-        var exportedBy = await db.Users
-            .Where(user => user.Id == exportedByUserId)
-            .Select(user => user.DisplayName)
-            .SingleAsync(cancellationToken);
-        return new(organisationName, noteDate, asAtUtc, exportedBy, notes);
+        return notes;
     }
 
     // A note is flagged when its flag status is not None, and its reason is that of its flagged version. A review
@@ -129,10 +151,10 @@ internal sealed record DailyReportModel(
 }
 
 /// <summary>
-/// One submitted note in a daily report: the participant's name, who wrote the note, when it was started if that was
-/// on a later day than its date, as a past-day note is, when it was first submitted, and the version that was current
-/// when the report was read; who saved that version and when, when the note has been edited; and its flag, when it has
-/// one.
+/// One submitted note as a report shows it, in a daily report or in a participant's record: the participant's name,
+/// who wrote the note, when it was started if that was on a later day than its date, as a past-day note is, when it
+/// was first submitted, and the version that was current when the report was read; who saved that version and when,
+/// when the note has been edited; and its flag, when it has one.
 /// </summary>
 internal sealed record DailyReportNote(
     string ParticipantName,
@@ -144,7 +166,12 @@ internal sealed record DailyReportNote(
     DailyReportFlag? Flag);
 
 /// <summary>
-/// A note's flag in a daily report: the reason that the writer gave when they flagged it, and the newest review of it,
+/// A note's flag in a report: the reason that the writer gave when they flagged it, and the newest review of it,
 /// or <c>null</c> when it is still to review.
 /// </summary>
 internal sealed record DailyReportFlag(string Reason, NoteReadReview? Review);
+
+/// <summary>
+/// A submitted note as <see cref="DailyReportModel.ReadNotesAsync"/> reads it, with its ID and its date.
+/// </summary>
+internal sealed record ReportNoteRead(Guid NoteId, DateOnly NoteDate, DailyReportNote Note);
