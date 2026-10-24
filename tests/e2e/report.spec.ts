@@ -38,6 +38,7 @@ const fieldError = (page: Page) => page.locator('#report-date-error');
 const alertLine = (page: Page) => main(page).getByRole('alert');
 // The status under the failure line: the second of the page's three (the date's, this one, and the page's own).
 const downloadStatus = (page: Page) => main(page).getByRole('status').nth(1);
+const pageStatus = (page: Page) => main(page).getByRole('status').nth(2);
 const navReport = (page: Page) =>
   page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Report', exact: true });
 
@@ -192,6 +193,9 @@ test('S10: a slow download is quiet for 399 ms, then says "Downloading…" and t
   await page.clock.runFor(1);
   await expect(button(page, 'Downloading…')).toBeVisible();
   await expect(downloadStatus(page)).toHaveText('Preparing the Word file… Keep this page open.');
+  // The shared Button is told not to write its busy label here (R26); a frame passes before the region is checked.
+  await page.clock.runFor(50);
+  await expect(pageStatus(page)).toBeEmpty();
   await page.clock.resume();
   await expectAxeToPass(page);
 

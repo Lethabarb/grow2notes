@@ -162,6 +162,8 @@ function field(): HTMLInputElement {
 /** The status under the field, and the one under the failure line: the first two of the page's three. */
 const dateStatus = () => screen.getAllByRole('status')[0];
 const downloadStatus = () => screen.getAllByRole('status')[1];
+/** The page-wide region the shared Button would write its busy label to, were it not told not to (R26). */
+const pageStatus = () => screen.getAllByRole('status')[2];
 
 function alertText(): string | null {
   return screen.getByRole('alert').textContent;
@@ -708,6 +710,9 @@ describe('the Report screen', () => {
       expect(other).not.toHaveTextContent('Downloading…');
       expect(other).toHaveAttribute('aria-disabled', 'true');
       expect(downloadStatus()).toHaveTextContent(line);
+      // The write to this region is on the next frame, so a frame is let pass before it is shown to be empty.
+      await advance(50);
+      expect(pageStatus()).toBeEmptyDOMElement();
     });
 
     it('says the file is ready, and keeps focus where it was', async () => {

@@ -1044,6 +1044,9 @@ not repeat them. They need a manager, the worker of step 18 and made-up particip
      buttons to become available, with no reload. Then download both formats and look in the audit log for one
      `report.downloaded` entry for each press, and none from opening the screen or stepping between days. Last, type a
      date a few weeks back, slowly, and record whether the pause of three quarters of a second before the page moves to
-     it feels right (daily-report.md open question 3). (S04.02.03 and S04.02.04; design.md A87.)
+     it feels right (daily-report.md open question 3). Also type a date by its parts, clearing one part and moving to
+     the next, and record whether "Enter a date" or an early history entry appears before leaving the field (Chromium
+     blurs and focuses the field between the parts, and the field commits on every blur); record it in T17's Notes.
+     (S04.02.03 and S04.02.04; design.md A87.)
 
 Record the results in T17's Notes.

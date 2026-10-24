@@ -128,7 +128,8 @@ The same screen on **today, with no submitted notes yet** (design.md §4.7 empty
   `--space-3`; between the two download buttons the shared `ButtonGroup` gap (1rem). Empty live regions take no space
   (`:empty { margin: 0 }`, never `display: none`).
 - Tap targets: field, step links and download buttons all `--target-button`, `max(3rem, 48px)`.
-- **Step links fit test:** each link is `flex: 1 1 10rem`, with a `--space-3` (0.75 rem) gap, so at 375 px "‹ Previous day" and "Next day ›" share a row,
+- **Step links fit test:** each link is `flex: 1 1 10rem`, with a `--space-3` (0.75 rem) gap, so at 375 px
+  "‹ Previous day" and "Next day ›" share a row,
   and at 320 px or 200% text they stack full width, still in DOM order. A label never wraps inside a half-width button
   and nothing scrolls sideways (SC 1.4.10). Their inline padding is `--space-3` (12 px), not the shared 20 px, so the
   pair fits on one row at 375 px [Opinion: arithmetic at 18 px bold; check on a device]. The basis of 10 rem (160 px)
