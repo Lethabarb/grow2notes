@@ -21,7 +21,7 @@ import {
 } from './commonItems.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusAt, expectStops, ring } from './focus.ts';
-import { expectTextAt7To1 } from './foundations.ts';
+import { expectFoundationsToPass, expectTextAt7To1 } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import {
   boxOf,
@@ -1533,4 +1533,29 @@ test('text is 7:1 against its background, and button borders, radio circles and 
   ]);
   expect(await contrastOf(groupButton(page, 'Archive', 'Community outing'), 'outline-color')).toBeGreaterThanOrEqual(3);
   await expectNothingKept(page, ...shownTexts, ...groupNames.slice(1));
+});
+
+// Common items' foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+test('three groups with the archived items and archived groups open pass the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+  await archivedSummary(page, 'Every note').click();
+  await archivedGroupsSummary(page).click();
+
+  await expectFoundationsToPass(page);
+});
+
+test('an item being edited, with its Group radios, passes the foundations', async ({ page }) => {
+  test.slow();
+  await serveMe(page, manager);
+  await serveCommonItems(page, threeGroups);
+  await page.goto('/manage/common-items');
+  await expect(groupHeadings(page)).toHaveText(groupNames);
+  await itemButton(page, 'Edit', paid.text).click();
+  await expect(radioRows(page).first()).toBeVisible();
+
+  await expectFoundationsToPass(page);
 });
