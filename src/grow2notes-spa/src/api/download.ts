@@ -11,8 +11,8 @@ const revokeAfterMs = 60_000;
  * Fetches a file and saves it through the browser (design.md A78, file-download.md *Save step*): the bytes as a `blob:`
  * URL of this origin, and a hidden `<a download>` with no `target`, which WebKit would turn into a blank tab
  * (daily-report.md component 6), clicked and removed. The name is the one in the answer's `Content-Disposition`,
- * `fallbackName` when it has none; the promise gives that name. Fails as `apiFile()` does; a `signal` abort is rethrown as
- * it came.
+ * `fallbackName` when it has none; the promise gives that name. Fails as `apiFile()` does; a `signal` abort is
+ * rethrown as it came.
  */
 export async function download(path: string, fallbackName: string, signal: AbortSignal): Promise<string> {
   const { body, headers } = await apiFile(path, { timeoutMs: downloadTimeoutMs, signal });

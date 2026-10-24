@@ -230,6 +230,9 @@ test('the walks mark the nav, name no one in titles, and keep no app state in hi
   await servePrompts(page, savedPrompts);
   await serveUsers(page, people);
   for (const { me, steps } of walks) {
+    // The last walk's page is left first: a /me refresh of its own, still on its way when the answer changes to the
+    // next person's, would load the page afresh (app-shell.md *Sign in again, a different person*), aborting the goto.
+    await page.goto('about:blank');
     await serveMe(page, me);
     await page.goto('/');
 

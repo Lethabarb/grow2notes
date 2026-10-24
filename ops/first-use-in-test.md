@@ -988,7 +988,7 @@ goal and leave one unticked. Open Report from the menu, which opens today's date
      other, no sideways scroll, and nothing cut off with the text set larger. With only the keyboard on the laptop, Tab
      to Download Word and then Download PDF, look for the focus ring on each, and press Enter on one and look for the
      file to save and focus to stay on the button. (T17 puts the date field and the two step links before the buttons;
-     step 120 checks that order.) (daily-report.md *Visual and device* and
+     step 127 checks that order.) (daily-report.md *Visual and device* and
      *Accessibility checklist*, keyboard items.)
 119. With NVDA and Chrome on the laptop, if you have it to hand, press Download Word on a day with notes, then press it
      on a day without any, and look for the buttons read by name, "Daily report, heading level 1" on arrival and, for
