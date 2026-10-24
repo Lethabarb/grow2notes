@@ -1,4 +1,5 @@
 using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Features.Reports;
@@ -7,7 +8,13 @@ namespace Grow2Notes.Tests.Features.Reports;
 
 public sealed class WordReportTests
 {
-    private static byte[] Render(params ReportBlock[] blocks) => WordReport.Render(blocks);
+    private const string Title = "Daily progress notes: Thu 1 Oct 2026";
+    private const string Organisation = "Example Care";
+    private const string Footer = "Confidential: health information. Copy exported from Grow2Notes by Jo Smith, "
+        + "Fri 2 Oct 2026, 9:14 am. The record in Grow2Notes is authoritative.";
+
+    private static byte[] Render(params ReportBlock[] blocks) =>
+        WordReport.Render(new ReportDocument(Title, Organisation, Footer, blocks));
 
     private static T Read<T>(byte[] docx, Func<WordprocessingDocument, T> read)
     {
@@ -22,21 +29,23 @@ public sealed class WordReportTests
         .StyleDefinitionsPart!.Styles!.Elements<Style>().Single(style => style.StyleId?.Value == styleId);
 
     [Fact]
-    public void The_styles_define_the_title_the_subtitle_and_two_outline_headings_that_keep_with_the_next_paragraph()
+    public void The_styles_define_the_title_the_subtitle_and_three_outline_headings_that_keep_with_the_next_paragraph()
     {
         var docx = Render(
             new ReportBlock(ReportBlockKind.Title, "Organisation"),
             new ReportBlock(ReportBlockKind.Subtitle, "Daily progress notes"),
             new ReportBlock(ReportBlockKind.Heading1, "Zoë Adams"),
-            new ReportBlock(ReportBlockKind.Heading2, "Goals"));
+            new ReportBlock(ReportBlockKind.Heading2, "Goals"),
+            new ReportBlock(ReportBlockKind.Heading3, "Every note"));
 
-        var styles = Read(docx, document => new[] { "Title", "Subtitle", "Heading1", "Heading2" }
+        var styles = Read(docx, document => new[] { "Title", "Subtitle", "Heading1", "Heading2", "Heading3" }
             .ToDictionary(id => id, id => StyleOf(document, id).CloneNode(true)));
 
         Assert.Equal(0, styles["Heading1"].GetFirstChild<StyleParagraphProperties>()!.OutlineLevel!.Val!.Value);
         Assert.Equal(1, styles["Heading2"].GetFirstChild<StyleParagraphProperties>()!.OutlineLevel!.Val!.Value);
+        Assert.Equal(2, styles["Heading3"].GetFirstChild<StyleParagraphProperties>()!.OutlineLevel!.Val!.Value);
         Assert.All(
-            new[] { "Title", "Subtitle", "Heading1", "Heading2" },
+            new[] { "Title", "Subtitle", "Heading1", "Heading2", "Heading3" },
             id => Assert.Equal(
                 id.StartsWith("Heading", StringComparison.Ordinal),
                 styles[id].GetFirstChild<StyleParagraphProperties>()?.KeepNext is not null));
@@ -55,6 +64,77 @@ public sealed class WordReportTests
             .ToList());
 
         Assert.Equal(["Zoë Adams"], headings);
+    }
+
+    [Fact]
+    public void A_common_item_group_is_a_Heading_3()
+    {
+        var docx = Render(
+            new ReportBlock(ReportBlockKind.Heading2, "Common items"),
+            new ReportBlock(ReportBlockKind.Heading3, "Personal care"),
+            new ReportBlock(ReportBlockKind.Tick, "Showered with prompting", IsTicked: true));
+
+        var groups = Read(docx, document => BodyOf(document).Elements<Paragraph>()
+            .Where(p => p.ParagraphProperties?.ParagraphStyleId?.Val?.Value == "Heading3")
+            .Select(p => p.InnerText)
+            .ToList());
+
+        Assert.Equal(["Personal care"], groups);
+    }
+
+    [Fact]
+    public void Pages_after_the_first_have_the_running_header_and_every_page_has_the_footer()
+    {
+        var docx = Render(new ReportBlock(ReportBlockKind.Line, "Text"));
+
+        var furniture = ReportText.WordHeadersAndFooters(docx);
+
+        Assert.True(furniture.TitlePage);
+        Assert.Null(furniture.FirstHeader);
+        Assert.Equal(Title, furniture.DefaultHeader);
+        Assert.Equal(Footer + " Page {PAGE} of {NUMPAGES}", furniture.FirstFooter);
+        Assert.Equal(furniture.FirstFooter, furniture.DefaultFooter);
+    }
+
+    [Fact]
+    public void The_properties_hold_the_title_and_the_organisation_only()
+    {
+        var docx = Render(new ReportBlock(ReportBlockKind.Line, "Text"));
+
+        var (title, others, extended, hasCustom) = Read(docx, document =>
+        {
+            var core = document.PackageProperties;
+            string?[] others =
+                [core.Creator, core.LastModifiedBy, core.Subject, core.Keywords, core.Description, core.Category];
+            var extended = document.ExtendedFilePropertiesPart!.Properties!.ChildElements
+                .Select(element => (element.GetType().Name, element.InnerText))
+                .ToList();
+            return (core.Title, others, extended, document.CustomFilePropertiesPart is not null);
+        });
+
+        Assert.Equal(Title, title);
+        Assert.All(others, value => Assert.True(string.IsNullOrEmpty(value)));
+        Assert.Equal([("Company", Organisation)], extended);
+        Assert.False(hasCustom);
+    }
+
+    [Fact]
+    public void The_file_is_valid_Open_XML()
+    {
+        var docx = Render(
+            new ReportBlock(ReportBlockKind.Title, "Organisation"),
+            new ReportBlock(ReportBlockKind.Subtitle, "Daily progress notes"),
+            new ReportBlock(ReportBlockKind.Heading1, "Zoë Adams"),
+            new ReportBlock(ReportBlockKind.Heading2, "Common items"),
+            new ReportBlock(ReportBlockKind.Heading3, "Every note"),
+            new ReportBlock(ReportBlockKind.Tick, "Medication prompted", IsTicked: true),
+            new ReportBlock(ReportBlockKind.Line, "One\nTwo"));
+
+        var errors = Read(docx, document => new OpenXmlValidator().Validate(document)
+            .Select(error => $"{error.Path?.XPath}: {error.Description}")
+            .ToList());
+
+        Assert.Empty(errors);
     }
 
     [Fact]

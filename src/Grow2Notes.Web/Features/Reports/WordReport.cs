@@ -1,37 +1,47 @@
 using System.Text;
 using System.Xml;
 using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.ExtendedProperties;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 
 namespace Grow2Notes.Web.Features.Reports;
 
 /// <summary>
-/// Renders report blocks as a Word file: Arial 11 pt on A4 with 20 mm margins, the Title and Subtitle styles, real
-/// headings (so each participant is in Word's Navigation pane) and the goals as a list with no visible marker.
+/// Renders a report document as a Word file: Arial 11 pt on A4 with 20 mm margins, the Title and Subtitle styles, real
+/// headings (so each participant is in Word's Navigation pane), the goals and common items as a list with no visible
+/// marker, a running header from page 2 and a footer with the page number on every page.
 /// </summary>
 internal static class WordReport
 {
     private const string TickFont = "Segoe UI Symbol";
     private const string TextFont = "Arial";
-    private const int GoalListId = 1;
+    private const int TickListId = 1;
 
-    public static byte[] Render(IReadOnlyList<ReportBlock> blocks)
+    public static byte[] Render(ReportDocument report)
     {
         using var stream = new MemoryStream();
         using (var document = WordprocessingDocument.Create(stream, WordprocessingDocumentType.Document))
         {
             var main = document.AddMainDocumentPart();
             main.AddNewPart<StyleDefinitionsPart>().Styles = Styles();
-            main.AddNewPart<NumberingDefinitionsPart>().Numbering = GoalList();
+            main.AddNewPart<NumberingDefinitionsPart>().Numbering = TickList();
+
+            // With titlePg set and no first-page header, page 1 has no header; the footer is on every page.
+            var headerPart = main.AddNewPart<HeaderPart>();
+            headerPart.Header = new Header(new Paragraph(
+                new ParagraphProperties(new ParagraphStyleId { Val = "Header" }), Lines(report.Title)));
 
             var body = new Body();
-            foreach (var block in blocks)
+            foreach (var block in report.Blocks)
             {
                 body.Append(Paragraph(block));
             }
 
             body.Append(new SectionProperties(
+                new HeaderReference { Type = HeaderFooterValues.Default, Id = main.GetIdOfPart(headerPart) },
+                AddFooter(main, report.Footer, HeaderFooterValues.Default),
+                AddFooter(main, report.Footer, HeaderFooterValues.First),
                 new PageSize { Width = 11906, Height = 16838 },
                 new PageMargin
                 {
@@ -42,8 +52,14 @@ internal static class WordReport
                     Header = 567,
                     Footer = 567,
                     Gutter = 0,
-                }));
+                },
+                new TitlePage()));
             main.Document = new Document(body);
+
+            // Word has no organisation field of its own, so Company holds it. No author is named.
+            document.PackageProperties.Title = report.Title;
+            document.AddExtendedFilePropertiesPart().Properties =
+                new Properties(new Company(Valid(report.OrganisationName)));
         }
 
         return stream.ToArray();
@@ -55,20 +71,21 @@ internal static class WordReport
         ReportBlockKind.Subtitle => Styled("Subtitle", block.Text),
         ReportBlockKind.Heading1 => Styled("Heading1", block.Text),
         ReportBlockKind.Heading2 => Styled("Heading2", block.Text),
+        ReportBlockKind.Heading3 => Styled("Heading3", block.Text),
         ReportBlockKind.Line => new Paragraph(Lines(block.Text)),
-        ReportBlockKind.Tick => Goal(block),
+        ReportBlockKind.Tick => Tick(block),
         _ => throw new ArgumentOutOfRangeException(nameof(block)),
     };
 
     private static Paragraph Styled(string styleId, string text) =>
         new(new ParagraphProperties(new ParagraphStyleId { Val = styleId }), Lines(text));
 
-    // The goals are text, not form controls, so the file reads as a record. The boxes come from a symbol font because
-    // Arial has no ☐ or ☑.
-    private static Paragraph Goal(ReportBlock block) => new(
+    // The goals and common items are text, not form controls, so the file reads as a record. The boxes come from a
+    // symbol font because Arial has no ☐ or ☑.
+    private static Paragraph Tick(ReportBlock block) => new(
         new ParagraphProperties(new NumberingProperties(
             new NumberingLevelReference { Val = 0 },
-            new NumberingId { Val = GoalListId })),
+            new NumberingId { Val = TickListId })),
         new Run(
             new RunProperties(new RunFonts
             {
@@ -79,6 +96,20 @@ internal static class WordReport
             }),
             new Text(block.IsTicked ? "☑" : "☐")),
         Lines(" " + block.Text));
+
+    // The same footer on page 1 and on the other pages: the sentence, then "Page n of N" from two fields. A field has
+    // no stored result, because a viewer that does not compute fields would show that one number on every page.
+    private static FooterReference AddFooter(MainDocumentPart main, string footer, HeaderFooterValues type)
+    {
+        var part = main.AddNewPart<FooterPart>();
+        part.Footer = new Footer(new Paragraph(
+            new ParagraphProperties(new ParagraphStyleId { Val = "Footer" }),
+            Lines(footer + ReportLayout.FooterPage),
+            new SimpleField { Instruction = " PAGE " },
+            Lines(ReportLayout.FooterOf),
+            new SimpleField { Instruction = " NUMPAGES " }));
+        return new FooterReference { Type = type, Id = main.GetIdOfPart(part) };
+    }
 
     // One run, with a line break between the lines of the text.
     private static Run Lines(string text)
@@ -154,7 +185,10 @@ internal static class WordReport
             StyleId = "Subtitle",
         },
         Heading("Heading1", "heading 1", "28", 0, before: "360"),
-        Heading("Heading2", "heading 2", "24", 1, before: "240"));
+        Heading("Heading2", "heading 2", "24", 1, before: "240"),
+        Heading("Heading3", "heading 3", "22", 2, before: "120"),
+        Furniture("Header", "header"),
+        Furniture("Footer", "footer"));
 
     // The only paragraphs that keep with the next one: a heading must not end a page (§11.5).
     private static Style Heading(string styleId, string name, string size, int outlineLevel, string before) => new(
@@ -172,8 +206,20 @@ internal static class WordReport
         StyleId = styleId,
     };
 
-    // A real list whose items show no number or bullet, because the box in front of each goal is its marker.
-    private static Numbering GoalList() => new(
+    // The running header and the footer are small, so that they stay out of the way of the body.
+    private static Style Furniture(string styleId, string name) => new(
+        new StyleName { Val = name },
+        new BasedOn { Val = "Normal" },
+        new PrimaryStyle(),
+        new StyleParagraphProperties(new SpacingBetweenLines { After = "0" }),
+        new StyleRunProperties(new FontSize { Val = "16" }, new FontSizeComplexScript { Val = "16" }))
+    {
+        Type = StyleValues.Paragraph,
+        StyleId = styleId,
+    };
+
+    // A real list whose items show no number or bullet, because the box in front of each item is its marker.
+    private static Numbering TickList() => new(
         new AbstractNum(
             new MultiLevelType { Val = MultiLevelValues.SingleLevel },
             new Level(
@@ -186,5 +232,5 @@ internal static class WordReport
         {
             AbstractNumberId = 0,
         },
-        new NumberingInstance(new AbstractNumId { Val = 0 }) { NumberID = GoalListId });
+        new NumberingInstance(new AbstractNumId { Val = 0 }) { NumberID = TickListId });
 }
