@@ -21,6 +21,8 @@ namespace Grow2Notes.Tests.Features.Notes;
 public sealed class ParticipantHeaderEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     : IClassFixture<Grow2NotesFactory>
 {
+    private static readonly DateTime DiscardedAtUtc = new(2026, 8, 3, 0, 0, 0, DateTimeKind.Utc);
+
     private readonly SeededOrganisations seeded = sqlServer.Seeded;
 
     [Theory]
@@ -36,7 +38,8 @@ public sealed class ParticipantHeaderEndpointTests(Grow2NotesFactory factory, Sq
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var header = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.Equal(
-            ["id", "givenName", "familyName", "status"], header.EnumerateObject().Select(property => property.Name));
+            ["id", "givenName", "familyName", "status", "firstNoteDate"],
+            header.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
             (participant.Id, "Jane", "Citizen", "Active"),
             (header.GetProperty("id").GetGuid(), header.GetProperty("givenName").GetString(),
@@ -96,6 +99,102 @@ public sealed class ParticipantHeaderEndpointTests(Grow2NotesFactory factory, Sq
         Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
         Assert.Equal(lastEventId, await LastEventIdAsync());
     }
+
+    // D80: the export screen starts its From date here. A draft and a discarded draft are not notes to count, however
+    // early, and the date is the earliest submitted note's, not the first one written.
+    [Fact]
+    public async Task The_first_note_date_is_the_earliest_submitted_note_s_and_ignores_a_draft_and_a_discarded_draft()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        var participant = await factory.Services.AddParticipantAsync(organisation);
+        await AddDraftAsync(organisation, participant.Id, new DateOnly(2026, 8, 1));
+        var discarded = await AddDraftAsync(organisation, participant.Id, new DateOnly(2026, 8, 2));
+        await factory.Services.DiscardAsync(organisation, discarded, DiscardedAtUtc);
+        await AddSubmittedAsync(organisation, participant.Id, new DateOnly(2026, 8, 20));
+        await AddSubmittedAsync(organisation, participant.Id, new DateOnly(2026, 8, 10));
+
+        var header = await GetHeaderAsync(organisation, participant.Id);
+
+        Assert.Equal("2026-08-10", header.GetProperty("firstNoteDate").GetString());
+    }
+
+    // Always written, as null for a participant who has no submitted note.
+    [Fact]
+    public async Task The_first_note_date_is_null_without_a_submitted_note()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        var drafted = await factory.Services.AddParticipantAsync(organisation, givenName: "Dora");
+        await AddDraftAsync(organisation, drafted.Id, new DateOnly(2026, 8, 1));
+        var discarded = await factory.Services.AddParticipantAsync(organisation, givenName: "Dan");
+        await factory.Services.DiscardAsync(
+            organisation,
+            await AddDraftAsync(organisation, discarded.Id, new DateOnly(2026, 8, 1)),
+            DiscardedAtUtc);
+        var none = await factory.Services.AddParticipantAsync(organisation, givenName: "Nora");
+
+        foreach (var participant in new[] { drafted, discarded, none })
+        {
+            var header = await GetHeaderAsync(organisation, participant.Id);
+
+            Assert.True(header.TryGetProperty("firstNoteDate", out var firstNoteDate));
+            Assert.Equal(JsonValueKind.Null, firstNoteDate.ValueKind);
+        }
+    }
+
+    // §5.9 item 7: another organisation's notes, of the same days, are not this participant's.
+    [Fact]
+    public async Task Another_organisation_s_notes_never_give_a_participant_a_first_note_date()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        var other = await factory.Services.AddOrganisationAsync();
+        var participant = await factory.Services.AddParticipantAsync(organisation);
+        var otherParticipant = await factory.Services.AddParticipantAsync(other);
+        await AddSubmittedAsync(other, otherParticipant.Id, new DateOnly(2026, 8, 10));
+
+        var header = await GetHeaderAsync(organisation, participant.Id);
+
+        Assert.Equal(JsonValueKind.Null, header.GetProperty("firstNoteDate").ValueKind);
+    }
+
+    // The header is for any signed-in user, so it never carries the date of birth, with or without a note.
+    [Fact]
+    public async Task The_header_with_a_first_note_date_still_has_no_birth_date()
+    {
+        var organisation = await factory.Services.AddOrganisationAsync();
+        var participant = await factory.Services.AddParticipantAsync(organisation);
+        await AddSubmittedAsync(organisation, participant.Id, new DateOnly(2026, 8, 10));
+
+        var header = await GetHeaderAsync(organisation, participant.Id);
+
+        Assert.DoesNotContain(
+            header.EnumerateObject(),
+            property => property.Name.Contains("birth", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("1987", header.GetRawText(), StringComparison.Ordinal);
+    }
+
+    private async Task<JsonElement> GetHeaderAsync(SeededOrganisation organisation, Guid participantId)
+    {
+        using var client = factory.CreateHttpsClient().SignInAs(organisation.WorkerId);
+        using var response = await client.GetAsync(
+            $"/api/participants/{participantId}", TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+    }
+
+    private Task<Guid> AddDraftAsync(SeededOrganisation organisation, Guid participantId, DateOnly noteDate) =>
+        factory.Services.AddDraftAsync(
+            organisation,
+            new(participantId, noteDate, organisation.WorkerId, new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)));
+
+    private Task<Guid> AddSubmittedAsync(SeededOrganisation organisation, Guid participantId, DateOnly noteDate) =>
+        factory.Services.AddSubmittedAsync(
+            organisation,
+            new(
+                participantId,
+                noteDate,
+                organisation.WorkerId,
+                new DateTime(2026, 10, 1, 0, 14, 0, DateTimeKind.Utc),
+                new DateTime(2026, 10, 1, 6, 42, 0, DateTimeKind.Utc)));
 
     // Over HTTPS, as the SPA calls the /api group (tests/README.md).
     private async Task<HttpResponseMessage> GetAsync(Caller caller, Guid participantId)
