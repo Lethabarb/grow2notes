@@ -123,7 +123,12 @@ export const routes: AppRoute[] = [
                 element: <FlaggedPage />,
                 handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
               },
-              { path: 'reports/daily/:date', element: <DailyReportPage />, handle: { pageName: pageName.dailyReport } },
+              // The date is optional so that /reports/daily reaches the page's arrival rules, behind the guard.
+              {
+                path: 'reports/daily/:date?',
+                element: <DailyReportPage />,
+                handle: { pageName: pageName.dailyReport, screenKey: 'dailyReport' },
+              },
               // Both pages of a note's version history (version-history.md *Routes*), whose rows are page A's return
               // points. React Router ranks these static segments above any param, so none takes them for a date.
               {

@@ -4996,7 +4996,7 @@ the design.md §5.8 flag rules for later versions, and one panel.
 
 ```yaml
 id: T17
-status: new
+status: done
 release: R1
 lane: B
 size: L
@@ -5028,10 +5028,97 @@ each download is preparing, ready or failed.
 
 - Builds the download hook that T21's export reuses, and adds the date controls to T15's Report screen.
 - Saving the file on real phones is a by-hand check on ops/first-use-in-test.md (from S04.02.05).
+- Built (24 October 2026). The decisions where design.md was silent or the plan chose between two readings:
+  - A87 and A88. A87: has-notes is a read and writes no audit event; only the export writes `report.downloaded`. A88:
+    a report date has no business lower bound; the page takes a real date from 1900-01-01 to today (`isReportDate`),
+    so a half-typed year such as 0202 never commits, an earlier date in the address is Page not found, and Previous
+    day is always available, so it lands on Page not found from 1900-01-01. This answers daily-report.md open
+    question 2. No D number: the behaviour is what the screen spec says, and T15's empty-day alert was an interim
+    stand-in.
+  - R42: has-notes for a date that is not real (2026-02-29, 2026-13-45) gets the `isodate` constraint's 404, as the
+    export does. The SPA never sends one, because the arrival rules and the field refuse it first. It is a Note, not an
+    A number.
+  - For M6's rate limits (T25, S06.01.05): the export limit of design.md §9.9 (10 a minute for each user) must attach
+    to the export route only, never to the `/reports` group or to has-notes, which falls under the general limit.
+    T25's Notes say so too.
+  - `useOnWindowFocus` (`src/components`) is used by the Report screen only. `TodayPage`, `FlaggedPage` and
+    `useRefreshMe` keep their own window `focus` listeners, which is a follow-up: move them onto the hook.
+  - The endpoint matrix holds one row for each route, so the export keeps its one docx row and has-notes has its own.
+    T15's `DailyReportEndpointTests` theories cover the PDF's 401, 403, 404 and 200, so F04.02's feature check, which
+    asks for "both formats", is met that way, and says so.
+  - `isNotFound(check.error)` shows Page not found for a refused has-notes check, which is the app-wide rule for a
+    refused manager request. A 404 cannot occur (the route exists and the SPA never sends a date that is not real), so
+    in practice it is the 403 of a manager whose role has changed. Every other failure of the check, a 503 or no
+    connection, leaves both buttons available and shows no sentence: the export is the gate.
+  - `useDownload` (`src/api/useDownload.ts`) holds the request lifecycle and no timing or copy. One `run` ref makes a
+    double click and the other button's press do nothing before the render that makes the buttons busy. Every way to
+    abandon a request drops the run first, so a press straight after Previous day is not swallowed. A press with a date
+    not yet committed starts with its own scope, so its own address change neither clears it nor aborts it; a step,
+    Back and Forward do both, and so does leaving the screen. The page words the failures through `failed()`, which can
+    also write the has-notes cache: a `404 report.no_notes` writes `{ date, hasNotes: false }` and shows the empty day
+    with no failure line.
+  - The 750 ms pause is an effect keyed on the draft and the address date, so a new address (a step, Back or Forward)
+    or leaving clears it and a stale value can never navigate again. One visit to the field adds one history entry,
+    and later commits in it replace that entry. A visit ends when the field is blurred and focus is not back on it a
+    moment later, not on a focus event: Chromium fires focus events between the parts of its date field, and again
+    after each re-render, so a rule on focus pushed a second entry (found by `report.spec.ts` in CI).
+  - Previous day and Next day are one `<a>` in both states, so focus stays on Next day when a step arrives on today.
+    The unavailable look is the shared button's `data-unavailable`. The route shares `screenKey: 'dailyReport'`, so
+    the shell skips the heading focus and the scroll reset for every report date, and nothing is written to
+    `sessionStorage`.
+  - The has-notes sentence is `apiErrorCopy['report.no_notes']` as a whole, and a date alone sits in `<time>`. While
+    the check is out, or has failed, the date shows and the buttons stay available. The ‹ and › glyphs are in
+    `strings` and in `aria-hidden` spans, because the lint rule rejects text in JSX.
+  - Only `report-date-status` and `report-date-error` have ids. T15's date-shape guard, its local `Format` type and its
+    empty-day alert were removed.
+  - Not ticked: daily-report.md's *Acceptance criteria* and *Accessibility checklist* stay as they were. The tests prove
+    most of them, but ticking them is done with the by-hand pass (steps 20, 21, 127 and 128), which the checklist's
+    screen reader and device items need.
+  - No table, column, index, grant or migration; the latest migration stays `20261023003611_AddNoteReview`.
+- By hand: steps 127 and 128 of ops/first-use-in-test.md (a real phone at 375 px and the keyboard order; an empty day
+  turning into a day with notes after a worker submits, the audit log's one `report.downloaded` for each press, and
+  whether the 750 ms pause feels right). The results are pending and are recorded here once they are in.
+
+### Plan
+
+Planned 24 October 2026.
+
+- Outcome: a manager steps or types to any day up to today, sees plainly when a day has no submitted notes, and is
+  told whether each download is preparing, ready or failed. No table, column, migration or index.
+- Design: one read-only endpoint, `GET /api/reports/daily/{date}/has-notes` (manager only, `{date, hasNotes}`, no
+  count). The Report route becomes `reports/daily/:date?` with the arrival rules in the page (no date or a future
+  date goes to today; an unreal date or one before 1900 is Page not found). Native date field committed on Enter,
+  blur or a 750 ms pause; Previous and Next day are links that push history; Next day on today is the unavailable
+  link look. Has-notes is a TanStack query refetched on window focus; a 404 `report.no_notes` on a download writes
+  the empty answer into its cache.
+- Domain: `DailyReportModel.HasNotesAsync` over a private `SubmittedOn` that `ReadAsync` shares, so it is false
+  exactly when the export would answer 404. Response record `DailyReportHasNotes(Date, HasNotes)`. No audit event.
+- Reuse: `MapDailyReportEndpoint`, `Policies.Manager`, the `isodate` constraint, `Button` busy and unavailable
+  handling, `FieldGroup`, `useDelayed`, `useMe`, `dayBefore`, `handle.screenKey`, the e2e report helpers. New shared
+  pieces: `useDownload` (T21 reuses it), `useOnWindowFocus`, `hasNotesQuery`, `dayAfter` and `isIsoDate`.
+- Decisions where design.md is silent: A87 has-notes is unaudited and only the export writes `report.downloaded`; A88
+  no business lower bound, with a 1900 floor so a half-typed year never commits, Page not found before it, and
+  Previous day always available. R42 (unreal date gets the isodate 404) is a Note only. No D number.
+- Tests: server theories prove has-notes agrees with the export; matrix row; Vitest for the page, hook, routes and
+  format helpers; Playwright for the states, keyboard, history and layout. Local checks are compile and lint only.
+
+### Verticals
+
+- v1: Has-notes endpoint: server, tests, matrix row; depends_on: none; R17 R18 R36 R37
+- v2: Report screen SPA, useDownload, e2e, by-hand steps and the design record; depends_on: v1;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R15 R16 R19 R20 R21 R22 R23 R24 R25 R26 R27 R28 R29 R30
+  R31 R32 R33 R34 R35 R38 R39 R40 R41 R42 R43
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] The has-notes endpoint (#95; S04.02.03 on the server, design.md §6.5): `GET /api/reports/daily/{date}/has-notes`
+      over `DailyReportModel.HasNotesAsync`, which `ReadAsync` shares through `SubmittedOn`; integration tests that
+      prove it agrees with the export, and the endpoint matrix row.
+- [x] The Report screen, the download hook and the design record (#96; S04.02.01 to S04.02.04 in the SPA):
+      `reports/daily/:date?` and its arrival rules, the date field and stepping, `hasNotesQuery`, `useDownload`,
+      `useOnWindowFocus`, `dayAfter` and `isIsoDate`, the copy; Vitest, and Playwright's `report.spec.ts` reworked with
+      `serveHasNotes`; A87 and A88, this task's Notes, the four stories, coverage.md's E04 rows, daily-report.md as
+      built and ops/first-use-in-test.md's steps 127 and 128.
 
 ---
 
@@ -5671,6 +5758,9 @@ open.
 ### Notes
 
 - Runs on the finished app once T19 and T21 are in, beside T24 and T26.
+- The export limit (design.md §9.9, 10 a minute for each user) attaches to the export route only, never to the
+  `/reports` group or to `GET /api/reports/daily/{date}/has-notes`, which the Report screen asks on every step and every
+  time the window takes focus and which falls under the general limit (T17's Notes).
 
 ### Steps
 

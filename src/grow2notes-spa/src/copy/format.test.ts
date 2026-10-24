@@ -1,11 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   count,
   dateLong,
   datePlain,
   dateTime,
   dateToday,
+  dayAfter,
   dayBefore,
+  isIsoDate,
   melbourneDay,
   parseDateOnly,
   stamp,
@@ -130,5 +132,37 @@ describe('count', () => {
     expect(count(999, 'character', 'characters')).toBe('999 characters');
     expect(count(1_000, 'character', 'characters')).toBe('1,000 characters');
     expect(count(20_000, 'character', 'characters')).toBe('20,000 characters');
+  });
+});
+
+describe('dayAfter, dayBefore and isIsoDate', () => {
+  beforeEach(() => {
+    vi.stubEnv('TZ', 'Australia/Melbourne');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    ['2026-09-30', '2026-10-01'],
+    ['2026-10-03', '2026-10-04'],
+    ['2026-04-05', '2026-04-06'],
+    ['2028-02-28', '2028-02-29'],
+    ['2026-12-31', '2027-01-01'],
+  ])('have the day after %s as %s, whatever the zone', (day, next) => {
+    expect(dayAfter(day)).toBe(next);
+  });
+
+  it('has the day before 2026-10-01 as 2026-09-30', () => {
+    expect(dayBefore('2026-10-01')).toBe('2026-09-30');
+  });
+
+  it.each(['2026-10-01', '2028-02-29'])('accepts %s as a date', (value) => {
+    expect(isIsoDate(value)).toBe(true);
+  });
+
+  it.each(['2026-02-29', '2026-13-45', '', '2026-1-1', '20261001', '0050-01-01'])('rejects %j as a date', (value) => {
+    expect(isIsoDate(value)).toBe(false);
   });
 });
