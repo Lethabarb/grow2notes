@@ -574,7 +574,7 @@ prompts. Its `serve(page, me)` answers the page's requests for a header, a histo
   version, or the current version as a template, at its base, with no `listsVersion` and nothing saved;
 - each save, which keeps the flag, and the reason only while flagged, as the API does, and updates the caller's own
   draft with `200`, or creates it with `201` after the creating save's checks in design.md §5.5's order,
-  `422 note.future_date`, `422 note.past_date_manager_only` for a worker, `422 note.participant_archived`,
+  `422 note.participant_archived`, `422 note.future_date`, `422 note.past_date_manager_only` for a worker,
   `409 note.lists_changed` for any lists' version but the current one's, and `422 validation.failed` for a goal not
   listed, a missing or wrong `pickedGroupIds` (Every note, a group with no items, or one outside the snapshot) and a
   missing or wrong `tickedCommonItemIds` (an item outside Every note and the picked groups); and

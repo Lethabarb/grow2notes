@@ -2556,10 +2556,10 @@ lets workers write only today's note, using the Melbourne date.
     `startedAtUtc`, the note's `CreatedAtUtc`, as problem extensions, before any create check and writing nothing,
     whoever sends it (design.md §6.3: "Draft: only the author"). This is the usual way to meet it, more often than a
     race: a form opened before the other's first save, a stale tab, or a manager saving on a worker's draft. With no
-    live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order, `422 note.future_date`,
-    `422 note.past_date_manager_only` and `422 note.participant_archived`; the `listsVersion`, which a missing one
-    never matches, else `409 note.lists_changed`; and each ticked ID in the template, else `422 validation.failed`
-    under `tickedGoalIds`. A manager's first save for an earlier day creates the note, as §5.5 item 4 says, and T18
+    live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order (T24, A97),
+    `422 note.future_date`, `422 note.past_date_manager_only` and `422 note.participant_archived`; the `listsVersion`,
+    which a missing one never matches, else `409 note.lists_changed`; and each ticked ID in the template, else
+    `422 validation.failed` under `tickedGoalIds`. A manager's first save for an earlier day creates the note, as §5.5 item 4 says, and T18
     builds its screens. A save on the caller's own draft reads no `listsVersion` and checks the ticked IDs against
     the stored snapshot. Ticks are a set, so an ID sent twice is one tick.
   - The unique index's error 2601 or 2627 on a creating `PUT` reads the live note again: the caller's own takes this
@@ -2895,7 +2895,8 @@ lets workers write only today's note, using the Melbourne date.
       S02.02.03's second criterion; note-form.md items 17, for goals, and 18; design.md §3.2, §3.3, §5.5 items
       3 and 4, §5.7 *New draft*): the creating `PUT`'s checks in the order of Notes, each creating nothing,
       `422 note.future_date`, `422 note.past_date_manager_only`, `422 note.participant_archived` and
-      `409 note.lists_changed`, added to `ErrorCode`; and the unique index's error taken as Notes say. Integration
+      `409 note.lists_changed` (the archived refusal now comes first: T24, A97), added to `ErrorCode`; and the
+      unique index's error taken as Notes say. Integration
       tests on SQL Server: a worker's first save for yesterday and for tomorrow, and a manager's for tomorrow, refused,
       and a manager's for yesterday creating the note with them as author; on a `TestClock`, a worker's template read
       at 11:58 pm and first save at 12:01 am refused, and a draft started at 11:58 pm and saved at 12:01 am keeping
@@ -5870,8 +5871,8 @@ report or export.
   rows for the new order, and no other test relied on the old one. §5.5 item 4's lead-in is now "Rules on creation
   (D35, §3.7)", with the archived bullet first, so the code's "in its order" comment stays true. The D86 refusal of
   detail or goal changes to an archived participant is not added. The code and tests cite the rule, not the number, so a
-  renumber touches only design.md, this file and S05.03.01's Notes. A95 and A96 were taken by T25 (24 October 2026), so
-  this is A97.
+  renumber touches only design.md (§5.5 item 4, the §13 row and the intro's A-range), this file and S05.03.01's
+  Notes. A95 and A96 were taken by T25 (24 October 2026), so this is A97.
 - One row for each sign-in event type, through the password path (R01): `auth.signin_succeeded`, `auth.signin_failed`,
   `auth.mfa_failed`, `auth.locked_out`, `auth.signed_out` and `auth.setup_completed`. The other triggers of those events
   (passkey, code step, passkey setup) already have exact-entry assertions in `PasskeySignInEndpointTests`,
@@ -5936,7 +5937,7 @@ report or export.
 
 ### Steps
 
-- [x] Plan (8bc837f): the T24 section and its requirements.
+- [x] Plan: the T24 section and its requirements.
 - [x] Append-only permissions (#112; v2): `AppendOnly` and `NeverDeleted` in `RuntimeRoleTests`, the derived denies, the
       `IAppendOnly` guard, and the `NoteReview` and passkey role writes.
 - [x] Audit completeness (#113; v1): the nine missing rows, the row guard in `AuditTypesTests`, and the note-text

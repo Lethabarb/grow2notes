@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D87 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A96), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D87 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A97), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 

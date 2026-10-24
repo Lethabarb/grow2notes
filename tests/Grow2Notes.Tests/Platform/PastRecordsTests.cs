@@ -28,9 +28,9 @@ namespace Grow2Notes.Tests.Platform;
 [Collection<SqlServerCollection>]
 public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
 {
-    private const string Archive = "archive";
-
     private const string GivenName = "Morgan";
+
+    private const string Narrative = $"{GivenName} made toast.";
 
     private readonly FakeTimeProvider clock = new(TestClock.Start);
     private readonly WebApplicationFactory<Program> app;
@@ -65,7 +65,7 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         Assert.Contains(GivenName, report);
         Assert.Contains(GivenName, export);
 
-        await PostNoContentAsync(manager, $"/api/admin/participants/{participant.Id}/{Archive}", participant.ETag);
+        await PostNoContentAsync(manager, $"/api/admin/participants/{participant.Id}/archive", participant.ETag);
 
         Assert.Equal(history, await BodyAsync(manager, $"/api/participants/{participant.Id}/notes"));
         Assert.Equal(read, await BodyAsync(manager, NotePath(participant.Id, first)));
@@ -147,9 +147,9 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         var export = await ExportTextAsync(manager, participant.Id, first, first);
         var workingCopy = await BodyAsync(worker, $"{NotePath(participant.Id, today)}/draft");
 
-        await PostNoContentAsync(manager, $"/api/admin/common-items/{item.Id}/{Archive}", item.ETag);
-        await PostNoContentAsync(manager, $"/api/admin/common-item-groups/{group.Id}/{Archive}", group.ETag);
-        await PostNoContentAsync(manager, $"/api/admin/goals/{goal.Id}/{Archive}", goal.ETag);
+        await PostNoContentAsync(manager, $"/api/admin/common-items/{item.Id}/archive", item.ETag);
+        await PostNoContentAsync(manager, $"/api/admin/common-item-groups/{group.Id}/archive", group.ETag);
+        await PostNoContentAsync(manager, $"/api/admin/goals/{goal.Id}/archive", goal.ETag);
 
         Assert.Equal(read, await BodyAsync(manager, NotePath(participant.Id, first)));
         Assert.Equal(version, await BodyAsync(manager, $"{NotePath(participant.Id, first)}/versions/1"));
@@ -314,7 +314,7 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
                 clientId = Guid.NewGuid(),
                 seq = 1,
                 listsVersion,
-                narrative = "Morgan made toast.",
+                narrative = Narrative,
                 tickedGoalIds = Array.Empty<Guid>(),
                 pickedGroupIds = Array.Empty<Guid>(),
                 tickedCommonItemIds = Array.Empty<Guid>(),
@@ -331,7 +331,7 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
             Content = JsonContent.Create(new
             {
                 baseVersion = 0,
-                narrative = "Morgan made toast.",
+                narrative = Narrative,
                 tickedGoalIds = Array.Empty<Guid>(),
                 pickedGroupIds = Array.Empty<Guid>(),
                 tickedCommonItemIds = Array.Empty<Guid>(),

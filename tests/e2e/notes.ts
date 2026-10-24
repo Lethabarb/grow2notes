@@ -613,16 +613,16 @@ export function notesStore({
     }
 
     const listed = goals.get(participantId) ?? [];
+    if (headers.get(participantId)?.status === 'Archived') {
+      return problem(422, 'note.participant_archived');
+    }
+
     if (noteDate > today) {
       return problem(422, 'note.future_date');
     }
 
     if (noteDate < today && me.role !== 'Manager') {
       return problem(422, 'note.past_date_manager_only');
-    }
-
-    if (headers.get(participantId)?.status === 'Archived') {
-      return problem(422, 'note.participant_archived');
     }
 
     if (sent.listsVersion !== versionOf(listed, commonItemGroups)) {
