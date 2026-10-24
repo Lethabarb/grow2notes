@@ -226,7 +226,9 @@ another minute they would lose.
      --name sqldb-grow2notes-restored --new-name sqldb-grow2notes
    ```
 
-   Check in the portal that the `CanNotDelete` lock covers the database now called `sqldb-grow2notes`; if it does not,
+   This step is unconfirmed: the `CanNotDelete` lock on `sqldb-grow2notes` may refuse a rename, and only the owner can
+   lift it. If the rename is refused for that reason, the owner lifts the lock, the operator renames, and the owner puts
+   the lock back. Check in the portal that the lock covers the database now called `sqldb-grow2notes`; if it does not,
    the owner puts it back (design.md [§10.5](../design/design.md#105-infrastructure-as-code-bicep)). The app's identity
    and its role are inside the database, so they come back with the copy.
 5. **Redeploy the previous artifact** with `deploy.yml`, naming that CI run, and start the web app. Its migration step
@@ -242,8 +244,8 @@ another minute they would lose.
 ### If it fails
 
 - A restore that cannot be checked (step 2 reports errors) is not put in place. Restore again to an earlier time.
-- If a rename is refused, stop and read the message; the web app stays stopped, the damaged database is unchanged and
-  nothing is lost by waiting.
+- If a rename is refused, perhaps by the lock (step 4), stop and read the message; the web app stays stopped, the
+  damaged database is unchanged and nothing is lost by waiting.
 
 ## An outage of Australia Southeast
 

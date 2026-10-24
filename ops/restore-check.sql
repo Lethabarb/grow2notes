@@ -56,7 +56,7 @@ DECLARE @Counts nvarchar(max) = (
     SELECT STRING_AGG(
         CAST(N'SELECT N' + QUOTENAME(t.name, '''') + N' AS [Table], COUNT_BIG(*) AS [Rows] FROM dbo.'
             + QUOTENAME(t.name) AS nvarchar(max)),
-        CAST(N' UNION ALL ' AS nvarchar(max))) WITHIN GROUP (ORDER BY t.name)
+        N' UNION ALL ') WITHIN GROUP (ORDER BY t.name)
     FROM sys.tables AS t
     WHERE t.schema_id = SCHEMA_ID(N'dbo') AND t.is_ms_shipped = 0);
 SET @Counts = N'SELECT c.[Table], c.[Rows] FROM (' + @Counts + N') AS c ORDER BY c.[Table];';
