@@ -869,6 +869,12 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
 - The app under test connects as `sa`, to which the denies of `grow2notes_runtime` do not apply. A test of what the
   database refuses the app runs its statements as a member of that role, as the app's identity is in Azure.
   `Grow2Notes.Tests/Data/RuntimeRoleTests.cs` is the example.
+- A test of a script in `ops/` runs the file itself through `OpsScripts.RunAsync`, which substitutes its `$(Name)`
+  variables as `sqlcmd` does, starts the session with `sqlcmd`'s `QUOTED_IDENTIFIER OFF`, and returns every result set.
+  It refuses a variable that the script uses and the test did not give, one that the test gave and the script does not
+  use, and a value with anything but letters, digits and hyphens. `OpsScripts.OnDatabaseOfItsOwnAsync` gives the test a
+  migrated database of its own, with the app on it to add rows through; its name is unique in the collection.
+  `Grow2Notes.Tests/Ops/FindIdsScriptTests.cs` is the example.
 - A test that stops its database (`SqlServerFixture.StopAsync`) declares a collection of its own with
   `ICollectionFixture<SqlServerFixture>`, so it gets its own container and cannot break the shared one. It starts the
   app (`factory.CreateClient()`) before stopping the database, because a stopped container has no port to build the

@@ -20,16 +20,17 @@ internal static class TestParticipants
 
     /// <summary>
     /// Adds a participant to <paramref name="organisation"/>, through the app's context under its tenant, as the app
-    /// adds one: <paramref name="givenName"/> <paramref name="familyName"/>, Jane Citizen unless given, born on 7
-    /// March 1987, active, or, with <paramref name="archived"/>, archived at <see cref="ArchivedAtUtc"/>. Each call
-    /// adds one more, with an ID of its own.
+    /// adds one: <paramref name="givenName"/> <paramref name="familyName"/>, Jane Citizen unless given, born on
+    /// <paramref name="dateOfBirth"/>, 7 March 1987 unless given, active, or, with <paramref name="archived"/>,
+    /// archived at <see cref="ArchivedAtUtc"/>. Each call adds one more, with an ID of its own.
     /// </summary>
     public static async Task<TestParticipant> AddParticipantAsync(
         this IServiceProvider services,
         SeededOrganisation organisation,
         bool archived = false,
         string givenName = "Jane",
-        string familyName = "Citizen")
+        string familyName = "Citizen",
+        DateOnly? dateOfBirth = null)
     {
         await using var scope = services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
@@ -38,7 +39,7 @@ internal static class TestParticipants
             OrganisationId = organisation.OrganisationId,
             GivenName = givenName,
             FamilyName = familyName,
-            DateOfBirth = new DateOnly(1987, 3, 7),
+            DateOfBirth = dateOfBirth ?? new DateOnly(1987, 3, 7),
             CreatedAtUtc = AddedAtUtc,
             Status = archived ? ParticipantStatus.Archived : ParticipantStatus.Active,
             ArchivedAtUtc = archived ? ArchivedAtUtc : null,
