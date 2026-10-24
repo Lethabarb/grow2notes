@@ -16,7 +16,7 @@ const wcag22aa = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
  * (320x200 and 640x400), and looks inside the page as well.
  */
 export async function expectAxeToPass(page: Page): Promise<void> {
-  // The 320 px check is made in passing: the window and the scroll go back as the test left them, so that axe checks the
+  // The 320 px check is made in passing: the window and the scroll go back as the test left them, so axe checks the
   // page the test built and not one that the reflow has scrolled, which axe's target-size rule found, under the note
   // form's sticky bar.
   const before = page.viewportSize();

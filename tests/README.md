@@ -138,8 +138,9 @@ as the one Chromium logs for a `401`, do not fail a test.
 `e2e/fixtures.spec.ts` shows that the fixture fails a test whose page meets a violation. It is marked `test.fail()`, so
 it passes by failing: the run marks it as failed, with a cross, and counts it as passed.
 
-A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which runs axe at a phone's
-width and then at a laptop's.
+A test checks a screen against WCAG 2.2 AA with `expectAxeToPass(page)` from `e2e/axe.ts`, which first expects the
+page not to scroll sideways at 320 px, then runs axe at a phone's width and at a laptop's (see *The 320 px check in
+`expectAxeToPass`*).
 
 Seven more fixtures are there for the tests that name them, and only those run them:
 
@@ -861,6 +862,89 @@ A test that answers `/api/auth/me` in the browser shows the view with a change t
 invite with `answerSetupLinks(page, { status: 401 })`, after `failMe(page, 401)`, so that the window's focus, which Tab
 out of the page and back gives, finds no session and leaves the view up. It calls `serveMe` again before it signs in
 again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec.ts` is the example of each.
+
+### Walking the Tab stops with `tabTo`
+
+`tabTo(page, stop, key, expected)` from `e2e/focus.ts` moves focus to a stop by pressing the key, which is Tab unless
+the test gives `'Shift+Tab'`, at least once and then until `stop` is the page's `document.activeElement`. `stop` is a
+Locator, so Playwright's strictness fails one that finds more than one element, or `'outside the page'`, where Tab takes
+focus past the page's last stop and Shift+Tab before its first. Every stop it passes, and `stop` itself, must show
+`expected`'s focus ring, `ring` unless the test gives another, such as one in `Highlight` under forced colours, but for
+a date field's calendar button, which the browser rings in its own style. It returns the names of the stops it passed,
+without `stop`. It never wraps. Focus leaving the page before a Locator stop, or no stop after 200 presses, which is
+more than any screen has, fails the test, which is how a trap, or a stop that the key never reaches, fails.
+
+Use `expectStops` where a screen file names a Tab order and the test should fail on any other. Use `tabTo` where a test
+crosses many stops and only the stop it is going to matters, as the key flows do.
+
+```ts
+await tabTo(page, page.getByRole('link', { name: 'Participants', exact: true }));
+await page.keyboard.press('Enter');
+```
+
+### `foundations.ts`: what a browser can prove of foundations.md's manual test list
+
+`e2e/foundations.ts` holds the checks of foundations.md's manual test list that need no person, so that each screen's
+own spec calls one function in its fullest state rather than carrying a copy.
+
+- `expectFoundationsToPass(page, { topBar })` runs, in this order: `<html lang>` is `en-AU`; `expectTextAt7To1`;
+  `expectNothingToMove`; nothing pinned to the window, at 1280x800 and at 640x400 (see below); a focus ring on every Tab
+  stop and no trap, forward and then backward with `tabTo`, in the page's colours and under forced colours, where the
+  ring is in `Highlight`; and `expectToFit` at 320x800, 320x200 and 640x400, each with 100% text, 200% text, and 200%
+  text with WCAG 1.4.12's spacing. Pass `topBar: true` on the note form and its forms, whose top bar, the first child
+  of `#page-bar`, is the one element allowed to stay put, and only on a window taller than 30rem.
+- `expectTextAt7To1(page, state)` runs axe's `color-contrast-enhanced` rule and names each target below 7:1. That rule
+  holds large text to 4.5:1, and cannot reach a placeholder or the pressed secondary label, which tokens.test.ts holds
+  to 4.5:1. An element painted with one of those two pairs is left out by selector, with a comment, and a token is never
+  changed to pass.
+- `expectNothingToMove(page)` expects no element, nor its `::before` or `::after`, to have an animation, a transition
+  lasting longer than 0, or smooth scrolling, with reduced motion off, as base.css's reduce rule would hide a
+  transition.
+- `spaceTextOut(page)` sets WCAG 1.4.12's text spacing on every element, through a constructed stylesheet, which the
+  Content Security Policy allows.
+- `expectToFit(page, state)` expects no sideways scroll; no element, and no word of an element's own text, past the
+  window's sides or its element's; no element cutting off what it holds, but for a box that scrolls up and down, such as
+  the dialog; and a field showing all its text. Words hidden on purpose by a clip are left out. A filled single-line
+  field is a field that cuts off what it holds when its text is longer than the field is wide at 320 px and 200% text,
+  so a test that calls it at that size empties such a field first, as Edit user's does; it is not excluded, since a
+  worker or manager who cannot see their own address in full has met the failure it looks for.
+
+The zoom sizes are real geometry. 1280x800 at 400% zoom is 320x200 CSS pixels, and at 200% it is 640x400, both under
+the `(max-height: 30rem)` layout, which is what a zoomed laptop and a landscape phone get; 320x800 is the narrowest
+phone upright, not zoom.
+
+Call `expectFoundationsToPass` last in a test, in a state where nothing has yet changed the text size or its spacing:
+neither can be undone on a page, and it leaves the page at 640x400 with 200% spaced text.
+
+### The 320 px check in `expectAxeToPass`
+
+`expectAxeToPass(page)` from `e2e/axe.ts` first sets the window to 320x800 and expects the page not to scroll
+sideways (`scrollsSideways`, WCAG 1.4.10), with the message `sideways scroll at 320 px wide (WCAG 1.4.10)`, then
+puts the window and the scroll back as the test left them, runs axe at 375 px and at 1280 px, and leaves the page at
+1280x800. It puts them back because the reflow alone scrolled two pages, the note form's with a group picked and its
+dead end, far enough for axe's `target-size` rule to fail them at 375 px and 1280 px. So every state that a test checks with axe also
+reflows at the narrowest phone's width, and a test that adds a state with `expectAxeToPass` gets the check without
+asking for it. The check measures the page's own width only; `expectToFit` in `expectFoundationsToPass` also looks
+inside the page, and fits the real zoom sizes. A test that asserts nothing but 320 px sideways scroll is no longer
+written.
+
+### `key-flows.spec.ts`: the eight flows of design.md section 4.13, by keyboard alone
+
+`e2e/key-flows.spec.ts` is the one spec that signs in for real and answers nothing in the browser. It holds two tests,
+each with one `test.step` for each flow, named as design.md section 4.13 names it, so that the report has a result for
+each flow:
+
+- `a manager, keyboard only`: Forgotten note, Daily report and Access request.
+- `a worker and a manager, keyboard only`: Wrong participant, Write today's note, Correct a note, Flag and Lost phone.
+
+Each runs at 1280x800 with `test.setTimeout(6 * 60_000)`. The made-up people, goals and common items that a flow needs
+are made with the clicks the other specs use (`signInThroughSetup`, `addJaneWithTwoGoals`, `addParticipantWithGoals`,
+`inviteThroughThePage`); inside a flow step only the keyboard is used, but for a native date field, which is reached by
+Tab and given its date with `fill('YYYY-MM-DD')`. After each change of screen the test asserts where focus landed,
+with `expectFocusAt` or `tabTo`'s ring, before it runs axe, and axe runs at each screen, result and dialog, not at
+every key. Yesterday comes from the server's today, which the nav's Report link holds, never from the device's clock
+(A33). In Lost phone the manager's Reset sign-in is pressed, and `resetSignIn` stands for the emailed link, as in
+`user-actions.spec.ts`. A failing flow step names the flow in the CI report.
 
 ## Writing integration tests
 
