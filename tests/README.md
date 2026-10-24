@@ -875,8 +875,11 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
   `SqlServerFixture.ConnectionStringFor` and creates it from its model with `EnsureCreated`;
   `Grow2Notes.Tests/Data/TenantIsolationOnNewEntitiesTests.cs` is the example.
 - The app under test connects as `sa`, to which the denies of `grow2notes_runtime` do not apply. A test of what the
-  database refuses the app runs its statements as a member of that role, as the app's identity is in Azure.
-  `Grow2Notes.Tests/Data/RuntimeRoleTests.cs` is the example.
+  database refuses the app runs its statements as a member of that role, as the app's identity is in Azure. A new
+  append-only table is added to its `AppendOnly` list and a new never-deleted table to `NeverDeleted`, the two places a
+  table is named there: the error-229 theories and the exact list of denies are derived from them, and a guard fails
+  while an `IAppendOnly` entity's table is missing from `AppendOnly`. `Grow2Notes.Tests/Data/RuntimeRoleTests.cs` is
+  the example.
 - A test of a script in `ops/` runs the file itself through `OpsScripts.RunAsync`, which substitutes its `$(Name)`
   variables as `sqlcmd` does, starts the session with `sqlcmd`'s `QUOTED_IDENTIFIER OFF`, and returns every result set.
   It refuses a variable that the script uses and the test did not give, one that the test gave and the script does not
@@ -904,6 +907,11 @@ again, as the new session's refreshes are then answered. `e2e/sign-in-again.spec
   `services.AddClientAddressHeader()`, which takes the remote address from an `X-Test-Client-Address` header.
   `Grow2Notes.Tests/Platform/RateLimitsTests.cs` is the example. Its counts are the design's numbers written out, never
   read from the permits.
+- A test of what archiving a participant, goal, common item or group, or deactivating a user, leaves of the past
+  adds an organisation of its own and changes no seeded row, and runs on a fake clock that stands still, so that the
+  report's "As at" line and the export's "Exported by" line are equal before and after and whole texts can be
+  compared. `Grow2Notes.Tests/Platform/PastRecordsTests.cs` is the example: one fact for each of a participant, a
+  goal with an item and a group, and a worker.
 - A test that reads what is written to standard output puts a writer of its own in its place with `Console.SetOut`,
   and the old one back in a `finally`, in `[Collection<StandardOutputCollection>]`, which xUnit runs on its own, after
   every collection that runs in parallel, so nothing else writes to it meanwhile. It hosts its app with
@@ -1087,8 +1095,8 @@ so a manager's request then gets `403`. `SignedInDevices` (`Grow2Notes.Tests/Fix
 several devices at once. Reset sign-in's tests use it (`Grow2Notes.Tests/Features/Users/SignInResetTests.cs`, the
 example), and so does every later test of a change that ends sessions or a role: deactivation, a change of role or
 email, and the operator's `admin reset-signin` and `admin signout-all`; T24's, that a deactivated person is signed out
-everywhere (S05.03.02); and T32's, that such a change ends a connected assistant's access as well as the person's own
-sessions.
+everywhere (S05.03.02, the third fact of `Grow2Notes.Tests/Platform/PastRecordsTests.cs`); and T32's, that such a
+change ends a connected assistant's access as well as the person's own sessions.
 
 - Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
   changes (the seeded-rows rule above).
@@ -1399,4 +1407,7 @@ story adds one as follows.
   than one trigger gets a row for each, named by the event type, " by " and the trigger, as `user.setup_link_sent`'s
   Resend invite and Reset sign-in are. A trigger that changes every organisation, as `admin signout-all` does, writes
   one entry for each, so its row runs on a migrated database of its own, which `DatabasesOfTheirOwn` names, in an
-  organisation that it adds there.
+  organisation that it adds there. The rows are one for each event type, plus one for each trigger that §5.4 names:
+  `AuditTypesTests` fails while the event types of the rows and the `AuditEventTypes` constants differ, naming each
+  one that is missing, so a new event type cannot be added without a row. The other triggers of the sign-in events (the
+  passkey, the code step and passkey setup) are proved by the exact entries in their endpoint tests.
