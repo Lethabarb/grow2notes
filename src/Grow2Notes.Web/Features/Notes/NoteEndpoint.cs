@@ -128,22 +128,8 @@ internal static class NoteEndpoint
             NoteReadVersion.Of(
                 note.CurrentVersionNumber, content.Snapshot, content.Narrative, content.IsFlagged, content.FlagReason),
             isManager ? note.FlagStatus.ToString() : null,
-            isManager ? await ReviewsAsync(db, note, cancellationToken) : null,
+            isManager ? await NoteReadReview.NewestFirstAsync(db, note.Id, cancellationToken) : null,
             // Versions are numbered 1 to the current number with no gap (§5.8), so no count is needed.
             isManager ? note.CurrentVersionNumber : null);
     }
-
-    private static async Task<IReadOnlyList<NoteReadReview>> ReviewsAsync(
-        Grow2NotesDbContext db, LiveNote note, CancellationToken cancellationToken) =>
-        await (
-            from review in db.NoteReviews.AsNoTracking()
-            where review.NoteId == note.Id
-            join reviewer in db.Users on review.ReviewedByUserId equals reviewer.Id
-            orderby review.ReviewedAtUtc descending
-            select new NoteReadReview(
-                review.VersionNumber,
-                new NoteReadAuthor(reviewer.Id, reviewer.DisplayName),
-                review.ReviewedAtUtc,
-                review.Comment))
-        .ToListAsync(cancellationToken);
 }

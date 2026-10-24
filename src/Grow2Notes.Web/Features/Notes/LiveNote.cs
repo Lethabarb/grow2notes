@@ -51,7 +51,12 @@ internal sealed record LiveNote(
     /// on every read from <see cref="CreatedAtUtc"/> and never stored. A worker's draft that crosses midnight is not
     /// one, so the first submitted time is never used.
     /// </summary>
-    public bool IsPastDayNote => MelbourneClock.DateOf(CreatedAtUtc) > NoteDate;
+    public bool IsPastDayNote => IsPastDay(CreatedAtUtc, NoteDate);
+
+    /// <summary>Whether a note dated <paramref name="noteDate"/> and started at <paramref name="createdAtUtc"/> is a
+    /// past-day note, the rule that <see cref="IsPastDayNote"/> applies and the daily report shares.</summary>
+    public static bool IsPastDay(DateTime createdAtUtc, DateOnly noteDate) =>
+        MelbourneClock.DateOf(createdAtUtc) > noteDate;
 
     /// <summary>
     /// Who started the note and when, when it is a draft that another user than <paramref name="actor"/> started,
