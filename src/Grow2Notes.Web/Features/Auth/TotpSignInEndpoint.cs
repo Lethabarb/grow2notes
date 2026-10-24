@@ -16,7 +16,9 @@ namespace Grow2Notes.Web.Features.Auth;
 /// Anyone may call it, as whoever asks is not signed in yet. The account is the one in Identity's two-factor cookie,
 /// which the password step set, read before anything else. Without one, because no password step came first, its 5
 /// minutes have passed or a passkey ceremony has replaced it, the answer is the <c>401</c> with nothing written.
-/// Otherwise that account's organisation is the tenant (§5.9 item 1), and the code is read by the one code check that
+/// Otherwise the account uses a permit of its limit of 10 a minute (design.md §9.9, <see cref="AccountRateLimiter"/>),
+/// and a request over it is a <c>429</c> that writes no event and counts nothing towards the lockout. Then that
+/// account's organisation is the tenant (§5.9 item 1), and the code is read by the one code check that
 /// setup's code passes too (<see cref="OneTimeCode"/>): a badly formed code is a wrong one that never reaches Identity,
 /// which would read "12345" as the code 012345, so it counts towards no lockout (totp-setup.md <i>Implementation
 /// notes</i>). Identity's <c>TwoFactorAuthenticatorSignInAsync</c> then checks that the user may still sign in
@@ -36,8 +38,10 @@ internal static class TotpSignInEndpoint
         return api;
     }
 
-    private static async Task<Results<Ok<Me>, UnauthorizedHttpResult>> SignInAsync(
+    private static async Task<Results<Ok<Me>, UnauthorizedHttpResult, StatusCodeHttpResult>> SignInAsync(
         TotpSignInRequest request,
+        AccountRateLimiter accounts,
+        HttpResponse response,
         SignInManager<ApplicationUser> signInManager,
         ITenantContext tenant,
         IAuditWriter audit,
@@ -48,6 +52,11 @@ internal static class TotpSignInEndpoint
         if (await signInManager.GetTwoFactorAuthenticationUserAsync() is not { } user)
         {
             return TypedResults.Unauthorized();
+        }
+
+        if (!accounts.TryAcquireCodeStep(user.Id))
+        {
+            return RateLimits.TooManyRequests(response);
         }
 
         using (tenant.Use(user.OrganisationId))

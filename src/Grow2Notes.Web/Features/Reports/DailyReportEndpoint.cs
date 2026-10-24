@@ -30,7 +30,9 @@ internal static class DailyReportEndpoint
     /// <summary>Maps the endpoint in the <c>/api</c> group, which <see cref="ApiGroup.MapApiGroup"/> returns.</summary>
     public static RouteGroupBuilder MapDailyReportEndpoint(this RouteGroupBuilder api)
     {
-        api.MapGet("/reports/daily/{date:isodate}/export", ExportAsync).RequireAuthorization(Policies.Manager);
+        api.MapGet("/reports/daily/{date:isodate}/export", ExportAsync)
+            .RequireAuthorization(Policies.Manager)
+            .RequireRateLimiting(RateLimits.Export);
         api.MapGet("/reports/daily/{date:isodate}/has-notes", HasNotesAsync).RequireAuthorization(Policies.Manager);
         return api;
     }

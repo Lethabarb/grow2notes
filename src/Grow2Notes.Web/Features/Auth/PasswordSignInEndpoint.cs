@@ -13,12 +13,15 @@ namespace Grow2Notes.Web.Features.Auth;
 /// outcome is the <c>401</c> of a failed sign-in, which starts nothing.
 /// </summary>
 /// <remarks>
-/// Anyone may call it, as whoever asks is not signed in yet. It finds the account by its email first, in any letter
-/// case, and makes that account's organisation the tenant (§5.9 item 1). Identity's <c>PasswordSignInAsync</c> then
-/// checks that the user may sign in (<see cref="Grow2NotesSignInManager.CanSignInAsync"/>) and is not locked out, and
-/// checks the password, counting a wrong one towards the lockout (A25), but only for an account that has a password:
-/// one set up with a passkey has none to guess, and counting guesses at it would let anyone who knows the email lock
-/// its passkey out (A55). It never signs anyone in here: every password user has two-factor on, and the sign-in
+/// Anyone may call it, as whoever asks is not signed in yet. It first uses a permit of the account's limit of 10 a
+/// minute (design.md §9.9, <see cref="AccountRateLimiter"/>), by the email as Identity normalises it, so an email of no
+/// account is counted like any other; a request over it is a <c>429</c> that writes no event, logs nothing and counts
+/// nothing towards the lockout. It then finds the account by its email, in any letter case, and makes that account's
+/// organisation the tenant (§5.9 item 1). Identity's <c>PasswordSignInAsync</c> then checks that the user may sign in
+/// (<see cref="Grow2NotesSignInManager.CanSignInAsync"/>) and is not locked out, and checks the password,
+/// counting a wrong one towards the lockout (A25), but only for an account that has a password: one set up with a
+/// passkey has none to guess, and counting guesses at it would let anyone who knows the email lock its passkey out
+/// (A55). It never signs anyone in here: every password user has two-factor on, and the sign-in
 /// manager refuses one who does not (<see cref="Grow2NotesSignInManager"/>'s <c>SignInOrTwoFactorAsync</c>, §8.1's
 /// invariant). The code step writes the audit event of a success, with the session; this step writes one only for a
 /// failure on the account, after Identity's own save, with no transaction, as §5.9 lists none for a sign-in:
@@ -35,8 +38,11 @@ internal static partial class PasswordSignInEndpoint
         return api;
     }
 
-    private static async Task<Results<Ok<PasswordSignInResponse>, UnauthorizedHttpResult>> SignInAsync(
+    private static async Task<Results<Ok<PasswordSignInResponse>, UnauthorizedHttpResult, StatusCodeHttpResult>>
+        SignInAsync(
         PasswordSignInRequest request,
+        AccountRateLimiter accounts,
+        HttpResponse response,
         SignInManager<ApplicationUser> signInManager,
         ITenantContext tenant,
         IAuditWriter audit,
@@ -44,6 +50,11 @@ internal static partial class PasswordSignInEndpoint
         ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
+        if (!accounts.TryAcquirePasswordStep(signInManager.UserManager.NormalizeEmail(request.Email)))
+        {
+            return RateLimits.TooManyRequests(response);
+        }
+
         if (await signInManager.UserManager.FindByEmailAsync(request.Email) is not { } user)
         {
             LogUnknownEmail(loggers.CreateLogger(typeof(PasswordSignInEndpoint)));
