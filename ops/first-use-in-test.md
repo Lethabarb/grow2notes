@@ -1025,3 +1025,27 @@ manager and one submitted on the next day. Every word typed is made up. Download
      parent company's name and look for none. (S04.01.03 and S04.01.04; design.md §11.3, A82 to A84, D72.)
 
 Record the results in T20's Notes.
+
+### Operator runbooks, once T23 is in test
+
+These steps hold T23's by-hand checks ([tasks.md](../design/backlog/tasks.md), T23's Notes). The runbooks and their
+scripts are tested in CI on made-up data, so none of these holds a story open. Step 127 needs the test environment to
+hold made-up data (A35), including a made-up participant that you archive for the purpose.
+
+127. As the SQL Entra admin on the test server, through a temporary rule for your own address deleted straight after,
+     with no address written down, run every `ops/` script on made-up data with the runbooks' commands. That includes
+     `retention-destroy.sql`, preview then destroy, on the made-up participant archived for the purpose. Look for exit
+     code 0, Melbourne times with their offset, names beside their IDs, and the audit file after the `sed` step with
+     its header, one line for each row and every Details value whole. Correct `audit-extraction.md` by pull request if
+     the flags differ. (S05.04.01 criterion 6, S05.04.02 criterion 7.)
+128. A manager reads `retention-and-destruction.md`, `audit-extraction.md` and `breach-response.md`. A comment on T23's
+     pull request records "a manager" and the date; the name stays in the provider's records. (S05.04.01 criterion 11,
+     S05.04.02 criterion 8, S06.06.01 criterion 9.)
+129. The operator gives the provider its contact details in writing (go-live checklist line 3). The managers choose the
+     place in their records storage for the yearly list, the HPP 4.3 log, the audit request record and the breach
+     records, and confirm that the operator can reach it. (S06.06.01 criterion 8, S05.04.02 criterion 3; design.md A87,
+     A90.)
+130. At the first restore drill, follow `restore-drill.md` step by step and fix any step that did not work in a pull
+     request. (S06.03.02.)
+
+Record the results in T23's Notes.
