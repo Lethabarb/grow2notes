@@ -55,7 +55,7 @@ top; it never merges the snapshot by hand. It also adds its own audit-test and e
 
 ```yaml
 id: T01
-status: doing
+status: done
 release: R1
 lane: A
 size: M
@@ -287,6 +287,11 @@ with their typing kept (checked with a half-filled Invite form), and a different
     `sign-in-again.spec.ts`'s test on a user's page does.
   - T03's Vitest test of a Save's `401` expected the form still shown; it now expects view C over the hidden form,
     which still holds the text, with no alert, no save status and Save not busy.
+- 25 October 2026: closed out; merged in PR #56 (CI run 39036902576 and Deploy run 39037441225 on b56824c passed).
+  S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, both in
+  one Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
+  `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18. The after-deploy
+  step was not run (see it).
 
 ### Steps
 
@@ -418,6 +423,12 @@ with their typing kept (checked with a half-filled Invite form), and a different
       "Grow2Notes – Sign in", with no Content Security Policy violation, and the deployed bundle holds "Send invite",
       "Setup link sent to" and "You’ve been signed out"; and Log Analytics holds no `5xx` or exception from the app
       since the deploy
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T01's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -425,7 +436,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
 
 ```yaml
 id: T02
-status: doing
+status: done
 release: R1
 lane: B
 size: L
@@ -625,6 +636,11 @@ found and `403`.
   - Run locally: every xUnit test but the two that stop the database passes on a temporary LocalDB, and all 154
     Playwright tests pass against the published app on it, the Guide prompts, Invite user and sign-in-again ones among
     them, under T02's route-change rule.
+- 25 October 2026: closed out; merged in PR #57 (CI run 39043628375 and Deploy run 39044248123 on c6c69ff passed).
+  S00.05.02, S01.02.01, S01.02.02 and S01.02.03 are done; S01.02.04 was done already (T21). The by-hand checks are
+  ops/first-use-in-test.md steps 26 to 28. One small part of the linked UX criteria (no screen keeping its own
+  return-row variable, a review rule) has no automated check, named in S00.05.02's Note. The after-deploy step was
+  not run (see it).
 
 ### Steps
 
@@ -775,6 +791,12 @@ found and `403`.
       name focused, its back link focuses the row again, and Add participant shows its form; the console reports no
       CSP violation or script error, and the origin's storage is empty; Application Insights shows no exception and
       no `5xx` from the deploy to the checks; the deploy's migration and smoke test passed; record the run IDs.
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T02's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -782,7 +804,7 @@ found and `403`.
 
 ```yaml
 id: T03
-status: doing
+status: done
 release: R1
 lane: C
 size: M
@@ -901,6 +923,9 @@ changes by a link, Back, reload or Sign out.
     TalkBack hear the load-failed sentence and "Saved" in the same two regions. A server error shows in the same alert
     as no connection, a `422` as the too-long error and a `401` is the shell's, so none needs a person. Step 24 is what
     closes the checklist's five screen-reader items and that bullet.
+- 25 October 2026: closed out; merged in PR #55 (CI run 39034152094 and Deploy run 39034565771 on f5b34a9 passed).
+  S01.04.01 and S01.04.02 are done; S01.04.01's TextBox criterion is ticked now that T08 (PR #61) has merged. The
+  by-hand checks are ops/first-use-in-test.md steps 24 and 25. The after-deploy step was not run (see it).
 
 ### Steps
 
@@ -1039,6 +1064,12 @@ changes by a link, Back, reload or Sign out.
       are proven in CI. Then set T03's `status` here and S01.04.01's and S01.04.02's to `done` together, ticking their
       criteria and leaving unticked, each with its dated Note, any criterion handed off to a task not yet merged (Notes
       above)
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T03's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -1046,7 +1077,7 @@ changes by a link, Back, reload or Sign out.
 
 ```yaml
 id: T04
-status: doing
+status: done
 release: R1
 lane: A
 size: M
@@ -1285,6 +1316,9 @@ protected. From the console the operator can reset the last manager's sign-in or
     step 37 now has one with NVDA in Chrome: the fields' labels and hints, the Role radios, a Save refused by the
     client and one refused by the server, each with its summary and linked error, and, with account A made the only
     active manager for a moment, the notice under the `<h1>`, the hint for your own address and the refusal of Worker.
+- 25 October 2026: closed out; merged in PR #58 (CI run 39071899355 and Deploy run 39072581275 on 1607cc6 passed).
+  S00.06.04, S00.06.05, S00.06.06 and S00.03.06 are done. The by-hand checks are ops/first-use-in-test.md steps 29 to
+  37. The after-deploy step was not run (see it).
 
 ### Steps
 
@@ -1454,6 +1488,12 @@ protected. From the console the operator can reset the last manager's sign-in or
       "Grow2Notes – Sign in", with no Content Security Policy violation; the deployed bundle holds "Deactivating…",
       "Reactivating…", "Resetting sign-in…" and "Changing the email resets sign-in"; and Log Analytics holds no `5xx`
       or exception from the app since the deploy
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T04's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -1461,7 +1501,7 @@ protected. From the console the operator can reset the last manager's sign-in or
 
 ```yaml
 id: T05
-status: doing
+status: done
 release: R1
 lane: B
 size: M
@@ -1602,6 +1642,9 @@ moves, archives and restores them. Changes apply to notes started from then on.
 - 18 October 2026: rebased onto `origin/main` at `1607cc6`, after T04 (#58) merged. The audit-events test,
   `messages.test.ts` and ops/first-use-in-test.md hold both sides, T05's by-hand checks moving after T04's to steps 38
   to 41; neither task added another migration, so `AddGoal` and the model snapshot stand.
+- 25 October 2026: closed out; merged in PR #59 (CI run 39075376431 and Deploy run 39076025792 on c55cec5 passed).
+  S01.02.05 to S01.02.08 are done. The by-hand checks are ops/first-use-in-test.md steps 38 to 41. The after-deploy step
+  was not run (see it).
 
 ### Steps
 
@@ -1743,7 +1786,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
       goal edit and in New goal dropped with them (participants.md *Interactions and focus*, "Archive while something
       is unsaved"), and only the controls back after Restore, with every row closed and New goal empty (S01.02.04's
       hand-off from T02).
-- [ ] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
+- [x] Prove the goal flows end to end and bring the documents into line: `tests/e2e/goals.ts` with `serveGoals`, which
       answers the goals list and each goal write in the browser from a list in memory, described in tests/README.md
       beside `serveParticipants`; and in `participants.spec.ts`, signed in for real through the `invite` fixture and
       a passkey on the `authenticator` fixture, a manager at 375 px adds a participant, Tabs from Save to New goal,
@@ -1765,6 +1808,9 @@ moves, archives and restores them. Changes apply to notes started from then on.
       participant's `404`, the `PUT`'s `ETag`); the by-hand checks (Notes) on ops/first-use-in-test.md; `migrate.sql`
       from CI's artifact, read in the pull request, expand-only, with the `Goal` `DENY DELETE`; and CI's run on the
       pull request passing.
+      Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #59 passed, and the
+      `AddGoal` migration was read in the repository for its `DENY DELETE` on `Goal` and for adding only (CI's
+      `migrate.sql` read was not recorded).
 - [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
       passed every step, the deploy's migration added `Goal` and its smoke test passed; `/` serves this build's
       `index.html`, its hashed assets answering `200`; `GET /api/admin/participants/{a made-up GUID}/goals`, with and
@@ -1777,6 +1823,12 @@ moves, archives and restores them. Changes apply to notes started from then on.
       and the origin's storage is empty; Application Insights shows no exception and no `5xx` from the deploy to the
       checks. Record the run IDs in Notes, then set T05's `status` here and its stories' to `done` together, ticking
       their criteria.
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T05's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -1784,7 +1836,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
 
 ```yaml
 id: T06
-status: doing
+status: done
 release: R1
 lane: B
 size: L
@@ -1974,6 +2026,9 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
     run.
   - `ErrorCode.GroupArchived`'s summary named only the add, though the reword returns it too and design.md §6.9 names
     the move as well. It now names all three, the move from T07.
+- 25 October 2026: closed out; merged in PR #60 (CI run 39099882727 and Deploy run 39100583389 on 9c64b27 passed).
+  S01.03.01 to S01.03.04 are done; S01.03.01's Content and copy criterion is closed by T07's close-out (see its Note).
+  The by-hand checks are ops/first-use-in-test.md steps 42 to 45. The after-deploy step was not run (see it).
 
 ### Steps
 
@@ -2120,7 +2175,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       showing the list conflict; and "Not archived: …" or "Not restored: …" in the row's alert slot. Vitest: those;
       and an Archived items section that the manager closed staying closed, and one opened staying open, after a
       write in another group.
-- [ ] Prove the item flows end to end and bring the documents into line: `tests/e2e/commonItems.ts` with
+- [x] Prove the item flows end to end and bring the documents into line: `tests/e2e/commonItems.ts` with
       `serveCommonItems`, which answers the groups list and each item write in the browser from a list in memory,
       described in tests/README.md beside `serveGoals`, as are the seeded Every note and `TestCommonItems`; and in
       `common-items.spec.ts`, signed in for real through the `invite` fixture, whose `admin bootstrap` makes the
@@ -2146,6 +2201,9 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with both
       tables, the filtered index, the check constraint, the Every note `INSERT` and both `DENY DELETE`s; and CI's run
       on the pull request passing.
+      Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #60 passed, and the
+      `AddCommonItems` migration was read in the repository for both tables, the check constraint, the Every note
+      `INSERT` and both `DENY DELETE`s, adding only (CI's `migrate.sql` read was not recorded).
 - [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
       passed every step, the deploy's migration applied `AddCommonItems` and its smoke test passed; `/` serves this
       build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with and without
@@ -2159,6 +2217,12 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       Notes, then set T06's `status` here and its stories' to `done` together, ticking their criteria and leaving
       S01.03.01's Content and copy criterion open for T07's parts, with a Note in S01.03.01, dated, naming T07 and
       those parts (Notes, *What T07 builds instead*), as T03 left its hand-offs open.
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T06's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -2166,7 +2230,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
 
 ```yaml
 id: T07
-status: doing
+status: done
 release: R1
 lane: B
 size: M
@@ -2305,6 +2369,10 @@ group; Every note stays first and fixed.
     no audit event and keeps every value given, and says that a test that adds a group through
     `POST /api/admin/common-item-groups` and finds where it lands works in an organisation of its own, as
     `AddCommonItemGroupEndpointTests` does, and that one adding a group to A that way reads that group's events alone.
+- 25 October 2026: closed out; merged in PR #62 (CI run 39126489386 and Deploy run 39127346700 on 9fed807 passed).
+  S01.03.05 to S01.03.08 are done, S01.03.01's Content and copy criterion is closed with a Note, and S01.03.07's Note
+  names T13 for the note side. The by-hand checks are ops/first-use-in-test.md steps 50 to 52, with steps 44 and 45. The
+  after-deploy step was not run (see it).
 
 ### Steps
 
@@ -2471,6 +2539,12 @@ group; Every note stays first and fixed.
       here and its stories' to `done` together, ticking their criteria, with a dated Note in S01.03.07 naming T13 for
       the note side (Notes), and close S01.03.01's Content and copy criterion, which T06 left open for this task's
       parts, with a dated Note there.
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T07's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -2478,7 +2552,7 @@ group; Every note stays first and fixed.
 
 ```yaml
 id: T08
-status: doing
+status: done
 release: R1
 lane: C
 size: L
@@ -2748,6 +2822,10 @@ lets workers write only today's note, using the Melbourne date.
   `CK_CommonItemGroup_EveryNoteActive` line is wrapped at 120 characters as `CK_Note_Status`'s is.
   `infra/sql/check-database.sql` lists both branches' tables, migrations and denies, with B7 15, B8 6 and D3 9, which
   `CheckDatabaseScriptTests` passes, and T08's by-hand steps are 46 to 49.
+- 25 October 2026: closed out; merged in PR #61 (CI run 39110313544 and Deploy run 39111013857 on 06f47fc passed).
+  S02.01.01, S02.01.02, S02.02.03 and S02.02.07 are done; S02.02.02 was done already (T21). What it handed to T09 and
+  later is in the stories' Notes. The by-hand checks are ops/first-use-in-test.md steps 46 to 49. The after-deploy step
+  was not run (see it).
 
 ### Steps
 
@@ -2920,7 +2998,7 @@ lets workers write only today's note, using the Melbourne date.
       note for Jane Citizen at 9:14 am. Only Alex P. can finish it." on an earlier one; the lists change keeping the
       text and a listed goal's tick, dropping an archived goal's, and the next `PUT` sending the new `listsVersion`;
       and focus kept unless the focused box went.
-- [ ] Prove Today and the note form end to end and bring the documents into line: `tests/e2e/today.ts` and
+- [x] Prove Today and the note form end to end and bring the documents into line: `tests/e2e/today.ts` and
       `tests/e2e/notes.ts`, which answer `/api/today`, the participant header and the draft's `GET` and `PUT` in the
       browser from data in memory, described in tests/README.md beside `serveParticipants`; and `today.spec.ts` and
       `note-form.spec.ts`. Signed in for real (Notes) at 375 px, on the app's own answers: the manager adds a
@@ -2956,6 +3034,9 @@ lets workers write only today's note, using the Melbourne date.
       receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
       ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the
       `Note` `DENY DELETE`; and CI's run on the pull request passing.
+      Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #61 passed, and the
+      `AddNote` migration was read in the repository for its `DENY DELETE` on `Note` and for adding only (CI's
+      `migrate.sql` read was not recorded).
 - [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
       the CI and Deploy runs passed every step, the deploy's migration added `Note` and `NoteDraft` and its smoke test
       passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed assets
@@ -2970,6 +3051,12 @@ lets workers write only today's note, using the Melbourne date.
       deploy to the checks. Record the run IDs in Notes, then set T08's `status` here and its stories' to `done`
       together, ticking their criteria and those that T08 proves for S01.04.01 and S01.02.04, and leaving unticked,
       each with its dated Note, any part handed to a task not yet merged (Notes).
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T08's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -2977,7 +3064,7 @@ lets workers write only today's note, using the Melbourne date.
 
 ```yaml
 id: T09
-status: doing
+status: done
 release: R1
 lane: C
 size: L
@@ -3266,6 +3353,10 @@ past notes.
     written (D67), where this task builds neither (the shared address's Note above). The story gains a dated T09 Note
     saying so, pointing at participant-notes.md's *Note not found* and *Load failed* rows, and that the read view's
     axe checks cover the states that are built.
+- 25 October 2026: closed out; merged in PR #63 (CI run 39156907144 and Deploy run 39158220816 on 3b52fd2 passed).
+  S02.01.03, S02.03.01, S02.03.02 and S02.04.01 are done; S02.04.02 was done already (T21). S02.03.01's manual check
+  stays unticked, as step 54 of ops/first-use-in-test.md (step 68 repeats it with common items). The other by-hand
+  checks are steps 53 and 55. The after-deploy step was not run (see it).
 
 ### Steps
 
@@ -3424,7 +3515,7 @@ past notes.
       75th opened and Back showing all 90 at once with the scroll kept and focus on the 75th; Past notes from a note
       starting at the newest 30, at the top, with the `<h1>` focused; the read view the same from Today and from Past
       notes but for the back link; and an archived participant's Actions holding Past notes.
-- [ ] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
+- [x] Prove submit, the status, the read view and Past notes end to end and bring the documents into line:
       `tests/e2e/notes.ts` and `tests/e2e/today.ts` answer `GET {base}`, `POST {base}/versions`, the history, the flag
       and Today's `note` in the browser, described in tests/README.md; and `note-form.spec.ts`, `today.spec.ts` and a
       new `past-notes.spec.ts`. Signed in for real (T08's Notes) at 375 px, on the app's own answers: the worker fills
@@ -3454,6 +3545,9 @@ past notes.
       (Notes) in the receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
       ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the four
       denies; and CI's run on the pull request passing.
+      Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #63 passed, and the
+      `AddNoteVersion` migration was read in the repository for `DENY UPDATE, DELETE` on both tables and for adding only
+      (CI's `migrate.sql` read was not recorded).
 - [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
       the CI and Deploy runs passed every step, the deploy's migration added `NoteVersion` and `NoteVersionItem` and its
       smoke test passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed
@@ -3472,6 +3566,12 @@ past notes.
       each with its dated Note, any part handed to a task not yet merged (Notes) and S02.03.01's manual check, whose
       Note names its ops/first-use-in-test.md step: only a person can prove it, and README §9 lets the story be done
       once CI and these checks pass.
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T09's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -3479,7 +3579,7 @@ past notes.
 
 ```yaml
 id: T10
-status: doing
+status: done
 release: R1
 lane: C
 size: M
@@ -3685,6 +3785,10 @@ older page is told the note has moved on, and nothing is overwritten without ask
   - ops/first-use-in-test.md step 62's two tabs could never show the takeover banner, as the first tab had not saved
     that note, and its first save is `seq` 1, which takes the note over: the first tab now saves a word before the
     second tab opens.
+- 25 October 2026: closed out; merged in PR #65 (CI run 39199110830 and Deploy run 39200750100 on 34deb30 passed).
+  S02.02.04, S02.02.05 and S02.02.06 are done. S02.02.05's and S02.02.06's manual checks stay unticked, as steps 61 and
+  59 of ops/first-use-in-test.md; the other by-hand checks are steps 58, 60 and 62. The after-deploy step was not run
+  (see it).
 
 ### Steps
 
@@ -3800,7 +3904,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
       `PUT` before `POST /api/auth/logout`; Sign out with that save failing, or meeting a `422` or a `403`, sending no
       logout, with the sentence and the button ready; Sign out after a dead end signing out; and Sign out during the
       takeover refused (Notes).
-- [ ] Prove the resilience end to end and bring the documents into line: `tests/e2e/notes.ts`'s store applies §5.6's
+- [x] Prove the resilience end to end and bring the documents into line: `tests/e2e/notes.ts`'s store applies §5.6's
       `clientId` and `seq` rules as the server does, described in tests/README.md; and `note-form.spec.ts`, with
       `sign-out.spec.ts` and `session-warning.spec.ts` where their flows are. Signed in for real (T08's Notes) at
       375 px, on the app's own answers: offline (`context.setOffline`) after typing, the indicator's exact sentence
@@ -3829,6 +3933,8 @@ older page is told the note has moved on, and nothing is overwritten without ask
       app-shell.md's naming the Sign out sentence's untrue "retrying" (Notes);
       the hand-offs (Notes) in the receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks
       (Notes) on ops/first-use-in-test.md; no migration; and CI's run on the pull request passing.
+      Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #65 passed, and the
+      PR added no migration.
 - [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
       the CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready`
       answer `200`; `/` serves this build's `index.html`, its hashed assets answering `200`; signed out,
@@ -3845,6 +3951,12 @@ older page is told the note has moved on, and nothing is overwritten without ask
       and S02.03.01, and leaving unticked, each with its dated Note, S02.02.05's and S02.02.06's manual checks, whose
       Notes name their ops/first-use-in-test.md steps (README §9), and any part handed to a task not yet merged
       (Notes).
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T10's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
@@ -3852,7 +3964,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
 
 ```yaml
 id: T11
-status: doing
+status: done
 release: R1
 lane: A
 size: M
@@ -3998,6 +4110,9 @@ the reason and when it was flagged. Only submitted flags count.
 - 19 October 2026: CI's run 39180061355 on the pull request (#64), which alone runs the SQL Server tests, passed on
   `fd1a41b`, with 2035 Vitest, 1563 xUnit and 284 Playwright tests, so step 6 is ticked. No migration was added, so
   there is no `migrate.sql` to read.
+- 25 October 2026: closed out; merged in PR #64 (CI run 39182349482 and Deploy run 39183660006 on d7155df passed).
+  S03.01.01 and S03.03.01 were done already, and the parts handed to T16 and T19 were closed there. The by-hand checks
+  are ops/first-use-in-test.md steps 56 and 57. The after-deploy step was not run (see it).
 
 ### Steps
 
@@ -4122,6 +4237,12 @@ the reason and when it was flagged. Only submitted flags count.
       then set T11's `status` here and its stories' to `done` together, ticking their criteria and leaving unticked,
       each with its dated Note, the parts handed to T19 and T16 (Notes) and the by-hand checks, whose Notes name their
       ops/first-use-in-test.md steps (Notes).
+      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
+      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
+- [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
+      every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
+      request, 25 October 2026): T11's `status` here and its stories' set to `done`, their criteria ticked where tests
+      prove them and left unticked, each with its dated Note, where only a person can prove them (Notes).
 
 ---
 
