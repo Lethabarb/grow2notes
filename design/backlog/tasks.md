@@ -288,8 +288,8 @@ with their typing kept (checked with a half-filled Invite form), and a different
   - T03's Vitest test of a Save's `401` expected the form still shown; it now expects view C over the hidden form,
     which still holds the text, with no alert, no save status and Save not busy.
 - 25 October 2026: closed out; merged in PR #56 (CI run 39036902576 and Deploy run 39037441225 on b56824c passed).
-  S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, each with
-  a Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
+  S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, both in
+  one Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
   `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18. The after-deploy
   step was not run (see it).
 
@@ -638,8 +638,9 @@ found and `403`.
     them, under T02's route-change rule.
 - 25 October 2026: closed out; merged in PR #57 (CI run 39043628375 and Deploy run 39044248123 on c6c69ff passed).
   S00.05.02, S01.02.01, S01.02.02 and S01.02.03 are done; S01.02.04 was done already (T21). The by-hand checks are
-  ops/first-use-in-test.md steps 26 to 28. A few small parts of the linked UX criteria have no automated check, named in
-  S00.05.02's Note. The after-deploy step was not run (see it).
+  ops/first-use-in-test.md steps 26 to 28. One small part of the linked UX criteria (no screen keeping its own
+  return-row variable, a review rule) has no automated check, named in S00.05.02's Note. The after-deploy step was
+  not run (see it).
 
 ### Steps
 
