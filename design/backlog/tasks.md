@@ -5559,7 +5559,7 @@ footer with "Page n of N" on every page, and file properties holding only the ti
 
 ```yaml
 id: T21
-status: new
+status: doing
 release: R1
 lane: B
 size: L
@@ -5593,6 +5593,31 @@ choose, to answer an access or correction request. The form says what to fix and
 - From T09 (19 October 2026): participant-notes.md item 11's Export record on a manager's Past notes, before Edit
   participant (S02.04.02's fourth criterion), and an archived participant's Export record, after Past notes in its
   Actions (S01.02.04), wait for this task, each with its dated Note.
+
+### Plan
+
+Planned 24 October 2026. No migration, library, download or owner question.
+
+- Outcome: `GET /api/reports/participants/{participantId}/export?from&to&format&includeHistory`, manager-only, and an
+  Export record screen at `/manage/participants/:participantId/export` with links on Participant detail and Past notes.
+- Design: one synchronous in-memory request. Checks run in order: query validation (422 keyed `from`, `to`, `format`),
+  participant lookup (plain 404), notes (404 `report.no_notes`), render, one `participant.exported` audit row, file.
+  `includeHistory` is a `bool?`; a malformed value gets the binder's 400.
+- Domain: read models `ParticipantExportModel`, `ParticipantExportNote` and `ParticipantExportVersion` (with its own
+  reviews); `ParticipantHeader.FirstNoteDate` computed on read (D80). Nothing is stored.
+- Reuse: `NoteBody` for each current block, with `VersionBody` extracted from it for earlier versions; the daily
+  report's note read, extracted as `DailyReportModel.ReadNotesAsync`; `ReportFile` moved out of the daily endpoint;
+  `NoteVersionSummary.Query` moved from the history endpoints; T17's `useDownload` and T15's `download()`.
+- Decisions where the design is silent: A89 (file layout) and A90 (request rules and audit entity), both numbered after
+  A88 and renumbered on rebase if another task lands first.
+
+### Verticals
+
+- v1: Server: export endpoint, layout, `firstNoteDate`, server tests incl. one-year timing; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R27 R28 R29 R33
+- v2: SPA: Export record screen, route, links, client handling, e2e; depends_on: v1;
+  R15 R16 R17 R18 R19 R20 R21 R22 R23 R24 R25 R26 R30 R31 R32
+- v3: Docs: A89, A90, stories, T21 Notes, ops steps from 129; depends_on: v1, v2; R34 R35
 
 ### Steps
 
