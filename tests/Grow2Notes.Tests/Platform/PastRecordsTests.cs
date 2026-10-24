@@ -212,8 +212,8 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
 
         using (var read = JsonDocument.Parse(await BodyAsync(manager, NotePath(participant.Id, first))))
         {
-            Assert.Equal(
-                PasswordSignIn.DisplayName, read.RootElement.GetProperty("author").GetProperty("displayName").GetString());
+            var name = read.RootElement.GetProperty("author").GetProperty("displayName").GetString();
+            Assert.Equal(PasswordSignIn.DisplayName, name);
         }
 
         using (var history = JsonDocument.Parse(await BodyAsync(manager, $"/api/participants/{participant.Id}/notes")))
@@ -385,8 +385,9 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
             .ToListAsync(TestContext.Current.CancellationToken);
     }
 
-    // What a refused sign-in shows a person, so that two refusals can be told apart or not.
-    private sealed record Refusal(HttpStatusCode Status, string? ContentType, string Body, bool SetsACookie)
+    // What a refused sign-in shows a person, so that two refusals can be told apart or not. A refusal may set other
+    // cookies (the passkey ceremony's is cleared); only a session cookie would sign the person in.
+    private sealed record Refusal(HttpStatusCode Status, string? ContentType, string Body, bool SetsASession)
     {
         // A problem's traceId names its request, so that it is the one member that two refusals never share.
         public static async Task<Refusal> OfAsync(HttpResponseMessage response)
@@ -400,7 +401,8 @@ public sealed class PastRecordsTests : IClassFixture<Grow2NotesFactory>, IAsyncD
                 body = problem.ToJsonString();
             }
 
-            return new(response.StatusCode, contentType, body, response.SetCookies().Count > 0);
+            var setsASession = response.SetCookies().Any(cookie => cookie.Name.Value == CookieSignIn.SessionCookie);
+            return new(response.StatusCode, contentType, body, setsASession);
         }
     }
 }
