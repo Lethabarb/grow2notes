@@ -308,6 +308,8 @@ test('history: one visit to the field adds one entry, however many dates are typ
   await page.goto('/');
   await navReport(page).click();
   await expect(page).toHaveURL(reportAddress);
+  // The shell's arrival focus on the <h1> comes first: it would take focus from the field, and end the visit.
+  await expect(heading(page)).toBeFocused();
 
   await enterDate(dateField(page), '2026-09-20');
   await expect(page).toHaveURL('/reports/daily/2026-09-20');
