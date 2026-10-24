@@ -7,7 +7,7 @@ namespace Grow2Notes.Tests.Ops;
 
 /// <summary>
 /// <c>ops/retention-list.sql</c>, the yearly list of participants whose periods for keeping records may have ended
-/// (A29, A84). Each test runs it on a migrated database of its own, so it knows every row that the script returns.
+/// (A29, A89). Each test runs it on a migrated database of its own, so it knows every row that the script returns.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class RetentionListScriptTests(SqlServerFixture sqlServer)

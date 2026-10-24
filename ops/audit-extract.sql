@@ -1,4 +1,4 @@
--- Extracts one organisation's audit log for a manager's question (design.md §5.3, A28, A85). It only reads: the
+-- Extracts one organisation's audit log for a manager's question (design.md §5.3, A28, A90). It only reads: the
 -- AuditEvent table, and the AspNetUsers and Participant tables to put names beside IDs. It writes nothing. Run it only
 -- for a request that has its row in the request record, with the IDs copied from the output of ops/find-ids.sql and
 -- never retyped.

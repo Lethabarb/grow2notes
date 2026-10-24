@@ -386,7 +386,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 2 | Audit entries for every event in §5.4 | F05.02 | Every earlier story writes its own event (DoD) | |
 | 3 | Append-only enforcement through `grow2notes_runtime` (§5.8) | F05.02 | S00.03.01, S00.03.03 and E02's migrations add the denies | |
 | 4 | Archive and deactivate flows checked end to end | F05.03 | | |
-| 5 | Written runbooks: retention and destruction (with the HPP 4.3 log and the backup note), and audit extraction for the operator (A28) | F05.04 | | Where the log is kept is an owner question (S05.04.01 Notes) |
+| 5 | Written runbooks: retention and destruction (with the HPP 4.3 log and the backup note), and audit extraction for the operator (A28) | F05.04 | | Written in T23. The log and the list are kept in the provider's records storage (A87), and the audit request record too (A90) |
 
 **design.md §14 M5 Done when**
 
@@ -395,7 +395,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 1 | A one-year export with earlier versions for one participant is generated in under 30 seconds and matches the app | F05.01 | | |
 | 2 | A test triggers each audit event type and finds its entry | F05.02 | | |
 | 3 | A test running as a member of `grow2notes_runtime` gets error 229 for `UPDATE` and `DELETE` on the append-only tables and for `DELETE` on `Note`, while deleting a `NoteDraft` still works | F05.02 | | |
-| 4 | Both runbooks are written and read by a manager | F05.04 | | |
+| 4 | Both runbooks are written and read by a manager | F05.04 | | Written in T23 (24 October 2026). The manager reads are by hand (S05.04.01 and S05.04.02 Notes; first-use step 128) |
 
 **ux/screens/record-export.md**
 
@@ -426,7 +426,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | No high or critical findings are open | F06.01 | | |
-| 2 | A restore test has been done and recorded | F06.06 | S06.03.02 (the runbook) | When production first holds a note is open (F06.06) |
+| 2 | A restore test has been done and recorded | F06.06 | S06.03.02 (the runbook) | The runbook is written (T23, A88). When production first holds a note is open (F06.06) |
 | 3 | The go-live checklist is complete and the switch-over date is recorded | F06.06 | | The date goes in [releases.md](releases.md) |
 
 **design.md §14 Go-live checklist** (short names; F06.06 holds the checklist with an owner and evidence for each line)
@@ -435,12 +435,12 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | Privacy policy updated (APP 1, HPP 5, HPP 9 wording, access and correction contact and timeframes) | F06.06 | | Checklist owner: the provider |
 | 2 | Collection notice and consent wording checked (APP 5, HPP 1.4, Practice Standards) | F06.06 | | Checklist owner: the provider |
-| 3 | Data breach response plan names Grow2Notes and the operator's contact | F06.06 | S06.06.01 (the runbook) | Checklist owner: the provider |
+| 3 | Data breach response plan names Grow2Notes and the operator's contact | F06.06 | S06.06.01 (the runbook) | Checklist owner: the provider. The runbook is written (T23); the operator's contact goes to the provider in writing (first-use step 129) |
 | 4 | Written hosting agreement between the provider and the developer's business signed (D40) | F06.06 | | Checklist owner: the owner and the provider, with a lawyer |
 | 5 | Every staff member has accepted their invite and set up MFA on their own phone; at least two managers are active | F06.06 | S06.05.02 (the first manager) | Checklist owner: the provider's managers |
 | 6 | Staff onboarding (about 30 minutes) | F06.06 | | Checklist owner: the provider |
 | 7 | Participants, goals, common items (in their groups) and guide prompts entered by one manager and checked by another | F06.06 | S06.05.02 (the organisation in production) | Checklist owner: the provider's managers |
-| 8 | Restore test of the latest production backup, recorded, copy deleted | F06.06 | S06.06.02 | Checklist owner: the operator |
+| 8 | Restore test of the latest production backup, recorded, copy deleted | F06.06 | S06.06.02 | Checklist owner: the operator. The runbook is written (T23); S06.06.02 records the test |
 | 9 | Every historical Word note gathered into organisation-controlled storage (D41), checked, then removed from personal devices (A39) | F06.06 | | Checklist owner: the provider |
 | 10 | Where the gathered Word notes are kept is written down, and the Word template stops being used from the switch-over date | F06.06 | S06.06.03 (the switch-over date) | Checklist owner: the provider |
 

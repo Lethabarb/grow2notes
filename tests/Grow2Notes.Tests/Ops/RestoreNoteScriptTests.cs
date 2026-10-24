@@ -7,7 +7,7 @@ namespace Grow2Notes.Tests.Ops;
 
 /// <summary>
 /// <c>ops/restore-note.sql</c>, which the operator runs on a restored copy and on production for the note that
-/// <c>ops/restore-check.sql</c> names (A83). Each test runs it on a migrated database of its own, with a second
+/// <c>ops/restore-check.sql</c> names (A88). Each test runs it on a migrated database of its own, with a second
 /// organisation whose rows must never come back.
 /// </summary>
 [Collection<SqlServerCollection>]
