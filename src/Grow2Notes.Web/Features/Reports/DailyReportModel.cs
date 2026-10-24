@@ -37,8 +37,7 @@ internal sealed record DailyReportModel(
         CancellationToken cancellationToken)
     {
         var rows = await (
-            from n in db.Notes
-            where n.Status == NoteStatus.Submitted && n.NoteDate == noteDate
+            from n in SubmittedOn(db, noteDate)
             join participant in db.Participants on n.ParticipantId equals participant.Id
             join author in db.Users on n.AuthorUserId equals author.Id
             orderby participant.FamilyName, participant.GivenName, participant.Id
@@ -80,6 +79,19 @@ internal sealed record DailyReportModel(
             .SingleAsync(cancellationToken);
         return new(organisationName, noteDate, asAtUtc, exportedBy, notes);
     }
+
+    /// <summary>
+    /// Whether <paramref name="noteDate"/> has a submitted note in the caller's organisation. It is <c>false</c>
+    /// exactly when <see cref="ReadAsync"/> returns <c>null</c>: both read <see cref="SubmittedOn"/>, and the joins in
+    /// <see cref="ReadAsync"/> lose no row, because a note's participant and author are in the note's own organisation
+    /// (composite foreign keys).
+    /// </summary>
+    public static Task<bool> HasNotesAsync(
+        Grow2NotesDbContext db, DateOnly noteDate, CancellationToken cancellationToken)
+        => SubmittedOn(db, noteDate).AnyAsync(cancellationToken);
+
+    private static IQueryable<Note> SubmittedOn(Grow2NotesDbContext db, DateOnly noteDate)
+        => db.Notes.Where(n => n.Status == NoteStatus.Submitted && n.NoteDate == noteDate);
 }
 
 /// <summary>

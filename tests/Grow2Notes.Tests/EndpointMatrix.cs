@@ -228,6 +228,12 @@ internal static class EndpointMatrix
         new(Get,       "/api/reports/daily/{date:isodate}/export", Unauthorized, Forbidden, OK, NotFound,
             TheDailyReportOfANoteSubmittedInA),
 
+        // Whether that day has a note (§6.5), for managers alone. It is the same call, so A's manager hears true and
+        // B's hears false, with 200 and not 404, so that nothing shows B that A has notes (§5.9 item 7). The export
+        // has one row, for Word: the PDF's refusals are DailyReportEndpointTests'.
+        new(Get,       "/api/reports/daily/{date:isodate}/has-notes", Unauthorized, Forbidden, OK, OK,
+            WhetherTheDayOfANoteSubmittedInAHasNotes, HasNotesForManagerOfAAlone),
+
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
         new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
@@ -503,10 +509,18 @@ internal static class EndpointMatrix
                 $"/api/participants/{participant.Id}/notes/{today:yyyy-MM-dd}{addressSuffix}"));
     }
 
-    // The daily report of 3 August 2026, as a Word file, asked for once the request has added to A a participant of its
-    // own, because a participant has one live note a day, with a note submitted by A's worker, as Submit leaves it. No
-    // test seeds a note of B's on that day. Its times are made up (A35).
-    private static async Task<HttpRequestMessage> TheDailyReportOfANoteSubmittedInA(EndpointCall call)
+    // The daily report of 3 August 2026, as a Word file.
+    private static Task<HttpRequestMessage> TheDailyReportOfANoteSubmittedInA(EndpointCall call) =>
+        ANoteSubmittedInAOn3August(call, "export?format=docx");
+
+    // Whether 3 August 2026 has a note.
+    private static Task<HttpRequestMessage> WhetherTheDayOfANoteSubmittedInAHasNotes(EndpointCall call) =>
+        ANoteSubmittedInAOn3August(call, "has-notes");
+
+    // The daily report's address for 3 August 2026 and the path after the date, asked for once the request has added to
+    // A a participant of its own, because a participant has one live note a day, with a note submitted by A's worker,
+    // as Submit leaves it. No test seeds a note of B's on that day. Its times are made up (A35).
+    private static async Task<HttpRequestMessage> ANoteSubmittedInAOn3August(EndpointCall call, string path)
     {
         var a = call.Seeded.A;
         var participant = await call.Services.AddParticipantAsync(a);
@@ -518,7 +532,7 @@ internal static class EndpointMatrix
                 a.WorkerId,
                 new DateTime(2026, 8, 3, 1, 14, 0, DateTimeKind.Utc),
                 new DateTime(2026, 8, 3, 6, 42, 0, DateTimeKind.Utc)));
-        return new HttpRequestMessage(call.Method, "/api/reports/daily/2026-08-03/export?format=docx");
+        return new HttpRequestMessage(call.Method, $"/api/reports/daily/2026-08-03/{path}");
     }
 
     // A's seeded participant's note form for today.
@@ -676,6 +690,36 @@ internal static class EndpointMatrix
             (Caller.ManagerOfB, true) => [$"holds the other organisation's flagged note of {participantId}"],
             _ => [],
         };
+    }
+
+    // For the has-notes check: exactly the date and the answer, true for A's manager and false for B's, whose day has
+    // no note (§5.9 item 7).
+    private static async Task<IReadOnlyList<string>> HasNotesForManagerOfAAlone(
+        HttpResponseMessage response, Caller caller, SeededOrganisations _)
+    {
+        var answer = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        var names = answer.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal).ToList();
+        var differences = new List<string>();
+        if (!names.SequenceEqual(["date", "hasNotes"]))
+        {
+            differences.Add($"has the properties {string.Join(", ", names)}, not date and hasNotes");
+        }
+
+        if (answer.TryGetProperty("date", out var date) && date.ToString() != "2026-08-03")
+        {
+            differences.Add($"names the date {date}, not 2026-08-03");
+        }
+
+        if (answer.TryGetProperty("hasNotes", out var hasNotes))
+        {
+            var expected = caller == Caller.ManagerOfA;
+            if (hasNotes.ValueKind != (expected ? JsonValueKind.True : JsonValueKind.False))
+            {
+                differences.Add($"says hasNotes {hasNotes}, not {expected.ToString().ToLowerInvariant()}");
+            }
+        }
+
+        return differences;
     }
 
     // The draft's path of the participant's note for today in Melbourne, by the app's own clock.
