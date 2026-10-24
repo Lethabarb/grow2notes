@@ -1941,7 +1941,7 @@ The pipeline's identity has Contributor on its own resource group only, which ca
 
 ### 11.1 What the report is
 
-One file, Word (.docx) or PDF (D29), holding every **submitted** note for one note date, each exactly as written: goals ticked, common items ticked, and the Guided notes text (D26). Only managers can download it (D28), from the Report screen (4.7). It is never shown on screen (D43), and the app emails nothing (D30). There are no totals, counts, charts or statistics (D26), and no list of drafts (A18).
+One file, Word (.docx) or PDF (D29), holding every **submitted** note for one note date, each exactly as written: goals ticked, common items ticked, and the Guided notes text (D26). Only managers can download it (D28), from the Report screen (4.7). It is never shown on screen (D43), and the app emails nothing (D30). There are no totals, counts of notes, charts or statistics across notes (D26, A86), and no list of drafts (A18).
 
 ### 11.2 Which notes are in it
 
@@ -1960,10 +1960,10 @@ As at Fri 2 Oct 2026, 9:14 am
 Exported by Jo Smith
 ────────────────────────────────────────────────────────────────
 Sam Taylor
-Written by Priya Nair  ·  Submitted Thu 1 Oct, 4:42 pm
-Edited  ·  3 versions  ·  last change Jo Smith, Fri 2 Oct 9:01 am
+Written by Priya Nair · Submitted Thu 1 Oct, 4:42 pm
+Edited · 3 versions · last change by Jo Smith, Fri 2 Oct 2026, 9:01 am
 Flagged for manager: "Mentioned pain in his left knee after the walk."
-  To review
+To review
 
 Goals
   ☑ Catch the 903 bus to the library on his own
@@ -1988,13 +1988,13 @@ Guided notes
 | Element | Shows | Rules |
 |---|---|---|
 | Participant | Full name | Archived participants still appear when they have a note for that day. |
-| Written by | The note's author | For a past-day note: "Past-day note, written by Jo Smith (manager) on Sat 3 Oct 2026, 10:14 am" (A11). |
+| Written by | The note's author | For a past-day note, the same line starts "Past-day note, written by Jo Smith (manager) on Sat 3 Oct 2026, 10:14 am" and keeps " · Submitted …" after it (A11, A84). |
 | Submitted | Day and time of version 1, in Melbourne, without the year (A79) | One shape for every note, so a note first submitted on a later day already shows its own date: "Submitted Thu 1 Oct, 4:42 pm", "Submitted Fri 2 Oct, 8:05 am". |
 | Goals | Every goal in the note's snapshot, in order, ticked or not ticked | The wording as it was when the note was written (A3). "No goals set" if there were none. |
 | Common items | The Every note group, then each group picked on the note, each under its group name in the configured order, with every item in it ticked or not ticked (D47) | Groups not picked do not appear. Group names and wording as they were when the note was written (A3). An Every note group with no items is left out. "No common items set" if no group is shown. |
 | Guided notes | The text exactly as written, line breaks kept | Guide prompts are never shown; they were placeholders (D34). Never empty, because submit requires text. |
-| Flag | Only when the note has been flagged: the reason (from the flagged version), "(flag removed in a later edit)" where that applies, then "To review" or "Reviewed by Jo Smith, Fri 2 Oct 9:30 am" with any comment | No flag line otherwise. |
-| Edited | Only when there is more than one version: "Edited · N versions · last change by <name>, <time>" | The block always shows the **current** version (A18). |
+| Flag | Only when the note has been flagged: the reason (from the flagged version) in quotation marks, "(flag removed in a later edit)" after it where that applies, then on the next line "To review" or "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", then "Comment: …" if the review has one (A82, A84) | No flag line otherwise. The comment keeps its line breaks. |
+| Edited | Only when there is more than one version: "Edited · N versions · last change by <name>, <date and time>", always dated with the year (A83) | The block always shows the **current** version (A18). |
 
 ### 11.4 Empty day
 
@@ -2014,7 +2014,7 @@ Both files have the same content and order (11.3). One `DailyReportModel` feeds 
 | Footer, every page | "Confidential: health information. Copy exported from Grow2Notes by Jo Smith, Fri 2 Oct 2026, 9:14 am. The record in Grow2Notes is authoritative. Page 3 of 7" | Same, using PAGE and NUMPAGES fields |
 | Ticks | ☑ / ☐ as text characters | ☑ / ☐ as text, not content controls, so the file reads as a record rather than a form |
 | File name | `daily-notes_2026-10-01.pdf` | `daily-notes_2026-10-01.docx` |
-| Metadata | Title and organisation only; no participant names | Same |
+| Metadata | Title "Daily progress notes: Thu 1 Oct 2026" and the organisation (the Subject property); no participant names (A85) | Same title; the organisation is the Company property (A85) |
 
 - **Libraries:** PDFsharp-MigraDoc and the Open XML SDK (§7.5). MigraDoc does no per-character font fallback, so an M4 test checks that every character in a rendered report exists in the embedded font. A character the font cannot draw, such as an emoji, is printed as the replacement mark U+FFFD in the PDF only; the Word file keeps the text as written (A59).
 - **Files are not stored:** each file is generated on request and sent straight to the manager's browser (A19). Each download is audited with who, when, which date and which format.
@@ -2166,6 +2166,11 @@ Small decisions the design had to make that decisions.md does not cover. The own
 | A79 | The Submitted line and the As at line in the files | The Submitted line always shows the Melbourne day and time of version 1, as "Thu 1 Oct, 4:42 pm", so a note first submitted on a later day already shows its own date. T20 checks this as the submitted-next-day marker and adds no other wording. "As at" uses the shape with the year, "Fri 2 Oct 2026, 9:14 am". The by-line separator is " · " with single spaces, as in the read view's byline; §11.3's code block shows two spaces, which is only visual spacing. §11.3 had one example of each shape and a rule that showed the time alone on the note's own date, and the time alone says something false about a note first submitted the next day. Taken by the developer on 24 October 2026 (T15, S04.01.01); the owner may overturn it. |
 | A80 | The download's file name header | The export answers with both `filename` and `filename*` in `Content-Disposition`, as `TypedResults.File` writes them (file-download.md *Standard*). The name is only the date and the format, so both forms carry the same text, and the SPA reads `filename*` first, then `filename`, then its own `daily-notes_{date}.{format}`. Taken by the developer on 24 October 2026 (T15, S04.01.02); the owner may overturn it. |
 | A81 | Which characters the PDF prints, reading A59 | A character prints in the PDF when DejaVu Sans maps it in the Basic Multilingual Plane (U+0000 to U+FFFF). Every other character prints as U+FFFD, including DejaVu's own characters beyond that plane, such as the emoticon U+1F600. This keeps A59's example of an emoji typed on a phone keyboard true and does not depend on PDFsharp's handling of surrogate pairs, which could not be checked before CI. The Word file keeps the text as written. Dropping the plane limit is a one-line change in `DejaVuSans.Draws`; the owner may prefer it (T15 Notes, open question). Taken by the developer on 24 October 2026 (T15, S04.01.02); the owner may overturn it. |
+| A82 | The Reviewed line in the report files | "Reviewed by Jo Smith on Fri 2 Oct 2026, 9:30 am", always with the date and year, in A74's one date-and-time format. This is M3's "Reviewed by … on …" and answers the open question in review-panel.md. A comment follows on the next line as "Comment: …", with its line breaks kept, as on the note screen. Taken by the developer on 24 October 2026 (T20, S04.01.04); the owner may overturn it. |
+| A83 | The Edited line in the report files | "Edited · 3 versions · last change by Jo Smith, Fri 2 Oct 2026, 9:01 am", always with the date and year and keeping "by". microcopy.md's reference-day rule is for screens; a file is read on any day, so its times carry the date. Taken by the developer on 24 October 2026 (T20, S04.01.04); the owner may overturn it. |
+| A84 | Where each part of a note sits in the report files | The order of §11.3's layout example, not of its element table: the byline, Edited, the flag line, its "To review" or "Reviewed by" line, an optional Comment, then Goals, Common items and Guided notes. A past-day note keeps the one-line byline, "Past-day note, written by Jo Smith (manager) on Fri 2 Oct 2026, 8:10 am · Submitted Fri 2 Oct, 8:20 am"; "(manager)" is constant, as only a manager can start a past-day note (D35). "(flag removed in a later edit)" follows the quoted reason. The status and comment lines are not indented. Taken by the developer on 24 October 2026 (T20, S04.01.04); the owner may overturn it. |
+| A85 | The files' title and properties | Both files are titled "Daily progress notes: Thu 1 Oct 2026", the running header's words. The organisation is Word's Company property and the PDF's Subject, as neither format has an organisation field. No author, creator or last-modified-by names a person. Taken by the developer on 24 October 2026 (T20, S04.01.05); the owner may overturn it. |
+| A86 | What "no counts" means in the report | M4's "no counts" (D26, A18) means no totals, counts of notes or statistics across notes. It does not forbid the version count in a note's own Edited line (A83). Taken by the developer on 24 October 2026 (T20, S04.01.04); the owner may overturn it. |
 
 ---
 
