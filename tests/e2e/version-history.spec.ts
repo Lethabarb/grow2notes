@@ -2,6 +2,7 @@ import type { Page, Route } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { expectNothingKept } from './kept.ts';
 import { scrollsSideways, setTextTo200Percent, shownText, systemColour } from './layout.ts';
 import { hiddenLiveRegions, watchLiveRegions } from './liveRegions.ts';
@@ -505,4 +506,21 @@ test('both pages, while they load and when they do not, pass axe', async ({ page
   await expect(loadLine(page)).toContainText('did not load: no connection. Try again.');
   await expect(main(page).getByRole('button', { name: 'Try again' })).toBeVisible();
   await expectAxeToPass(page);
+});
+
+// Both pages' foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+test('page A, the version list, passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, listAddress);
+  await expect(rows(page)).toHaveCount(3);
+
+  await expectFoundationsToPass(page);
+});
+
+test('page B, an earlier version that was flagged, passes the foundations', async ({ page }) => {
+  test.slow();
+  await open(page, versionAddress(2));
+  await expect(lineStarting(page, /^Flagged/)).toBeVisible();
+
+  await expectFoundationsToPass(page);
 });

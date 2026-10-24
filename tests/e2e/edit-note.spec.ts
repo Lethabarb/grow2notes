@@ -2,6 +2,7 @@ import type { Page, Response } from '@playwright/test';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectStops } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus } from './goals.ts';
 import { savedPrompts } from './guidePrompts.ts';
 import { expectNothingKept } from './kept.ts';
@@ -476,4 +477,23 @@ test('the keyboard alone goes through the form, Save changes and Cancel, and the
   await page.keyboard.press('Enter');
   await expect(heading(page)).toBeFocused();
   await expect(heading(page)).toHaveText(/^Editing submitted note \(version 3\) /);
+});
+
+// The edit form's and the cannot-edit page's foundations (T26), each in a test of its own, as the call changes the text
+// size and spacing for good. The top bar is the one element allowed to stay pinned, on a window taller than 30rem.
+test('the edit form passes the foundations', async ({ page }) => {
+  test.slow();
+  await openEdit(page, janesNote({ edited: true }));
+  await box(page).fill(editedText);
+  await expect(saveStatus(page)).toHaveText(savedAtFourTwelve);
+
+  await expectFoundationsToPass(page, { topBar: true });
+});
+
+test('the cannot-edit page passes the foundations', async ({ page }) => {
+  test.slow();
+  await openRead(page, janesNote(), riley, editAddress);
+  await expect(heading(page)).toHaveText('You cannot edit this note');
+
+  await expectFoundationsToPass(page);
 });
