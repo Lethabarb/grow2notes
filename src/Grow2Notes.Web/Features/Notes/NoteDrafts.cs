@@ -393,23 +393,25 @@ internal sealed class NoteDrafts(
     // while it is not, as an unflagged note has no reason (§5.3).
     private static string? FlagReasonOf(DraftSaveRequest request) => request.IsFlagged ? request.FlagReason : null;
 
-    // §5.5 item 4's rules for creating a note, in its order: no date after today in Melbourne, for anyone; no day
-    // before it but by a manager; no archived participant.
+    // §5.5 item 4's rules for creating a note, in its order: no archived participant, whatever the date or role; no
+    // date after today in Melbourne, for anyone; no day before it but by a manager.
     private async Task<ErrorCode?> StartRefusalAsync(
         Actor actor, ParticipantStatus status, DateOnly noteDate, CancellationToken cancellationToken)
     {
+        if (status == ParticipantStatus.Archived)
+        {
+            return ErrorCode.ParticipantArchived;
+        }
+
         var today = clock.Today();
         if (noteDate > today)
         {
             return ErrorCode.FutureDate;
         }
 
-        if (noteDate < today && !await StoredRole.IsManagerAsync(db, actor, cancellationToken))
-        {
-            return ErrorCode.PastDateManagerOnly;
-        }
-
-        return status == ParticipantStatus.Archived ? ErrorCode.ParticipantArchived : null;
+        return noteDate < today && !await StoredRole.IsManagerAsync(db, actor, cancellationToken)
+            ? ErrorCode.PastDateManagerOnly
+            : null;
     }
 
     // Whether a new note's form opens (A65): never for a date after today, and for a day before yesterday only to a
