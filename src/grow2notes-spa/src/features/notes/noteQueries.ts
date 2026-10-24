@@ -10,6 +10,8 @@ export type ParticipantHeader = {
   givenName: string;
   familyName: string;
   status: ParticipantStatus;
+  /** The date of their earliest submitted note, or null when they have none: Export record's From date (D80). */
+  firstNoteDate: string | null;
 };
 
 /** An item of a list, a goal or a common item: its wording as the form shows it, and whether it is ticked. */
