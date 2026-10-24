@@ -922,11 +922,11 @@ neither can be undone on a page, and it leaves the page at 640x400 with 200% spa
 sideways (`scrollsSideways`, WCAG 1.4.10), with the message `sideways scroll at 320 px wide (WCAG 1.4.10)`, then
 puts the window and the scroll back as the test left them, runs axe at 375 px and at 1280 px, and leaves the page at
 1280x800. It puts them back because, without that, two states of the note form (a group picked, and the dead end after
-midnight) failed axe's `target-size` rule at 375 px or 1280 px, the reflow having moved what the rule saw. So every state that a test checks with axe also
-reflows at the narrowest phone's width, and a test that adds a state with `expectAxeToPass` gets the check without
-asking for it. The check measures the page's own width only; `expectToFit` in `expectFoundationsToPass` also looks
-inside the page, and fits the real zoom sizes. A test that asserts nothing but 320 px sideways scroll is no longer
-written.
+midnight) failed axe's `target-size` rule at 375 px or 1280 px, the reflow having moved what the rule saw. So
+every state that a test checks with axe also reflows at the narrowest phone's width, and a test that adds a state with
+`expectAxeToPass` gets the check without asking for it. The check measures the page's own width only;
+`expectToFit` in `expectFoundationsToPass` also looks inside the page, and fits the real zoom sizes. A test that
+asserts nothing but 320 px sideways scroll is no longer written.
 
 ### `key-flows.spec.ts`: the eight flows of design.md section 4.13, by keyboard alone
 
