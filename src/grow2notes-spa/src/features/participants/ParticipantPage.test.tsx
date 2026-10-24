@@ -1354,7 +1354,7 @@ async function openArchivedJane(): Promise<Router> {
 }
 
 describe('Archive participant', () => {
-  // participants.md B7: the links to other screens first, Past notes, Write past-day note and Export record, then a rule.
+  // participants.md B7: the links to other screens first (Past notes, Write past-day note, Export record), then a rule.
   it('is in Actions under Details, after Past notes and a rule, its empty alert above it, in Tab order', async () => {
     await openJane();
 

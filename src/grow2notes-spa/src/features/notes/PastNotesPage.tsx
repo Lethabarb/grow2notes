@@ -112,11 +112,11 @@ function tagsOf(note: PastNote): TagKind[] {
 /**
  * The list once loaded (participant-notes.md components 3 to 7): the `<h1>`, the caption "Past notes" and the name as
  * stored, never translated; for a manager alone, Write past-day note, unless the participant is archived, Export
- * record and Edit participant, there even with no notes; then the notes, newest first, 30 at a time with Show older, or "No notes yet
- * for Jane Citizen.". Each row's link names the note's date alone and opens the note, which shows what this person may
- * see of it, as the list cannot tell; its status and author describe it, and Flagged too on a submitted note whose
- * current version is flagged, then, on a manager's list, To review or Reviewed, then Edited when it has more than one
- * version, never on a draft.
+ * record and Edit participant, there even with no notes; then the notes, newest first, 30 at a time with Show older,
+ * or "No notes yet for Jane Citizen.". Each row's link names the note's date alone and opens the note, which shows
+ * what this person may see of it, as the list cannot tell; its status and author describe it, and Flagged too on a
+ * submitted note whose current version is flagged, then, on a manager's list, To review or Reviewed, then Edited when
+ * it has more than one version, never on a draft.
  */
 function Loaded({ participant, notes, isManager }: LoadedProps) {
   const name = fullName(participant);

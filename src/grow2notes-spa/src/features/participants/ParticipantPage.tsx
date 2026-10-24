@@ -324,11 +324,11 @@ type ParticipantProps =
  *
  * An archived participant's page is read-only (participants.md B3, *Archive and Restore*): the archived notice under
  * the `<h1>`, with Restore, then Details as a summary list, their goals as text alone, and Actions with Past notes
- * and Export record, as an archived participant's notes are kept (design.md §3.7). Archive participant, with no dialog, turns the
- * page read-only, dropping what was typed (participants.md open question 3), and focuses the notice, as its button has
- * gone; Restore turns it back into the form, filled in afresh, and focuses the `<h1>`. A press refused as stale reads
- * the list again: when that finds the status changed already, by someone else, the page simply shows it, as that
- * action's success does; otherwise the alert above the button says so.
+ * and Export record, as an archived participant's notes are kept (design.md §3.7). Archive participant, with no dialog,
+ * turns the page read-only, dropping what was typed (participants.md open question 3), and focuses the notice, as its
+ * button has gone; Restore turns it back into the form, filled in afresh, and focuses the `<h1>`. A press refused as
+ * stale reads the list again: when that finds the status changed already, by someone else, the page simply shows it,
+ * as that action's success does; otherwise the alert above the button says so.
  */
 function Participant({ participant, onAdded }: ParticipantProps) {
   const me = useMe();
