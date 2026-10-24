@@ -310,24 +310,6 @@ test('history: one visit to the field adds one entry, however many dates are typ
   await expect(page).toHaveURL(reportAddress);
   // The shell's arrival focus on the <h1> comes first: it would take focus from the field, and end the visit.
   await expect(heading(page)).toBeFocused();
-  page.on('console', (message) => console.log(`DEBUG ${message.text()}`));
-  await page.evaluate(() => {
-    const note = (text: string) => console.log(`${text} at ${Math.round(performance.now())}`);
-    for (const type of ['focusin', 'focusout']) {
-      document.addEventListener(type, (event) => {
-        const target = event.target as HTMLElement;
-        const related = (event as FocusEvent).relatedTarget as HTMLElement | null;
-        note(`${type} ${target.localName} related ${related?.localName ?? 'null'}`);
-      }, true);
-    }
-    for (const method of ['pushState', 'replaceState'] as const) {
-      const original = history[method].bind(history);
-      history[method] = (state: unknown, unused: string, url?: string | URL | null) => {
-        note(`${method} ${String(url)}`);
-        original(state, unused, url);
-      };
-    }
-  });
 
   await enterDate(dateField(page), '2026-09-20');
   await expect(page).toHaveURL('/reports/daily/2026-09-20');

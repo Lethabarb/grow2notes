@@ -223,9 +223,10 @@ function DailyReport({ date, today }: { date: string; today: string }) {
               aria-invalid={error !== undefined || undefined}
               aria-describedby={error === undefined ? 'report-date-status' : 'report-date-error'}
               onFocus={(event) => {
-                // The browser's date field has a focus stop for each part of the date. Moving between them is still
-                // one visit: the event's related target is then the field itself, retargeted out of its shadow tree.
-                if (!event.currentTarget.contains(event.relatedTarget)) {
+                // Chromium fires this as focus moves between the parts of the date, and again after a re-render, with
+                // the part it left, in the field's own shadow tree, as the related target. That is the same visit.
+                const left = event.relatedTarget?.getRootNode();
+                if (!(left instanceof ShadowRoot && left.host === event.currentTarget)) {
                   pushedThisVisit.current = false;
                 }
               }}
