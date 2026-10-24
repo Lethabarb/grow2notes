@@ -6,6 +6,7 @@ import { savedPrompts, servePrompts } from './guidePrompts.ts';
 import { manager, serveMe, worker, type Me } from './me.ts';
 import { notesStore } from './notes.ts';
 import { participants, serveParticipants } from './participants.ts';
+import { serveHasNotes } from './report.ts';
 import { serveReviews } from './reviews.ts';
 import { people, serveUsers } from './users.ts';
 
@@ -223,6 +224,7 @@ test('the walks mark the nav, name no one in titles, and keep no app state in hi
   // requests, answered in the browser with no flags and made-up people, groups and prompts, as no made-up manager has a
   // session.
   await serveReviews(page, notesStore({ today: manager.today, participants }));
+  await serveHasNotes(page);
   await serveParticipants(page, participants);
   await serveCommonItems(page, [everyNote]);
   await servePrompts(page, savedPrompts);

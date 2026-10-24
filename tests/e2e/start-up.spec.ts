@@ -3,6 +3,7 @@ import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { answerMe, failMe, holdMe, manager, serveMe, worker } from './me.ts';
 import { notesStore } from './notes.ts';
+import { serveHasNotes } from './report.ts';
 import { serveReviews } from './reviews.ts';
 
 // The start-up's loading line and messages, the refresh of /api/auth/me and the crash pages in the published app
@@ -202,6 +203,7 @@ test('/api/auth/me is asked once at start-up, per nav link and per focus, and ne
   await page.clock.install();
   await serveMe(page, manager);
   await serveReviews(page, notesStore({ today: manager.today, participants: [] }));
+  await serveHasNotes(page);
   await page.goto('/');
   await expect(heading(page)).toContainText('Today');
   await expectSent(1);
