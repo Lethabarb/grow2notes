@@ -78,6 +78,9 @@ const screenAnswers: Readonly<Record<string, unknown>> = {
     participants: participants.map(({ id, givenName, familyName }) => ({ id, givenName, familyName, note: null })),
   },
   '/api/me/drafts': [],
+  // The Report screen's has-notes checks, for the days its tests open.
+  '/api/reports/daily/2026-10-01/has-notes': { date: '2026-10-01', hasNotes: true },
+  '/api/reports/daily/2026-09-30/has-notes': { date: '2026-09-30', hasNotes: true },
   '/api/admin/users': users,
   '/api/admin/participants?includeArchived=true': participants,
   '/api/admin/guide-prompts': { text: 'Mood and wellbeing today?' },
@@ -294,6 +297,24 @@ describe('Daily report', () => {
     expect(document.title).toBe('Grow2Notes – Daily report');
     expect(currentItems()).toEqual(['Report page']);
   });
+
+  it("replaces /reports/daily with today's, so that Back does not return to it", async () => {
+    serveMe(manager);
+    const router = renderApp('/reports/daily');
+    await settle();
+
+    expect(router.state.location.pathname).toBe('/reports/daily/2026-10-01');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveAccessibleName('Daily report');
+  });
+
+  it.each(['2026-02-29', '2026-13-45'])('shows Page not found for %s, which is no date', async (date) => {
+    serveMe(manager);
+    renderApp(`/reports/daily/${date}`);
+    await settle();
+
+    expectPageNotFound();
+  });
 });
 
 // A note's version history, both of whose pages are manager screens, and where it sits.
@@ -304,6 +325,7 @@ const pastDayNotePath = `/manage/participants/${participants[0].id}/past-day-not
 describe('Page not found', () => {
   it.each([
     { me: worker, path: '/flagged' },
+    { me: worker, path: '/reports/daily' },
     { me: worker, path: '/reports/daily/2026-10-01' },
     { me: manager, path: '/no-such-page' },
     { me: worker, path: '/no-such-page' },
@@ -382,7 +404,7 @@ function madeUpSegment(segment: string): string {
     return segment;
   }
 
-  return /date$/i.test(segment) ? '2026-09-30' : '4e7a2c1b-8d35-4f60-9b1e-2a6c0d5f8e73';
+  return /date\??$/i.test(segment) ? '2026-09-30' : '4e7a2c1b-8d35-4f60-9b1e-2a6c0d5f8e73';
 }
 
 /** Every address that a route of `table` matches, with made-up IDs and dates for its parameters. */

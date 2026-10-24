@@ -7,8 +7,24 @@ export const strings = {
   mainNavigation: 'Main',
   /** The main navigation's items (app-shell.md component 2b), in design.md §4.0's words. */
   navItem: { today: 'Today', flagged: 'Flagged', report: 'Report', manage: 'Manage' },
-  /** The Report screen's Download buttons (daily-report.md component 6), Word first, and the busy label. */
-  report: { downloadWord: 'Download Word', downloadPdf: 'Download PDF', downloading: 'Downloading…' },
+  /** The Report screen's date field and steps, its Download buttons (daily-report.md), Word first, and its lines. */
+  report: {
+    date: 'Date',
+    previousDay: 'Previous day',
+    nextDay: 'Next day',
+    previousGlyph: '‹',
+    nextGlyph: '›',
+    enterADate: 'Enter a date',
+    dateNotFuture: 'Date must be today or in the past',
+    downloadWord: 'Download Word',
+    downloadPdf: 'Download PDF',
+    downloading: 'Downloading…',
+    tooManyDownloads: 'Not downloaded: too many downloads in the last minute. Wait a minute, then try again.',
+    preparing: {
+      docx: 'Preparing the Word file… Keep this page open.',
+      pdf: 'Preparing the PDF file… Keep this page open.',
+    },
+  },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
   /** The Account panel's Sign out button (component 2d). */

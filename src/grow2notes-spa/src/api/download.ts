@@ -11,14 +11,16 @@ const revokeAfterMs = 60_000;
  * Fetches a file and saves it through the browser (design.md A78, file-download.md *Save step*): the bytes as a `blob:`
  * URL of this origin, and a hidden `<a download>` with no `target`, which WebKit would turn into a blank tab
  * (daily-report.md component 6), clicked and removed. The name is the one in the answer's `Content-Disposition`,
- * `fallbackName` when it has none. Fails as `apiFile()` does; a `signal` abort is rethrown as it came.
+ * `fallbackName` when it has none; the promise gives that name. Fails as `apiFile()` does; a `signal` abort is rethrown as
+ * it came.
  */
-export async function download(path: string, fallbackName: string, signal: AbortSignal): Promise<void> {
+export async function download(path: string, fallbackName: string, signal: AbortSignal): Promise<string> {
   const { body, headers } = await apiFile(path, { timeoutMs: downloadTimeoutMs, signal });
   const url = URL.createObjectURL(body);
   const link = document.createElement('a');
   link.href = url;
-  link.download = nameFrom(headers.get('Content-Disposition')) ?? fallbackName;
+  const name = nameFrom(headers.get('Content-Disposition')) ?? fallbackName;
+  link.download = name;
   link.rel = 'noopener';
   link.hidden = true;
   document.body.append(link);
@@ -27,6 +29,7 @@ export async function download(path: string, fallbackName: string, signal: Abort
   setTimeout(() => {
     URL.revokeObjectURL(url);
   }, revokeAfterMs);
+  return name;
 }
 
 // The file name in a `Content-Disposition` (RFC 6266): `filename*`, percent-encoded UTF-8 (design.md A80), before

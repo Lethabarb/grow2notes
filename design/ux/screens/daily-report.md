@@ -14,6 +14,15 @@ still needs the owner's approval.
 HTML, MDN, framework documentation · [Convention] established design systems · [Opinion] reasoned judgement. The full
 evidence sits in each component file; only the load-bearing citations are repeated here.
 
+**Built in T15 and T17 (24 October 2026).** T15 built the two download buttons and the failure line; T17 built the rest.
+Where T17 changed what T15 built, the section says so: the route's optional date and the arrival rules (T15 showed a
+"something went wrong" line for a date that was not yyyy-MM-dd, and this screen shows Page not found for a date that is
+not real, or before 1900, A88); the date field, the two step links, the date status line and the download status line,
+which are new; a `404 report.no_notes` now writes the empty answer into the has-notes cache and shows the empty-day
+sentence with both buttons unavailable, where T15 showed it as the failure line; both buttons are unavailable on an
+empty day and while the field is in error; and the Tab order, which is the field, Previous day, Next day, Download
+Word, Download PDF, where T15's was the two buttons alone.
+
 ---
 
 ## Purpose and who uses it
@@ -119,10 +128,13 @@ The same screen on **today, with no submitted notes yet** (design.md §4.7 empty
   `--space-3`; between the two download buttons the shared `ButtonGroup` gap (1rem). Empty live regions take no space
   (`:empty { margin: 0 }`, never `display: none`).
 - Tap targets: field, step links and download buttons all `--target-button`, `max(3rem, 48px)`.
-- **Step links fit test:** each link is `flex: 1 1 auto`, so at 375 px "‹ Previous day" and "Next day ›" share a row,
+- **Step links fit test:** each link is `flex: 1 1 10rem`, with a `--space-3` (0.75 rem) gap, so at 375 px "‹ Previous day" and "Next day ›" share a row,
   and at 320 px or 200% text they stack full width, still in DOM order. A label never wraps inside a half-width button
   and nothing scrolls sideways (SC 1.4.10). Their inline padding is `--space-3` (12 px), not the shared 20 px, so the
-  pair fits on one row at 375 px [Opinion: arithmetic at 18 px bold; check on a device].
+  pair fits on one row at 375 px [Opinion: arithmetic at 18 px bold; check on a device]. The basis of 10 rem (160 px)
+  is not `auto`, so it beats the button's phone width of 100%: two of them and the gap are 332 px, which fit the 343 px
+  of content at 375 px and not the 288 px at 320 px, where they stack (T17: the wrap is deterministic, with no
+  tuning).
 
 ---
 
@@ -175,7 +187,7 @@ Each entry links to its component spec and gives only what is specific to this s
 Specs: [app-shell-nav.md](../components/app-shell-nav.md), [foundations.md](../components/foundations.md),
 [empty-loading-error.md](../components/empty-loading-error.md).
 
-- **Route:** `/reports/daily/:date`, a `YYYY-MM-DD` Melbourne date (design.md §4.7: "a date only, so back, forward and
+- **Route:** `/reports/daily/:date?`, a `YYYY-MM-DD` Melbourne date (design.md §4.7: "a date only, so back, forward and
   bookmarks work and no personal data is in the URL").
 - **Nav:** "Report" (V) is the current item (`aria-current="page"`) for every date. Its `href` is
   `/reports/daily/${me.today}`, so the screen opens on today without a redirect entry (app-shell-nav.md).
@@ -186,7 +198,8 @@ Specs: [app-shell-nav.md](../components/app-shell-nav.md), [foundations.md](../c
 - **Arrival rules** (date-navigation.md, empty-loading-error.md):
   - `/reports/daily` with no date → replace with `/reports/daily/{me.today}`.
   - A well-formed date after `me.today` → replace with today, so a future date is never on screen or in history.
-  - Anything that is not a real `YYYY-MM-DD` (`2026-13-45`, `2026-02-29`) → "Page not found".
+  - Anything that is not a real `YYYY-MM-DD` (`2026-13-45`, `2026-02-29`), or is before 1900-01-01 (A88) → "Page
+    not found". The same rule, `isReportDate`, holds for the field, so a half-typed year never commits.
   - Workers → "Page not found" (role guard).
 - **Loading:** none of its own. The shell shows the wordmark (and "Loading…" after 1 s) until `/api/auth/me` returns;
   this screen then renders fully at once because its `<h1>`, field and links need no data.
@@ -217,9 +230,9 @@ Specs: [date-navigation.md](../components/date-navigation.md), [primary-actions.
 |---|---|
 | Element | `<a>` elements styled with the shared **secondary** button class, because each one changes the URL [Convention] Roselli, https://adrianroselli.com/2016/01/links-buttons-submits-and-divs-oh-hell.html · GOV.UK pagination uses links, https://design-system.service.gov.uk/components/pagination/ |
 | Labels | Previous day · Next day (V). A `‹` / `›` glyph sits beside each with `aria-hidden="true"`, so the accessible name is exactly the visible words (SC 2.5.3) |
-| Targets | Previous day: URL date − 1. Next day: URL date + 1. Calendar arithmetic on `YYYY-MM-DD` strings in UTC (`addDays` in `src/lib/dates.ts`), never ±86,400,000 ms, never `Date.now()`: adding a day's milliseconds goes wrong on 5 April 2026, and daylight saving starts on Sunday 4 October 2026 [Opinion, tested in Node 24 in date-navigation.md] |
-| Behaviour | Client-side push (`useLinkClickHandler` with `preventScrollReset`), so each step adds one Back entry [Research] Baymard 2020, https://baymard.com/blog/back-button-expectations. Focus stays on the link; nothing scrolls; the route is never keyed by date |
-| Previous day | Always available (there is no earliest date) |
+| Targets | Previous day: URL date − 1. Next day: URL date + 1. Calendar arithmetic on `YYYY-MM-DD` strings in UTC (`dayBefore` and `dayAfter` in `src/copy/format.ts`), never ±86,400,000 ms, never `Date.now()`: adding a day's milliseconds goes wrong on 5 April 2026, and daylight saving starts on Sunday 4 October 2026 [Opinion, tested in Node 24 in date-navigation.md] |
+| Behaviour | Client-side push (`useLinkClickHandler`; the route's shared `screenKey` keeps focus and scroll, so there is no `preventScrollReset`), so each step adds one Back entry [Research] Baymard 2020, https://baymard.com/blog/back-button-expectations. Focus stays on the link; nothing scrolls; the route is never keyed by date |
+| Previous day | Always available (there is no earliest date, A88) |
 | Next day on today (design: "disabled") | The **same `<a>` element**: no `href`, `role="link"`, `aria-disabled="true"`, `tabIndex={0}`, no click handler. Unavailable look: `--colour-surface-muted` fill, `--colour-text-secondary` label (8.1:1), 2 px **dashed** border, `cursor: not-allowed`; `GrayText` in forced colours. Enter or a click does nothing. Swapping the element or dropping `href` without `tabIndex` would drop a keyboard user's focus to `<body>` when they step onto today [Standard] HTML focus fixup, https://html.spec.whatwg.org/multipage/interaction.html · React state reset on a different element type, https://react.dev/learn/preserving-and-resetting-state · [Convention] O'Hara, https://www.scottohara.me/blog/2021/05/28/disabled-links.html |
 | Reason text for Next day | None added. The field shows the chosen date and the status line names it; design.md gives no reason string, and the meaning ("no later day") is plain from the position [Opinion] |
 | States | Default (secondary: 2 px `--colour-action` border, `--colour-action` label) · Hover (laptop: `--colour-hover` fill) · Focus (3 px outline, 2 px offset) · Active (`--colour-action-tint-pressed`, instant) · Unavailable (Next day on today only) |
@@ -246,7 +259,7 @@ Specs: [date-navigation.md](../components/date-navigation.md), [empty-loading-er
 
 Specs: [primary-actions.md](../components/primary-actions.md), [microcopy.md](../components/microcopy.md).
 
-- `<div id="report-download-alert" role="alert">`, always in the DOM, above the download status line and the
+- `<RequestAlert>` (a `<div role="alert">` with no id), always in the DOM, above the download status line and the
   download buttons (the shared order for action failures, as on Export record: alert, status, buttons). Empty and
   spaceless until a download fails.
 - Text: one sentence in the microcopy.md "Action failed" shape, bold, `--colour-error` (8.1:1); no icon, no box. The
@@ -276,7 +289,7 @@ Specs: [file-download.md](../components/file-download.md), [primary-actions.md](
 
 Spec: [file-download.md](../components/file-download.md).
 
-- `<p id="report-download-status" role="status">`, always in the DOM, directly **above** the buttons, after the
+- `<p role="status">` (no id: nothing refers to it), always in the DOM, directly **above** the buttons, after the
   failure alert: the same position as on Export record, so the line is in view whenever the buttons are.
 - Text, word for word the same shapes as Export record: "Preparing the Word file… Keep this page open." or
   "Preparing the PDF file… Keep this page open." (P; the format of the pressed button) while a download has taken
@@ -370,9 +383,15 @@ function DailyReport({ date, today }: { date: IsoDate; today: IsoDate }) {
 }
 ```
 
-`StepLink` is date-navigation.md's single-`<a>` component. `Button` needs two additions to primary-actions.md's sketch
-(see Conflicts resolved 11): a `blocked` prop (ignore presses with no visual change) and a `describedBy` that is
-merged, not replaced, when unavailable. All strings come from `src/copy` (microcopy.md).
+`StepLink` is date-navigation.md's single-`<a>` component. All strings come from `src/copy` (microcopy.md).
+
+**As built in T17**, which differs from this sketch: the screen is `DailyReportPage` in
+`src/features/reports/DailyReportPage.tsx`, and the download is `useDownload` in `src/api/useDownload.ts`, which holds
+the request and the last result and no timing (the page times the 400 ms line with `useDelayed`). `Button` needed no
+addition: `busy` with no `busyLabel` already blocks a press with no change of look (Conflicts resolved 11), and
+`aria-describedby` is already merged. The has-notes check is `hasNotesQuery`, refetched on the window's `focus` through
+`useOnWindowFocus`. The dates are `dayBefore`, `dayAfter` and `isIsoDate` in `src/copy/format.ts`, and the 1900 floor is
+the page's own `isReportDate`. Only `report-date-status` and `report-date-error` have ids.
 
 ---
 
@@ -480,9 +499,9 @@ positive `tabindex`, no custom keys.
 | Region | Role | Carries | Never carries |
 |---|---|---|---|
 | `#report-date-status` | `role="status"` (polite) | The URL date in words · "No submitted notes for …" · hidden field-error copy | Download progress or results |
-| `#report-download-alert` | `role="alert"` | The three "Not downloaded: …" sentences | Success, busy, empty-day text |
-| `#report-download-status` | `role="status"` (polite) | "Preparing the Word file… Keep this page open." (or PDF) · "… is ready. Look in your downloads." | Errors |
-| Page status region (`PageStatus`, visually hidden, app-shell.md component 3) | `role="status"` (polite) | Nothing on this screen in normal use: the downloads opt out (`announceBusy={false}`) because `#report-download-status` says the wait | Download text (never twice) |
+| The failure alert (`RequestAlert`) | `role="alert"` | The three "Not downloaded: …" sentences | Success, busy, empty-day text |
+| The download status line | `role="status"` (polite) | "Preparing the Word file… Keep this page open." (or PDF) · "… is ready. Look in your downloads." | Errors |
+| Page status region (`PageStatus`, visually hidden, app-shell.md component 3) | `role="status"` (polite) | Nothing on this screen in normal use: the downloads opt out (`announceBusy={false}`) because the download status line says the wait | Download text (never twice) |
 
 They never change at the same moment: a date change clears the two download regions silently (clearing is not
 announced) and writes only the date status. Text present at first render is not announced; the focused `<h1>` announces
@@ -649,10 +668,10 @@ is never cleared by the app) · 4.1.2 · 4.1.3. 3.3.4 does not apply: nothing is
 | 8 | **Re-keying the downloads.** file-download.md renders the download block with `key={date}`. date-navigation.md: never key anything on this screen by date. | No key. The download hook clears its messages and aborts any request when the URL date changes to a different day. | A keyed block remounts the buttons, which drops focus if a keyboard user presses browser Back (or Alt+Left) while on a download button. |
 | 9 | **A typed or picked date that is not yet committed.** date-navigation.md: downloads unavailable until the field matches the URL. primary-actions.md: a press on an unavailable control must never simply do nothing. | Buttons keep their look; a press commits the field with Enter's checks, then downloads that date (or shows the field error and focuses the field). | Avoids a 750 ms flash of the unavailable style after every pick, and a dead press when the order of blur, re-render and click differs between browsers (iOS does not focus buttons on tap; unverified detail). The rule "a press never downloads a day other than the one in the field" still holds, which is what date-navigation.md was protecting. |
 | 10 | **`aria-describedby` on the downloads.** file-download.md and primary-actions.md: only while unavailable. date-navigation.md's sketch: always. | Always, to the date status line. | On a normal day the screen reader then says which day the button downloads, a cheap guard against the wrong day; on an empty day it gives the reason. |
-| 11 | **Shared Button behaviour.** primary-actions.md's `Button` has no way to block presses without a busy label or the unavailable look (with `busy` and no `busyLabel`, its CSS hides the label), and it replaces `aria-describedby` with the reason id. | Add a `blocked` prop and merge `describedBy`. | Needed for "both buttons ignore presses during a download, only the pressed one says Downloading…" and for the permanent date description. No visible change elsewhere. |
+| 11 | **Shared Button behaviour.** primary-actions.md's `Button` has no way to block presses without a busy label or the unavailable look (with `busy` and no `busyLabel`, its CSS hides the label), and it replaces `aria-describedby` with the reason id. | Add a `blocked` prop and merge `describedBy`. (Built in T17 without either: `busy` with no `busyLabel` blocks, and `Button` already merges `aria-describedby`.) | Needed for "both buttons ignore presses during a download, only the pressed one says Downloading…" and for the permanent date description. No visible change elsewhere. |
 | 12 | **403.** file-download.md: "Only managers can download these files." empty-loading-error.md: any `403` from a manager-only request shows "Page not found". | "Page not found" via the role guard (`/me` is refreshed, the nav rebuilds). | One rule app-wide, matching the API's 404-not-403 stance (§9.2); the case only arises after a role change mid-session. |
 | 13 | **Sizes and type.** primary-actions.md's Button CSS: `2.75rem` (44 px), breakpoint `40em`. file-download.md: 48 px, weight 600, `min-inline-size: 12rem`. foundations.md: buttons `max(3rem, 48px)`, weights 400/700, breakpoint `40rem` written literally. | 48 px, weight 700, `40rem`, both download buttons at least `12rem` wide on a laptop. | foundations.md owns tokens; 600 renders as Semibold on iPhone and Bold on Android ([Standard] CSS font matching); equal widths show the two formats as equals. |
-| 14 | **Date formatters.** date-navigation.md: `formatLong` in `src/lib/dates.ts` (no non-breaking space). foundations.md: `src/lib/formatDate.ts`. microcopy.md: `dateLong` in `src/copy/format.ts` (non-breaking space). | Display: microcopy.md's `dateLong`. Arithmetic and validation: date-navigation.md's `isIsoDate` and `addDays`. | One formatter for every displayed date, with the Style Manual's non-breaking space; one place for calendar arithmetic. |
+| 14 | **Date formatters.** date-navigation.md: `formatLong` in `src/lib/dates.ts` (no non-breaking space). foundations.md: `src/lib/formatDate.ts`. microcopy.md: `dateLong` in `src/copy/format.ts` (non-breaking space). | Display: microcopy.md's `dateLong`. Arithmetic and validation: `isIsoDate`, `dayBefore` and `dayAfter` in `src/copy/format.ts` (T17). | One formatter for every displayed date, with the Style Manual's non-breaking space; one place for calendar arithmetic. |
 | 15 | **Reason for the unavailable Next day.** microcopy.md: every disabled control has a visible reason next to it. primary-actions.md: none needed. | No new text. | design.md gives no string, the field and status line show the chosen day, and "Next day" being unavailable on the latest possible day explains itself. Adding a sentence would be new copy for little gain [Opinion]. |
 | 16 | **Download timeout.** empty-loading-error.md's `api()` applies `AbortSignal.timeout(10_000)` to every request. file-download.md uses the wrapper with only an abort signal. | Downloads pass the wrapper's per-call `timeoutMs: 30_000` (now in empty-loading-error.md's `api()` sketch), plus the screen's abort signal. | M4 accepts up to 10 s for 20 notes; a 10 s cut-off would report "no connection" for a slow but working download. 30 s matches M5's export target, and Export record now passes the same option, so both download screens share one value [Opinion]. |
 | 17 | **Status line position.** file-download.md: under the buttons (this file's earlier draft). export-form.md, primary-actions.md and Export record: above the button. | Above the buttons: alert, then status line, then the downloads. | One position on both download screens (SC 3.2.4); the line stays in view with the buttons at the bottom of a phone screen. |
@@ -697,6 +716,8 @@ For the owner unless marked otherwise. None of them adds a feature.
    A (P) string added after that date still needs the owner's approval.
 2. Should the report date have an earliest allowed date (for example go-live)? design.md sets none, so none is set;
    earlier days simply show "No submitted notes for …". Dates before go-live are covered by the Word records (A39).
+   **Answered 24 October 2026 (A88):** no business lower bound. The one limit is technical: a date before 1900-01-01
+   is not a report date, so a half-typed year such as 0202 never commits, and an address with one shows Page not found.
 3. For testing (not the owner), in M4 on real devices under the production CSP: whether iPhone Safari, iPhone Chrome,
    Android Chrome and Samsung Internet save a `blob:` download (decides file-download.md's plain-link contingency);
    whether iPhone Safari's download prompt appears for a scripted click; the date field's `change` timing while typing

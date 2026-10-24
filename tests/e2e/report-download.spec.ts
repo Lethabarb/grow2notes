@@ -1,6 +1,13 @@
 import { expect, test } from './fixtures.ts';
 import { manager, serveMe } from './me.ts';
-import { recordExports, reportAddress, reportDay, serveOverHttp, serveReport } from './report.ts';
+import {
+  recordExports,
+  reportAddress,
+  reportDay,
+  serveHasNotes,
+  serveOverHttp,
+  serveReport,
+} from './report.ts';
 
 // The Report screen's two downloads in Chromium, Firefox and WebKit (daily-report.md, file-download.md *Save step*):
 // the save step is the part that differs between engines. The export is answered in the browser with made-up bytes
@@ -15,6 +22,7 @@ for (const { button, format } of [
     context,
   }) => {
     await serveMe(page, manager);
+    await serveHasNotes(page);
     await serveOverHttp(page);
     await serveReport(page);
     const sent = recordExports(page);

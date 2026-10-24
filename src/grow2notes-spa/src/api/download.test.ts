@@ -77,17 +77,19 @@ describe('download', () => {
   ])('names the file by %s', async (_case, disposition, name) => {
     fetchMock.mockResolvedValue(await file(disposition));
 
-    await download(exportPath, fallbackName, new AbortController().signal);
+    const saved = await download(exportPath, fallbackName, new AbortController().signal);
 
     expect(clicked.map((link) => link.name)).toEqual([name]);
+    expect(saved).toBe(name);
   });
 
   it('names the file by the fallback when the answer has no Content-Disposition', async () => {
     fetchMock.mockResolvedValue(await file());
 
-    await download(exportPath, fallbackName, new AbortController().signal);
+    const saved = await download(exportPath, fallbackName, new AbortController().signal);
 
     expect(clicked.map((link) => link.name)).toEqual([fallbackName]);
+    expect(saved).toBe(fallbackName);
   });
 
   it('sends a GET of the path and saves the bytes through a hidden link, appended, clicked and removed', async () => {

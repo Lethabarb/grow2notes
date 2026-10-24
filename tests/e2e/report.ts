@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 /** The day of the made-up report (daily-report.md): Thursday 1 October 2026. */
 export const reportDay = '2026-10-01';
@@ -11,7 +11,37 @@ const contentTypes = {
   pdf: 'application/pdf',
 } as const;
 
-const isExport = (url: URL) => url.pathname === `/api/reports/daily/${reportDay}/export`;
+/** The test of the URL of the made-up day's export request, for `holdNext` and `page.route`. */
+export const isExport = (url: URL) => url.pathname === `/api/reports/daily/${reportDay}/export`;
+
+/**
+ * Answers each `GET /api/reports/daily/{date}/has-notes` that the page sends from now on, in the browser, with the
+ * date and whether it is not one of `emptyDays`. Registered before the page loads in every spec that lands on the
+ * Report screen: otherwise the request reaches the app, where no made-up manager has a session, and its `401` ends the
+ * session in place.
+ */
+export async function serveHasNotes(page: Page, emptyDays: readonly string[] = []): Promise<void> {
+  await page.route('**/api/reports/daily/*/has-notes', (route) => {
+    const date = new URL(route.request().url()).pathname.split('/')[4];
+    return route.fulfill({ json: { date, hasNotes: !emptyDays.includes(date) } });
+  });
+}
+
+/**
+ * Sets the date field's value as a person's change does, in the same visit to the field if it has focus already. A
+ * script's plain assignment to a controlled input's `value` is not seen by React as a change, so the setter is the
+ * prototype's, followed by the `input` event.
+ */
+export async function enterDate(field: Locator, value: string): Promise<void> {
+  await field.evaluate((input: HTMLInputElement, typed) => {
+    if (document.activeElement !== input) {
+      input.focus();
+    }
+
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, typed);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, value);
+}
 
 /**
  * Answers each `GET /api/reports/daily/2026-10-01/export` that the page sends from now on with made-up bytes, in the
