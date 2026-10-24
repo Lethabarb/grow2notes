@@ -5422,7 +5422,10 @@ footer with "Page n of N" on every page, and file properties holding only the ti
   format, Word then PDF, through the real endpoint on a host that is already running. "Cold" is per test process: the
   PDF's font is loaded once for the whole process, so if another collection has rendered a PDF first, its timing is
   warm. The edited notes (every 5th) keep the fixture's short second-version text, as `AddVersionAsync` writes it.
-  CI timings: TIMINGS_PENDING
+  CI timings: the test passed on the pull request's run (24 October 2026), so both formats took under 10 s on a
+  shared build machine. The exact times are not in the CI log, because `dotnet test` prints no output for a passing
+  test and ci.yml sets no logger; they are in the test output only. The owner can add `--logger
+  "console;verbosity=normal"` to the Test step if the numbers are wanted, which is outside T20's files.
 - Real-device timings (laptop and phone) are pending: ops/first-use-in-test.md steps 121 and 122. Record them here.
 
 ### Plan
