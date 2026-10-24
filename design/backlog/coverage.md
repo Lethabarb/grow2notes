@@ -117,7 +117,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | A manager and a worker can each accept an invite and sign in with MFA on a phone and a laptop, in test, and sign in again a second time (both setup paths) | F00.04 | S00.06.02 (the worker's invite) | Manual check in test |
-| 2 | After deactivation, the user's next request is rejected (tested) | F00.06 | S00.04.01 (the stamp check); S05.03.02 checks it end to end at M5 | |
+| 2 | After deactivation, the user's next request is rejected (tested) | F00.06 | S00.04.01 (the stamp check); S05.03.02 checks it end to end at M5 | Proved end to end in T24 (24 October 2026) by `PastRecordsTests`' third fact; the signed-out view by `signedOutInPlace.test.tsx`; by hand, first-use step 33 |
 | 3 | A test fails the build if any `ITenantOwned` entity lacks the organisation filter; the named exceptions are listed in the test | F00.03 | | |
 | 4 | The 12-hour absolute limit and the `org_id` claim survive the per-request principal rebuild (tested) | F00.04 | | |
 | 5 | Successful and failed sign-ins appear in the audit log | F00.04 | S00.03.03 (the writer) | |
@@ -383,9 +383,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | The participant record export (date range, earlier-versions option, PDF or Word) | F05.01 | | |
-| 2 | Audit entries for every event in §5.4 | F05.02 | Every earlier story writes its own event (DoD) | |
-| 3 | Append-only enforcement through `grow2notes_runtime` (§5.8) | F05.02 | S00.03.01, S00.03.03 and E02's migrations add the denies | |
-| 4 | Archive and deactivate flows checked end to end | F05.03 | | |
+| 2 | Audit entries for every event in §5.4 | F05.02 | Every earlier story writes its own event (DoD) | Proved in T24 (24 October 2026): `AuditEventsTests` has a row for every event type, and `AuditTypesTests` fails while the rows and the constants differ |
+| 3 | Append-only enforcement through `grow2notes_runtime` (§5.8) | F05.02 | S00.03.01, S00.03.03 and E02's migrations add the denies | Proved in T24 (24 October 2026) by `RuntimeRoleTests`; the app identity's role was checked in Azure on 9 October 2026 (S00.02.02) |
+| 4 | Archive and deactivate flows checked end to end | F05.03 | | Checked in T24 (24 October 2026) by `PastRecordsTests` in CI; the by-hand checks are in `ops/first-use-in-test.md` (steps 33 to 35, 41, 45, 52 and 104), none new |
 | 5 | Written runbooks: retention and destruction (with the HPP 4.3 log and the backup note), and audit extraction for the operator (A28) | F05.04 | | Written in T23. The log and the list are kept in the provider's records storage (A89), and the audit request record too (A92) |
 
 **design.md §14 M5 Done when**
@@ -393,8 +393,8 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | A one-year export with earlier versions for one participant is generated in under 30 seconds and matches the app | F05.01 | | |
-| 2 | A test triggers each audit event type and finds its entry | F05.02 | | |
-| 3 | A test running as a member of `grow2notes_runtime` gets error 229 for `UPDATE` and `DELETE` on the append-only tables and for `DELETE` on `Note`, while deleting a `NoteDraft` still works | F05.02 | | |
+| 2 | A test triggers each audit event type and finds its entry | F05.02 | | Done in T24 (24 October 2026): `AuditEventsTests.Its_trigger_writes_exactly_one_entry_with_its_fields_and_values`, with all 41 types, and its guard in `AuditTypesTests` |
+| 3 | A test running as a member of `grow2notes_runtime` gets error 229 for `UPDATE` and `DELETE` on the append-only tables and for `DELETE` on `Note`, while deleting a `NoteDraft` still works | F05.02 | | Done in T24 (24 October 2026): `RuntimeRoleTests` (the 229 theories for `DELETE` and `UPDATE`, and the role's writes) |
 | 4 | Both runbooks are written and read by a manager | F05.04 | | Written in T23 (24 October 2026). The manager reads are by hand (S05.04.01 and S05.04.02 Notes; first-use step 130) |
 
 **ux/screens/record-export.md**

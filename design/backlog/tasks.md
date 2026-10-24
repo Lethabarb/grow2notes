@@ -2556,12 +2556,13 @@ lets workers write only today's note, using the Melbourne date.
     `startedAtUtc`, the note's `CreatedAtUtc`, as problem extensions, before any create check and writing nothing,
     whoever sends it (design.md §6.3: "Draft: only the author"). This is the usual way to meet it, more often than a
     race: a form opened before the other's first save, a stale tab, or a manager saving on a worker's draft. With no
-    live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order, `422 note.future_date`,
-    `422 note.past_date_manager_only` and `422 note.participant_archived`; the `listsVersion`, which a missing one
-    never matches, else `409 note.lists_changed`; and each ticked ID in the template, else `422 validation.failed`
-    under `tickedGoalIds`. A manager's first save for an earlier day creates the note, as §5.5 item 4 says, and T18
-    builds its screens. A save on the caller's own draft reads no `listsVersion` and checks the ticked IDs against
-    the stored snapshot. Ticks are a set, so an ID sent twice is one tick.
+    live note, a creating `PUT` checks, in turn: §5.5 item 4's rules in its order (T24, A97),
+    `422 note.participant_archived`, `422 note.future_date` and `422 note.past_date_manager_only`; the
+    `listsVersion`, which a missing one never matches, else `409 note.lists_changed`; and each ticked ID in the
+    template, else `422 validation.failed` under `tickedGoalIds`. A manager's first save for an earlier day creates
+    the note, as §5.5 item 4 says, and T18 builds its screens. A save on the caller's own draft reads no
+    `listsVersion` and checks the ticked IDs against the stored snapshot. Ticks are a set, so an ID sent twice is
+    one tick.
   - The unique index's error 2601 or 2627 on a creating `PUT` reads the live note again: the caller's own takes this
     save as an update (S02.02.07's same user on two devices), and anyone else's is the same `409`, which
     `GET {base}/draft` gives for another person's draft too.
@@ -2894,8 +2895,9 @@ lets workers write only today's note, using the Melbourne date.
 - [x] One note per participant per day, the date rules and the lists check (S02.02.07's other criteria;
       S02.02.03's second criterion; note-form.md items 17, for goals, and 18; design.md §3.2, §3.3, §5.5 items
       3 and 4, §5.7 *New draft*): the creating `PUT`'s checks in the order of Notes, each creating nothing,
-      `422 note.future_date`, `422 note.past_date_manager_only`, `422 note.participant_archived` and
-      `409 note.lists_changed`, added to `ErrorCode`; and the unique index's error taken as Notes say. Integration
+      `422 note.participant_archived`, `422 note.future_date`, `422 note.past_date_manager_only` and
+      `409 note.lists_changed` (T24, A97 put the archived refusal first), added to `ErrorCode`; and the
+      unique index's error taken as Notes say. Integration
       tests on SQL Server: a worker's first save for yesterday and for tomorrow, and a manager's for tomorrow, refused,
       and a manager's for yesterday creating the note with them as author; on a `TestClock`, a worker's template read
       at 11:58 pm and first save at 12:01 am refused, and a draft started at 11:58 pm and saved at 12:01 am keeping
@@ -5828,7 +5830,7 @@ log, and breach response, which links to the audit runbook rather than repeating
 
 ```yaml
 id: T24
-status: new
+status: done
 release: R1
 lane: A
 size: M
@@ -5860,10 +5862,94 @@ report or export.
 
 - Completes the shared audit-events test that T02 started, and adds a guard that fails the build if an event type has no
   test row or an append-only table lacks its denies. Reuses T04's session-revocation helper.
+- Precedence (R17, A97): a new note for an archived participant is refused first, with `422 note.participant_archived`
+  on any date and for either role, before the future-date and worker-date rules. This reverses T08, whose Steps record
+  the order future date, past date, archived. S05.03.01 says "any date", and the refusal that says why no note can be
+  written is the one a manager needs to see, not a date sentence. It is one return moved in
+  `NoteDrafts.StartRefusalAsync`, which also skips the role query for an archived participant, and it runs before the
+  lists' version check as before. The screens do not change: a worker cannot open a form before yesterday (A65), and the
+  SPA already maps `note.participant_archived` on any first save. The order theory in `NoteDraftEndpointsTests` has five
+  rows for the new order, and no other test relied on the old one. §5.5 item 4's lead-in is now "Rules on creation
+  (D35, §3.7)", with the archived bullet first, so the code's "in its order" comment stays true. The D86 refusal of
+  detail or goal changes to an archived participant is not added. The code and tests cite the rule, not the number, so a
+  renumber touches only design.md (§5.5 item 4, the §13 row and the intro's A-range), this file and S05.03.01's
+  Notes. A95 and A96 were taken by T25 (24 October 2026), so this is A97.
+- ops/security-review.md rows 1.2.4, 2.3.4, 8.2.2, 13.2.2, 16.2.5, 16.3.1 and 16.4.2 and the §9.4 and §9.5 lines cite
+  files that T24 changes (`NoteDrafts.cs`, `RuntimeRoleTests.cs`, `TelemetryCanaryTests.cs`, `AuditEventsTests.cs`).
+  They were re-read and none changes: the moved return touches neither the raw SQL nor the author binding, and the
+  tests only add coverage.
+- One row for each sign-in event type, through the password path (R01): `auth.signin_succeeded`, `auth.signin_failed`,
+  `auth.mfa_failed`, `auth.locked_out`, `auth.signed_out` and `auth.setup_completed`. The other triggers of those events
+  (passkey, code step, passkey setup) already have exact-entry assertions in `PasskeySignInEndpointTests`,
+  `TotpSignInEndpointTests`, `PasswordSignInLimitsTests` and `SetupPasskeyEndpointTests`. §5.4 names extra triggers
+  only for `user.setup_link_sent` (Resend invite, Reset sign-in) and `common_item.updated` (Reword, Move), which keep a
+  row each. `AuditTypesTests` fails while the event types of the rows and the constants differ, in either direction, and
+  needs no Docker. `admin.bootstrap`'s row runs on the shared database in an organisation of its own, as
+  `BootstrapCommandTests` does.
+- The WITHOUT LOGIN simplification (R14): `RuntimeRoleTests` keeps a database user WITHOUT LOGIN under EXECUTE AS, not a
+  server login. In Azure the app identity is a contained Entra database user with no server login either, and
+  permissions are checked on the database user in both places. S05.02.02's "a login" is read that way.
+- The cut re-tests live where they were built. R07, an unknown email or credential writes no audit row and telemetry
+  gets only a count: `PasswordSignInEndpointTests` and `PasskeySignInEndpointTests`. R08, a refused change writes no
+  audit row: the no-audit assertions in `UserDeactivationEndpointsTests`, `NoteDraftEndpointsTests`,
+  `NoteDraftCancelEndpointTests`, `NoteDiscardEndpointTests` and the other endpoint tests that assert it. R06, reading
+  writes no audit row: the last-event-ID checks in `NoteEndpointTests`, `NoteHistoryEndpointTests` and
+  `NoteVersionHistoryEndpointsTests`.
+- R15, the app identity's role check in Azure: done on 9 October 2026 under S00.02.02 (F00.02's notes), which found it a
+  direct member of `grow2notes_runtime` only. It is not repeated.
+- R10: the MCP events join the shared audit-events test in Release 2 (T32, S07.02.03; mcp-server.md §9), not now.
+- "Tested in the test environment" (S05.03.x) is read as CI on the SQL Server container plus the existing by-hand steps
+  in `ops/first-use-in-test.md` (15, 29 to 37 and 31's audit rows, 41, 45, 52, 104, and the archive screen-reader steps
+  27 and 28). No step is added and nothing is sent to the deployed site.
+- "Leaves Today and search" is proved by `GET /api/today` leaving the participant out: Today's search filters that list
+  in the SPA, and no search endpoint exists (`TodayPage.test.tsx`). The author's own draft stays under Your unfinished
+  drafts, as design.md §3.7 says it can still be submitted.
+- No gap was found. Reports, exports, the read view and the history do not filter on a participant's status, an item's
+  archive or a user's status, so `PastRecordsTests` passes with no app change beyond R17. The nine missing audit rows
+  and the `NoteReview` and passkey role writes were test gaps, added by v1 and v2. v1 also added two note-text canaries
+  (narrative and flag reason) to `TelemetryCanaryTests`: `participant.created` and `goal.created` carry the names and
+  the goal text by design, so the shared canary could not be asserted absent from every entry.
+- No migration, snapshot change, endpoint, SPA change or new by-hand step.
+
+### Plan
+
+- Outcome: test and guard work with one small app change (R17). No migration, snapshot change, endpoint, SPA change or
+  by-hand step. A gap a new test exposes is fixed in the same vertical with that test and recorded in the Notes.
+- Design: V1 adds the 9 missing rows to the shared audit-events test (all 41 event types then have one), a Docker-free
+  guard in `AuditTypesTests` (rows and constants must match both ways) and two note-text canaries in
+  `TelemetryCanaryTests`. V2 gives `RuntimeRoleTests` one table vocabulary (`AppendOnly`, `NeverDeleted`, derived
+  `DeleteDenied` and `UpdateDenied`), a model-only guard for `IAppendOnly` tables, and role inserts for `NoteReview`
+  and insert-then-delete for `AspNetUserPasskeys`. V3 moves the archived-participant refusal first in
+  `NoteDrafts.StartRefusalAsync` and adds `PastRecordsTests`: three facts (archive and restore a participant; archive a
+  goal, item and group; deactivate and reactivate a worker), each in an organisation of its own under a frozen clock.
+  V4 is docs.
+- Domain: none new. The WITHOUT LOGIN user under EXECUTE AS is kept (R14).
+- Reuse: `AuditEventsTests` rows and `WrittenEvent`, `PasswordSignIn`, `SetupLinks`, `CookieSignIn`,
+  `AdminCommandRuns`, `SignedInDevices` (T04), `AppWithoutDatabase`, `ProblemResponse`, `ReportText`, and the data
+  fixtures. Cut re-tests stay where they were built.
+- Decisions where design.md is silent: A97 (first planned as A95; T25 took A95 and A96) an archived participant is
+  refused first (`note.participant_archived`, on any date and for either role), which reverses T08's order.
+  "Tested in the test environment" is read as CI on the SQL Server container plus the existing by-hand steps.
+
+### Verticals
+
+- v1: Audit completeness: 9 rows, row guard, note-text canary; depends_on: none; R01 R02 R03 R04 R05 R06 R09
+- v2: Append-only permissions: derived table lists, IAppendOnly guard, review and passkey role writes; depends_on: none;
+  R11 R12 R13 R14
+- v3: Archived refusal first, plus PastRecordsTests for archive, restore and deactivate; depends_on: none; R16 R17 R18
+  R19 R20 R21 R22 R23 R24 R25 R26 R27 R28 R29 R30
+- v4: Docs: A97, §5.5 item 4, tests README, T24 and story notes, coverage.md; depends_on: v1 v2 v3; R31 R07 R08 R10 R15
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Plan: the T24 section and its requirements.
+- [x] Append-only permissions (#112; v2): `AppendOnly` and `NeverDeleted` in `RuntimeRoleTests`, the derived denies, the
+      `IAppendOnly` guard, and the `NoteReview` and passkey role writes.
+- [x] Audit completeness (#113; v1): the nine missing rows, the row guard in `AuditTypesTests`, and the note-text
+      canaries in `TelemetryCanaryTests`.
+- [x] Past records (#116; v3): the archived refusal first in `StartRefusalAsync`, the order theory's five rows, and
+      `PastRecordsTests`' three facts.
+- [x] Docs (v4): A97, §5.5 item 4, the tests README, this section, the S05.02.01 to S05.03.02 notes and coverage.md.
 
 ---
 

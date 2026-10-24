@@ -15,7 +15,7 @@ namespace Grow2Notes.Web.Features.Notes;
 /// answers <c>{savedAtUtc}</c>: <c>201</c> when it created the note, at its first save, and <c>200</c> after, also
 /// with the stored time for a save that the working copy holds already, which changes nothing (§5.6), and for the save
 /// that creates a pending edit; or, for a first save that may not start the note,
-/// <c>422 note.future_date</c>, <c>422 note.past_date_manager_only</c>, <c>422 note.participant_archived</c> or
+/// <c>422 note.participant_archived</c>, <c>422 note.future_date</c>, <c>422 note.past_date_manager_only</c> or
 /// <c>409 note.lists_changed</c>; or <c>409 note.version_conflict</c>, with no extensions, for a base that the note
 /// does not accept (§6.7); or <c>409 draft.taken_over</c> for any save but the first from a page other than the one
 /// that saved last (§5.6); or <c>422 validation.failed</c> for a field it refuses. The <c>DELETE</c>, Cancel, removes

@@ -1347,13 +1347,15 @@ public sealed class NoteDraftEndpointsTests(Grow2NotesFactory factory, SqlServer
         Assert.Equal(before, await StoredRowsAsync());
     }
 
-    // The creating save's checks in turn (T08's Notes): §5.5 item 4's rules in that item's order, then the lists'
-    // version, then the ticks. Each body breaks every check after the one that refuses it: an archived participant, no
-    // lists' version, and a ticked ID that is not one of the template's goals.
+    // The creating save's checks in turn (T08's Notes): §5.5 item 4's rules in that item's order (an archived
+    // participant, then the dates), then the lists' version, then the ticks. Each body breaks every check after the one
+    // that refuses it: a day the caller may not start, no lists' version, and a ticked ID that is not one of the
+    // template's goals.
     [Theory]
-    [InlineData(Caller.WorkerOfA, 1, true, "note.future_date")]
-    [InlineData(Caller.WorkerOfA, -1, true, "note.past_date_manager_only")]
-    [InlineData(Caller.ManagerOfA, -1, true, "note.participant_archived")]
+    [InlineData(Caller.WorkerOfA, 1, true, "note.participant_archived")]
+    [InlineData(Caller.WorkerOfA, -1, true, "note.participant_archived")]
+    [InlineData(Caller.WorkerOfA, 1, false, "note.future_date")]
+    [InlineData(Caller.WorkerOfA, -1, false, "note.past_date_manager_only")]
     [InlineData(Caller.ManagerOfA, 0, false, "note.lists_changed")]
     public async Task A_first_save_is_refused_for_the_first_check_that_it_fails(
         Caller caller, int days, bool archived, string code)
