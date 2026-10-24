@@ -22,18 +22,30 @@ internal static class ReportLayout
 
     private const string GuidedNotes = "Guided notes";
 
+    private const string FooterStart = "Confidential: health information. Copy exported from Grow2Notes by ";
+
+    private const string FooterEnd = ". The record in Grow2Notes is authoritative.";
+
+    /// <summary>The words before the page number, as both renderers print them.</summary>
+    public const string FooterPage = " Page ";
+
+    /// <summary>The words between the page number and the number of pages.</summary>
+    public const string FooterOf = " of ";
+
     /// <summary>
-    /// The day's report: the organisation's name, the title block, then each note under its participant's name, in the
-    /// model's order.
+    /// The day's report: the running header, the footer sentence and the properties, then the body, which is the
+    /// organisation's name, the title block and each note under its participant's name, in the model's order. The
+    /// exporter and the time in the footer are the strings the title block shows.
     /// </summary>
-    public static IReadOnlyList<ReportBlock> DailyReport(DailyReportModel model)
+    public static ReportDocument DailyReport(DailyReportModel model)
     {
+        var asAt = ReportDates.DateTimeWithYear(model.AsAtUtc);
         List<ReportBlock> blocks =
         [
             new(ReportBlockKind.Title, model.OrganisationName),
             new(ReportBlockKind.Subtitle, DailyTitle),
             new(ReportBlockKind.Subtitle, ReportDates.DateLong(model.NoteDate)),
-            new(ReportBlockKind.Subtitle, AsAt + ReportDates.DateTimeWithYear(model.AsAtUtc)),
+            new(ReportBlockKind.Subtitle, AsAt + asAt),
             new(ReportBlockKind.Subtitle, ExportedBy + model.ExportedBy),
         ];
         foreach (var note in model.Notes)
@@ -42,7 +54,11 @@ internal static class ReportLayout
             blocks.AddRange(NoteBody(note));
         }
 
-        return blocks;
+        return new ReportDocument(
+            DailyTitle + ": " + ReportDates.DateWithYear(model.NoteDate),
+            model.OrganisationName,
+            FooterStart + model.ExportedBy + ", " + asAt + FooterEnd,
+            blocks);
     }
 
     /// <summary>

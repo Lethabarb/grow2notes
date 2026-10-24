@@ -25,22 +25,25 @@ internal static class ReportDates
     public static string DateLong(DateOnly date) =>
         $"{Days[(int)date.DayOfWeek]} {date.Day}{Nbsp}{Months[date.Month - 1]} {date.Year}";
 
+    /// <summary>"Thu 1 Oct 2026".</summary>
+    public static string DateWithYear(DateOnly date) => $"{DayAndMonth(date)} {date.Year}";
+
     /// <summary>"Fri 2 Oct 2026, 9:14 am", for a time in UTC.</summary>
     public static string DateTimeWithYear(DateTime utc)
     {
         var melbourne = MelbourneClock.InMelbourne(utc);
-        return $"{DayAndMonth(melbourne)} {melbourne.Year}, {TimeOf(melbourne)}";
+        return $"{DateWithYear(DateOnly.FromDateTime(melbourne))}, {TimeOf(melbourne)}";
     }
 
     /// <summary>"Thu 1 Oct, 4:42 pm", for a time in UTC.</summary>
     public static string DateTimeShort(DateTime utc)
     {
         var melbourne = MelbourneClock.InMelbourne(utc);
-        return $"{DayAndMonth(melbourne)}, {TimeOf(melbourne)}";
+        return $"{DayAndMonth(DateOnly.FromDateTime(melbourne))}, {TimeOf(melbourne)}";
     }
 
-    private static string DayAndMonth(DateTime melbourne) =>
-        $"{Days[(int)melbourne.DayOfWeek][..3]} {melbourne.Day}{Nbsp}{Months[melbourne.Month - 1][..3]}";
+    private static string DayAndMonth(DateOnly date) =>
+        $"{Days[(int)date.DayOfWeek][..3]} {date.Day}{Nbsp}{Months[date.Month - 1][..3]}";
 
     private static string TimeOf(DateTime melbourne) => (melbourne.Hour, melbourne.Minute) switch
     {
