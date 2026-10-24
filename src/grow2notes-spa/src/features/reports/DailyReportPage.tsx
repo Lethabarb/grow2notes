@@ -87,7 +87,8 @@ function DailyReport({ date, today }: { date: string; today: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const input = useRef<HTMLInputElement>(null);
-  // Whether this visit to the field has pushed an entry yet: one visit adds one, and the rest replace it.
+  // Whether this visit to the field, from focus to blur, has pushed an entry yet: one visit adds one, and the rest
+  // replace it.
   const pushedThisVisit = useRef(false);
   const [shownFor, setShownFor] = useState(date);
   const [draft, setDraft] = useState(date);
@@ -222,14 +223,6 @@ function DailyReport({ date, today }: { date: string; today: string }) {
               autoComplete="off"
               aria-invalid={error !== undefined || undefined}
               aria-describedby={error === undefined ? 'report-date-status' : 'report-date-error'}
-              onFocus={(event) => {
-                // Chromium fires this as focus moves between the parts of the date, and again after a re-render, with
-                // the part it left, in the field's own shadow tree, as the related target. That is the same visit.
-                const left = event.relatedTarget?.getRootNode();
-                if (!(left instanceof ShadowRoot && left.host === event.currentTarget)) {
-                  pushedThisVisit.current = false;
-                }
-              }}
               onChange={(event) => {
                 const value = event.currentTarget.value;
                 setDraft(value);
@@ -244,7 +237,15 @@ function DailyReport({ date, today }: { date: string; today: string }) {
                 }
               }}
               onBlur={(event) => {
-                commit(event.currentTarget.value, true);
+                const field = event.currentTarget;
+                commit(field.value, true);
+                // Chromium blurs and focuses the field between the parts of the date, and again after a re-render,
+                // so the visit ends only if focus is not back on the field once that has run.
+                window.setTimeout(() => {
+                  if (document.activeElement !== field) {
+                    pushedThisVisit.current = false;
+                  }
+                }, 0);
               }}
             />
           </FieldGroup>

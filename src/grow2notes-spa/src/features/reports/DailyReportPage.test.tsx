@@ -443,6 +443,9 @@ describe('the Report screen', () => {
       await advance(750);
       act(() => {
         field().blur();
+      });
+      await settle();
+      act(() => {
         field().focus();
       });
 
