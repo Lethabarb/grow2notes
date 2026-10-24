@@ -390,6 +390,7 @@ describe('the Report screen', () => {
       act(() => {
         client.setQueryData(meQuery.queryKey, { ...manager, today: '2026-10-02' });
       });
+      await settle();
 
       expect(nextDay()).toHaveAttribute('href', '/reports/daily/2026-10-02');
       expect(path()).toBe(`/reports/daily/${today}`);
@@ -613,7 +614,7 @@ describe('the Report screen', () => {
       answers.set(hasNotesPath('2026-09-30'), noAnswer);
       open();
       await settle();
-      expect(dateStatus()).toHaveTextContent(noNotes);
+      expect(dateStatus().textContent).toBe(noNotes);
 
       await press(previousDay());
 
@@ -628,7 +629,7 @@ describe('the Report screen', () => {
       answers.set(hasNotesPath(), () => json({ date: today, hasNotes }));
       open();
       await settle();
-      expect(dateStatus()).toHaveTextContent(noNotes);
+      expect(dateStatus().textContent).toBe(noNotes);
 
       hasNotes = true;
       act(() => {
@@ -727,10 +728,12 @@ describe('the Report screen', () => {
       answers.set(exportPath('docx'), fileAfter(25_000, 'docx'));
       open();
       await settle();
+      // Held before the press: the busy label takes the button's name once it shows.
+      const wordButton = word();
 
-      await press(word());
+      await press(wordButton);
       await advance(24_900);
-      expect(word()).toHaveTextContent('Downloading…');
+      expect(wordButton).toHaveTextContent('Downloading…');
       expect(downloadStatus()).toHaveTextContent('Preparing the Word file… Keep this page open.');
       await advance(100);
 
@@ -899,15 +902,17 @@ describe('the Report screen', () => {
       open();
       await settle();
 
+      const wordButton = word();
+
       type('2026-09-15');
-      await press(word());
+      await press(wordButton);
       const signal = signalOf(exportPath('docx', '2026-09-15'));
       await advance(1000);
 
       expect(path()).toBe('/reports/daily/2026-09-15');
       expect(signal?.aborted).toBe(false);
-      expect(word()).toHaveAttribute('aria-disabled', 'true');
-      expect(word()).toHaveTextContent('Downloading…');
+      expect(wordButton).toHaveAttribute('aria-disabled', 'true');
+      expect(wordButton).toHaveTextContent('Downloading…');
       expect(exports()).toEqual([exportPath('docx', '2026-09-15')]);
     });
 
