@@ -5,6 +5,7 @@ import { authenticatorCode } from './authenticatorCode.ts';
 import { expectAxeToPass } from './axe.ts';
 import { expect, test } from './fixtures.ts';
 import { expectFocusAt, expectStops, ring } from './focus.ts';
+import { expectFoundationsToPass } from './foundations.ts';
 import { breakfast, bus, madeUpGoal, sister } from './goals.ts';
 import { savedPrompts, servePrompts } from './guidePrompts.ts';
 import { expectNothingKept } from './kept.ts';
@@ -2871,3 +2872,38 @@ for (const width of [375, 1280]) {
     await expectNothingKept(page, 'Jane', 'Citizen', 'Went to the shops');
   });
 }
+
+// The note form's foundations (T26), each in a test of its own, as the call changes the text size and spacing for good.
+// The top bar is the one element allowed to stay pinned to the window, on a window taller than 30rem.
+test('the form with the flag ticked and its Reason shown passes the foundations', async ({ page }) => {
+  test.slow();
+  await openJanesNote(page, twoGoals());
+  await flagBox(page).check();
+  await expect(reasonBox(page)).toBeVisible();
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+
+  await expectFoundationsToPass(page, { topBar: true });
+});
+
+test('the Submit confirmation passes the foundations', async ({ page }) => {
+  test.slow();
+  await openJanesNote(page, twoGoals());
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  await submitNote(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+
+  await expectFoundationsToPass(page, { topBar: true });
+});
+
+test('the Discard dialog passes the foundations', async ({ page }) => {
+  test.slow();
+  await openJanesNote(page, twoGoals());
+  await box(page).pressSequentially('Went to the shops.');
+  await expect(saveStatus(page)).toHaveText('Saved 4:12 pm');
+  await moreActions(page).click();
+  await discardDraft(page).click();
+  await expect(confirmationTitle(page)).toBeFocused();
+
+  await expectFoundationsToPass(page, { topBar: true });
+});
