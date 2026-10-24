@@ -14,19 +14,22 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Grow2Notes.Tests.Platform.Audit;
 
 /// <summary>
 /// The shared audit-events test (design.md §5.3, §5.4, §14 M5; S05.02.01): one table-driven test with a row for each
-/// event type of the catalogue, and for each trigger of an event type that has more than one, which triggers the event
-/// through the real endpoint or operator command, as the app's callers do, and finds exactly one new entry, with its
-/// <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>, <c>EntityId</c>,
-/// <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its row here, and T24
-/// completes the table. Rows act in seeded organisation A and add rows of their own to it, changing no seeded row, but
-/// for a change to an organisation's own row, such as its guide prompts, or one whose values depend on every row of
-/// the organisation's list, such as a new group's place among its groups, which a row makes in an organisation that it
-/// adds, and for a change to every organisation, which a row makes on a database of its own (tests/README.md).
+/// event type of the catalogue, and for each trigger that §5.4 names for an event type that has more than one
+/// (<c>user.setup_link_sent</c> by Resend invite and by Reset sign-in; <c>common_item.updated</c> by Reword and by
+/// Move), which triggers the event through the real endpoint or operator command, as the app's callers do, and finds
+/// exactly one new entry, with its <c>EventType</c>, <c>OrganisationId</c>, <c>ActorUserId</c>, <c>EntityType</c>,
+/// <c>EntityId</c>, <c>ParticipantId</c> and the values in its <c>Details</c>. Each task that writes an event adds its
+/// row here. The table is complete, and <see cref="AuditTypesTests"/> fails while a constant and the rows differ. Rows
+/// act in seeded organisation A and add rows of their own to it, changing no seeded row, but for a change to an
+/// organisation's own row, such as its guide prompts, or one whose values depend on every row of the organisation's
+/// list, such as a new group's place among its groups, which a row makes in an organisation that it adds, and for a
+/// change to every organisation, which a row makes on a database of its own (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -39,6 +42,12 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     /// </summary>
     private static readonly Dictionary<string, Func<AuditEventsTests, Task<WrittenEvent>>> Rows = new()
     {
+        [AuditEventTypes.Auth.SignInSucceeded] = test => test.SignInAsync(),
+        [AuditEventTypes.Auth.SignInFailed] = test => test.FailPasswordAsync(),
+        [AuditEventTypes.Auth.MfaFailed] = test => test.FailCodeAsync(),
+        [AuditEventTypes.Auth.LockedOut] = test => test.GetLockedOutAsync(),
+        [AuditEventTypes.Auth.SignedOut] = test => test.SignOutAsync(),
+        [AuditEventTypes.Auth.SetupCompleted] = test => test.CompleteSetupAsync(),
         [AuditEventTypes.User.Invited] = test => test.InviteUserAsync(),
         [AuditEventTypes.User.Updated] = test => test.RenameUserAsync(),
         [$"{AuditEventTypes.User.SetupLinkSent} by Resend invite"] = test => test.ResendInviteAsync(),
@@ -71,6 +80,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Note.Submitted] = test => test.SubmitNoteAsync(),
         [AuditEventTypes.Note.Edited] = test => test.EditNoteAsync(),
         [AuditEventTypes.Note.Reviewed] = test => test.ReviewNoteAsync(),
+        [AuditEventTypes.Report.Downloaded] = test => test.DownloadDailyReportAsync(),
+        [AuditEventTypes.Participant.Exported] = test => test.ExportParticipantAsync(),
+        [AuditEventTypes.Admin.Bootstrap] = test => test.RunBootstrapAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
     };
@@ -84,6 +96,12 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Admin.SignOutAll] = "AuditEventsSignOutAll",
     };
 
+    // The day of the report and export rows: a made-up one (A35), so that what they expect never depends on the real
+    // clock crossing midnight in Melbourne.
+    private static readonly DateOnly ReportDate = new(2026, 10, 1);
+
+    private static readonly string ReportDay = ReportDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
     private readonly SqlServerFixture sqlServer = sqlServer;
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
 
@@ -91,6 +109,10 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     private WebApplicationFactory<Program>? appOnItsOwnDatabase;
 
     public static TheoryData<string> RowNames { get; } = new(Rows.Keys);
+
+    /// <summary>The event types that the rows trigger, which <see cref="AuditTypesTests"/> compares with the constants.
+    /// </summary>
+    internal static IEnumerable<string> RowEventTypes => Rows.Keys.Select(EventTypeOf).Distinct();
 
     // The app that the row acts through, and on whose database the test finds the entry.
     private WebApplicationFactory<Program> App => appOnItsOwnDatabase ?? factory;
@@ -109,7 +131,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         var expected = await Rows[row](this);
 
         var written = Assert.Single(await EventsAfterAsync(lastEventId));
-        Assert.Equal(row.Split(' ')[0], expected.EventType);
+        Assert.Equal(EventTypeOf(row), expected.EventType);
         Assert.Equal(expected with { Details = null }, written with { Details = null });
         Assert.True(
             JsonNode.DeepEquals(Parse(expected.Details), Parse(written.Details)),
@@ -118,7 +140,141 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
 
     public ValueTask DisposeAsync() => appOnItsOwnDatabase?.DisposeAsync() ?? ValueTask.CompletedTask;
 
+    // A row's name is its event type, which has no space, then, if it has one, " by " and the trigger.
+    private static string EventTypeOf(string row) => row.Split(' ')[0];
+
     private static JsonNode? Parse(string? details) => details is null ? null : JsonNode.Parse(details);
+
+    /// <summary>
+    /// <c>auth.signin_succeeded</c>: a worker added to A with a password and a code signs in with
+    /// <c>POST /api/auth/login</c> and <c>POST /api/auth/login/totp</c>, whose code step writes the entry, which
+    /// records the user as the actor and the entity, with no participant and no <c>Details</c>, so no address (A28).
+    /// </summary>
+    private async Task<WrittenEvent> SignInAsync()
+    {
+        var user = await factory.AddPasswordUserAsync(a);
+        using var client = factory.CreateHttpsClient();
+
+        using var response = await client.SignInWithPasswordAsync(
+            user.Email, PasswordSignIn.Password, AuthenticatorCodes.Now(user.AuthenticatorKey));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.SignInSucceeded, user.Id);
+    }
+
+    /// <summary>
+    /// <c>auth.signin_failed</c>: a worker added to A sends a wrong password to <c>POST /api/auth/login</c>, which
+    /// answers 401 and records the user as the actor and the entity, as <c>auth.signin_succeeded</c> does.
+    /// </summary>
+    private async Task<WrittenEvent> FailPasswordAsync()
+    {
+        var user = await factory.AddPasswordUserAsync(a);
+        using var client = factory.CreateHttpsClient();
+
+        using var response = await client.SendPasswordAsync(user.Email, $"{PasswordSignIn.Password} (wrong)");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.SignInFailed, user.Id);
+    }
+
+    /// <summary>
+    /// <c>auth.mfa_failed</c>: a worker added to A sends the right password, which answers the code step, then a wrong
+    /// code to <c>POST /api/auth/login/totp</c>, which answers 401 and records the user as the actor and the entity.
+    /// The code is the right key's, for a step ten minutes away, which Identity counts as wrong.
+    /// </summary>
+    private async Task<WrittenEvent> FailCodeAsync()
+    {
+        var user = await factory.AddPasswordUserAsync(a);
+        using var client = factory.CreateHttpsClient();
+        using (var passwordStep = await client.SendPasswordAsync(user.Email, PasswordSignIn.Password))
+        {
+            Assert.Equal(HttpStatusCode.OK, passwordStep.StatusCode);
+        }
+
+        using var response = await client.SendCodeAsync(
+            AuthenticatorCodes.At(user.AuthenticatorKey, DateTimeOffset.UtcNow.AddMinutes(10)));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.MfaFailed, user.Id);
+    }
+
+    /// <summary>
+    /// <c>auth.locked_out</c>: a worker added to A, whose failed count is raised to one short of Identity's limit,
+    /// which writes no event, sends one wrong password, which answers 401 and locks them out, so records the user as
+    /// the actor and the entity, and not <c>auth.signin_failed</c>.
+    /// </summary>
+    private async Task<WrittenEvent> GetLockedOutAsync()
+    {
+        var user = await factory.AddPasswordUserAsync(a);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var stored = await users.FindByIdAsync(user.Id.ToString());
+            Assert.NotNull(stored);
+            var limit = scope.ServiceProvider.GetRequiredService<IOptions<IdentityOptions>>()
+                .Value.Lockout.MaxFailedAccessAttempts;
+            for (var failed = 1; failed < limit; failed++)
+            {
+                Assert.True((await users.AccessFailedAsync(stored)).Succeeded);
+            }
+        }
+
+        using var client = factory.CreateHttpsClient();
+        using var response = await client.SendPasswordAsync(user.Email, $"{PasswordSignIn.Password} (wrong)");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.LockedOut, user.Id);
+    }
+
+    /// <summary>
+    /// <c>auth.signed_out</c>: a worker added to A, signed in with the cookie sign-in, which writes no event, signs
+    /// out with <c>POST /api/auth/logout</c>, which answers 204 and records the user as the actor and the entity.
+    /// </summary>
+    private async Task<WrittenEvent> SignOutAsync()
+    {
+        var worker = await factory.Services.AddUserAsync(a, UserRole.Worker, PasswordSignIn.DisplayName);
+        await using var app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn());
+        using var client = app.CreateHttpsClient();
+        await client.SignInWithCookieAsync(worker);
+
+        using var response = await client.PostWithTokenAsync("/api/auth/logout", await client.FetchTokenAsync());
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.SignedOut, worker);
+    }
+
+    /// <summary>
+    /// <c>auth.setup_completed</c>: a worker invited to A, which writes no event, follows their setup link and sets a
+    /// password and a code with <c>POST /api/auth/setup/password</c>, which answers 200 and records the user as the
+    /// actor and the entity.
+    /// </summary>
+    private async Task<WrittenEvent> CompleteSetupAsync()
+    {
+        var link = await factory.InviteAsync(a);
+        using var client = factory.CreateHttpsClient();
+        var (token, _) = await client.StartSetupAsync(link);
+        string key;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var stored = await users.FindByIdAsync(link.UserId);
+            Assert.NotNull(stored);
+            key = await users.GetAuthenticatorKeyAsync(stored) ?? throw new InvalidOperationException("No key.");
+        }
+
+        using var response = await client.PostWithTokenAsync(
+            "/api/auth/setup/password",
+            token,
+            new { password = "applecrumble", totpCode = AuthenticatorCodes.Now(key) });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return AuthEvent(AuditEventTypes.Auth.SetupCompleted, Guid.Parse(link.UserId));
+    }
+
+    // What a sign-in event of a user of A writes: the user is the actor and the entity, with no participant, and no
+    // Details.
+    private WrittenEvent AuthEvent(string eventType, Guid userId) =>
+        new(eventType, a.OrganisationId, userId, AuditEntityTypes.User, userId, null, null);
 
     /// <summary>
     /// <c>user.invited</c>: A's manager invites a worker with an address of the row's own with
@@ -1178,6 +1334,108 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             noteId,
             participant.Id,
             new JsonObject { ["versionNumber"] = 1 }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>report.downloaded</c>: A's manager downloads the daily report of <see cref="ReportDate"/>, a day on which a
+    /// participant added for the row has a submitted note, with <c>GET /api/reports/daily/{date}/export</c> as a PDF,
+    /// which records the manager as the actor and the report as the entity, with no entity ID and no participant,
+    /// and the date and format alone in <c>Details</c>.
+    /// </summary>
+    private async Task<WrittenEvent> DownloadDailyReportAsync()
+    {
+        await AddParticipantWithANoteOnReportDateAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+
+        using var response = await client.GetAsync(
+            $"/api/reports/daily/{ReportDay}/export?format=pdf", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return new(
+            AuditEventTypes.Report.Downloaded,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Report,
+            null,
+            null,
+            new JsonObject { ["date"] = ReportDay, ["format"] = "pdf" }.ToJsonString());
+    }
+
+    /// <summary>
+    /// <c>participant.exported</c>: A's manager exports the record of a participant added for the row, who has a
+    /// submitted note on <see cref="ReportDate"/>, for that day, as Word without earlier versions, with
+    /// <c>GET /api/reports/participants/{id}/export</c>, which records the manager as the actor and the participant
+    /// as the entity and the participant, and the range, format and whether earlier versions are included alone in
+    /// <c>Details</c>.
+    /// </summary>
+    private async Task<WrittenEvent> ExportParticipantAsync()
+    {
+        var participant = await AddParticipantWithANoteOnReportDateAsync();
+        using var client = factory.CreateHttpsClient().SignInAs(a.ManagerId);
+
+        using var response = await client.GetAsync(
+            $"/api/reports/participants/{participant.Id}/export?from={ReportDay}&to={ReportDay}" +
+            "&format=docx&includeHistory=false",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var details = new JsonObject
+        {
+            ["from"] = ReportDay,
+            ["to"] = ReportDay,
+            ["format"] = "docx",
+            ["includeHistory"] = false,
+        };
+        return new(
+            AuditEventTypes.Participant.Exported,
+            a.OrganisationId,
+            a.ManagerId,
+            AuditEntityTypes.Participant,
+            participant.Id,
+            participant.Id,
+            details.ToJsonString());
+    }
+
+    // A participant added to A with a note that A's worker submitted on the report date, as a report asks for one: both
+    // endpoints answer 404 report.no_notes for a day with none.
+    private async Task<TestParticipant> AddParticipantWithANoteOnReportDateAsync()
+    {
+        var participant = await factory.Services.AddParticipantAsync(a);
+        await factory.Services.AddSubmittedAsync(a, new(
+            participant.Id,
+            ReportDate,
+            a.WorkerId,
+            new DateTime(2026, 10, 1, 0, 14, 0, DateTimeKind.Utc),
+            new DateTime(2026, 10, 1, 6, 42, 0, DateTimeKind.Utc)));
+        return participant;
+    }
+
+    /// <summary>
+    /// <c>admin.bootstrap</c>: the operator runs <c>admin bootstrap</c>, on the collection's database, which adds an
+    /// organisation of the row's own and records it as the entity, with no actor, as the operator is no user, no
+    /// participant, and its first manager's ID alone in <c>Details</c>, so no name or address (A28).
+    /// </summary>
+    private async Task<WrittenEvent> RunBootstrapAsync()
+    {
+        var email = $"quinn.harper.{Guid.NewGuid():N}@example.org";
+
+        var run = await factory.RunAdminCommandAsync([
+            "bootstrap",
+            "--organisation", "Audit events test",
+            "--manager-name", "Quinn Harper",
+            "--manager-email", email,
+        ]);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        var manager = await StoredUserAsync(email);
+        return new(
+            AuditEventTypes.Admin.Bootstrap,
+            manager.OrganisationId,
+            null,
+            AuditEntityTypes.Organisation,
+            manager.OrganisationId,
+            null,
+            new JsonObject { ["userId"] = manager.Id }.ToJsonString());
     }
 
     /// <summary>
