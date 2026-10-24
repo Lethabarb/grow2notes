@@ -472,7 +472,7 @@ opened-from record; falls back to "Participant". Pops when the previous entry is
 participant's full name (3.9), shown above the title in secondary weight. It is **inside** the `<h1>` so that the shell's
 heading focus reads the name too (the same pattern note-identity-header.md uses for "Editing submitted note"). It holds
 data, so it takes the pending route focus when it mounts. Failed load: fallback `<h1>` "Write past-day note".
-Data: `GET /api/participants/{participantId}` (`{id, givenName, familyName, status}`, design 6.3).
+Data: `GET /api/participants/{participantId}` (`{id, givenName, familyName, status, firstNoteDate}`, design 6.3).
 
 **C3. Note date** → [`date-navigation.md`](../components/date-navigation.md),
 [`text-and-date-inputs.md`](../components/text-and-date-inputs.md), [`form-validation.md`](../components/form-validation.md)
