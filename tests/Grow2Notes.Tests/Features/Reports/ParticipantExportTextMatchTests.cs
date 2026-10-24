@@ -13,7 +13,7 @@ using UglyToad.PdfPig;
 namespace Grow2Notes.Tests.Features.Reports;
 
 /// <summary>
-/// What the participant record's Word and PDF files say (S05.01.01 to S05.01.04, design.md §11.6 and A89), for the
+/// What the participant record's Word and PDF files say (S05.01.01 to S05.01.04, design.md §11.6 and A93), for the
 /// one participant, Zoë Adams, that the test adds to an organisation of its own (<see cref="TestOrganisations"/>)
 /// with six submitted notes, and with a draft, a discarded draft, a note outside the range and another participant's
 /// note that must not appear. Without earlier versions the Word file's body paragraphs equal the expected list
