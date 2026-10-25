@@ -604,9 +604,9 @@ Check during M0: SimpleWebAuthn's non-autofill path should reach `navigator.cred
 - Opening `/setup` in a real browser **without** the token and **without** an enrolment cookie is a state design.md
   does not define. Don't invent new copy for it; reuse "Your setup session timed out. Open the link from your email
   again." (flagged in open questions).
-- **Device check before go-live:** open a real setup link (test environment) on an iPhone and an Android phone from
-  Gmail, Outlook and the phone's built-in mail app. Note which ones can create a passkey. This turns the "Unverified"
-  above into fact for the actual staff phones.
+- **Device check before go-live** (first-use step 144; it does not hold go-live, A107): open a real setup link (test
+  environment) on an iPhone and an Android phone from Gmail, Outlook and the phone's built-in mail app. Note which ones
+  can create a passkey. This turns the "Unverified" above into fact for the actual staff phones.
 
 **4. Sign in, on a phone.**
 

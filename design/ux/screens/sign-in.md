@@ -746,7 +746,8 @@ orchestrator so the other files can be aligned.
    describes a pause that failed sign-ins never start, which bears on the call above.
 9. **Oldest phones:** which iOS and Android versions may workers' own phones run? (Drives the prefetch rule and the
    CSS baseline.)
-10. **In-app browsers:** which email apps on staff phones can create passkeys (device check before go-live).
+10. **In-app browsers:** which email apps on staff phones can create passkeys (the device check, first-use step 144; it
+    does not hold go-live, A107).
 
 ---
 

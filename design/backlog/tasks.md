@@ -6154,7 +6154,7 @@ sideways at 320 px.
 
 - Orders the by-hand accessibility steps on ops/first-use-in-test.md into one sequence (screen readers, real devices,
   zoom, contrast and forced colours, the five-worker words check), starting from the steps the cut stories moved there.
-  Whether they hold go-live is owner question Q12.
+  They do not hold go-live (A107).
 - Built (24 October 2026) as five pull requests into `feat/t26-accessibility-pass`: v1 (#114) the shared helpers, v2
   (#118) the key flows, v3 (#117) and v4 (#131) the foundations calls and the audit additions, and v5 (#134) the 320 px
   check and these documents. T26 adds no endpoint, entity, migration, audit event, screen, route, setting or copy key:
@@ -6239,7 +6239,7 @@ sideways at 320 px.
     `emailFormat`, `oneTimeCode.label`, `setup.password`, `setup.authenticatorApp` (`heading`, `getApp`, `qrAlt`),
     `users.roleHint.Manager`, `users.lastManagerNotice`, `review.commentHint` and the API errors `review.not_current`
     and `user.email_in_use`.
-- Q12 (do the by-hand accessibility checks hold go-live?) is open and affects T28 only.
+- Whether the by-hand accessibility checks hold go-live (Q12) is answered by A107: they do not.
 - A criterion that needs a real device or a person stays unticked until a by-hand run proves it. S06.02.01's two
   criteria are ticked on green CI (F06.02, with the CI run named); S06.02.02's stay unticked until steps 143 to 147 and
   the steps that their order paragraph cites are run and recorded here.
@@ -6375,7 +6375,7 @@ weeks in production to invite staff and enter its configuration before cut-over.
 
 ```yaml
 id: T28
-status: doing
+status: done
 release: R1
 lane: D
 size: S
@@ -6402,11 +6402,20 @@ date, on a build that passed CI and was deployed to test.
 
 ### Cuts
 
-- A pilot: not run unless the owner asks for one (A40, Q6).
+- A pilot: not run unless the owner asks for one (A40, A106).
 
 ### Notes
 
 - One of the two tasks that wait for a run sheet: `ops/go-live.md`, which T22 writes.
+- 26 October 2026: Q6 and Q12 are answered by design.md A106 and A107, assumed defaults the owner may overturn.
+- 26 October 2026: no pilot was run, because A106 sets none unless the owner asks (A40).
+- 26 October 2026: where the design is silent, the developer chose the deploy rule (F2: the last production deploy
+  stays live, and a newer CI run is deployed only when the owner wants a change live) and the log kind (*quarterly*,
+  with *before go-live* and *copy deleted* in the Result).
+- 26 October 2026, judgment call: done means the run sheet is merged, as for T27. The by-hand cut-over is held by the
+  go-live gate at `ops/go-live.md` F4, not by this task (D90; README §9 *Short variants*). Release 1 is released only
+  when F is complete (README §9 R1). S06.06.02 and S06.06.03 are done with their by-hand criteria unticked.
+- 26 October 2026, by hand: `ops/go-live.md` F1 to F5 and first-use steps 132 and 159.
 
 ### Plan
 
@@ -6433,7 +6442,10 @@ date, on a build that passed CI and was deployed to test.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Docs (#147; v1): `ops/go-live.md` section F (F1 to F5), the restore-drill.md and restore-log.md corrections.
+- [x] Docs (#148; v2): A106 and A107, design.md §14 line 8, S06.06.02 and S06.06.03 done, F06.06, F06.02, coverage,
+      releases, first-use steps 132 and 159, the microcopy and passkey-flows pointers, the ops README line, Q6 and Q12
+      answered.
 
 ---
 
@@ -6842,14 +6854,14 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 - [S06.02.03][] VoiceOver and TalkBack on the note form: by-hand runs only (VoiceOver, TalkBack, NVDA, Voice Control,
   Dragon and Windows voice typing), now on ops/first-use-in-test.md, which T26 orders. WCAG 2.2 AA still applies and
   any failure becomes a bug. The Dragon 1-second save is added only if that run shows it is needed
-  (guided-notes-textarea.md, *Behaviour* item 6). Whether go-live waits for it is owner question Q12.
+  (guided-notes-textarea.md, *Behaviour* item 6). It does not hold go-live (A107).
 - [S06.02.04][] VoiceOver and TalkBack on the Report screen: by-hand runs only, now on ops/first-use-in-test.md. The
-  Report screen's automated axe and keyboard checks stay in T17 and T26. Whether go-live waits for it is owner
-  question Q12.
+  Report screen's automated axe and keyboard checks stay in T17 and T26. It does not hold go-live
+  (A107).
 - [S06.02.05][] Button words checked with five workers: it needs the provider's people, which no build lane can
   arrange, so it would hold a task open for ever. It is on ops/first-use-in-test.md, and because microcopy.md asks
-  for it before go-live, T22 also lists it on `ops/go-live.md` for the managers to arrange; whether go-live waits for
-  it is owner question Q12. Its readability check stays in T26. No wording changes without the owner's approval.
+  for it before go-live, T22 also lists it on `ops/go-live.md` for the managers to arrange; it does not hold go-live
+  (A107). Its readability check stays in T26. No wording changes without the owner's approval.
 - [S07.05.03][] Manual tests with two approved assistants: all by hand (real approved assistants on a phone and a
   laptop, the prompt-injection test and the MCP Inspector). It becomes steps on `ops/mcp-switch-on.md`, which T38
   writes. It holds no task open, but switch-on (T39) still waits for it, as mcp-server.md §11.1 line 1 requires, and
@@ -6860,22 +6872,16 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q7, Q8 and Q13 are
-answered (below). Each holds only the tasks named. Everything else still open in the specs is built as they say unless
-the owner says otherwise.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q12 and
+Q13 are answered (below). Each holds only the tasks named. Everything else still open in the specs is built as they
+say unless the owner says otherwise.
 
-- **Q6. The switch-over date, who runs staff onboarding, and whether to pilot.** Blocks T28. Suggested: the owner
-  and the managers set the date, the managers run the 30-minute onboarding, and there is no pilot.
 - **Q9. Is confirming inside the assistant enough for the four access tools?** (mcp-server.md §12 Q4, MA6.) Blocks
   T36 and T37. Suggested: yes, keep MA6: the assistant's own confirmation form where it has one, and preview then
   confirm otherwise.
 - **Q10. The Support option shipping before switch-on.** Blocks T31. Suggested: accept it; no code is needed.
 - **Q11. The operator's AI provider and account type, and the provider's privacy contact.** Blocks T29. Suggested:
   the owner names the business AI account the operator will use, and the provider names its privacy contact.
-- **Q12. Do the by-hand accessibility checks hold go-live?** design.md §14 M6 names VoiceOver and TalkBack, and
-  microcopy.md asks for the five-worker words check before go-live. Affects T28 only. Suggested: no, under the
-  owner's rules of 12 and 20 October 2026: they are by-hand steps on ops/first-use-in-test.md, which hold nothing open,
-  and any failure becomes a bug.
 
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:
@@ -6905,12 +6911,17 @@ defaults (T23), which the owner may overturn:
   address is operator-supplied configuration (A100). Verifying a sending domain in Resend is the owner's by-hand step.
   Communication Services is removed, and A58's test sender is superseded.
 
-**Answered on 26 October 2026.** The developer took the plan's suggested answer as an assumed default, which the owner
-may overturn:
+**Answered on 26 October 2026.** The developer took the plan's suggested answers to three questions as assumed
+defaults, which the owner may overturn:
 
 - **Q8. How the first manager gets their setup link** (T27): design.md A105, the printed link given by the operator to
   the first manager directly, in one text message to their own phone while with them in person or on a call; no code
   change.
+- **Q6. The switch-over date, who runs staff onboarding, and whether to pilot** (T28): design.md A106, the owner and
+  the managers set the date, the managers run the 30-minute onboarding in test with made-up data, and there is no
+  pilot unless the owner asks.
+- **Q12. Do the by-hand accessibility checks hold go-live?** (T28): design.md A107, no: they are by-hand steps on
+  ops/first-use-in-test.md, which hold nothing open, and any failure becomes a bug.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
