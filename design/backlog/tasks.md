@@ -6367,7 +6367,7 @@ weeks in production to invite staff and enter its configuration before cut-over.
 
 - [x] Docs (#144; v1): the first manager's run sheet in `ops/go-live.md` D, the hand-over in `ops/break-glass.md` (*The
       setup link*) and the ops README line.
-- [x] Docs (#PRNUM; v2): A105, S06.05.02 and S06.05.01 corrected, first-use step 158, T27 done, Q8 answered.
+- [x] Docs (#145; v2): A105, S06.05.02 and S06.05.01 corrected, first-use step 158, T27 done, Q8 answered.
 
 ---
 
