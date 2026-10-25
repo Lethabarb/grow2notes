@@ -75,7 +75,8 @@ refuse.
 
 The integration tests serve the real SPA build, so CI builds the SPA (`npm ci`, `npm run build`) before `dotnet test
 Grow2Notes.slnx`. If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying
-so. On a machine, only the .NET build with warnings as errors runs.
+so. On a machine, only the .NET build with warnings as errors runs: for that compile check, run `npm ci` and
+`npm run build` in `src/grow2notes-spa` first, and again after changing the SPA.
 
 ## The end-to-end tests
 

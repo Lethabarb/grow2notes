@@ -4,7 +4,7 @@ Grow2Notes is a small web app that replaces the daily Word progress-note templat
 
 ## Decisions
 
-The product owner's decisions D1–D87 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A98), which the owner can override. There are no open questions (§15).
+The product owner's decisions D1–D90 are recorded in [decisions.md](decisions.md). They are final; D9 and D11 are amended by D44, D28 and D31 by D48, D60 by D65, and D61 by D63. Release 2's admin MCP server (D48–D51, D55–D59) is designed in [mcp-server.md](mcp-server.md). This document cites them as (D6), (D35) and so on, and does not reopen them. Everything else this design had to decide is listed once in §13 Assumed defaults (A1–A98), which the owner can override. There are no open questions (§15).
 
 The app is called Grow2Notes, and that is the only name a user ever sees: on screens, page titles, the setup email, exported files, the session cookie, the passkey's relying-party name and the authenticator-app issuer. The parent company's name never appears in the app (D42).
 
@@ -1480,7 +1480,7 @@ Versions are those reported by the research pass on 1 October 2026. They were **
 | Compute + storage, Australia Southeast, AUD/month ex GST | **≈ 22.51** (AUD 0.7402/day, verified 1 Oct 2026; 10 DTU; 250 GB included) | ≈ 33 (estimate) |
 | Point-in-time restore backup storage | Included up to the database's maximum size (DTU model) | Free up to provisioned size |
 | Managed-identity login from .NET | Built into SqlClient | Works, but needs token-refresh plumbing in Npgsql |
-| Local development on Windows | LocalDB or SQL Server Developer (free) | Needs a container or local install |
+| Local development on Windows (rationale only; not used, D90) | LocalDB or SQL Server Developer (free) | Needs a container or local install |
 
 Azure SQL is cheaper at this size and more native to .NET. Azure SQL **Basic** (about AUD 7.50/month, estimate) was rejected: it caps the database at 2 GB and point-in-time restore at 7 days. Upgrade path if ever needed: S0 → S1.
 
@@ -1801,7 +1801,7 @@ Australia Southeast has no availability zones. Nothing here depends on them: the
 | Alerts | — | HTTP 5xx, health-check failure and DTU above 80%. The action group emails the developer; these are operations alerts, not app emails. |
 | Governance | the two Grow2Notes resource groups | Azure Policy *Allowed locations* = Australia Southeast and Australia East (Australia East only for geo-restore and the disaster-recovery redeploy, §10.7), assigned to each of the two resource groups; a Cost Management budget alert inside each resource group, emailing the developer: AUD 30/month for test and AUD 70/month for prod (AUD 100 in total). Neither applies to the rest of the operator's shared subscription, so its other workloads are unaffected (D60, D61, D63) |
 
-The lock is on the database rather than the server, so the pipeline can still remove its temporary firewall rule and restore-drill copies can be deleted. The operator confirms, by hand on `ops/first-use-in-test.md`, that deleting the test server is refused while the database is locked, and that step holds nothing open; if it is not refused, long-term backups (which survive server deletion) remain the protection. There is no Front Door, WAF, deployment slot or paid Defender plan: none is justified at under 20 users. Defender for Cloud's free posture checks are on.
+The lock is on the database rather than the server, so the pipeline can still remove its temporary firewall rule and restore-drill copies can be deleted. The operator confirms, by hand, that deleting the test server is refused while the database is locked (T22 adds this step to `ops/first-use-in-test.md`), and that step holds nothing open; if it is not refused, long-term backups (which survive server deletion) remain the protection. There is no Front Door, WAF, deployment slot or paid Defender plan: none is justified at under 20 users. Defender for Cloud's free posture checks are on.
 
 ### 10.2 Estimated monthly cost (AUD, ex GST)
 
@@ -1826,7 +1826,7 @@ That is **about AUD 62–65 a month ex GST (about AUD 68–72 including GST) for
 
 | Environment | Purpose | Data | Differences from prod |
 |---|---|---|---|
-| **Local** | Development on Windows | None | Compile and lint only: nothing is run locally (no tests, app, database or LocalDB; D90); no Azure resources |
+| **Local** | Development on Windows | None | Compile and lint only: nothing is run locally (no tests, app, database or LocalDB; D90); emails are written to the console when the app runs, as in CI; no Azure resources |
 | **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its default `*.azurewebsites.net` address with App Service's built-in HTTPS, so no custom domain or managed certificate for now (D62); setup-link email from the free Azure-managed `azurecomm.net` domain, with SPF, DKIM and DMARC set by Azure (A58); its own identities and passkeys |
 | **Prod** | Real use | Real | — |
 
