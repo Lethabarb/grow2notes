@@ -216,7 +216,7 @@ Counts are those read from the standard against the rows written below; they mus
 | V17 WebRTC | 0 | 7 | 0 | 7 | 5 |
 | **Total** | **70** | **183** | **70** | **183** | **92** |
 
-Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicable and 15 point to a finding.
+Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicable and 14 point to a finding.
 
 ### V1 Encoding and sanitization
 

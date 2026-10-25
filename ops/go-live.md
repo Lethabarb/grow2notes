@@ -161,12 +161,13 @@ the vault, add your address to its firewall, `read -s` the key from A4 into `az 
 resend-api-key`, then remove both. While your address is still allowed, list the vault's contents by name:
 
 ```shell
-az keyvault key list --vault-name kv-grow2notes-prod --query '[].name' --output tsv
+az resource list --resource-group rg-grow2notes-prod-ause --resource-type Microsoft.KeyVault/vaults/keys --query '[].name' --output tsv
 az keyvault secret list --vault-name kv-grow2notes-prod --query '[].name' --output tsv
 ```
 
-Look for one key, `data-protection`, and one secret, `resend-api-key`. Then look for the firewall rule and your role
-assignment gone.
+Look for one key, `data-protection` (listed through Resource Manager, because your role covers secrets only; the name
+shows as `kv-grow2notes-prod/data-protection`), and one secret, `resend-api-key`. Then look for the firewall rule and
+your role assignment gone.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
