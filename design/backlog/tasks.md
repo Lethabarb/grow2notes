@@ -6301,7 +6301,7 @@ Planned 24 October 2026.
 
 ```yaml
 id: T27
-status: new
+status: doing
 release: R1
 lane: D
 size: S
@@ -6322,6 +6322,31 @@ weeks in production to invite staff and enter its configuration before cut-over.
 ### Notes
 
 - Waits for owner question Q8, how the first manager gets the printed setup link.
+
+### Plan
+
+- Outcome: documents only. A run sheet for the production first manager (the first part of `ops/go-live.md` D), the
+  hand-over of the printed setup link in `ops/break-glass.md`, and the backlog updates. No code, test, migration, SPA,
+  copy key or audit event change. `admin bootstrap` stays as built: it prints the link and sends no email (§7.4).
+- Design: Q8 becomes A105, an assumed default the owner may overturn. The provider confirms the first manager in
+  person or on a call the operator makes (D74), and the operator sends the link in one text message to that
+  manager's own phone while with them, so they set up there and then. The steps live once, in `ops/break-glass.md`
+  (*The setup link*, which reset-signin also uses); A105 holds only the decision and go-live D links to the steps.
+- Domain: none. Organisation, the first manager (Invited, then Active on setup), Every note and `admin.bootstrap` are
+  used as they are. The manager's mobile number is a runbook value, used once and recorded nowhere.
+- Reuse: `admin bootstrap` and `admin reset-signin` with their tests, the break-glass console and bootstrap steps,
+  go-live conventions (numbered steps, Result lines), D74's identity rule, README §9 for a document enabler.
+- Decisions where design.md is silent: the name check comes before the run, because nothing renames an organisation;
+  the run sheet is the first part of go-live D, not a new letter, so outside citations stay right; the SPF, DKIM and
+  DMARC check moves to production's first invite from Users, with the invitee's agreement and no check account; the
+  approved setup copy is unchanged (D67, D85) and the mismatch is recorded; S06.05.02 is done with its by-hand
+  criteria unticked (D90).
+
+### Verticals
+
+- v1: Docs: first manager's run sheet in go-live.md D and the hand-over in break-glass.md; depends_on: none; R4 R5 R6
+  R11 R12 R14
+- v2: Docs: A105, S06.05.02 and S06.05.01, first-use step 158, tasks.md; depends_on: v1; R1 R2 R3 R7 R8 R9 R10 R13
 
 ### Steps
 
