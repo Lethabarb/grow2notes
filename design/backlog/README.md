@@ -646,7 +646,7 @@ only a person can check, ticked with a dated Note pointing to ops/first-use-in-t
 **Release.**
 
 - **R1:** all epics are done, the *Go-live readiness* checklist is complete with an owner and evidence for every line,
-  and the build that passed CI and was deployed to test is deployed to production (design.md §10.4, §14).
+  and a build that passed CI and was deployed to test is deployed to production (design.md §10.4, §14).
 - **R2:** its epics are done, the mcp-server.md §11.1 switch-on checklist is complete, `Mcp:Enabled` is turned on in
   production, and the date is recorded.
 

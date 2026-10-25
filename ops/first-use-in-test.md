@@ -282,7 +282,7 @@ the steps above. Step 30 signs out everyone in test, so run these when no one el
     signed out". Then sign each in again, A with Sign in with a passkey and B with email, password and a 6-digit code,
     and look for Today each time. Type `exit` in the console and close its tab, so step 29's link is kept nowhere.
     (S00.03.06's second criterion, in test.)
-31. The developer reads the audit rows as in step 15:
+31. You read the audit rows as in step 15:
 
     ```sql
     SELECT EventType, OccurredAtUtc, ActorUserId, EntityType, OrganisationId, IpAddress
