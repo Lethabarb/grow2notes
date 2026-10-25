@@ -15,9 +15,9 @@ Bicep for the Azure resources (design.md §10.1, §10.5).
 
 `bootstrap.bicep` creates both environments' resource groups and what goes in them before any deploy: the identities,
 the role and policy assignments and the budgets. Run it from the root of a clone of this repository, in Bash (Git Bash
-on Windows). The subscription and tenant IDs, the client IDs, the SQL admin group's object ID and the email addresses
-stay in the shell, in Azure and in GitHub's environment secrets, and are never written into the repository (D42, D60,
-D65).
+on Windows). The subscription and tenant IDs, the repository's OIDC subject prefix (which holds the GitHub account's
+and the repository's numeric IDs), the client IDs, the SQL admin group's object ID and the email addresses stay in the
+shell, in Azure and in GitHub, and are never written into the repository (D42, D60, D65, D89).
 
 You need:
 - the Azure CLI, signed in (`az login`) with an account that is Owner of the subscription, and its Bicep
@@ -31,21 +31,26 @@ You need:
    az account show --query '{subscription: name, signedInAs: user.name}' --output table
    ```
 
-2. Check the repository's OIDC subject prefix. `gh` fills in `{owner}` and `{repo}` from the clone:
+2. Read the repository's OIDC subject prefix into the shell. `gh` fills in `{owner}` and `{repo}` from the clone. Run
+   steps 2 to 4 in the same shell, because steps 3 and 4 read it:
 
    ```shell
-   gh api repos/{owner}/{repo}/actions/oidc/customization/sub --jq .sub_claim_prefix
+   github_subject_prefix=$(gh api repos/{owner}/{repo}/actions/oidc/customization/sub --jq .sub_claim_prefix)
+   echo "$github_subject_prefix"
    ```
 
-   It must print the default of `githubSubjectPrefix` in `bootstrap.bicep`. If it prints anything else, correct that
-   default before going on, or the federated credentials will not match GitHub's tokens.
+   It prints `repo:<owner>@<owner id>/<repo>@<repo id>`, because this repository uses GitHub's immutable subjects. Stop
+   if it prints nothing or anything of another shape. Steps 3 and 4 pass it, as printed, as `githubSubjectPrefix`.
+   Entra ID matches the federated credentials' subjects exactly, so any other value stops the deploys signing in, and
+   `bootstrap.bicep` refuses an empty one.
 
 3. Preview the deployment. `read` asks for the budget alerts' address, so it is not saved in your shell history:
 
    ```shell
    read -rp 'Budget alert email address: ' budget_email
    az deployment sub what-if --name grow2notes-bootstrap --location australiasoutheast \
-     --template-file infra/bootstrap.bicep --parameters budgetEmail="$budget_email"
+     --template-file infra/bootstrap.bicep \
+     --parameters budgetEmail="$budget_email" githubSubjectPrefix="$github_subject_prefix"
    ```
 
    On the first run it should create only:
@@ -63,7 +68,8 @@ You need:
 
    ```shell
    az deployment sub create --name grow2notes-bootstrap --location australiasoutheast \
-     --template-file infra/bootstrap.bicep --parameters budgetEmail="$budget_email" \
+     --template-file infra/bootstrap.bicep \
+     --parameters budgetEmail="$budget_email" githubSubjectPrefix="$github_subject_prefix" \
      --query properties.provisioningState --output tsv
    ```
 
@@ -119,7 +125,7 @@ You need:
 
 ### Running it again
 
-Deploys never need the bootstrap. Run it again only when `bootstrap.bicep` or its module changes, with steps 1, 3 and
+Deploys never need the bootstrap. Run it again only when `bootstrap.bicep` or its module changes, with steps 1 to
 4; the what-if should show only that change.
 
 Also pass the budgets' start date, because Azure refuses to change it and the parameter's default is the first of the
@@ -130,4 +136,5 @@ budget_start_date=$(az deployment sub show --name grow2notes-bootstrap \
   --query properties.parameters.budgetStartDate.value --output tsv)
 ```
 
-Then add `budgetStartDate="$budget_start_date"` after `budgetEmail="$budget_email"` in both commands.
+Then add `budgetStartDate="$budget_start_date"` after `githubSubjectPrefix="$github_subject_prefix"` in both
+commands.

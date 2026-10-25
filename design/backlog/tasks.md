@@ -6121,12 +6121,15 @@ open.
   requirements read from the standard, a row for each; the standard has 345 in all, and the 92 at level 3 are out of
   scope), the check of design.md §8 and §9, the findings register and the ZAP section. **Open High/Critical: none.**
   There are 25 findings: 1 Medium, open for the owner, 17 Low and 7 Informational, each with a decision. No finding is
-  High or Critical, so no bug story was filed and nothing under `infra/` was edited.
+  High or Critical, so no bug story was filed and nothing under `infra/` was edited. F-25 was fixed afterwards at the
+  owner's request (25 October 2026, D89): `infra/bootstrap.bicep` lost the prefix's default, and step 150 of
+  `ops/first-use-in-test.md` checks the bootstrap's what-if.
 - Owner notes, none blocking:
   1. The repository is public, where design.md §9.11, §10.4 and S06.01.03's Note assume a private one (A92 already
      treats it as public). The review is committed as S06.01.01 requires, with no secrets, identifiers, names or
-     participant data; F-25 records that `infra/bootstrap.bicep` holds the public GitHub identifiers of the account and
+     participant data; F-25 records that `infra/bootstrap.bicep` held the public GitHub identifiers of the account and
      the repository, which the project's no-IDs rule would otherwise forbid. Should a public repository keep that?
+     The owner's answer for the IDs, 25 October 2026: remove them; F-25 is fixed (D89).
   2. CodeQL and secret scanning are free on a public repository. They stay cut unless the owner turns them on, which is
      a GitHub setting done by hand.
   3. Shared-office capacity (A96): about 10 sign-ins a minute from one shared address. Should §9.9's 30 be raised for
