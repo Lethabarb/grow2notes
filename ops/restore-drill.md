@@ -31,7 +31,8 @@ deleted.
   visible. Record the kind as *after a migration*.
 - **Before go-live,** the first drill, with the extra step 5 below (A90,
   [design.md §13](../design/design.md#13-assumed-defaults)). Before there are notes the checks still prove that the
-  restore works, the schema is complete and `DBCC CHECKDB` is clean.
+  restore works, the schema is complete and `DBCC CHECKDB` is clean. Record the kind as *quarterly*, with *before
+  go-live* in the result.
 
 ### What to have ready
 
@@ -71,7 +72,10 @@ deleted.
    attempt fails to sign in, wait a minute and run it again.
 3. **Judge the first result set.** *Latest migration* is the newest migration that the release deployed. *Latest audit
    event* and *Latest note version* are shortly before the restore point (a time after it means the wrong database was
-   checked). *Note with the latest version* names a note, such as `<note ID> version 3`, for step 6.
+   checked). *Note with the latest version* names a note, such as `<note ID> version 3`, for step 6. Before go-live,
+   *Latest note version* and *Note with the latest version* read `none yet`, and *Latest audit event* is the last
+   change before the restore point, which can be days earlier (a time after the restore point still means the wrong
+   database).
 4. **Judge the second.** Every table is listed, and no table that holds data, such as `Participant` or `AuditEvent`, is
    at 0 rows unless it is 0 in production too. Exit code 1 and an error message from `DBCC CHECKDB` mean the copy is
    damaged: see *If it fails*.
@@ -111,7 +115,8 @@ deleted.
 
    Never delete `sqldb-grow2notes`. Read the name twice.
 8. **Delete the firewall rule,** then **add a row to [restore-log.md](restore-log.md)**: the date, the kind, the
-   restore point, the result, how long it took and your role. Never a note ID, a name or an address.
+   restore point, the result (ending *copy deleted* once step 7 is done), how long it took and your role. Never a note
+   ID, a name or an address.
 
 ### What it writes and prints
 
@@ -119,8 +124,9 @@ The drill writes one row to [restore-log.md](restore-log.md), and in Azure it ma
 it. `restore-check.sql` and `restore-note.sql` write nothing, and the first prints:
 
 - **Result set 1, *Check* and *Value*:** *Latest migration*; *Latest audit event (UTC)*; *Latest note version (UTC)*;
-  and *Note with the latest version*, as `<note ID> version <n>`. Each of the last three says `none yet` while its table
-  is empty, as before go-live. Times are UTC, like the restore point.
+  and *Note with the latest version*, as `<note ID> version <n>`. The two note lines say `none yet` while there are no
+  notes, as before go-live; *Latest audit event* has a time from admin bootstrap onwards. Times are UTC, like the
+  restore point.
 - **Result set 2, *Table* and *Rows*:** every table of the database by name, each with its exact number of rows.
 
 `restore-check.sql` then runs `DBCC CHECKDB`, which prints nothing when the database is sound. `restore-note.sql`
