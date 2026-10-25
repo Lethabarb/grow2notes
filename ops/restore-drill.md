@@ -201,8 +201,9 @@ another minute they would lose.
 
 - The restore point: the UTC time that the deploy recorded before the migration ran, step 3 of design.md
   [§10.4](../design/design.md#104-cicd-with-github-actions). It is in the deploy run's summary.
-- The previous artifact: the CI run of the build that was in production before this deploy, which `deploy.yml`
-  takes as its input.
+- The previous artifact: the CI run of the build that was in production before this deploy, which the dispatch of
+  `deploy.yml` takes as its `ci-run` input. That run must have a successful test deploy of its current attempt (the
+  `Check the CI run` job refuses it otherwise), and it must be within the 90 days that CI keeps its artifacts.
 - The sign-in and firewall rule, as above.
 
 ### Running it
@@ -227,13 +228,15 @@ another minute they would lose.
      --name sqldb-grow2notes-restored --new-name sqldb-grow2notes
    ```
 
-   This step is unconfirmed: the `CanNotDelete` lock on `sqldb-grow2notes` may refuse a rename, and only the owner can
-   lift it. If the rename is refused for that reason, the owner lifts the lock, the operator renames, and the owner puts
-   the lock back. Check in the portal that the lock covers the database now called `sqldb-grow2notes`; if it does not,
-   the owner puts it back (design.md [§10.5](../design/design.md#105-infrastructure-as-code-bicep)). The app's identity
-   and its role are inside the database, so they come back with the copy.
-5. **Redeploy the previous artifact** with `deploy.yml`, naming that CI run, and start the web app. Its migration step
-   finds nothing to apply. Check `/healthz/ready`.
+   This step is unconfirmed until first-use step 155 has tried a rename and back on the test database, and the result is
+   recorded in S00.02.05's Notes and here (result: not yet tried). The `CanNotDelete` lock on `sqldb-grow2notes` may
+   refuse a rename, and only the owner can lift it. If the rename is refused for that reason, the owner lifts the lock,
+   the operator renames, and the owner puts the lock back. Check in the portal that the lock covers the database now
+   called `sqldb-grow2notes`; if it does not, the owner puts it back (design.md
+   [§10.5](../design/design.md#105-infrastructure-as-code-bicep)). The app's identity and its role are inside the
+   database, so they come back with the copy.
+5. **Redeploy the previous artifact** by dispatching `deploy.yml` from `main` with that CI run's ID as `ci-run`, and
+   start the web app. Its migration step finds nothing to apply. Check `/healthz/ready`.
 6. **Tell the managers the window of lost writes:** from the restore point to the time the web app was stopped.
    Notes saved in that window are not in the database, and anyone who wrote one may need to write it again. Say which
    hours, and no more, in writing.
