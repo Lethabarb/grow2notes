@@ -15,10 +15,12 @@ here. Each step ends with what it confirms.
   An account invited from the Users screen gets its setup link by email instead, which an `example.org` address never
   receives, so it gets a new address at a mailbox kept only for testing; if the mailbox takes `+` tags, as Gmail and
   Outlook.com do, `name+20261015c@…` gives each account its own.
-- Test sends that email from an Azure-managed domain, which allows 5 emails a minute and 10 an hour for the whole
-  subscription, with no way to raise either. An invite or a resend over that says "Not sent: something went wrong. Try
-  again." and changes nothing: wait a minute, or until the hour is up, and press again. Steps 12 and 17 send five
-  between them.
+- Test sends that email through Resend's free plan (D92). Confirmed on Resend's pricing page on 25 October 2026 (a page
+  read): 3,000 emails a month and 100 a day, for 3 sending domains in all, and 30 days of searchable logs; it gives no
+  per-second figure for the free plan. Nothing here comes near 100 a day, but an invite or a resend over a limit says
+  "Not sent: something went wrong. Try again." and changes nothing: wait and press again. Check the page again if a
+  limit seems to have changed. The email is sent from the address in the `test` environment's `EMAIL_SENDER_ADDRESS`,
+  and a missing key in `kv-grow2notes-test`, or a missing role, answers "Not sent" the same way (step 151).
 - Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
   Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
   your own account. Let each browser keep the name and email address it already offers on forms of your own, as
@@ -127,8 +129,9 @@ here. Each step ends with what it confirms.
     account A's is on the laptop, each setting up and signing in a second time on a phone and a laptop. As account A,
     invite from the Users screen (S00.06.02) two workers and a third manager (account C), each with a made-up name and
     a new address at the testing mailbox (*Before you start*). Open the first invite's email on the laptop, leaving its
-    link for step 18. Look for: it arrives within 5 minutes (look in junk too, and say which folder it was in), from a
-    `DoNotReply@…azurecomm.net` address, with the subject "Set up your Grow2Notes sign-in"; its text names Grow2Notes
+    link for step 18. Look for: it arrives within 5 minutes (look in junk too, and say which folder it was in), from
+    the address in the `test` environment's `EMAIL_SENDER_ADDRESS`, sent through Resend, with the subject "Set up your
+    Grow2Notes sign-in"; its text names Grow2Notes
     and no other organisation, product or person, and holds one link, of the form
     `https://app-grow2notes-test.azurewebsites.net/setup#u=…&t=…`; and its headers (Show original in Gmail, View
     message source in Outlook.com) show `spf=pass`, `dkim=pass` and `dmarc=pass` in `Authentication-Results`.
@@ -1192,7 +1195,7 @@ steps need the Android phone, with Chrome, Samsung Internet and TalkBack. Everyt
      `tests/e2e/key-flows.spec.ts`.)
 144. The go-live device check. On the iPhone, with Gmail, Outlook and Apple Mail, and on the Android phone, with Gmail,
      Outlook and the phone's own mail app, invite one made-up account for each app, to the testing mailbox, minding the
-     limit of 5 emails a minute and 10 an hour (*Before you start*). Open each setup link in the app that received it
+     free plan's 100 emails a day (*Before you start*). Open each setup link in the app that received it
      and try Use a passkey (recommended) in the app's own browser. Write down, for each phone and each app, whether a
      passkey was made, refused or not offered, and, if it was not made, whether opening the link in the phone's
      browser fixed it. (S06.02.02; sign-in.md *Layout and accessibility*, the go-live device check.)
@@ -1223,14 +1226,12 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 ### The email sender's settings, once T01 is in test
 
 148. In the Azure portal, signed in with your own account, open the web app `app-grow2notes-test`, then Settings,
-     Environment variables. Look at the names only. Look for: `Email__Endpoint` and `Email__SenderAddress` among them;
-     and no other name that suggests Communication Services, such as `Email__ConnectionString` or one with Acs,
-     Communication or Key in it. The only connection-string names expected are `ConnectionStrings__Grow2Notes` and
-     `APPLICATIONINSIGHTS_CONNECTION_STRING`. If a name looks wrong, open that one value. Then open the test resource
-     group's Communication Services resource. Look for access keys turned off (local authentication disabled), and
-     for the Email service's Azure-managed domain showing SPF, DKIM and DMARC verified. Do not write any value down.
-     (S00.02.07's second criterion, its deployed half: its app half is `EmailSendingTests`, in CI. This is the read-only
-     check, by hand, for the Azure side.)
+     Environment variables. Look at the names only. Look for: `Email__ApiKeySecretUri` and `Email__SenderAddress`
+     among them and no other `Email__` name; and no setting whose value is a key or a connection string. The secret's
+     address holds the vault's name and `resend-api-key`, and no key. The only connection-string names expected are
+     `ConnectionStrings__Grow2Notes` and `APPLICATIONINSIGHTS_CONNECTION_STRING`. If a name looks wrong, open that one
+     value. Do not write any value down. (S00.02.07's second criterion, its deployed half: its app half is
+     `EmailSendingTests`, in CI. This is the read-only check, by hand, for the Azure side; D92 changed the names.)
 
 ### Sign-out on every device, once F-1's fix is in test
 
@@ -1256,3 +1257,50 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      prefix, an ID or an email address. (F-25 in `ops/security-review.md`, D89: the prefix now comes from GitHub when
      the bootstrap is run, not from a default in `bootstrap.bicep`, and nothing in Azure changes. The developer records
      the result in T25's Notes.)
+
+### Email through Resend and the database lock, once T22 is in test
+
+151. Before T22 merges (A104). First the owner: in Resend, verify one sending domain that belongs to Grow2Notes and is
+     never the parent company's or a subdomain of it, add the DNS records Resend gives and a DMARC record, turn open and
+     click tracking off, protect the account with multi-factor sign-in and the fewest members, and create a
+     sending-only API key for test (`infra/README.md`, *Email through Resend*). Then the operator, in one Git Bash shell
+     and signed in to the Azure CLI as Owner and to the GitHub CLI as an admin of the repository: store the key as
+     `resend-api-key` in `kv-grow2notes-test` as that section says, set the `test` environment's secret
+     `EMAIL_SENDER_ADDRESS` with `gh secret set --env test`, and run *Running it again* from a clone of the T22 branch,
+     steps 1 to 4, passing the GitHub subject prefix at run time (D89) and the budgets' start date. Look for the
+     what-if showing one new role assignment, `Key Vault Secrets User`, in each group and nothing else, then for the
+     deployment to succeed. The old `Communication and Email Service Owner` assignment stays until step 153, so test
+     keeps sending through the old sender until T22 deploys. Do not write down the key, the prefix, an ID or an address.
+     (A104, D92, D89. Until `EMAIL_SENDER_ADDRESS` is set, every test deploy stops at its what-if, before any change,
+     and test keeps its previous build: expected, not a defect. Step 150's record of "no change" is of the earlier
+     bootstrap and stands.)
+152. After T22's first test deploy, the cold-start check. Restart the web app `app-grow2notes-test` in the Azure portal
+     and, within a minute of it starting, invite a new worker from Users to the testing mailbox. Look for the invite
+     arriving within 5 minutes and no "Not sent" on screen. If it answers "Not sent", wait a minute and invite again: if
+     only the first fails, the first send's 5 seconds were too short for the cold start, and the developer raises
+     `SendTimeout` in `EmailSending.cs` to 8 seconds (T22's Notes). If every send fails, the key or the role is
+     missing: look at step 151. (D92, the one 5-second deadline over the vault read and the post.)
+153. After T22's first test deploy has sent an invite (step 152), delete the old email resources. In the Azure portal,
+     delete `acs-grow2notes-test` and `ecs-grow2notes-test` from the test resource group, in it and in the production
+     resource group delete any Communication Services resource too if one was ever made (none should exist). Then delete
+     the app identity's old `Communication and Email Service Owner` role assignment in both groups, as `infra/README.md`
+     says. Look for neither group listing a Communication or Email resource, and each group's role assignments for the
+     app identity being Key Vault Crypto Service Encryption User, Key Vault Secrets User and Monitoring Metrics
+     Publisher. (D92; ops/security-review.md F-8.)
+154. Run `infra/locks.bicep` for test as Owner, with `infra/README.md`'s *Locking the database* command, once the test
+     database exists. Look for the deployment succeeding and `az lock list --resource-group rg-grow2notes-test-ause`
+     showing `grow2notes-database` at level `CanNotDelete`. (S00.02.05; design.md §10.1.)
+155. With the lock in place, try the two things it matters for, on test only. First `az sql server delete` for
+     `sql-grow2notes-test` in its resource group. Look for the Azure CLI refusing with `ScopeLocked`. If it is not
+     refused, the test server and database are gone: test holds made-up data only, so rebuild it by hand (a deploy of
+     `main.bicep`, then `infra/sql/grant-identities.sql`, then Deploy), update design.md §10.1 to say that long-term
+     backups are the protection, and tell the developer. Then `az sql db rename` of `sqldb-grow2notes` to a temporary
+     name and straight back, while nobody is using test. Look for whether each rename is accepted or refused. Then
+     `az lock list` for the group: look for `grow2notes-database` still on the database, and run step 154 again if it is
+     gone. Write down the dates and the two results (no IDs): the developer records them in S00.02.05's Notes and in
+     `restore-drill.md` step 4. This step holds nothing open. (S00.02.05's first criterion; design.md §14 M0, the last
+     Done-when line; D90.)
+156. In the next test deploy after the lock, open the run's log. Look for the step that adds the runner's firewall rule
+     and the step that removes it both succeeding. (S00.02.05's second criterion.)
+157. Production's checks are not here: they are in [go-live.md](go-live.md), which the operator works through before
+     any real data goes in. (S00.02.04, S06.03.01, S06.04.01, S06.05.01.)
