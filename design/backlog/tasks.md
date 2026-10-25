@@ -10,7 +10,8 @@ cut ([Cut stories](#cut-stories)).
   *Absorbs*.
 - **One branch and one pull request per task**, titled as a Conventional Commit, with the task's ID and its stories'
   IDs in the description. The Definition of Done ([README §9](README.md#9-definition-of-done)) applies to each task
-  as it did to each story: one review, green CI, merge, the deploy to test and one after-deploy check.
+  as it did to each story: one review, green CI, merge, and the deploy to test, with no after-deploy check (owner,
+  20 October 2026, D89).
 - **A task is planned briefly when its lane starts it**: its *Steps* turn the absorbed criteria into a short
   checklist, shared parts first. There is no per-story refinement, no pull-in row in a sprint file and no per-story
   close-out. When the task is done, its `status` here and its stories' `status` fields become `done` together.
@@ -414,17 +415,6 @@ with their typing kept (checked with a half-filled Invite form), and a different
       logout `401`, nor for one to a request sent before the newest sign-in; a refresh that answers another `userId`
       reloads; on a user's page, view C hides the back link in `#page-bar` from sight and from Tab; and axe passes on
       view C
-- [ ] After the deploy to test, check read-only, with no sign-in: read-only `az` shows the test resource group's
-      Communication Services and Email service with data location Australia and access keys off, the Azure-managed
-      domain linked with SPF, DKIM and DMARC verified, and the web app's settings naming `Email__Endpoint` and
-      `Email__SenderAddress` (names only, no values printed) and no Communication Services connection string or key;
-      signed out, `POST /api/admin/users` and `POST /api/admin/users/{a new GUID}/setup-link` answer `401`
-      problem+json with `no-store`; a headless browser at `/manage/users/new` meets sign-in's view A, titled
-      "Grow2Notes – Sign in", with no Content Security Policy violation, and the deployed bundle holds "Send invite",
-      "Setup link sent to" and "You’ve been signed out"; and Log Analytics holds no `5xx` or exception from the app
-      since the deploy
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T01's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -780,19 +770,8 @@ found and `403`.
       approves it (ux/README.md open question 2), focus going to the `<h1>` after Restore, and the notice's Restore
       following its words on a wrapping line from 40rem, with no container query; search-filter.md,
       participant-list-rows.md and sign-in.md component 15; the by-hand checks (Notes) on ops/first-use-in-test.md;
-      `migrate.sql` from CI's artifact read in the pull request, expand-only, with the `Participant` `DENY DELETE`;
+      the migration's diff read in the pull request, expand-only, with the `Participant` `DENY DELETE`;
       and CI's run on the pull request passing.
-- [ ] After the deploy to test, check with requests that change nothing: `/` serves this build's `index.html`, its
-      hashed assets answering `200`; `GET /api/admin/participants`, with and without `includeArchived=true`, answers
-      a `401` problem with `no-store` when no cookie is sent; then headless Chromium under Playwright, whose
-      `page.route` answers `/api/auth/me` with a made-up manager and `/api/admin/participants` with made-up
-      participants (A35), so that test receives only `GET`s: at 375 px and laptop width, Manage, then Participants,
-      lists them by family name, Find a participant filters, Archived switches the view, a row opens its page with the
-      name focused, its back link focuses the row again, and Add participant shows its form; the console reports no
-      CSP violation or script error, and the origin's storage is empty; Application Insights shows no exception and
-      no `5xx` from the deploy to the checks; the deploy's migration and smoke test passed; record the run IDs.
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T02's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -1055,17 +1034,6 @@ changes by a link, Back, reload or Sign out.
       VoiceOver with iOS Safari and TalkBack with Chrome hearing *Interactions and focus* once each, and, on real
       phones, the Android back gesture and iOS swipe-back while dirty, and whether `beforeunload` shows anything there
       (S01.04.02's Note; guide-prompts.md *Open questions*)
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
-      the CI and Deploy runs passed every step, the deploy applied no migration and its smoke test passed; `/healthz`
-      and `/healthz/ready` answer `200`; a signed-out `GET /api/admin/guide-prompts` answers `401` problem+json with
-      `Cache-Control: no-store` and a `Date` header through App Service's front end, the header that "Saved 4:12 pm"
-      reads (guide-prompts.md *Open questions*); and headless Chromium at `/manage/guide-prompts`, signed out, shows
-      sign-in with no Content Security Policy error in its console. Record the run IDs in Notes, and that the criteria
-      are proven in CI. Then set T03's `status` here and S01.04.01's and S01.04.02's to `done` together, ticking their
-      criteria and leaving unticked, each with its dated Note, any criterion handed off to a task not yet merged (Notes
-      above)
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T03's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -1482,14 +1450,6 @@ protected. From the console the operator can reset the last manager's sign-in or
       through Invite user is renamed and given a new address, and their page shows both and reads Invited; no name or
       email reaches a title, an address, `history.state` or storage (AC3); axe passes in each state (AC39); and
       ops/first-use-in-test.md gains the check that a new address gets the setup-link email
-- [ ] After the deploy to test, check read-only, with no sign-in: signed out, `PUT /api/admin/users/{a new GUID}`,
-      `POST /api/admin/users/{a new GUID}/deactivate`, `…/reactivate` and `…/setup-link` answer `401` problem+json
-      with `no-store`; a headless browser at `/manage/users/{a new GUID}/edit` meets sign-in's view A, titled
-      "Grow2Notes – Sign in", with no Content Security Policy violation; the deployed bundle holds "Deactivating…",
-      "Reactivating…", "Resetting sign-in…" and "Changing the email resets sign-in"; and Log Analytics holds no `5xx`
-      or exception from the app since the deploy
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T04's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -1805,26 +1765,12 @@ moves, archives and restores them. Changes apply to notes started from then on.
       or the origin's storage after each flow. Docs, each to the code as built: list-editor.md, its sketch keeping the
       list's order rather than sorting by `sortOrder`, its CSS taking common-items.md's `rowButton` rule and its
       expected Edit reading in the order Notes give; participants.md; design.md §6.6's goal rows (an unknown
-      participant's `404`, the `PUT`'s `ETag`); the by-hand checks (Notes) on ops/first-use-in-test.md; `migrate.sql`
-      from CI's artifact, read in the pull request, expand-only, with the `Goal` `DENY DELETE`; and CI's run on the
-      pull request passing.
+      participant's `404`, the `PUT`'s `ETag`); the by-hand checks (Notes) on ops/first-use-in-test.md; the
+      migration's diff read in the pull request, expand-only, with the `Goal` `DENY DELETE`; and CI's run on the pull
+      request passing.
       Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #59 passed, and the
       `AddGoal` migration was read in the repository for its `DENY DELETE` on `Goal` and for adding only (CI's
       `migrate.sql` read was not recorded).
-- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
-      passed every step, the deploy's migration added `Goal` and its smoke test passed; `/` serves this build's
-      `index.html`, its hashed assets answering `200`; `GET /api/admin/participants/{a made-up GUID}/goals`, with and
-      without `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless
-      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the
-      participants list, the goals list and every goal write with made-up data (A35), so that test receives only
-      `GET`s: at 375 px and 1280 px a participant's page shows Goals, five Adds keep focus in New goal, Move down on
-      row 1 keeps focus on that goal's Move down, Archive opens Archived goals with focus on Restore, and an archived
-      participant's goals are numbered text with no buttons; the console reports no CSP violation or script error,
-      and the origin's storage is empty; Application Insights shows no exception and no `5xx` from the deploy to the
-      checks. Record the run IDs in Notes, then set T05's `status` here and its stories' to `done` together, ticking
-      their criteria.
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T05's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -2198,27 +2144,12 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
       wait for ops/first-use-in-test.md step 45, and those that name a group part for T07 (Notes). Docs, each to the
       code as built: common-items.md and list-editor.md (the item kind and the shared list wrapper); design.md §6.6's
       common item rows (the `404` for a group or an item not in the organisation); the by-hand checks (Notes) on
-      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with both
+      ops/first-use-in-test.md; the migration's diff read in the pull request, expand-only, with both
       tables, the filtered index, the check constraint, the Every note `INSERT` and both `DENY DELETE`s; and CI's run
       on the pull request passing.
       Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #60 passed, and the
       `AddCommonItems` migration was read in the repository for both tables, the check constraint, the Every note
       `INSERT` and both `DENY DELETE`s, adding only (CI's `migrate.sql` read was not recorded).
-- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
-      passed every step, the deploy's migration applied `AddCommonItems` and its smoke test passed; `/` serves this
-      build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with and without
-      `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless Chromium
-      under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the groups list and every
-      item write with made-up data (A35), so that test receives only `GET`s: at 375 px and 1280 px
-      `/manage/common-items` shows the heading, the help text and Every note with its line, five Adds keep focus in
-      "New item in Every note", Move down on row 1 keeps focus on that item's Move down, and Archive opens Archived
-      items with focus on Restore; the console reports no CSP violation or script error, and the origin's storage is
-      empty; Application Insights shows no exception and no `5xx` from the deploy to the checks. Record the run IDs in
-      Notes, then set T06's `status` here and its stories' to `done` together, ticking their criteria and leaving
-      S01.03.01's Content and copy criterion open for T07's parts, with a Note in S01.03.01, dated, naming T07 and
-      those parts (Notes, *What T07 builds instead*), as T03 left its hand-offs open.
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T06's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -2524,23 +2455,6 @@ group; Every note stays first and fixed.
       `config.every_note_fixed` and §5.3 *CommonItemGroup*'s Constraints, which name renaming and archiving alone, to
       the restore refusal as well (Notes); ops/first-use-in-test.md's steps 50 to 52; and CI's run on the pull request
       passing.
-- [ ] After the deploy to test, check with requests that change nothing and sign no one in: the CI and Deploy runs
-      passed every step, the deploy's migration step finding nothing new to apply, and its smoke test passed; `/`
-      serves this build's `index.html`, its hashed assets answering `200`; `GET /api/admin/common-item-groups`, with
-      and without `includeArchived=true`, answers a `401` problem with `no-store` when no cookie is sent; then headless
-      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager, and the groups list
-      and every group and item write with made-up data (A35), so that test receives only `GET`s: at 375 px and 1280 px
-      `/manage/common-items` shows Every note with no group buttons, then a made-up group with Move up, Move down,
-      Rename and Archive; Add group puts focus in the new group's New item field; Rename's Save puts focus on Rename;
-      Move down on the first group keeps focus on that group's Move down; Edit on an item shows the Group radios, and
-      a move puts focus on its Edit in its new group; and Archive opens Archived groups with focus on Restore; the
-      console reports no CSP violation or script error, and the origin's storage is empty; Application Insights shows
-      no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T07's `status`
-      here and its stories' to `done` together, ticking their criteria, with a dated Note in S01.03.07 naming T13 for
-      the note side (Notes), and close S01.03.01's Content and copy criterion, which T06 left open for this task's
-      parts, with a dated Note there.
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T07's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -3032,27 +2946,11 @@ lets workers write only today's note, using the Melbourne date.
       note-form.md, checkbox-list.md, guided-notes-textarea.md, autosave-status.md and search-filter.md likewise keep
       their full design and gain only what the build settles; the deferred parts and hand-offs (Notes) in the
       receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
-      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the
+      ops/first-use-in-test.md; the migration's diff read in the pull request, expand-only, with the
       `Note` `DENY DELETE`; and CI's run on the pull request passing.
       Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #61 passed, and the
       `AddNote` migration was read in the repository for its `DENY DELETE` on `Note` and for adding only (CI's
       `migrate.sql` read was not recorded).
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
-      the CI and Deploy runs passed every step, the deploy's migration added `Note` and `NoteDraft` and its smoke test
-      passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed assets
-      answering `200`; signed out, `GET /api/today`, `GET /api/participants/{a made-up GUID}` and
-      `GET /api/participants/{that GUID}/notes/{today}/draft` each answer a `401` problem with `no-store`; then
-      headless Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker, and
-      `/api/today`, the participant header and the draft's `GET` and `PUT` with made-up data (A35), so that test
-      receives only `GET`s: at 375 and 1280 px, Today lists the participants under "Today · …", Find a participant
-      filters them, a row opens the note with its `<h1>` focused, a tick and typing show "Saving…" then "Saved …"
-      from the answered `PUT`, and the back link focuses the row again; the console reports no CSP violation or
-      script error, and the origin's storage is empty; Application Insights shows no exception and no `5xx` from the
-      deploy to the checks. Record the run IDs in Notes, then set T08's `status` here and its stories' to `done`
-      together, ticking their criteria and those that T08 proves for S01.04.01 and S01.02.04, and leaving unticked,
-      each with its dated Note, any part handed to a task not yet merged (Notes).
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T08's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -3543,31 +3441,11 @@ past notes.
       status-tags.md, checkbox-list.md, chronological-list.md, confirm-dialog.md, status-messages.md (the success
       tone of `Notice`) and autosave-status.md gain only what the build settles; the deferred parts and hand-offs
       (Notes) in the receiving tasks' Notes and, dated, in the stories' Notes; the by-hand checks (Notes) on
-      ops/first-use-in-test.md; `migrate.sql` from CI's artifact, read in the pull request, expand-only, with the four
+      ops/first-use-in-test.md; the migration's diff read in the pull request, expand-only, with the four
       denies; and CI's run on the pull request passing.
       Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #63 passed, and the
       `AddNoteVersion` migration was read in the repository for `DENY UPDATE, DELETE` on both tables and for adding only
       (CI's `migrate.sql` read was not recorded).
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
-      the CI and Deploy runs passed every step, the deploy's migration added `NoteVersion` and `NoteVersionItem` and its
-      smoke test passed; `/healthz` and `/healthz/ready` answer `200`; `/` serves this build's `index.html`, its hashed
-      assets answering `200`; signed out, `GET /api/participants/{a made-up GUID}/notes` and
-      `GET /api/participants/{that GUID}/notes/{today}` each answer a `401` problem with `no-store`; then headless
-      Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker and every other `/api`
-      request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, Today shows the four
-      status forms and Flagged; a row with no note opens the form, where a tick, typing, the flag and a reason show
-      "Saving…" then "Saved …", Submit opens the confirmation with the name, the date and "Flagged for manager: Yes",
-      and confirming lands on Today with the banner focused; a submitted row opens the read view with the flag line;
-      and its Past notes link lists the rows, Show older adding the next ones with focus on the first of them; the
-      console reports no CSP violation or script error, and the origin's storage is empty; Application Insights shows
-      no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T09's `status` here
-      and its stories' to `done` together, ticking their criteria, the parts that T08 handed to T09 in S02.01.01,
-      S02.01.02, S02.02.02, S02.02.03 and S02.02.07, and S01.02.04's archived Past notes action, and leaving unticked,
-      each with its dated Note, any part handed to a task not yet merged (Notes) and S02.03.01's manual check, whose
-      Note names its ops/first-use-in-test.md step: only a person can prove it, and README §9 lets the story be done
-      once CI and these checks pass.
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T09's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -3935,24 +3813,6 @@ older page is told the note has moved on, and nothing is overwritten without ask
       (Notes) on ops/first-use-in-test.md; no migration; and CI's run on the pull request passing.
       Ticked at the close-out (25 October 2026): the tests and documents are on `main`, CI's run on #65 passed, and the
       PR added no migration.
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in:
-      the CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready`
-      answer `200`; `/` serves this build's `index.html`, its hashed assets answering `200`; signed out,
-      `GET /api/participants/{a made-up GUID}/notes/{today}/draft` answers a `401` problem with `no-store`; then
-      headless Chromium under Playwright, whose `page.route` answers `/api/auth/me` with a made-up worker and every
-      other `/api` request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, typing
-      with the `PUT`s failing shows "Not saved: no connection. Keep this page open; retrying." after about 1 s with
-      Submit `aria-disabled`, and "Saved …" once they are answered; a `PUT` answered `409 draft.taken_over` shows the
-      banner with both buttons, Keep sending a `PUT` with a new `clientId` and `seq` 1, and Load showing the other
-      version's text; a change waiting as the back link is pressed sending its `PUT`, then Today; the console reports
-      no CSP violation or script error, and the origin's storage is empty; Application Insights shows no exception
-      and no `5xx` from the deploy to the checks. Record the run IDs in Notes, then set T10's `status` here and its
-      stories' to `done` together, ticking their criteria and the parts that T08 and T09 handed to T10 in S02.02.02
-      and S02.03.01, and leaving unticked, each with its dated Note, S02.02.05's and S02.02.06's manual checks, whose
-      Notes name their ops/first-use-in-test.md steps (README §9), and any part handed to a task not yet merged
-      (Notes).
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T10's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -4222,23 +4082,6 @@ the reason and when it was flagged. Only submitted flags count.
       T11 builds ticked (the checklist Note); the hand-offs (Notes) in T16's, T18's and T19's Notes and, dated, in
       S03.03.01's, S03.03.02's, S03.03.03's and S03.03.05's Notes; the by-hand checks (Notes) on
       ops/first-use-in-test.md; no migration, as the model is unchanged; and CI's run on the pull request passing.
-- [ ] After the deploy to test, check with requests and a headless browser that change nothing and sign no one in: the
-      CI and Deploy runs passed every step and the deploy's smoke test passed; `/healthz` and `/healthz/ready` answer
-      `200`; `/` and `/flagged` serve this build's `index.html`, its hashed assets answering `200`; signed out,
-      `GET /api/reviews?status=toReview` answers a `401` problem with `no-store`; then headless Chromium under
-      Playwright, whose `page.route` answers `/api/auth/me` with a made-up manager or worker and every other `/api`
-      request with made-up data (A35), so that test receives only `GET`s: at 375 and 1280 px, as the manager,
-      `/flagged`, titled "Grow2Notes – Flagged notes" with Flagged current, shows the rows in the order answered, with
-      "flagged" and the time, or the date and time, "Reason: …" and "Flag removed in a later edit", and an empty list
-      its sentence; a row opens the read view with the back link "Flagged", which returns to the list; a flagged Submit
-      answered `201` with `flagStatus: "ToReview"` is followed by a `GET /api/auth/me`; as the worker, `/flagged` shows
-      Page not found; the console reports no CSP violation or script error, and the origin's storage is empty;
-      Application Insights shows no exception and no `5xx` from the deploy to the checks. Record the run IDs in Notes,
-      then set T11's `status` here and its stories' to `done` together, ticking their criteria and leaving unticked,
-      each with its dated Note, the parts handed to T19 and T16 (Notes) and the by-hand checks, whose Notes name their
-      ops/first-use-in-test.md steps (Notes).
-      (Not run at the close-out, 25 October 2026: the owner's rule of 20 October 2026 is that nothing is checked on the
-      deployed site, so CI and the Deploy run, which passed (see the close-out Note), decide.)
 - [x] Close the backlog (owner, 20 October 2026: this machine runs no test, app or deploy; CI on the pull request ran
       every test and decided, and nothing was checked on the deployed site; closed out with T01 to T11 in one pull
       request, 25 October 2026): T11's `status` here and its stories' set to `done`, their criteria ticked where tests
@@ -6885,7 +6728,8 @@ otherwise.
   the owner names the business AI account the operator will use, and the provider names its privacy contact.
 - **Q12. Do the by-hand accessibility checks hold go-live?** design.md §14 M6 names VoiceOver and TalkBack, and
   microcopy.md asks for the five-worker words check before go-live. Affects T28 only. Suggested: no, under the
-  owner's rule of 12 October 2026: do them in test when possible, and turn any failure into a bug.
+  owner's rules of 12 and 20 October 2026: they are by-hand steps on ops/first-use-in-test.md, which hold nothing open,
+  and any failure becomes a bug.
 - **Q13. What sends production's email (A58, S00.02.04), as Communication Services' Email retires on 30 September
   2028?** Blocks T22, and so T27 and T28. Added on 14 October 2026 by T01's plan. design.md §10.1 has production
   send from `acs-grow2notes-prod` on the product domain, but Microsoft Learn (updated 8 October 2026) puts the Email

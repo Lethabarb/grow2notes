@@ -102,8 +102,10 @@ decision changes scope.
 3. **No overlap.** Each coverage row has exactly one owning feature, or is marked DoD. Other items may mention the row
    but don't own it.
 4. **Children add up to the parent.**
-   - A feature is done only when all its stories are done and the rows it owns pass in the test environment.
-   - An epic is done only when all its features are done and its milestone's *Done when* list passes in test.
+   - A feature is done only when all its stories are done and the rows it owns are proven by CI. A part of a row that
+     only a person can check is a by-hand step on ops/first-use-in-test.md and holds nothing open (D89).
+   - An epic is done only when all its features are done and its milestone's *Done when* list is proven by CI, with the
+     same by-hand exception.
 5. **Rules that apply everywhere are not owned by a feature.** Examples are nothing stored on the device, Melbourne
    time, audit entries and security headers. In coverage.md they are marked DoD. They live in the Definition of Done
    (§9) and are checked on every story. The first build of their shared mechanism is an enabler story, such as the
@@ -216,7 +218,8 @@ as R1 epics follow M0–M6.
 - **Use Given / When / Then only where the state before the action matters**: permissions, dates and time zones,
   conflicting edits [20, Convention]. For example: "Given a token for a manager since made a worker, when it calls the
   invite tool, then the call returns 401 and no invite is created."
-- **Every criterion needs a check**: either an automated test or a named manual check in the test environment.
+- **Every criterion needs a check**: either an automated test, or a named by-hand step on ops/first-use-in-test.md that
+  holds nothing open (D89).
 
 ## 4. ID scheme
 
@@ -550,15 +553,30 @@ Opinion].
 
 ## 9. Definition of Done
 
+**The owner's build rules** (decision of 20 October 2026, D89; A98 applies them to accessibility). They shape every list
+below:
+
+- While building, the only local checks are compile and lint: the .NET build with warnings as errors, and the SPA build,
+  type check and lint. Nothing is run locally: no tests, app, database or LocalDB.
+- Nothing is checked against the deployed site after a deploy.
+- Tests are still written with the work. CI runs every test (unit, integration and end-to-end) on every pull request and
+  is the authority.
+- A pull request merges only after review and with CI green.
+- A migration is reviewed in the pull request's diff (expand-only), not from a separately produced `migrate.sql`.
+- By-hand checks (real devices, screen readers, a person signing in, operator steps) go on the one ordered checklist
+  in [ops/first-use-in-test.md](../../ops/first-use-in-test.md), which the owner works through the first time they sign
+  in to the test site. They never hold a story or task open (this extends the owner's decision of 12 October 2026, D87).
+
 **Story.** A story is done when all of these are true:
 
-- [ ] **Merged** to `main` through a pull request: squash merge, Conventional Commit title, and the story ID in the
-  description. Use one story per pull request where practical.
-- [ ] **CI is green** (design.md §10.4): build with warnings as errors, unit and integration tests, NuGet and npm
-  audit, type-check, lint, Vitest, Playwright smoke tests with axe, and no pending model changes.
-- [ ] **Migrations:** the `migrate.sql` from the CI artifact has been read in the pull request; the change is
-  expand-only (design.md §10.6); any new append-only table has its `DENY` in `grow2notes_runtime` and is added to the
-  M5 permission test; data fixes are migrations, never ad-hoc SQL.
+- [ ] **Merged** to `main` through a pull request, after review and with CI green: squash merge, Conventional Commit
+  title, and the story ID in the description. Use one story per pull request where practical.
+- [ ] **CI is green** (design.md §10.4) on the pull request, with every test run: build with warnings as errors, unit
+  and integration tests, Playwright end-to-end tests with axe, NuGet and npm audit, type-check, lint, Vitest, and no
+  pending model changes.
+- [ ] **Migrations:** the migration's diff has been read in the pull request; the change is expand-only (design.md
+  §10.6); any new append-only table has its `DENY` in `grow2notes_runtime` and is added to the M5 permission test; data
+  fixes are migrations, never ad-hoc SQL.
 - [ ] **Automated tests** cover the acceptance criteria. For every new endpoint or tool, that includes worker versus
   manager permissions (and support in R2) and organisation scoping (design.md §14, D3).
 - [ ] **R2 tools:** the tool has a row in the tool matrix test (mcp-server.md §10 item 1) and the `tools/list`
@@ -570,59 +588,63 @@ Opinion].
   carry `Cache-Control: no-store` (design.md §6.1); new tenant-owned entities implement `ITenantOwned`; no
   `IgnoreQueryFilters` outside the operator commands (design.md §5.9).
 - [ ] **Accessibility:** the changed parts meet WCAG 2.2 AA (A32). Automated checks find only part of WCAG (about 57%
-  of issues by volume in Deque's own study [37, Vendor]), so the evidence is:
+  of issues by volume in Deque's own study [37, Vendor]), but under the owner's rule the Playwright run in CI is the
+  evidence (A98), so the story's tests include:
   - axe in Playwright shows no issues on changed screens;
-  - a keyboard-only check passes;
-  - the screen spec's accessibility checklist items for the changed parts are ticked;
-  - it works at 375 px wide and on a laptop (D5);
-  - a screen reader spot check has been done if a form or dialog changed.
+  - a keyboard-only run of each changed flow;
+  - the changed screens work at 375 px wide and on a laptop (D5).
 
-  M6's VoiceOver and TalkBack runs on the note form and the Report screen stay a coverage row in E06.
+  The screen spec's accessibility checklist items for the changed parts stay the spec. The ones that CI's run proves are
+  ticked; the rest, such as a real keyboard pass, a screen reader spot check (NVDA, VoiceOver, TalkBack) and real
+  devices, are by-hand steps on ops/first-use-in-test.md. They hold nothing open, and a criterion that only they can
+  prove stays unticked, with a dated Note pointing to the checklist. M6's VoiceOver and TalkBack runs on the note form
+  and the Report screen are by-hand steps there too.
 - [ ] **Audit:** every state change writes its audit event from design.md §5.4, or mcp-server.md §9 for R2 (with
   `"via": "mcp"`), and a test finds it.
 - [ ] **Privacy:**
   - no participant data or note content in logs or telemetry (design.md §9.5);
   - nothing stored on the device (D22);
-  - the parent company's name appears nowhere (D42), checked by hand on screens, page titles, emails and files, and
-    in the change's diff before each commit, as no automated check looks for it (D72);
+  - the parent company's name appears nowhere (D42), checked by review and in the change's diff before each commit,
+    covering screens, page titles, emails and files, as no automated check looks for it (D72);
   - **R2:** no note content in any tool reply (D49), with a test.
 - [ ] **Words on screen** match the UX spec and the microcopy glossary.
 - [ ] **Docs:**
   - design.md or the UX spec is updated if behaviour changed, with a decision in decisions.md;
   - the `ops/` runbooks are updated if operations changed.
-- [ ] **Deployed to the test environment** (this happens automatically on merge), and the acceptance criteria checked
-  there with made-up data (A35).
+- [ ] **Deployed to the test environment.** This happens automatically on merge; nothing is checked there afterwards.
 - [ ] **Story section:** tasks ticked, `status: done` and `sprint` set in its fields block.
 
-**By-hand checks in test do not hold a story open** (owner, 12 October 2026). A check that needs a person rather than
-an agent, such as a sign-in in test, a real phone or laptop, a screen reader, or the operator's Azure access, is a
-nice-to-have: it goes on the one ordered checklist in [ops/first-use-in-test.md](../../ops/first-use-in-test.md),
-which the owner works through the first time they sign in to the test site, and the story is done once its criteria
-are proven in CI and its after-deploy checks that change nothing have passed. A criterion that only such a check can
-prove stays unticked, with a dated Note pointing to the checklist.
+**By-hand checks never hold a story open** (owner, 20 October 2026, A98, D89; first decided on 12 October 2026). A check
+that needs a person rather than CI, such as a sign-in in test, a real phone or laptop, a screen reader, or the
+operator's Azure access, is a nice-to-have: it goes on [ops/first-use-in-test.md](../../ops/first-use-in-test.md). The
+story is done once its criteria are proven in CI. A criterion that only such a check can prove stays unticked, with a
+dated Note pointing to the checklist.
 
 **Short variants.** Some items can't produce tested code, so they use a shorter list:
 
 - **Spike:** the time-box was kept, and its output (a decision in decisions.md, a design note, or split stories) is
   merged by pull request.
-- **Document enabler** (a runbook or other document): merged by pull request, and read by the person its coverage row
-  names (M5 says "read by a manager").
+- **Document enabler** (a runbook or other document): merged by pull request. The read by the person its coverage row
+  names (M5 says "read by a manager") is a by-hand step on ops/first-use-in-test.md and holds nothing open.
 - **Checklist lines that the provider or the owner does** (design.md §14 go-live checklist, mcp-server.md §11.1): no
   story and no points. They stay a checklist, with owner and evidence columns, in one feature: *Go-live readiness* in
   E06, and F07.05 for the mcp-server.md §11.1 lines. The Release check below ticks them. Only developer work on those
   lists, such as the restore test, becomes a pointed story.
 
-**Feature.** Done when all its stories are done, and the coverage.md rows it owns are checked in test.
+**Feature.** Done when all its stories are done, and each coverage.md row it owns is proven by CI or, for a part that
+only a person can check, ticked with a dated Note pointing to ops/first-use-in-test.md.
 
 **Epic.**
 
-- **R1:** all its features are done, and its milestone's *Done when* list in design.md §14 passes in test.
-- **R2:** all its features are done, and the tests in mcp-server.md §10 pass in test.
+- **R1:** all its features are done, and its milestone's *Done when* list in design.md §14 is proven by CI. A line that
+  only a person can check is a by-hand step on ops/first-use-in-test.md and holds nothing open.
+- **R2:** all its features are done, and the tests in mcp-server.md §10 pass in CI. Its by-hand tests are on
+  ops/mcp-switch-on.md.
 
 **Release.**
 
 - **R1:** all epics are done, the *Go-live readiness* checklist is complete with an owner and evidence for every line,
-  and the build that passed in test is deployed to production (design.md §10.4, §14).
+  and the build that passed CI and was deployed to test is deployed to production (design.md §10.4, §14).
 - **R2:** its epics are done, the mcp-server.md §11.1 switch-on checklist is complete, `Mcp:Enabled` is turned on in
   production, and the date is recorded.
 
@@ -648,8 +670,9 @@ Sprints are a fixed two weeks (D53) and are never extended. If the sprint goal i
 - **Sprint goal.** One sentence a manager would understand. For example: "A manager can set up a participant with five
   goals on a phone" (from M1's *Done when*).
 - **Review.** The Scrum Guide calls the review a working session, not a presentation [1]. Managers try the increment
-  themselves, with their own test accounts in the test environment, using made-up data only (A35). If a sprint has
-  nothing they can see, as with much of E00, send a three-line written update instead.
+  themselves, with their own test accounts in the test environment, using made-up data only (A35). This is the review
+  session, not a check that a story waits for (D89). If a sprint has nothing they can see, as with much of E00, send a
+  three-line written update instead.
 - **Feedback that adds scope** goes to the owner as a decision question first (§1). It doesn't go straight into the
   backlog.
 
