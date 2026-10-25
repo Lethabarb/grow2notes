@@ -1281,12 +1281,11 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      `SendTimeout` in `EmailSending.cs` to 8 seconds (T22's Notes). If every send fails, the key or the role is
      missing: look at step 151. (D92, the one 5-second deadline over the vault read and the post.)
 153. After T22's first test deploy has sent an invite (step 152), delete the old email resources. In the Azure portal,
-     delete `acs-grow2notes-test` and `ecs-grow2notes-test` from the test resource group, in it and in the production
-     resource group delete any Communication Services resource too if one was ever made (none should exist). Then delete
-     the app identity's old `Communication and Email Service Owner` role assignment in both groups, as `infra/README.md`
-     says. Look for neither group listing a Communication or Email resource, and each group's role assignments for the
-     app identity being Key Vault Crypto Service Encryption User, Key Vault Secrets User and Monitoring Metrics
-     Publisher. (D92; ops/security-review.md F-8.)
+     delete `acs-grow2notes-test` and `ecs-grow2notes-test` from the test resource group; the production group should
+     never have had any. Then delete the app identity's old `Communication and Email Service Owner` role assignment in
+     both groups, as `infra/README.md` says. Look for neither group listing a Communication or Email resource, and each
+     group's role assignments for the app identity being Key Vault Crypto Service Encryption User, Key Vault Secrets
+     User and Monitoring Metrics Publisher. (D92; ops/security-review.md F-8.)
 154. Run `infra/locks.bicep` for test as Owner, with `infra/README.md`'s *Locking the database* command, once the test
      database exists. Look for the deployment succeeding and `az lock list --resource-group rg-grow2notes-test-ause`
      showing `grow2notes-database` at level `CanNotDelete`. (S00.02.05; design.md §10.1.)
