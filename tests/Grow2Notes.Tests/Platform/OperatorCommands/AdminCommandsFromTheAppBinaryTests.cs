@@ -130,9 +130,9 @@ public sealed class AdminCommandsFromTheAppBinaryTests(Grow2NotesFactory factory
             (run.ExitCode, run.Output, run.Error));
     }
 
-    // The link alone: with no Email:Endpoint, the binary's email sender writes to standard output, so an email sent
-    // would be there too. The web app's content root is the web project's folder and the command's is the folder it
-    // ran from, so the two share one key ring only because Program.cs names the application for both, with
+    // The link alone: with no Email:ApiKeySecretUri, the binary's email sender writes to standard output, so an
+    // email sent would be there too. The web app's content root is the web project's folder and the command's is the
+    // folder it ran from, so the two share one key ring only because Program.cs names the application for both, with
     // SetApplicationName.
     private static async Task AssertPrintsOnlyALinkTheWebAppVerifiesAsync(
         string output, UserManager<ApplicationUser> users, ApplicationUser user)
