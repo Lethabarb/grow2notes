@@ -1303,3 +1303,12 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      and the step that removes it both succeeding. (S00.02.05's second criterion.)
 157. Production's checks are not here: they are in [go-live.md](go-live.md), which the operator works through before
      any real data goes in. (S00.02.04, S06.03.01, S06.04.01, S06.05.01.)
+
+### The provider's organisation in production, once T27 is on main
+
+158. Before anyone starts [go-live.md](go-live.md) D, steps 141 and 142 are done and their results recorded
+     (`ops/security-review.md`'s ZAP section and T25's Notes). Its D1 does not pass without them, so no real personal
+     information goes into production first. (S06.05.02's first criterion; design.md §14 M6; D1.) The production run,
+     the first manager's setup and production's first email are go-live.md D, done by the operator, the owner and the
+     first manager, and nothing about them is written here. (S06.05.02; S06.05.01's third and fourth criteria; A105.)
+     This step holds nothing open and writes nothing down. (D90.)

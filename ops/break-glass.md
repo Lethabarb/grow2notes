@@ -49,10 +49,11 @@ link (design.md §7.4, §8.1). There is no sign-up screen (D23, A1), so this is 
   `Alex Sample` and `alex.sample.20261012@example.org`, with a new address each time, and only when a test
   organisation is needed, since it stays for good. The first run in test is step 3 of
   [first-use-in-test.md](first-use-in-test.md), which opens the link and completes setup with it.
-- **In production,** once, for the provider, as S06.05.02 says: only when F06.01's list of high and critical findings
-  is empty, because the first manager's name and address are the first real personal information in production (D1),
-  and with the provider's name checked by hand for the parent company's name, as every change to the app is (D42,
-  D72).
+- **In production,** once, for the provider, as S06.05.02 and [go-live.md](go-live.md) D say: only when F06.01's list
+  of high and critical findings is empty, because the first manager's name and address are the first real personal
+  information in production (design.md §14 M6), only once the provider has told you, in person or on a call you made to
+  a number you already hold for it, who its first manager is (A105, D74), and with the provider's name checked by hand
+  for the parent company's name, as every change to the app is (D42, D72).
 
 ### What to have ready
 
@@ -117,13 +118,23 @@ so neither goes to telemetry (design.md §9.5).
 
 - **It works once, and for 7 days** (A23). The token holds the manager's security stamp, which completing setup
   changes (design.md §8.1 step 5), so it stops working then, and in any case 7 days after it was printed.
-- **It goes to the first manager directly,** and to no one else: whoever opens it can set up the account. In
-  production, S06.05.02 settles how it reaches them. In test the address is made up and receives nothing, so the
-  operator opens it.
-- **It is kept nowhere else:** not in notes, a ticket, a chat, an email to anyone else, this repository or `ops/`. The
-  console's screen is the only place it is shown, so close the tab once the link has gone to the manager. The token
-  is in the link's fragment, after `#`, which a browser never sends to a server, so no server log holds it either
-  (design.md §8.1 step 2).
+- **It goes to the first manager directly,** and to no one else: whoever opens it can set up the account. In test the
+  address is made up and receives nothing, so the operator opens it. In production:
+  - Send it in one text message to the first manager's own mobile, the number the provider gave when it confirmed who
+    they are. Send it while you are with them in person or on a call you made to that number, so they open it in their
+    phone's browser and set up there and then (A105).
+  - Copy it from the console and paste it straight into the message, from your computer through your phone's messages
+    (such as Phone Link, Messages for web or Messages on a Mac). Never open it, retype it or read it out.
+  - Once it has gone, clear the clipboard, and its history if the computer keeps one (on Windows, Win+V, then Clear
+    all).
+  - Once they have finished setup, delete the message from your phone and from every computer your messages sync to.
+  - Finishing setup ends the link (first bullet), so a copy missed after that cannot be used.
+  - If setup is not finished then, they finish it from the same message within 7 days, and you delete your copies once
+    they have.
+- **It is kept nowhere else:** not in notes, a ticket, a chat, an email, this repository or `ops/`, and in production
+  nowhere but the one text message above. Apart from that, the console's screen is the only place it is shown, so close
+  the tab once the link has gone to the manager. The token is in the link's fragment, after `#`, which a browser never
+  sends to a server, so no server log holds it either (design.md §8.1 step 2).
 - If it is lost, or 7 days pass before setup, do not run `admin bootstrap` again: the address already has an account,
   so the run is refused. [admin reset-signin](#admin-reset-signin) prints a new link for the manager, and ends the
   old one.

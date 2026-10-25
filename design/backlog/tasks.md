@@ -6301,7 +6301,7 @@ Planned 24 October 2026.
 
 ```yaml
 id: T27
-status: new
+status: done
 release: R1
 lane: D
 size: S
@@ -6321,11 +6321,53 @@ weeks in production to invite staff and enter its configuration before cut-over.
 
 ### Notes
 
-- Waits for owner question Q8, how the first manager gets the printed setup link.
+- 26 October 2026: Q8 is answered by design.md A105, with no code change.
+- 26 October 2026: S06.05.02's third criterion is amended (the printed link by text message to the first manager's own
+  phone, from the operator only).
+- 26 October 2026: S06.05.01's fourth criterion moves to production's first invite from Users, with the invitee's
+  agreement (`ops/go-live.md` D7) and no check account. Its third moves to the first passkey enrolment (D5).
+- 26 October 2026: the setup copy is unchanged (D67, D85), and `admin reset-signin` is the recovery for a lost or
+  expired first-manager link.
+- 26 October 2026, departures: the parent company name check comes before the run, because nothing renames an
+  organisation; the run sheet is the first part of `ops/go-live.md` D, not a new letter, so outside citations stay
+  right.
+- 26 October 2026: rate limits are code, not settings, so first-use step 142 on test holds for production.
+- 26 October 2026: gate inputs are still pending: first-use steps 141 and 142, and the owner's F-7 decision at
+  `ops/go-live.md` A6 before A9. They hold nothing open, but the production run waits for them.
+- 26 October 2026, judgment call: S06.05.02 is done with all four criteria unticked (README §9, D90).
+- 26 October 2026, by hand: `ops/go-live.md` D1 to D7 and first-use step 158.
+- 26 October 2026: Q6 and Q12 are recorded as assumed defaults with T28, which follows at once.
+
+### Plan
+
+- Outcome: documents only. A run sheet for the production first manager (the first part of `ops/go-live.md` D), the
+  hand-over of the printed setup link in `ops/break-glass.md`, and the backlog updates. No code, test, migration, SPA,
+  copy key or audit event change. `admin bootstrap` stays as built: it prints the link and sends no email (§7.4).
+- Design: Q8 becomes A105, an assumed default the owner may overturn. The provider confirms the first manager in
+  person or on a call the operator makes (D74), and the operator sends the link in one text message to that
+  manager's own phone while with them, so they set up there and then. The steps live once, in `ops/break-glass.md`
+  (*The setup link*, which reset-signin also uses); A105 holds only the decision and go-live D links to the steps.
+- Domain: none. Organisation, the first manager (Invited, then Active on setup), Every note and `admin.bootstrap` are
+  used as they are. The manager's mobile number is a runbook value, used once and recorded nowhere.
+- Reuse: `admin bootstrap` and `admin reset-signin` with their tests, the break-glass console and bootstrap steps,
+  go-live conventions (numbered steps, Result lines), D74's identity rule, README §9 for a document enabler.
+- Decisions where design.md is silent: the name check comes before the run, because nothing renames an organisation;
+  the run sheet is the first part of go-live D, not a new letter, so outside citations stay right; the SPF, DKIM and
+  DMARC check moves to production's first invite from Users, with the invitee's agreement and no check account; the
+  approved setup copy is unchanged (D67, D85) and the mismatch is recorded; S06.05.02 is done with its by-hand
+  criteria unticked (D90).
+
+### Verticals
+
+- v1: Docs: first manager's run sheet in go-live.md D and the hand-over in break-glass.md; depends_on: none; R4 R5 R6
+  R11 R12 R14
+- v2: Docs: A105, S06.05.02 and S06.05.01, first-use step 158, tasks.md; depends_on: v1; R1 R2 R3 R7 R8 R9 R10 R13
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Docs (#144; v1): the first manager's run sheet in `ops/go-live.md` D, the hand-over in `ops/break-glass.md` (*The
+      setup link*) and the ops README line.
+- [x] Docs (#145; v2): A105, S06.05.02 and S06.05.01 corrected, first-use step 158, T27 done, Q8 answered.
 
 ---
 
@@ -6795,14 +6837,12 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q7 and Q13 are answered
-(below). Each holds only the tasks named. Everything else still open in the specs is built as they say unless the owner
-says otherwise.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q7, Q8 and Q13 are
+answered (below). Each holds only the tasks named. Everything else still open in the specs is built as they say unless
+the owner says otherwise.
 
 - **Q6. The switch-over date, who runs staff onboarding, and whether to pilot.** Blocks T28. Suggested: the owner
   and the managers set the date, the managers run the 30-minute onboarding, and there is no pilot.
-- **Q8. How the first manager gets their setup link.** Bootstrap prints the link and sends no email. Blocks T27.
-  Suggested: the operator gives the printed link to the first manager in person or by phone, with no code change.
 - **Q9. Is confirming inside the assistant enough for the four access tools?** (mcp-server.md §12 Q4, MA6.) Blocks
   T36 and T37. Suggested: yes, keep MA6: the assistant's own confirmation form where it has one, and preview then
   confirm otherwise.
@@ -6813,6 +6853,7 @@ says otherwise.
   microcopy.md asks for the five-worker words check before go-live. Affects T28 only. Suggested: no, under the
   owner's rules of 12 and 20 October 2026: they are by-hand steps on ops/first-use-in-test.md, which hold nothing open,
   and any failure becomes a bug.
+
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:
 
@@ -6840,6 +6881,13 @@ defaults (T23), which the owner may overturn:
   key is a secret that the operator stores in Key Vault, never in the repository or an app setting value, and the from
   address is operator-supplied configuration (A100). Verifying a sending domain in Resend is the owner's by-hand step.
   Communication Services is removed, and A58's test sender is superseded.
+
+**Answered on 26 October 2026.** The developer took the plan's suggested answer as an assumed default, which the owner
+may overturn:
+
+- **Q8. How the first manager gets their setup link** (T27): design.md A105, the printed link given by the operator to
+  the first manager directly, in one text message to their own phone while with them in person or on a call; no code
+  change.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
