@@ -2,9 +2,11 @@
 
 One ordered checklist of every check by hand still outstanding in test,
 `https://app-grow2notes-test.azurewebsites.net`, for the first time the owner signs in there. On 12 October 2026 the
-owner decided that checks like these are nice-to-haves that do not hold a story open (backlog README §9): the stories
-are done on their checks in CI and their read-only checks after the deploy, and the criteria that only these steps can
-prove stay unticked, each with a Note pointing here. Each step ends with what it confirms.
+owner decided that checks like these are nice-to-haves that do not hold a story open, and on 20 October 2026 that
+nothing is checked against the deployed site after a deploy (backlog README §9, decisions.md D90, design.md A98): the
+stories are done on CI, which runs every test on every pull request, and these steps are by hand, hold nothing open
+and are not run by an agent. The criteria that only these steps can prove stay unticked, each with a Note pointing
+here. Each step ends with what it confirms.
 
 ## Before you start
 
@@ -99,7 +101,7 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     and VoiceOver reading the sign-in page and the code step as sign-in.md's *Accessibility checklist* says. Sign out
     with Sign out. (S00.04.05; F00.04's feature check, the phone, and the second sign-in on the password path.)
 
-### What the developer reads afterwards (read-only)
+### What the owner reads afterwards (read-only, by hand)
 
 15. The audit rows, as the Entra admin, through a temporary firewall rule for your own address on
     `sql-grow2notes-test`, deleted straight after, as `infra/sql/check-database.sql` describes:
@@ -115,9 +117,9 @@ prove stay unticked, each with a Note pointing here. Each step ends with what it
     your own address, the one the firewall rule names, not a private or `169.254.` address of App Service's front end;
     and one `auth.signed_out` row for each sign-out, with the person as actor. Do not write the addresses down.
     (S00.03.03's `IpAddress` criterion; S00.03.05's first criterion; S00.04.06.)
-16. The telemetry, which an agent can query: from step 8's time, the workspace holds its `POST /api/auth/login` `401`
-    and one "Password sign-in with an unknown email" entry holding no address, and no `400`, `415` or `5xx` on
-    `/api/auth/*`, and no exception. (S00.04.05.)
+16. The telemetry, in the Azure portal's Log Analytics workspace: from step 8's time, the workspace holds its
+    `POST /api/auth/login` `401` and one "Password sign-in with an unknown email" entry holding no address, and no
+    `400`, `415` or `5xx` on `/api/auth/*`, and no exception. (S00.04.05.)
 
 ### More accounts, invited from Users
 
@@ -280,7 +282,7 @@ the steps above. Step 30 signs out everyone in test, so run these when no one el
     signed out". Then sign each in again, A with Sign in with a passkey and B with email, password and a 6-digit code,
     and look for Today each time. Type `exit` in the console and close its tab, so step 29's link is kept nowhere.
     (S00.03.06's second criterion, in test.)
-31. The developer reads the audit rows as in step 15:
+31. You read the audit rows as in step 15:
 
     ```sql
     SELECT EventType, OccurredAtUtc, ActorUserId, EntityType, OrganisationId, IpAddress
@@ -382,7 +384,7 @@ the testing mailbox (*Before you start*), and accounts B and C, the other two ma
 These steps hold T05's by-hand checks ([tasks.md](../design/backlog/tasks.md), T05's Notes). They need account A and
 the kit of steps 26 to 28. Every goal typed is made up (A35), such as `Makes own breakfast`.
 
-38. The database, as in step 26: run `infra/sql/check-database.sql` for test after T05's deploy. Look for PASS on
+38. The database, as in step 26: run `infra/sql/check-database.sql` for test once T05 is in test. Look for PASS on
     every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Goal` for `grow2notes_runtime`, and B7
     and B8, which list the `Goal` table and the `AddGoal` migration. (S01.02.05's first criterion, in test.)
 39. Ask a manager who has not used the Participants screens before to set up a made-up participant with five goals
@@ -408,7 +410,7 @@ the kit of steps 26 to 28. Every goal typed is made up (A35), such as `Makes own
 These steps hold T06's by-hand checks ([tasks.md](../design/backlog/tasks.md), T06's Notes). They need account A and
 the kit of steps 26 to 28. Every common item typed is made up (A35), such as `Medication prompted`.
 
-42. The database, as in step 26: run `infra/sql/check-database.sql` for test after T06's deploy. Look for PASS on
+42. The database, as in step 26: run `infra/sql/check-database.sql` for test once T06 is in test. Look for PASS on
     every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.CommonItemGroup` and `dbo.CommonItem`
     for `grow2notes_runtime`, and B7 and B8, which list the `CommonItemGroup` and `CommonItem` tables and the
     `AddCommonItems` migration. (S01.03.01's first criterion, in test.)
@@ -441,7 +443,7 @@ kit of steps 26 to 28, and made-up participants with two goals each, such as `Ja
 and `Phones her sister`, whose notes for today nobody has started: three for each screen reader in the steps below,
 nine in all. Every word typed into a note is made up (A35).
 
-46. The database, as in step 26: run `infra/sql/check-database.sql` for test after T08's deploy. Look for PASS on
+46. The database, as in step 26: run `infra/sql/check-database.sql` for test once T08 is in test. Look for PASS on
     every row, among them D3 and D5, which now name the `DENY DELETE` on `dbo.Note` for `grow2notes_runtime`, with
     none on `dbo.NoteDraft`, and B7 and B8, which list the `Note` and `NoteDraft` tables and the `AddNote` migration.
     (S02.02.02's first criterion and S02.02.07's database test, in test.)
@@ -509,7 +511,7 @@ such as `Jane Citizen` with `Makes own breakfast` and `Phones her sister`, whose
 one for step 54 and two for each screen reader in step 55, seven in all. Every word typed into a note is made up
 (A35).
 
-53. The database, as in step 26: run `infra/sql/check-database.sql` for test after T09's deploy. Look for PASS on
+53. The database, as in step 26: run `infra/sql/check-database.sql` for test once T09 is in test. Look for PASS on
     every row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteVersion` and
     `dbo.NoteVersionItem` for `grow2notes_runtime`, and B7 and B8, which list the `NoteVersion` and `NoteVersionItem`
     tables and the `AddNoteVersion` migration. (S02.03.01's first criterion, in test.)
@@ -670,7 +672,7 @@ finish them. The steps need the passkey worker of step 18, the kit of steps 26 t
 goals each, whose notes for today nobody has started: one for step 68 and one for each screen reader in step 69, four in
 all. Every word typed into a note is made up (A35).
 
-67. The database, as in step 26: run `infra/sql/check-database.sql` for test after T13's deploy. Look for PASS on every
+67. The database, as in step 26: run `infra/sql/check-database.sql` for test once T13 is in test. Look for PASS on every
     row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteVersionGroup` for
     `grow2notes_runtime`, and B7 and B8, which list the `NoteVersionGroup` table and the `AddNoteVersionGroup`
     migration. (S02.05.01's first criterion, in test.)
@@ -765,7 +767,7 @@ with two goals. The worker submits two notes for today with Flag for manager tic
 `Asked about a new medication`, so that each manager has a note to review; every word typed is made up (A35). A note
 can be flagged again after a review by a manager's edit, as step 84 does.
 
-77. The database, as in step 26: run `infra/sql/check-database.sql` for test after T16's deploy. Look for PASS on every
+77. The database, as in step 26: run `infra/sql/check-database.sql` for test once T16 is in test. Look for PASS on every
     row, among them D3 and D5, which now name the `DENY UPDATE` and `DENY DELETE` on `dbo.NoteReview` for
     `grow2notes_runtime`, and B7 and B8, which list the `NoteReview` table and the `AddNoteReview` migration.
     (S03.02.01's migration criterion, in test.)
@@ -827,7 +829,7 @@ of step 18, the kit of steps 26 to 28, and a made-up participant with two goals,
 state is changed in step 104. For the first part, the worker submits a note for today, and account A edits it twice,
 changing a word and a tick each time and flagging it once. Every word typed is made up (A35).
 
-86. The database, as in step 26: run `infra/sql/check-database.sql` for test after T18's deploy. Look for PASS on every
+86. The database, as in step 26: run `infra/sql/check-database.sql` for test once T18 is in test. Look for PASS on every
     row, with no new table or migration named, as T18 adds no table, column or write path.
 87. On the laptop in Chrome, as account A, open the edited note and look for Version history between Edit and Past
     notes in the row, and no such link when you sign in as the worker. Press it and look for the `<h1>` "Version
@@ -1228,7 +1230,7 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      group's Communication Services resource. Look for access keys turned off (local authentication disabled), and
      for the Email service's Azure-managed domain showing SPF, DKIM and DMARC verified. Do not write any value down.
      (S00.02.07's second criterion, its deployed half: its app half is `EmailSendingTests`, in CI. This is the read-only
-     check that T01's after-deploy step names for the Azure side.)
+     check, by hand, for the Azure side.)
 
 ### Sign-out on every device, once F-1's fix is in test
 

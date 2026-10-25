@@ -13,10 +13,11 @@ azure:
 **Goal:** a manager can export any participant's record for an access or correction request, every audited event is
 recorded and found by a test, the database itself stops history and the audit log being changed, archive and
 deactivate behave the same on every screen and file, and the operator has written retention and audit extraction
-runbooks that a manager has read.
+runbooks (the manager's read of them is a by-hand step that holds nothing open).
 
 **Done when:** the *Done when* list of [design.md §14 M5](../../design.md#m5-participant-export-audit-completeness-retention)
-passes in the test environment, and every feature below is done ([README §9](../README.md#9-definition-of-done)).
+is proven by CI, and every feature below is done ([README §9](../README.md#9-definition-of-done)). A line only a person
+can check is a by-hand step on ops/first-use-in-test.md and holds nothing open.
 
 ## Features
 - F05.01 Participant record export

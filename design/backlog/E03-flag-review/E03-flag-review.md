@@ -14,8 +14,9 @@ azure:
 until one manager marks it reviewed (with an optional comment), and comes back when a later edit adds a flag or
 changes its reason; every review is recorded and audited, and the only alert is inside the app.
 
-**Done when:** [design.md §14 M3 *Done when*](../../design.md#m3-flag-review) passes in the test environment, and
-every feature below is done ([README §9](../README.md#9-definition-of-done)).
+**Done when:** [design.md §14 M3 *Done when*](../../design.md#m3-flag-review) is proven by CI, and every feature below
+is done ([README §9](../README.md#9-definition-of-done)). A line only a person can check is a by-hand step on
+ops/first-use-in-test.md and holds nothing open.
 
 **Builds on:** E02 (the note form's Flag for manager box, the version save and the read view) and E00 (the app shell,
 its `/me` refresh and the audit writer).

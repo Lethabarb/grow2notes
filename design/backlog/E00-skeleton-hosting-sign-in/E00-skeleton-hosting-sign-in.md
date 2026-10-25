@@ -14,8 +14,9 @@ azure:
 who can sign in and in which role, every state change can be audited, and every merge to `main` runs in the test
 environment in Azure Australia Southeast, with production ready for manual deploys.
 
-**Done when:** the *Done when* list of [design.md §14 M0](../../design.md#m0-skeleton-hosting-sign-in) passes in the
-test environment, and every feature below is done ([README §9](../README.md#9-definition-of-done)).
+**Done when:** the *Done when* list of [design.md §14 M0](../../design.md#m0-skeleton-hosting-sign-in) is proven by CI,
+and every feature below is done ([README §9](../README.md#9-definition-of-done)). A line only a person can check is a
+by-hand step on ops/first-use-in-test.md and holds nothing open.
 
 ## Features
 - F00.01 Skeleton and continuous integration

@@ -31,13 +31,14 @@ groups the stories into sprint-sized vertical slices, mostly in the order they w
 - **S00.02.05** (the delete lock on the test database) comes after the user stories, in Sprint 09; only S00.02.04
   depends on it.
 - **S00.02.04** (production) comes last in E00, so the owner has until Sprint 09 to fix the production domain (A38).
-- **In E06**, the runbooks and the security stories come first: Dependabot (S06.01.03), the rate limits (S06.01.05),
-  the ZAP scan (S06.01.02) and the ASVS self-review (S06.01.01). Then production is checked, backed up and watched by
-  alerts (S06.05.01, S06.03.01, S06.04.01), and only then is the provider's organisation created (S06.05.02), so no
-  real personal information reaches production before the M6 security work is done and no high or critical finding is
-  open (D1). The accessibility checks follow, in the test environment, while the provider works in production. At the
-  likely rate this leaves the provider about three weeks of production before go-live for the go-live checklist lines
-  that need it (lines 3, 5, 6 and 7); a later switch-over date gives more (owner questions, Sprint 27).
+- **In E06**, the runbooks and the security stories come first: Dependabot (S06.01.03), the rate limits (S06.01.05), the
+  ZAP scan (S06.01.02) and the ASVS self-review (S06.01.01). Then production is checked, backed up and watched by alerts
+  (S06.05.01, S06.03.01, S06.04.01), and only then is the provider's organisation created (S06.05.02), so no real
+  personal information reaches production before the M6 security work is done and no high or critical finding is open
+  (D1). The automated accessibility runs in CI decide (A98); the by-hand ones are steps on ops/first-use-in-test.md,
+  done while the provider works in production, and hold nothing open. At the likely rate this leaves the provider about
+  three weeks of production before go-live for the go-live checklist lines that need it (lines 3, 5, 6 and 7); a later
+  switch-over date gives more (owner questions, Sprint 27).
 - **In R2**, the spike S07.01.03 comes first, and so do S07.05.06 and S07.05.07 (the check of the operator's own AI
   provider; the privacy and hosting wording, with placeholders for the AI providers), so the provider's approvals and
   legal checks run alongside the build (mcp-server.md §11.1 lines 2–6). S07.03.02 comes before S07.03.01, because it
@@ -230,7 +231,7 @@ Grow2Notes instead of the Word template, from one switch-over date, with manager
 configuration (D55, A40, design.md §1, §14).
 
 **Done when:** README §9 *Release* R1: every epic below is done, the go-live checklist in F06.06 is complete with an
-owner and evidence for every line, and the build that passed in test is deployed to production.
+owner and evidence for every line, and a build that passed CI and was deployed to test is deployed to production.
 
 **Switch-over date:** not set yet. S06.06.03 records it here.
 
@@ -478,8 +479,9 @@ S07.05.10 names the approved AI providers in it once the provider has approved t
 4. **Owner questions are answered in time.** The forecast assumes each open question is settled before the sprint
    planning that takes its story (table below). A late answer moves that story, not the release, if another Ready story
    can take its place.
-5. **Bootstrap exception in E00.** Until S00.02.03 deploys `main` to test (Sprint 02), stories are checked locally and
-   in CI, and that first deploy re-checks them in test, including the two Sprint 01 criteria parts that need Azure
+5. **Bootstrap exception in E00.** (Superseded on 20 October 2026: nothing is run locally or checked on the deployed
+   site, and CI decides; D90.) Until S00.02.03 deploys `main` to test (Sprint 02), stories are checked locally and in
+   CI, and that first deploy re-checks them in test, including the two Sprint 01 criteria parts that need Azure
    (S00.01.02's Bicep artifact and S00.03.01's run on Azure SQL). Until S00.01.02's workflow exists (Sprint 01), the
    stories before it count as done once its first run on `main` is green ([sprint-01.md](sprints/sprint-01.md)). The
    stories before S06.01.04 (Sprint 03) have no screen, and its header test covers the response kinds they add, so the

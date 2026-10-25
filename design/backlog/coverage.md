@@ -38,11 +38,11 @@ only mentions the row. Confirm at refinement.
 
 ### Rows to watch
 
-These rows have one owner, but part of the row is delivered or can only be checked by a story forecast later than
-the owner's own stories. The owner is the feature that starts the row, in both releases (*How to read the tables*).
-Under README §2.3 rule 4 the owning feature, and so its epic, is not done until the whole row passes in test; the
-epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*). The sprint numbers are the forecast in
-releases.md.
+These rows have one owner, but part of the row is delivered or can only be checked by a story forecast later than the
+owner's own stories. The owner is the feature that starts the row, in both releases (*How to read the tables*). Under
+README §2.3 rule 4 the owning feature, and so its epic, is not done until the whole row is proven by CI or its by-hand
+part is recorded with a dated Note (D90); the epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*).
+The sprint numbers are the forecast in releases.md.
 
 | Row | Owner (own stories forecast) | Last contributing story (forecast) |
 |---|---|---|
@@ -76,10 +76,11 @@ stories; the first choice is what the *Can close* column in releases.md (R1 *Epi
 ## How to read the tables
 
 - **Row:** the scope bullet, checklist line or acceptance criteria group, quoted or shortened.
-- **Owner:** the one feature whose stories deliver the row, and which is not done until the row passes in test; or
-  **DoD**, meaning the group is a rule checked on every story under README §9. When more than one feature delivers a
-  row, the owner is the feature that starts it (for a screen file's group, usually the screen's own feature), in R1
-  and R2 alike. The later stories that finish the row are under *Also*, and the row is listed in *Rows to watch*.
+- **Owner:** the one feature whose stories deliver the row, and which is not done until the row is proven by CI or its
+  by-hand part is on ops/first-use-in-test.md (D90); or **DoD**, meaning the group is a rule checked on every story
+  under README §9. When more than one feature delivers a row, the owner is the feature that starts it (for a screen
+  file's group, usually the screen's own feature), in R1 and R2 alike. The later stories that finish the row are under
+  *Also*, and the row is listed in *Rows to watch*.
 - **Also:** stories or features that deliver part of the row or check it again. They do not own it.
 - Rows are numbered within each table only, so they can be referred to in conversation. The numbers are not IDs.
 
@@ -116,7 +117,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | A manager and a worker can each accept an invite and sign in with MFA on a phone and a laptop, in test, and sign in again a second time (both setup paths) | F00.04 | S00.06.02 (the worker's invite) | Manual check in test |
+| 1 | A manager and a worker can each accept an invite and sign in with MFA on a phone and a laptop, in test, and sign in again a second time (both setup paths) | F00.04 | S00.06.02 (the worker's invite) | By hand, ops/first-use-in-test.md; holds nothing open |
 | 2 | After deactivation, the user's next request is rejected (tested) | F00.06 | S00.04.01 (the stamp check); S05.03.02 checks it end to end at M5 | Proved end to end in T24 (24 October 2026) by `PastRecordsTests`' third fact; the signed-out view by `signedOutInPlace.test.tsx`; by hand, first-use step 33 |
 | 3 | A test fails the build if any `ITenantOwned` entity lacks the organisation filter; the named exceptions are listed in the test | F00.03 | | |
 | 4 | The 12-hour absolute limit and the `org_id` claim survive the per-request principal rebuild (tested) | F00.04 | | |
@@ -175,7 +176,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | A manager can set up a participant with five goals on a phone without help | F01.02 | | Manual check in test, by a manager new to the screen |
+| 1 | A manager can set up a participant with five goals on a phone without help | F01.02 | | By hand, by a manager new to the screen, on ops/first-use-in-test.md; holds nothing open |
 | 2 | A worker calling any configuration endpoint gets `403` (automated test) | F01.01 | | |
 | 3 | There is no delete endpoint for any of these | F01.01 | | |
 | 4 | The Every note group cannot be renamed, moved or archived, and a second one cannot be created (API and database tests) | F01.03 | | |
@@ -489,7 +490,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | Every automated test in §10 passes, and the manual tests are recorded | F07.05 | | Checklist owner: the operator |
+| 1 | Every automated test in §10 passes in CI, and the by-hand tests are recorded on the switch-on run sheet | F07.05 | | Checklist owner: the operator |
 | 2 | The provider has approved the AI assistants (and the operator's for Support, D57) after the §7.1 check, each through a business account with a data processing agreement | F07.05 | S07.05.06 (the §7.1 record for the operator's AI provider) | Checklist owner: the provider; the operator for its own account and agreement |
 | 3 | Privacy policy and collection notice updated, naming the AI providers and their countries | F07.05 | S07.05.07 (draft wording), S07.05.10 (named providers) | Checklist owner: the provider |
 | 4 | Staff told (staff privacy notice or handbook sentence) | F07.05 | S07.05.07 (draft wording), S07.05.10 (named providers) | Checklist owner: the provider |

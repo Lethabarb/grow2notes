@@ -14,8 +14,9 @@ azure:
 note as its current version exactly as written, with the common items of the picked groups only (D47) and no counts;
 every download is audited, no file is stored, and nothing of the report is shown on screen (D43).
 
-**Done when:** [design.md §14 M4 *Done when*](../../design.md#m4-daily-report-pdf-and-word) passes in the test
-environment, and every feature below is done ([README §9](../README.md#9-definition-of-done)).
+**Done when:** [design.md §14 M4 *Done when*](../../design.md#m4-daily-report-pdf-and-word) is proven by CI, and every
+feature below is done ([README §9](../README.md#9-definition-of-done)). A line only a person can check is a by-hand
+step on ops/first-use-in-test.md and holds nothing open.
 
 **Builds on:** E02 (submitted notes, versions and their snapshots), E03 (flag and review state, shown in the file)
 and E00 (the app shell and the audit writer).

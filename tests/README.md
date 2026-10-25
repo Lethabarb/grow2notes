@@ -3,7 +3,7 @@
 Automated tests for Grow2Notes (design.md §7.3, §10.4).
 
 - `Grow2Notes.Tests/`: xUnit v3 unit tests and API integration tests. The integration tests host the app with
-  `WebApplicationFactory` against a real SQL Server in Testcontainers, so Docker must be running.
+  `WebApplicationFactory` against a real SQL Server in Testcontainers, which CI's runner provides.
 - `e2e/`: Playwright smoke tests and end-to-end tests of the app shell, account setup, sign-out, the warning before
   the idle sign-out, signing in again in place, the Users and Participants screens, a participant's goals, Common
   items, Guide prompts, Today and its unfinished drafts, the note form and Discard, someone else's draft, and Flagged's
@@ -13,38 +13,46 @@ Automated tests for Grow2Notes (design.md §7.3, §10.4).
 The SPA's unit tests are not here: they sit next to the code they test, as `*.test.ts` or `*.test.tsx` files under
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
 
-## Running the SPA checks
+**Where the tests run.** Tests are written with the work, but none is run on a developer's machine: the owner's rule of
+20 October 2026 (decisions.md D90, design.md A98) is that the only local checks are compile and lint. CI runs every
+test (unit, integration and end-to-end) on every pull request and is the authority; a pull request merges only after
+review and with CI green. The sections below say what each test run covers and how to write the tests; they are not
+steps to run on a machine.
 
-Each is a separate step of CI's SPA checks (design.md §10.4 step 2). In `src/grow2notes-spa`, after `npm ci`:
+## The SPA checks
+
+Each is a separate step of CI's SPA checks (design.md §10.4 step 2). On a machine, in `src/grow2notes-spa` after
+`npm ci`, only the compile and lint checks run:
 
 ```shell
 npm run typecheck           # tsc over the app, the tests, the config files and scripts/
 npm run lint                # ESLint; a warning fails it too
-npm test                    # Vitest, once
-npm run test:webkit         # the format tests again, in Playwright's WebKit (below)
 npm run build               # vite build into src/Grow2Notes.Web/wwwroot
-npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
 ```
 
 `npm run build` does not type-check, so a type error shows up only in `npm run typecheck`.
 
+CI runs the other scripts:
+
+```shell
+npm test                    # Vitest, once
+npm run test:webkit         # the format tests again, in Playwright's WebKit (below)
+npm run check:no-analytics  # no Application Insights JavaScript SDK or third-party analytics (design.md §9.5)
+```
+
 `npm run test:webkit` runs `src/copy/format.test.ts` alone, headless in Playwright's WebKit, Safari's engine, through
 Vitest's browser mode (`vitest.webkit.config.ts`), because Safari's time-zone data can differ from Node's
 (microcopy.md §8). The browser's zone is set to America/Los_Angeles, behind UTC, whatever the machine's, so that a date
-read in the device's own time, which there falls on the day before, fails it. It needs the WebKit build that the SPA's
-`playwright` package drives, installed once per machine and again after that package is updated:
-
-```shell
-npx playwright install webkit              # Windows and macOS
-npx playwright install --with-deps webkit  # Linux, with WebKit's system packages, as CI installs it
-```
+read in the device's own time, which there falls on the day before, fails it. CI installs the WebKit build that the
+SPA's `playwright` package drives (`npx playwright install --with-deps webkit`).
 
 `npm test` needs no browser: it runs every test, `format.test.ts` included, in jsdom.
 
-`npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so it runs after
+`npm run check:no-analytics` reads every package in `package-lock.json` and every file of the build, so CI runs it after
 `npm run build`; its denylist is at the top of `scripts/check-no-analytics.ts`.
 
-`npm test` also runs foundations.md's two checks on the stylesheets, which have no script or CI step of their own:
+`npm test` also runs, in CI, foundations.md's two checks on the stylesheets, which have no script or CI step of their
+own:
 
 - `src/styles/tokens.test.ts`, the contrast test, checks each colour token in `tokens.css` against each background it
   is used on, at 7:1, 4.5:1 or 3:1 (the pairs are listed at the top of the test), and fails on a colour token in no
@@ -56,59 +64,26 @@ npx playwright install --with-deps webkit  # Linux, with WebKit's system package
 The build keeps those queries in `min-width` form only because `vite.config.ts` sets `build.cssTarget`: at Vite's
 default targets the minifier rewrites them in range syntax. `SpaBuildTests` checks the built stylesheets for it.
 
-`npm test` also runs microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of its
-own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and the
-word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
-contraction outside design.md's two "can't" strings. With it, `src/copy/wordsInJsx.test.ts` lints sample components
-with `eslint.config.js` and checks which words in JSX its rule refuses, as no JSX in `src` holds one for
-`npm run lint` to refuse.
+`npm test` also runs, in CI, microcopy.md §8's wording check, `src/copy/copy.test.ts`, which has no script or CI step of
+its own either. It reads every `.ts` and `.tsx` module in `src/copy` except its tests, and fails, naming the file and
+the word, on §8's banned words, on "please" outside "Please check your ticks.", on §8's US spellings, and on a negative
+contraction outside design.md's two "can't" strings. With it, `src/copy/wordsInJsx.test.ts` lints sample components with
+`eslint.config.js` and checks which words in JSX its rule refuses, as no JSX in `src` holds one for `npm run lint` to
+refuse.
 
-## Running the .NET tests
+## The .NET tests
 
-The integration tests serve the real SPA build, so build the SPA first, and again after changing it:
+The integration tests serve the real SPA build, so CI builds the SPA (`npm ci`, `npm run build`) before
+`dotnet test Grow2Notes.slnx`. If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an
+error saying so. On a machine, only the .NET build with warnings as errors runs: for that compile check, run `npm ci`
+and `npm run build` in `src/grow2notes-spa` first, and again after changing the SPA.
 
-```shell
-cd src/grow2notes-spa
-npm ci
-npm run build
-cd ../..
-dotnet test Grow2Notes.slnx
-```
-
-If `src/Grow2Notes.Web/wwwroot` has no build, the test project's build stops with an error saying so.
-
-## Running the end-to-end tests
+## The end-to-end tests
 
 CI runs them against the published app, on a SQL Server container that the migrations bundle has migrated (the
-end-to-end steps of `.github/workflows/ci.yml`). To do the same on a machine, build the SPA as above, then from the
-repository root, with Docker running:
-
-```shell
-docker run -d --name grow2notes-e2e-sql -p 1433:1433 -e ACCEPT_EULA=Y -e MSSQL_SA_PASSWORD=Grow2Notes-CI-only-1 \
-  mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
-# Once SQL Server has started, about 15 seconds later:
-export ConnectionStrings__Grow2Notes="Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=Grow2Notes-CI-only-1;TrustServerCertificate=True"
-dotnet tool restore
-dotnet ef database update --project src/Grow2Notes.Web --context Grow2NotesDbContext \
-  --connection "$ConnectionStrings__Grow2Notes"
-dotnet publish src/Grow2Notes.Web --configuration Release --output artifacts/app
-cd artifacts/app
-ASPNETCORE_ENVIRONMENT=Production ASPNETCORE_URLS=http://localhost:5000 App__Origin=http://localhost:5000 \
-  dotnet Grow2Notes.Web.dll
-```
-
-Then, in a second terminal, from the repository root:
-
-```shell
-export ConnectionStrings__Grow2Notes="Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=Grow2Notes-CI-only-1;TrustServerCertificate=True"
-export App__Origin=http://localhost:5000
-export E2E_APP_DIR="$PWD/artifacts/app"
-cd tests/e2e
-npm ci
-npx playwright install chromium firefox webkit
-npm run typecheck
-npm test
-```
+end-to-end steps of `.github/workflows/ci.yml`): it builds the SPA, migrates the container, publishes the app, starts
+it on `http://localhost:5000`, installs the browsers and runs `npm test` in `tests/e2e`. They are not run on a machine;
+the run's output on the pull request, with the HTML report and a trace of each failed test, is the evidence.
 
 The tests open `http://localhost:5000` unless `E2E_BASE_URL` names another address. The setup tests
 (`e2e/setup.spec.ts`), the two sign-out tests that sign in through setup (`e2e/sign-out.spec.ts`), the session
@@ -122,11 +97,10 @@ app's own answers (`e2e/common-items.spec.ts`), the two tests of a user's action
 note form tests that meet the app's own Today, notes, saves, Submit and Discard (`e2e/note-form.spec.ts`) and the
 Flagged test that meets the app's own Submit and To review list (`e2e/flagged.spec.ts`) get their setup links from the
 published app's own `admin bootstrap` and `admin reset-signin` (the `invite`, `secondInvite` and `resetSignIn` fixtures,
-below), so the second terminal gives them what CI's end-to-end step gives them: the published app's folder, in
-`E2E_APP_DIR`, and the app's connection string and `App__Origin`, which must be the address that the tests open.
-Without one of the three, each test that needs a link fails and names it, and each that gets one adds a made-up
-organisation and manager to the database. After a failure, `npx playwright show-report` opens the HTML report, which
-holds a trace of each failed test. Remove the database with `docker rm -f grow2notes-e2e-sql` when done.
+below), so CI's end-to-end step gives them the published app's folder, in `E2E_APP_DIR`, and the app's connection
+string and `App__Origin`, which must be the address that the tests open. Without one of the three, each test that
+needs a link fails and names it, and each that gets one adds a made-up organisation and manager to the database. After
+a failure, the HTML report that CI uploads holds a trace of each failed test.
 
 ## Writing end-to-end tests
 

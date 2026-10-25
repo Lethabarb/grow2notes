@@ -16,8 +16,9 @@ device, the note is submitted after a check that names the participant, the auth
 version, everyone can read a participant's past notes, and managers can read every version and write a forgotten
 past-day note.
 
-**Done when:** [design.md §14 M2 *Done when*](../../design.md#m2-note-form-autosave-submit-edit-history) passes in
-the test environment.
+**Done when:** [design.md §14 M2 *Done when*](../../design.md#m2-note-form-autosave-submit-edit-history) is proven by
+CI, and every feature below is done ([README §9](../README.md#9-definition-of-done)). A line only a person can check is
+a by-hand step on ops/first-use-in-test.md and holds nothing open.
 
 ## Features
 - F02.01 Today list
