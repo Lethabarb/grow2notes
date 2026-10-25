@@ -231,7 +231,7 @@ Grow2Notes instead of the Word template, from one switch-over date, with manager
 configuration (D55, A40, design.md §1, §14).
 
 **Done when:** README §9 *Release* R1: every epic below is done, the go-live checklist in F06.06 is complete with an
-owner and evidence for every line, and the build that passed in test is deployed to production.
+owner and evidence for every line, and a build that passed CI and was deployed to test is deployed to production.
 
 **Switch-over date:** not set yet. S06.06.03 records it here.
 

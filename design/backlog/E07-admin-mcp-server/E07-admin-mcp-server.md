@@ -14,10 +14,11 @@ azure:
 any AI assistant the provider has approved. They sign in with their own Grow2Notes account and MFA, the same rules and
 audit trail apply, and no tool ever returns note content ([mcp-server.md](../../mcp-server.md), D48–D51, D56–D59).
 
-**Done when:** the automated and manual tests in [mcp-server.md §10](../../mcp-server.md#10-testing) pass in the test
-environment and every feature below is done ([README §9](../README.md#9-definition-of-done) *Epic*, R2). The release
-is done when the [§11.1 switch-on checklist](../../mcp-server.md#111-switch-on-checklist-release-2-per-environment) is
-complete, `Mcp:Enabled` is on in production and the date is recorded (README §9 *Release*, R2).
+**Done when:** the tests in [mcp-server.md §10](../../mcp-server.md#10-testing) pass in CI (its by-hand tests are on
+ops/mcp-switch-on.md) and every feature below is done ([README §9](../README.md#9-definition-of-done) *Epic*, R2).
+The release is done when the
+[§11.1 switch-on checklist](../../mcp-server.md#111-switch-on-checklist-release-2-per-environment) is complete,
+`Mcp:Enabled` is on in production and the date is recorded (README §9 *Release*, R2).
 
 ## Features
 - F07.01 Support role, sign-in and Connect an AI assistant

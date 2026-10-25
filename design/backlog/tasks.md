@@ -5648,9 +5648,9 @@ stories: [S00.02.04, S00.02.05, S06.03.01, S06.04.01, S06.05.01]
 
 ### Outcome
 
-The operator deploys, by hand, exactly the build that passed in test to production on the product domain. Production has
-its own identities, database delete locks, 35-day and 12-month backups in Australia, email alerts to the operator, the
-product-domain email sender, and a read-only production check.
+The operator deploys, by hand, exactly a build that passed CI and was deployed to test to production on the product
+domain. Production has its own identities, database delete locks, 35-day and 12-month backups in Australia, email
+alerts to the operator, the product-domain email sender, and a read-only production check.
 
 ### Absorbs
 
@@ -6254,7 +6254,7 @@ stories: [S06.06.02, S06.06.03]
 ### Outcome
 
 The latest production backup is restored and checked, then every staff member switches from the Word template on the set
-date, on the build that passed in test.
+date, on a build that passed CI and was deployed to test.
 
 ### Absorbs
 

@@ -1842,7 +1842,7 @@ There are no deployment slots. A production deploy restarts the app for a few se
 5. Upload the artifacts. **Production deploys exactly these artifacts; nothing is rebuilt.**
 
 **`deploy.yml`:**
-- **Triggers:** automatically to test when CI succeeds on `main`. To prod only by `workflow_dispatch`, naming the CI run of a build that has already passed in test.
+- **Triggers:** automatically to test when CI succeeds on `main`. To prod only by `workflow_dispatch`, naming the CI run of a build that passed CI and was deployed to test.
 - **Steps, per environment:**
   1. `azure/login` with OIDC. The federated credential trusts only `repo:<owner>/<repo>:environment:<env>`, written with the repository's immutable subject prefix (`repo:<owner>@<owner id>/<repo>@<repo id>`) when GitHub reports one.
   2. `az deployment group what-if`, then `az deployment group create` with `main.bicep`.
@@ -2271,7 +2271,7 @@ For every milestone:
 **Done when:**
 - An automated test confirms the PDF text and the Word text both match the stored notes.
 - Every character in a rendered PDF exists in the embedded font, including ☐ and ☑ (automated test).
-- A day with 20 notes downloads in under 10 seconds.
+- A day with 20 notes downloads in under 10 seconds (by hand).
 - The PDF opens in Edge and Acrobat; the Word file opens in desktop and mobile Word, with participant headings in the desktop Navigation pane (by hand).
 - Edited, flagged, reviewed, submitted-next-day and past-day notes each show the right marker.
 - Common items show the Every note group and the picked groups only, by group name in the configured order, each item ticked or not ticked; groups not picked do not appear (D47).
@@ -2289,7 +2289,7 @@ For every milestone:
 - Written runbooks: retention and destruction (with the HPP 4.3 log and the backup note), and audit extraction for the operator (A28).
 
 **Done when:**
-- A one-year export with earlier versions for one participant is generated in under 30 seconds and matches the app.
+- A one-year export with earlier versions for one participant is generated in under 30 seconds and matches the app (the timing is by hand).
 - A test triggers each audit event type and finds its entry.
 - A test running as a member of `grow2notes_runtime` on the SQL Server container gets error 229 for `UPDATE` and `DELETE` on `NoteVersion`, `NoteVersionGroup`, `NoteVersionItem`, `NoteReview` and `AuditEvent`, and for `DELETE` on `Note`, while deleting a `NoteDraft` still works.
 - Both runbooks are written; a manager reads them (a by-hand step; it holds nothing open).

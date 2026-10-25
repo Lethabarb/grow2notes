@@ -15,8 +15,9 @@ the built-in Every note group first and fixed) and the guide prompts, on a phone
 of it, nothing can be deleted, and every change is audited with its old and new values.
 
 **Done when:** the *Done when* list of
-[design.md §14 M1](../../design.md#m1-participants-goals-common-items-and-groups-guide-prompts) passes in the test
-environment, and every feature below is done ([README §9](../README.md#9-definition-of-done)).
+[design.md §14 M1](../../design.md#m1-participants-goals-common-items-and-groups-guide-prompts) is proven by CI, and
+every feature below is done ([README §9](../README.md#9-definition-of-done)). A line only a person can check is a
+by-hand step on ops/first-use-in-test.md and holds nothing open.
 
 ## Features
 - F01.01 Configuration rules

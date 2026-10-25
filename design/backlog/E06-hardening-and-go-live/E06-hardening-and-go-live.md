@@ -16,8 +16,8 @@ to it on one set date with the go-live checklist complete.
 
 **Done when:** the *Done when* list of [design.md §14 M6](../../design.md#m6-hardening-and-go-live) passes, every
 feature below is done, and the R1 release check in [README §9](../README.md#9-definition-of-done) is met: the
-*Go-live readiness* checklist (F06.06) has an owner and evidence for every line, and the build that passed in test is
-deployed to production.
+*Go-live readiness* checklist (F06.06) has an owner and evidence for every line, and a build that passed CI and was
+deployed to test is deployed to production.
 
 ## Features
 - F06.01 Security review and hardening

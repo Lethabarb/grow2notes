@@ -558,8 +558,9 @@ below:
 
 - While building, the only local checks are compile and lint: the .NET build with warnings as errors, and the SPA build,
   type check and lint. Nothing is run locally: no tests, app, database or LocalDB.
-- Nothing is checked against the deployed site after a deploy. The deploy pipeline's own smoke test (design.md
-  section 10.4) is part of the deploy, not a check by a person or an agent.
+- Nothing is checked against the deployed site after a deploy by a story, a task or an agent. The deploy pipeline's own
+  smoke test (design.md §10.4) is part of the deploy, not a check by a person or an agent. The owner's by-hand checks
+  of the test site are the last bullet below.
 - Tests are still written with the work. CI runs every test (unit, integration and end-to-end) on every pull request and
   is the authority.
 - A pull request merges only after review and with CI green.
