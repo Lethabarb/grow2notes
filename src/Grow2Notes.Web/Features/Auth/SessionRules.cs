@@ -18,8 +18,9 @@ internal static class SessionRules
 
     /// <summary>
     /// The cookie's <c>OnValidatePrincipal</c>. First the stamp check, which rejects and signs out a session whose
-    /// user's security stamp has changed, as deactivation and a sign-in reset change it (§8.6), and otherwise rebuilds
-    /// the principal, keeping its sign-in time (<see cref="CarryForward"/>), and renews the cookie. Then a session that
+    /// user's security stamp has changed, as deactivation, a sign-in reset and sign-out change it (§8.5, §8.6), and
+    /// otherwise rebuilds the principal, keeping its sign-in time (<see cref="CarryForward"/>), and renews the cookie.
+    /// Then a session that
     /// signed in more than 12 hours ago, by <see cref="TimeProvider"/>, is rejected and signed out too, and so is one
     /// with no sign-in time: it did not sign in through <see cref="Grow2NotesSignInManager"/>, so it has no start to
     /// count the 12 hours from.

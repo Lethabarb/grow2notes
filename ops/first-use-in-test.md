@@ -1229,3 +1229,15 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      for the Email service's Azure-managed domain showing SPF, DKIM and DMARC verified. Do not write any value down.
      (S00.02.07's second criterion, its deployed half: its app half is `EmailSendingTests`, in CI. This is the read-only
      check that T01's after-deploy step names for the Azure side.)
+
+### Sign-out on every device, once F-1's fix is in test
+
+149. Sign in as account B with email, password and a 6-digit code on the laptop in Chrome, with the developer tools open
+     on the Network panel, and on the iPhone in Safari, as in step 14. On the laptop, open today's note for a made-up
+     participant whose note nobody has started today (A35), type a sentence and wait for "Saved" and the time. On the
+     iPhone, sign out from Account: look for the sign-in page. Then on the laptop type a second sentence: look for
+     "You've been signed out" in the form's place, at the same address. Sign in again with email, password and a
+     6-digit code: look for the note form again with both sentences, the status "Saved" and the time, no "This note was
+     changed on another device or tab.", and a `PUT …/draft` answered `200` in the Network panel. (design.md A99 and
+     §8.5 *No work is lost*; ops/security-review.md F-1. CI proves in `LogoutEndpointTests` that a copy of the cookie
+     stops working, so no cookie is copied by hand.)

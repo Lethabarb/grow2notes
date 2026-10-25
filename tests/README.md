@@ -1041,7 +1041,10 @@ acts in A and checks that nothing of B's reaches it.
 `Grow2Notes.Tests/Fixtures/SeededOrganisationsTests.cs` shows what is seeded.
 
 - Other tests rely on the seeded IDs, and on each seeded user's email address, role, Active status, security stamp
-  and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. An endpoint call
+  and lockout (Identity's count of failed sign-ins and its lockout end), so no test changes them. One call does: the
+  endpoint matrix's `POST /api/auth/logout` gives each seeded caller a new security stamp (design.md A99). No other
+  test sees it: the test-only sign-in reads the row on each request and checks no stamp, a cookie sign-in takes the
+  stamp of that moment, and no test keeps a seeded user's cookie from one test to the next. An endpoint call
   commits, and may change other columns of a seeded row, such as Identity's `ConcurrencyStamp`. A test may add rows
   to a seeded organisation, users included, so no test assumes the seeded users are its only ones. A test that
   deactivates or resets a user, changes a user's role or email, or fails a sign-in on purpose does it to a user it
@@ -1168,19 +1171,21 @@ using var response = await client.GetAsync("/api/...", TestContext.Current.Cance
 ```
 
 Signing in changes no row, so a test may sign in as a seeded user; one that then changes the user, such as rotating
-their security stamp or changing their role, adds the user itself (the seeded-rows rule above).
+their security stamp, signing them out or changing their role, adds the user itself (the seeded-rows rule above).
 `Grow2Notes.Tests/Fixtures/CookieSignInTests.cs` is the example.
 
 ### Ending a user's sessions on every device
 
-A change to a user reaches each session of theirs on its next request (design.md §8.4, §8.6): a reset, a deactivation
-or `admin signout-all` rotates the security stamp, which ends each with `401`, and a change to Worker leaves the stamp,
-so a manager's request then gets `403`. `SignedInDevices` (`Grow2Notes.Tests/Fixtures/SignedInDevices.cs`) shows it on
-several devices at once. Reset sign-in's tests use it (`Grow2Notes.Tests/Features/Users/SignInResetTests.cs`, the
-example), and so does every later test of a change that ends sessions or a role: deactivation, a change of role or
-email, and the operator's `admin reset-signin` and `admin signout-all`; T24's, that a deactivated person is signed out
-everywhere (S05.03.02, the third fact of `Grow2Notes.Tests/Platform/PastRecordsTests.cs`); and T32's, that such a
-change ends a connected assistant's access as well as the person's own sessions.
+A change to a user reaches each session of theirs on its next request (design.md §8.4, §8.5, §8.6): a reset, a
+deactivation, a sign-out on another device or `admin signout-all` rotates the security stamp, which ends each with
+`401`, and a change to Worker leaves the stamp, so a manager's request then gets `403`. `SignedInDevices`
+(`Grow2Notes.Tests/Fixtures/SignedInDevices.cs`) shows it on several devices at once. Reset sign-in's tests use it
+(`Grow2Notes.Tests/Features/Users/SignInResetTests.cs`, the example), and so does every later test of a change that
+ends sessions or a role: deactivation, a change of role or email, Sign out
+(`Grow2Notes.Tests/Features/Auth/LogoutEndpointTests.cs`), and the operator's `admin reset-signin` and
+`admin signout-all`; T24's, that a deactivated person is signed out everywhere (S05.03.02, the third fact of
+`Grow2Notes.Tests/Platform/PastRecordsTests.cs`); and T32's, that such a change ends a connected assistant's access as
+well as the person's own sessions.
 
 - Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
   changes (the seeded-rows rule above).
