@@ -12,9 +12,9 @@ param healthCheckPath '/healthz' | '/healthz/ready'
 @description('The address the app is reached at, https://<host>, which its links start with (design.md §8.1).')
 param appOrigin string
 
-// Every deploy passes these three, and they are never committed, because the object ID belongs to the operator's tenant
-// and the address may contain the company's name (D42, D60, D64, D65). The parameters files leave them empty;
-// sql.bicep and monitoring.bicep refuse them empty.
+// Every deploy passes these four, and they are never committed, because the object ID belongs to the operator's tenant
+// and the addresses may contain the company's name (D42, D60, D64, D65). The parameters files leave them empty;
+// sql.bicep, monitoring.bicep and app.bicep refuse them empty.
 @description('The display name of the Entra group that is the SQL server\'s admin, "Grow2Notes SQL admins" (D64).')
 param sqlAdminGroupName string
 
@@ -23,6 +23,9 @@ param sqlAdminGroupObjectId string
 
 @description('The developer\'s email address, which the operations alerts are sent to (design.md §10.1).')
 param alertEmail string
+
+@description('The address the app sends its setup-link email from, a bare address or "Grow2Notes <address>" (D92).')
+param emailSenderAddress string
 
 @description('The database SKU, written the way Azure returns it: name, tier, family and capacity.')
 param databaseSku resourceInput<'Microsoft.Sql/servers/databases@2025-01-01'>.sku
@@ -85,13 +88,6 @@ module keyVault 'modules/keyvault.bicep' = {
   }
 }
 
-module email 'modules/email.bicep' = {
-  name: 'email'
-  params: {
-    environmentName: environmentName
-  }
-}
-
 // SqlClient signs in as the app identity, so the string holds no secret (design.md §9.4). Encrypt=Strict is TDS 8.0:
 // TLS starts before any TDS message and the server's certificate is always validated, which TrustServerCertificate
 // cannot turn off, so that keyword is left out (design.md §9.3).
@@ -113,10 +109,12 @@ module app 'modules/app.bicep' = {
     appIdentityId: appIdentity.id
     subnetId: network.outputs.subnetId
     healthCheckPath: healthCheckPath
+    // Written by app.bicep as Email:SenderAddress, the address on every email the app sends, which it refuses empty.
+    emailSenderAddress: emailSenderAddress
     // The app reads these as ConnectionStrings:Grow2Notes, ManagedIdentity:ClientId and DataProtection:KeyVaultKeyUri.
     // The client ID picks the user-assigned identity for ManagedIdentityCredential, which signs in to Key Vault,
-    // telemetry and email (design.md §9.4). The key URI has no version: Data Protection wraps each new key with the
-    // key's current version (design.md §9.3). APPLICATIONINSIGHTS_CONNECTION_STRING is the name the Azure
+    // telemetry and the email key (design.md §9.4). The key URI has no version: Data Protection wraps each new key
+    // with the key's current version (design.md §9.3). APPLICATIONINSIGHTS_CONNECTION_STRING is the name the Azure
     // Monitor OpenTelemetry distro reads; the string only says where to send, and the identity's token is what lets
     // the app send (design.md §9.5). Statsbeat, the exporter's own usage reports, would go to Microsoft outside
     // Australia, so it is off (design.md §10, D33).
@@ -129,12 +127,10 @@ module app 'modules/app.bicep' = {
       // Read as App:Origin. An invite's setup link starts with it, because the operator commands, which print one,
       // run where there is no request to take the address from (design.md §7.4, §8.1).
       App__Origin: appOrigin
-      // Read as Email:Endpoint and Email:SenderAddress. With both, the app sends its setup-link email through
-      // Communication Services as the app identity; without the endpoint it would write each email, link and all, to
-      // its console. Neither is a secret: access keys are off, so there is no connection string or key, and the
-      // address is on every email the app sends.
-      Email__Endpoint: email.outputs.endpoint
-      Email__SenderAddress: email.outputs.senderAddress
+      // Read as Email:ApiKeySecretUri. It is where the app finds the Resend API key it sends its setup-link email with:
+      // it reads the key from Key Vault as the app identity at each send, so the key is in no setting. Without this
+      // setting the app would write each email, link and all, to its console, so every deploy sets it (D92).
+      Email__ApiKeySecretUri: keyVault.outputs.emailApiKeySecretUri
       // App Service mounts the deployed zip read-only as wwwroot, so a running build never loads a later build's files,
       // and sends traffic to a newly started build only once /healthz answers 200 (design.md §10.4 step 7, A49).
       // /healthz in both environments, not prod's /healthz/ready, because it never touches the database (design.md
@@ -143,6 +139,18 @@ module app 'modules/app.bicep' = {
       WEBSITE_WARMUP_PATH: '/healthz'
       WEBSITE_WARMUP_STATUSES: '200'
     }
+  }
+}
+
+// The production alerts, which are kept out of test (design.md §10.1, S06.04.01). The action group and test's own
+// alert are in monitoring.bicep, which the web app's settings depend on.
+module alerts 'modules/alerts.bicep' = if (environmentName == 'prod') {
+  name: 'alerts'
+  params: {
+    environmentName: environmentName
+    actionGroupId: monitoring.outputs.actionGroupId
+    webAppId: app.outputs.webAppId
+    databaseId: sql.outputs.databaseId
   }
 }
 

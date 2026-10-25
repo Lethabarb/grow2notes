@@ -6,7 +6,7 @@ namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
 /// Stands in for the app's email sender in a test of an email that cannot be sent: it sends nothing and throws, as
-/// Communication Services can, an exception whose message holds the address and the whole text, setup link and all, so
+/// an email service can, an exception whose message holds the address and the whole text, setup link and all, so
 /// that a test shows that neither reaches the logs (design.md §9.5).
 /// </summary>
 internal sealed class FailingEmailSender : IEmailSender

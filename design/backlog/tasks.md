@@ -35,7 +35,7 @@ Up to four lanes run at once, each one task at a time:
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
-- **D:** T22 (once the production domain is set and Q13 is answered) and T23, alongside the note and report work,
+- **D:** T22 (Q2 and Q13 are answered, D91 and D92) and T23, alongside the note and report work,
   then T27 and T28.
 
 Some pairs run one after the other on purpose: T12, T13 and T14 all change the note form, the draft save and Today;
@@ -5638,7 +5638,7 @@ Planned 24 October 2026. No migration, library, download or owner question.
 
 ```yaml
 id: T22
-status: new
+status: done
 release: R1
 lane: D
 size: M
@@ -5648,9 +5648,9 @@ stories: [S00.02.04, S00.02.05, S06.03.01, S06.04.01, S06.05.01]
 
 ### Outcome
 
-The operator deploys, by hand, exactly a build that passed CI and was deployed to test to production on the product
-domain. Production has its own identities, database delete locks, 35-day and 12-month backups in Australia, email
-alerts to the operator, the product-domain email sender, and a read-only production check.
+The operator deploys, by hand, exactly a build that passed CI and was deployed to test to production at its default
+Azure host (D91). Production has its own identities, database delete locks, 35-day and 12-month backups in Australia,
+email alerts to the operator, setup-link email through Resend (D92), and a read-only production check.
 
 ### Absorbs
 
@@ -5666,17 +5666,107 @@ alerts to the operator, the product-domain email sender, and a read-only product
 
 ### Notes
 
-- Writes `ops/go-live.md`, the ordered run sheet for the mandatory production and go-live steps: the ten design.md §14
-  go-live lines, the operator's production Owner steps (grant-identities, locks, the main-only deploy rule), and the
-  five-worker words check (S06.02.05, cut) for the managers to arrange.
-- Its product-domain sender replaces, in production, the test environment's azurecomm.net sender (A58).
-- Waits for owner question Q2, the production domain (A38).
-- Waits for owner question Q13, what sends production's email, as Communication Services' Email retires on
-  30 September 2028 (T01's Notes).
+- Writes `ops/go-live.md`, the ordered run sheet for the mandatory production and go-live steps: the operator's
+  production Owner steps (grant-identities, locks, the main-only deploy rule), the read-only checks, the alert and email
+  tries, and the ten design.md §14 go-live lines with the five-worker words check (S06.02.05, cut) for the managers to
+  arrange.
+- Owner questions Q2 and Q13 were answered on 25 October 2026 and are recorded in D91 and D92. Production is at
+  `app-grow2notes-prod.azurewebsites.net`; no custom domain, DNS record or certificate is a work item. Resend sends the
+  email in test and production from a key in Key Vault; Communication Services, `modules/email.bicep` and its role are
+  gone, and A58's test sender is superseded. Every Azure action is the operator's by-hand step; the agents wrote only
+  Bicep, workflow YAML, code, tests and docs.
+- New assumed defaults A100 to A104, which the owner may overturn: A100 (the Resend free plan, a verified domain that is
+  not the parent company's, tracking off, one sending-only key per environment), A101 (passkeys bind to the default
+  host; add any custom domain before real staff enrol), A102 (Resend as an email sub-processor, and the setup links its
+  dashboard holds), A103 (no required reviewer on `prod`; the dispatch from `main` is the approval) and A104 (the
+  pre-merge step 151).
+- Alert thresholds, where design.md §10.1 was silent. All three are production only, hold resource metrics only and
+  resolve by themselves; the free-amount alert stays test only. HTTP 5xx: total above 0 over 5 minutes, severity 2.
+  Health check: average below 50 over 15 minutes, severity 1, so a sustained failure fires and a deploy restart does
+  not. DTU: average above 80 over 15 minutes, severity 2. Each is evaluated every 5 minutes.
+- Blind spot: a stopped site emits no `HealthCheckStatus`, so it raises no health-check alert. No availability test was
+  added, because nobody asked for one; the operator knows of it from `ops/go-live.md` C.
+- Expected alert: a deploy restarts the app, so one HTTP 5xx alert around a production deploy is expected. There is no
+  suppression rule.
+- The health-check failure test (S06.04.01 criterion 3) deletes the SQL server's virtual network rule `app-subnet` and
+  restarts the web app, waits at least 25 minutes, then recreates the rule (or re-runs the last production Deploy) and
+  waits for both alerts to resolve. It needs no code, setting or health path change.
+- The run-name link: a CI run is linked to its test deployment by the Deploy run's title, `Deploy CI run <id> attempt
+  <n> to test`, which the `Check the CI run` job looks for among the successful runs. Only a CI run whose test deploy
+  ran after T22 merged has such a title, so only runs from T22's merge onward can go to production. The artifacts last
+  90 days.
+- The first production deploy is made by hand, as `grow2notes-prod-main`, from a chosen CI run's artifact (S00.02.02's
+  precedent), because the vault and server exist only after `main.bicep`, and `grant-identities.sql` must run before any
+  migration. The order is the hand deploy, the key, the grants, then the first dispatch (`ops/go-live.md` A6 to A9).
+- Seven GitHub secrets per environment, not six: `EMAIL_SENDER_ADDRESS` is the only addition. A deploy without it stops
+  at what-if, before any change, so until the owner does step 151 every test deploy is red and test keeps its previous
+  build. That blocks other lanes' "deployed to test", and it is expected, not a defect.
+- Cold start: the app has one 5-second deadline for the vault read and the Resend post. If first-use step 152 (an
+  invite sent within a minute of a restart) answers "Not sent", raise `SendTimeout` in `EmailSending.cs` to 8 seconds,
+  which is still under the SPA's 10 seconds.
+- `weekOfYear` is left out of the long-term retention policy. If the what-if in `ops/go-live.md` B shows it as drift, the
+  fix is `weekOfYear: 0` in `sql.bicep`.
+- `app.bicep` refuses an empty sender with `@minLength(3)` on a separate `emailSenderAddress` parameter that is merged
+  into the settings, not through the `appSettings` type that the plan named. The documents say only "refused at
+  what-if".
+- Findings for the owner, none changed here: `ops/go-live.md` A needs the owner's decision on security-review.md F-7
+  (a 3072-bit Key Vault key) before the first production deploy; S06.05.02's third criterion says the setup email comes
+  "from the product domain", which D92 changes to the owner's verified Resend domain (noted in S06.05.01); and
+  `releases.md` still lists the production domain as an owner question for Sprint 09.
+- Out of T22, for the planner: `bootstrap.bicep` creates no Australia East resource group or identity rights for the
+  §10.7 outage redeploy (S06.03.02's Notes), and the `migrate.sql` step in `ci.yml` is dead output under D90 item 6, so a
+  later chore could remove it together with design.md §10.4 step 3.
+- Stories S00.02.04, S00.02.05, S06.03.01, S06.04.01 and S06.05.01 are done under README §9 with their by-hand criteria
+  unticked, as dated Notes record; only S00.02.05's third criterion is proven in CI (`InfraTemplateTests`). F03.03's
+  row 5 in coverage.md still holds (`MessagingOutOfScopeTests`).
+- By hand: ops/first-use-in-test.md steps 151 to 157 (151 first, before this merges) and `ops/go-live.md`.
+
+### Plan
+
+Planned 25 October 2026. No endpoint, entity, field, migration, audit event, SPA change or screen. Three verticals, each
+merged into the feature branch; the feature branch goes to main as one unit because V1 and V2 share setting names.
+
+- Outcome: production is a second environment from the same Bicep with its own values (`prod.bicepparam`), served at
+  the default Azure host (D91). It is deployed only by a manual dispatch from main of a CI run whose test deploy
+  succeeded. It has a database delete lock, 35-day PITR, monthly long-term backups (12 months) and geo storage, three
+  metric alerts, and a read-only check run sheet (`ops/go-live.md`). Resend replaces Communication Services in test and
+  production (D92).
+- Design: `ResendEmailSender` posts to Resend's HTTP API with a key read from Key Vault (`resend-api-key`) at each send
+  by the app identity (Key Vault Secrets User at group scope, granted by bootstrap). One 5-second deadline covers the
+  vault read and the one POST; every failure reaches callers as `EmailNotSentException`. `Email:ApiKeySecretUri` is the
+  switch: unset means the console sender. `deploy.yml` becomes one workflow with a `Check the CI run` job and one
+  parameterised `Deploy to <env>` job. The CI run is linked to its test deploy through the Deploy run-name. Alerts live
+  in `modules/alerts.bicep` (prod only); the lock lives in `locks.bicep`, run by the operator, never in `main.bicep`.
+- Domain: none. Existing entities are used read-only (`ApplicationUser.Email` as the recipient, `AuditEvent` rows
+  rolled back on a failed send, passkey rows bound to the App:Origin host). Invariants: Resend body is exactly
+  from, to, subject, text; the key exists only in Key Vault and in a local for one send; a missing key or role only
+  makes sends answer Not sent.
+- Reuse: `EmailSending` switch point, the `KeyRingWrapping` managed-identity pattern and Key Vault network path,
+  `SetupLinkEmail`'s exception filter, the bootstrap role loop, `deploy.yml`'s steps (kept once), `test.bicepparam`,
+  `grant-identities.sql` and `check-database.sql`, `restore-drill.md` and `break-glass.md`.
+- Where design.md is silent: alert thresholds (5xx Total > 0 over 5 minutes; health check Average < 50 over
+  15 minutes; DTU Average > 80 over 15 minutes), no required reviewer on prod (A103), seven GitHub secrets (adds
+  `EMAIL_SENDER_ADDRESS`), fake key `test-api-key`, health-check failure tested by deleting the SQL VNet rule, old
+  Communication resources deleted by hand. New assumed defaults A100 to A104; decisions D91 and D92.
+- Owner flags: pre-merge first-use step 151 (Resend domain and test key, test's `EMAIL_SENDER_ADDRESS`, bootstrap
+  re-run with the GitHub subject prefix); test deploys stop at what-if until that secret is set; a custom domain added
+  after the first production enrolment means everyone enrols again; setup emails now leave Australia through Resend.
+
+### Verticals
+
+- v1: App: setup-link email through Resend, Key Vault key read, packages and tests; depends_on: none; R14 R17
+- v2: Infra: prod parameters, alerts, long-term retention, lock, bootstrap role, gated prod deploy, infra README;
+  depends_on: none; R01 R02 R03 R04 R05 R06 R07 R08 R10 R11 R12 R15 R16 R23 R24
+- v3: Docs and ops: D91, D92, A100 to A104, design sections, stories, go-live.md, first-use steps, backlog;
+  depends_on: v1 v2; R09 R13 R18 R19 R20 R21 R22 R25 R26 R27 R28 R29 R30
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] App (#140; v1): `ResendEmailSender` and the Key Vault key read, the packages, and the tests.
+- [x] Infra (#141; v2): `prod.bicepparam`, `modules/alerts.bicep`, long-term retention, `locks.bicep`, the Key Vault
+      secrets role in bootstrap, the gated `deploy.yml`, and `infra/README.md`.
+- [x] Docs (#142; v3): D91 and D92, A100 to A104, the design sections, the five stories, coverage.md, `ops/go-live.md`,
+      first-use steps 151 to 157, and Q2 and Q13 answered.
 
 ---
 
@@ -6705,12 +6795,10 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q3, Q4, Q5 and Q7 are answered (below).
-Each holds only the tasks named. Everything else still open in the specs is built as they say unless the owner says
-otherwise.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q7 and Q13 are answered
+(below). Each holds only the tasks named. Everything else still open in the specs is built as they say unless the owner
+says otherwise.
 
-- **Q2. The production domain (A38).** Blocks T22, and so T27 and T28. Suggested: pick a Grow2Notes domain now. It
-  cannot be the parent company's domain or a subdomain of it, and it cannot change after the first real passkey.
 - **Q6. The switch-over date, who runs staff onboarding, and whether to pilot.** Blocks T28. Suggested: the owner
   and the managers set the date, the managers run the 30-minute onboarding, and there is no pilot.
 - **Q8. How the first manager gets their setup link.** Bootstrap prints the link and sends no email. Blocks T27.
@@ -6725,14 +6813,6 @@ otherwise.
   microcopy.md asks for the five-worker words check before go-live. Affects T28 only. Suggested: no, under the
   owner's rules of 12 and 20 October 2026: they are by-hand steps on ops/first-use-in-test.md, which hold nothing open,
   and any failure becomes a bug.
-- **Q13. What sends production's email (A58, S00.02.04), as Communication Services' Email retires on 30 September
-  2028?** Blocks T22, and so T27 and T28. Added on 14 October 2026 by T01's plan. design.md §10.1 has production
-  send from `acs-grow2notes-prod` on the product domain, but Microsoft Learn (updated 8 October 2026) puts the Email
-  service in maintenance mode, advises migrating rather than onboarding new solutions, and starts limiting onboarding
-  to retiring services on 23 October 2026, likely before T22, which also waits for Q2, creates that resource (T01's
-  Notes). Whether A58, the test sender, holds is part of the same question. No answer is suggested, as each one
-  chooses a provider.
-
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:
 
@@ -6749,6 +6829,17 @@ defaults (T23), which the owner may overturn:
 - **Q7. The restore test while production holds no notes before go-live** (T23): design.md A90, a drill that checks the
   configuration counts, `restore-check.sql` and `DBCC CHECKDB` before go-live, and opens a known note at the first
   drill after go-live.
+
+**Answered on 25 October 2026.** The owner answered two questions that blocked T22:
+
+- **Q2. The production domain (A38)** (T22): production uses App Service's default host,
+  `app-grow2notes-prod.azurewebsites.net`, for now (D91). The owner will add a custom domain to the web app
+  themselves later, so a custom domain, DNS record or certificate is not a work item and nothing depends on one. A
+  domain added after the first production enrolment means everyone enrols again (A101).
+- **Q13. What sends production's email (A58, S00.02.04)** (T22): Resend, in test and in production (D92). The Resend API
+  key is a secret that the operator stores in Key Vault, never in the repository or an app setting value, and the from
+  address is operator-supplied configuration (A100). Verifying a sending domain in Resend is the owner's by-hand step.
+  Communication Services is removed, and A58's test sender is superseded.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock

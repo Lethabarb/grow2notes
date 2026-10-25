@@ -60,7 +60,7 @@ T25 does not merge to `main` while a High or Critical finding is open (F06.01's 
 No Medium finding is open: F-1 was fixed on 25 October 2026, at the owner's decision. Every finding is recorded with a
 decision. "Accepted" means the developer decided to leave it, and the owner may overturn that. "Fixed" means the owner
 asked for the change and it is made; the row says how. No finding is in `infra/` at High or Critical, so no bug story
-was filed; `infra/` was edited afterwards only to fix a finding at the owner's request (F-25: `bootstrap.bicep`).
+was filed; `infra/` was edited afterwards only to fix a finding at the owner's request (F-25 and F-8: `bootstrap.bicep`).
 Counts: Medium 1 (fixed); Low 17; Informational 7.
 
 ### 3.1 Register
@@ -74,7 +74,7 @@ Counts: Medium 1 (fixed); Low 17; Informational 7.
 | F-5 | Low | 11.4.2 | `Program.cs` | Passwords are hashed with Identity's default PBKDF2 at its default of 100,000 iterations, below OWASP's current guidance for HMAC-SHA512. | Accepted: it matters only to someone who already has a copy of the database, and the second factor remains. Raising `PasswordHasherOptions.IterationCount` is one line, and Identity rehashes at the next sign-in. | Accepted |
 | F-6 | Low | 3.3.1, 3.3.2, 3.3.3 | `Program.cs`, `EnrolmentCookie.cs` | Identity's two-factor cookie keeps its defaults (SameSite Lax, Secure as the request is, no `__Host-` prefix), and the setup cookie is `__Secure-` with a path, not `__Host-`. | Accepted: both are HttpOnly, last 5 and 30 minutes, hold a protected ID, and every endpoint that reads them needs the antiforgery token; the setup cookie's path is deliberate. Setting `SecurePolicy` and `SameSite` on the two-factor scheme is two lines beside the existing `Configure` call. | Accepted |
 | F-7 | Low | 11.2.3 | `infra/modules/keyvault.bicep` | The Key Vault key that wraps the Data Protection key ring is RSA 2048, about 112 bits of security where the standard asks for 128. | Accepted, `infra/` not edited: the key only wraps the key ring, which is itself AES-256. A 3072-bit key is a change to the vault module and a re-wrap, best made when production is first deployed. | Accepted |
-| F-8 | Low | 13.2.2 | `infra/modules/bootstrap-environment.bicep` | The app identity holds the built-in role Communication and Email Service Owner, to send mail with Entra ID, which is broader than sending. | Accepted, `infra/` not edited: it covers only the Communication Services and Email resources of its resource group; a custom role that only sends is possible. | Accepted |
+| F-8 | Low | 13.2.2 | `infra/modules/bootstrap-environment.bicep` | The app identity held the built-in role Communication and Email Service Owner, to send mail with Entra ID, which is broader than sending. | Fixed (D92, 25 October 2026): Communication Services is gone, and the role is replaced by Key Vault Secrets User at group scope, which only reads secrets, to read the Resend key (`infra/modules/bootstrap-environment.bicep`). The old role assignment is deleted by hand (`infra/README.md`, `ops/first-use-in-test.md` step 153). | Fixed |
 | F-9 | Low | 13.2.3 | `.github/workflows/ci.yml`, `tests/README.md` | CI and the test guide hold a fixed SQL Server password for a throwaway container. The repository is public. | Accepted: the password guards a container that exists for one CI job and is reachable only inside it; no deployed system uses it. | Accepted |
 | F-10 | Low | 13.2.4 | `.github/workflows/deploy.yml` | The deploy asks a third-party service for the runner's address, to open a temporary SQL firewall rule. | Accepted: the answer must look like an IPv4 address, the rule is deleted after the migration whatever happens, and SQL accepts Entra sign-in only, so the firewall alone gives no access. | Accepted |
 | F-11 | Low | 2.4.1, 15.2.2 | `HealthEndpoints.cs` | `/healthz/ready`, the probe production uses, is open to everyone, has no rate limit and runs a one-row query for each call. | Accepted: the query is `SELECT 1` with a 5-second timeout, and a flood is a platform-level denial of service that no app limit stops. Test's `/healthz` touches no database. | Accepted |
@@ -136,7 +136,7 @@ Counts: Medium 1 (fixed); Low 17; Informational 7.
 | §9.3: app to database with `Encrypt=Strict`, server TLS 1.2 | Yes | `infra/main.bicep` (the connection string); `infra/modules/sql.bicep` (`minimalTlsVersion`) |
 | §9.3: encryption at rest | By the platform | Azure SQL's transparent data encryption is on by default and is not set in the repository; the restore drill (`ops/restore-drill.md`) covers the backups |
 | §9.3: key ring in SQL, wrapped by a Key Vault key; soft delete and purge protection on | Yes | `KeyRingWrapping.cs`, `KeyRingWrappingTests`; `infra/modules/keyvault.bicep`; `infra/sql/check-database.sql` check C |
-| §9.4: managed identities, no long-lived secrets | Yes | `infra/main.bicep` (app settings hold IDs and addresses only); `infra/modules/bootstrap-environment.bicep` |
+| §9.4: managed identities; one long-lived secret, the Resend key, in Key Vault | Yes | `infra/main.bicep` (app settings hold IDs, addresses and the secret's URI only); `infra/modules/bootstrap-environment.bicep` |
 | §9.4: GitHub to Azure by OIDC, per environment | Yes | `infra/modules/bootstrap-environment.bicep` (the credential's subject names the environment); `deploy.yml` |
 | §9.4: runtime role with grants and denies, append-only history and audit | Yes | `RuntimeRoleTests`; `AuditEventAppendOnlyTests`; `infra/sql/grant-identities.sql`; `infra/sql/check-database.sql` checks A, B, D and E |
 | §9.4: FTP and basic-auth publishing off | Yes | `infra/modules/app.bicep` (`ftpsState`, `basicPublishingCredentialsPolicies`) |
@@ -157,10 +157,11 @@ Counts: Medium 1 (fixed); Low 17; Informational 7.
 |---|---|---|---|
 | Session, antiforgery, enrolment and two-factor cookies; setup tokens | AES-256-CBC with HMAC-SHA256 (Data Protection's default) | The key ring in `dbo.DataProtectionKeys` | The Key Vault key below |
 | Key ring wrapping key `data-protection` | RSA 2048, wrap and unwrap only, OAEP (F-7) | Key Vault, with soft delete and purge protection | Entra RBAC: the app identity's Crypto Service Encryption User role |
+| Resend API key | Opaque bearer token | Key Vault secret `resend-api-key`, stored by the operator and read at each send | Entra RBAC: the app identity's Key Vault Secrets User role |
 | Passwords | PBKDF2 with 100,000 iterations (F-5) | `AspNetUsers` | Database access control |
 | Authenticator keys | HMAC-SHA1 TOTP of RFC 6238, 6 digits (F-12) | Identity's user-token table | Database access control |
 | Passkeys | WebAuthn public keys, user verification required | Identity's passkey table | Database access control |
-| Browser to app | TLS 1.2 or later, certificate of App Service (test: its built-in one; production: the managed one) | The platform | Azure |
+| Browser to app | TLS 1.2 or later, certificate of App Service (its own, in both environments, D91) | The platform | Azure |
 | App to database | TDS 8 strict encryption, TLS 1.2 or later | The platform | Azure SQL's certificate |
 | Data at rest | Azure SQL's transparent data encryption, service-managed key | Azure | Azure |
 | Azure access from GitHub | OIDC tokens, nothing stored | GitHub and Entra | Per-environment subject |
@@ -215,7 +216,7 @@ Counts are those read from the standard against the rows written below; they mus
 | V17 WebRTC | 0 | 7 | 0 | 7 | 5 |
 | **Total** | **70** | **183** | **70** | **183** | **92** |
 
-Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicable and 15 point to a finding.
+Of the 253 rows, 153 are met (8 of them confirmed in test), 86 are not applicable and 14 point to a finding.
 
 ### V1 Encoding and sanitization
 
@@ -242,7 +243,7 @@ Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicabl
 | 1.3.8 | 2 | JNDI injection | N/A: the app is not a Java application. |
 | 1.3.9 | 2 | Memcache injection | N/A: the app uses no memcache. |
 | 1.3.10 | 2 | Format strings | Met: log messages are source-generated templates with fixed text (`LoggerMessage`); no user text is used as a format. |
-| 1.3.11 | 2 | Mail injection | Met: the email goes through the Communication Services API as a typed message (`CommunicationServicesEmailSender.cs`), not SMTP, and the address is checked by `UserDetailsChecks` and Identity. |
+| 1.3.11 | 2 | Mail injection | Met: the email goes through Resend's HTTP API as a typed message (`ResendEmailSender.cs`), not SMTP, and the address is checked by `UserDetailsChecks` and Identity. |
 | 1.4.1 | 2 | Memory-safe handling | Met: managed C# and TypeScript; no `unsafe` code in `src/` (read). |
 | 1.4.2 | 2 | Integer range checks | Met: user numbers are bounded by validation and the `Limits` constants (`SpaLimitsTests`); no unchecked arithmetic on request values. |
 | 1.4.3 | 2 | Freed memory | N/A: memory is managed and garbage-collected. |
@@ -366,7 +367,7 @@ Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicabl
 | 7.1.2 | 2 | Documented concurrent sessions | Met: documented here: a person may be signed in on several devices at once with no cap, one cookie for each; signing out on any of them, a reset or a deactivation ends all (design.md A99; `LogoutEndpointTests.Every_other_session_of_the_person_gets_401_on_its_next_request`). |
 | 7.1.3 | 2 | Documented re-authentication conditions | Met: design.md §8.5 and §8.6: idle and absolute limits, signing out on another device (A99), and deactivation or reset; there is no federation. |
 | 7.2.1 | 1 | Session checked on the server | Met: the cookie is validated on every request and the user's row is read each time (`Program.cs`, `ValidationInterval` zero; `SessionRules.cs`). |
-| 7.2.2 | 1 | Dynamically generated session tokens | Met: the session is a protected cookie ticket made at sign-in; the app uses no static API keys or secrets. |
+| 7.2.2 | 1 | Dynamically generated session tokens | Met: the session is a protected cookie ticket made at sign-in; the one static key, Resend's, is read from Key Vault and is not a session token. |
 | 7.2.3 | 1 | Reference token strength | N/A: the session is a self-contained protected ticket, not a reference token (see chapter 9). |
 | 7.2.4 | 1 | New token at sign-in | Met: every sign-in issues a new cookie (`Grow2NotesSignInManager.cs`), and no session cookie exists before it. |
 | 7.3.1 | 2 | Inactivity timeout | Met by design, confirmed in test by step 11: 30 minutes (`SessionLimitTests.A_request_after_30_minutes_and_1_second_idle_gets_401`). |
@@ -466,8 +467,8 @@ Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicabl
 | 12.1.2 | 2 | Cipher suites with forward secrecy | F-24: the suite list is Azure's platform default and not set in the repository. |
 | 12.1.3 | 2 | Client certificates | N/A: the app uses no client certificates. |
 | 12.2.1 | 1 | TLS for all external connections | Met: `httpsOnly`, HSTS with `includeSubDomains`; the app has no plain-HTTP listener of its own beyond App Service's front end. |
-| 12.2.2 | 1 | Publicly trusted certificates | Met: test uses App Service's built-in certificate and production its managed certificate (design.md §9.3, D62). |
-| 12.3.1 | 2 | TLS between services | Met: SQL with `Encrypt=Strict` (`infra/main.bicep`); Key Vault, Communication Services and Application Insights over HTTPS. |
+| 12.2.2 | 1 | Publicly trusted certificates | Met: both environments use App Service's own certificate on their default hosts (design.md §9.3, D62, D91). |
+| 12.3.1 | 2 | TLS between services | Met: SQL with `Encrypt=Strict` (`infra/main.bicep`); Key Vault, Resend and Application Insights over HTTPS. |
 | 12.3.2 | 2 | Certificates validated | Met: no `TrustServerCertificate` or certificate bypass in `src/`; CI's throwaway SQL container uses it alone (F-9). |
 | 12.3.3 | 2 | Internal connections encrypted | Met by platform: the one hop without TLS is App Service's front end to the app, inside the platform; the app's own connections are all TLS. |
 | 12.3.4 | 2 | Internal certificate authorities | N/A: the app uses no internal CA or self-signed certificate. |
@@ -476,14 +477,14 @@ Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicabl
 
 | ID | L | Topic | Status |
 |---|---|---|---|
-| 13.1.1 | 2 | Documented communication needs | Met: design.md §7.1, §7.7 and §9.4 list what the app talks to: SQL, Key Vault, Communication Services and Application Insights. |
-| 13.2.1 | 2 | Authenticated backend communication | Met: managed identities for SQL, Key Vault, Communication Services and telemetry (design.md §9.4; `infra/main.bicep` uses `Active Directory Managed Identity`); no shared or password accounts. |
-| 13.2.2 | 2 | Least privilege for service accounts | F-8: one built-in role is broader than needed; the SQL role and the Key Vault role are narrow (`RuntimeRoleTests`). |
+| 13.1.1 | 2 | Documented communication needs | Met: design.md §7.1, §7.7 and §9.4 list what the app talks to: SQL, Key Vault, Resend and Application Insights. |
+| 13.2.1 | 2 | Authenticated backend communication | Met: managed identities for SQL, Key Vault and telemetry, and a bearer key read from Key Vault for Resend (design.md §9.4; `infra/main.bicep` uses `Active Directory Managed Identity`); no shared or password accounts. |
+| 13.2.2 | 2 | Least privilege for service accounts | Met: the SQL role and the two Key Vault roles are narrow (`RuntimeRoleTests`); F-8, the broad email role, is fixed. |
 | 13.2.3 | 2 | No default credentials | F-9: CI holds a throwaway SQL password; no deployed credential exists. |
 | 13.2.4 | 2 | Allowlist of external resources | Met: the app calls only its configured endpoints and fetches no user-supplied address (the deploy workflow's own call is F-10). |
 | 13.2.5 | 2 | Remote resources the server loads | N/A: the server loads no remote resources, and the CSP stops the page loading any (`connect-src 'self'`, `script-src 'self'`). |
-| 13.3.1 | 2 | Secrets management | Met: Key Vault holds the one key and no secrets; the app settings hold IDs and addresses only (`infra/main.bicep`); the GitHub subject prefix is passed when `infra/bootstrap.bicep` is run, not kept in the repository (F-25, fixed). |
-| 13.3.2 | 2 | Least privilege to secrets | Met: RBAC on the vault; the app identity has Key Vault Crypto Service Encryption User only; soft delete and purge protection are on (`infra/modules/bootstrap-environment.bicep`, `infra/modules/keyvault.bicep`). |
+| 13.3.1 | 2 | Secrets management | Met: Key Vault holds the one key and one secret, the Resend key; the app settings hold IDs, addresses and the secret's URI only (`infra/main.bicep`); the GitHub subject prefix is passed when `infra/bootstrap.bicep` is run, not kept in the repository (F-25, fixed). |
+| 13.3.2 | 2 | Least privilege to secrets | Met: RBAC on the vault; the app identity has Key Vault Crypto Service Encryption User and Key Vault Secrets User only; soft delete and purge protection are on (`infra/modules/bootstrap-environment.bicep`, `infra/modules/keyvault.bicep`). |
 | 13.4.1 | 1 | No source-control data deployed | Met: `app.zip` is the output of `dotnet publish` (`ci.yml`), which holds no `.git` folder; `wwwroot` comes from the Vite build. |
 | 13.4.2 | 2 | Debug modes off | Met: no setting turns on the development environment (Production is the default; `infra/main.bicep` sets none); no `EnableSensitiveDataLogging` or `EnableDetailedErrors` in `src/`; errors carry no exception text (`DatabaseFailureHandlerTests`, `ErrorCodeTests`). |
 | 13.4.3 | 2 | No directory listing | Met: no directory browsing is enabled; static files come from `MapStaticAssets`. |

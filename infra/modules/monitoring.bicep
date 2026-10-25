@@ -168,3 +168,6 @@ resource freeAmountAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = if (useF
 // the component's IDs, so deploy.yml masks it in the public log (D60, D65).
 @description('Application Insights\' connection string, which the app reads as APPLICATIONINSIGHTS_CONNECTION_STRING.')
 output applicationInsightsConnectionString string = applicationInsights.properties.ConnectionString
+
+@description('The action group that emails the developer, which alerts.bicep\'s alerts use.')
+output actionGroupId string = actionGroup.id

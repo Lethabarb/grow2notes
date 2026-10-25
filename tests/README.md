@@ -267,8 +267,8 @@ await answerInvites(page, { status: 500 });
 ```
 
 The tests that meet the app's own invite sign in for real, as above, and invite a made-up person with a new
-`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no `Email__Endpoint`
-and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
+`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no
+`Email__ApiKeySecretUri` and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
 
 Resend invite on an Invited user's page sends `POST /api/admin/users/{id}/setup-link`, whose path `setupLinks` in
 `e2e/users.ts` matches for any user. `answerSetupLinks(page, answer)` answers each resend in the browser:
@@ -1325,7 +1325,7 @@ that nothing was sent, or exactly what was, uses such an app, as
 `Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends nothing. The
 class fixture's app is shared by the class's tests, so a test that calls it finds its own messages by the address it
 used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` keeps the app's console sender, which
-writes each message to standard output; the app sends through Communication Services only where `Email:Endpoint` is
+writes each message to standard output; the app sends through Resend only where `Email:ApiKeySecretUri` is
 set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
 `SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email, and
@@ -1364,10 +1364,10 @@ a `+`, `/` or `=` in it.
   list. A test of the count adds an organisation of its own, as above, because other tests flag notes in A.
 - `Grow2Notes.Tests/Platform/MessagingOutOfScopeTests.cs` is the build check for the scope line on messaging. It reads
   the repository as text: no package ID in `Directory.Packages.props`, a `.csproj` or the two `package.json` files names
-  SMS, push, SMTP, mail or another messaging service, except `Azure.Communication.Email`; the `.cs` files of the web
-  project that name `IEmailSender` or a mail library are exactly the listed set; the mail libraries are named only in
-  `Platform/Email`; and the three handlers that issue a setup link use the sender only as the first argument of
-  `SetupLinkEmail.SendAsync`. A change that adds a sender, or a legitimate use of the email package, changes the list in
+  SMS, push, SMTP, mail or another messaging service (Resend is called over HTTP, with no package); the `.cs` files of
+  the web project that name `IEmailSender` or a mail library are exactly the listed set; the mail libraries are named
+  only in `Platform/Email`; and the three handlers that issue a setup link use the sender only as the first argument of
+  `SetupLinkEmail.SendAsync`. A change that adds a sender, or a legitimate use of a mail library, changes the list in
   that test in the same change. Matching by name is coarse by nature.
 
 ### The endpoint matrix

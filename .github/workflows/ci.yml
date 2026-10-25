@@ -150,7 +150,8 @@ jobs:
           cd "$RUNNER_TEMP/app"
           zip -q -r "$GITHUB_WORKSPACE/artifacts/app.zip" .
 
-      # For review only; the deploy applies the bundle (design.md §10.6).
+      # Kept with the artifacts (design.md §10.4 step 3) and never applied: the deploy applies the bundle. A migration
+      # is reviewed in the pull request's diff (D90).
       - name: Script the migrations as migrate.sql
         run: >-
           dotnet ef migrations script
@@ -275,7 +276,7 @@ jobs:
           overwrite: true
 
       # Upload (design.md §10.4 step 5). Production deploys exactly these files; nothing is rebuilt. Only a run whose
-      # end-to-end tests passed gets here. Pull request runs upload them too, so migrate.sql can be read in review.
+      # end-to-end tests passed gets here. Pull request runs upload them too, though only a push run is ever deployed.
       # deploy.yml downloads the artifact named grow2notes from the CI run it is given (download-artifact's run-id)
       # and must chmod +x efbundle first: an artifact is a zip, which keeps no file permissions. Re-running all jobs
       # deletes a run's earlier artifacts and uploads a fresh build under the same name, so deploy.yml must not assume

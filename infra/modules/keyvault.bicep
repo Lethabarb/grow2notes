@@ -1,6 +1,8 @@
-// The Key Vault and its one RSA key, which wraps the Data Protection key ring that the app keeps in SQL (design.md
-// §7.1, §9.3, §9.4). The vault holds no secrets. The app identity's wrap and unwrap rights come from the role that
-// bootstrap.bicep assigns on the resource group, so this file has no role assignment.
+// The Key Vault, which holds one key and one secret (design.md §7.1, §9.3, §9.4, D92). The key is an RSA key, which
+// wraps the Data Protection key ring that the app keeps in SQL. The secret is the Resend API key, resend-api-key, which
+// the operator stores by hand and which no template holds or changes. The app identity's rights to wrap and unwrap and
+// to read the secret come from the roles that bootstrap.bicep assigns on the resource group, so this file has no role
+// assignment.
 targetScope = 'resourceGroup'
 
 @description('The environment, test or prod.')
@@ -67,3 +69,8 @@ resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2026-02-01' = {
 // its one version: it has no rotation policy, and it must not be rotated by hand.
 @description('The URI of the Data Protection wrapping key, without a version.')
 output keyUri string = dataProtectionKey.properties.keyUri
+
+// The secret itself is not declared here, so a deploy never creates, changes or reads it. The app reads its current
+// version at each send, so a rotated key needs no deploy.
+@description('The URI of the Resend API key secret, without a version, which the app reads as Email:ApiKeySecretUri.')
+output emailApiKeySecretUri string = '${vault.properties.vaultUri}secrets/resend-api-key'

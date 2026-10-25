@@ -106,7 +106,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | ASP.NET Core on .NET 10 LTS serving the React (Vite, TypeScript) build from the same origin; unknown `/api` paths return 404 | F00.01 | | |
-| 2 | EF Core and Azure SQL in Australia Southeast, Key Vault, the user-assigned identity, Bicep (`bootstrap`, `main`, `locks`) and GitHub Actions deploying to test and prod | F00.02 | S00.03.01 (the EF Core context), S00.01.02 (CI) | |
+| 2 | EF Core and Azure SQL in Australia Southeast, Key Vault, the user-assigned identity, Bicep (`bootstrap`, `main`, `locks`) and GitHub Actions deploying to test and prod | F00.02 | S00.03.01 (the EF Core context), S00.01.02 (CI) | Prod built in T22 (25 October 2026): `prod.bicepparam`, the gated prod deploy, `modules/alerts.bicep`, `locks.bicep`; created by hand and checked on `ops/go-live.md` A and B; production is at the default Azure host (D91) |
 | 3 | The Organisation table, `OrganisationId` on every `ITenantOwned` entity with the named query filter, and the `grow2notes_runtime` database role (D3) | F00.03 | | |
 | 4 | Accounts: invite and setup (passkey, or password + TOTP), sign-in and sign-out, cookie sessions validated against the security stamp on every request, 30-minute idle timeout with warning, 12-hour limit | F00.04 | S00.06.02 (sending the invite) | |
 | 5 | Manager screen: invite, edit, reset sign-in, deactivate and reactivate users | F00.06 | | |
@@ -123,7 +123,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 4 | The 12-hour absolute limit and the `org_id` claim survive the per-request principal rebuild (tested) | F00.04 | | |
 | 5 | Successful and failed sign-ins appear in the audit log | F00.04 | S00.03.03 (the writer) | |
 | 6 | HTTPS only with HSTS; the cookie is HttpOnly, Secure and SameSite=Strict; API responses carry `Cache-Control: no-store` | F00.04 | S00.01.01 (`no-store`), S00.02.02 (HTTPS only) | |
-| 7 | Deleting the test SQL server is refused while its database is locked (or the fallback in §10.1 is recorded) | F00.02 | | |
+| 7 | Deleting the test SQL server is refused while its database is locked (or the fallback in §10.1 is recorded) | F00.02 | | `infra/locks.bicep` built in T22 (25 October 2026); the try on the test server is by hand, `ops/first-use-in-test.md` step 155 (result recorded in S00.02.05's Notes), and on production `ops/go-live.md` A10 and B |
 
 **ux/screens/sign-in.md**
 
@@ -319,7 +319,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 2 | A reviewed note leaves the list and shows "Reviewed by … on …" on the note and in the report | F03.03 | S03.02.02 (on the note), S04.01.04 (in the report) | See *Rows to watch*; the list and the note are built in T19 (23 October 2026), the report is S04.01.04's |
 | 3 | A flag removed by a later edit stays in To review until reviewed | F03.01 | | Built in T16 (23 October 2026) |
 | 4 | Workers get `403` on the review endpoints | F03.03 | F03.02 (the review endpoint's own test) | Built in T19 (23 October 2026) |
-| 5 | The codebase has no email, SMS or push dependency apart from setup-link email | F03.03 | | Built in T19 (23 October 2026), by `MessagingOutOfScopeTests` |
+| 5 | The codebase has no email, SMS or push dependency apart from setup-link email | F03.03 | | Built in T19 (23 October 2026), by `MessagingOutOfScopeTests`; still holds under T22 (25 October 2026): Resend is reached by an HTTP call, no email package is added, and the test denies `resend` and lists `ResendEmailSender.cs` |
 
 **ux/screens/flagged.md**
 
@@ -416,8 +416,8 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 |---|---|---|---|---|
 | 1 | Security: self-review against OWASP ASVS level 2; an OWASP ZAP baseline scan; dependency scanning (NuGet Audit, npm audit, Dependabot); CSP and the other security headers; rate limiting and lockout | F06.01 | S00.01.02 (NuGet Audit, npm audit and pinned actions in CI), S00.04.05 (Identity lockout) | S06.01.04 (the headers) is placed before the first screen (releases.md) |
 | 2 | Accessibility: axe checks, keyboard-only use, and VoiceOver and TalkBack on the note form and the Report screen | F06.02 | | |
-| 3 | Backups: 35-day point-in-time restore and monthly long-term backups for 12 months, all in Australian regions (A36) | F06.03 | | |
-| 4 | Monitoring: uptime and error alerts to the operator | F06.04 | | |
+| 3 | Backups: 35-day point-in-time restore and monthly long-term backups for 12 months, all in Australian regions (A36) | F06.03 | | Set in `sql.bicep` and `prod.bicepparam` in T22 (25 October 2026); checked by hand on `ops/go-live.md` B |
+| 4 | Monitoring: uptime and error alerts to the operator | F06.04 | | Three alerts in `modules/alerts.bicep` and the action group in `monitoring.bicep` (T22, 25 October 2026); tried by hand on `ops/go-live.md` C |
 | 5 | Set-up: production configuration entered from the current Word template (prompts become the guide prompts; standard tick items become the common items, sorted into groups) | F06.05 | Go-live checklist line 7 (the managers enter it) | |
 | 6 | Cut-over on one set date (A40) | F06.06 | | |
 | 7 | *Migration from Word* (paragraph): historical Word documents are not imported; they are gathered, checked and removed from laptops; Grow2Notes starts with no notes on the switch-over day | F06.06 | | Not a bullet; included for the 100% check |

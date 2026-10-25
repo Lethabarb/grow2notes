@@ -114,6 +114,18 @@ resource pointInTimeRestore 'Microsoft.Sql/servers/databases/backupShortTermRete
   }
 }
 
+// Long-term retention is production's alone (design.md §10.1, §10.3): one backup a month, kept for 12 months. Weekly
+// and yearly are PT0S, which is none. The policy resource is left out of test, so test keeps no long-term backups.
+resource longTermRetention 'Microsoft.Sql/servers/databases/backupLongTermRetentionPolicies@2025-01-01' = if (environmentName == 'prod') {
+  parent: database
+  name: 'default'
+  properties: {
+    monthlyRetention: 'P12M'
+    weeklyRetention: 'PT0S'
+    yearlyRetention: 'PT0S'
+  }
+}
+
 @description('The server\'s host name, <name>.database.windows.net, for the connection string and the migration.')
 output serverFullyQualifiedDomainName string = server.properties.fullyQualifiedDomainName
 
