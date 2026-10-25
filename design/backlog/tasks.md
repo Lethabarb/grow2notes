@@ -5638,7 +5638,7 @@ Planned 24 October 2026. No migration, library, download or owner question.
 
 ```yaml
 id: T22
-status: new
+status: doing
 release: R1
 lane: D
 size: M
@@ -5673,6 +5673,45 @@ alerts to the operator, the product-domain email sender, and a read-only product
 - Waits for owner question Q2, the production domain (A38).
 - Waits for owner question Q13, what sends production's email, as Communication Services' Email retires on
   30 September 2028 (T01's Notes).
+
+### Plan
+
+Planned 25 October 2026. No endpoint, entity, field, migration, audit event, SPA change or screen. Three verticals, each
+merged into the feature branch; the feature branch goes to main as one unit because V1 and V2 share setting names.
+
+- Outcome: production is a second environment from the same Bicep with its own values (`prod.bicepparam`), served at
+  the default Azure host (D91). It is deployed only by a manual dispatch from main of a CI run whose test deploy
+  succeeded. It has a database delete lock, 35-day PITR, monthly long-term backups (12 months) and geo storage, three
+  metric alerts, and a read-only check run sheet (`ops/go-live.md`). Resend replaces Communication Services in test and
+  production (D92).
+- Design: `ResendEmailSender` posts to Resend's HTTP API with a key read from Key Vault (`resend-api-key`) at each send
+  by the app identity (Key Vault Secrets User at group scope, granted by bootstrap). One 5-second deadline covers the
+  vault read and the one POST; every failure reaches callers as `EmailNotSentException`. `Email:ApiKeySecretUri` is the
+  switch: unset means the console sender. `deploy.yml` becomes one workflow with a `Check the CI run` job and one
+  parameterised `Deploy to <env>` job. The CI run is linked to its test deploy through the Deploy run-name. Alerts live
+  in `modules/alerts.bicep` (prod only); the lock lives in `locks.bicep`, run by the operator, never in `main.bicep`.
+- Domain: none. Existing entities are used read-only (`ApplicationUser.Email` as the recipient, `AuditEvent` rows
+  rolled back on a failed send, passkey rows bound to the App:Origin host). Invariants: Resend body is exactly
+  from, to, subject, text; the key exists only in Key Vault and in a local for one send; a missing key or role only
+  makes sends answer Not sent.
+- Reuse: `EmailSending` switch point, the `KeyRingWrapping` managed-identity pattern and Key Vault network path,
+  `SetupLinkEmail`'s exception filter, the bootstrap role loop, `deploy.yml`'s steps (kept once), `test.bicepparam`,
+  `grant-identities.sql` and `check-database.sql`, `restore-drill.md` and `break-glass.md`.
+- Where design.md is silent: alert thresholds (5xx Total > 0 over 5 minutes; health check Average < 50 over
+  15 minutes; DTU Average > 80 over 15 minutes), no required reviewer on prod (A103), seven GitHub secrets (adds
+  `EMAIL_SENDER_ADDRESS`), fake key `test-api-key`, health-check failure tested by deleting the SQL VNet rule, old
+  Communication resources deleted by hand. New assumed defaults A100 to A104; decisions D91 and D92.
+- Owner flags: pre-merge first-use step 151 (Resend domain and test key, test's `EMAIL_SENDER_ADDRESS`, bootstrap
+  re-run with the GitHub subject prefix); test deploys stop at what-if until that secret is set; a custom domain added
+  after the first production enrolment means everyone enrols again; setup emails now leave Australia through Resend.
+
+### Verticals
+
+- v1: App: setup-link email through Resend, Key Vault key read, packages and tests; depends_on: none; R14 R17
+- v2: Infra: prod parameters, alerts, long-term retention, lock, bootstrap role, gated prod deploy, infra README;
+  depends_on: none; R01 R02 R03 R04 R05 R06 R07 R08 R10 R11 R12 R15 R16 R23 R24
+- v3: Docs and ops: D91, D92, A100 to A104, design sections, stories, go-live.md, first-use steps, backlog;
+  depends_on: v1 v2; R09 R13 R18 R19 R20 R21 R22 R25 R26 R27 R28 R29 R30
 
 ### Steps
 
