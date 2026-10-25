@@ -1241,3 +1241,16 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      changed on another device or tab.", and a `PUT …/draft` answered `200` in the Network panel. (design.md A99 and
      §8.5 *No work is lost*; ops/security-review.md F-1. CI proves in `LogoutEndpointTests` that a copy of the cookie
      stops working, so no cookie is copied by hand.)
+
+### The bootstrap's GitHub subject, once F-25's fix is on `main`
+
+150. In Git Bash, from the root of a clone of `main`, signed in to the Azure CLI as Owner of the subscription and to the
+     GitHub CLI as an admin of the repository, follow `infra/README.md`'s *Running it again*: steps 1, 2 and 3 in one
+     shell, with `budgetStartDate` read from the last run. Look for step 2 printing `repo:`, then the account and the
+     repository, each followed by `@` and a number. Look for the what-if showing no create, modify or delete in either
+     group, with the federated credentials `github-test` and `github-prod` unchanged. Do not run step 4: with no change,
+     it has nothing to deploy. If the what-if shows a change to a federated credential's subject, stop: the prefix
+     passed is not the one the credentials were made with, and deploys would stop signing in. Do not write down the
+     prefix, an ID or an email address. (F-25 in `ops/security-review.md`, D89: the prefix now comes from GitHub when
+     the bootstrap is run, not from a default in `bootstrap.bicep`, and nothing in Azure changes. The developer records
+     the result in T25's Notes.)

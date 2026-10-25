@@ -3,9 +3,11 @@
 targetScope = 'subscription'
 
 // This repository uses GitHub's immutable OIDC subjects, which carry the owner's and the repository's numeric IDs, so
-// this is the prefix GitHub reports rather than plain owner/name. Both IDs are public.
+// this is the prefix GitHub reports rather than plain owner/name. Passed when the file is run and never committed,
+// because no ID is kept in the repository (D60, D89).
 @description('The sub_claim_prefix that gh api repos/<owner>/<repo>/actions/oidc/customization/sub returns, verbatim.')
-param githubSubjectPrefix string = 'repo:Lethabarb@76515166/grow2notes@1403713365'
+@minLength(1)
+param githubSubjectPrefix string
 
 // Passed when the file is run and never committed, because it may contain the company's name (D42).
 @description('The developer\'s email address for both budget alerts.')
