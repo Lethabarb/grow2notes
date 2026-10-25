@@ -11,7 +11,9 @@ A copy made as evidence for a breach is recorded in the breach decisions table
 - **Date (UTC)** is the day the drill or the restore was done, as `yyyy-mm-dd`.
 - **Kind** is one of: `quarterly`, `yearly geo-restore`, `after a migration`, `failed-migration restore`, `outage`.
 - **Restore point (UTC)** is the time restored to, as `yyyy-mm-ddThh:mm:ssZ`.
-- **Result** is `passed`, or `failed` and in a few words what failed, with no ID or name.
+- **Result** is `passed`, or `failed` and in a few words what failed, with no ID or name. For a drill it ends
+  `copy deleted` once the copy is gone, and the first drill adds `before go-live`, as in
+  `passed, before go-live, copy deleted`.
 - **Time taken** is from the start of the restore to its check passing, in minutes. It is what the 4 hour target (RTO)
   is measured against.
 - **Ran by (role)** is the role of the person who ran it, such as `developer`, and not their name.
