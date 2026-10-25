@@ -419,7 +419,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 3 | Backups: 35-day point-in-time restore and monthly long-term backups for 12 months, all in Australian regions (A36) | F06.03 | | Set in `sql.bicep` and `prod.bicepparam` in T22 (25 October 2026); checked by hand on `ops/go-live.md` B |
 | 4 | Monitoring: uptime and error alerts to the operator | F06.04 | | Three alerts in `modules/alerts.bicep` and the action group in `monitoring.bicep` (T22, 25 October 2026); tried by hand on `ops/go-live.md` C |
 | 5 | Set-up: production configuration entered from the current Word template (prompts become the guide prompts; standard tick items become the common items, sorted into groups) | F06.05 | Go-live checklist line 7 (the managers enter it) | |
-| 6 | Cut-over on one set date (A40) | F06.06 | | |
+| 6 | Cut-over on one set date (A40) | F06.06 | | Run sheet: `ops/go-live.md` F (T28); date set by the owner and the managers (A106) |
 | 7 | *Migration from Word* (paragraph): historical Word documents are not imported; they are gathered, checked and removed from laptops; Grow2Notes starts with no notes on the switch-over day | F06.06 | | Not a bullet; included for the 100% check |
 
 **design.md §14 M6 Done when**
@@ -427,8 +427,8 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | No high or critical findings are open | F06.01 | | |
-| 2 | A restore test has been done and recorded | F06.06 | S06.03.02 (the runbook) | The runbook is written (T23, A90). When production first holds a note is open (F06.06) |
-| 3 | The go-live checklist is complete and the switch-over date is recorded | F06.06 | | The date goes in [releases.md](releases.md) |
+| 2 | A restore test has been done and recorded | F06.06 | S06.03.02 (the runbook) | Runbook written (T23); before go-live the test checks the configuration counts, and a known note is opened at the first drill after go-live (A90, 24 October 2026); run at `ops/go-live.md` F3 |
+| 3 | The go-live checklist is complete and the switch-over date is recorded | F06.06 | | The date goes in [releases.md](releases.md) and F06.06 line 10's note (`ops/go-live.md` F1) |
 
 **design.md §14 Go-live checklist** (short names; F06.06 holds the checklist with an owner and evidence for each line)
 
@@ -441,9 +441,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 5 | Every staff member has accepted their invite and set up MFA on their own phone; at least two managers are active | F06.06 | S06.05.02 (the first manager) | Checklist owner: the provider's managers |
 | 6 | Staff onboarding (about 30 minutes) | F06.06 | | Checklist owner: the provider |
 | 7 | Participants, goals, common items (in their groups) and guide prompts entered by one manager and checked by another | F06.06 | S06.05.02 (the organisation in production) | Checklist owner: the provider's managers |
-| 8 | Restore test of the latest production backup, recorded, copy deleted | F06.06 | S06.06.02 | Checklist owner: the operator. The runbook is written (T23); S06.06.02 records the test |
+| 8 | Restore test of the latest production backup, recorded, copy deleted | F06.06 | S06.06.02 | Checklist owner: the operator. The runbook is written (T23); the test is run at `ops/go-live.md` F3 (A90) |
 | 9 | Every historical Word note gathered into organisation-controlled storage (D41), checked, then removed from personal devices (A39) | F06.06 | | Checklist owner: the provider |
-| 10 | Where the gathered Word notes are kept is written down, and the Word template stops being used from the switch-over date | F06.06 | S06.06.03 (the switch-over date) | Checklist owner: the provider |
+| 10 | Where the gathered Word notes are kept is written down, and the Word template stops being used from the switch-over date | F06.06 | S06.06.03 (the switch-over date) | Checklist owner: the provider. The date is written at `ops/go-live.md` F1 and the Word template stops at F5 (A106) |
 
 ---
 

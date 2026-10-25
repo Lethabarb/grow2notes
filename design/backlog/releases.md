@@ -233,7 +233,8 @@ configuration (D55, A40, design.md §1, §14).
 **Done when:** README §9 *Release* R1: every epic below is done, the go-live checklist in F06.06 is complete with an
 owner and evidence for every line, and a build that passed CI and was deployed to test is deployed to production.
 
-**Switch-over date:** not set yet. S06.06.03 records it here.
+**Switch-over date:** not set yet. The owner and the managers set it (A106), and it is recorded here at
+`ops/go-live.md` F1.
 
 ### Epics
 
@@ -490,8 +491,7 @@ S07.05.10 names the approved AI providers in it once the provider has approved t
    owner question needed at Sprint 01 planning (table below). The forecast assumes `main` can be protected from Sprint
    01: on a private repository that needs GitHub Pro, which design.md §10.2 already budgets for the production
    environment's branch rule (S00.01.02's first criterion, S00.02.04).
-7. **No pilot.** A40 allows a short pilot before the set date; it is not in the backlog unless the owner asks
-   (S06.06.03 Notes).
+7. **No pilot.** A40 allows a short pilot before the set date: none unless the owner asks (A106, S06.06.03 Notes).
 8. **Not in the forecast:** the .NET 10 to next-LTS upgrade, due by November 2028 (design.md §10.9), is routine
    operations. It falls after both likely dates but close to the cautious R2 date.
 
@@ -530,7 +530,7 @@ that takes an affected story.
 | Sprint 23 (16 Aug 2027) | What the PDF shows for a character the embedded font lacks, such as an emoji. **Answered 14 Oct 2026** by an assumed default from the condensed plan: the replacement mark U+FFFD in the PDF only, while the Word file keeps the text as written (design.md A59, read as A81 in T15: only characters in the font's Basic Multilingual Plane print) | S04.01.02 |
 | Sprint 25 (13 Sep 2027) | record-export.md Q1 (the earliest note date for the From default), Q2 (the no-notes response), Q3 (a To date after today). **Q1 and Q2 answered 13 Oct 2026:** `GET /api/participants/{id}` gives `firstNoteDate`, and an empty range answers `404 report.no_notes` (D80). **Q3 answered 14 Oct 2026** by an assumed default from the condensed plan: a To date after today is accepted as sent (design.md A60) | S05.01.01, S05.01.02 |
 | Sprint 27 (11 Oct 2027) | Where the HPP 4.3 destruction log and the yearly retention list are kept (not in the repository). **Answered 24 October 2026** by an assumed default (T23): design.md A89, the provider's own records storage | S05.04.01 |
-| Sprint 27 (11 Oct 2027) | The switch-over date (A40), so staff onboarding and the gathering of Word notes can be planned (the likely forecast leaves the provider about three weeks of production before go-live; a later date gives more); who runs staff onboarding; whether to have a pilot | F06.06, S06.05.02, S06.06.03 |
+| Sprint 27 (11 Oct 2027) | The switch-over date (A40), so staff onboarding and the gathering of Word notes can be planned (the likely forecast leaves the provider about three weeks of production before go-live; a later date gives more); who runs staff onboarding; whether to have a pilot. **Answered 26 October 2026** by an assumed default (T28): design.md A106; the date itself is set later by the owner and the managers | F06.06, S06.05.02, S06.06.03 |
 | Sprint 27 (11 Oct 2027) | When the restore test runs, given production holds no note until the switch-over day: may production hold a known note before then? The answer shapes how S06.03.02's runbook is written and whether go-live line 8 can be complete before go-live. **Answered 24 October 2026** by an assumed default (T23): design.md A90, a drill before go-live checks the configuration counts, `restore-check.sql` and `DBCC CHECKDB`, and a known note is opened at the first drill after go-live | S06.03.02, S06.06.02 |
 | Sprint 31 planning (6 Dec 2027), at Release 2 planning | mcp-server.md §12 Q4: is confirmation by the assistant enough for the four access-related tools? The R2 forecast assumes it is (MA6) | S07.04.01–S07.04.06 |
 | Sprint 31 planning (6 Dec 2027), at Release 2 planning | The Support role and its sign-in, setup and session policies are not behind `Mcp:Enabled`, so the monthly production deploys would ship them before switch-on: accept that, or hide the Support option while `Mcp:Enabled` is false (a decisions.md entry, then a criterion in S07.01.01)? The R2 forecast assumes they ship | S07.01.01, S07.01.02 |

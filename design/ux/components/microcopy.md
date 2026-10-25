@@ -522,9 +522,10 @@ Server-side strings (setup email, report and export files) follow the same gloss
 exact layout. In .NET, use the `Australia/Melbourne` time zone and compose the strings the same way rather than
 relying on culture defaults (unverified whether .NET's en-AU designators are "am"/"pm" on Linux).
 
-**Testing the words.** Before go-live, ask 5 workers, including some who write in English as an additional language,
-to say what each primary button will do before they press it (the ui-ux-design corpus suggests at least 80% should be
-able to). Use a readability checker on worker-facing strings as a smoke alarm only (NHS). This needs no new feature.
+**Testing the words.** Ideally before go-live, ask 5 workers, including some who write in English as an additional
+language, to say what each primary button will do before they press it (the ui-ux-design corpus suggests at least 80%
+should be able to). Use a readability checker on worker-facing strings as a smoke alarm only (NHS). This needs no new
+feature. It does not hold go-live; a failure is a wording question for the owner (A107).
 
 ### 9. Alignment with other component documents
 

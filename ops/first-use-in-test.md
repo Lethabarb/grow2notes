@@ -1076,8 +1076,8 @@ hold made-up data (A35), including a made-up participant that you archive for th
      place in their records storage for the yearly list, the HPP 4.3 log, the audit request record and the breach
      records, and confirm that the operator can reach it. (S06.06.01 criterion 8, S05.04.02 criterion 3; design.md A89,
      A92.)
-132. At the first restore drill, follow `restore-drill.md` step by step and fix any step that did not work in a pull
-     request. (S06.03.02.)
+132. At the first restore drill, before go-live ([go-live.md](go-live.md) F3), follow `restore-drill.md` step by step
+     and fix any step that did not work in the same pull request as its restore-log.md row. (S06.03.02, S06.06.02.)
 
 Record the results in T23's Notes.
 
@@ -1168,7 +1168,8 @@ Record the results in T25's Notes (S06.01.01, S06.01.02, S06.01.03 and S06.01.05
 
 These steps hold the by-hand checks of S06.02.01 and S06.02.02 ([tasks.md](../design/backlog/tasks.md), T26's Notes).
 CI's Playwright run proves what a browser can (design.md A98); these steps need a real device, a screen reader or a
-person, and none of them holds a story open. Run the by-hand accessibility steps in this order, once T26 is in test:
+person, and none of them holds a story open or go-live (A107). Run the by-hand accessibility steps in this order, once
+T26 is in test:
 
 1. Keyboard only, on the laptop: step 143.
 2. Screen readers: steps 21 and 22, then the screen-reader steps of the screens, in the order of the screens: 4, 9, 10,
@@ -1312,3 +1313,16 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      the first manager's setup and production's first email are go-live.md D, done by the operator, the owner and the
      first manager, and nothing about them is written here. (S06.05.02; S06.05.01's third and fourth criteria; A105.)
      This step holds nothing open and writes nothing down. (D90.)
+
+### Staff onboarding in test, once T28 is on main
+
+159. Before the managers' 30-minute onboarding ([go-live.md](go-live.md) E line 6), the operator readies test with
+     made-up participants, goals, common items in their groups and guide prompts (those from earlier steps will do),
+     and one made-up worker account, set up as earlier steps do. The managers present from a laptop signed in to that
+     account, and the workers watch and may take turns on it. Nobody types a real participant's details or a real
+     staff address, nobody sets up their own phone on test, and production is not used. The topics are design.md §14
+     line 6's: writing and submitting today's note, using the flag, editing keeps the history, incidents stay on the
+     existing incident form, and nothing needs saving on the device. Cross-device passkeys are explained only, because
+     each worker makes their production passkey at their own setup (go-live line 5; passkey-flows.md). The dates held
+     go on the provider's copy of go-live.md E, as line 6's evidence. This step holds nothing open, and any problem
+     becomes a bug. (S06.06.03; A106, A107, A35, D90.)
