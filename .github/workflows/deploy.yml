@@ -1,8 +1,17 @@
-# Deploys to test whenever CI succeeds on a push to main (design.md §10.4, deploy.yml). Nothing is checked out or
-# built: the job downloads the grow2notes artifact of the CI run that triggered it, so test runs exactly what CI built
-# and tested. Production is deployed only by hand, by workflow_dispatch naming a CI run that has already passed in
-# test; that job is S00.02.04's.
+# Deploys a CI run's artifacts to test or to production (design.md §10.4, deploy.yml). Nothing is checked out or
+# built: the deploy job downloads the grow2notes artifact of a CI run, so each environment runs exactly what CI built
+# and tested. Test is deployed whenever CI succeeds on a push to main. Production is deployed only by hand, by
+# workflow_dispatch from main naming a CI run (ci-run) whose test deploy has already succeeded; the check job refuses
+# anything else before the deploy job, and so the prod environment, is entered.
 name: Deploy
+
+# The title links a CI run to its test deployment: the check job looks for 'Deploy CI run <id> attempt <n> to test'
+# among the successful runs. Re-running all of a CI run's jobs replaces its artifact, so the attempt is in the title.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch'
+  && format('Deploy CI run {0} to prod', inputs.ci-run)
+  || format('Deploy CI run {0} attempt {1} to test',
+  github.event.workflow_run.id, github.event.workflow_run.run_attempt) }}
 
 on:
   # GitHub runs this workflow as it is on main, so a change to this file takes effect only once it is merged.
@@ -10,37 +19,120 @@ on:
     # ci.yml's name. Renaming that workflow without changing this stops every deploy.
     workflows: [CI]
     types: [completed]
-    # Matches the triggering run's head branch, which a pull request from a fork's own main also has; the job's event
-    # check keeps such runs out.
+    # Matches the triggering run's head branch, which a pull request from a fork's own main also has; the check job's
+    # event test keeps such runs out.
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      ci-run:
+        description: The ID of the CI run to deploy to prod, the number in its URL. It must have deployed to test.
+        required: true
+        type: string
 
 # Nothing is granted unless a job asks for it.
 permissions: {}
 
 jobs:
-  deploy-test:
-    name: Deploy to test
-    # Pull request runs pass and upload artifacts too, but they are builds of unmerged code.
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+  check:
+    name: Check the CI run
+    # Pull request runs pass and upload artifacts too, but they are builds of unmerged code. A dispatch is checked in
+    # its steps.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # No environment, so a refused dispatch never enters prod.
+    permissions:
+      # Reads the CI run and the earlier Deploy runs through the Actions API.
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # There is no checkout for gh to find the repository from.
+      GH_REPO: ${{ github.repository }}
+      # The input reaches the shell only through env.
+      CI_RUN: ${{ inputs.ci-run }}
+    outputs:
+      environment: ${{ steps.test.outputs.environment || steps.prod.outputs.environment }}
+      ci-run: ${{ steps.test.outputs.ci-run || steps.prod.outputs.ci-run }}
+      ci-commit: ${{ steps.test.outputs.ci-commit || steps.prod.outputs.ci-commit }}
+    steps:
+      - name: Deploy the CI run that just passed to test
+        id: test
+        if: github.event_name == 'workflow_run'
+        env:
+          TRIGGERING_RUN: ${{ github.event.workflow_run.id }}
+          TRIGGERING_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          {
+            echo "environment=test"
+            echo "ci-run=$TRIGGERING_RUN"
+            echo "ci-commit=$TRIGGERING_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+
+      # Production takes only a CI run of main's own code that passed and was deployed to test as it stands now. The ref
+      # test is defence in depth: a dispatch from another branch runs that branch's copy of this file, so the real
+      # guards are the prod environment's main-only branch rule and the deployment identity's federated credential,
+      # which trusts only the environment:prod subject.
+      - name: Check the CI run for prod
+        id: prod
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          [[ $GITHUB_REF == refs/heads/main ]] || fail "Production is deployed only from main, not from $GITHUB_REF."
+          [[ $CI_RUN =~ ^[0-9]+$ ]] || fail "ci-run must be the number of a CI run."
+          if ! run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN" --jq \
+                       '[.path, .event, .head_branch, .conclusion, .head_sha, .run_attempt] | @tsv'); then
+            fail "CI run $CI_RUN was not found."
+          fi
+          IFS=$'\t' read -r path event branch conclusion commit attempt <<< "$run"
+          [[ $path == .github/workflows/ci.yml ]] || fail "Run $CI_RUN is not a CI run."
+          [[ $event == push ]] || fail "CI run $CI_RUN was not a push; pull request builds are never deployed."
+          [[ $branch == main ]] || fail "CI run $CI_RUN did not build main."
+          [[ $conclusion == success ]] || fail "CI run $CI_RUN did not succeed."
+          title="Deploy CI run $CI_RUN attempt $attempt to test"
+          if ! gh run list --workflow deploy.yml --event workflow_run --status success --limit 1000 \
+                 --json displayTitle --jq '.[].displayTitle' | grep -Fxq -- "$title"; then
+            fail "'$title' has not succeeded, so this build has not been through test."
+          fi
+          {
+            echo "environment=prod"
+            echo "ci-run=$CI_RUN"
+            echo "ci-commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy to ${{ needs.check.outputs.environment }}
+    needs: check
     # efbundle is a self-contained linux-x64 executable.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
-      name: test
-      url: https://app-grow2notes-test.azurewebsites.net
-    # One deploy at a time, and none is cancelled part-way, mid-migration for instance. Deploys queue in the order their
-    # CI runs finish, normally commit order because main only accepts up-to-date branches; a waiting deploy is replaced
-    # by the next one.
+      name: ${{ needs.check.outputs.environment }}
+      url: https://app-grow2notes-${{ needs.check.outputs.environment }}.azurewebsites.net
+    # One deploy at a time per environment, and none is cancelled part-way, mid-migration for instance. Deploys queue in
+    # the order their CI runs finish, normally commit order because main only accepts up-to-date branches; a waiting
+    # deploy is replaced by the next one.
     concurrency:
-      group: deploy-test
+      group: deploy-${{ needs.check.outputs.environment }}
       cancel-in-progress: false
     permissions:
-      # The OIDC token azure/login exchanges: the test deployment identity trusts only this repository's test
-      # environment (design.md §9.4).
+      # The OIDC token azure/login exchanges: each deployment identity trusts only this repository's environment of its
+      # own name (design.md §9.4).
       id-token: write
       # download-artifact reads another run's artifacts through the Actions API.
       actions: read
     env:
+      RESOURCE_GROUP: rg-grow2notes-${{ needs.check.outputs.environment }}-ause
+      WEB_APP: app-grow2notes-${{ needs.check.outputs.environment }}
+      SQL_SERVER: sql-grow2notes-${{ needs.check.outputs.environment }}
+      APP_IDENTITY: id-grow2notes-${{ needs.check.outputs.environment }}-app
+      APP_INSIGHTS: appi-grow2notes-${{ needs.check.outputs.environment }}
+      PARAMETERS: artifacts/infra/${{ needs.check.outputs.environment }}.parameters.json
+      DEPLOYMENT: grow2notes-${{ needs.check.outputs.environment }}-main
       # The runner's SQL firewall rule, which steps 4 and 6 add and remove. If the runner is lost in between, no later
       # step runs and the rule stays; its name says which run and attempt left it, so it can be deleted by hand.
       FIREWALL_RULE: deploy-${{ github.run_id }}-${{ github.run_attempt }}
@@ -51,7 +143,7 @@ jobs:
         with:
           name: grow2notes
           path: artifacts
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ needs.check.outputs.ci-run }}
           github-token: ${{ github.token }}
 
       # An artifact is a zip, which keeps no file permissions.
@@ -62,8 +154,8 @@ jobs:
       # names the CI run and its commit.
       - name: Show what is deployed
         env:
-          CI_RUN_ID: ${{ github.event.workflow_run.id }}
-          CI_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          CI_RUN_ID: ${{ needs.check.outputs.ci-run }}
+          CI_COMMIT: ${{ needs.check.outputs.ci-commit }}
         run: |
           echo "The artifacts of CI run $CI_RUN_ID, built from commit $CI_COMMIT:"
           ls -lR artifacts
@@ -78,10 +170,10 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # design.md §10.4 step 2. The secrets replace test.parameters.json's empty placeholders (S00.02.02). They reach
-      # the script through env, not as expressions in it, which GitHub would paste into the script's text before bash
-      # reads it. what-if and create get the same arguments, so the preview is of what is then deployed. create prints
-      # only errors: its result would list every resource ID, parameter value and output.
+      # design.md §10.4 step 2. The secrets replace the environment's parameters file's empty placeholders (S00.02.02).
+      # They reach the script through env, not as expressions in it, which GitHub would paste into the script's text
+      # before bash reads it. what-if and create get the same arguments, so the preview is of what is then deployed.
+      # create prints only errors: its result would list every resource ID, parameter value and output.
       # Every deploy reuses the name of the first one, made by hand (S00.02.02). Azure refuses a deployment while one
       # with the same name is still running, as it can be after its job is cancelled or times out, so two never overlap.
       # main.bicep puts the app identity's client ID in the app's settings, where what-if may print it, so the log masks
@@ -94,24 +186,25 @@ jobs:
           SQL_ADMIN_GROUP_NAME: ${{ secrets.SQL_ADMIN_GROUP_NAME }}
           SQL_ADMIN_GROUP_OBJECT_ID: ${{ secrets.SQL_ADMIN_GROUP_OBJECT_ID }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          EMAIL_SENDER_ADDRESS: ${{ secrets.EMAIL_SENDER_ADDRESS }}
         run: |
-          for id in $(az identity show --resource-group rg-grow2notes-test-ause --name id-grow2notes-test-app \
+          for id in $(az identity show --resource-group "$RESOURCE_GROUP" --name "$APP_IDENTITY" \
                         --query '[clientId, principalId]' --output tsv --only-show-errors); do
             echo "::add-mask::$id"
           done
-          for value in $(az resource show --resource-group rg-grow2notes-test-ause --name appi-grow2notes-test \
+          for value in $(az resource show --resource-group "$RESOURCE_GROUP" --name "$APP_INSIGHTS" \
                            --resource-type Microsoft.Insights/components \
                            --query '[properties.ConnectionString, properties.InstrumentationKey, properties.AppId]' \
                            --output tsv --only-show-errors); do
             echo "::add-mask::$value"
           done
           deployment=(
-            --resource-group rg-grow2notes-test-ause
-            --name grow2notes-test-main
+            --resource-group "$RESOURCE_GROUP"
+            --name "$DEPLOYMENT"
             --template-file artifacts/infra/main.json
-            --parameters @artifacts/infra/test.parameters.json
+            --parameters "@$PARAMETERS"
             --parameters sqlAdminGroupName="$SQL_ADMIN_GROUP_NAME" sqlAdminGroupObjectId="$SQL_ADMIN_GROUP_OBJECT_ID"
-              alertEmail="$ALERT_EMAIL"
+              alertEmail="$ALERT_EMAIL" emailSenderAddress="$EMAIL_SENDER_ADDRESS"
             --only-show-errors
           )
           az deployment group what-if "${deployment[@]}"
@@ -121,7 +214,7 @@ jobs:
       # summary puts it on the run's page, where it is found without searching the log.
       - name: Record the restore point
         env:
-          CI_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          CI_COMMIT: ${{ needs.check.outputs.ci-commit }}
         run: |
           restore_time=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           echo "Restore point before the migration: $restore_time"
@@ -131,10 +224,10 @@ jobs:
           **$restore_time**, before the migration of commit $CI_COMMIT.
 
           If this run's migration damages data, this is the point-in-time restore target for sqldb-grow2notes
-          (7 days of restore points) on sql-grow2notes-test. The restore makes a new database:
+          on $SQL_SERVER. The restore makes a new database:
 
           ~~~bash
-          az sql db restore --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \\
+          az sql db restore --resource-group $RESOURCE_GROUP --server $SQL_SERVER \\
             --name sqldb-grow2notes --dest-name sqldb-grow2notes-restored --time $restore_time
           ~~~
           EOF
@@ -161,20 +254,20 @@ jobs:
             echo "::error::api.ipify.org did not answer with an IPv4 address."
             exit 1
           fi
-          echo "Allowing $ip through the firewall of sql-grow2notes-test as $FIREWALL_RULE."
-          az sql server firewall-rule create --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test \
+          echo "Allowing $ip through the firewall of $SQL_SERVER as $FIREWALL_RULE."
+          az sql server firewall-rule create --resource-group "$RESOURCE_GROUP" --server "$SQL_SERVER" \
             --name "$FIREWALL_RULE" --start-ip-address "$ip" --end-ip-address "$ip" --output none --only-show-errors
 
       # design.md §10.4 step 5. Active Directory Default has SqlClient sign in with DefaultAzureCredential, which uses
       # the Azure CLI's sign-in: the deployment identity, a member of db_owner (infra/sql/grant-identities.sql). The
-      # string holds no secret. The free-offer database pauses when idle and refuses logins with error 40613 for about a
-      # minute while it resumes. Program.cs's retrying execution strategy outlasts that: six retries spread over about a
-      # minute of back-off, and SqlClient retries a refused login once itself, ten seconds later, when its connect
-      # timeout allows.
+      # string holds no secret. In test, the free-offer database pauses when idle and refuses logins with error 40613
+      # for about a minute while it resumes. Program.cs's retrying execution strategy outlasts that: six retries spread
+      # over about a minute of back-off, and SqlClient retries a refused login once itself, ten seconds later, when its
+      # connect timeout allows.
       - name: Migrate the database
         env:
           ConnectionStrings__Grow2Notes: >-
-            Server=tcp:sql-grow2notes-test.database.windows.net,1433; Database=sqldb-grow2notes;
+            Server=tcp:${{ env.SQL_SERVER }}.database.windows.net,1433; Database=sqldb-grow2notes;
             Authentication=Active Directory Default; Encrypt=Strict
         run: artifacts/efbundle --connection "$ConnectionStrings__Grow2Notes"
 
@@ -184,7 +277,7 @@ jobs:
       - name: Remove the runner's firewall rule
         if: always() && steps.allow-runner.outcome != 'skipped'
         run: >-
-          az sql server firewall-rule delete --resource-group rg-grow2notes-test-ause --server sql-grow2notes-test
+          az sql server firewall-rule delete --resource-group "$RESOURCE_GROUP" --server "$SQL_SERVER"
           --name "$FIREWALL_RULE" --output none --only-show-errors
 
       # The deploy needs a token for the app's Kudu (scm) site, a resource az has none for yet, so az presents GitHub's
@@ -209,7 +302,7 @@ jobs:
       - name: Deploy app.zip
         run: |
           deploy=(
-            az webapp deploy --resource-group rg-grow2notes-test-ause --name app-grow2notes-test
+            az webapp deploy --resource-group "$RESOURCE_GROUP" --name "$WEB_APP"
             --src-path artifacts/app.zip --type zip --track-status true --timeout 300 --output none --only-show-errors
           )
           if ! "${deploy[@]}"; then
@@ -233,7 +326,7 @@ jobs:
       # check proves that trust too (S00.03.03).
       - name: Smoke-test the new build
         env:
-          SITE_URL: https://app-grow2notes-test.azurewebsites.net
+          SITE_URL: https://${{ env.WEB_APP }}.azurewebsites.net
           MANIFEST: Grow2Notes.Web.staticwebassets.endpoints.json
           XSRF_COOKIE: __Host-grow2notes-xsrf
         run: |
@@ -258,9 +351,9 @@ jobs:
           if ! wait_for_build; then
             echo "::warning::$SITE_URL/index.html was not this build's within five minutes, perhaps because a restart" \
                  "for changed app settings swallowed the deploy's recycle. Restarting the app to mount the new package."
-            if ! az webapp restart --resource-group rg-grow2notes-test-ause --name app-grow2notes-test --output none \
+            if ! az webapp restart --resource-group "$RESOURCE_GROUP" --name "$WEB_APP" --output none \
                    --only-show-errors; then
-              echo "::error::The restart of app-grow2notes-test failed."
+              echo "::error::The restart of $WEB_APP failed."
               exit 1
             fi
             if ! wait_for_build; then
