@@ -117,8 +117,8 @@ here. Each step ends with what it confirms.
     your own address, the one the firewall rule names, not a private or `169.254.` address of App Service's front end;
     and one `auth.signed_out` row for each sign-out, with the person as actor. Do not write the addresses down.
     (S00.03.03's `IpAddress` criterion; S00.03.05's first criterion; S00.04.06.)
-16. The telemetry, in the Azure portal's Log Analytics workspace: from step 8's time, the workspace holds its `POST
-    /api/auth/login` `401` and one "Password sign-in with an unknown email" entry holding no address, and no `400`,
+16. The telemetry, in the Azure portal's Log Analytics workspace: from step 8's time, the workspace holds its
+    `POST /api/auth/login` `401` and one "Password sign-in with an unknown email" entry holding no address, and no `400`,
     `415` or `5xx` on `/api/auth/*`, and no exception. (S00.04.05.)
 
 ### More accounts, invited from Users

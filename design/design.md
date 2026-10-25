@@ -1877,8 +1877,8 @@ infra/
 ├─ sql/grant-identities.sql   # one-off, run as Entra admin: CREATE USER ... FROM EXTERNAL PROVIDER for the app and
 │                             #   deployment identities; ALTER ROLE grow2notes_runtime ADD MEMBER for the app identity,
 │                             #   first creating the role with the first migration's guard if it is missing
-├─ sql/check-database.sql     # read-only, run by the operator as Entra admin when wanted: the identities' roles and rights, the
-│                             #   role's grants and denies, and the key ring wrapped by Key Vault
+├─ sql/check-database.sql     # read-only, run by the operator as Entra admin when wanted: the identities' roles
+│                             #   and rights, the role's grants and denies, and the key ring wrapped by Key Vault
 ├─ test.bicepparam
 └─ prod.bicepparam
 ```

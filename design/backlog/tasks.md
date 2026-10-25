@@ -114,8 +114,9 @@ with their typing kept (checked with a half-filled Invite form), and a different
   otherwise a console sender that writes each message to standard output, never through `ILogger`, so a link never
   reaches logs or telemetry (§9.5). Local development and CI's end-to-end run, which set no endpoint, use the console
   one, so CI never sends real email. Refusing the console sender outside Development would stop CI's run, which is in
-  Production; as for Key Vault and telemetry, the after-deploy check that the web app's settings name `Email__Endpoint`
-  and `Email__SenderAddress` is the guard against an Azure app writing links to its console.
+  Production; as for Key Vault and telemetry, the by-hand step 148 on ops/first-use-in-test.md (the web app's settings
+  name `Email__Endpoint` and `Email__SenderAddress`) and `EmailSendingTests` are the guard against an Azure app writing
+  links to its console.
 - When the email goes (design.md is silent): inside the transaction, after the audit event and before the commit. A
   failed send then leaves nothing changed, so "Not sent: … Try again." is true and a second press works; a commit that
   fails after the send leaves only a link that answers `410`. A transient failure that the execution strategy retries
@@ -291,8 +292,7 @@ with their typing kept (checked with a half-filled Invite form), and a different
 - 25 October 2026: closed out; merged in PR #56 (CI run 39036902576 and Deploy run 39037441225 on b56824c passed).
   S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, both in
   one Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
-  `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18. The after-deploy
-  step was not run (see it).
+  `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18.
 
 ### Steps
 
@@ -629,8 +629,7 @@ found and `403`.
 - 25 October 2026: closed out; merged in PR #57 (CI run 39043628375 and Deploy run 39044248123 on c6c69ff passed).
   S00.05.02, S01.02.01, S01.02.02 and S01.02.03 are done; S01.02.04 was done already (T21). The by-hand checks are
   ops/first-use-in-test.md steps 26 to 28. One small part of the linked UX criteria (no screen keeping its own
-  return-row variable, a review rule) has no automated check, named in S00.05.02's Note. The after-deploy step was
-  not run (see it).
+  return-row variable, a review rule) has no automated check, named in S00.05.02's Note.
 
 ### Steps
 
@@ -904,7 +903,7 @@ changes by a link, Back, reload or Sign out.
     closes the checklist's five screen-reader items and that bullet.
 - 25 October 2026: closed out; merged in PR #55 (CI run 39034152094 and Deploy run 39034565771 on f5b34a9 passed).
   S01.04.01 and S01.04.02 are done; S01.04.01's TextBox criterion is ticked now that T08 (PR #61) has merged. The
-  by-hand checks are ops/first-use-in-test.md steps 24 and 25. The after-deploy step was not run (see it).
+  by-hand checks are ops/first-use-in-test.md steps 24 and 25.
 
 ### Steps
 
@@ -1286,7 +1285,7 @@ protected. From the console the operator can reset the last manager's sign-in or
     active manager for a moment, the notice under the `<h1>`, the hint for your own address and the refusal of Worker.
 - 25 October 2026: closed out; merged in PR #58 (CI run 39071899355 and Deploy run 39072581275 on 1607cc6 passed).
   S00.06.04, S00.06.05, S00.06.06 and S00.03.06 are done. The by-hand checks are ops/first-use-in-test.md steps 29 to
-  37. The after-deploy step was not run (see it).
+  37.
 
 ### Steps
 
@@ -1603,8 +1602,7 @@ moves, archives and restores them. Changes apply to notes started from then on.
   `messages.test.ts` and ops/first-use-in-test.md hold both sides, T05's by-hand checks moving after T04's to steps 38
   to 41; neither task added another migration, so `AddGoal` and the model snapshot stand.
 - 25 October 2026: closed out; merged in PR #59 (CI run 39075376431 and Deploy run 39076025792 on c55cec5 passed).
-  S01.02.05 to S01.02.08 are done. The by-hand checks are ops/first-use-in-test.md steps 38 to 41. The after-deploy step
-  was not run (see it).
+  S01.02.05 to S01.02.08 are done. The by-hand checks are ops/first-use-in-test.md steps 38 to 41.
 
 ### Steps
 
@@ -1974,7 +1972,7 @@ already exist (D82). A manager adds, rewords, reorders, archives and restores it
     the move as well. It now names all three, the move from T07.
 - 25 October 2026: closed out; merged in PR #60 (CI run 39099882727 and Deploy run 39100583389 on 9c64b27 passed).
   S01.03.01 to S01.03.04 are done; S01.03.01's Content and copy criterion is closed by T07's close-out (see its Note).
-  The by-hand checks are ops/first-use-in-test.md steps 42 to 45. The after-deploy step was not run (see it).
+  The by-hand checks are ops/first-use-in-test.md steps 42 to 45.
 
 ### Steps
 
@@ -2302,8 +2300,7 @@ group; Every note stays first and fixed.
     `AddCommonItemGroupEndpointTests` does, and that one adding a group to A that way reads that group's events alone.
 - 25 October 2026: closed out; merged in PR #62 (CI run 39126489386 and Deploy run 39127346700 on 9fed807 passed).
   S01.03.05 to S01.03.08 are done, S01.03.01's Content and copy criterion is closed with a Note, and S01.03.07's Note
-  names T13 for the note side. The by-hand checks are ops/first-use-in-test.md steps 50 to 52, with steps 44 and 45. The
-  after-deploy step was not run (see it).
+  names T13 for the note side. The by-hand checks are ops/first-use-in-test.md steps 50 to 52, with steps 44 and 45.
 
 ### Steps
 
@@ -2738,8 +2735,7 @@ lets workers write only today's note, using the Melbourne date.
   `CheckDatabaseScriptTests` passes, and T08's by-hand steps are 46 to 49.
 - 25 October 2026: closed out; merged in PR #61 (CI run 39110313544 and Deploy run 39111013857 on 06f47fc passed).
   S02.01.01, S02.01.02, S02.02.03 and S02.02.07 are done; S02.02.02 was done already (T21). What it handed to T09 and
-  later is in the stories' Notes. The by-hand checks are ops/first-use-in-test.md steps 46 to 49. The after-deploy step
-  was not run (see it).
+  later is in the stories' Notes. The by-hand checks are ops/first-use-in-test.md steps 46 to 49.
 
 ### Steps
 
@@ -3254,7 +3250,7 @@ past notes.
 - 25 October 2026: closed out; merged in PR #63 (CI run 39156907144 and Deploy run 39158220816 on 3b52fd2 passed).
   S02.01.03, S02.03.01, S02.03.02 and S02.04.01 are done; S02.04.02 was done already (T21). S02.03.01's manual check
   stays unticked, as step 54 of ops/first-use-in-test.md (step 68 repeats it with common items). The other by-hand
-  checks are steps 53 and 55. The after-deploy step was not run (see it).
+  checks are steps 53 and 55.
 
 ### Steps
 
@@ -3665,8 +3661,7 @@ older page is told the note has moved on, and nothing is overwritten without ask
     second tab opens.
 - 25 October 2026: closed out; merged in PR #65 (CI run 39199110830 and Deploy run 39200750100 on 34deb30 passed).
   S02.02.04, S02.02.05 and S02.02.06 are done. S02.02.05's and S02.02.06's manual checks stay unticked, as steps 61 and
-  59 of ops/first-use-in-test.md; the other by-hand checks are steps 58, 60 and 62. The after-deploy step was not run
-  (see it).
+  59 of ops/first-use-in-test.md; the other by-hand checks are steps 58, 60 and 62.
 
 ### Steps
 
@@ -3972,7 +3967,7 @@ the reason and when it was flagged. Only submitted flags count.
   there is no `migrate.sql` to read.
 - 25 October 2026: closed out; merged in PR #64 (CI run 39182349482 and Deploy run 39183660006 on d7155df passed).
   S03.01.01 and S03.03.01 were done already, and the parts handed to T16 and T19 were closed there. The by-hand checks
-  are ops/first-use-in-test.md steps 56 and 57. The after-deploy step was not run (see it).
+  are ops/first-use-in-test.md steps 56 and 57.
 
 ### Steps
 
