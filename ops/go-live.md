@@ -2,10 +2,11 @@
 
 The operator's ordered run sheet for production, `https://app-grow2notes-prod.azurewebsites.net` (D91). It sets
 production up, checks it against design.md §10.1 before any real data goes in, tries its alerts, creates the
-provider's organisation and first manager, checks its email, and lists the go-live lines of design.md §14. Nothing here
-is a work item or holds a task open (D90): every step is by hand, an agent never runs one, and each is the operator's
-or the owner's. The Azure subscription is shared with another production system, so every command here stays inside
-the two Grow2Notes resource groups, apart from the read-only Defender check in B.
+provider's organisation and first manager, checks its email, lists the go-live lines of design.md §14, then runs the
+restore test and the cut-over (F). Nothing here is a work item or holds a task open (D90): every step is by hand, an
+agent never runs one, and each is the operator's or the owner's. The Azure subscription is shared with another
+production system, so every command here stays inside the two Grow2Notes resource groups, apart from the read-only
+Defender check in B.
 
 Rules for everyone who works through it:
 
@@ -15,8 +16,9 @@ Rules for everyone who works through it:
 - Each check ends with a `Result:` line. Fill it in with the date, `pass` or `fail`, and who did it. Paste no raw
   output: it holds IDs and addresses, which the repository never keeps (D60, D89). Never write down a key, a setup link,
   a token, a prefix, an ID or an address. A `fail` is written as one plain sentence and told to the developer.
-- Do the sections in order. A needs production not to exist yet; B to E assume A is done. C changes production on
+- Do the sections in order. A needs production not to exist yet; B to F assume A is done. C changes production on
   purpose, so do it before any real use. D puts the first real personal information in, so it comes after C, once.
+  F's order, and what it needs first, are at its start.
 - Names: `rg-grow2notes-prod-ause`, `app-grow2notes-prod`, `sql-grow2notes-prod`, `sqldb-grow2notes`,
   `kv-grow2notes-prod`, `vnet-grow2notes-prod`, `id-grow2notes-prod-app` and `id-grow2notes-prod-deploy`
   ([break-glass.md](break-glass.md) lists them for the SSH console).
@@ -521,20 +523,145 @@ work items. Tick each with its evidence and owner on the provider's own copy of 
    as sub-processors (A102).
 5. Every staff member has accepted their invite and set up MFA on their own phone, and at least two managers are
    active.
-6. Staff onboarding (about 30 minutes) is done.
+6. Staff onboarding (about 30 minutes) is done, by the managers, in test with made-up data (A106; first-use
+   step 159). Until the switch-over day nobody starts a note in production, not even to try it: a started note is
+   kept even when discarded (design.md §3.4, §3.7).
 7. Participants, goals, common items (in their groups) and guide prompts are entered by one manager and checked by
    another.
-8. The restore test is done: restore the latest production backup to a scratch database, open a known note and its
-   history, record the date and result, then delete the copy ([restore-drill.md](restore-drill.md)).
+8. The restore test is done (F3): restore the latest production backup to a scratch database and check it as A90
+   says (a known note and its history are opened from the first drill after go-live), record the date and
+   result, then delete the copy ([restore-drill.md](restore-drill.md)).
 9. Every historical Word note is gathered into organisation-controlled storage (D41), checked, and removed from the
    personal devices (A39).
 10. Where the gathered Word notes are kept is written down, and the Word template stops being used from the switch-over
     date.
 
 Also for the managers to arrange: the button-words check with five workers (S06.02.05, cut), which microcopy.md §8 asks
-for before go-live. Each of five workers, some of whom write in English as an additional language, says what every
-main button will do before pressing it, in test with made-up data (first-use step 23). Any button that fewer than four
-of the five understood goes to the owner as a wording question, and no wording changes without the owner's approval.
-Whether go-live waits for it is the owner's call (Q12).
+for, ideally before go-live. Each of five workers, some of whom write in English as an additional language, says what
+every main button will do before pressing it, in test with made-up data (first-use step 23). Any button that fewer than
+four of the five understood goes to the owner as a wording question, and no wording changes without the owner's
+approval. It does not hold go-live, and nor do the by-hand accessibility steps (first-use steps 143 to 147): a failure
+becomes a bug (A107).
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+## F. The restore test and the cut-over
+
+F starts only once A to D have passing Results, D1's gate included (first-use steps 141 and 142, and the owner's F-7
+decision at A6). F3 also needs line 7 of E to have its evidence, and F4 needs every line of E. Do F1 to F5 in order.
+Results in F follow D's rule: they never name the provider or its people, and they hold no CI run ID, address, link or
+secret.
+
+### F1. The switch-over date
+
+(S06.06.03's first and fifth criteria; A40, A106.) The owner and the managers agree three things, outside the hours
+staff usually write notes, which they name themselves (A35):
+
+- the switch-over date;
+- the time of any F2 deploy;
+- the latest start time for F5's morning check.
+
+The operator then opens a small pull request that writes the date, as `Switch-over date: yyyy-mm-dd`, in two places:
+the switch-over line of Release 1 in `design/backlog/releases.md` (in place of "not set yet"), and the "Line 10" note
+of the checklist in `design/backlog/E06-hardening-and-go-live/F06.06-go-live-readiness-cut-over.md`. The Done (date)
+column of that checklist stays empty until F5's record. If the date moves, the same two lines change the same way.
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### F2. The build
+
+(S06.06.03's first and second criteria; design.md §10.4.) The build that is live at the switch-over is the CI run of
+the last successful `Deploy CI run <id> to prod`: A9's, or a later one. The `Check the CI run` job of `deploy.yml`
+accepts only a CI run whose test deploy succeeded, and that deploy's smoke test passed, so the build already meets the
+second criterion, and A9 ran at a time the owner and the managers agreed (the first). To see which deploy is live,
+read-only:
+
+```shell
+gh run list --workflow deploy.yml --event workflow_dispatch --status success --limit 3 \
+  --json displayTitle,createdAt --jq '.[] | "\(.createdAt)  \(.displayTitle)"'
+```
+
+Do not ask whether `main` has changed: merges of documents change it all the time, and none of them needs a deploy.
+
+Deploy a newer CI run only when the owner wants a change live before the switch-over:
+
+1. Choose the CI run as A5 says, and dispatch it as A9 does, at the time agreed in F1.
+2. Look for what A9 looks for: `Check the CI run` and `Deploy to prod` succeed, the migration applies, and the smoke
+   test passes.
+3. Finish it before F3 starts.
+
+A rollback is only the redeploy of an earlier CI run that design.md §10.4 describes. In the Result, write the date of
+the production deploy that is live and that its smoke test passed, and never the run ID.
+
+Result: ____ (date), ____ (pass or fail), by ____ (live deploy dated: ____)
+
+### F3. The restore test
+
+(S06.06.02; line 8 of E; A90.) Run it after line 7 of E has its evidence, and at least one hour after the last
+production deploy (A9 or F2). The copy is restored to one hour ago, so it then holds the release's migration and the
+real configuration. A configuration change inside that hour is the difference that step 5 of
+[restore-drill.md](restore-drill.md) already lets the operator check and accept.
+
+1. Follow *The quarterly drill* of [restore-drill.md](restore-drill.md) exactly, as its before-go-live drill and as the
+   Entra admin: steps 1 to 5, then 7 and 8. Step 6 (the known note and its history) waits for the first drill after
+   go-live (A90). Note the minutes from the start of the restore to its check passing.
+2. Add the row to [restore-log.md](restore-log.md) by pull request: the kind `quarterly`, and a result such as
+   `passed, before go-live, copy deleted`. Fix any drill step that did not work as written in that same pull request
+   (S06.06.02's fifth criterion).
+
+Look for the drill's own checks passing: exit code 0 on the copy and on production, so `DBCC CHECKDB` is clean; the
+same latest migration on both; the configuration counts equal, or each difference explained by a change in the last
+hour; the two note lines reading `none yet`; and a time on the audit line. If the time taken is over 240 minutes (the
+4-hour target, RTO), record it all the same: it is a finding for the owner. The row on `main` is the evidence for
+line 8 of E. A production deploy after F3 does not repeat it: the drill's own rule for a large migration covers such a
+deploy.
+
+Result: ____ (date), ____ (pass or fail), by ____ (minutes taken: ____)
+
+### F4. The gate (read-only)
+
+(S06.06.03's fourth criterion; design.md §14 M6 Done when and README §9, Release 1.) Every one of these must hold, or
+the date moves and F1 is done again:
+
+- `ops/security-review.md` §3 still reads `Open High/Critical: none`.
+- F3's row in [restore-log.md](restore-log.md) is on `main` and reads `passed`.
+- Every line of E has its owner and its evidence on the provider's copy of this sheet. Line 9 is shown by the
+  provider's confirmation only: where the Word notes are kept is never written in the repository.
+- Line 5 of E still holds on the Users screen the day before: every staff member is Active, and at least two managers
+  are Active. A manager uses Resend invite for anyone still Invited, in good time: a link lasts 7 days (A23), and the
+  free plan sends at most 100 emails a day (A100; *Before you start* in
+  [first-use-in-test.md](first-use-in-test.md)). The gate waits until line 5 holds.
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### F5. The switch-over day
+
+(S06.06.03's third and fifth criteria; line 10 of E; design.md §14 M6, Migration from Word; A40, D16.)
+
+1. **Morning check (read-only),** before staff start and by the latest start time agreed in F1, which bounds the run
+   of `DBCC CHECKDB` on production. The operator runs `ops/restore-check.sql` on production, with the sign-in and the
+   temporary firewall rule of *What to have ready* in [restore-drill.md](restore-drill.md) and the `sqlcmd` line of its
+   step 5, then deletes the rule as its step 8 says. Look for:
+   - exit code 0;
+   - *Latest note version (UTC)* and *Note with the latest version* both reading `none yet`;
+   - `Note`, `NoteDraft` and `NoteVersion` each at 0 rows (every other note table hangs off `Note`, so `Note` at 0 is
+     the deciding count);
+   - `Participant`, `Goal` and `CommonItem` each above 0.
+
+   *Latest audit event (UTC)* shows a time, as it should, because admin bootstrap writes an audit event.
+   `CommonItemGroup` proves nothing, because bootstrap always creates the Every note group.
+2. **Guide prompts.** A manager confirms them on Manage, Guide prompts. They are a setting and not a table, so no row
+   count shows them.
+3. **If any note row exists, the cut-over stops.** The row stays, because nothing is deleted (design.md §3.4, §3.7).
+   Find the cause first, then the owner and the managers decide whether to go ahead or to move the date (F1). Any other
+   failure, such as exit code 1 or a missing configuration, also stops the cut-over: tell the owner, and the date
+   moves.
+4. **The switch.** The operator tells the owner and the managers that production is ready. From the date, notes are
+   written in Grow2Notes only, with no double entry (A40). The provider stops the Word template. Incidents still go on
+   the existing incident form (D16).
+5. **The record.** After the day, the operator opens a pull request that fills the Done (date) column of the F06.06
+   checklist, with dates only, and ticks the S06.06.02 and S06.06.03 criteria that F proved, each with a dated Note.
+   S06.06.02's known-note part stays unticked until the first drill after go-live. Release 1 is released then
+   (README §9, Release 1).
 
 Result: ____ (date), ____ (pass or fail), by ____
