@@ -11,16 +11,18 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.Net.Http.Headers;
 
 namespace Grow2Notes.Tests.Features.Auth;
 
 /// <summary>
-/// <c>POST /api/auth/logout</c> (design.md §6.2, §8.5), called as the SPA calls it: over HTTPS, signed in with the
+/// <c>POST /api/auth/logout</c> (design.md §6.2, §8.5, A99), called as the SPA calls it: over HTTPS, signed in with the
 /// cookie sign-in (<see cref="CookieSignIn"/>) as a user that the test adds to seeded organisation A, so that it finds
 /// its own <c>auth.signed_out</c> by its actor, with the antiforgery token fetched after signing in. The app is hosted
 /// on a fake clock (<see cref="TestClock"/>) that moves a second before each request, so the session check runs on
 /// each, and gives each request a client address, which the test server does not. The endpoint matrix covers who may
-/// call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// call it, and <see cref="SignedOutTests"/> what a signed-out caller gets. The person's other sessions are
+/// <see cref="SignedInDevices"/>, and a copy of the session cookie is sent from a client that keeps no cookies.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -98,24 +100,49 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
             Assert.Single(await EventsByAsync(userId)));
     }
 
-    // As on a phone and a laptop. The session check compares the second session's security stamp with the row's on its
-    // request, so its 200 shows that signing out left the stamp alone.
+    // The direct proof of F-1 (ops/security-review.md): a copy of the cookie, sent from a client that keeps no cookies,
+    // as a thief's would be. It has seconds of its 30 minutes left to run, so only the sign-out explains the 401.
     [Fact]
-    public async Task A_second_session_of_the_same_person_goes_on()
+    public async Task A_copy_of_the_session_cookie_gets_401_after_sign_out()
+    {
+        var userId = await AddUserToAAsync();
+        using var client = app.CreateHttpsClient();
+        var copy = await client.SignInWithCookieAsync(userId);
+        var token = await client.FetchTokenAsync();
+        using var thief = app.CreateClient(
+            new() { BaseAddress = new("https://localhost"), AllowAutoRedirect = false, HandleCookies = false });
+        using (var before = await MeWithCopyAsync(thief, copy))
+        {
+            Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        }
+
+        using (var response = await SignOutAsync(client, token))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
+        using var after = await MeWithCopyAsync(thief, copy);
+
+        await after.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        after.AssertClearsTheSessionCookie();
+    }
+
+    // As on a phone and a laptop (A99). The phone signs in and out with this class's helpers because SignedInDevices
+    // asserts one status across its devices and the phone needs its own 204. The antiforgery tokens fetched before stay
+    // valid, as their uid is the user ID claim.
+    [Fact]
+    public async Task Every_other_session_of_the_person_gets_401_on_its_next_request()
     {
         var userId = await AddUserToAAsync();
         using var phone = app.CreateHttpsClient();
         var token = await SignInAsync(phone, userId);
-        using var laptop = app.CreateHttpsClient();
-        await SignInAsync(laptop, userId);
+        using var devices = await SignedInDevices.SignInAsync(app, clock, userId);
         using (var response = await SignOutAsync(phone, token))
         {
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         }
 
-        using var me = await MeAsync(laptop);
-
-        Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        await devices.AssertNextRequestsAsync(HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
     }
 
     [Fact]
@@ -136,15 +163,17 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
 
-    // A failed write leaves the person signed in, so no sign-out goes unrecorded. The session check renews the cookie
-    // on the 500, but nothing deletes it.
+    // A failed write rolls the new stamp back too, so the person stays signed in everywhere and no sign-out goes
+    // unrecorded. The session check renews the cookie on the 500, but nothing deletes it.
     [Fact]
-    public async Task When_the_event_cannot_be_written_it_gets_500_and_the_session_goes_on()
+    public async Task When_the_event_cannot_be_written_it_gets_500_and_every_session_goes_on()
     {
         await using var failing = app.WithWebHostBuilder(builder => builder.ConfigureTestServices(
             services => services.AddScoped<IAuditWriter, FailingAuditWriter>()));
+        var userId = await AddUserToAAsync();
         using var client = failing.CreateHttpsClient();
-        var token = await SignInAsync(client, await AddUserToAAsync());
+        var token = await SignInAsync(client, userId);
+        using var devices = await SignedInDevices.SignInAsync(failing, clock, userId);
 
         using (var response = await SignOutAsync(client, token))
         {
@@ -156,6 +185,7 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
         using var me = await MeAsync(client);
 
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+        await devices.AssertNextRequestsAsync(HttpStatusCode.OK);
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
@@ -179,6 +209,15 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
             request.Headers.Add(AntiforgeryTokens.Header, token);
         }
 
+        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+    }
+
+    // A second after the last request, so the session check runs on this one, with only the copied cookie.
+    private async Task<HttpResponseMessage> MeWithCopyAsync(HttpClient client, SetCookieHeaderValue copy)
+    {
+        clock.Advance(TimeSpan.FromSeconds(1));
+        using var request = new HttpRequestMessage(HttpMethod.Get, MePath);
+        request.Headers.Add(HeaderNames.Cookie, new CookieHeaderValue(copy.Name, copy.Value).ToString());
         return await client.SendAsync(request, TestContext.Current.CancellationToken);
     }
 

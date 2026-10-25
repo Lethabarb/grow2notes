@@ -11,7 +11,8 @@ design.md §8 and §9, and the ZAP baseline results (S06.01.01, S06.01.02; desig
   the v5.0.0 tag.
 - **Level 3 is out of scope.** The standard's level 3 requirements are counted in section 5 and not reviewed.
 - **What was reviewed.** `main` at commit `9f7514f`, plus T25's changes: the rate limits (V1) and
-  `.github/dependabot.yml`.
+  `.github/dependabot.yml`. F-1's fix was checked on 25 October 2026 against the pull request "fix(auth): sign-out
+  ends the session for good".
 - **Date.** 24 October 2026.
 - **Scope.**
   - The app: `src/Grow2Notes.Web` (the `Platform`, `Features/Auth` and `Data` folders, the export endpoints, the
@@ -56,18 +57,18 @@ T25 does not merge to `main` while a High or Critical finding is open (F06.01's 
 
 **Open High/Critical: none.**
 
-One Medium finding is open for the owner (F-1). Every other finding is recorded with a decision. "Accepted" means the
+No Medium finding is open: F-1 was fixed on 25 October 2026, at the owner's decision. Every finding is recorded with a decision. "Accepted" means the
 developer decided to leave it, and the owner may overturn that. No finding is in `infra/` at High or Critical, so no
-bug story was filed and no file under `infra/` was edited. Counts: Medium 1; Low 17; Informational 7.
+bug story was filed and no file under `infra/` was edited. Counts: Medium 1 (fixed); Low 17; Informational 7.
 
 ### 3.1 Register
 
 | ID | Severity | ASVS | Where | What | Decision | Status |
 |---|---|---|---|---|---|---|
-| F-1 | Medium | 7.4.1 | `LogoutEndpoint.cs`, `Program.cs` | Sign-out deletes the browser's cookie and sends `Clear-Site-Data`, but the session is a stateless protected ticket, so a copy of the cookie keeps working until it expires (30 minutes idle, 12 hours) or the person's security stamp changes. Getting a copy needs the cookie to be stolen despite Secure, HttpOnly and SameSite=Strict. | For the owner: accept it, or rotate the person's security stamp at sign-out, which would sign them out of every device (today a second session goes on, `LogoutEndpointTests.A_second_session_of_the_same_person_goes_on`). Not High, because it needs a stolen cookie. | Open |
+| F-1 | Medium | 7.4.1 | `LogoutEndpoint.cs`, `Program.cs` | Sign-out deletes the browser's cookie and sends `Clear-Site-Data`, but the session is a stateless protected ticket, so a copy of the cookie keeps working until it expires (30 minutes idle, 12 hours) or the person's security stamp changes. Getting a copy needs the cookie to be stolen despite Secure, HttpOnly and SameSite=Strict. | The owner decided on 25 October 2026 to fix it, not accept it. Fixed: sign-out gives the person a new security stamp in one transaction with `auth.signed_out`, so a copy of the cookie gets 401 on its next request, as does every other session of theirs (design.md A99; `LogoutEndpointTests.A_copy_of_the_session_cookie_gets_401_after_sign_out`, `LogoutEndpointTests.Every_other_session_of_the_person_gets_401_on_its_next_request`; by-hand step 149). | Fixed |
 | F-2 | Low | 6.5.1 | Identity's authenticator provider | A TOTP code can be used again while its time window lasts: Identity checks a few time steps around now and keeps no record of a code once used. It needs the password as well. | Accepted: the account limit of 10 a minute and the lockout bound guessing, and a used-code store means a new table. | Accepted |
 | F-3 | Low | 6.1.2, 6.2.4, 6.2.11, 6.2.12 | `Program.cs` | New passwords are checked for length (12) only; there is no common-password, breached-password or context-word check. | Accepted: every account has a second factor, and lockout and the rate limits slow guessing. | Accepted |
-| F-4 | Low | 6.2.2, 7.5.1, 7.5.2 | design.md §8.6 | No self-service account management: a person cannot change their password or list and end their sessions, and a manager is not asked to sign in again before changing a person's email or resetting their sign-in. | Accepted, by design: recovery goes through a manager (D23, D74); a reset is confirmed in a dialog and audited. | Accepted |
+| F-4 | Low | 6.2.2, 7.5.1, 7.5.2 | design.md §8.6 | No self-service account management: a person cannot change their password, or list their sessions or end one alone (Sign out ends them all, A99), and a manager is not asked to sign in again before changing a person's email or resetting their sign-in. | Accepted, by design: recovery goes through a manager (D23, D74); a reset is confirmed in a dialog and audited. | Accepted |
 | F-5 | Low | 11.4.2 | `Program.cs` | Passwords are hashed with Identity's default PBKDF2 at its default of 100,000 iterations, below OWASP's current guidance for HMAC-SHA512. | Accepted: it matters only to someone who already has a copy of the database, and the second factor remains. Raising `PasswordHasherOptions.IterationCount` is one line, and Identity rehashes at the next sign-in. | Accepted |
 | F-6 | Low | 3.3.1, 3.3.2, 3.3.3 | `Program.cs`, `EnrolmentCookie.cs` | Identity's two-factor cookie keeps its defaults (SameSite Lax, Secure as the request is, no `__Host-` prefix), and the setup cookie is `__Secure-` with a path, not `__Host-`. | Accepted: both are HttpOnly, last 5 and 30 minutes, hold a protected ID, and every endpoint that reads them needs the antiforgery token; the setup cookie's path is deliberate. Setting `SecurePolicy` and `SameSite` on the two-factor scheme is two lines beside the existing `Configure` call. | Accepted |
 | F-7 | Low | 11.2.3 | `infra/modules/keyvault.bicep` | The Key Vault key that wraps the Data Protection key ring is RSA 2048, about 112 bits of security where the standard asks for 128. | Accepted, `infra/` not edited: the key only wraps the key ring, which is itself AES-256. A 3072-bit key is a change to the vault module and a re-wrap, best made when production is first deployed. | Accepted |
@@ -212,7 +213,7 @@ Counts are those read from the standard against the rows written below; they mus
 | V17 WebRTC | 0 | 7 | 0 | 7 | 5 |
 | **Total** | **70** | **183** | **70** | **183** | **92** |
 
-Of the 253 rows, 151 are met (8 of them confirmed in test), 86 are not applicable and 16 point to a finding.
+Of the 253 rows, 152 are met (8 of them confirmed in test), 86 are not applicable and 15 point to a finding.
 
 ### V1 Encoding and sanitization
 
@@ -360,15 +361,15 @@ Of the 253 rows, 151 are met (8 of them confirmed in test), 86 are not applicabl
 | ID | L | Topic | Status |
 |---|---|---|---|
 | 7.1.1 | 2 | Documented timeouts | Met: design.md §8 and §8.5 (A24): 30 minutes idle, 12 hours absolute. |
-| 7.1.2 | 2 | Documented concurrent sessions | Met: documented here: a person may be signed in on several devices at once with no cap, one cookie for each (`LogoutEndpointTests.A_second_session_of_the_same_person_goes_on`); a reset or deactivation ends all. |
-| 7.1.3 | 2 | Documented re-authentication conditions | Met: design.md §8.5 and §8.6: idle and absolute limits, and deactivation or reset; there is no federation. |
+| 7.1.2 | 2 | Documented concurrent sessions | Met: documented here: a person may be signed in on several devices at once with no cap, one cookie for each; signing out on any of them, a reset or a deactivation ends all (design.md A99; `LogoutEndpointTests.Every_other_session_of_the_person_gets_401_on_its_next_request`). |
+| 7.1.3 | 2 | Documented re-authentication conditions | Met: design.md §8.5 and §8.6: idle and absolute limits, signing out on another device (A99), and deactivation or reset; there is no federation. |
 | 7.2.1 | 1 | Session checked on the server | Met: the cookie is validated on every request and the user's row is read each time (`Program.cs`, `ValidationInterval` zero; `SessionRules.cs`). |
 | 7.2.2 | 1 | Dynamically generated session tokens | Met: the session is a protected cookie ticket made at sign-in; the app uses no static API keys or secrets. |
 | 7.2.3 | 1 | Reference token strength | N/A: the session is a self-contained protected ticket, not a reference token (see chapter 9). |
 | 7.2.4 | 1 | New token at sign-in | Met: every sign-in issues a new cookie (`Grow2NotesSignInManager.cs`), and no session cookie exists before it. |
 | 7.3.1 | 2 | Inactivity timeout | Met by design, confirmed in test by step 11: 30 minutes (`SessionLimitTests.A_request_after_30_minutes_and_1_second_idle_gets_401`). |
 | 7.3.2 | 2 | Absolute lifetime | Met: 12 hours (`SessionLimitTests.A_request_every_20_minutes_is_let_in_at_12_hours_and_refused_at_12_hours_and_1_minute`). |
-| 7.4.1 | 1 | Sign-out ends the session for good | F-1: sign-out deletes the browser's cookie but does not invalidate a copy. |
+| 7.4.1 | 1 | Sign-out ends the session for good | Met (F-1, fixed): sign-out rotates the security stamp, so the session, and any copy of its cookie, gets 401 on its next request (`LogoutEndpointTests.A_copy_of_the_session_cookie_gets_401_after_sign_out`). |
 | 7.4.2 | 1 | Disabled accounts lose their sessions | Met: deactivation and reset rotate the security stamp, so each device gets 401 next request (`UserDeactivationEndpointsTests.Each_device_of_a_deactivated_worker_gets_401_on_its_next_request_and_their_passkey_too`, `SignInResetTests.Each_device_the_worker_is_signed_in_on_gets_401_on_its_next_request`). |
 | 7.4.3 | 2 | Sessions ended after a factor changes | Met: only a manager's reset changes a person's factors and it ends every session (`SignInResetTests`); people change none themselves (F-4). |
 | 7.4.4 | 2 | Sign-out on every signed-in page | Met by design, confirmed in test by step 7: the signed-in header has an Account menu with Sign out (steps 7 and 10). |

@@ -163,7 +163,8 @@ builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFac
 });
 
 // The security stamp is checked on every request that carries the cookie, rebuilding the principal from the user's
-// row, so deactivation, a sign-in reset and a role change apply on the user's next request (§8.4, §8.6).
+// row, so deactivation, a sign-in reset, a sign-out on another device and a role change apply on the user's next
+// request (§8.4, §8.5, §8.6).
 builder.Services.Configure<SecurityStampValidatorOptions>(o =>
 {
     o.ValidationInterval = TimeSpan.Zero;

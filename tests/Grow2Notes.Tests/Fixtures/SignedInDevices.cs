@@ -8,8 +8,9 @@ namespace Grow2Notes.Tests.Fixtures;
 
 /// <summary>
 /// One user signed in on several devices, each a client with the real session cookie, for the tests that a change to
-/// the user reaches every session of theirs on its next request (design.md §8.4, §8.6): a reset, a deactivation or
-/// <c>admin signout-all</c> ends each, with <c>401</c>, and a change to Worker refuses each a manager's request, with
+/// the user reaches every session of theirs on its next request (design.md §8.4, §8.5, §8.6): a reset, a deactivation,
+/// a sign-out on another device or <c>admin signout-all</c> ends each, with <c>401</c>, and a change to Worker refuses
+/// each a manager's request, with
 /// <c>403</c>. Each device signs in with the cookie sign-in (<see cref="CookieSignIn"/>) on the app's fake clock
 /// (<see cref="TestClock"/>), and is let in once before the test changes the user; then the clock moves on a second
 /// before each device's next request, so that the session check, which compares the security stamp and rebuilds the

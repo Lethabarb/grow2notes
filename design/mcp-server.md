@@ -314,7 +314,7 @@ There is no IP check (MA10). Hosted assistants call from their providers' clouds
 
 | Event | Effect on MCP access |
 |---|---|
-| A manager deactivates the person, resets their sign-in, or the operator runs `admin signout-all` | The security stamp rotates, so the next call fails step 4; the person's OpenIddict authorisations are revoked in the same transaction |
+| A manager deactivates the person, resets their sign-in, the person signs out of the app (design.md A99), or the operator runs `admin signout-all` | The security stamp rotates, so the next call fails step 4; the person's OpenIddict authorisations are revoked in the same transaction |
 | The person is made a worker | Step 4 fails on the role check |
 | 30 minutes without using the connection, or 12 hours after the person signed in | The refresh token lapses or is refused; the assistant asks them to connect again, with MFA |
 | The person disconnects Grow2Notes in their assistant | The assistant stops using the tokens. The revocation endpoint is enabled for clients that call it; whether each assistant calls it is unverified (§10). |

@@ -94,9 +94,10 @@ internal static class EndpointMatrix
         new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
         new(Get,       "/api/auth/me",           Unauthorized, OK,     OK,         OK),
 
-        // Each signed-in user signs out of their own session (§8.5). The test-only sign-in has no session cookie, so a
-        // call ends nothing: it adds one auth.signed_out to the caller's organisation and changes no seeded row
-        // (tests/README.md).
+        // Each signed-in user signs out of every session of theirs (§8.5, A99). The test-only sign-in has no session
+        // cookie, so a call deletes none: it gives the caller a new security stamp, which the test-only sign-in never
+        // checks, and adds one auth.signed_out to the caller's organisation (tests/README.md, the seeded-rows rule's
+        // one exception).
         new(Post,      "/api/auth/logout",       Unauthorized, NoContent, NoContent, NoContent),
 
         // Each signed-in user may press Stay signed in on the warning before the idle sign-out (§8.5): the ping changes

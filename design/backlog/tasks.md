@@ -6132,7 +6132,9 @@ open.
   3. Shared-office capacity (A96): about 10 sign-ins a minute from one shared address. Should §9.9's 30 be raised for
      larger offices? Step 142 is the case to watch.
   4. F-1 (Medium): sign-out does not invalidate a copied session cookie. Accept it, or have sign-out rotate the
-     person's security stamp, which signs them out of every device.
+     person's security stamp, which signs them out of every device. Decided by the owner on 25 October 2026: fix it.
+     Fixed by "fix(auth): sign-out ends the session for good": sign-out rotates the security stamp and ends every
+     device (design.md A99).
   5. F-23: the repository's GitHub settings that are not files (fork pull-request approval, the `test` and `prod`
      environments' branch rules, the default token permission) were not read; the owner looks at them in GitHub.
 - Dependabot: `.github/dependabot.yml` has four weekly entries (NuGet at `/`, npm at `/src/grow2notes-spa`, npm at
