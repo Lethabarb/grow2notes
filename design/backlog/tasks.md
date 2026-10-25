@@ -11,7 +11,7 @@ cut ([Cut stories](#cut-stories)).
 - **One branch and one pull request per task**, titled as a Conventional Commit, with the task's ID and its stories'
   IDs in the description. The Definition of Done ([README §9](README.md#9-definition-of-done)) applies to each task
   as it did to each story: one review, green CI, merge, and the deploy to test, with no after-deploy check (owner,
-  20 October 2026, D89).
+  20 October 2026, D90).
 - **A task is planned briefly when its lane starts it**: its *Steps* turn the absorbed criteria into a short
   checklist, shared parts first. There is no per-story refinement, no pull-in row in a sprint file and no per-story
   close-out. When the task is done, its `status` here and its stories' `status` fields become `done` together.

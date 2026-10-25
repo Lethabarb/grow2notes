@@ -1394,7 +1394,7 @@ Grow2Notes runs as **one deployable web application** with **one database**. The
 - **No login redirects.** The cookie's `OnRedirectToLogin` and `OnRedirectToAccessDenied` return `401` and `403` for every request, because there is no server-rendered login page. This also covers endpoints that return files or `204`.
 - **Caching.** Vite's hashed assets get `Cache-Control: public, max-age=31536000, immutable`; `index.html` gets `no-cache`; every `/api` response gets `no-store`. A page or asset response that renews the session cookie is `private` instead, and an asset's keeps no `Pragma` or `Expires` (A50).
 - **Strict CSP compatibility.** `build.assetsInlineLimit: 0` in `vite.config.ts`, so Vite never inlines small assets as `data:` URIs that the CSP would block (§9.7).
-- **Development.** The app is not run on a developer's machine (D89, A98): the only local checks are compile and lint. Should it ever be run by hand, `npm run dev` runs the Vite dev server, which proxies `/api` to Kestrel on `https://localhost`. Cookies still behave as same-origin, and passkeys work because `localhost` is a secure context; as the app takes a passkey only from a page at `App:Origin` (A54), Kestrel then runs with `App__Origin` set to the dev server's address.
+- **Development.** The app is not run on a developer's machine (D90, A98): the only local checks are compile and lint. Should it ever be run by hand, `npm run dev` runs the Vite dev server, which proxies `/api` to Kestrel on `https://localhost`. Cookies still behave as same-origin, and passkeys work because `localhost` is a secure context; as the app takes a passkey only from a page at `App:Origin` (A54), Kestrel then runs with `App__Origin` set to the dev server's address.
 - **Node.js is needed only at build time.** No Node runtime runs in production.
 
 ### 7.3 Solution layout (solo developer)
@@ -1826,7 +1826,7 @@ That is **about AUD 62–65 a month ex GST (about AUD 68–72 including GST) for
 
 | Environment | Purpose | Data | Differences from prod |
 |---|---|---|---|
-| **Local** | Development on Windows | None | Compile and lint only: nothing is run locally (no tests, app, database or LocalDB; D89); no Azure resources |
+| **Local** | Development on Windows | None | Compile and lint only: nothing is run locally (no tests, app, database or LocalDB; D90); no Azure resources |
 | **Test** | Every merge to `main` deploys here; serves as staging; the owner can try changes | **Made-up data only; production data is never copied here** (A35) | Azure SQL free offer (the first request after it pauses is slow); LRS backups; 7-day point-in-time restore; health check `/healthz` (liveness only, no database call, so the free database can pause); a "free amount remaining" alert; its default `*.azurewebsites.net` address with App Service's built-in HTTPS, so no custom domain or managed certificate for now (D62); setup-link email from the free Azure-managed `azurecomm.net` domain, with SPF, DKIM and DMARC set by Azure (A58); its own identities and passkeys |
 | **Prod** | Real use | Real | — |
 
@@ -1837,7 +1837,7 @@ There are no deployment slots. A production deploy restarts the app for a few se
 **`ci.yml`** on every pull request and push to `main`:
 1. **.NET:** restore (NuGet Audit; high or critical fails the build); build with warnings as errors; `dotnet test` (unit tests and Testcontainers integration tests, including the authorisation matrix, tenant isolation, append-only permissions, security headers, the telemetry canary and the daylight-saving tests); `dotnet ef migrations has-pending-model-changes`.
 2. **SPA:** `npm ci`, `npm audit`, type-check, lint, Vitest, `vite build` into `wwwroot`.
-3. **Package:** `dotnet publish` → `app.zip`; `dotnet ef migrations bundle --self-contained -r linux-x64` → `efbundle`; `dotnet ef migrations script --idempotent` → `migrate.sql`, kept with the build (a migration is reviewed in the pull request's diff, not from this file; D89); `az bicep build`.
+3. **Package:** `dotnet publish` → `app.zip`; `dotnet ef migrations bundle --self-contained -r linux-x64` → `efbundle`; `dotnet ef migrations script --idempotent` → `migrate.sql`, kept with the build (a migration is reviewed in the pull request's diff, not from this file; D90); `az bicep build`.
 4. **End-to-end:** Playwright tests with axe checks against the published app running in CI on a SQL Server container.
 5. Upload the artifacts. **Production deploys exactly these artifacts; nothing is rebuilt.**
 
@@ -1887,7 +1887,7 @@ The pipeline's identity has Contributor on its own resource group only, which ca
 
 ### 10.6 Database migrations
 
-- **EF Core code-first migrations** under `Data/Migrations`; the migration's diff, read expand-only in the pull request (D89), shows exactly what will run.
+- **EF Core code-first migrations** under `Data/Migrations`; the migration's diff, read expand-only in the pull request (D90), shows exactly what will run.
 - **The app never migrates itself at startup.** Its identity has no DDL rights. Migrations run as a pipeline step before the new code is deployed.
 - **The first migration creates the role `grow2notes_runtime`** if it does not exist yet, and gives it the grants and denies in §5.8. A later migration that adds an append-only table adds its `DENY` to the role. Because the denies target a role rather than an Azure identity, migrations run the same in Testcontainers, LocalDB and Azure. `grant-identities.sql` adds identities to the role; because it runs before the first migration, it creates the role with the same guard if it is missing, and the migration's guard tolerates that.
 - **Expand, then contract.** Every migration must stay compatible with the previous release: add tables and nullable columns first, backfill, and drop or rename only in a later release.
@@ -2198,7 +2198,7 @@ For every milestone:
 - Automated tests check worker-versus-manager permissions and organisation scoping, and grow with each milestone.
 - Audit entries are added as each feature is built.
 - Only made-up data is used before go-live (A35).
-- A *Done when* line that only a person can check (a real device, a screen reader, a person signing in, an operator step) is a by-hand step on `ops/first-use-in-test.md`; it holds nothing open. CI, which runs every test on every pull request, decides (the owner's rule of 20 October 2026, D89, A98).
+- A *Done when* line that only a person can check (a real device, a screen reader, a person signing in, an operator step) is a by-hand step on `ops/first-use-in-test.md`; it holds nothing open. CI, which runs every test on every pull request, decides (the owner's rule of 20 October 2026, D90, A98).
 
 ### M0: Skeleton, hosting, sign-in
 

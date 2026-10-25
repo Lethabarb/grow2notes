@@ -480,7 +480,7 @@ S07.05.10 names the approved AI providers in it once the provider has approved t
    planning that takes its story (table below). A late answer moves that story, not the release, if another Ready story
    can take its place.
 5. **Bootstrap exception in E00.** (Superseded on 20 October 2026: nothing is run locally or checked on the deployed
-   site, and CI decides; D89.) Until S00.02.03 deploys `main` to test (Sprint 02), stories are checked locally and in
+   site, and CI decides; D90.) Until S00.02.03 deploys `main` to test (Sprint 02), stories are checked locally and in
    CI, and that first deploy re-checks them in test, including the two Sprint 01 criteria parts that need Azure
    (S00.01.02's Bicep artifact and S00.03.01's run on Azure SQL). Until S00.01.02's workflow exists (Sprint 01), the
    stories before it count as done once its first run on `main` is green ([sprint-01.md](sprints/sprint-01.md)). The

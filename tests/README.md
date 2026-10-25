@@ -14,7 +14,7 @@ The SPA's unit tests are not here: they sit next to the code they test, as `*.te
 `src/grow2notes-spa/src`, and run in Vitest with Testing Library.
 
 **Where the tests run.** Tests are written with the work, but none is run on a developer's machine: the owner's rule of
-20 October 2026 (decisions.md D89, design.md A98) is that the only local checks are compile and lint. CI runs every
+20 October 2026 (decisions.md D90, design.md A98) is that the only local checks are compile and lint. CI runs every
 test (unit, integration and end-to-end) on every pull request and is the authority; a pull request merges only after
 review and with CI green. The sections below say what each test run covers and how to write the tests; they are not
 steps to run on a machine.

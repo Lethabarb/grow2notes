@@ -103,7 +103,7 @@ decision changes scope.
    but don't own it.
 4. **Children add up to the parent.**
    - A feature is done only when all its stories are done and the rows it owns are proven by CI. A part of a row that
-     only a person can check is a by-hand step on ops/first-use-in-test.md and holds nothing open (D89).
+     only a person can check is a by-hand step on ops/first-use-in-test.md and holds nothing open (D90).
    - An epic is done only when all its features are done and its milestone's *Done when* list is proven by CI, with the
      same by-hand exception.
 5. **Rules that apply everywhere are not owned by a feature.** Examples are nothing stored on the device, Melbourne
@@ -219,7 +219,7 @@ as R1 epics follow M0–M6.
   conflicting edits [20, Convention]. For example: "Given a token for a manager since made a worker, when it calls the
   invite tool, then the call returns 401 and no invite is created."
 - **Every criterion needs a check**: either an automated test, or a named by-hand step on ops/first-use-in-test.md that
-  holds nothing open (D89).
+  holds nothing open (D90).
 
 ## 4. ID scheme
 
@@ -553,7 +553,7 @@ Opinion].
 
 ## 9. Definition of Done
 
-**The owner's build rules** (decision of 20 October 2026, D89; A98 applies them to accessibility). They shape every list
+**The owner's build rules** (decision of 20 October 2026, D90; A98 applies them to accessibility). They shape every list
 below:
 
 - While building, the only local checks are compile and lint: the .NET build with warnings as errors, and the SPA build,
@@ -614,7 +614,7 @@ below:
 - [ ] **Deployed to the test environment.** This happens automatically on merge; nothing is checked there afterwards.
 - [ ] **Story section:** tasks ticked, `status: done` and `sprint` set in its fields block.
 
-**By-hand checks never hold a story open** (owner, 20 October 2026, A98, D89; first decided on 12 October 2026). A check
+**By-hand checks never hold a story open** (owner, 20 October 2026, A98, D90; first decided on 12 October 2026). A check
 that needs a person rather than CI, such as a sign-in in test, a real phone or laptop, a screen reader, or the
 operator's Azure access, is a nice-to-have: it goes on [ops/first-use-in-test.md](../../ops/first-use-in-test.md). The
 story is done once its criteria are proven in CI. A criterion that only such a check can prove stays unticked, with a
@@ -671,7 +671,7 @@ Sprints are a fixed two weeks (D53) and are never extended. If the sprint goal i
   goals on a phone" (from M1's *Done when*).
 - **Review.** The Scrum Guide calls the review a working session, not a presentation [1]. Managers try the increment
   themselves, with their own test accounts in the test environment, using made-up data only (A35). This is the review
-  session, not a check that a story waits for (D89). If a sprint has nothing they can see, as with much of E00, send a
+  session, not a check that a story waits for (D90). If a sprint has nothing they can see, as with much of E00, send a
   three-line written update instead.
 - **Feedback that adds scope** goes to the owner as a decision question first (§1). It doesn't go straight into the
   backlog.

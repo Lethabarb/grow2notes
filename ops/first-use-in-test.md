@@ -3,7 +3,7 @@
 One ordered checklist of every check by hand still outstanding in test,
 `https://app-grow2notes-test.azurewebsites.net`, for the first time the owner signs in there. On 12 October 2026 the
 owner decided that checks like these are nice-to-haves that do not hold a story open, and on 20 October 2026 that
-nothing is checked against the deployed site after a deploy (backlog README §9, decisions.md D89, design.md A98): the
+nothing is checked against the deployed site after a deploy (backlog README §9, decisions.md D90, design.md A98): the
 stories are done on CI, which runs every test on every pull request, and these steps are by hand, hold nothing open
 and are not run by an agent. The criteria that only these steps can prove stay unticked, each with a Note pointing
 here. Each step ends with what it confirms.

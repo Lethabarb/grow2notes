@@ -41,7 +41,7 @@ only mentions the row. Confirm at refinement.
 These rows have one owner, but part of the row is delivered or can only be checked by a story forecast later than the
 owner's own stories. The owner is the feature that starts the row, in both releases (*How to read the tables*). Under
 README §2.3 rule 4 the owning feature, and so its epic, is not done until the whole row is proven by CI or its by-hand
-part is ticked with a dated Note (D89); the epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*).
+part is ticked with a dated Note (D90); the epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*).
 The sprint numbers are the forecast in releases.md.
 
 | Row | Owner (own stories forecast) | Last contributing story (forecast) |
@@ -77,7 +77,7 @@ stories; the first choice is what the *Can close* column in releases.md (R1 *Epi
 
 - **Row:** the scope bullet, checklist line or acceptance criteria group, quoted or shortened.
 - **Owner:** the one feature whose stories deliver the row, and which is not done until the row is proven by CI or its
-  by-hand part is on ops/first-use-in-test.md (D89); or **DoD**, meaning the group is a rule checked on every story
+  by-hand part is on ops/first-use-in-test.md (D90); or **DoD**, meaning the group is a rule checked on every story
   under README §9. When more than one feature delivers a row, the owner is the feature that starts it (for a screen
   file's group, usually the screen's own feature), in R1 and R2 alike. The later stories that finish the row are under
   *Also*, and the row is listed in *Rows to watch*.
