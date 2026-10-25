@@ -5765,7 +5765,7 @@ merged into the feature branch; the feature branch goes to main as one unit beca
 - [x] App (#140; v1): `ResendEmailSender` and the Key Vault key read, the packages, and the tests.
 - [x] Infra (#141; v2): `prod.bicepparam`, `modules/alerts.bicep`, long-term retention, `locks.bicep`, the Key Vault
       secrets role in bootstrap, the gated `deploy.yml`, and `infra/README.md`.
-- [x] Docs (v3): D91 and D92, A100 to A104, the design sections, the five stories, coverage.md, `ops/go-live.md`,
+- [x] Docs (#142; v3): D91 and D92, A100 to A104, the design sections, the five stories, coverage.md, `ops/go-live.md`,
       first-use steps 151 to 157, and Q2 and Q13 answered.
 
 ---
