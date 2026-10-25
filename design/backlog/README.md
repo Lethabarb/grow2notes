@@ -634,7 +634,7 @@ dated Note pointing to the checklist.
   lists, such as the restore test, becomes a pointed story.
 
 **Feature.** Done when all its stories are done, and each coverage.md row it owns is proven by CI or, for a part that
-only a person can check, ticked with a dated Note pointing to ops/first-use-in-test.md.
+only a person can check, recorded with a dated Note pointing to ops/first-use-in-test.md.
 
 **Epic.**
 

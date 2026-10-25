@@ -41,7 +41,7 @@ only mentions the row. Confirm at refinement.
 These rows have one owner, but part of the row is delivered or can only be checked by a story forecast later than the
 owner's own stories. The owner is the feature that starts the row, in both releases (*How to read the tables*). Under
 README §2.3 rule 4 the owning feature, and so its epic, is not done until the whole row is proven by CI or its by-hand
-part is ticked with a dated Note (D90); the epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*).
+part is recorded with a dated Note (D90); the epics' real closing dates are in [releases.md](releases.md) (R1 *Epics*).
 The sprint numbers are the forecast in releases.md.
 
 | Row | Owner (own stories forecast) | Last contributing story (forecast) |
