@@ -6375,7 +6375,7 @@ weeks in production to invite staff and enter its configuration before cut-over.
 
 ```yaml
 id: T28
-status: new
+status: doing
 release: R1
 lane: D
 size: S
@@ -6407,6 +6407,29 @@ date, on a build that passed CI and was deployed to test.
 ### Notes
 
 - One of the two tasks that wait for a run sheet: `ops/go-live.md`, which T22 writes.
+
+### Plan
+
+- Outcome: documents only. A run sheet, `ops/go-live.md` section F (F1 the switch-over date, F2 the build, F3 the
+  restore test, F4 the gate, F5 the switch-over day), and the design and backlog text corrected to match. No code,
+  test, migration, SPA, copy key, audit event, script or workflow change.
+- Design: Q6 becomes A106 and Q12 becomes A107, assumed defaults the owner may overturn. The restore test is
+  `ops/restore-drill.md` run once before go-live, as A90 says: the known note and its history wait for the first
+  drill after go-live. F2 uses the last production deploy unless the owner wants a newer change live. F5's morning
+  check reuses `ops/restore-check.sql`: no note rows, configuration present, guide prompts seen on screen.
+- Domain: none. Note, Participant, Goal and CommonItem are read only; production holds no note before the switch-over
+  day, so the 30-minute onboarding runs in test with made-up data (A106).
+- Reuse: `restore-drill.md`, `restore-check.sql`, `restore-log.md` (kind quarterly, with *before go-live* and *copy
+  deleted* in the Result), go-live A5 and A9 for any deploy, T27's documents-only shape (D90).
+- Decisions where design.md is silent: the deploy rule at F2, the log naming, and the switch-over date, which the
+  owner and the managers set and the operator records at F1.
+
+### Verticals
+
+- v1: Docs: go-live.md section F, restore-drill.md and restore-log.md corrections; depends_on: none; R5 R6 R7 R8 R9
+  R12 R13 R17 R19 R20
+- v2: Docs: A106 and A107, S06.06.02 and S06.06.03, F06.06, F06.02, coverage, releases, tasks.md, first-use step 159,
+  microcopy and passkey-flows pointers, ops README; depends_on: v1; R1 R2 R3 R4 R10 R11 R14 R15 R16 R18
 
 ### Steps
 
