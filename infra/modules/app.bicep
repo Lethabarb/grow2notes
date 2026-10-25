@@ -22,8 +22,20 @@ param healthCheckPath string
 
 // App Service on Linux needs '__' in place of ':' in app setting names, so ConnectionStrings:Grow2Notes is passed as
 // ConnectionStrings__Grow2Notes, which ASP.NET Core reads back as the same key.
-@description('The app settings, by name. Every deploy replaces the whole set.')
+@description('The app settings, by name, other than the sender address. Every deploy replaces the whole set.')
 param appSettings { *: string }
+
+// Passed in by every deploy and never committed, because the address may contain the company's name (D42, D65). The
+// parameters files hold an empty placeholder, so a deploy that forgets it fails on this length at what-if, before any
+// change. It is checked here rather than in main.bicep, because there Bicep would refuse to build the parameters
+// files' placeholder.
+@description('The address the app sends email from, the Email:SenderAddress setting, written as it is on each message.')
+@minLength(3)
+param emailSenderAddress string
+
+var allAppSettings = union(appSettings, {
+  Email__SenderAddress: emailSenderAddress
+})
 
 resource plan 'Microsoft.Web/serverfarms@2025-03-01' = {
   name: 'asp-grow2notes-${environmentName}'
@@ -78,7 +90,7 @@ resource webApp 'Microsoft.Web/sites@2025-03-01' = {
       ftpsState: 'Disabled'
       healthCheckPath: healthCheckPath
       appSettings: [
-        for setting in items(appSettings): {
+        for setting in items(allAppSettings): {
           name: setting.key
           value: setting.value
         }
@@ -108,6 +120,9 @@ resource scmPublishingCredentials 'Microsoft.Web/sites/basicPublishingCredential
 
 @description('The web app\'s name, which the deploy step targets.')
 output webAppName string = webApp.name
+
+@description('The web app\'s resource ID, which alerts.bicep\'s alerts watch.')
+output webAppId string = webApp.id
 
 @description('The web app\'s default host name, <name>.azurewebsites.net, where it is reached and smoke-tested.')
 output defaultHostName string = webApp.properties.defaultHostName

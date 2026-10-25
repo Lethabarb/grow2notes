@@ -69,16 +69,14 @@ var monitoringMetricsPublisherRoleDefinitionId = subscriptionResourceId(
   '3913510d-42f4-4e42-8a64-420c390055eb'
 )
 
-// Sending email with Entra ID needs read and write on the Communication Services resource. This is the only built-in
-// Communication Services role; Contributor, the other built-in role Microsoft names for it, reaches every resource
-// type. This role also lets the app list keys and delete the group's Communication and Email resources, which it
-// never does.
-var communicationAndEmailServiceOwnerRoleDefinitionId = subscriptionResourceId(
+// Reading the secret values in the vault, which is the Resend API key the app sends email with (design.md §9.4, D92).
+// Read only: the app can neither store nor change a secret.
+var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId(
   'Microsoft.Authorization/roleDefinitions',
-  '09976791-48a7-449e-bb21-39d1a415f350'
+  '4633458b-17de-408a-b874-0445c86b69e6'
 )
 
-// The web app runs as this identity for SQL, Key Vault, telemetry and email (design.md §9.4). Its database access is a
+// The web app runs as this identity for SQL, Key Vault and telemetry (design.md §9.4). Its database access is a
 // database user that grant-identities.sql adds, not an Azure role.
 resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: 'id-grow2notes-${environmentName}-app'
@@ -86,13 +84,13 @@ resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-3
   tags: resourceGroup().tags
 }
 
-// Scoped to the group, because the vault, Application Insights and Communication Services are created later by
-// main.bicep, whose identity cannot assign roles (design.md §10.5).
+// Scoped to the group, because the vault and Application Insights are created later by main.bicep, whose identity
+// cannot assign roles (design.md §10.5).
 resource appIdentityRoleAssignments 'Microsoft.Authorization/roleAssignments@2022-04-01' = [
   for roleDefinitionId in [
     keyVaultCryptoServiceEncryptionUserRoleDefinitionId
     monitoringMetricsPublisherRoleDefinitionId
-    communicationAndEmailServiceOwnerRoleDefinitionId
+    keyVaultSecretsUserRoleDefinitionId
   ]: {
     name: guid(resourceGroup().id, appIdentity.id, roleDefinitionId)
     properties: {
@@ -103,10 +101,9 @@ resource appIdentityRoleAssignments 'Microsoft.Authorization/roleAssignments@202
   }
 ]
 
-// The built-in definition skips resources whose location is 'global', so Communication Services, its Email service, the
-// alert rules and the action group are still allowed, and it checks only resources that have a location, so budgets
-// and role assignments are not affected. Australia East is there only for geo-restore and the disaster-recovery
-// redeploy (design.md §10.7).
+// The built-in definition skips resources whose location is 'global', so the alert rules and the action group are still
+// allowed, and it checks only resources that have a location, so budgets and role assignments are not affected.
+// Australia East is there only for geo-restore and the disaster-recovery redeploy (design.md §10.7).
 resource allowedLocations 'Microsoft.Authorization/policyAssignments@2026-06-01' = {
   name: 'allowed-locations'
   properties: {

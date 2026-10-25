@@ -25,8 +25,9 @@ param backupStorageRedundancy = 'Local'
 param pointInTimeRestoreDays = 7
 
 // Placeholders only. Every deploy passes the real values as parameters, from the test environment's secrets, because
-// the object ID belongs to the operator's tenant and the address may contain the company's name (D42, D60, D64, D65);
-// sql.bicep and monitoring.bicep refuse them empty.
+// the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
+// sql.bicep, monitoring.bicep and app.bicep refuse them empty.
 param sqlAdminGroupName = ''
 param sqlAdminGroupObjectId = ''
 param alertEmail = ''
+param emailSenderAddress = ''
