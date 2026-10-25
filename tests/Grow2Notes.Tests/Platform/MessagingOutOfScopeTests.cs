@@ -14,18 +14,16 @@ namespace Grow2Notes.Tests.Platform;
 /// </summary>
 public sealed partial class MessagingOutOfScopeTests
 {
-    private const string EmailPackage = "Azure.Communication.Email";
-
-    // Words that mark a messaging package by its ID, in any case. Azure.Communication.Email is the one package that
-    // matches, and the one that is allowed.
+    // Words that mark a messaging package by its ID, in any case. No package matches: Resend is called over HTTP,
+    // without a package (D92).
     private static readonly string[] Denylist =
     [
         "sms", "push", "mail", "smtp", "mime", "sendgrid", "twilio", "vonage", "nexmo", "plivo", "messagebird", "sinch",
-        "firebase", "onesignal", "notificationhub", "pinpoint", "postmark", "apns",
+        "firebase", "onesignal", "notificationhub", "pinpoint", "postmark", "apns", "resend",
     ];
 
-    // The names of the mail libraries: the Azure package's namespace and .NET's own.
-    private static readonly string[] MailLibraries = [EmailPackage, "System.Net.Mail", "SmtpClient"];
+    // The names of the mail libraries: Resend's API address and .NET's own.
+    private static readonly string[] MailLibraries = ["api.resend.com", "System.Net.Mail", "SmtpClient"];
 
     private static readonly string[] SenderNames = ["IEmailSender", .. MailLibraries];
 
@@ -37,25 +35,24 @@ public sealed partial class MessagingOutOfScopeTests
         "Features/Users/UserEdit.cs",
         "Features/Users/UserInvite.cs",
         "Features/Users/UserSetupLink.cs",
-        "Platform/Email/CommunicationServicesEmailSender.cs",
         "Platform/Email/ConsoleEmailSender.cs",
         "Platform/Email/EmailNotSentException.cs",
         "Platform/Email/EmailSending.cs",
         "Platform/Email/IEmailSender.cs",
+        "Platform/Email/ResendEmailSender.cs",
     ];
 
     private static readonly string[] IgnoredFolders = ["bin", "obj", "node_modules", ".git"];
 
     [Fact]
-    public void No_package_is_a_messaging_service_and_Azure_Communication_Email_is_the_only_email_package()
+    public void No_package_is_a_messaging_service()
     {
         var (packages, sources) = PackageIds();
 
-        // The check finds the package that is allowed, so it reads the files that name packages.
-        Assert.True(packages.Contains(EmailPackage), $"{EmailPackage} was not found. Read: {sources}");
+        // The check finds packages, so it reads the files that name them.
+        Assert.True(packages.Count > 0, $"No package was found. Read: {sources}");
         Assert.DoesNotContain(
-            packages,
-            id => id != EmailPackage && Denylist.Any(word => id.Contains(word, StringComparison.OrdinalIgnoreCase)));
+            packages, id => Denylist.Any(word => id.Contains(word, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]

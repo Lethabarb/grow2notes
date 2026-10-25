@@ -30,7 +30,7 @@ var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 // settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
 builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
 
-// The setup-link email goes through Communication Services where it is configured, as in Azure, and to the console
+// The setup-link email goes through the email service where it is configured, as in Azure, and to the console
 // elsewhere (design.md §10.3). Its settings are read here, for the same reasons as the Key Vault settings below.
 builder.Services.AddEmailWhenConfigured(builder.Configuration);
 

@@ -1,10 +1,8 @@
-using System.Net;
-using System.Net.Http.Headers;
 using System.Reflection;
 using Azure;
 using Azure.Core;
-using Azure.Core.Pipeline;
 using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform.Email;
 using Microsoft.AspNetCore.Hosting;
@@ -15,21 +13,25 @@ namespace Grow2Notes.Tests.Platform.Email;
 
 /// <summary>
 /// Which email sender the app has (<see cref="EmailSending"/>), read from the app's own services. The tests host the
-/// app without a database, so they run without Docker, and send nothing to Communication Services: building its client
-/// and its credential calls nothing, and the one request made goes to a stand-in for it.
+/// app without a database, so they run without Docker, and read nothing from a vault and send nothing to Resend:
+/// building the vault's client and its credential calls nothing.
 /// </summary>
 public sealed class EmailSendingTests
 {
-    // No such resource exists, and nothing here sends to it.
-    private const string Endpoint = "https://acs-grow2notes-example.australia.communication.azure.com/";
+    // No such resource exists, and nothing here reads from it.
+    private const string VaultAddress = "https://kv-grow2notes-example.vault.azure.net/";
 
-    private const string SenderAddress = "DoNotReply@00000000-0000-0000-0000-000000000003.azurecomm.net";
+    private const string SecretUriKey = "Email:ApiKeySecretUri";
+
+    private const string SecretUri = VaultAddress + "secrets/resend-api-key";
+
+    private const string SenderAddress = "Grow2Notes <setup@example.org>";
 
     private const string ClientId = "00000000-0000-0000-0000-000000000001";
 
     private static readonly (string Key, string Value)[] Settings =
     [
-        ("Email:Endpoint", Endpoint),
+        (SecretUriKey, SecretUri),
         ("Email:SenderAddress", SenderAddress),
         ("ManagedIdentity:ClientId", ClientId),
     ];
@@ -38,7 +40,7 @@ public sealed class EmailSendingTests
     [Theory]
     [InlineData("Development")]
     [InlineData("Production")]
-    public async Task Without_an_endpoint_the_email_goes_to_the_console(string environment)
+    public async Task Without_an_api_key_secret_the_email_goes_to_the_console(string environment)
     {
         await using var app = new AppWithoutDatabase(environment);
 
@@ -46,61 +48,50 @@ public sealed class EmailSendingTests
     }
 
     [Fact]
-    public async Task With_an_endpoint_the_client_signs_in_as_the_app_identity_and_holds_no_key()
+    public async Task With_the_settings_the_key_is_read_from_Key_Vault_as_the_app_identity_and_no_key_is_held()
     {
         await using var factory = new AppWithoutDatabase("Production");
         await using var app = WithSettings(factory, Settings);
 
-        var sender = Assert.IsType<CommunicationServicesEmailSender>(app.Services.GetRequiredService<IEmailSender>());
+        var sender = Assert.IsType<ResendEmailSender>(app.Services.GetRequiredService<IEmailSender>());
 
-        // A client made from a connection string or a key holds an AzureKeyCredential instead.
         var reachable = Reachable(sender);
+        var secrets = Assert.Single(reachable.OfType<SecretClient>());
+        Assert.Equal(new Uri(VaultAddress), secrets.VaultUri);
+
+        // A client made from a key holds an AzureKeyCredential instead.
         var credential = Assert.IsType<ManagedIdentityCredential>(Assert.Single(
-            reachable, item => item is TokenCredential or AzureKeyCredential or AzureNamedKeyCredential));
+            Reachable(secrets), item => item is TokenCredential or AzureKeyCredential or AzureNamedKeyCredential));
         Assert.Equal($"ClientId {ClientId}", ManagedIdentities.IdentityOf(credential));
-        Assert.Contains(new Uri(Endpoint), reachable.OfType<Uri>());
+
+        // The sender holds where the key is, never the key.
+        Assert.Contains("resend-api-key", reachable.OfType<string>());
         Assert.Contains(SenderAddress, reachable.OfType<string>());
-    }
-
-    // Communication Services refuses a send over its limits with a 429 and a Retry-After, which the SDK's default
-    // retries would wait out 3 times, holding the request and its transaction open long past the SPA's 10-second
-    // timeout (T01's Notes). The client's own retry policy, in a pipeline to a stand-in for the service, sends once.
-    [Fact]
-    public async Task With_an_endpoint_the_client_tries_a_send_once_and_waits_5_seconds_at_most_for_its_answer()
-    {
-        await using var factory = new AppWithoutDatabase("Production");
-        await using var app = WithSettings(factory, Settings);
-        var sender = Assert.IsType<CommunicationServicesEmailSender>(app.Services.GetRequiredService<IEmailSender>());
-        var reachable = Reachable(sender);
-
-        var service = new ThrottlingService();
-        var pipeline = new HttpPipeline(
-            new HttpClientTransport(service), [Assert.Single(reachable.OfType<RetryPolicy>())]);
-        using var message = pipeline.CreateMessage();
-        message.Request.Uri.Reset(new Uri(Endpoint));
-        await pipeline.SendAsync(message, TestContext.Current.CancellationToken);
-
-        Assert.Equal((429, 1), (message.Response.Status, service.Requests));
-
-        // Azure.Core does not say publicly how long a client waits for an answer. Its internal ResponseBodyPolicy holds
-        // it, so this reads that; if an Azure.Core update moves it, the test fails rather than passing unchecked.
-        var responseBody = Assert.Single(
-            reachable, item => item.GetType().FullName == "Azure.Core.Pipeline.ResponseBodyPolicy");
-        var networkTimeout = responseBody.GetType()
-            .GetField("_networkTimeout", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(responseBody);
-        Assert.Equal(TimeSpan.FromSeconds(5), Assert.IsType<TimeSpan>(networkTimeout));
+        Assert.Contains(TimeSpan.FromSeconds(5), reachable.OfType<TimeSpan>());
     }
 
     [Theory]
     [InlineData("ManagedIdentity:ClientId")]
     [InlineData("Email:SenderAddress")]
-    public async Task An_endpoint_without_the_other_setting_stops_the_app_starting(string missing)
+    public async Task A_secret_uri_without_the_other_setting_stops_the_app_starting(string missing)
     {
         await using var factory = new AppWithoutDatabase("Production");
         await using var app = WithSettings(factory, [.. Settings.Where(setting => setting.Key != missing)]);
 
         var exception = Assert.Throws<InvalidOperationException>(() => app.Services);
-        Assert.Contains($"Email:Endpoint is set but {missing} is not", exception.Message);
+        Assert.Contains($"Email:ApiKeySecretUri is set but {missing} is not", exception.Message);
+    }
+
+    // An address with no secret in it is not where a key is.
+    [Fact]
+    public async Task A_setting_that_is_not_a_secret_uri_stops_the_app_starting()
+    {
+        await using var factory = new AppWithoutDatabase("Production");
+        await using var app = WithSettings(
+            factory,
+            [.. Settings.Where(setting => setting.Key != SecretUriKey), (SecretUriKey, VaultAddress)]);
+
+        Assert.ThrowsAny<ArgumentException>(() => app.Services);
     }
 
     // Host settings rather than app configuration: Program.cs reads these while it registers services, and
@@ -168,21 +159,5 @@ public sealed class EmailSendingTests
         }
 
         return reachable;
-    }
-
-    // Answers as Communication Services answers a send over its limits: 429, with when to try again, here a second, so
-    // that a client that retried would fail the test in moments rather than minutes.
-    private sealed class ThrottlingService : HttpMessageHandler
-    {
-        public int Requests { get; private set; }
-
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            Requests++;
-            var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
-            response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(1));
-            return Task.FromResult(response);
-        }
     }
 }
