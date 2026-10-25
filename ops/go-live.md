@@ -1,11 +1,11 @@
 # Go-live run sheet
 
 The operator's ordered run sheet for production, `https://app-grow2notes-prod.azurewebsites.net` (D91). It sets
-production up, checks it against design.md §10.1 before any real data goes in, tries its alerts and email, and lists
-the go-live lines of design.md §14. Nothing here is a work item or holds a task open (D90): every step is by hand, an
-agent never runs one, and each is the operator's or the owner's. The Azure subscription is shared with another
-production system, so every command here stays inside the two Grow2Notes resource groups, apart from the read-only
-Defender check in B.
+production up, checks it against design.md §10.1 before any real data goes in, tries its alerts, creates the
+provider's organisation and first manager, checks its email, and lists the go-live lines of design.md §14. Nothing here
+is a work item or holds a task open (D90): every step is by hand, an agent never runs one, and each is the operator's
+or the owner's. The Azure subscription is shared with another production system, so every command here stays inside
+the two Grow2Notes resource groups, apart from the read-only Defender check in B.
 
 Rules for everyone who works through it:
 
@@ -16,7 +16,7 @@ Rules for everyone who works through it:
   output: it holds IDs and addresses, which the repository never keeps (D60, D89). Never write down a key, a setup link,
   a token, a prefix, an ID or an address. A `fail` is written as one plain sentence and told to the developer.
 - Do the sections in order. A needs production not to exist yet; B to E assume A is done. C changes production on
-  purpose, so do it before any real use.
+  purpose, so do it before any real use. D puts the first real personal information in, so it comes after C, once.
 - Names: `rg-grow2notes-prod-ause`, `app-grow2notes-prod`, `sql-grow2notes-prod`, `sqldb-grow2notes`,
   `kv-grow2notes-prod`, `vnet-grow2notes-prod`, `id-grow2notes-prod-app` and `id-grow2notes-prod-deploy`
   ([break-glass.md](break-glass.md) lists them for the SSH console).
@@ -377,27 +377,126 @@ one.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
-## D. Email
+## D. The provider's organisation, first manager and email
 
-### D1. The first invite passes SPF, DKIM and DMARC
+The first manager's name and address are the first real personal information in production, so the operator does D with
+the owner after the gate in D1, and an agent never does. Results in D never name the provider, its first manager or
+anyone invited, and hold no address, phone number or link. Every step ends with the usual `Result:` line.
 
-At T27's first invite (the first manager's setup, S06.05.02), send the message to an address the operator reads and look
-at the received headers (Show original in Gmail, View message source in Outlook.com): `spf=pass`, `dkim=pass` and
-`dmarc=pass` in `Authentication-Results`, sent from the address in the `prod` environment's `EMAIL_SENDER_ADDRESS`,
-and the link in the text being the plain `https://app-grow2notes-prod.azurewebsites.net/setup#…` link, not a Resend
-tracking redirect. The first invite needs the first manager, so it cannot be sent earlier. (S06.05.01's fourth
-criterion.)
+### D1. The gate (read-only)
+
+(S06.05.02's first criterion, design.md §14 M6.) Every one of these must hold:
+
+- `ops/security-review.md` §3 reads `Open High/Critical: none`.
+- Its ZAP section (§6) records the baseline on test (first-use step 141) with no High alert open.
+- First-use step 142 (rate limits, on test) has passed, and the operator has recorded it in T25's Notes. The limits and
+  the client-address handling are in the app's code, not its settings, so a pass on test holds for production, which
+  runs a build that test has run (A5 above, design.md §10.4).
+- A1 to A11, B and C have passing Results, and A6's Result holds the owner's F-7 decision, so A6 and A9 come before D.
+- The owner confirms that no custom domain will be added before the first manager enrols (B10, A101, D91).
+
+If any one is missing: stop, run nothing below and tell the owner.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
-### D2. The passkey prompt
+### D2. Who the first manager is, and the organisation's name
 
-At T27's first enrolment, the first manager sets up with a passkey: the browser's prompt names
-`app-grow2notes-prod.azurewebsites.net` and not the parent company. (S06.05.01's third criterion, D91.)
+(S06.05.02's second criterion; A105, D74, D42, D72.) The provider's named contact gives you four values, in person or on
+a call you make to a number you already hold for the provider, never only by email or chat and never on a number given
+in a message:
+
+- the organisation's name, exactly as reports are to print it (200 characters or fewer);
+- the first manager's name (100 or fewer);
+- their email address (256 or fewer, with no account yet, A27);
+- their own mobile number.
+
+The owner and the operator each read the name for the parent company's name before the run, because no screen or
+command renames an organisation later and nothing deletes one. Keep the values only for the run. The mobile number is
+used once, in D4, and is recorded nowhere.
+
+Result: ____ (date), ____ (pass or fail), by ____ (name checked by: ____)
+
+### D3. The run
+
+(S06.05.02's second criterion; design.md §7.4.)
+
+1. Agree a time when the first manager has their own phone and about 15 minutes, in person with you or on a call you
+   make to D2's number. Have your phone's text messages working on the computer you will open the console on.
+2. At that time `https://app-grow2notes-prod.azurewebsites.net/healthz/ready` answers `200`. Open the SSH console of
+   `app-grow2notes-prod` and check its six settings ([break-glass.md, The SSH console](break-glass.md#the-ssh-console)).
+   Paste the block from [break-glass.md, Running it](break-glass.md#running-it), which is linked here and not copied,
+   and give it D2's three values.
+3. Before pressing Enter after the organisation name, read what you typed against D2's. If it differs, press Ctrl+C or
+   close the console tab, then start D3 again. Closing the tab is the sure stop. Either stops the block before the
+   command runs, and the same is true at the other two prompts.
+4. Look for one line starting `https://app-grow2notes-prod.azurewebsites.net/setup#u=` and then `Exit code: 0`. On
+   anything else, follow [break-glass.md, If it is refused or
+   fails](break-glass.md#if-it-is-refused-or-fails), and never run it again with another name or address.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
-### D3. Resend, checked by the owner
+### D4. The link to the first manager
+
+(S06.05.02's third criterion; A105.) Send it as [break-glass.md, The setup link](break-glass.md#the-setup-link) says:
+one text message to their own mobile, while you are with them or on a call you made to D2's number. Before they open
+it, tell them four things:
+
+- open it in the phone's browser, such as Safari or Chrome;
+- set up on their own phone, with a passkey or with a password and an authenticator app;
+- a screen that mentions "the link from your email" means this text message;
+- a screen saying the link has expired and to ask a manager means: tell you, because there is no other manager yet.
+
+Once they say the message has arrived, type `exit` and close the console tab. Look for them finishing setup and signing
+in on their phone. Then delete your copies as *The setup link* says. If the link is lost, or 7 days pass, use
+[admin reset-signin](break-glass.md#admin-reset-signin) once the provider's contact has confirmed the person again
+(D74), never a second bootstrap.
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### D5. The passkey prompt
+
+At the first passkey enrolment in production, normally the first manager's in D4, the browser's prompt names
+`app-grow2notes-prod.azurewebsites.net` and not the parent company. If the first manager chose an authenticator app,
+check it at the first person who enrols a passkey. (S06.05.01's third criterion, D91.)
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### D6. The Manage screens
+
+(S06.05.02's fourth criterion; A43.)
+
+- Signed in on their phone, the first manager opens Manage and finds Participants, Common items, Guide prompts and
+  Users. Common items shows Every note first, with no items yet. Users lists them as an Active manager.
+- Until a second manager is Active, a lost phone or passkey or a forgotten password is put right only with admin
+  reset-signin, after the provider confirms the person (A26, D74). So a second manager is best invited first.
+- Next, inside the three weeks before the switch-over, come the managers' lines 5 and 7 of E, which are not part of D.
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### D7. Production's first invite passes SPF, DKIM and DMARC
+
+(S06.05.01's fourth criterion; D92.) The setup does not send an email, so production's first email is the first invite
+a manager sends from Users after D6. Ask the person invited, before it is sent, whether they agree to this check.
+
+- With you beside them or on a call, they open the message's original (Show original in Gmail, View message source in
+  Outlook.com) and read out `Authentication-Results`. Look for `spf=pass`, `dkim=pass` and `dmarc=pass`.
+- Check that the sender is the address in the `prod` environment's `EMAIL_SENDER_ADDRESS`, that its display name and the
+  subject read Grow2Notes and not the parent company, and that the link starts
+  `https://app-grow2notes-prod.azurewebsites.net/setup#` and is not a Resend tracking redirect. They read out only the
+  start of the link.
+- If Users shows "Not sent: something went wrong. Try again.", nothing was saved: the manager tries again. If it keeps
+  failing, count it as a fail.
+- If they cannot open the original, use the next invite. Never invite an address of your own for this check: users
+  are never deleted, and one address has one account (design.md §4.11, A27).
+- On a fail, the managers send no more invites until the sender is put right, and you tell the owner and the developer.
+  The person keeps their Invited account, and a manager then uses Resend invite from Users for them, never a new
+  account.
+
+Write only pass or fail.
+
+Result: ____ (date), ____ (pass or fail), by ____
+
+### D8. Resend, checked by the owner
 
 The owner confirms, in Resend and with the provider (A102):
 
