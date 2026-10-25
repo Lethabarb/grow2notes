@@ -2320,6 +2320,7 @@ For every milestone:
 - The go-live checklist is complete and the switch-over date is recorded.
 
 ### Go-live checklist
+
 The production environment's own set-up and checks are the operator's run sheet, `ops/go-live.md`; its section E lists the lines below.
 
 - [ ] Privacy policy updated (APP 1, HPP 5): notes are now electronic, "held by our IT operator on Microsoft Azure in its Melbourne (Victoria) data centres, with backup copies in Sydney (New South Wales)" (HPP 9), and names Resend as the sub-processor that sends the setup-link email, which holds a staff member's address only and is not processed in Australia (A102), with the contact and timeframes for access and correction (30 days in practice; 45 days at most under the HRA).
