@@ -6443,7 +6443,7 @@ date, on a build that passed CI and was deployed to test.
 ### Steps
 
 - [x] Docs (#147; v1): `ops/go-live.md` section F (F1 to F5), the restore-drill.md and restore-log.md corrections.
-- [x] Docs (#PRV2; v2): A106 and A107, design.md §14 line 8, S06.06.02 and S06.06.03 done, F06.06, F06.02, coverage,
+- [x] Docs (#148; v2): A106 and A107, design.md §14 line 8, S06.06.02 and S06.06.03 done, F06.06, F06.02, coverage,
       releases, first-use steps 132 and 159, the microcopy and passkey-flows pointers, the ops README line, Q6 and Q12
       answered.
 
