@@ -1,6 +1,7 @@
--- Checks one environment's database after a deploy (design.md §9.3, §9.4, §10.6; S00.02.02's check in test). It only
--- reads: catalog views, two DMVs and the key ring table, and EXECUTE AS USER ... REVERT to see what each identity may
--- do. It creates, changes and deletes nothing, so it is safe to run as often as you like.
+-- Checks one environment's database when the operator runs it (ops/first-use-in-test.md, ops/go-live.md; design.md
+-- §9.3, §9.4, §10.6; S00.02.02's check in test). It only reads: catalog views, two DMVs and the key ring table, and
+-- EXECUTE AS USER ... REVERT to see what each identity may do. It creates, changes and deletes nothing, so it is safe
+-- to run as often as you like.
 --
 -- The first result set has one row per check, with PASS, FAIL or INFO, and a summary row at the end:
 --   A  id-grow2notes-<env>-app, which the web app runs as, is a member of grow2notes_runtime and of no other role, owns

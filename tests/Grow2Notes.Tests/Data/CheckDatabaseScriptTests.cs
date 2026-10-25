@@ -11,9 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Grow2Notes.Tests.Data;
 
 /// <summary>
-/// <c>infra/sql/check-database.sql</c>, which the operator runs after each deploy (ops/first-use-in-test.md), names
-/// what the migrations make in its B7, B8, D3 and D5 rows: the tables, the migrations and the role's denies, B7, B8 and
-/// D3 each with a count of its own. Nothing in CI runs the script, so these tests read it as text against the app's
+/// <c>infra/sql/check-database.sql</c>, which the operator runs when wanted (ops/first-use-in-test.md, ops/go-live.md),
+/// names what the migrations make in its B7, B8, D3 and D5 rows: the tables, the migrations and the role's denies, B7,
+/// B8 and D3 each with a count of its own. Nothing in CI runs the script, so these tests read it as text against the app's
 /// model and its migrations, neither of which opens a connection. A migration added without the script's rows, or a
 /// rebase that keeps both branches' lists but one branch's count, which git merges without a conflict where both
 /// branches made the same change to it, then fails here rather than as a FAIL row on the operator's screen. Each
