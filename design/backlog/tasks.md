@@ -6520,7 +6520,7 @@ collection notice, staff notice and hosting agreement, so its lawyer can start w
 
 ```yaml
 id: T30
-status: new
+status: done
 release: R2
 lane: A
 size: M
@@ -6548,10 +6548,101 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 
 - From here Release 2 runs one task after another in lane A, because each MCP tool edits the shared `tools/list`
   snapshot and tool matrix.
+- 26 October 2026, the AI scope: support workers who write notes get no AI feature anywhere (D48 amends D31; design.md's
+  *AI in the app* row says "never for workers"). The AI-assistant access this task starts is for managers and admins
+  editing their setup and options, and for the operator's Support account (D48, D50). The owner confirmed this on
+  26 October 2026. D48 already records it, so there is no new D-number.
+- 26 October 2026: Q9 and Q10 are answered by design.md A109 and A110, assumed defaults the owner may overturn. Spike
+  S07.01.03's eight answers are in mcp-server.md §13, each with its evidence. Question 5 (a loopback redirect URI on
+  any port) is verified: `RedirectUriMatchingTests` passed in CI (runs 40317532754 and 40325366855), so no gap goes
+  to S07.01.06.
+- A CI re-run of v4 showed `Add_by_client_ID_stores_one_public_client_and_writes_one_event_for_each_organisation`
+  comparing the stored `Properties` JSON as text; OpenIddict's property dictionary does not fix the key order, so the
+  test now compares the parsed objects (`JsonNode.DeepEquals`).
+- Where the design is silent, the developer chose the limits `McpClientId` 100 (OpenIddict's own column, pinned),
+  `McpAssistantName` 100 (as `DisplayName`), `McpCompany` 200 (as `OrganisationName`) and `McpDataLocation` 200.
+  They need no `limits.ts` entry, because the SPA has no form for them.
+- The off switch: no `Mcp:Enabled` setting means off, and `infra/main.bicep` defaults `mcpEnabled` to `false`.
+  Test is on through the committed `param mcpEnabled = true` in `infra/test.bicepparam`, because `deploy.yml` deploys
+  `main.bicep` with test's parameters after every successful CI run on `main`, and a setting changed by hand
+  would be replaced by the next deploy. `prod.bicepparam` is untouched until T39. The App Service setting is
+  `Mcp__Enabled`.
+- Authorise is refused until T31: with the switch on, OpenIddict validates `GET /oauth/authorize` and passes a valid
+  request on to the `/oauth/{**rest}` catch-all, which answers `404` with no `Location` and no code, so no code is
+  issued before T31's consent step (MA4), even in test. `/oauth/revoke` is `404` until T31 too.
+- The endpoint matrix has rows for routed endpoints only: the three catch-alls (`/oauth/{**rest}`,
+  `/.well-known/{**rest}`, `/mcp/{**rest}`), `NotFound` for every caller. OpenIddict answers its discovery and token
+  addresses inside `UseAuthentication`, so they are not in the endpoint data source; `AuthorisationServerTests` and
+  `McpOffSwitchTests` cover them.
+- The command's details where the design is silent (design.md A114 holds its checks): all argument checks come first,
+  then `App:Origin` (`add` only), then the one fetch, all before the transaction; the organisation read and the
+  client lookup run inside it, before any write. `add` is refused when the database has no organisation. A repeated
+  `add` always writes `_updated` and recomputes the permissions. A client ID that differs from an approved one only
+  in letter case is refused before any write, because the database ignores case; a redirect URI given twice is stored
+  once. `remove` of an unknown ID is refused; it needs no organisation check, because with none no client can exist.
+  `list` sorts in code by ordinal client ID, prints nothing when there are none and writes no audit event. The fetch
+  checks no `Content-Type`. A concurrent duplicate `add` is not caught: the unique index refuses it, its
+  transaction rolls back and the command exits non-zero, which suits one operator running it by hand.
+- Audit is per organisation: one event for each organisation, with no actor and no entity, as `admin.signout_all`
+  does, because an approved assistant serves every organisation's managers. `Details` is `{client, name}`.
+- The `/.well-known` rule: no tracked file has `.well-known` in its path and the SPA has no public folder, so the
+  catch-all hides nothing. Any future `/.well-known` file must be a specific route or a static asset, which wins over
+  the catch-all.
+- Hand-offs. T31: token passthrough that rebuilds the principal from the user row (MA3); `/oauth/revoke`, with its
+  advertised authentication methods also narrowed to `none`; make the `resource` parameter required;
+  `SetRefreshTokenReuseLeeway` of 15 seconds and the refresh token without `offline_access` (A112, A113); consent
+  asked on every connection without reading `ConsentType`, which is empty; `iss` on a successful code redirect; and
+  the consent endpoints added to `McpOffSwitchTests`. T32: validation with `UseDataProtection`;
+  `McpSetup.Issuer`, with its trailing slash, as the identical string in `authorization_servers`; and the `/mcp`
+  and protected-resource cases added to `McpOffSwitchTests` (its `POST /mcp` route is more specific than the
+  `/mcp/{**rest}` catch-all and takes over). T38: OpenIddict answers inside `UseAuthentication`, before
+  `UseRateLimiter`, so mcp-server.md §5.6's OAuth limits must be placed where OpenIddict cannot bypass them, and the
+  MCP Inspector by-hand check also covers how clients handle the issuer's trailing slash.
+- By hand: first-use steps 161 to 165, under *Approved assistants and discovery in test, once T30 is on main*. None of
+  them holds T30 open.
+
+### Plan
+
+- Outcome: server side only. OpenIddict 7.7.1 stores, the `Mcp:Enabled` off switch, the authorisation server's
+  discovery document and the operator command `admin mcp-client` (add, list, remove). No SPA, route, copy or limits.ts
+  change. The AI rule: support workers who write notes get no AI feature (D48); this access is for managers and admins
+  editing their setup and options (owner, 26 October 2026).
+- Design: `McpSetup.AddMcp` always registers OpenIddict core and the EF stores (Guid keys, entity caching off), so the
+  command works before switch-on. Only when `Mcp:Enabled` is true does it add the server: authorisation code with PKCE
+  S256 and refresh token only, `openid` and `plain` removed, ephemeral in-memory keys, Data Protection token format, no
+  JWKS, and one discovery handler adding `client_id_metadata_document_supported` and narrowing auth methods to `none`.
+  Three always-mapped 404 catch-alls (`/oauth`, `/.well-known`, `/mcp`) mean nothing is served off-switch and no code is
+  issued before T31's consent step. Test turns the switch on through a committed `mcpEnabled` Bicep parameter.
+- Domain: one expand-only migration, `AddOpenIddict` (four library tables, named exceptions to tenant isolation, no
+  participant data). Limits `McpClientId` 100, `McpAssistantName` 100, `McpCompany` 200, `McpDataLocation` 200. Three
+  operator audit events, one per organisation, no entity type.
+- Reuse: `AdminCommands` dispatch, `InTransactionAsync`, `SignOutAllCommand` audit shape, `AppOrigin`, the Data
+  Protection key ring, OpenIddict's managers (including `DeleteAsync` with children), the typed `HttpClient` pattern.
+- Decisions where design.md is silent: A109 (Q9) and A110 (Q10) accepted; A111 remove hard-deletes the registration;
+  A112 refresh token without `offline_access`; A113 reuse leeway 15 seconds; A114 the command's fetch and value checks
+  (no redirects, 64 KB, 30 s, plain-form URL, loopback literals, no control or format characters). Spike answers go in
+  mcp-server.md; question 5 stayed unverified until CI passed (verified: see Notes). Hand-offs to T31, T32 and T38
+  go in the Notes.
+- By hand: ops/first-use-in-test.md steps 161 to 165.
+
+### Verticals
+
+- v1: Foundation: OpenIddict stores, migration, `Mcp:Enabled` switch, 404 catch-alls, Bicep parameter; depends_on: none;
+  R01 R02 R07 R16
+- v2: Operator command `admin mcp-client` (add, list, remove) with audit; depends_on: v1;
+  R08 R09 R10 R11 R12 R13 R14 R15 R21
+- v3: Authorisation server behind the switch: discovery, PKCE-only flows, token no-store, no code before consent;
+  depends_on: v1; R03 R04 R05 R06 R22
+- v4: Docs, spike answers and backlog close-out; depends_on: v1, v2, v3; R17 R18 R19 R20 R23 R24 R25 R26
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Foundation (#152; v1): OpenIddict stores and migration, the `Mcp:Enabled` switch, the 404 catch-alls and the
+  Bicep parameter.
+- [x] Operator command (#155; v2): `admin mcp-client` add, list and remove, with audit.
+- [x] Authorisation server (#154; v3): discovery, PKCE-only flows, token no-store, no code before consent.
+- [x] Docs (#156; v4): design.md, mcp-server.md (spike answers), backlog, break-glass.md, first-use steps 161 to 165,
+  A109 to A114, Q9 and Q10 answered.
 
 ---
 
@@ -6584,7 +6675,7 @@ refused.
 
 ### Notes
 
-- Waits for owner question Q10, the Support option shipping before switch-on.
+- Owner question Q10, the Support option shipping before switch-on, is answered by design.md A110 (26 October 2026).
 
 ### Steps
 
@@ -6758,7 +6849,7 @@ gives a reason.
 ### Notes
 
 - Builds the MCP confirmation code that T37 reuses, and adds the through-MCP deactivate row to T32's access-ends test.
-  Waits for owner question Q9 (MA6).
+  Owner question Q9 (MA6) is answered by design.md A109 (26 October 2026).
 
 ### Steps
 
@@ -6906,14 +6997,8 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q11,
-Q12 and Q13 are answered (below). Each holds only the tasks named. Everything else still open in the specs is built
-as they say unless the owner says otherwise.
-
-- **Q9. Is confirming inside the assistant enough for the four access tools?** (mcp-server.md §12 Q4, MA6.) Blocks
-  T36 and T37. Suggested: yes, keep MA6: the assistant's own confirmation form where it has one, and preview then
-  confirm otherwise.
-- **Q10. The Support option shipping before switch-on.** Blocks T31. Suggested: accept it; no code is needed.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; all thirteen are answered (below). Everything
+else still open in the specs is built as they say unless the owner says otherwise.
 
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:
@@ -6957,6 +7042,13 @@ defaults, which the owner may overturn:
 - **Q11. The operator's AI provider and account type, and the provider's privacy contact** (T29): design.md A108, the
   owner names the operator's business AI account and the provider names its privacy contact, each on their own copy
   of `design/mcp-compliance-pack.md`, whose fields stay blank in the repository.
+
+**Answered on 26 October 2026 (T30).** The developer took the plan's suggested answers to two more questions as
+assumed defaults, which the owner may overturn:
+
+- **Q9. Is confirming inside the assistant enough for the four access tools?** (T36, T37; mcp-server.md §12 Q4, MA6):
+  design.md A109, yes: the assistant's own confirmation form where it has one, and preview then confirm otherwise.
+- **Q10. The Support option shipping before switch-on** (T31): design.md A110, accepted; no code is needed.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock

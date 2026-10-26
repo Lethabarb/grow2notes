@@ -469,9 +469,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 1 | Item 1: tool matrix (every tool by every caller and token case; the named Support cases; a tool with no row fails the build) | F07.02 | Every later tool adds its row (DoD) | |
 | 2 | Item 2: the no-note-content tests (architecture rule, contract allow-list and deny-list, canary over every tool, `tools/list` snapshot) | F07.02 | Every later tool joins them (DoD) | |
 | 3 | Item 3: separation of sign-in (cookie rejected at `/mcp`, bearer ignored at `/api`, the Origin rule, no CORS headers) | F07.02 | | |
-| 4 | Item 4: OAuth (unknown client refused with no outbound request; PKCE, redirect and resource refusals; `iss`; code replay; refresh reuse, 30 minutes, 12 hours; no role claim; auth method `none` only; discovery contents) | F07.01 | | |
+| 4 | Item 4: OAuth (unknown client refused with no outbound request; PKCE, redirect and resource refusals; `iss`; code replay; refresh reuse, 30 minutes, 12 hours; no role claim; auth method `none` only; discovery contents) | F07.01 | | The discovery part and the PKCE, redirect, resource and `iss` refusals are done in T30 (S07.01.04); the rest arrives with S07.01.06 to S07.01.08 |
 | 5 | Item 5: ending access (deactivation, reset, role change to worker, `admin signout-all`, registration removal: next call `401` and authorisations revoked) | F07.02 | | |
-| 6 | Item 6: consent (worker refused with `access_denied`; registered details and hosts shown; loopback warning; Allow under the production CSP; `Mcp:Enabled = false` gives `404`) | F07.01 | | |
+| 6 | Item 6: consent (worker refused with `access_denied`; registered details and hosts shown; loopback warning; Allow under the production CSP; `Mcp:Enabled = false` gives `404`) | F07.01 | | The `404` part is done for the addresses that exist (T30, `McpOffSwitchTests`); the rest arrives with S07.01.06 |
 | 7 | Item 7: rules through MCP (last-manager rule, Every note rules, `config.group_archived`, `config.order_mismatch`, stale `expectedVersion`, `changed: false` on repeats) | F07.03 | S07.04.04, S07.04.05 (the last-manager rule, repeated deactivation) | See *Rows to watch* |
 | 8 | Item 8: confirmation for each of the four tools (preview-then-confirm path and confirmation-form path) | F07.04 | | |
 | 9 | Item 9: audit (`"via": "mcp"` and `client` on every change event; `mcp.read` with the returned IDs; the Support reason) | F07.02 | | |
@@ -506,7 +506,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
 | 1 | MA1: only assistants the provider has approved can connect; the operator registers at written request and removes within one business day | F07.01 | | |
-| 2 | MA2: Client ID Metadata Document URLs as client IDs, accepted only once registered; read once by the operator command; pre-registration fallback; public clients with PKCE; no Dynamic Client Registration | F07.01 | | |
+| 2 | MA2: Client ID Metadata Document URLs as client IDs, accepted only once registered; read once by the operator command; pre-registration fallback; public clients with PKCE; no Dynamic Client Registration | F07.01 | | Partly done in T30: the command, the one fetch and the public clients with PKCE (S07.01.05); the sign-in side is S07.01.06 |
 | 3 | MA3: 10-minute access tokens with no role; rotating refresh tokens, 30 minutes sliding, refused 12 hours after sign-in | F07.01 | | |
 | 4 | MA4: the Connect an AI assistant screen on every connection, with the registered name, company, data location and hosts; consent not remembered | F07.01 | | |
 | 5 | MA5: no date of birth in any result | F07.02 | | |
@@ -515,5 +515,5 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 8 | MA8: every MCP call audited, look-ups included, naming the assistant that received the data | F07.02 | | |
 | 9 | MA9: rate limits, 60 requests a minute per user and 10 confirmed user changes an hour per user | F07.05 | | |
 | 10 | MA10: no IP restriction; an `Origin` header must match an approved assistant's HTTPS redirect origin; no CORS headers | F07.02 | | |
-| 11 | MA11: MCP off by default (`Mcp:Enabled = false`) until switch-on; turned off within one business day of the provider asking | F07.01 | S07.05.09 (switch-on) | |
+| 11 | MA11: MCP off by default (`Mcp:Enabled = false`) until switch-on; turned off within one business day of the provider asking | F07.01 | S07.05.09 (switch-on) | Partly done in T30: off unless set, `404` on every path; switch-on is S07.05.09 |
 | 12 | MA12: no edits to a user's name, email or role, and no reactivation, through MCP | F07.04 | | |

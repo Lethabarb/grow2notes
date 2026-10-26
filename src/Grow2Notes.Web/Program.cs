@@ -2,6 +2,8 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
+using Grow2Notes.Web.Features.Mcp;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Features.Reports;
@@ -33,6 +35,10 @@ builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
 // The setup-link email goes through the email service where it is configured, as in Azure, and to the console
 // elsewhere (design.md §10.3). Its settings are read here, for the same reasons as the Key Vault settings below.
 builder.Services.AddEmailWhenConfigured(builder.Configuration);
+
+// OpenIddict's stores are always registered, so the operator command for approved AI assistants works before the
+// feature is switched on; the authorisation server itself is added only where Mcp:Enabled is true (mcp-server.md §3.5).
+builder.Services.AddMcp(builder.Configuration);
 
 builder.Services.AddHealthEndpoints();
 
@@ -275,6 +281,16 @@ builder.Services.AddScoped<AdminCommands>();
 builder.Services.AddScoped<BootstrapCommand>();
 builder.Services.AddScoped<ResetSignInCommand>();
 builder.Services.AddScoped<SignOutAllCommand>();
+builder.Services.AddScoped<McpClientCommand>();
+
+// The one fetch that admin mcp-client makes, of an approved assistant's metadata document (mcp-server.md §11.2): it
+// follows no redirect, reads at most 64 KB and waits at most 30 seconds.
+builder.Services.AddHttpClient<ClientMetadataDocuments>(http =>
+    {
+        http.MaxResponseContentBufferSize = ClientMetadataDocuments.MaxBytes;
+        http.Timeout = ClientMetadataDocuments.Timeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's
@@ -426,6 +442,9 @@ api.MapAdminGroup()
 // every method, never the SPA page (design.md §6.1), and never a 401. It is outside the /api group, so the group's
 // filter never answers in its place.
 app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
+
+// The same for the paths of the AI-assistant access and its discovery documents, switched on or off.
+app.MapMcpFallbacks();
 
 // Client-side routes get index.html, for GET and HEAD. The default pattern skips paths with a file extension.
 app.MapFallbackToFile("index.html").AllowAnonymous();

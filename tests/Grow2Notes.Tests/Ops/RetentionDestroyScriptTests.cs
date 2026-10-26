@@ -30,6 +30,7 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
     [
         "Organisation", "AspNetUsers", "AspNetUserClaims", "AspNetUserLogins", "AspNetUserTokens",
         "AspNetUserPasskeys", "CommonItemGroup", "CommonItem", "AuditEvent", "DataProtectionKeys",
+        "OpenIddictApplications", "OpenIddictAuthorizations", "OpenIddictScopes", "OpenIddictTokens",
         "__EFMigrationsHistory",
     ];
 

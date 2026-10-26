@@ -58,7 +58,7 @@ internal sealed class BootstrapCommand(
             return await AdminCommands.RefuseAsync(error, problem, Usage);
         }
 
-        if (AdminCommands.FindOriginProblem(configuration) is { } originProblem)
+        if (AdminCommands.FindOriginProblem(configuration, "no setup link can be made.") is { } originProblem)
         {
             return await AdminCommands.RefuseAsync(error, originProblem, usage: null);
         }
