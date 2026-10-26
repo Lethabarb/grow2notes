@@ -6650,7 +6650,7 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 
 ```yaml
 id: T31
-status: new
+status: doing
 release: R2
 lane: A
 size: L
@@ -6676,6 +6676,40 @@ refused.
 ### Notes
 
 - Owner question Q10, the Support option shipping before switch-on, is answered by design.md A110 (26 October 2026).
+
+### Plan
+
+Planned 27 October 2026.
+
+- Outcome: a third role, Support, with one page and its own Sign out. Managers and Support people connect an approved
+  assistant on the Connect screen, and the token endpoint keeps it connected within the session limits. Workers are
+  refused. Nothing changes for the support workers who write notes. No table, migration or cache.
+- Design: `UserRole.Support = 3` (a tinyint value, so no migration; `dotnet ef` is never run). `Policies.SignedIn`
+  (Worker, Manager or Support, by name) is the only policy that admits Support, on me, logout, ping and
+  `/api/connect`. The authorise request and the decision travel as Data Protection tokens (10 minutes, the decision
+  bound to a hash of the query and the user). Allow and Cancel post to `/api/connect`, which answers a same-origin
+  `/oauth/authorize?...&decision=` address; OpenIddict then issues the code or `access_denied` with its own redirect, so
+  the CSP is unchanged. `/oauth/token` is a passthrough that rebuilds the principal from the user row.
+- Domain: `ConsentRequests`, `ConsentDecisions` and `AssistantTokens` (`PrincipalFor`, `Check`); audit events
+  `mcp.authorised` and `mcp.authorisation_refused`; access tokens 10 minutes, refresh tokens 30 minutes sliding with a
+  15-second reuse leeway; a changed user revokes by subject, the 12-hour limit only refuses.
+- Reuse: OpenIddict 7.7.1 for the protocol, `McpSetup` from T30, `SessionRules`, the Data Protection key ring,
+  `ManagerOnly`, `AccountPanel`'s sign-out (extracted as `useSignOut`), the general error screen and the existing test
+  fixtures.
+- Where the design is silent: the last-manager guard is `role != Manager`; Support copy, the Connect copy and the
+  not-single-use decision are recorded as assumed defaults A115 to A117; a seeded Support user is used in the shared
+  test database; with the switch off `/api/connect` is a 404 and `/connect` shows the general error.
+
+### Verticals
+
+- v1 | Server: the Support role, the SignedIn policy and the Support caller in the matrix | depends_on: none |
+  R01, R02, R06, R07, R08, R10, R11, R12, R13
+- v2 | SPA: Support role option, Support page and Sign out hook | depends_on: v1 | R03, R04, R05, R09, R14
+- v3 | Server: consent hand-off, Connect API, Allow and Cancel with audit | depends_on: v1 |
+  R16, R17, R22, R23, R26, R32
+- v4 | SPA: Connect an AI assistant screen | depends_on: v2, v3 | R15, R18, R19, R20, R21, R24, R35
+- v5 | Server tokens (code exchange, refresh, revocation), then docs and backlog close-out | depends_on: v1, v2, v3, v4 |
+  R25, R27, R28, R29, R30, R31, R33, R34, R36
 
 ### Steps
 
