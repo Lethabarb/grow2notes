@@ -71,6 +71,7 @@ internal static class McpSetup
     {
         server.SetAuthorizationEndpointUris("oauth/authorize")
             .SetTokenEndpointUris("oauth/token")
+            // OpenIddict serves a JWKS endpoint unless told otherwise; no issued token needs one.
             .SetJsonWebKeySetEndpointUris(Array.Empty<string>())
             .AllowAuthorizationCodeFlow()
             .AllowRefreshTokenFlow()

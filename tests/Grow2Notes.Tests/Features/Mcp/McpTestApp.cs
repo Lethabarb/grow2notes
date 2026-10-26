@@ -20,12 +20,15 @@ internal static class McpTestApp
 
     /// <summary>
     /// The app with <c>Mcp:Enabled</c> on, on a database that only the caller uses. <see cref="McpSetup.AddMcp"/> reads
-    /// the setting while the app is built, so it is a host setting and not a service.
+    /// the setting while the app is built, so it is a host setting and not a service. xUnit makes a new test class
+    /// instance for every test, and a database of a given name is reused, so the name gets a suffix that no other
+    /// test shares: each test registers its assistant on an empty database.
     /// </summary>
     public static async Task<WebApplicationFactory<Program>> OnDatabaseOfItsOwnAsync(
         this Grow2NotesFactory factory, SqlServerFixture sqlServer, string name)
     {
-        var connectionString = await sqlServer.CreateDatabaseAsync(name, TestContext.Current.CancellationToken);
+        var connectionString = await sqlServer.CreateDatabaseAsync(
+            $"{name}{Guid.NewGuid():N}", TestContext.Current.CancellationToken);
         return factory.WithWebHostBuilder(builder => builder
             .UseSetting(McpSetup.EnabledKey, "true")
             .ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(
