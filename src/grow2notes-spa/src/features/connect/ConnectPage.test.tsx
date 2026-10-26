@@ -173,7 +173,10 @@ describe('a manager or a Support account', () => {
       'Use only the Example Assistant account your organisation has approved. Only continue if you started this ' +
         'from Example Assistant yourself just now.',
     ]);
-    expect(within(main()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Allow', 'Cancel']);
+    const buttons = within(main()).getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]).toHaveAccessibleName('Allow');
+    expect(buttons[1]).toHaveAccessibleName('Cancel');
     expect(bodiesSent('GET')).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledWith('/api/connect?request=made-up-handle', expect.anything());
   });
@@ -228,15 +231,18 @@ describe('a manager or a Support account', () => {
       return json({ next })();
     });
     await renderApp(address);
+    // Once busy for 400 ms the button's visible text is its busy label, so it is no longer found by "Allow".
+    const allowButton = allow();
+    const cancelButton = cancel();
 
-    fireEvent.click(allow());
+    fireEvent.click(allowButton);
     await wait(500);
 
-    expect(allow()).toHaveAttribute('aria-disabled', 'true');
-    expect(allow()).toHaveAttribute('data-busy');
-    expect(cancel()).toHaveAttribute('aria-disabled', 'true');
-    expect(cancel()).not.toHaveAttribute('data-busy');
-    fireEvent.click(cancel());
+    expect(allowButton).toHaveAttribute('aria-disabled', 'true');
+    expect(allowButton).toHaveAttribute('data-busy');
+    expect(cancelButton).toHaveAttribute('aria-disabled', 'true');
+    expect(cancelButton).not.toHaveAttribute('data-busy');
+    fireEvent.click(cancelButton);
     expect(bodiesSent('POST')).toHaveLength(1);
 
     release();
@@ -298,7 +304,9 @@ describe('a worker', () => {
 
     expect(heading()).toHaveAccessibleName('Connect an AI assistant to Grow2Notes');
     expect(sentences()).toEqual(['Only managers can connect an AI assistant to Grow2Notes.']);
-    expect(within(main()).getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel']);
+    const buttons = within(main()).getAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName('Cancel');
     expect(screen.queryByText(/Example Assistant/)).not.toBeInTheDocument();
   });
 
