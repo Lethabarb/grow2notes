@@ -586,9 +586,10 @@ below:
 - [ ] **R1 admin stories** (E00 users, E01 configuration): follows mcp-server.md §3.5: handler class with acting user
   and channel; explicit enum values; audit `Details` accepts extra keys.
 - [ ] **Rules everywhere:** dates through `TimeProvider` in Australia/Melbourne, stored as UTC (A33); no delete
-  endpoint or hard delete, archive instead (A29); new responses carry the design.md §9.7 headers, and API responses
-  carry `Cache-Control: no-store` (design.md §6.1); new tenant-owned entities implement `ITenantOwned`; no
-  `IgnoreQueryFilters` outside the operator commands (design.md §5.9).
+  endpoint or hard delete, archive instead (A29) (A111: an approved assistant's registration is the one exception);
+  new responses carry the design.md §9.7 headers, and API responses carry `Cache-Control: no-store` (design.md §6.1);
+  new tenant-owned entities implement `ITenantOwned`; no `IgnoreQueryFilters` outside the operator commands
+  (design.md §5.9).
 - [ ] **Accessibility:** the changed parts meet WCAG 2.2 AA (A32). Automated checks find only part of WCAG (about 57%
   of issues by volume in Deque's own study [37, Vendor]), but under the owner's rule the Playwright run in CI is the
   evidence (A98), so the story's tests include:
