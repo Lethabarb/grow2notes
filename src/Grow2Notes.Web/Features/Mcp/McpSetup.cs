@@ -1,9 +1,11 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.OpenIddictServerEvents;
+using static OpenIddict.Server.OpenIddictServerHandlers.Authentication;
 using static OpenIddict.Server.OpenIddictServerHandlers.Discovery;
 
 namespace Grow2Notes.Web.Features.Mcp;
@@ -39,6 +41,11 @@ internal static class McpSetup
 
     public static IServiceCollection AddMcp(this IServiceCollection services, IConfiguration configuration)
     {
+        // The consent step's classes are registered whether or not the access is on: the handler writes audit events
+        // that a test calls on an app with the access off.
+        services.AddScoped<ConsentRequests>();
+        services.AddScoped<ConsentDecisions>();
+
         var openIddict = services.AddOpenIddict();
 
         // The stores save through the scoped Grow2NotesDbContext, so the operator command's changes join its
@@ -64,9 +71,10 @@ internal static class McpSetup
     }
 
     // Only the authorize and token endpoints exist: no JWKS, revocation or other endpoint. A code is exchanged with
-    // PKCE S256 alone, by a public client, and no identity token is ever issued, so openid is not a scope. Tokens are
-    // in Data Protection format on the app's key ring; the two keys OpenIddict will not start without are made in
-    // memory at each start and protect nothing that is issued.
+    // PKCE S256 alone, by a public client, and no identity token is ever issued, so openid is not a scope. Responses
+    // go in the query only, so no page has to post a form under the CSP. Tokens are in Data Protection format on the
+    // app's key ring; the two keys OpenIddict will not start without are made in memory at each start and protect
+    // nothing that is issued.
     private static void AddAuthorisationServer(OpenIddictServerBuilder server)
     {
         server.SetAuthorizationEndpointUris("oauth/authorize")
@@ -80,15 +88,37 @@ internal static class McpSetup
             {
                 options.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain);
                 options.Scopes.Remove(Scopes.OpenId);
+                options.ResponseModes.Remove(ResponseModes.FormPost);
+                options.ResponseModes.Remove(ResponseModes.Fragment);
             })
             .RegisterScopes(AdminScope, Scopes.OfflineAccess)
             .AddEphemeralEncryptionKey()
             .AddEphemeralSigningKey()
             .UseDataProtection();
 
-        // The authorize request is validated by OpenIddict and then passed on, to the 404 of /oauth/{**rest}, until
-        // the consent step takes it, so no code can be issued without consent.
-        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
+        // The authorize request is validated by OpenIddict and then passed on to AuthoriseEndpoint, so no code can be
+        // issued without consent. An error with no redirect URI that OpenIddict can use goes there too, instead of
+        // OpenIddict's own error page; one with a validated redirect URI is still sent to it, with iss.
+        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough().EnableErrorPassthrough();
+
+        // An assistant is sent back to a state it chose and a resource it asked for (RFC 8707), and it must tell the
+        // person's browser apart from any other, so the request must hold exactly one resource and a state. It runs
+        // after the built-in checks, so the redirect URI is validated and the refusal can be sent to it.
+        server.AddEventHandler<ValidateAuthorizationRequestContext>(handler => handler
+            .UseInlineHandler(context =>
+            {
+                if (string.IsNullOrEmpty(context.Request.State))
+                {
+                    context.Reject(Errors.InvalidRequest, "The state parameter is required.");
+                }
+                else if (context.Request.Resources?.Count() != 1)
+                {
+                    context.Reject(Errors.InvalidRequest, "Exactly one resource parameter is required.");
+                }
+
+                return default;
+            })
+            .SetOrder(ValidateAuthorizedParty.Descriptor.Order + 1_000));
 
         // OpenIddict 7.7.1 has neither a way to advertise client ID metadata documents nor a way to leave out the
         // client authentication methods it advertises: every approved assistant is a public client.
@@ -101,6 +131,17 @@ internal static class McpSetup
                 return default;
             })
             .SetOrder(AttachAdditionalMetadata.Descriptor.Order + 1_000));
+    }
+
+    /// <summary>
+    /// Maps the endpoints of the consent step, which exist only where the access is switched on: the authorise
+    /// endpoint, and the Connect screen's two in the <c>/api</c> group, <paramref name="api"/>. Where it is off they
+    /// are unmapped, so each falls to a 404 catch-all.
+    /// </summary>
+    public static void MapMcpEndpoints(this WebApplication app, RouteGroupBuilder api)
+    {
+        app.MapAuthoriseEndpoint();
+        api.MapConnectEndpoints();
     }
 
     /// <summary>
