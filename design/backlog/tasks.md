@@ -6453,7 +6453,7 @@ date, on a build that passed CI and was deployed to test.
 
 ```yaml
 id: T29
-status: new
+status: done
 release: R2
 lane: B
 size: S
@@ -6473,12 +6473,46 @@ collection notice, staff notice and hosting agreement, so its lawyer can start w
 
 ### Notes
 
-- A documents-only pull request. Sending the pack is a step on `ops/mcp-switch-on.md`, which T38 writes. Runs beside
-  T30.
+- A documents-only pull request. Sending the pack is first-use step 160 (README §9 *Document enabler*, D90);
+  `ops/mcp-switch-on.md`, which T38 writes, may point to it. Runs beside T30.
+- 26 October 2026: Q11 is answered by design.md A108, an assumed default the owner may overturn.
+- 26 October 2026: where the design is silent, the developer chose the pack's place (`design/mcp-compliance-pack.md`,
+  beside mcp-server.md, so ops/README.md is unchanged) and one field form, square brackets filled in only on a copy
+  outside the repository (A108). §7.4's example for `[AI providers]` moved to the pack's field list so all three texts
+  share one form, and the pack defines its terms for a reader without the design. §7.1's reasons column and worked
+  examples are left out: the examples name AI providers and are not answers. §7.5's Support accounts are a
+  `[Support account holders]` field. The amendments keep §7.5's words with no clause numbers, because the hosting
+  agreement is not in the repository (design.md §14). They name only the operator's own AI provider, so S07.05.10
+  fills `[AI providers]` and `[countries]` in the three §7.4 texts only. There is no next-check-due field: the
+  quarterly repeat is the operator's ongoing work (§11.5).
+- 26 October 2026, judgment call: done means the pack is merged, as for T28. S07.05.06 and S07.05.07 are done with
+  their by-hand criteria unticked (D90).
+- 26 October 2026, by hand: first-use step 160.
+
+### Plan
+
+- Outcome: documents only. `design/mcp-compliance-pack.md` (part 1 the operator's §7.1 check as fields, part 2 the
+  three §7.4 texts, part 3 the six §7.5 amendments), first-use step 160 and A108. No code, test, migration, SPA, copy
+  key, audit event, script or workflow change.
+- Design: Q11 becomes A108, an assumed default the owner may overturn. Every field is in square brackets and is
+  filled in only on a copy kept outside the repository; the pack defines its terms and cites mcp-server.md sections
+  only. It covers the AI-assistant access for managers and the Support person, never the support workers who
+  write notes, and no AI assistant ever receives progress notes.
+- Domain: none. The pack copies mcp-server.md's wording; nothing is stored in the app.
+- Reuse: mcp-server.md §7.1, §7.4 and §7.5; go-live.md E's own-copy rule; T28's documents-only shape (D90).
+- Decisions where the design is silent: the pack's place, the field form, the `[Support account holders]` field, and
+  amendments without clause numbers.
+
+### Verticals
+
+- v1: Docs: the pack; depends_on: none; R1 R2 R3 R4 R6 R7 R8 R9 R10 R11 R12 R13 R14 R17
+- v2: Docs: first-use step 160, A108, Q11, tasks.md and F07.05 (S07.05.06 and S07.05.07 done, S07.05.10's Note);
+  depends_on: v1; R5 R15 R16 R18
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Docs (#150; v1): `design/mcp-compliance-pack.md` parts 1 to 3.
+- [x] Docs (#151; v2): first-use step 160, A108, Q11 answered, S07.05.06 and S07.05.07 done, S07.05.10's Note.
 
 ---
 
@@ -6872,16 +6906,14 @@ Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `sta
 
 ## Open owner questions
 
-Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q12 and
-Q13 are answered (below). Each holds only the tasks named. Everything else still open in the specs is built as they
-say unless the owner says otherwise.
+Numbered as in the condensed plan the owner agreed on 14 October 2026; Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q11,
+Q12 and Q13 are answered (below). Each holds only the tasks named. Everything else still open in the specs is built
+as they say unless the owner says otherwise.
 
 - **Q9. Is confirming inside the assistant enough for the four access tools?** (mcp-server.md §12 Q4, MA6.) Blocks
   T36 and T37. Suggested: yes, keep MA6: the assistant's own confirmation form where it has one, and preview then
   confirm otherwise.
 - **Q10. The Support option shipping before switch-on.** Blocks T31. Suggested: accept it; no code is needed.
-- **Q11. The operator's AI provider and account type, and the provider's privacy contact.** Blocks T29. Suggested:
-  the owner names the business AI account the operator will use, and the provider names its privacy contact.
 
 **Answered on 14 October 2026.** The developer took the plan's suggested answers to three questions as assumed
 defaults, which the owner may overturn:
@@ -6911,7 +6943,7 @@ defaults (T23), which the owner may overturn:
   address is operator-supplied configuration (A100). Verifying a sending domain in Resend is the owner's by-hand step.
   Communication Services is removed, and A58's test sender is superseded.
 
-**Answered on 26 October 2026.** The developer took the plan's suggested answers to three questions as assumed
+**Answered on 26 October 2026.** The developer took the plan's suggested answers to four questions as assumed
 defaults, which the owner may overturn:
 
 - **Q8. How the first manager gets their setup link** (T27): design.md A105, the printed link given by the operator to
@@ -6922,6 +6954,9 @@ defaults, which the owner may overturn:
   pilot unless the owner asks.
 - **Q12. Do the by-hand accessibility checks hold go-live?** (T28): design.md A107, no: they are by-hand steps on
   ops/first-use-in-test.md, which hold nothing open, and any failure becomes a bug.
+- **Q11. The operator's AI provider and account type, and the provider's privacy contact** (T29): design.md A108, the
+  owner names the operator's business AI account and the provider names its privacy contact, each on their own copy
+  of `design/mcp-compliance-pack.md`, whose fields stay blank in the repository.
 
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
