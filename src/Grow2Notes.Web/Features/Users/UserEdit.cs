@@ -44,9 +44,9 @@ internal sealed class UserEdit(
     /// it, before the user is looked for, or, for an address that Identity finds is not one or cannot be a user name,
     /// as it saves; <see cref="UserChangeResult.NotFound"/>, or <see cref="ErrorCode.PreconditionRequired"/> or
     /// <see cref="ErrorCode.PreconditionFailed"/> for the version, as <see cref="UserChanges.ChangeAsync"/> gives
-    /// them; <see cref="ErrorCode.LastManager"/> to make a worker of, or give a new address to, the organisation's only
-    /// Active manager, the actor themselves among them (A26); <see cref="ErrorCode.EmailInUse"/> for an address that
-    /// another account holds, in any organisation and any letter case (A27); or
+    /// them; <see cref="ErrorCode.LastManager"/> to make a worker or Support of, or give a new address to, the
+    /// organisation's only Active manager, the actor themselves among them (A26); <see cref="ErrorCode.EmailInUse"/> for
+    /// an address that another account holds, in any organisation and any letter case (A27); or
     /// <see cref="ErrorCode.PreconditionFailed"/> when the user changed after they were loaded. A refusal changes,
     /// writes and sends nothing.
     /// </returns>
@@ -80,7 +80,7 @@ internal sealed class UserEdit(
 
             // Compared normalised, as Identity compares addresses, so a change of letter case alone is no new address.
             var isNewAddress = users.NormalizeEmail(email) != user.NormalizedEmail;
-            if ((isNewAddress || role == UserRole.Worker) && await lastManager.IsOnlyActiveManagerAsync(user, ct))
+            if ((isNewAddress || role != UserRole.Manager) && await lastManager.IsOnlyActiveManagerAsync(user, ct))
             {
                 return UserChangeResult.Refused(ErrorCode.LastManager);
             }
