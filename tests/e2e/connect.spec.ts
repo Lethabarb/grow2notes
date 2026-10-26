@@ -108,11 +108,17 @@ test('with the keyboard alone, Tab reaches Allow and then Cancel', async ({ page
 });
 
 test('Allow ends at the assistant’s address, under the production Content Security Policy', async ({ page }) => {
-  // The server's answer to the navigation: a redirect to the assistant, which a stand-in answers. Set up before the
-  // page opens, so that nothing the page does can come first.
+  // The server's answer to the navigation leads to the assistant, which a stand-in answers. The request that follows a
+  // 302 given by route.fulfill was not routed in CI, so the real name lookup of assistant.example failed. The stand-in
+  // for the server therefore answers with a page that moves on to the assistant's address, a request of its own that
+  // the second route answers. Both are set up before the page opens, so that nothing the page does can come first.
   await page.route(
     (url) => url.pathname === '/oauth/authorize',
-    (route) => route.fulfill({ status: 302, headers: { location: callback } }),
+    (route) =>
+      route.fulfill({
+        contentType: 'text/html',
+        body: `<!doctype html><title>Authorising</title><script>location.replace(${JSON.stringify(callback)})</script>`,
+      }),
   );
   await page.route(
     (url) => url.hostname === 'assistant.example',
