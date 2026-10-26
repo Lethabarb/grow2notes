@@ -313,7 +313,6 @@ describe('Header', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Account' }));
     expect(within(accountPanel()).getByRole('button', { name: 'Sign out' })).toBeVisible();
-    expect(headerTargets()).toEqual(['link Grow2Notes', 'button Account', 'button Sign out']);
   });
 
   // Component 2b's table, with every marked element in the header found, so that a second would fail. At

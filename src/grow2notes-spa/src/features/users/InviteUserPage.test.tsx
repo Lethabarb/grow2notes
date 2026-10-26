@@ -528,6 +528,7 @@ describe('Invite user, sending', () => {
 
     fireEvent.click(supportRadio());
     pressSend();
+    await settle();
 
     expect(supportRadio()).toBeChecked();
     expect(invitesSent()).toEqual([{ displayName: 'Alex Park', email: 'alex.park@example.org', role: 'Support' }]);
