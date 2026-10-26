@@ -434,7 +434,7 @@ public sealed class ConnectTests(Grow2NotesFactory factory, SqlServerFixture sql
 
         using var response = await client.GetAsync(
             "/oauth/authorize?"
-                + McpTestApp.AuthorizeQuery("https://evil.example/ a b", RedirectUri),
+                + McpTestApp.AuthorizeQuery("https://evil.example/2028a2029b", RedirectUri),
             Ct);
 
         AssertSentToTheConnectScreen(response);
