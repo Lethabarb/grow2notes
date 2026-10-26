@@ -6676,6 +6676,9 @@ refused.
 ### Notes
 
 - Owner question Q10, the Support option shipping before switch-on, is answered by design.md A110 (26 October 2026).
+- The Connect screen stays locked once Allow or Cancel has been answered, as the page is on its way to the assistant. If
+  the browser restores it from its back/forward cache when the person presses Back, both buttons are still disabled and
+  a reload shows the screen again (the request has usually expired by then). Accepted as the simplest option.
 
 ### Plan
 

@@ -91,23 +91,25 @@ test('the views say what each person needs to read', async ({ page }) => {
 test('with the keyboard alone, Tab reaches Allow and then Cancel', async ({ page }) => {
   await openAs(page, manager);
 
-  // The wordmark and Account come first, and Allow is the next stop after them.
-  for (let tabs = 0; tabs < 5; tabs += 1) {
-    if (await allow(page).evaluate((button) => button === document.activeElement)) {
-      break;
-    }
-
+  // The skip link, the wordmark, the manager's main navigation and Account come before Allow, so Tab until it has the
+  // focus, within a bound that is well past those stops.
+  const maxStops = 20;
+  const isAllowFocused = () => allow(page).evaluate((button) => button === document.activeElement);
+  let stops = 0;
+  while (stops < maxStops && !(await isAllowFocused())) {
     await page.keyboard.press('Tab');
+    stops += 1;
   }
 
+  expect(stops, `Tab reached Allow within ${maxStops} stops`).toBeLessThan(maxStops);
   await expect(allow(page)).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(cancel(page)).toBeFocused();
 });
 
 test('Allow ends at the assistant’s address, under the production Content Security Policy', async ({ page }) => {
-  await openAs(page, manager);
-  // The server's answer to the navigation: a redirect to the assistant, which a stand-in answers.
+  // The server's answer to the navigation: a redirect to the assistant, which a stand-in answers. Set up before the
+  // page opens, so that nothing the page does can come first.
   await page.route(
     (url) => url.pathname === '/oauth/authorize',
     (route) => route.fulfill({ status: 302, headers: { location: callback } }),
@@ -116,10 +118,15 @@ test('Allow ends at the assistant’s address, under the production Content Secu
     (url) => url.hostname === 'assistant.example',
     (route) => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Assistant</title>' }),
   );
+  await openAs(page, manager);
 
+  const authorised = page.waitForRequest((request) => new URL(request.url()).pathname === '/oauth/authorize');
   await allow(page).click();
 
-  await page.waitForURL(callback);
+  const request = await authorised;
+  expect(request.url().endsWith(authoriseAddress), 'Allow went to the address that the server gave').toBe(true);
+  // A function, as a string would be read as a glob, in which '?' stands for any character.
+  await page.waitForURL((url) => url.href === callback);
   expect(page.url()).toBe(callback);
   // A violation is a console error, which fixtures.ts fails the test on.
 });
