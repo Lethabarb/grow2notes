@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Web.Data;
@@ -14,12 +15,12 @@ namespace Grow2Notes.Web.Features.Mcp.OAuth;
 
 /// <summary>
 /// <c>admin mcp-client</c> (mcp-server.md §11.2, design.md §7.4): approves an AI assistant by registering it as a
-/// public OpenIddict client, lists the approved assistants, and removes one with its authorisations and tokens. It works
-/// whether or not <c>Mcp:Enabled</c> is on, because OpenIddict's core and stores are always registered. Every check, and
-/// the one fetch of a metadata document, comes before the transaction, so that a refused run has written nothing and a
-/// retried transaction never fetches again. The registration change and one <c>admin.mcp_client_*</c> event for each
-/// organisation commit together, and the result is printed once they have. It logs nothing, because the output holds
-/// the result and nothing else.
+/// public OpenIddict client, lists the approved assistants, and removes one with its authorisations and tokens. It
+/// works whether or not <c>Mcp:Enabled</c> is on, because OpenIddict's core and stores are always registered. Every
+/// check, and the one fetch of a metadata document, comes before the transaction, so that a refused run has written
+/// nothing and a retried transaction never fetches again. The registration change and one
+/// <c>admin.mcp_client_*</c> event for each organisation commit together, and the result is printed once they have.
+/// It logs nothing, because the output holds the result and nothing else.
 /// </summary>
 internal sealed class McpClientCommand(
     Grow2NotesDbContext db,
@@ -52,6 +53,8 @@ internal sealed class McpClientCommand(
         (CompanyOption, Limits.McpCompany),
         (DataLocationOption, Limits.McpDataLocation),
     ];
+
+    private static readonly string[] LoopbackHosts = ["127.0.0.1", "[::1]", "localhost"];
 
     private static readonly string[] OtherOptions = [MetadataUrlOption, ClientIdOption, RedirectUriOption];
 
@@ -404,7 +407,9 @@ internal sealed class McpClientCommand(
         }
 
         problem = redirectUris.Select(uri => RedirectUriProblem(uri!)).FirstOrDefault(found => found is not null);
-        if (problem is null && document["token_endpoint_auth_method"] is { } method && Text(method) != "none")
+        if (problem is null
+            && document.TryGetPropertyValue("token_endpoint_auth_method", out var method)
+            && Text(method) != "none")
         {
             problem = "The document's token_endpoint_auth_method is not none.";
         }
@@ -440,18 +445,40 @@ internal sealed class McpClientCommand(
             { UserInfo.Length: > 0 } => $"The redirect URI \"{value}\" has user information.",
             _ when value.Contains('#') => $"The redirect URI \"{value}\" has a fragment.",
             { Scheme: "https" } => null,
-            { Scheme: "http" } when IsLoopback(uri) => null,
+            { Scheme: "http" } when IsLoopback(value) => null,
             _ => $"The redirect URI \"{value}\" must be https, or http on 127.0.0.1, [::1] or localhost.",
         };
     }
 
-    // Uri.IsLoopback is not used, as it also accepts "loopback" and all of 127.0.0.0/8 (RFC 8252 §7.3).
-    private static bool IsLoopback(Uri uri) => uri.Host is "127.0.0.1" or "[::1]" or "localhost";
+    // Decided on the host as it is written, since Uri turns "loopback" into "localhost" and other spellings into
+    // 127.0.0.1, and Uri.IsLoopback accepts all of 127.0.0.0/8: RFC 8252 §7.3 names these three hosts only.
+    private static bool IsLoopback(string value)
+    {
+        var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd < 0)
+        {
+            return false;
+        }
+
+        var authority = value[(schemeEnd + 3)..];
+        var end = authority.IndexOfAny(['/', '?', '#']);
+        if (end >= 0)
+        {
+            authority = authority[..end];
+        }
+
+        var host = authority.StartsWith('[')
+            ? authority[..(authority.IndexOf(']') + 1)]
+            : authority.Split(':')[0];
+        return LoopbackHosts.Contains(host, StringComparer.OrdinalIgnoreCase);
+    }
 
     // Controls include ANSI escapes, and formatting characters include the bidirectional overrides: neither belongs in
-    // a value that is stored and printed.
+    // a value that is stored and printed. Runes, not chars, so that the invisible tag characters, which are outside the
+    // basic plane, are found too.
     private static bool HasControlOrFormat(string value) =>
-        value.Any(c => char.GetUnicodeCategory(c) is UnicodeCategory.Control or UnicodeCategory.Format);
+        value.EnumerateRunes().Any(
+            rune => Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format);
 
     private static OpenIddictApplicationDescriptor Describe(Registration registration, string resource)
     {
@@ -480,7 +507,7 @@ internal sealed class McpClientCommand(
         };
 
         // Native turns on OpenIddict's loopback matching, which ignores the port. Nothing reads "web".
-        if (registration.RedirectUris.Any(uri => IsLoopback(new Uri(uri))))
+        if (registration.RedirectUris.Any(uri => IsLoopback(uri)))
         {
             descriptor.ApplicationType = ApplicationTypes.Native;
         }

@@ -48,16 +48,19 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
     // The refusals that are found before anything is fetched or written, each with the words of its reason.
     public static TheoryData<string[], string> ArgumentRefusals { get; } = new()
     {
-        { [], "No subcommand was given." },
-        { ["register"], "\"register\" is not a subcommand of admin mcp-client." },
-        { ["list", "everything"], "list takes no arguments" },
-        { ["remove"], "No client ID was given." },
-        { ["remove", "one", "two"], "remove takes one client ID" },
-        { ["remove", "unknown-assistant"], "No approved assistant has the client ID \"unknown-assistant\"." },
+        { ["mcp-client"], "No subcommand was given." },
+        { ["mcp-client", "register"], "\"register\" is not a subcommand of admin mcp-client." },
+        { ["mcp-client", "list", "everything"], "list takes no arguments" },
+        { ["mcp-client", "remove"], "No client ID was given." },
+        { ["mcp-client", "remove", "one", "two"], "remove takes one client ID" },
+        {
+            ["mcp-client", "remove", "unknown-assistant"],
+            "No approved assistant has the client ID \"unknown-assistant\"."
+        },
         { [.. ById(), "--client-id", "other"], "--client-id is given more than once." },
         { [.. ById(), "--colour", "red"], "\"--colour\" is not an option of admin mcp-client add." },
         { [.. ById(), "--data-location"], "--data-location has no value." },
-        { [.. ById(), .. ByMetadataUrl()[1..3]], "cannot both be given." },
+        { [.. ById(), .. ByMetadataUrl()[2..4]], "cannot both be given." },
         { Without(ById(), "--client-id"), "One of --metadata-url and --client-id is needed." },
         { [.. ByMetadataUrl(), "--redirect-uri", Redirect], "--redirect-uri is only for --client-id" },
         { Without(ById(), "--redirect-uri"), "--client-id needs at least one --redirect-uri." },
@@ -69,7 +72,11 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
             With(ById(), "--data-location", new('d', Limits.McpDataLocation + 1)),
             "--data-location is longer than 200 characters."
         },
-        { With(ById(), "--name", "Assistant‮One"), "--name has a control or formatting character." },
+        {
+            With(ById(), "--name", $"Assistant{char.ConvertFromUtf32(0xE0041)}One"),
+            "--name has a control or formatting character."
+        },
+        { With(ById(), "--name", "Assistant\u202eOne"), "--name has a control or formatting character." },
         {
             With(ById(), "--client-id", new('a', Limits.McpClientId + 1)),
             "--client-id is longer than 100 characters."
@@ -78,6 +85,12 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
         { With(ById(), "--redirect-uri", "http://assistant.example/cb"), "must be https, or http on 127.0.0.1" },
         { With(ById(), "--redirect-uri", "http://loopback/cb"), "must be https, or http on 127.0.0.1" },
         { With(ById(), "--redirect-uri", "http://127.5.5.5/cb"), "must be https, or http on 127.0.0.1" },
+        { With(ById(), "--redirect-uri", "http://0x7f.1/cb"), "must be https, or http on 127.0.0.1" },
+        { With(ById(), "--redirect-uri", "http://localhost.example/cb"), "must be https, or http on 127.0.0.1" },
+        {
+            With(ById(), "--redirect-uri", $"https://assistant.example/cb{char.ConvertFromUtf32(0xE0041)}"),
+            "A redirect URI has a control or formatting character."
+        },
         { With(ById(), "--redirect-uri", "assistant.example/cb"), "is not an absolute address." },
         { With(ById(), "--redirect-uri", "https://assistant.example/cb#part"), "has a fragment." },
         { With(ById(), "--redirect-uri", "https://user@assistant.example/cb"), "has user information." },
@@ -120,6 +133,7 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
             Document(("token_endpoint_auth_method", "client_secret_basic")),
             "token_endpoint_auth_method is not none."
         },
+        { Document(("token_endpoint_auth_method", null)), "token_endpoint_auth_method is not none." },
     };
 
     [Fact]
@@ -159,6 +173,7 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
     [InlineData("Ipv4", "http://127.0.0.1:8080/callback")]
     [InlineData("Ipv6", "http://[::1]:8080/callback")]
     [InlineData("Localhost", "http://localhost:8080/callback")]
+    [InlineData("LocalhostInCapitals", "http://LOCALHOST:8080/callback")]
     public async Task A_loopback_redirect_URI_makes_the_client_native(string label, string redirectUri)
     {
         await using var app = await OnDatabaseOfItsOwnAsync($"McpClientNative{label}", new RecordingHttpHandler());
@@ -257,6 +272,30 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
     }
 
     [Fact]
+    public async Task A_client_ID_that_differs_only_in_letter_case_is_another_client_and_is_refused()
+    {
+        var handler = new RecordingHttpHandler();
+        await using var app = await OnDatabaseOfItsOwnAsync("McpClientCaseVariant", handler);
+        var organisations = new[] { await AddOrganisationAsync(app) };
+        Assert.Equal(0, (await app.RunAdminCommandAsync(ById())).ExitCode);
+
+        var add = await app.RunAdminCommandAsync(
+            With(With(ById(), "--client-id", "Assistant-One"), "--name", "Assistant Two"));
+        var remove = await app.RunAdminCommandAsync(["mcp-client", "remove", "ASSISTANT-ONE"]);
+
+        Assert.Equal((1, ""), (add.ExitCode, add.Output));
+        Assert.Contains("differs from it only in letter case", add.Error, StringComparison.Ordinal);
+        Assert.Equal((1, ""), (remove.ExitCode, remove.Output));
+        Assert.Contains(
+            "No approved assistant has the client ID \"ASSISTANT-ONE\".", remove.Error, StringComparison.Ordinal);
+        var stored = Assert.Single(await StoredApplicationsAsync(app));
+        Assert.Equal(("assistant-one", "Assistant One"), (stored.ClientId, stored.DisplayName));
+        await AssertEventsAsync(
+            app, AuditEventTypes.Admin.McpClientAdded, organisations, "assistant-one", "Assistant One");
+        Assert.Single(await StoredEventsAsync(app));
+    }
+
+    [Fact]
     public async Task List_prints_each_client_in_client_ID_order_with_no_token_data_and_writes_no_event()
     {
         await using var app = await OnDatabaseOfItsOwnAsync("McpClientList", new RecordingHttpHandler());
@@ -302,7 +341,7 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
         var handler = new RecordingHttpHandler();
         await using var app = await OnDatabaseOfItsOwnAsync("McpClientRefusals", handler);
 
-        var run = await app.RunAdminCommandAsync(["mcp-client", .. arguments]);
+        var run = await app.RunAdminCommandAsync(arguments);
 
         await AssertRefusedAsync(app, handler, run, reason, requests: 0);
     }
@@ -385,17 +424,17 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
-    // The arguments of an add by client ID, with all its options.
+    // The arguments of an add by client ID, with all its options, as the operator commands' entry takes them.
     private static string[] ById() =>
     [
-        "add", "--client-id", "assistant-one", "--redirect-uri", Redirect,
+        "mcp-client", "add", "--client-id", "assistant-one", "--redirect-uri", Redirect,
         "--name", "Assistant One", "--company", "Example AI", "--data-location", "In the United States",
     ];
 
-    // The arguments of an add by metadata URL, with all its options.
+    // The arguments of an add by metadata URL, with all its options, as the operator commands' entry takes them.
     private static string[] ByMetadataUrl() =>
     [
-        "add", "--metadata-url", MetadataUrl,
+        "mcp-client", "add", "--metadata-url", MetadataUrl,
         "--name", "Assistant One", "--company", "Example AI", "--data-location", "In the United States",
     ];
 
