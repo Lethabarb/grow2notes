@@ -6637,7 +6637,7 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
   Bicep parameter.
 - [x] Operator command (#155; v2): `admin mcp-client` add, list and remove, with audit.
 - [x] Authorisation server (#154; v3): discovery, PKCE-only flows, token no-store, no code before consent.
-- [x] Docs (#PR; v4): design.md, mcp-server.md (spike answers), backlog, break-glass.md, first-use steps 161 to 165,
+- [x] Docs (#156; v4): design.md, mcp-server.md (spike answers), backlog, break-glass.md, first-use steps 161 to 165,
   A109 to A114, Q9 and Q10 answered.
 
 ---
