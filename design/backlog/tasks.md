@@ -6556,6 +6556,9 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
   S07.01.03's eight answers are in mcp-server.md §13, each with its evidence. Question 5 (a loopback redirect URI on
   any port) is verified: `RedirectUriMatchingTests` passed in CI (runs 40317532754 and 40325366855), so no gap goes
   to S07.01.06.
+- A CI re-run of v4 showed `Add_by_client_ID_stores_one_public_client_and_writes_one_event_for_each_organisation`
+  comparing the stored `Properties` JSON as text; OpenIddict's property dictionary does not fix the key order, so the
+  test now compares the parsed objects (`JsonNode.DeepEquals`).
 - Where the design is silent, the developer chose the limits `McpClientId` 100 (OpenIddict's own column, pinned),
   `McpAssistantName` 100 (as `DisplayName`), `McpCompany` 200 (as `OrganisationName`) and `McpDataLocation` 200.
   They need no `limits.ts` entry, because the SPA has no form for them.
@@ -6618,7 +6621,7 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 - Decisions where design.md is silent: A109 (Q9) and A110 (Q10) accepted; A111 remove hard-deletes the registration;
   A112 refresh token without `offline_access`; A113 reuse leeway 15 seconds; A114 the command's fetch and value checks
   (no redirects, 64 KB, 30 s, plain-form URL, loopback literals, no control or format characters). Spike answers go in
-  mcp-server.md; question 5 stays unverified until CI passes. Hand-offs to T31, T32 and T38 go in the Notes.
+  mcp-server.md; question 5 stayed unverified until CI passed (verified: see Notes). Hand-offs to T31, T32 and T38 go in the Notes.
 - By hand: ops/first-use-in-test.md steps 161 to 165.
 
 ### Verticals

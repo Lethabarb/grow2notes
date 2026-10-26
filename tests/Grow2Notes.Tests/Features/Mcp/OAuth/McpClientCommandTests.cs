@@ -159,9 +159,9 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
         Assert.Null(stored.ApplicationType);
         Assert.Equal("Assistant One", stored.DisplayName);
         Assert.Equal([Redirect], Strings(stored.RedirectUris));
-        Assert.Equal(
-            new JsonObject { ["company"] = "Example AI", ["dataLocation"] = "In the United States" }.ToJsonString(),
-            JsonNode.Parse(stored.Properties!)!.ToJsonString());
+        Assert.True(JsonNode.DeepEquals(
+            new JsonObject { ["company"] = "Example AI", ["dataLocation"] = "In the United States" },
+            JsonNode.Parse(stored.Properties!)));
         Assert.Equal(
             AllPermissions.Order(StringComparer.Ordinal),
             Strings(stored.Permissions).Order(StringComparer.Ordinal));
