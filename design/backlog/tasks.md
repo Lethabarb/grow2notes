@@ -6621,7 +6621,8 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 - Decisions where design.md is silent: A109 (Q9) and A110 (Q10) accepted; A111 remove hard-deletes the registration;
   A112 refresh token without `offline_access`; A113 reuse leeway 15 seconds; A114 the command's fetch and value checks
   (no redirects, 64 KB, 30 s, plain-form URL, loopback literals, no control or format characters). Spike answers go in
-  mcp-server.md; question 5 stayed unverified until CI passed (verified: see Notes). Hand-offs to T31, T32 and T38 go in the Notes.
+  mcp-server.md; question 5 stayed unverified until CI passed (verified: see Notes). Hand-offs to T31, T32 and T38
+  go in the Notes.
 - By hand: ops/first-use-in-test.md steps 161 to 165.
 
 ### Verticals

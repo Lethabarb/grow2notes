@@ -327,7 +327,7 @@ options, never for the support workers who write notes (D48).
   assistant, do it within one business day (MA1).
 - **In production, as part of switch-on** (mcp-server.md §11.1, S07.05.09), after the provider has approved the
   assistant in writing, and not before.
-- **In test,** with the assistants and made-up clients that steps 163 and 164 of
+- **In test,** with the assistants and made-up clients that steps 162 and 164 of
   [first-use-in-test.md](first-use-in-test.md) use, and a made-up client ID such as
   `https://assistant.example/oauth/client.json` for a check of your own. The examples below are for illustration only.
 - **Knowing that it applies to every organisation in the environment:** an approved assistant is not tied to one

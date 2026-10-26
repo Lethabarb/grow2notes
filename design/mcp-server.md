@@ -840,7 +840,7 @@ All read on 4 October 2026 unless stated.
 - [Doc] [OpenIddict.AspNetCore on NuGet](https://www.nuget.org/packages/OpenIddict.AspNetCore): 7.7.1 (17 Sep 2026), Apache-2.0
 - [Doc] [Migrate to OpenIddict 7.0](https://documentation.openiddict.com/guides/migration/60-to-70): `resource` validation, `RegisterResources`, resource permissions
 - [Doc] [OpenIddict: ASP.NET Core Data Protection integration](https://documentation.openiddict.com/integrations/aspnet-core-data-protection)
-- [Vendor blog] [OpenIddict 5.0 general availability](https://kevinchalet.com/2023/12/18/openiddict-5-0-general-availability/): native `iss` support (via search summary; confirm in slice 1)
+- [Vendor blog] [OpenIddict 5.0 general availability](https://kevinchalet.com/2023/12/18/openiddict-5-0-general-availability/): native `iss` support (via search summary; confirmed in 7.7.1, §13 question 2)
 - [Vendor blog] [OpenIddict 3.0 beta6 is out](https://kevinchalet.com/2020/10/27/openiddict-3-0-beta6-is-out/): refresh-token reuse leeway, `OpenIddictServerBuilder.SetRefreshTokenReuseLeeway()`, 15 seconds by default at that release
 - [Secondary] [openiddict-core issue 2552, "Implement CIMD"](https://github.com/openiddict/openiddict-core/issues/2552): open, opened 24 September 2026
 
