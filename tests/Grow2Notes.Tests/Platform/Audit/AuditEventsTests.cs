@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
@@ -89,6 +90,8 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Admin.McpClientAdded] = test => test.RunMcpClientAddAsync(),
         [AuditEventTypes.Admin.McpClientUpdated] = test => test.RunMcpClientAddAgainAsync(),
         [AuditEventTypes.Admin.McpClientRemoved] = test => test.RunMcpClientRemoveAsync(),
+        [AuditEventTypes.Mcp.Authorised] = test => test.AllowAssistantAsync(),
+        [AuditEventTypes.Mcp.AuthorisationRefused] = test => test.CancelAssistantAsync(),
     };
 
     /// <summary>
@@ -1545,6 +1548,46 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
 
         Assert.Equal((0, ""), (run.ExitCode, run.Error));
         return McpClientEvent(AuditEventTypes.Admin.McpClientRemoved, organisationId);
+    }
+
+    /// <summary>
+    /// <c>mcp.authorised</c>: A's manager allows an assistant, which <c>ConsentDecisions.TakeAsync</c> records, as
+    /// the authorise endpoint does just before it issues the code. It records the manager as the actor, with no entity
+    /// and no participant, and the client ID and the scope granted alone in <c>Details</c>. The access is off on the
+    /// collection's app, so the row calls the handler, which is registered either way, and the sequence is covered
+    /// through the endpoints in <c>ConnectTests</c>.
+    /// </summary>
+    private async Task<WrittenEvent> AllowAssistantAsync()
+    {
+        var details = new JsonObject { ["client"] = McpClientId, ["scope"] = "grow2notes.admin offline_access" };
+
+        return await TakeConsentAsync(allow: true, AuditEventTypes.Mcp.Authorised, details);
+    }
+
+    /// <summary>
+    /// <c>mcp.authorisation_refused</c>: A's manager cancels, which records them as the actor, with no entity and no
+    /// participant, and the client ID and why, <c>cancelled</c>, alone in <c>Details</c>.
+    /// </summary>
+    private async Task<WrittenEvent> CancelAssistantAsync()
+    {
+        var details = new JsonObject { ["client"] = McpClientId, ["why"] = "cancelled" };
+
+        return await TakeConsentAsync(allow: false, AuditEventTypes.Mcp.AuthorisationRefused, details);
+    }
+
+    private async Task<WrittenEvent> TakeConsentAsync(bool allow, string eventType, JsonObject details)
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+
+        var principal = await scope.ServiceProvider.GetRequiredService<ConsentDecisions>().TakeAsync(
+            new Actor(a.ManagerId, Channel.App),
+            allow,
+            McpClientId,
+            authTime: "1790000000",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(allow, principal is not null);
+        return new(eventType, a.OrganisationId, a.ManagerId, null, null, null, details.ToJsonString());
     }
 
     private static WrittenEvent McpClientEvent(string eventType, Guid organisationId) =>
