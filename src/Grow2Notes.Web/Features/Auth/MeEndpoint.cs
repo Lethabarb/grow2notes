@@ -14,11 +14,10 @@ namespace Grow2Notes.Web.Features.Auth;
 /// </summary>
 /// <remarks>
 /// It carries the <see cref="Policies.SignedIn"/> policy, which admits any signed-in Worker, Manager or Support person,
-/// and a request with no session gets
-/// the session cookie's <c>401</c>. The user's ID, display name and role come from the principal, which
-/// the session check rebuilds from the user's row on every request (§8.4), so a change to the row shows on the user's
-/// next call. The organisation's name is read for the request's tenant (<see cref="ITenantContext"/>), which is the
-/// organisation in the principal's <c>org_id</c>.
+/// and a request with no session gets the session cookie's <c>401</c>. The user's ID, display name and role come from
+/// the principal, which the session check rebuilds from the user's row on every request (§8.4), so a change to the row
+/// shows on the user's next call. The organisation's name is read for the request's tenant
+/// (<see cref="ITenantContext"/>), which is the organisation in the principal's <c>org_id</c>.
 /// </remarks>
 internal static class MeEndpoint
 {

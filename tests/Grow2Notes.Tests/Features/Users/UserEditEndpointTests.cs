@@ -304,7 +304,7 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
     [InlineData("Worker", false)]
     [InlineData("Support", false)]
     [InlineData("Manager", true)]
-    public async Task The_only_active_manager_making_themselves_a_non_manager_or_giving_themselves_a_new_address_gets_409(
+    public async Task The_only_active_manager_making_themselves_a_non_manager_or_changing_their_address_gets_409(
         string role, bool newAddress)
     {
         var manager = await AddTheOnlyActiveManagerAsync();
@@ -381,7 +381,7 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
 
     [Theory]
     [MemberData(nameof(InvalidUserDetails.Roles), MemberType = typeof(InvalidUserDetails))]
-    public Task A_missing_role_or_one_that_is_none_of_Worker_Manager_and_Support_gets_a_422_for_role_and_nothing_is_done(
+    public Task A_missing_role_or_one_that_is_not_Worker_Manager_or_Support_gets_a_422_for_role_and_nothing_is_done(
         string? role) =>
         AssertInvalidAsync(worker => Body(Name, worker.Email, role), ("role", UserDetailsChecks.RoleMissing));
 

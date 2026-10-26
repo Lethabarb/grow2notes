@@ -45,10 +45,10 @@ internal sealed class UserEdit(
     /// as it saves; <see cref="UserChangeResult.NotFound"/>, or <see cref="ErrorCode.PreconditionRequired"/> or
     /// <see cref="ErrorCode.PreconditionFailed"/> for the version, as <see cref="UserChanges.ChangeAsync"/> gives
     /// them; <see cref="ErrorCode.LastManager"/> to make a worker or Support of, or give a new address to, the
-    /// organisation's only Active manager, the actor themselves among them (A26); <see cref="ErrorCode.EmailInUse"/> for
-    /// an address that another account holds, in any organisation and any letter case (A27); or
-    /// <see cref="ErrorCode.PreconditionFailed"/> when the user changed after they were loaded. A refusal changes,
-    /// writes and sends nothing.
+    /// organisation's only Active manager, the actor themselves among them (A26);
+    /// <see cref="ErrorCode.EmailInUse"/> for an address that another account holds, in any organisation and any
+    /// letter case (A27); or <see cref="ErrorCode.PreconditionFailed"/> when the user changed after they were loaded.
+    /// A refusal changes, writes and sends nothing.
     /// </returns>
     /// <exception cref="EmailNotSentException">
     /// The email could not be sent, so the transaction rolled back, and nothing was changed or written.

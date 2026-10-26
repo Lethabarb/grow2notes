@@ -15,13 +15,12 @@ namespace Grow2Notes.Web.Features.Auth;
 /// </summary>
 /// <remarks>
 /// It carries the <see cref="Policies.SignedIn"/> policy, which admits any signed-in Worker, Manager or Support person,
-/// and a request with no session gets
-/// the session cookie's <c>401</c>, before the <c>/api</c> group's antiforgery check, with no event. In one
-/// transaction (§5.9) it gives the person a new security stamp, which the session check finds changed on each session's
-/// next request (ops/security-review.md F-1), and writes <c>auth.signed_out</c> in the session's organisation (§5.9
-/// item 1). If either fails, the exception handler's <c>500</c> comes before the sign-out, with nothing changed, so no
-/// sign-out goes unrecorded. Only then does the sign-in manager delete the session cookie and Identity's other sign-in
-/// cookies.
+/// and a request with no session gets the session cookie's <c>401</c>, before the <c>/api</c> group's antiforgery
+/// check, with no event. In one transaction (§5.9) it gives the person a new security stamp, which the session check
+/// finds changed on each session's next request (ops/security-review.md F-1), and writes <c>auth.signed_out</c> in the
+/// session's organisation (§5.9 item 1). If either fails, the exception handler's <c>500</c> comes before the
+/// sign-out, with nothing changed, so no sign-out goes unrecorded. Only then does the sign-in manager delete the
+/// session cookie and Identity's other sign-in cookies.
 /// </remarks>
 internal static class LogoutEndpoint
 {

@@ -136,11 +136,11 @@ public sealed class SqlServerFixture : IAsyncLifetime
         return new(
             await AddOrganisationAsync("Seeded organisation A",
                 ("Jordan Ellis", "jordan.ellis@example.org"), ("Casey Nguyen", "casey.nguyen@example.org"),
-                ("Alex Morgan", "alex.morgan@example.org"),
+                ("Alex Morgan", "support.a@example.org"),
                 ("Priya", "Kumar", new DateOnly(1985, 6, 14))),
             await AddOrganisationAsync("Seeded organisation B",
                 ("Morgan Reid", "morgan.reid@example.org"), ("Riley Chen", "riley.chen@example.org"),
-                ("Sam Taylor", "sam.taylor@example.org"),
+                ("Sam Taylor", "support.b@example.org"),
                 ("Tom", "Ward", new DateOnly(1992, 11, 3))));
 
         async Task<SeededOrganisation> AddOrganisationAsync(

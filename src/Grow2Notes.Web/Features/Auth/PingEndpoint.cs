@@ -10,10 +10,9 @@ namespace Grow2Notes.Web.Features.Auth;
 /// </summary>
 /// <remarks>
 /// It carries the <see cref="Policies.SignedIn"/> policy, which admits any signed-in Worker, Manager or Support person,
-/// and a request with no session gets
-/// the session cookie's <c>401</c>, before the <c>/api</c> group's antiforgery check. Past the 12-hour limit,
-/// <see cref="SessionRules"/> refuses the session and deletes its cookie, as on any request, so Stay signed in cannot
-/// extend a session beyond it. §5.4 lists no event for it, so nothing is written.
+/// and a request with no session gets the session cookie's <c>401</c>, before the <c>/api</c> group's antiforgery
+/// check. Past the 12-hour limit, <see cref="SessionRules"/> refuses the session and deletes its cookie, as on any
+/// request, so Stay signed in cannot extend a session beyond it. §5.4 lists no event for it, so nothing is written.
 /// </remarks>
 internal static class PingEndpoint
 {
