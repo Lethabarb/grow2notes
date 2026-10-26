@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Auth;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.AspNetCore.Hosting;
@@ -331,7 +332,7 @@ public sealed class BootstrapCommandTests(Grow2NotesFactory factory) : IClassFix
 
     private static string RefusalWithEveryUsage(string reason) =>
         $"{RefusalWithUsage(reason)}{ResetSignInCommand.Usage}{Environment.NewLine}" +
-        $"{SignOutAllCommand.Usage}{Environment.NewLine}";
+        $"{SignOutAllCommand.Usage}{Environment.NewLine}{McpClientCommand.Usage}{Environment.NewLine}";
 
     // As the SPA reads the fragment, with URLSearchParams, which ParseQuery matches: + is a space, then %XX is decoded.
     private static string TokenIn(string setupLink) =>

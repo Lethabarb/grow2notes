@@ -57,7 +57,7 @@ internal sealed class ResetSignInCommand(
             return await AdminCommands.RefuseAsync(error, argumentProblem, Usage);
         }
 
-        if (AdminCommands.FindOriginProblem(configuration) is { } originProblem)
+        if (AdminCommands.FindOriginProblem(configuration, "no setup link can be made.") is { } originProblem)
         {
             return await AdminCommands.RefuseAsync(error, originProblem, usage: null);
         }

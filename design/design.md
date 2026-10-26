@@ -1005,7 +1005,7 @@ Audit rows for changes are written in the same transaction as the change (5.9). 
 | Configuration | `participant.created`, `participant.updated`, `participant.archived`, `participant.restored`; `goal.created`, `goal.updated`, `goal.archived`, `goal.restored`, `goal.reordered`; the same five with a `common_item.` prefix (`common_item.updated` also records a move to another group, with the old and new group); the same five with a `common_item_group.` prefix; `guide_prompts.updated` (only when the text changes, D84) |
 | Notes | `note.draft_started`, `note.discarded`, `note.submitted` (v1), `note.edited` (v2 and later), `note.reviewed` |
 | Reports | `report.downloaded` (date, format), `participant.exported` (date range, format, earlier versions included or not) |
-| Operator | `admin.bootstrap`, `admin.signin_reset`, `admin.signout_all` |
+| Operator | `admin.bootstrap`, `admin.signin_reset`, `admin.signout_all`, `admin.mcp_client_added`, `admin.mcp_client_updated`, `admin.mcp_client_removed` |
 
 Reading a note, a participant's history or version history is **not** audited (A28). §9.10 explains what this means for a breach assessment.
 

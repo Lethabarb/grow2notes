@@ -15,6 +15,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 
 namespace Grow2Notes.Tests.Platform.Audit;
 
@@ -85,6 +86,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Admin.Bootstrap] = test => test.RunBootstrapAsync(),
         [AuditEventTypes.Admin.SignInReset] = test => test.RunResetSignInAsync(),
         [AuditEventTypes.Admin.SignOutAll] = test => test.RunSignOutAllAsync(),
+        [AuditEventTypes.Admin.McpClientAdded] = test => test.RunMcpClientAddAsync(),
+        [AuditEventTypes.Admin.McpClientUpdated] = test => test.RunMcpClientAddAgainAsync(),
+        [AuditEventTypes.Admin.McpClientRemoved] = test => test.RunMcpClientRemoveAsync(),
     };
 
     /// <summary>
@@ -94,6 +98,9 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     private static readonly Dictionary<string, string> DatabasesOfTheirOwn = new()
     {
         [AuditEventTypes.Admin.SignOutAll] = "AuditEventsSignOutAll",
+        [AuditEventTypes.Admin.McpClientAdded] = "AuditEventsMcpClientAdded",
+        [AuditEventTypes.Admin.McpClientUpdated] = "AuditEventsMcpClientUpdated",
+        [AuditEventTypes.Admin.McpClientRemoved] = "AuditEventsMcpClientRemoved",
     };
 
     // The day of the report and export rows: a made-up one (A35), so that what they expect never depends on the real
@@ -101,6 +108,15 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
     private static readonly DateOnly ReportDate = new(2026, 10, 1);
 
     private static readonly string ReportDay = ReportDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    private const string McpClientId = "audit-assistant";
+    private const string McpClientName = "Audit Assistant";
+
+    private static readonly string[] McpClientAdd =
+    [
+        "mcp-client", "add", "--client-id", McpClientId, "--redirect-uri", "https://assistant.example/callback",
+        "--name", McpClientName, "--company", "Example AI", "--data-location", "In the United States",
+    ];
 
     private readonly SqlServerFixture sqlServer = sqlServer;
     private readonly SeededOrganisation a = sqlServer.Seeded.A;
@@ -1481,6 +1497,79 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
             organisationId,
             null,
             null);
+    }
+
+    /// <summary>
+    /// <c>admin.mcp_client_added</c>: the operator runs <c>admin mcp-client add</c> for a client ID that is not yet
+    /// approved, on a database of the row's own, where an organisation that the row adds is the only one. It records
+    /// no actor, no entity and no participant, and only the client ID and the name in <c>Details</c>, never a redirect
+    /// URI, and writes one entry for each organisation, because an approved assistant is for all of them.
+    /// </summary>
+    private async Task<WrittenEvent> RunMcpClientAddAsync()
+    {
+        var (organisationId, _) = await AddOrganisationAsync();
+
+        var run = await App.RunAdminCommandAsync(McpClientAdd);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        return McpClientEvent(AuditEventTypes.Admin.McpClientAdded, organisationId);
+    }
+
+    /// <summary>
+    /// <c>admin.mcp_client_updated</c>: the operator runs <c>admin mcp-client add</c> again for a client ID that is
+    /// approved already, which the row registers through OpenIddict's manager, so that the row's one entry is the
+    /// update's; it records what <c>admin.mcp_client_added</c> does.
+    /// </summary>
+    private async Task<WrittenEvent> RunMcpClientAddAgainAsync()
+    {
+        var (organisationId, _) = await AddOrganisationAsync();
+        await AddApprovedAssistantAsync();
+
+        var run = await App.RunAdminCommandAsync(McpClientAdd);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        return McpClientEvent(AuditEventTypes.Admin.McpClientUpdated, organisationId);
+    }
+
+    /// <summary>
+    /// <c>admin.mcp_client_removed</c>: the operator runs <c>admin mcp-client remove</c> for a client ID that is
+    /// approved, which the row registers through OpenIddict's manager; it records what
+    /// <c>admin.mcp_client_added</c> does, with the name that the registration holds.
+    /// </summary>
+    private async Task<WrittenEvent> RunMcpClientRemoveAsync()
+    {
+        var (organisationId, _) = await AddOrganisationAsync();
+        await AddApprovedAssistantAsync();
+
+        var run = await App.RunAdminCommandAsync(["mcp-client", "remove", McpClientId]);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        return McpClientEvent(AuditEventTypes.Admin.McpClientRemoved, organisationId);
+    }
+
+    private static WrittenEvent McpClientEvent(string eventType, Guid organisationId) =>
+        new(
+            eventType,
+            organisationId,
+            null,
+            null,
+            null,
+            null,
+            new JsonObject { ["client"] = McpClientId, ["name"] = McpClientName }.ToJsonString());
+
+    // An approved assistant, registered as the command does but writing no event.
+    private async Task AddApprovedAssistantAsync()
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<IOpenIddictApplicationManager>().CreateAsync(
+            new OpenIddictApplicationDescriptor
+            {
+                ClientId = McpClientId,
+                ClientType = OpenIddictConstants.ClientTypes.Public,
+                DisplayName = McpClientName,
+                RedirectUris = { new("https://assistant.example/callback") },
+            },
+            TestContext.Current.CancellationToken);
     }
 
     // An app on a migrated database of the row's own, with nothing seeded, named database.
