@@ -7,7 +7,7 @@ namespace Grow2Notes.Web.Features.Mcp.OAuth;
 /// Fetches an approved assistant's client metadata document, for <c>admin mcp-client add --metadata-url</c> and nothing
 /// else (mcp-server.md §11.2). It follows no redirect, and refuses a body over <see cref="MaxBytes"/> or a fetch that
 /// takes over <see cref="Timeout"/>, because the handler and client the app registers it with are set so (Program.cs).
-/// It logs nothing, because the operator's output holds the command's result and nothing else.
+/// Its own code logs nothing, because the operator's output holds the command's result and nothing else.
 /// </summary>
 internal sealed class ClientMetadataDocuments(HttpClient http)
 {

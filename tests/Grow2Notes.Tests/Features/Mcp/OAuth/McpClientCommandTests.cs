@@ -188,6 +188,20 @@ public sealed class McpClientCommandTests(Grow2NotesFactory factory, SqlServerFi
     }
 
     [Fact]
+    public async Task A_redirect_URI_given_twice_is_stored_and_printed_once()
+    {
+        await using var app = await OnDatabaseOfItsOwnAsync("McpClientRepeatedRedirect", new RecordingHttpHandler());
+        await AddOrganisationAsync(app);
+
+        var run = await app.RunAdminCommandAsync([.. ById(), "--redirect-uri", Redirect]);
+
+        Assert.Equal((0, ""), (run.ExitCode, run.Error));
+        Assert.Single(
+            run.Output.Split(Environment.NewLine), line => line.StartsWith("Redirect URI:", StringComparison.Ordinal));
+        Assert.Equal([Redirect], Strings(Assert.Single(await StoredApplicationsAsync(app)).RedirectUris));
+    }
+
+    [Fact]
     public async Task Add_again_updates_the_one_row_and_writes_updated()
     {
         await using var app = await OnDatabaseOfItsOwnAsync("McpClientAddAgain", new RecordingHttpHandler());

@@ -9,6 +9,7 @@ using Grow2Notes.Web.Platform.Audit;
 using Grow2Notes.Web.Platform.OperatorCommands;
 using Microsoft.EntityFrameworkCore;
 using OpenIddict.Abstractions;
+using OpenIddict.EntityFrameworkCore.Models;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Web.Features.Mcp.OAuth;
@@ -20,7 +21,7 @@ namespace Grow2Notes.Web.Features.Mcp.OAuth;
 /// check, and the one fetch of a metadata document, comes before the transaction, so that a refused run has written
 /// nothing and a retried transaction never fetches again. The registration change and one
 /// <c>admin.mcp_client_*</c> event for each organisation commit together, and the result is printed once they have.
-/// It logs nothing, because the output holds the result and nothing else.
+/// Its own code logs nothing, because the output holds the result and nothing else.
 /// </summary>
 internal sealed class McpClientCommand(
     Grow2NotesDbContext db,
@@ -56,7 +57,7 @@ internal sealed class McpClientCommand(
 
     private static readonly string[] LoopbackHosts = ["127.0.0.1", "[::1]", "localhost"];
 
-    private static readonly string[] OtherOptions = [MetadataUrlOption, ClientIdOption, RedirectUriOption];
+    private static readonly string[] UrlAndRedirectOptions = [MetadataUrlOption, ClientIdOption, RedirectUriOption];
 
     /// <summary>
     /// Runs the subcommand that <paramref name="arguments"/> names, <c>add</c>, <c>list</c> or <c>remove</c>. A refused
@@ -124,6 +125,11 @@ internal sealed class McpClientCommand(
             documentName = document.Name;
         }
 
+        // Repeating a redirect URI changes nothing: the descriptor holds a set, so what is printed is what is stored.
+        registration = registration with
+        {
+            RedirectUris = [.. registration.RedirectUris.Distinct(StringComparer.Ordinal)],
+        };
         var descriptor = Describe(registration, McpSetup.Resource(configuration));
 
         // Set by each attempt, as a transient failure runs the whole work again, so that it holds the outcome of the
@@ -138,10 +144,13 @@ internal sealed class McpClientCommand(
                 return;
             }
 
+            // The manager finds a client by its ID exactly, but the database ignores case, so a client ID that differs
+            // only in case is another client that the unique index would refuse.
             var existing = await applications.FindByClientIdAsync(registration.ClientId, ct);
-            if (existing is not null && await applications.GetClientIdAsync(existing, ct) != registration.ClientId)
+            if (existing is null
+                && await db.Set<OpenIddictEntityFrameworkCoreApplication<Guid>>()
+                    .AnyAsync(row => row.ClientId == registration.ClientId, ct))
             {
-                // The database ignores case, so it finds a client ID that differs only in case, which is another one.
                 outcome = Outcome.Refused("A client ID that differs from it only in letter case is already approved.");
                 return;
             }
@@ -215,7 +224,7 @@ internal sealed class McpClientCommand(
         await db.InTransactionAsync(async ct =>
         {
             var existing = await applications.FindByClientIdAsync(clientId, ct);
-            if (existing is null || await applications.GetClientIdAsync(existing, ct) != clientId)
+            if (existing is null)
             {
                 outcome = Outcome.Refused($"No approved assistant has the client ID \"{clientId}\".");
                 return;
@@ -269,7 +278,7 @@ internal sealed class McpClientCommand(
         for (var i = 0; i < options.Count; i += 2)
         {
             var option = options[i];
-            if (!OtherOptions.Contains(option) && !TextOptions.Any(known => known.Name == option))
+            if (!UrlAndRedirectOptions.Contains(option) && !TextOptions.Any(known => known.Name == option))
             {
                 problem = $"\"{option}\" is not an option of admin mcp-client add.";
                 return false;
@@ -507,7 +516,7 @@ internal sealed class McpClientCommand(
         };
 
         // Native turns on OpenIddict's loopback matching, which ignores the port. Nothing reads "web".
-        if (registration.RedirectUris.Any(uri => IsLoopback(uri)))
+        if (registration.RedirectUris.Any(IsLoopback))
         {
             descriptor.ApplicationType = ApplicationTypes.Native;
         }
@@ -526,9 +535,12 @@ internal sealed class McpClientCommand(
         return new(
             (await applications.GetClientIdAsync(application, cancellationToken))!,
             (await applications.GetDisplayNameAsync(application, cancellationToken))!,
-            properties[ApprovedAssistantProperties.Company].GetString()!,
-            properties[ApprovedAssistantProperties.DataLocation].GetString()!,
+            Property(ApprovedAssistantProperties.Company),
+            Property(ApprovedAssistantProperties.DataLocation),
             await applications.GetRedirectUrisAsync(application, cancellationToken));
+
+        // A client registered by other means may have neither property.
+        string Property(string key) => properties.TryGetValue(key, out var value) ? value.GetString() ?? "" : "";
     }
 
     private static IEnumerable<string> Block(Registration registration) =>
