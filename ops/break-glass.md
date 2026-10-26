@@ -311,3 +311,150 @@ run [admin reset-signin](#admin-reset-signin) for that manager.
   its retries, or an account that changed while the command ran, such as by a failed sign-in counted at the same
   moment; .NET writes the exception on standard error. Nothing was written, so everyone is still signed in: check
   `/healthz/ready` as above, then run it again.
+
+## admin mcp-client
+
+Registers, lists or removes the AI assistants that the provider has approved to connect to the managers' and admins'
+AI-assistant access (design.md §7.4; mcp-server.md §11.2). An assistant that is not registered cannot connect, and
+registering one does not switch the access on: that is `Mcp:Enabled`, which is a separate step (mcp-server.md §11.1).
+The command works whether `Mcp:Enabled` is on or off. The access is for managers and admins changing their setup and
+options, never for the support workers who write notes (D48).
+
+### When to run it
+
+- **Only at the provider's written request,** and keep that request with the hosting agreement records (mcp-server.md
+  §11.2, MA1). Take each client ID from the assistant's own documentation. When the provider asks you to remove an
+  assistant, do it within one business day (MA1).
+- **In production, as part of switch-on** (mcp-server.md §11.1, S07.05.09), after the provider has approved the
+  assistant in writing, and not before.
+- **In test,** with the assistants and made-up clients that steps 163 and 164 of
+  [first-use-in-test.md](first-use-in-test.md) use, and a made-up client ID such as
+  `https://assistant.example/oauth/client.json` for a check of your own. The examples below are for illustration only.
+- **Knowing that it applies to every organisation in the environment:** an approved assistant is not tied to one
+  organisation, so each organisation's audit records show the change (see *What it writes and prints*).
+
+### What to have ready
+
+- The provider's written request, naming the assistant.
+- For each assistant, three texts the managers will see on the consent screen: its **name** (at most 100 characters),
+  its **company**, meaning its AI provider (at most 200), and **where it holds data**, such as `in the United States`
+  (at most 200). They come from you, from the provider's approval and the AI provider's terms (mcp-server.md §7.1),
+  never from the assistant's own document. None may hold an invisible control character, so type them rather than
+  pasting from a web page.
+- For an assistant with a metadata document: its address, taken from its documentation. It must be `https`, have a
+  path and no user information or fragment, and be written in plain form, with no `./` or `../` parts, no default
+  port and no capitals in the host. The client ID is that address exactly, at most 100 characters.
+- For an assistant without one: its client ID, at most 100 characters and with no spaces, and every redirect URI from
+  its documentation. A redirect URI is `https`, or `http` on exactly `127.0.0.1`, `[::1]` or `localhost`, with no user
+  information and no fragment (A114). It is stored exactly as typed, so copy it from the documentation.
+- The app answering `200` at `/healthz/ready`, as for `admin bootstrap` above, and an organisation already created,
+  since `add` is refused without one. The console's check of `App__Origin` matters here: it names the resource that
+  the assistant is given.
+
+### Running it
+
+Open the SSH console and check its settings (above). Then paste one of these blocks, which runs the command from
+`/home/site/wwwroot`, as for `admin bootstrap`. Put your own values between the quotation marks.
+
+An assistant with a metadata document. The command fetches the document once, from the address you give:
+
+```shell
+cd /home/site/wwwroot && {
+  dotnet Grow2Notes.Web.dll admin mcp-client add --metadata-url "https://assistant.example/oauth/client.json" \
+    --name "Example assistant" --company "Example AI company" --data-location "in the United States"
+  echo "Exit code: $?"
+}
+```
+
+An assistant without one, with a redirect URI for each of its documented addresses:
+
+```shell
+cd /home/site/wwwroot && {
+  dotnet Grow2Notes.Web.dll admin mcp-client add --client-id "example-assistant" \
+    --redirect-uri "https://assistant.example/callback" --redirect-uri "http://127.0.0.1/callback" \
+    --name "Example assistant" --company "Example AI company" --data-location "in the United States"
+  echo "Exit code: $?"
+}
+```
+
+To see what is approved, and to remove one:
+
+```shell
+cd /home/site/wwwroot && {
+  dotnet Grow2Notes.Web.dll admin mcp-client list
+  echo "Exit code: $?"
+}
+```
+
+```shell
+cd /home/site/wwwroot && {
+  dotnet Grow2Notes.Web.dll admin mcp-client remove "https://assistant.example/oauth/client.json"
+  echo "Exit code: $?"
+}
+```
+
+- Run `add` again with the same client ID to change an assistant's name, company, data location or redirect URIs: it
+  updates the one registration. A client ID that differs from an approved one only in capital letters is refused.
+- The usage line is `Usage: admin mcp-client add (--metadata-url <url> | --client-id <id> --redirect-uri <uri>
+  [--redirect-uri <uri> ...]) --name "<name>" --company "<company>" --data-location "<where>"; admin mcp-client list;
+  admin mcp-client remove <client-id>`.
+
+### What it writes and prints
+
+For `add` and `remove`, in one transaction (design.md §5.9), so all of it or none of it, it writes:
+
+- the registration: for `add`, a public client with no secret, the name, company and data location, the redirect URIs,
+  and the permissions of mcp-server.md §11.2; for `remove`, the deletion of the registration together with the
+  authorisations and tokens that it issued (A111). Nothing else is deleted, and other assistants are untouched;
+- one audit event for each organisation, with no actor and no entity, so that each organisation's audit records show
+  it: `admin.mcp_client_added` for the first `add` of a client ID, `admin.mcp_client_updated` for every later one, and
+  `admin.mcp_client_removed`. Its details hold the client ID and the name, never a redirect URI.
+
+The metadata document itself is never stored. Once the transaction has committed it prints, and then the block prints
+`Exit code: 0`:
+
+```text
+Added https://assistant.example/oauth/client.json
+Client ID: https://assistant.example/oauth/client.json
+Name: Example assistant
+Company: Example AI company
+Data location: in the United States
+Redirect URI: https://assistant.example/callback
+Document client_name: Example Assistant
+```
+
+- The first line is `Added <client id>`, `Updated <client id>` or, for `remove`, `Removed <client id>` alone.
+- The `Document client_name` line appears only for a metadata document. **Compare that name, and the redirect URIs,
+  with the assistant's own documentation before going on:** the name you typed is what the managers see, and the
+  document's is only printed. If the document is not the approved assistant's, run `remove` for it.
+- `list` prints the same block, without the first line and without `Document client_name`, for each approved
+  assistant in client ID order, with a blank line between. It prints nothing when there are none, reads no token data
+  and writes no audit event.
+
+### If it is refused or fails
+
+- **Exit code 1: refused.** It writes one line on standard error, `Refused: <why> Nothing was written.`, followed by
+  the usage line when an argument was at fault. Put right what it names and run it again. Before anything is fetched or
+  written, it refuses an unknown subcommand or option, an option that is missing, empty, given twice (apart from
+  `--redirect-uri`) or too long, both or neither of `--metadata-url` and `--client-id`, a value with a control or
+  formatting character, a redirect URI that breaks the rule above, a metadata address that is not in plain form, and an
+  `App__Origin` that is missing, which the refusal calls `App:Origin`. After the one fetch of a metadata document, it
+  refuses:
+  - `The server answered <code>, not a success.`: the address is wrong, or the server redirected, which it does not
+    follow. Check the address in the assistant's documentation;
+  - `The document could not be fetched: ...`, `The document is not JSON.` or `The document is not a JSON object.`: the
+    server was not reached in 30 seconds, answered more than 64 KB, or did not answer with a metadata document.
+    Check the address, and if it is right, ask the assistant's company;
+  - `The document's client_id is not exactly the URL.`, `The document has no client_name.`, `The document's
+    redirect_uris is missing or empty.` or `The document's token_endpoint_auth_method is not none.`: the document
+    does not meet mcp-server.md §11.2, so the assistant cannot be approved as it is. Use the second block if it can be
+    pre-registered.
+- **Refused inside the transaction, which writes nothing:** `There is no organisation yet: run admin bootstrap first.`,
+  and `A client ID that differs from it only in letter case is already approved.`, where the client ID typed matches
+  an approved one in everything but capitals: run `list`, and use the registered spelling.
+- **`remove` refuses an unknown client:** `No approved assistant has the client ID "<id>".` Run `list` and copy the
+  client ID exactly.
+- **Any other exit code: a failure the command did not expect,** such as a database that stayed unreachable through
+  its retries, or a second run that registered the same client ID at the same moment; .NET writes the exception on
+  standard error. The transaction rolled back, so nothing changed: check `/healthz/ready` as above, run `list` to see
+  what is registered, then run the command again.

@@ -1340,3 +1340,59 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      points to the pack: nothing filled in is written here or anywhere in the repository. This step holds nothing
      open: the provider's approval, its decision, publishing and signing are switch-on lines 2 to 6 (mcp-server.md
      §11.1). (S07.05.06; S07.05.07's first and third criteria; A108, D57, D90.)
+
+### Approved assistants and discovery in test, once T30 is on main
+
+161. After the merge's deploy, the operator opens test's web app in the Azure portal and reads its settings
+     (Settings, Environment variables) without changing any: `Mcp__Enabled` must read `True`, because
+     `infra/test.bicepparam` sets it and every deploy from `main` replaces the app settings. Then open
+     `https://app-grow2notes-test.azurewebsites.net/.well-known/oauth-authorization-server` and
+     `https://app-grow2notes-test.azurewebsites.net/.well-known/openid-configuration` in a browser, not signed in. Both
+     show the same JSON document, with `issuer` as the app's address followed by `/`, `authorization_endpoint`
+     ending `/oauth/authorize` and `token_endpoint` ending `/oauth/token`, `grant_types_supported` of
+     `authorization_code` and `refresh_token`, `response_types_supported` of `code`,
+     `code_challenge_methods_supported` of `S256` alone, `scopes_supported` of `grow2notes.admin` and
+     `offline_access`, `token_endpoint_auth_methods_supported` of `none` alone,
+     `authorization_response_iss_parameter_supported` and `client_id_metadata_document_supported` both `true`, and
+     no `registration_endpoint` and no `jwks_uri`. This step holds nothing open. (S07.01.04; MA2, MA11; D90.)
+162. Open `https://app-grow2notes-test.azurewebsites.net/.well-known/oauth-protected-resource`: it answers `404`
+     with a short problem-details answer, not the app's screens, because the protected-resource document is T32's.
+     Once step 163 has registered an assistant, open `/oauth/authorize` on the same address in a browser, with that
+     assistant's client ID and one of its redirect URIs, `response_type=code`, any 43-character `code_challenge` of
+     letters and digits with `code_challenge_method=S256`, `resource=https://app-grow2notes-test.azurewebsites.net/mcp`,
+     `scope=grow2notes.admin` and any `state`. It answers `404`, with no redirect to the assistant and no code,
+     because the consent step is T31's (MA4). This step holds nothing open, and a code that does arrive is a bug.
+     (S07.01.04; MA4, MA11.)
+163. In test's SSH console, as [break-glass.md](break-glass.md) says, run `admin mcp-client add --metadata-url` with
+     the client ID that one AI assistant publishes in its own documentation (mcp-server.md §11.2 gives examples), and
+     a name, company and data location of your own. Compare the printed `Document client_name` and the redirect URIs
+     with that documentation, then run `admin mcp-client list`: the assistant shows once, with the name, company and
+     data location you typed and no token data. Leave it registered for step 162. If the assistant's address does not
+     answer, or its document is refused, the refusal names why; that is not a bug in Grow2Notes, and you may use a
+     different assistant. This step holds nothing open. (S07.01.05; MA1, MA2; A114.)
+164. In the same console, run `admin mcp-client add --client-id` with a made-up client ID such as
+     `step-164-sample-client`, one `--redirect-uri` of `https://sample.example/callback` and one of
+     `http://127.0.0.1/callback`, and a made-up name, company and data location. Run the same command again with
+     another name (the other options as before): it prints `Updated`, not `Added`. Run `admin mcp-client list`
+     (both assistants show), then `admin mcp-client remove step-164-sample-client` and `list` again (it is gone and
+     the other is not). Last, run `add --metadata-url` with `http://assistant.example/client.json` and the same kind
+     of options: it is refused, and `list` shows nothing new. Remove the assistant of step 163 too if the provider has
+     not approved it. You read the audit rows as in step 15:
+
+     ```sql
+     SELECT EventType, OccurredAtUtc, ActorUserId, EntityType, Details
+     FROM dbo.AuditEvent
+     WHERE EventType LIKE 'admin.mcp_client_%'
+     ORDER BY OccurredAtUtc;
+     ```
+
+     Look for: from step 164, one `admin.mcp_client_added`, one `admin.mcp_client_updated` and one
+     `admin.mcp_client_removed` row for each organisation in test, each with no actor and no `EntityType`, and a
+     `Details` of the client ID and the name alone, and none from the refused run. This step holds nothing open.
+     (S07.01.05; A111, A114, D90.)
+165. In the Azure portal, read production's web app settings without changing any: `Mcp__Enabled` must read
+     `False`, or be absent if no production deploy has run since T30. Then open
+     `https://app-grow2notes-prod.azurewebsites.net/oauth/authorize`, `/mcp` and
+     `/.well-known/oauth-authorization-server` on that address: each answers `404`. Production stays this way until
+     T39 switches the access on at an agreed time (mcp-server.md §11.1). This step holds nothing open.
+     (S07.01.04; MA11; D90.)
