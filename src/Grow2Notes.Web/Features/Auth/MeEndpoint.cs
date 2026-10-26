@@ -13,18 +13,18 @@ namespace Grow2Notes.Web.Features.Auth;
 /// on window focus and when the page becomes visible again (§6.8).
 /// </summary>
 /// <remarks>
-/// It has no policy of its own, so the fallback policy admits any signed-in Worker or Manager, and a request with no
-/// session gets the session cookie's <c>401</c>. The user's ID, display name and role come from the principal, which
-/// the session check rebuilds from the user's row on every request (§8.4), so a change to the row shows on the user's
-/// next call. The organisation's name is read for the request's tenant (<see cref="ITenantContext"/>), which is the
-/// organisation in the principal's <c>org_id</c>.
+/// It carries the <see cref="Policies.SignedIn"/> policy, which admits any signed-in Worker, Manager or Support person,
+/// and a request with no session gets the session cookie's <c>401</c>. The user's ID, display name and role come from
+/// the principal, which the session check rebuilds from the user's row on every request (§8.4), so a change to the row
+/// shows on the user's next call. The organisation's name is read for the request's tenant
+/// (<see cref="ITenantContext"/>), which is the organisation in the principal's <c>org_id</c>.
 /// </remarks>
 internal static class MeEndpoint
 {
     /// <summary>Maps the endpoint in the <c>/api</c> group, which <see cref="ApiGroup.MapApiGroup"/> returns.</summary>
     public static RouteGroupBuilder MapMeEndpoint(this RouteGroupBuilder api)
     {
-        api.MapGet("/auth/me", GetAsync);
+        api.MapGet("/auth/me", GetAsync).RequireAuthorization(Policies.SignedIn);
         return api;
     }
 

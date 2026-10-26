@@ -58,8 +58,10 @@ public sealed class FindIdsScriptTests(SqlServerFixture sqlServer)
                 $"Find ids A|Casey Quinn|Worker|Invited|{invited}",
                 $"Find ids A|Drew Moss|Manager|Deactivated|{deactivated}",
                 $"Find ids A|Manager|Manager|Active|{a.ManagerId}",
+                $"Find ids A|Support|Support|Active|{a.SupportId}",
                 $"Find ids A|Worker|Worker|Active|{a.WorkerId}",
                 $"Find ids B|Manager|Manager|Active|{b.ManagerId}",
+                $"Find ids B|Support|Support|Active|{b.SupportId}",
                 $"Find ids B|Worker|Worker|Active|{b.WorkerId}",
             ],
             Rows(results[2]));

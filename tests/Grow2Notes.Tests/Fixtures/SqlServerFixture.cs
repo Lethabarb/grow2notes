@@ -38,8 +38,8 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
     /// <summary>
     /// The IDs of the two made-up organisations in the app's database, each with an Active manager, an Active worker,
-    /// an active participant and its Every note group, which are there before the first test. Tests leave the seeded
-    /// rows as they are (tests/README.md).
+    /// an Active Support person, an active participant and its Every note group, which are there before the first
+    /// test. Tests leave the seeded rows as they are (tests/README.md).
     /// </summary>
     public SeededOrganisations Seeded { get; private set; } = null!;
 
@@ -136,15 +136,18 @@ public sealed class SqlServerFixture : IAsyncLifetime
         return new(
             await AddOrganisationAsync("Seeded organisation A",
                 ("Jordan Ellis", "jordan.ellis@example.org"), ("Casey Nguyen", "casey.nguyen@example.org"),
+                ("Alex Morgan", "support.a@example.org"),
                 ("Priya", "Kumar", new DateOnly(1985, 6, 14))),
             await AddOrganisationAsync("Seeded organisation B",
                 ("Morgan Reid", "morgan.reid@example.org"), ("Riley Chen", "riley.chen@example.org"),
+                ("Sam Taylor", "support.b@example.org"),
                 ("Tom", "Ward", new DateOnly(1992, 11, 3))));
 
         async Task<SeededOrganisation> AddOrganisationAsync(
             string name,
             (string Name, string Email) manager,
             (string Name, string Email) worker,
+            (string Name, string Email) support,
             (string GivenName, string FamilyName, DateOnly DateOfBirth) person)
         {
             // With its Every note group, as admin bootstrap adds an organisation (design.md §7.4).
@@ -157,9 +160,10 @@ public sealed class SqlServerFixture : IAsyncLifetime
                 await db.SaveChangesAsync(cancellationToken);
             }
 
-            // The manager stands in for the one the admin bootstrap command invites, so the manager invites the worker.
+            // The manager stands in for the one the admin bootstrap command invites, so the manager invites the others.
             var managerId = await AddUserAsync(organisation.Id, UserRole.Manager, manager, invitedByUserId: null);
             var workerId = await AddUserAsync(organisation.Id, UserRole.Worker, worker, invitedByUserId: managerId);
+            var supportId = await AddUserAsync(organisation.Id, UserRole.Support, support, invitedByUserId: managerId);
 
             var participant = new Participant
             {
@@ -175,7 +179,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
                 await db.SaveChangesAsync(cancellationToken);
             }
 
-            return new(organisation.Id, managerId, workerId, participant.Id, everyNote.Id);
+            return new(organisation.Id, managerId, workerId, supportId, participant.Id, everyNote.Id);
         }
 
         async Task<Guid> AddUserAsync(

@@ -19,7 +19,7 @@ internal static class UserDetailsChecks
 
     public const string EmailNotAnAddress = "Enter an email address in the correct format, like name@example.com";
 
-    public const string RoleMissing = "Choose Worker or Manager";
+    public const string RoleMissing = "Choose Worker, Manager or Support";
 
     public static readonly string NameTooLong = $"Name must be {Limits.DisplayName} characters or less";
 

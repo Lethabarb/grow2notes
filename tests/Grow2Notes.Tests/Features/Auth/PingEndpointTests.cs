@@ -26,11 +26,13 @@ public sealed class PingEndpointTests : IClassFixture<Grow2NotesFactory>, IAsync
 
     private readonly FakeTimeProvider clock = new(TestClock.Start);
     private readonly Guid userId;
+    private readonly Guid supportId;
     private readonly WebApplicationFactory<Program> app;
 
     public PingEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     {
         userId = sqlServer.Seeded.A.WorkerId;
+        supportId = sqlServer.Seeded.A.SupportId;
         app = factory.WithWebHostBuilder(builder => builder.MapCookieSignIn().UseClock(clock));
     }
 
@@ -57,6 +59,19 @@ public sealed class PingEndpointTests : IClassFixture<Grow2NotesFactory>, IAsync
         using var me = await client.GetAsync(MePath, cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
+    }
+
+    [Fact]
+    public async Task A_Support_person_s_ping_answers_204_and_renews_the_cookie()
+    {
+        using var client = app.CreateHttpsClient();
+        var token = await SignInAsync(client, supportId);
+
+        clock.Advance(TimeSpan.FromMinutes(29));
+        using var response = await client.PostWithTokenAsync(Path, token);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.NotEqual(string.Empty, Assert.Single(response.SetCookies()).Value.Value);
     }
 
     [Fact]
@@ -124,9 +139,9 @@ public sealed class PingEndpointTests : IClassFixture<Grow2NotesFactory>, IAsync
     // Returns the antiforgery token, which is issued to the user a request is signed in as, so is fetched after
     // signing in (tests/README.md). On a clock that has not moved, its request renews nothing, so the session's last
     // request is the sign-in.
-    private async Task<string> SignInAsync(HttpClient client)
+    private async Task<string> SignInAsync(HttpClient client, Guid? user = null)
     {
-        await client.SignInWithCookieAsync(userId);
+        await client.SignInWithCookieAsync(user ?? userId);
         return await client.FetchTokenAsync();
     }
 

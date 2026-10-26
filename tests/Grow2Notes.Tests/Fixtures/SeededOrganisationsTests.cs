@@ -15,18 +15,18 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
     : IClassFixture<Grow2NotesFactory>
 {
     [Fact]
-    public void The_two_organisations_their_four_users_two_participants_and_two_Every_note_groups_are_distinct()
+    public void The_two_organisations_their_six_users_two_participants_and_two_Every_note_groups_are_distinct()
     {
         var (a, b) = sqlServer.Seeded;
 
         Assert.NotEqual(a.OrganisationId, b.OrganisationId);
-        Assert.Distinct([a.ManagerId, a.WorkerId, b.ManagerId, b.WorkerId]);
+        Assert.Distinct([a.ManagerId, a.WorkerId, a.SupportId, b.ManagerId, b.WorkerId, b.SupportId]);
         Assert.NotEqual(a.ParticipantId, b.ParticipantId);
         Assert.NotEqual(a.EveryNoteGroupId, b.EveryNoteGroupId);
     }
 
     [Fact]
-    public async Task Each_organisation_is_there_with_its_Active_manager_and_Active_worker()
+    public async Task Each_organisation_is_there_with_its_Active_manager_Active_worker_and_Active_Support_person()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var scope = factory.Services.CreateScope();
@@ -40,15 +40,16 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
             // Other tests may add users to a seeded organisation, so it reads the seeded two by their IDs.
             var users = await db.Users
                 .Where(u => u.OrganisationId == seeded.OrganisationId
-                    && (u.Id == seeded.ManagerId || u.Id == seeded.WorkerId))
+                    && (u.Id == seeded.ManagerId || u.Id == seeded.WorkerId || u.Id == seeded.SupportId))
                 .ToListAsync(cancellationToken);
 
             Assert.Equal(
                 [
+                    (seeded.SupportId, UserRole.Support, UserStatus.Active),
                     (seeded.ManagerId, UserRole.Manager, UserStatus.Active),
                     (seeded.WorkerId, UserRole.Worker, UserStatus.Active),
                 ],
-                // Manager (2) sorts before Worker (1).
+                // Support (3) sorts before Manager (2), which sorts before Worker (1).
                 users.OrderByDescending(u => u.Role).Select(u => (u.Id, u.Role, u.Status)));
         }
     }
@@ -115,7 +116,7 @@ public sealed class SeededOrganisationsTests(SqlServerFixture sqlServer, Grow2No
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var (a, b) = sqlServer.Seeded;
 
-        foreach (var userId in new[] { a.ManagerId, a.WorkerId, b.ManagerId, b.WorkerId })
+        foreach (var userId in new[] { a.ManagerId, a.WorkerId, a.SupportId, b.ManagerId, b.WorkerId, b.SupportId })
         {
             var user = await userManager.FindByIdAsync(userId.ToString());
             Assert.NotNull(user);

@@ -11,7 +11,7 @@ public sealed class UserEnumTests
     [Fact]
     public void UserRole_keeps_its_stored_values() =>
         Assert.Equal(
-            new Dictionary<string, byte> { ["Worker"] = 1, ["Manager"] = 2 },
+            new Dictionary<string, byte> { ["Worker"] = 1, ["Manager"] = 2, ["Support"] = 3 },
             Enum.GetValues<UserRole>().ToDictionary(r => r.ToString(), r => (byte)r));
 
     [Fact]
