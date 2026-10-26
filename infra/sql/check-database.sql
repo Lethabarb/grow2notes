@@ -503,7 +503,8 @@ FULL JOIN (VALUES (N'__EFMigrationsHistory'), (N'AspNetUserClaims'), (N'AspNetUs
                   (N'AspNetUsers'), (N'AspNetUserTokens'), (N'AuditEvent'), (N'CommonItem'), (N'CommonItemGroup'),
                   (N'DataProtectionKeys'), (N'Goal'), (N'Note'), (N'NoteDraft'),
                   (N'NoteReview'), (N'NoteVersion'), (N'NoteVersionGroup'), (N'NoteVersionItem'), (N'Organisation'),
-                  (N'Participant')) AS e(name)
+                  (N'OpenIddictApplications'), (N'OpenIddictAuthorizations'), (N'OpenIddictScopes'),
+                  (N'OpenIddictTokens'), (N'Participant')) AS e(name)
     ON e.name = t.name COLLATE DATABASE_DEFAULT;
 
 DECLARE @b8 nvarchar(max) = (
@@ -516,7 +517,8 @@ DECLARE @b8Expected int = (
                           N'20261014113808_AddParticipant', N'20261017154447_AddGoal',
                           N'20261017230811_AddCommonItems', N'20261017231729_AddNote',
                           N'20261018085706_AddNoteVersion',
-                          N'20261020054950_AddNoteVersionGroup', N'20261023003611_AddNoteReview'));
+                          N'20261020054950_AddNoteVersionGroup', N'20261023003611_AddNoteReview',
+                          N'20261026094320_AddOpenIddict'));
 
 ------------------------------------------------------------------------------------------------------------------------
 -- C. The Data Protection key ring in SQL, wrapped by the Key Vault key
@@ -739,10 +741,10 @@ WITH checks AS (
               ISNULL(@b6, N'(no tables)'),
               CASE WHEN @b6Total > 0 AND @b6NotDbo = 0 THEN 1 ELSE 0 END),
         (207, N'B7', N'Tables created by the migrations, plus __EFMigrationsHistory',
-              N'19 present, none missing',
+              N'23 present, none missing',
               CONCAT(ISNULL(@b7Present, 0), N' present; missing: ', ISNULL(@b7Missing, N'none'),
                      N'; other tables: ', ISNULL(@b7Extra, N'none')),
-              CASE WHEN @b7Present = 19 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
+              CASE WHEN @b7Present = 23 AND @b7Missing IS NULL THEN 1 ELSE 0 END),
         (208, N'B8', N'Migrations history (dbo.__EFMigrationsHistory)',
               CONCAT(N'20261004032521_InitialCreate (EF Core 10.0.12), ',
                      N'20261008130254_AddAuditEvent (EF Core 10.0.12), ',
@@ -752,9 +754,10 @@ WITH checks AS (
                      N'20261017231729_AddNote (EF Core 10.0.12), ',
                      N'20261018085706_AddNoteVersion (EF Core 10.0.12), ',
                      N'20261020054950_AddNoteVersionGroup (EF Core 10.0.12), ',
-                     N'20261023003611_AddNoteReview (EF Core 10.0.12)'),
+                     N'20261023003611_AddNoteReview (EF Core 10.0.12), ',
+                     N'20261026094320_AddOpenIddict (EF Core 10.0.12)'),
               ISNULL(@b8, N'(empty)'),
-              CASE WHEN @b8Expected = 9 THEN 1 ELSE 0 END),
+              CASE WHEN @b8Expected = 10 THEN 1 ELSE 0 END),
 
         (301, N'C1', N'Key ring table dbo.DataProtectionKeys and its columns',
               N'Id int, FriendlyName nvarchar(max), Xml nvarchar(max)',

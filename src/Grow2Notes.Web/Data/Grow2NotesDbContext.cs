@@ -2,6 +2,7 @@ using Grow2Notes.Web.Platform;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace Grow2Notes.Web.Data;
 
@@ -396,6 +397,13 @@ internal sealed class Grow2NotesDbContext(DbContextOptions<Grow2NotesDbContext> 
         // KeysDbContext reads and writes the Data Protection key ring. The table is in this model as well, so that this
         // context's migrations create it, under the plural name that KeysDbContext expects (design.md §5.3).
         builder.Entity<DataProtectionKey>().ToTable(nameof(KeysDbContext.DataProtectionKeys));
+
+        // The four tables of OpenIddict's stores, for the approved AI assistants (mcp-server.md §3.2). They are the
+        // library's own entity types, with Guid keys like the rest (§5.1), added before the filter below, which skips
+        // them because none is tenant-owned. The client ID's size is pinned to the limit the operator command checks.
+        builder.UseOpenIddict<Guid>();
+        builder.Entity<OpenIddictEntityFrameworkCoreApplication<Guid>>()
+            .Property(a => a.ClientId).HasMaxLength(Limits.McpClientId);
 
         // Last, so it finds every entity type configured above. With the filter, it makes OrganisationId a concurrency
         // token, so updates and deletes keep to the tenant's rows too.
