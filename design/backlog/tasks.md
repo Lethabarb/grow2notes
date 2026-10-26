@@ -6453,7 +6453,7 @@ date, on a build that passed CI and was deployed to test.
 
 ```yaml
 id: T29
-status: new
+status: doing
 release: R2
 lane: B
 size: S
@@ -6475,6 +6475,26 @@ collection notice, staff notice and hosting agreement, so its lawyer can start w
 
 - A documents-only pull request. Sending the pack is a step on `ops/mcp-switch-on.md`, which T38 writes. Runs beside
   T30.
+
+### Plan
+
+- Outcome: documents only. `design/mcp-compliance-pack.md` (part 1 the operator's §7.1 check as fields, part 2 the
+  three §7.4 texts, part 3 the six §7.5 amendments), a first-use step and an assumed default. No code, test, migration,
+  SPA, copy key, audit event, script or workflow change.
+- Design: Q11 becomes the next A-number, an assumed default the owner may overturn. Every field is in square brackets
+  and is filled in only on a copy kept outside the repository; the pack defines its terms and cites mcp-server.md
+  sections only. It covers the AI-assistant access for managers and the Support person, never the support workers who
+  write notes, and no AI assistant ever receives progress notes.
+- Domain: none. The pack copies mcp-server.md's wording; nothing is stored in the app.
+- Reuse: mcp-server.md §7.1, §7.4 and §7.5; go-live.md E's own-copy rule; T28's documents-only shape (D90).
+- Decisions where the design is silent: the pack's place, the field form, the `[Support account holders]` field, and
+  amendments without clause numbers.
+
+### Verticals
+
+- v1: Docs: the pack; depends_on: none; R1 R2 R3 R4 R6 R7 R8 R9 R10 R11 R12 R13 R14 R17
+- v2: Docs: first-use step, A-row, Q11, S07.05.06, S07.05.07 and S07.05.10's Note, tasks.md; depends_on: v1;
+  R5 R15 R16 R18
 
 ### Steps
 
