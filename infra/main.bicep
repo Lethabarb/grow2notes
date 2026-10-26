@@ -42,6 +42,9 @@ param backupStorageRedundancy 'Local' | 'Geo'
 @description('How many days back point-in-time restore reaches: 7 in test, 35 in prod (design.md §10.3, §10.7).')
 param pointInTimeRestoreDays int
 
+@description('Whether AI-assistant access for managers and admins is on: on in test, off in prod (mcp-server.md).')
+param mcpEnabled bool = false
+
 // bootstrap.bicep creates the identity and its roles; this file only reads it, by the name bootstrap.bicep gives it, so
 // no client ID has to be copied into the repository (D60).
 resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' existing = {
@@ -127,6 +130,9 @@ module app 'modules/app.bicep' = {
       // Read as App:Origin. An invite's setup link starts with it, because the operator commands, which print one,
       // run where there is no request to take the address from (design.md §7.4, §8.1).
       App__Origin: appOrigin
+      // Read as Mcp:Enabled. Off, the app answers 404 at every path of the AI-assistant access and registers no
+      // authorisation server; the default is off, and only a parameter file turns it on (mcp-server.md §3.5).
+      Mcp__Enabled: string(mcpEnabled)
       // Read as Email:ApiKeySecretUri. It is where the app finds the Resend API key it sends its setup-link email with:
       // it reads the key from Key Vault as the app identity at each send, so the key is in no setting. Without this
       // setting the app would write each email, link and all, to its console, so every deploy sets it (D92).
