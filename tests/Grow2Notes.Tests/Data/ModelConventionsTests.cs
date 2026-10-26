@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenIddict.EntityFrameworkCore.Models;
 
 namespace Grow2Notes.Tests.Data;
 
@@ -33,6 +34,10 @@ public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : I
             [typeof(IdentityUserToken<Guid>)] = "AspNetUserTokens",
             [typeof(IdentityUserPasskey<Guid>)] = "AspNetUserPasskeys",
             [typeof(DataProtectionKey)] = "DataProtectionKeys",
+            [typeof(OpenIddictEntityFrameworkCoreApplication<Guid>)] = "OpenIddictApplications",
+            [typeof(OpenIddictEntityFrameworkCoreAuthorization<Guid>)] = "OpenIddictAuthorizations",
+            [typeof(OpenIddictEntityFrameworkCoreScope<Guid>)] = "OpenIddictScopes",
+            [typeof(OpenIddictEntityFrameworkCoreToken<Guid>)] = "OpenIddictTokens",
         };
 
         // An owned type, such as Identity's passkey data, is stored in its owner's table.
@@ -75,7 +80,11 @@ public sealed partial class ModelConventionsTests(Grow2NotesFactory factory) : I
 
         Assert.Contains(dateTimes, p => p.ClrType == typeof(DateTime));
         Assert.Contains(dateTimes, p => p.ClrType == typeof(DateTime?));
-        Assert.All(properties, p => Assert.Equal(IsDateTime(p), p.Name.EndsWith("Utc", StringComparison.Ordinal)));
+
+        // The name rule is for the app's own types: OpenIddict names its dates CreationDate and the like.
+        var ownProperties = properties.Where(
+            p => p.DeclaringType.ClrType.Assembly == typeof(Grow2NotesDbContext).Assembly);
+        Assert.All(ownProperties, p => Assert.Equal(IsDateTime(p), p.Name.EndsWith("Utc", StringComparison.Ordinal)));
         Assert.All(dateTimes, p =>
         {
             Assert.Equal("datetime2(3)", p.GetColumnType());

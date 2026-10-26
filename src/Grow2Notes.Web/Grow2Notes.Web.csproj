@@ -16,6 +16,9 @@
     <!-- For the dotnet ef tool only (design.md §10.4, §10.6); nothing the app or the tests run uses it. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="OpenIddict.EntityFrameworkCore" />
+    <PackageReference Include="OpenIddict.Server.AspNetCore" />
+    <PackageReference Include="OpenIddict.Server.DataProtection" />
     <PackageReference Include="PDFsharp-MigraDoc" />
     <PackageReference Include="QRCoder" />
   </ItemGroup>
