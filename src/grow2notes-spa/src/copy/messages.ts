@@ -1,3 +1,4 @@
+import type { Role } from '../api/me.ts';
 import { count, datePlain, type Ymd } from './format.ts';
 import type { PageName } from './pageNames.ts';
 import { strings, type Cause } from './strings.ts';
@@ -10,6 +11,26 @@ export const msg = {
   pageTitle: (name: PageName) => `${strings.appName} – ${name}`,
   /** The Account panel's first line (app-shell.md component 2d): whose session it is on a shared device (D21). */
   signedInAs: (displayName: string) => `Signed in as ${displayName}`,
+  /** The Connect an AI assistant screen's sentences with slots (mcp-server.md §4.4 step 4), as proposed (A116). */
+  connect: {
+    /** Whose session it is, with the role as the screen words it: "(manager)" or "(Support)", capitalised (A115). */
+    signedInAs: (displayName: string, role: Role) =>
+      `Signed in as ${displayName} (${role === 'Support' ? 'Support' : 'manager'}).`,
+    /** Who asks, from the registration, then the two hosts that the specification asks the screen to show. */
+    wantsToConnect: (assistantName: string, company: string, clientIdHost: string, redirectHost: string) =>
+      `${assistantName}, from ${company}, wants to connect. It identifies itself as ${clientIdHost} and will send ` +
+      `you back to ${redirectHost}.`,
+    /** Where what the assistant looks up or changes goes, from the registration. */
+    dataGoesTo: (company: string, dataLocation: string) =>
+      'Whatever you look up or change through it, including participants’ names and goals, dates of birth you type ' +
+      'when adding or correcting a participant, and staff names and email addresses, is sent to ' +
+      `${company} and stored ${dataLocation}.`,
+    approvedAccount: (assistantName: string) =>
+      `Use only the ${assistantName} account your organisation has approved. Only continue if you started this ` +
+      `from ${assistantName} yourself just now.`,
+    /** An Allow that failed, in the alert above the buttons: "Not connected: no connection. Try again." */
+    notConnected: (cause: Cause): string => msg.notDone('connected', cause),
+  },
   /**
    * microcopy.md §4's Load failed: "[Thing] did not load: [cause]. Try again.", or, `again` after a Try again that
    * failed, "[Thing] still did not load: [cause]. Try again.", new words that a screen reader announces again.

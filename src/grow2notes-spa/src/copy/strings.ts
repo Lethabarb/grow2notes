@@ -48,6 +48,24 @@ export const strings = {
   },
   /** The one line of the Support page, the only screen a Support account sees (app-shell.md component 3). */
   supportPage: 'This account is only used to connect an AI assistant.',
+  /**
+   * The Connect an AI assistant screen's words that have no slots (mcp-server.md §4.4 steps 3 and 4, the (P) copy that
+   * ships as proposed, A116), plain sentences with no bold: for a manager or Support account, the heading, what the
+   * assistant will be able to do, the loopback warning, Allow and the busy labels; for a worker, the refusal line.
+   */
+  connect: {
+    heading: 'Connect an AI assistant to Grow2Notes',
+    canDo:
+      'It will be able to look up and change Grow2Notes setup for you: users, participants and their goals, common ' +
+      'items and guide prompts. It cannot see notes.',
+    loopbackWarning: 'This assistant runs on your computer. Other programs on this computer could pretend to be it.',
+    allow: 'Allow',
+    connecting: 'Connecting…',
+    cancelling: 'Cancelling…',
+    workerRefusal: 'Only managers can connect an AI assistant to Grow2Notes.',
+    loading: 'Loading the assistant’s details…',
+    what: 'The assistant’s details',
+  },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
   /** The Account panel's Sign out button (component 2d). */

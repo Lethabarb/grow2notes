@@ -1,6 +1,7 @@
 import type { IndexRouteObject, NonIndexRouteObject } from 'react-router';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { CommonItemsPage } from '../features/commonItems/CommonItemsPage.tsx';
+import { ConnectPage } from '../features/connect/ConnectPage.tsx';
 import { FlaggedPage } from '../features/flagged/FlaggedPage.tsx';
 import { GuidePromptsPage } from '../features/guidePrompts/GuidePromptsPage.tsx';
 import { NotePage } from '../features/notes/NotePage.tsx';
@@ -94,6 +95,9 @@ export const routes: AppRoute[] = [
               { path: 'app', element: <AuthenticatorSetup />, handle: setupHandle },
             ],
           },
+          // Outside SupportGate and ManagerOnly: a manager, a Support account and a worker all reach it. Signed out,
+          // the shell shows sign-in in place, and the person returns to this address.
+          { path: 'connect', element: <ConnectPage />, handle: { pageName: pageName.connectAnAiAssistant } },
           // Every signed-in screen goes in here, so that a Support account sees the Support page in place of them all.
           // Setup stays outside it, for a person with no session, and so does the Connect screen.
           {
