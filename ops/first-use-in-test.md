@@ -1326,3 +1326,17 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      each worker makes their production passkey at their own setup (go-live line 5; passkey-flows.md). The dates held
      go on the provider's copy of go-live.md E, as line 6's evidence. This step holds nothing open, and any problem
      becomes a bug. (S06.06.03; A106, A107, A35, D90.)
+
+### The compliance pack for the provider, once T29 is on main
+
+160. Early in Release 2, the owner names the business AI account the operator's Support person will use: its AI
+     provider and account type (A108). The operator writes them into its copy of
+     [mcp-compliance-pack.md](../design/mcp-compliance-pack.md), kept outside the repository, with the Support account
+     holders in `[Support account holders]`. On that copy it answers each of part 1's seven checks from that AI
+     provider's current terms, with the date checked and a link, fills in `[AI providers]` and `[countries]` with its
+     own AI provider for now, sends the copy to the provider and writes the date sent on it. The provider names its
+     privacy contact on the copy it received, and its lawyer or privacy officer checks the wording. It confirms that
+     the provider has the operator's check and the draft wording while the server is built. This checklist only
+     points to the pack: nothing filled in is written here or anywhere in the repository. This step holds nothing
+     open: the provider's approval, its decision, publishing and signing are switch-on lines 2 to 6 (mcp-server.md
+     §11.1). (S07.05.06; S07.05.07's first and third criteria; A108, D57, D90.)
