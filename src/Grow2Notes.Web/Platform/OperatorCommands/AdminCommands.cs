@@ -1,12 +1,17 @@
+using Grow2Notes.Web.Features.Mcp.OAuth;
+
 namespace Grow2Notes.Web.Platform.OperatorCommands;
 
 /// <summary>
 /// The operator commands' one entry (design.md §7.4): it runs the command that its first argument names with the rest,
-/// <c>admin bootstrap</c>, <c>admin reset-signin</c> or <c>admin signout-all</c>. Release 2's <c>admin mcp-client</c>
-/// (mcp-server.md §11.2) joins them here.
+/// <c>admin bootstrap</c>, <c>admin reset-signin</c>, <c>admin signout-all</c> or, for Release 2,
+/// <c>admin mcp-client</c> (mcp-server.md §11.2).
 /// </summary>
 internal sealed class AdminCommands(
-    BootstrapCommand bootstrap, ResetSignInCommand resetSignIn, SignOutAllCommand signOutAll)
+    BootstrapCommand bootstrap,
+    ResetSignInCommand resetSignIn,
+    SignOutAllCommand signOutAll,
+    McpClientCommand mcpClient)
 {
     /// <summary>The exit code of a command that has done its work.</summary>
     public const int Done = 0;
@@ -16,7 +21,11 @@ internal sealed class AdminCommands(
 
     /// <summary>How each command is used, one to a line, for a run that names no command or an unknown one.</summary>
     public static readonly string Usage = string.Join(
-        Environment.NewLine, BootstrapCommand.Usage, ResetSignInCommand.Usage, SignOutAllCommand.Usage);
+        Environment.NewLine,
+        BootstrapCommand.Usage,
+        ResetSignInCommand.Usage,
+        SignOutAllCommand.Usage,
+        McpClientCommand.Usage);
 
     /// <summary>
     /// Runs the command that <paramref name="arguments"/> names, or refuses an unknown one, or none, saying why on
@@ -38,6 +47,8 @@ internal sealed class AdminCommands(
                 await resetSignIn.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
             [SignOutAllCommand.Name, ..] =>
                 await signOutAll.RunAsync([.. arguments.Skip(1)], error, cancellationToken),
+            [McpClientCommand.Name, ..] =>
+                await mcpClient.RunAsync([.. arguments.Skip(1)], output, error, cancellationToken),
             [var command, ..] => await RefuseAsync(error, $"\"{command}\" is not a command.", Usage),
             _ => await RefuseAsync(error, "No command was given.", Usage),
         };
@@ -58,21 +69,23 @@ internal sealed class AdminCommands(
     }
 
     /// <summary>
-    /// Why the setup-link step can make no link from <paramref name="configuration"/>'s <c>App:Origin</c>, as a
-    /// refusal's reason, or null when it can. A command that prints a link checks it before its transaction, so that
-    /// such a setting is refused, rather than thrown from inside the transaction.
+    /// Why <paramref name="configuration"/>'s <c>App:Origin</c> cannot make what a command needs of it, as a refusal's
+    /// reason, or null when it can. A command that makes a link or names a resource from it checks it before its
+    /// transaction, so that such a setting is refused, rather than thrown from inside the transaction.
     /// </summary>
-    public static string? FindOriginProblem(IConfiguration configuration)
+    /// <param name="configuration">The app's settings.</param>
+    /// <param name="consequence">What cannot be done without the setting, ending the sentence.</param>
+    public static string? FindOriginProblem(IConfiguration configuration, string consequence)
     {
         try
         {
             return AppOrigin.Find(configuration) is null
-                ? $"{AppOrigin.Key} is not set, so no setup link can be made."
+                ? $"{AppOrigin.Key} is not set, so {consequence}"
                 : null;
         }
         catch (UriFormatException)
         {
-            return $"{AppOrigin.Key} is not an absolute address, so no setup link can be made.";
+            return $"{AppOrigin.Key} is not an absolute address, so {consequence}";
         }
     }
 }

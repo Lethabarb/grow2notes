@@ -3,6 +3,7 @@ using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.CommonItems;
 using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Features.Mcp;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Features.Participants;
 using Grow2Notes.Web.Features.Reports;
@@ -280,6 +281,16 @@ builder.Services.AddScoped<AdminCommands>();
 builder.Services.AddScoped<BootstrapCommand>();
 builder.Services.AddScoped<ResetSignInCommand>();
 builder.Services.AddScoped<SignOutAllCommand>();
+builder.Services.AddScoped<McpClientCommand>();
+
+// The one fetch that admin mcp-client makes, of an approved assistant's metadata document (mcp-server.md §11.2): it
+// follows no redirect, reads at most 64 KB and waits at most 30 seconds.
+builder.Services.AddHttpClient<ClientMetadataDocuments>(http =>
+    {
+        http.MaxResponseContentBufferSize = ClientMetadataDocuments.MaxBytes;
+        http.Timeout = ClientMetadataDocuments.Timeout;
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
 // App Service's front end ends TLS and calls the app over HTTP, adding the client's address, with its port, to
 // X-Forwarded-For, and the scheme to X-Forwarded-Proto. Both are taken only from the private ranges that Microsoft's

@@ -129,5 +129,11 @@ internal static class AuditEventTypes
         public const string SignInReset = "admin.signin_reset";
 
         public const string SignOutAll = "admin.signout_all";
+
+        public const string McpClientAdded = "admin.mcp_client_added";
+
+        public const string McpClientUpdated = "admin.mcp_client_updated";
+
+        public const string McpClientRemoved = "admin.mcp_client_removed";
     }
 }
