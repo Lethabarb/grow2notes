@@ -322,8 +322,16 @@ DOM order equals visual order everywhere. Sizes and colours are foundations.md t
   here first): Sign in · Set up your account · Today · Note · Past notes · Version history · Flagged notes ·
   Daily report · Manage · Participants · Add participant · Participant · Write past-day note · Common items ·
   Guide prompts · Users · Invite user · User · Edit user · Export record · Page not found · There is a problem ·
-  Could not connect. "Note" covers the note form (new, draft and edit), the read view and the whole-page "You
-  cannot edit this note" message. sign-in.md uses only "Sign in" and "Set up your account" for all its views.
+  Could not connect · Connect an AI assistant. "Note" covers the note form (new, draft and edit), the read view and
+  the whole-page "You cannot edit this note" message. sign-in.md uses only "Sign in" and "Set up your account" for
+  all its views. "Connect an AI assistant" is the name of the Support page, and of the Connect screen
+  (mcp-server.md §4.4).
+- **Support page** (Release 2, mcp-server.md §2.2): a Support account sees this page at every address inside the
+  shell, in place of the screen the address holds (a layout route above every signed-in route, so no screen sends a
+  request for it). It is a whole-page message in the shell: the page's `<h1>` is "This account is only used to
+  connect an AI assistant.", then a Sign out button with the Account panel's sign-out behaviour (the shared
+  `useSignOut`), then a status line that says why a sign-out failed. The header shows the wordmark and Account only,
+  with no navigation; the Account panel keeps its Sign out.
 - **Message store** (status-messages.md): a module-level variable holding at most one success message (for example
   "Note for Jane Citizen submitted"). Memory only. Never `navigate(…, { state })` (some browsers save history state
   to disk [Standard, https://developer.mozilla.org/en-US/docs/Web/API/History/pushState]), never the URL, never

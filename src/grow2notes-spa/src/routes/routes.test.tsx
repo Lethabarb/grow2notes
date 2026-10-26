@@ -11,7 +11,7 @@ import type { AdminParticipant } from '../features/participants/participantsQuer
 import type { AdminUser } from '../features/users/usersQuery.ts';
 import { routes, type AppRoute } from './routes.tsx';
 
-// A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
+// A made-up worker, manager and Support person (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
   userId: '5b0e7c3a-1f42-4d8e-9a61-2c7f0b9d4e13',
   displayName: 'Alex Pham',
@@ -23,6 +23,14 @@ const manager: Me = {
   userId: '9d3a61f0-7c2b-4e58-b1a4-0f6e2d8c5b97',
   displayName: 'Sam Lee',
   role: 'Manager',
+  organisationName: 'Riverbend Support',
+  today: '2026-10-01',
+};
+
+const support: Me = {
+  userId: 'e7c2a94d-3b58-4f61-8d0a-5a1f9b6c2e34',
+  displayName: 'Ivy Chen',
+  role: 'Support',
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };
@@ -395,6 +403,26 @@ describe('every page', () => {
   });
 });
 
+describe('a Support account', () => {
+  const participantNotes = `/participants/${participants[0].id}/notes`;
+
+  it.each(['/', '/flagged', '/manage/users', participantNotes, '/no-such-page'])(
+    'sees the Support page in place of the screen at %s, titled Connect an AI assistant, and sends only /me',
+    async (path) => {
+      serveMe(support);
+      renderApp(path);
+      await settle();
+
+      expect(pageHeading()).toHaveAccessibleName('This account is only used to connect an AI assistant.');
+      expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+      expect(within(screen.getByRole('main')).getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+      expect(document.title).toBe('Grow2Notes – Connect an AI assistant');
+      expect([...new Set(fetchMock.mock.calls.map(([called]) => called))]).toEqual(['/api/auth/me']);
+    },
+  );
+});
+
 // Stand-ins for a route's parameters: a date for one named after a date, an ID for any other, and an address that no
 // route matches for a splat.
 function madeUpSegment(segment: string): string {
@@ -439,6 +467,7 @@ describe('the page titles', () => {
     { who: 'anyone, before /me answers', me: undefined },
     { who: 'a worker', me: worker },
     { who: 'a manager', me: manager },
+    { who: 'a Support account', me: support },
   ])('for $who', ({ me }) => {
     it.each(everyAddress)('name a page from the list at %s, and no person or organisation', async (path) => {
       serveMe(me);

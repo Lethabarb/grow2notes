@@ -15,7 +15,7 @@ import { routes, type AppRoute } from './routes.tsx';
 // jsdom does not navigate, so the full reload is a stand-in that counts its calls.
 vi.mock('./fullPageLoad.ts');
 
-// A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
+// A made-up worker, manager and Support person (A35), in the JSON that MeEndpointTests asserts.
 const worker: Me = {
   userId: '5b0e7c3a-1f42-4d8e-9a61-2c7f0b9d4e13',
   displayName: 'Alex Pham',
@@ -27,6 +27,14 @@ const manager: Me = {
   userId: '9d3a61f0-7c2b-4e58-b1a4-0f6e2d8c5b97',
   displayName: 'Sam Lee',
   role: 'Manager',
+  organisationName: 'Riverbend Support',
+  today: '2026-10-01',
+};
+
+const support: Me = {
+  userId: 'e7c2a94d-3b58-4f61-8d0a-5a1f9b6c2e34',
+  displayName: 'Ivy Chen',
+  role: 'Support',
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };
@@ -293,6 +301,19 @@ describe('Header', () => {
     expect(headerTargets()).toEqual(targets);
     const items = within(screen.getByRole('navigation', { name: 'Main' })).getAllByRole('listitem');
     expect(items.map((item) => within(item).getByRole('link').getAttribute('href'))).toEqual(addresses);
+  });
+
+  it('gives Support the wordmark and Account only, with no navigation, and Sign out in the panel', async () => {
+    serveMe(() => support);
+    renderShell('/');
+    await settle();
+
+    expect(headerTargets()).toEqual(['link Grow2Notes', 'button Account']);
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account' }));
+    expect(within(accountPanel()).getByRole('button', { name: 'Sign out' })).toBeVisible();
+    expect(headerTargets()).toEqual(['link Grow2Notes', 'button Account', 'button Sign out']);
   });
 
   // Component 2b's table, with every marked element in the header found, so that a second would fail. At
@@ -578,6 +599,7 @@ describe('Sign out', () => {
   it.each([
     { me: worker, signedInAs: 'Signed in as Alex Pham' },
     { me: manager, signedInAs: 'Signed in as Sam Lee' },
+    { me: support, signedInAs: 'Signed in as Ivy Chen' },
   ])('follows "$signedInAs", before an empty status line, and comes next after Account', async ({ me, signedInAs }) => {
     serveMe(() => me);
     renderShell('/');

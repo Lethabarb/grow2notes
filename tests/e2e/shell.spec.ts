@@ -22,10 +22,11 @@ const title = (pageName: string) => `Grow2Notes – ${pageName}`;
 const headerItems: Record<Me['role'], string[]> = {
   Worker: ['Grow2Notes', 'Today', 'Account'],
   Manager: ['Grow2Notes', 'Account', 'Today', 'Flagged', 'Report', 'Manage'],
+  Support: ['Grow2Notes', 'Account'],
 };
 
 // Each role's rows in the header where nothing wraps: a worker's one, a manager's two (app-shell.md *Layout - phone*).
-const headerRows: Record<Me['role'], number> = { Worker: 1, Manager: 2 };
+const headerRows: Record<Me['role'], number> = { Worker: 1, Manager: 2, Support: 1 };
 
 for (const me of [worker, manager]) {
   const role = me.role.toLowerCase();
@@ -306,6 +307,7 @@ async function expectHeaderToWrap(page: Page, rows: number) {
 const tabOrder: Record<Me['role'], { toAccount: string[]; afterSignOut: string[] }> = {
   Worker: { toAccount: ['Grow2Notes', 'Today', 'Account'], afterSignOut: [] },
   Manager: { toAccount: ['Grow2Notes', 'Account'], afterSignOut: ['Today', 'Flagged', 'Report', 'Manage'] },
+  Support: { toAccount: ['Grow2Notes', 'Account'], afterSignOut: [] },
 };
 
 for (const me of [worker, manager]) {

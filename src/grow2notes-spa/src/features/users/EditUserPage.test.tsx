@@ -83,6 +83,8 @@ const lastManagerNotice =
   'else a manager.';
 const lastManagerRole =
   'You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first.';
+const lastManagerSupport =
+  'You are the only active manager, so you cannot make yourself Support. Make someone else a manager first.';
 const lastManagerEmail =
   'You are the only active manager, so you cannot change your email. Make someone else a manager first.';
 const changedWhileEditing =
@@ -93,7 +95,7 @@ const enterEmail = 'Enter an email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
 const emailInUse =
   'Another account already uses this email address. Use a different one, or find the person in the Users list.';
-const chooseRole = 'Choose Worker or Manager';
+const chooseRole = 'Choose Worker, Manager or Support';
 const noConnectionSentence = 'Not saved: no connection. Try again.';
 const somethingWentWrong = 'Not saved: something went wrong. Try again.';
 
@@ -230,6 +232,7 @@ const emailField = () => within(main()).getByRole('textbox', { name: 'Email addr
 const roleGroup = () => within(main()).getByRole('group', { name: 'Role' });
 const workerRadio = () => within(main()).getByRole('radio', { name: 'Worker' });
 const managerRadio = () => within(main()).getByRole('radio', { name: 'Manager' });
+const supportRadio = () => within(main()).getByRole('radio', { name: 'Support (IT operator)' });
 const saveButton = () => within(main()).getByRole('button', { name: /^(Save|Saving…)$/ });
 const alertLine = () => within(main()).getByRole('alert');
 
@@ -554,6 +557,11 @@ describe('Edit user, checked before it saves', () => {
       items: [{ text: lastManagerRole, href: '#role-worker' }],
     },
     {
+      given: 'Support',
+      change: () => fireEvent.click(supportRadio()),
+      items: [{ text: lastManagerSupport, href: '#role-worker' }],
+    },
+    {
       given: 'a new address',
       change: () => type(emailField(), 'sam.leigh@example.org'),
       items: [{ text: lastManagerEmail, href: '#email' }],
@@ -831,6 +839,31 @@ describe('Edit user, your own account', () => {
     expect(fullPageLoad).not.toHaveBeenCalled();
   });
 
+  it('lands on Today as Support, which shows the Support page with no nav and no banner', async () => {
+    const router = await openEdit(sam, [...people, kim]);
+    serve(userPath(sam), saved);
+    const before = listsAskedFor();
+    serve(mePath, json({ ...manager, role: 'Support' }));
+    fireEvent.click(supportRadio());
+
+    pressSave();
+    await answered();
+
+    expect(savesOf(sam)).toEqual([
+      {
+        ifMatch: `"stamp-${sam.id}"`,
+        body: { displayName: 'Sam Lee', email: 'sam.lee@example.org', role: 'Support' },
+      },
+    ]);
+    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(pageHeading()).toHaveTextContent('This account is only used to connect an AI assistant.');
+    expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
+    expect(within(main()).queryByRole('alert')).not.toBeInTheDocument();
+    expect(listsAskedFor()).toBe(before);
+    expect(fullPageLoad).not.toHaveBeenCalled();
+  });
+
   it('loads the app afresh after your own new address, which has ended your session, still busy (AC38)', async () => {
     await openEdit(sam, [...people, kim]);
     serve(userPath(sam), saved);
@@ -931,6 +964,11 @@ describe('Edit user, refused by the server', () => {
       given: 'Worker',
       change: () => fireEvent.click(workerRadio()),
       items: [{ text: lastManagerRole, href: '#role-worker' }],
+    },
+    {
+      given: 'Support',
+      change: () => fireEvent.click(supportRadio()),
+      items: [{ text: lastManagerSupport, href: '#role-worker' }],
     },
     {
       given: 'a new address',
