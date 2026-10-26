@@ -136,4 +136,14 @@ internal static class AuditEventTypes
 
         public const string McpClientRemoved = "admin.mcp_client_removed";
     }
+
+    /// <summary>The AI-assistant access (mcp-server.md §9).</summary>
+    public static class Mcp
+    {
+        /// <summary>A manager or Support person allowed an assistant to connect, as the code is issued.</summary>
+        public const string Authorised = "mcp.authorised";
+
+        /// <summary>A cancel, or an allow by someone who may not connect an assistant.</summary>
+        public const string AuthorisationRefused = "mcp.authorisation_refused";
+    }
 }
