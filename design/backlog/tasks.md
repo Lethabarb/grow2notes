@@ -6512,7 +6512,7 @@ collection notice, staff notice and hosting agreement, so its lawyer can start w
 ### Steps
 
 - [x] Docs (#150; v1): `design/mcp-compliance-pack.md` parts 1 to 3.
-- [x] Docs (#NNN; v2): first-use step 160, A108, Q11 answered, S07.05.06 and S07.05.07 done, S07.05.10's Note.
+- [x] Docs (#151; v2): first-use step 160, A108, Q11 answered, S07.05.06 and S07.05.07 done, S07.05.10's Note.
 
 ---
 
