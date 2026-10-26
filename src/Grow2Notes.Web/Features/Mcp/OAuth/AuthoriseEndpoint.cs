@@ -13,16 +13,13 @@ namespace Grow2Notes.Web.Features.Mcp.OAuth;
 
 /// <summary>
 /// <c>GET /oauth/authorize</c> (mcp-server.md §4.1): the step of the authorisation flow that no code can pass without
-/// consent. OpenIddict validates the request first and passes on the ones it accepts; this answers them, and the
-/// errors it has no redirect URI for. It is mapped only where <c>Mcp:Enabled</c> is true.
+/// consent. OpenIddict validates the request first and passes on the ones it accepts; this answers them. It is mapped
+/// only where <c>Mcp:Enabled</c> is true.
 /// </summary>
 /// <remarks>
 /// Anyone may call it, as an assistant's request arrives with no session, but it sees the session's cookie when there
 /// is one. It never sends anything to the assistant except through OpenIddict:
 /// <list type="number">
-/// <item>An error OpenIddict could not send to a registered redirect URI, such as an unknown client or a redirect
-/// URI that is not registered, is logged and answered <c>302 /connect</c> with no request, which shows the general
-/// error.</item>
 /// <item>A valid request with no <c>decision</c> is answered <c>302 /connect?request=</c> with its handle
 /// (<see cref="ConsentRequests"/>); nothing is remembered, so every request goes to the screen.</item>
 /// <item>A request that ends in the <c>decision</c> that <c>POST /api/connect</c> issued is acted on only if the
@@ -33,9 +30,13 @@ namespace Grow2Notes.Web.Features.Mcp.OAuth;
 /// <c>access_denied</c>, which OpenIddict answers the same way with the error.</item>
 /// </list>
 /// </remarks>
-internal static partial class AuthoriseEndpoint
+internal static class AuthoriseEndpoint
 {
-    private const string ConnectPath = "/connect";
+    /// <summary>
+    /// The Connect screen. With no request, it shows the general error, which is where a refused request goes.
+    /// </summary>
+    public const string ConnectPath = "/connect";
+
     private const string DecisionParameter = "&decision=";
 
     /// <summary>Maps the endpoint.</summary>
@@ -50,17 +51,9 @@ internal static partial class AuthoriseEndpoint
         ConsentRequests consents,
         ConsentDecisions decisions,
         IOptions<IdentityOptions> identityOptions,
-        ILoggerFactory loggers,
         CancellationToken cancellationToken)
     {
-        var logger = loggers.CreateLogger(typeof(AuthoriseEndpoint));
         var request = http.GetOpenIddictServerRequest();
-        if (http.GetOpenIddictServerResponse() is { Error: not null } refusal)
-        {
-            LogRefused(logger, ForLog(request?.ClientId), refusal.Error);
-            return Results.Redirect(ConnectPath);
-        }
-
         var query = http.Request.QueryString.Value is { Length: > 1 } value ? value[1..] : "";
         var decisionAt = query.LastIndexOf(DecisionParameter, StringComparison.Ordinal);
         if (decisionAt < 0)
@@ -92,21 +85,4 @@ internal static partial class AuthoriseEndpoint
                 [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme])
             : Results.SignIn(principal, authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
-
-    // The client ID is whatever the caller sent: without control characters, so that it cannot forge a line of the
-    // log, and cut, so that it cannot fill it.
-    private static string ForLog(string? clientId)
-    {
-        if (string.IsNullOrEmpty(clientId))
-        {
-            return "(none)";
-        }
-
-        var clean = string.Concat(clientId.Where(character => !char.IsControl(character)));
-        return clean.Length > Limits.McpClientId ? clean[..Limits.McpClientId] + "…" : clean;
-    }
-
-    [LoggerMessage(
-        Level = LogLevel.Warning, Message = "Refused an authorisation request from client {ClientId}: {Error}")]
-    private static partial void LogRefused(ILogger logger, string clientId, string? error);
 }

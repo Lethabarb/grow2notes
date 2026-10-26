@@ -97,9 +97,20 @@ internal static class McpSetup
             .UseDataProtection();
 
         // The authorize request is validated by OpenIddict and then passed on to AuthoriseEndpoint, so no code can be
-        // issued without consent. An error with no redirect URI that OpenIddict can use goes there too, instead of
-        // OpenIddict's own error page; one with a validated redirect URI is still sent to it, with iss.
-        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough().EnableErrorPassthrough();
+        // issued without consent.
+        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
+
+        // OpenIddict sends the assistant only the errors that the app itself raises, and answers any other on the
+        // spot. A request whose client and redirect URI have been accepted gets its errors at that redirect URI, with
+        // iss (RFC 9207); AuthorisationRefusals answers the rest, which have no redirect URI to use.
+        server.AddEventHandler<ValidateAuthorizationRequestContext>(handler => handler
+            .UseInlineHandler(context =>
+            {
+                context.Transaction.Properties[AuthorisationRefusals.ValidatedRedirectUri] = context.RedirectUri;
+                return default;
+            })
+            .SetOrder(ValidateClientRedirectUri.Descriptor.Order + 500));
+        server.AddEventHandler(AuthorisationRefusals.Descriptor);
 
         // An assistant is sent back to a state it chose and a resource it asked for (RFC 8707), and it must tell the
         // person's browser apart from any other, so the request must hold exactly one resource and a state. It runs

@@ -427,7 +427,37 @@ public sealed class ConnectTests(Grow2NotesFactory factory, SqlServerFixture sql
         Assert.Equal(longClientId[..Limits.McpClientId] + "…", entry.ClientId);
     }
 
-    private static string ValidQuery => McpTestApp.AuthorizeQuery(ClientId, RedirectUri);
+    [Fact]
+    public async Task A_client_ID_with_Unicode_line_separators_is_logged_without_them()
+    {
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?"
+                + McpTestApp.AuthorizeQuery("https://evil.example/ a b", RedirectUri),
+            Ct);
+
+        AssertSentToTheConnectScreen(response);
+        var entry = Assert.Single(logs.Entries, line => line.Category == typeof(AuthoriseEndpoint).FullName);
+        Assert.Equal("https://evil.example/ab", entry.ClientId);
+    }
+
+    [Fact]
+    public async Task A_client_ID_is_never_cut_in_the_middle_of_a_surrogate_pair()
+    {
+        // "https://long.example/" is 21 characters, so the emoji's two halves are the 100th and 101st.
+        var longClientId = "https://long.example/" + new string('a', Limits.McpClientId - 22) + "\U0001F600tail";
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?" + McpTestApp.AuthorizeQuery(longClientId, RedirectUri), Ct);
+
+        AssertSentToTheConnectScreen(response);
+        var entry = Assert.Single(logs.Entries, line => line.Category == typeof(AuthoriseEndpoint).FullName);
+        Assert.Equal(longClientId[..(Limits.McpClientId - 1)] + "…", entry.ClientId);
+    }
+
+    private static string ValidQuery =>McpTestApp.AuthorizeQuery(ClientId, RedirectUri);
 
     private static void AssertSentToTheConnectScreen(HttpResponseMessage response)
     {
