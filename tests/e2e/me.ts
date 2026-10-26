@@ -5,7 +5,7 @@ import type { Page } from '@playwright/test';
 export type Me = {
   userId: string;
   displayName: string;
-  role: 'Worker' | 'Manager';
+  role: 'Worker' | 'Manager' | 'Support';
   organisationName: string;
   /** The date in Melbourne on the server (A33). */
   today: string;
@@ -13,7 +13,7 @@ export type Me = {
   toReviewCount?: number;
 };
 
-// A made-up worker and manager (A35), in the JSON that MeEndpointTests asserts.
+// A made-up worker, manager and Support person (A35), in the JSON that MeEndpointTests asserts.
 export const worker: Me = {
   userId: '5b0e7c3a-1f42-4d8e-9a61-2c7f0b9d4e13',
   displayName: 'Alex Pham',
@@ -25,6 +25,14 @@ export const manager: Me = {
   userId: '9d3a61f0-7c2b-4e58-b1a4-0f6e2d8c5b97',
   displayName: 'Sam Lee',
   role: 'Manager',
+  organisationName: 'Riverbend Support',
+  today: '2026-10-01',
+};
+
+export const support: Me = {
+  userId: 'e7c2a94d-3b58-4f61-8d0a-5a1f9b6c2e34',
+  displayName: 'Ivy Chen',
+  role: 'Support',
   organisationName: 'Riverbend Support',
   today: '2026-10-01',
 };

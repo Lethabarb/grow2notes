@@ -21,6 +21,7 @@ const nameField = (page: Page) => main(page).getByRole('textbox', { name: 'Name'
 const emailField = (page: Page) => main(page).getByRole('textbox', { name: 'Email address' });
 const workerRadio = (page: Page) => main(page).getByRole('radio', { name: 'Worker' });
 const managerRadio = (page: Page) => main(page).getByRole('radio', { name: 'Manager' });
+const supportRadio = (page: Page) => main(page).getByRole('radio', { name: 'Support (IT operator)' });
 const sendInvite = (page: Page) => main(page).getByRole('button', { name: /^(Send invite|Sending…)$/ });
 const alertLine = (page: Page) => main(page).getByRole('alert');
 // The error summary: the focusable box round its heading (form-validation.md *Anatomy*).
@@ -36,7 +37,7 @@ const enterEmail = 'Enter an email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
 const emailInUse =
   'Another account already uses this email address. Use a different one, or find the person in the Users list.';
-const chooseRole = 'Choose Worker or Manager';
+const chooseRole = 'Choose Worker, Manager or Support';
 const somethingWentWrong = 'Not sent: something went wrong. Try again.';
 
 const isInvite = (request: Request) =>
@@ -233,6 +234,9 @@ test('Invite user opens with Worker chosen, both fields empty and no error, in T
   await expect(managerRadio(page)).toHaveAccessibleDescription(
     'Can also review flagged notes, download reports, and set up participants and users',
   );
+  await expect(supportRadio(page)).toHaveAccessibleDescription(
+    'Only connects an AI assistant. Sees no participants or notes.',
+  );
   await expect(page.locator('[disabled]')).toHaveCount(0);
   await expectAxeToPass(page);
 
@@ -344,6 +348,23 @@ for (const { cut, answer, sentence } of [
     await expectAxeToPass(page);
   });
 }
+
+test('choosing Support sends the invite with the role "Support"', async ({ page }) => {
+  await openInviteUser(page);
+  await answerInvites(page, { status: 500 });
+  const sent = page.waitForRequest(isInvite);
+  await nameField(page).fill('Ivy Chen');
+  await emailField(page).fill('ivy.chen@example.org');
+
+  await supportRadio(page).check();
+  await sendInvite(page).click();
+
+  expect((await sent).postDataJSON()).toEqual({
+    displayName: 'Ivy Chen',
+    email: 'ivy.chen@example.org',
+    role: 'Support',
+  });
+});
 
 test('while an invite is out, Send invite is busy, says "Sending…", and passes axe', async ({ page }) => {
   await openInviteUser(page);

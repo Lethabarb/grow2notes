@@ -1,0 +1,10 @@
+/* In the text colour, not red, as a status line's failure is (empty-loading-error.md *Visual specification*). */
+.statusLine {
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
+/* Never display: none, as a live region shown from it is the least reliable; empty, it takes no space. */
+.statusLine:not(:empty) {
+  margin-block-start: var(--space-2);
+}

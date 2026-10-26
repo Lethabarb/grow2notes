@@ -1,16 +1,14 @@
 import { useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type Ref } from 'react';
 import { Link, matchPath, useLocation } from 'react-router';
-import { api, classify } from '../api/api.ts';
 import type { Me } from '../api/me.ts';
-import { flushSaves, getPhase, isWarning, subscribe } from '../api/session.ts';
+import { getPhase, isWarning, subscribe } from '../api/session.ts';
 import { Button } from '../components/Button.tsx';
 import { msg } from '../copy/messages.ts';
 import { pageName, type PageName } from '../copy/pageNames.ts';
 import { strings } from '../copy/strings.ts';
-import { fullPageLoad } from './fullPageLoad.ts';
 import styles from './Header.module.css';
 import layout from './layout.module.css';
-import { confirmLeave, disarmUnloadGuard, rearmUnloadGuard } from './leaveGuard.ts';
+import { useSignOut } from './useSignOut.ts';
 
 type NavItemKey = keyof typeof strings.navItem;
 
@@ -57,7 +55,8 @@ export function Header({ me, page }: HeaderProps) {
 
 /**
  * A worker's one row, or a manager's two: the wordmark and Account, then the navigation; with the Account panel
- * straight after Account's row, in the flow, so that it pushes the page down rather than covering it (component 2d).
+ * straight after Account's row, in the flow, so that it pushes the page down rather than covering it (component 2d). A
+ * Support account has the wordmark and Account alone, as it has no screen to go to.
  */
 function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
   const { pathname, key } = useLocation();
@@ -97,6 +96,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
   const mark =
     page === pageName.pageNotFound ? undefined : markTable.find(({ path }) => matchPath(path, pathname) !== null);
   const isManager = me.role === 'Manager';
+  const hasNav = me.role === 'Worker' || isManager;
 
   // On the whole header, so that Escape closes the panel from a nav link and from Sign out as well as from Account.
   function closeOnEscape(event: KeyboardEvent<HTMLElement>) {
@@ -127,7 +127,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
   );
   const panel = <AccountPanel ref={panelRef} open={open} displayName={me.displayName} />;
   // Report opens on the server's today in Melbourne (A33), so that the report needs no redirect to today's date.
-  const nav = (
+  const nav = hasNav && (
     <nav aria-label={strings.mainNavigation}>
       <ul className={styles.navList}>
         <NavItem item="today" to="/" mark={mark} />
@@ -175,46 +175,7 @@ function SignedInHeader({ me, page }: { me: Me; page: PageName | undefined }) {
  * that was added with them.
  */
 function AccountPanel({ ref, open, displayName }: { ref: Ref<HTMLDivElement>; open: boolean; displayName: string }) {
-  const [signingOut, setSigningOut] = useState(false);
-  // Emptied as each sign-out starts, so that a failure that repeats is written into an empty line and announced again.
-  const [failure, setFailure] = useState('');
-
-  // *Press Sign out* and *Sign out fails* (app-shell.md).
-  async function signOut() {
-    // First of all, so that a page's Stay sends nothing and leaves the panel as it was.
-    if (!(await confirmLeave())) {
-      return;
-    }
-
-    setFailure('');
-    setSigningOut(true);
-    // A note form's change waiting for its save goes first, as the reload would lose it; one that cannot be saved now
-    // keeps the person signed in, with the page as it is.
-    if (!(await flushSaves())) {
-      setFailure(strings.notSignedOutNoteNotSaved);
-      setSigningOut(false);
-      return;
-    }
-
-    // The person has chosen to leave, so the reload that follows the logout asks them nothing more.
-    disarmUnloadGuard();
-    try {
-      await api('/api/auth/logout', { method: 'POST' });
-    } catch (error) {
-      const cause = classify(error);
-      // A 401 counts as done: there was no session left to end.
-      if (cause !== 'signedOut') {
-        // The page is still there, with any text it has not saved, which a reload must warn about again.
-        rearmUnloadGuard();
-        setFailure(msg.notSignedOut(cause));
-        setSigningOut(false);
-        return;
-      }
-    }
-
-    // Still busy, so that nothing more is sent while the page goes.
-    fullPageLoad();
-  }
+  const { signOut, signingOut, failure } = useSignOut();
 
   return (
     <div ref={ref} id={accountPanelId} className={styles.panel} hidden={!open}>

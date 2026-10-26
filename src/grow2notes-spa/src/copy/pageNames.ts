@@ -26,6 +26,7 @@ export const pageName = {
   pageNotFound: 'Page not found',
   thereIsAProblem: 'There is a problem',
   couldNotConnect: 'Could not connect',
+  connectAnAiAssistant: 'Connect an AI assistant',
 } as const;
 
 export type PageName = (typeof pageName)[keyof typeof pageName];

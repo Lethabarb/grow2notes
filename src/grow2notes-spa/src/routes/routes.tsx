@@ -27,6 +27,7 @@ import { AuthenticatorSetup } from './setup/AuthenticatorSetup.tsx';
 import { CreatePassword } from './setup/CreatePassword.tsx';
 import { SetupLayout } from './setup/SetupLayout.tsx';
 import { SetupPage } from './setup/SetupPage.tsx';
+import { SupportGate } from './SupportGate.tsx';
 
 /**
  * The name that a screen gives itself as the opener of the screens that it opens, which the shell records on each of
@@ -93,106 +94,122 @@ export const routes: AppRoute[] = [
               { path: 'app', element: <AuthenticatorSetup />, handle: setupHandle },
             ],
           },
+          // Every signed-in screen goes in here, so that a Support account sees the Support page in place of them all.
+          // Setup stays outside it, for a person with no session, and so does the Connect screen.
           {
-            index: true,
-            element: <TodayPage />,
-            handle: { pageName: pageName.today, returnFocus: {}, backKey: 'today' },
-          },
-          {
-            path: 'participants/:participantId/notes',
-            element: <PastNotesPage />,
-            handle: { pageName: pageName.pastNotes, returnFocus: {}, backKey: 'pastNotes' },
-          },
-          {
-            path: 'participants/:participantId/notes/:noteDate',
-            element: <NotePage />,
-            handle: { pageName: pageName.note, backKey: 'note' },
-          },
-          {
-            path: 'participants/:participantId/notes/:noteDate/edit',
-            element: <NotePage editing />,
-            handle: { pageName: pageName.note, backKey: 'note' },
-          },
-          // Every manager screen goes in here.
-          {
-            element: <ManagerOnly />,
+            element: <SupportGate />,
             children: [
-              // Its rows' return points: on a pop back from a note that a review has taken off the list, the row now
-              // in its place (flagged.md *Interactions and focus*).
               {
-                path: 'flagged',
-                element: <FlaggedPage />,
-                handle: { pageName: pageName.flaggedNotes, returnFocus: { fallback: 'sameIndex' }, backKey: 'flagged' },
-              },
-              // The date is optional so that /reports/daily reaches the page's arrival rules, behind the guard.
-              {
-                path: 'reports/daily/:date?',
-                element: <DailyReportPage />,
-                handle: { pageName: pageName.dailyReport, screenKey: 'dailyReport' },
-              },
-              // Both pages of a note's version history (version-history.md *Routes*), whose rows are page A's return
-              // points. React Router ranks these static segments above any param, so none takes them for a date.
-              {
-                path: 'participants/:participantId/notes/:noteDate/versions',
-                element: <VersionHistoryPage />,
-                handle: { pageName: pageName.versionHistory, returnFocus: {}, backKey: 'versionHistory' },
+                index: true,
+                element: <TodayPage />,
+                handle: { pageName: pageName.today, returnFocus: {}, backKey: 'today' },
               },
               {
-                path: 'participants/:participantId/notes/:noteDate/versions/:versionNumber',
-                element: <VersionPage />,
-                handle: { pageName: pageName.versionHistory },
-              },
-              { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
-              {
-                path: 'manage/participants',
-                element: <ParticipantsPage />,
-                handle: { pageName: pageName.participants, returnFocus: {}, backKey: 'participants' },
-              },
-              // One element for both, so that the replace after Add participant's 201 keeps it mounted
-              // (participants.md component B), and each with its own title.
-              {
-                path: 'manage/participants/new',
-                element: <ParticipantPage />,
-                handle: { pageName: pageName.addParticipant },
+                path: 'participants/:participantId/notes',
+                element: <PastNotesPage />,
+                handle: { pageName: pageName.pastNotes, returnFocus: {}, backKey: 'pastNotes' },
               },
               {
-                path: 'manage/participants/:participantId',
-                element: <ParticipantPage />,
-                handle: { pageName: pageName.participant, backKey: 'participant' },
+                path: 'participants/:participantId/notes/:noteDate',
+                element: <NotePage />,
+                handle: { pageName: pageName.note, backKey: 'note' },
               },
               {
-                path: 'manage/participants/:participantId/past-day-note',
-                element: <WritePastDayNotePage />,
-                handle: { pageName: pageName.writePastDayNote },
+                path: 'participants/:participantId/notes/:noteDate/edit',
+                element: <NotePage editing />,
+                handle: { pageName: pageName.note, backKey: 'note' },
               },
+              // Every manager screen goes in here.
               {
-                path: 'manage/participants/:participantId/export',
-                element: <ExportRecordPage />,
-                handle: { pageName: pageName.exportRecord },
+                element: <ManagerOnly />,
+                children: [
+                  // Its rows' return points: on a pop back from a note that a review has taken off the list, the row
+                  // now in its place (flagged.md *Interactions and focus*).
+                  {
+                    path: 'flagged',
+                    element: <FlaggedPage />,
+                    handle: {
+                      pageName: pageName.flaggedNotes,
+                      returnFocus: { fallback: 'sameIndex' },
+                      backKey: 'flagged',
+                    },
+                  },
+                  // The date is optional so that /reports/daily reaches the page's arrival rules, behind the guard.
+                  {
+                    path: 'reports/daily/:date?',
+                    element: <DailyReportPage />,
+                    handle: { pageName: pageName.dailyReport, screenKey: 'dailyReport' },
+                  },
+                  // Both pages of a note's version history (version-history.md *Routes*), whose rows are page A's
+                  // return points. React Router ranks these static segments above any param, so none takes them for a
+                  // date.
+                  {
+                    path: 'participants/:participantId/notes/:noteDate/versions',
+                    element: <VersionHistoryPage />,
+                    handle: { pageName: pageName.versionHistory, returnFocus: {}, backKey: 'versionHistory' },
+                  },
+                  {
+                    path: 'participants/:participantId/notes/:noteDate/versions/:versionNumber',
+                    element: <VersionPage />,
+                    handle: { pageName: pageName.versionHistory },
+                  },
+                  { path: 'manage', element: <ManagePage />, handle: { pageName: pageName.manage } },
+                  {
+                    path: 'manage/participants',
+                    element: <ParticipantsPage />,
+                    handle: { pageName: pageName.participants, returnFocus: {}, backKey: 'participants' },
+                  },
+                  // One element for both, so that the replace after Add participant's 201 keeps it mounted
+                  // (participants.md component B), and each with its own title.
+                  {
+                    path: 'manage/participants/new',
+                    element: <ParticipantPage />,
+                    handle: { pageName: pageName.addParticipant },
+                  },
+                  {
+                    path: 'manage/participants/:participantId',
+                    element: <ParticipantPage />,
+                    handle: { pageName: pageName.participant, backKey: 'participant' },
+                  },
+                  {
+                    path: 'manage/participants/:participantId/past-day-note',
+                    element: <WritePastDayNotePage />,
+                    handle: { pageName: pageName.writePastDayNote },
+                  },
+                  {
+                    path: 'manage/participants/:participantId/export',
+                    element: <ExportRecordPage />,
+                    handle: { pageName: pageName.exportRecord },
+                  },
+                  {
+                    path: 'manage/common-items',
+                    element: <CommonItemsPage />,
+                    handle: { pageName: pageName.commonItems },
+                  },
+                  {
+                    path: 'manage/guide-prompts',
+                    element: <GuidePromptsPage />,
+                    handle: { pageName: pageName.guidePrompts },
+                  },
+                  {
+                    path: 'manage/users',
+                    element: <UsersPage />,
+                    handle: { pageName: pageName.users, returnFocus: {}, backKey: 'users' },
+                  },
+                  // React Router ranks this static segment above :userId, so "new" is never taken for a user's ID.
+                  { path: 'manage/users/new', element: <InviteUserPage />, handle: { pageName: pageName.inviteUser } },
+                  { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },
+                  {
+                    path: 'manage/users/:userId/edit',
+                    element: <EditUserPage />,
+                    handle: { pageName: pageName.editUser },
+                  },
+                ],
               },
-              {
-                path: 'manage/common-items',
-                element: <CommonItemsPage />,
-                handle: { pageName: pageName.commonItems },
-              },
-              {
-                path: 'manage/guide-prompts',
-                element: <GuidePromptsPage />,
-                handle: { pageName: pageName.guidePrompts },
-              },
-              {
-                path: 'manage/users',
-                element: <UsersPage />,
-                handle: { pageName: pageName.users, returnFocus: {}, backKey: 'users' },
-              },
-              // React Router ranks this static segment above :userId, so "new" is never taken for a user's ID.
-              { path: 'manage/users/new', element: <InviteUserPage />, handle: { pageName: pageName.inviteUser } },
-              { path: 'manage/users/:userId', element: <UserPage />, handle: { pageName: pageName.user } },
-              { path: 'manage/users/:userId/edit', element: <EditUserPage />, handle: { pageName: pageName.editUser } },
+              // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
+              { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
             ],
           },
-          // Inside the shell, so that the header and nav stay on an address no route matches (component 4).
-          { path: '*', element: <PageNotFound />, handle: { pageName: pageName.pageNotFound } },
         ],
       },
     ],

@@ -30,8 +30,8 @@ import { usersQuery, type AdminUser } from './usersQuery.ts';
 
 /**
  * Where a saved edit takes the manager (users.md *States* › Edit user): to the user's page; to Today, after making
- * yourself a worker, as the Users screens are no longer yours; or to sign-in, by loading the app afresh, after giving
- * yourself a new address, which has ended your session.
+ * yourself a worker or Support, as the Users screens are no longer yours; or to sign-in, by loading the app afresh,
+ * after giving yourself a new address, which has ended your session.
  */
 type Landing = 'user' | 'today' | 'signIn';
 
@@ -45,7 +45,7 @@ function landingOf(sent: UserValues, stored: AdminUser, isSelf: boolean): Landin
     return 'signIn';
   }
 
-  return sent.role === 'Worker' ? 'today' : 'user';
+  return sent.role === 'Manager' ? 'user' : 'today';
 }
 
 /** A save of the user `target` as the form had them, whose stamp it sends, with the values sent and where it lands. */
@@ -90,7 +90,7 @@ function EditUser({ userId }: { userId: string | undefined }) {
   // take for a list not loaded yet (S00.05.03).
   const user = users.data?.find(({ id }) => id === userId);
   // The user as the form took them, as it first filled or from the list fetched again after a `412`: whose stamp Save
-  // sends, and against whose values it tells a new address and a change to Worker.
+  // sends, and against whose values it tells a new address and a change of role.
   const [stored, setStored] = useState<AdminUser>();
   const [values, setValues] = useState<UserValues>();
   const [errors, setErrors] = useState<UserErrors>({});
@@ -123,8 +123,8 @@ function EditUser({ userId }: { userId: string | undefined }) {
       }
 
       // Awaited, so that the user's page shows the change, Status included (users.md *E. Data and helpers*,
-      // Mutations). Not after your own new address, which has ended your session, or your own change to Worker, after
-      // which the list is no longer yours to fetch (design.md §8.4).
+      // Mutations). Not after your own new address, which has ended your session, or your own change to Worker or
+      // Support, after which the list is no longer yours to fetch (design.md §8.4).
       if (landing === 'user') {
         await refetchUsers();
       }
@@ -140,7 +140,7 @@ function EditUser({ userId }: { userId: string | undefined }) {
   const isSelf = userId === me.userId;
   // As the list gives it now, so that the notice and the rule's checks follow a manager added or gone meanwhile.
   const onlyManager = isSelf && users.data !== undefined && isOnlyActiveManager(users.data, me.userId);
-  // You as the form took you, against whom the rule tells a new address and a change to Worker, while it applies.
+  // You as the form took you, against whom the rule tells a new address and a change of role, while it applies.
   const ruledBy = onlyManager ? stored : undefined;
 
   function change(next: UserValues, field: keyof UserValues) {
@@ -175,7 +175,7 @@ function EditUser({ userId }: { userId: string | undefined }) {
       {
         // Each in place of the form, so that Back does not return to it (users.md *Interactions*). On a new entry,
         // which the shell refreshes `/me` for, so that your own new name shows in the Account panel, and your own
-        // change to Worker takes Manage from the nav.
+        // change to Worker or Support takes Manage from the nav.
         onSuccess: () => {
           switch (landing) {
             case 'user':
