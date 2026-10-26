@@ -24,6 +24,10 @@ param useFreeOffer = true
 param backupStorageRedundancy = 'Local'
 param pointInTimeRestoreDays = 7
 
+// The AI-assistant access for managers and admins is on in test, so it can be tried before production (§10.3).
+// Every deploy replaces the app settings, so this parameter, not a setting changed by hand, is what keeps it on.
+param mcpEnabled = true
+
 // Placeholders only. Every deploy passes the real values as parameters, from the test environment's secrets, because
 // the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
 // sql.bicep, monitoring.bicep and app.bicep refuse them empty.

@@ -65,4 +65,20 @@ internal static class Limits
 
     /// <summary>The shortest password Identity accepts (A22, §8.4): a minimum, where the others are maximums.</summary>
     public const int PasswordMinLength = 12;
+
+    /// <summary>
+    /// <c>OpenIddictApplications.ClientId</c>, the client ID or metadata-document URL of an approved assistant
+    /// (mcp-server.md §11.2). OpenIddict sizes the column at 100 already; Grow2NotesDbContext pins it to this, so the
+    /// operator command's check and the column cannot drift apart.
+    /// </summary>
+    public const int McpClientId = 100;
+
+    /// <summary>An approved assistant's name, which the operator sets and the consent screen shows (§11.2).</summary>
+    public const int McpAssistantName = 100;
+
+    /// <summary>The company behind an approved assistant, as long as an organisation's name (§11.2).</summary>
+    public const int McpCompany = 200;
+
+    /// <summary>Where an approved assistant keeps the data it is given, in the operator's words (§11.2).</summary>
+    public const int McpDataLocation = 200;
 }

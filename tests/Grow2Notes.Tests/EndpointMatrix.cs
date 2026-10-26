@@ -84,6 +84,14 @@ internal static class EndpointMatrix
         // the /api group, so it needs no antiforgery token either.
         new(AnyMethod, "/api/{**rest}",          NotFound,  NotFound,  NotFound,   NotFound,   At("/api/no-such-path")),
 
+        // The paths of the AI-assistant access and its discovery documents are a 404 for every method and caller,
+        // whether it is switched on or off. OpenIddict answers its own addresses inside the authentication middleware,
+        // so they are not endpoints and have no row; McpOffSwitchTests and AuthorisationServerTests cover them.
+        new(AnyMethod, "/oauth/{**rest}",        NotFound,  NotFound,  NotFound,   NotFound,   At("/oauth/authorize")),
+        new(AnyMethod, "/.well-known/{**rest}",  NotFound,  NotFound,  NotFound,   NotFound,
+            At("/.well-known/oauth-authorization-server")),
+        new(AnyMethod, "/mcp/{**rest}",          NotFound,  NotFound,  NotFound,   NotFound,   At("/mcp")),
+
         // App Service's health check and the deploy's smoke test send no credentials. Readiness runs the database
         // check, which passes here.
         new(AnyMethod, "/healthz",               OK,        OK,        OK,         OK),
