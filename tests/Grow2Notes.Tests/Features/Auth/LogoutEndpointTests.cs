@@ -100,6 +100,28 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
             Assert.Single(await EventsByAsync(userId)));
     }
 
+    // The Support role is let in by the SignedIn policy, and signing out does what it does for a worker: it rotates the
+    // stamp, ends the person's other sessions and writes the event.
+    [Fact]
+    public async Task A_Support_person_signs_out_with_a_new_stamp_and_every_other_session_gets_401()
+    {
+        var userId = await AddUserToAAsync(UserRole.Support);
+        var stampBefore = await SecurityStampAsync(userId);
+        using var client = app.CreateHttpsClient();
+        var token = await SignInAsync(client, userId);
+        using var devices = await SignedInDevices.SignInAsync(app, clock, userId);
+
+        using (var response = await SignOutAsync(client, token))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+            response.AssertClearsTheSessionCookie();
+        }
+
+        Assert.NotEqual(stampBefore, await SecurityStampAsync(userId));
+        Assert.Equal(AuditEventTypes.Auth.SignedOut, Assert.Single(await EventsByAsync(userId)).EventType);
+        await devices.AssertNextRequestsAsync(HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
+    }
+
     // The direct proof of F-1 (ops/security-review.md): a copy of the cookie, sent from a client that keeps no cookies,
     // as a thief's would be. It has seconds of its 30 minutes left to run, so only the sign-out explains the 401.
     [Fact]
@@ -227,9 +249,18 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
         return await client.GetAsync(MePath, TestContext.Current.CancellationToken);
     }
 
-    // An Active worker of A, with an address of its own, which no other test or run uses, as setup leaves one
-    // (design.md §8.1) apart from the passkey or password, which the cookie sign-in does not need.
-    private async Task<Guid> AddUserToAAsync()
+    private async Task<string?> SecurityStampAsync(Guid userId)
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var user = await scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>()
+            .FindByIdAsync(userId.ToString());
+        return user?.SecurityStamp;
+    }
+
+    // An Active user of A, a worker unless the test says otherwise, with an address of its own, which no other test or
+    // run uses, as setup leaves one (design.md §8.1) apart from the passkey or password, which the cookie sign-in does
+    // not need.
+    private async Task<Guid> AddUserToAAsync(UserRole role = UserRole.Worker)
     {
         var email = $"{Guid.NewGuid():N}@example.org";
         var now = clock.GetUtcNow().UtcDateTime;
@@ -237,7 +268,7 @@ public sealed class LogoutEndpointTests : IClassFixture<Grow2NotesFactory>, IAsy
         {
             OrganisationId = a.OrganisationId,
             DisplayName = "Sam Taylor",
-            Role = UserRole.Worker,
+            Role = role,
             Status = UserStatus.Active,
             InvitedAtUtc = now,
             InvitedByUserId = a.ManagerId,

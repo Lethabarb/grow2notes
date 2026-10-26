@@ -19,8 +19,8 @@ namespace Grow2Notes.Tests.Features.Auth;
 /// later request of the session: the user's own ID, display name and role, their organisation's name, and the date in
 /// Melbourne, as JSON in camelCase that is never stored (§6.1); for a manager, the number of the organisation's notes
 /// in To review, which the tests count in an organisation of their own (<see cref="TestOrganisations"/>), as other
-/// tests flag notes in the seeded ones; for a worker, no such property. The endpoint matrix covers who may call it, and
-/// <see cref="SignedOutTests"/> what a signed-out caller gets.
+/// tests flag notes in the seeded ones; for a worker or a Support person, no such property. The endpoint matrix covers
+/// who may call it, and <see cref="SignedOutTests"/> what a signed-out caller gets.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class MeEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -46,6 +46,7 @@ public sealed class MeEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
         {
             (a.WorkerId, a.OrganisationId, "Worker"),
             (a.ManagerId, a.OrganisationId, "Manager"),
+            (a.SupportId, a.OrganisationId, "Support"),
             (b.ManagerId, b.OrganisationId, "Manager"),
         })
         {
@@ -119,6 +120,19 @@ public sealed class MeEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDi
 
         var me = await GetMeAsync(organisation.WorkerId);
 
+        Assert.Equal(
+            ["userId", "displayName", "role", "organisationName", "today"],
+            me.EnumerateObject().Select(property => property.Name));
+    }
+
+    [Fact]
+    public async Task A_Support_person_s_answer_has_the_five_properties_and_no_toReviewCount()
+    {
+        var organisation = await AddOrganisationWithNotesAsync();
+
+        var me = await GetMeAsync(organisation.SupportId);
+
+        Assert.Equal("Support", me.GetProperty("role").GetString());
         Assert.Equal(
             ["userId", "displayName", "role", "organisationName", "today"],
             me.EnumerateObject().Select(property => property.Name));

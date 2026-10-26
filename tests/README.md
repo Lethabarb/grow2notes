@@ -1104,7 +1104,7 @@ using var client = factory.CreateClient().SignInAs(sqlServer.Seeded.A.WorkerId);
 
 A request that the fallback policy or the `Manager` policy refuses then answers as problem details: `401` signed
 out, from the session cookie, and `403` signed in, from the test-only sign-in, which forbids as the cookie does. To
-test a role that `UserRole` does not have, such as Release 2's Support, a request also sends the `X-Test-Role` header,
+test a role that `UserRole` does not have, such as "Admin", a request also sends the `X-Test-Role` header,
 whose value replaces the role claim's, and no other claim changes; the value `TestSignIn.NoRole` leaves the user with
 no role claim (an empty value would not: the test server drops a header whose value is empty). The header needs
 `X-Test-User`: a request with `X-Test-Role` alone fails to sign in, rather than going to the cookie, which would
@@ -1373,7 +1373,7 @@ a `+`, `/` or `=` in it.
 ### The endpoint matrix
 
 `Grow2Notes.Tests/EndpointMatrixTests.cs` takes every endpoint from the app's `EndpointDataSource` and calls it as each
-`Caller`: signed out, A's worker, A's manager and B's manager (design.md §2, §9.2). Each must answer with the status in
+`Caller`: signed out, A's worker, A's manager, B's manager and A's Support person (design.md §2, §9.2). Each must answer with the status in
 the endpoint's row in `Grow2Notes.Tests/EndpointMatrix.cs`; the matrix checks the status, and the answer only where the
 row has a check of it (below). An endpoint with no row fails the run, and so does a row with no endpoint, so a story
 that maps, changes or removes an endpoint changes its row in the same change. The app is hosted there with no test-only

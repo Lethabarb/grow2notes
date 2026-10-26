@@ -71,82 +71,94 @@ internal static class EndpointMatrix
     public static IReadOnlyList<EndpointRow> Rows { get; } =
     [
         // The SPA, for everyone, so a signed-out user gets the sign-in page: each file of the build, and index.html at
-        // each client route.
-        //  Methods    Route                     Signed out A's worker A's manager B's manager Request
-        new(GetOrHead, StaticAssets,             OK,        OK,        OK,         OK),
-        new(GetOrHead, "{*path:nonfile}",        OK,        OK,        OK,         OK,         At("/")),
+        // each client route. Support gets it too: it is the SPA, not the API, that shows the Support person the one
+        // page they have.
+        // After the route: the status for signed out, A's worker, A's manager, B's manager and A's Support person, then
+        // how to call it. Only the SignedIn policy admits Support, and the sign-in and setup endpoints, which are
+        // anonymous, answer it as they answer a worker; the fallback and Manager policies refuse it with 403 before any
+        // handler runs.
+        new(GetOrHead, StaticAssets, OK, OK, OK, OK, OK),
+        new(GetOrHead, "{*path:nonfile}", OK, OK, OK, OK, OK, At("/")),
 
         // A request that no other endpoint answers is a 404, never a 401: a path with a file extension that is no
         // file of the build, such as /favicon.ico, or a client route called with a method other than GET or HEAD.
-        new(AnyMethod, "{*path}",                NotFound,  NotFound,  NotFound,   NotFound,   At("/favicon.ico")),
+        new(AnyMethod, "{*path}", NotFound, NotFound, NotFound, NotFound, NotFound, At("/favicon.ico")),
 
         // An unknown /api path is a 404 for every method, never the SPA page or a 401 (design.md §6.1). It is outside
         // the /api group, so it needs no antiforgery token either.
-        new(AnyMethod, "/api/{**rest}",          NotFound,  NotFound,  NotFound,   NotFound,   At("/api/no-such-path")),
+        new(AnyMethod, "/api/{**rest}", NotFound, NotFound, NotFound, NotFound, NotFound,
+            At("/api/no-such-path")),
 
         // The paths of the AI-assistant access and its discovery documents are a 404 for every method and caller,
         // whether it is switched on or off. OpenIddict answers its own addresses inside the authentication middleware,
-        // so they are not endpoints and have no row; McpOffSwitchTests and AuthorisationServerTests cover them.
-        new(AnyMethod, "/oauth/{**rest}",        NotFound,  NotFound,  NotFound,   NotFound,   At("/oauth/authorize")),
-        new(AnyMethod, "/.well-known/{**rest}",  NotFound,  NotFound,  NotFound,   NotFound,
+        // so they are not endpoints and have no row; McpOffSwitchTests and AuthorisationServerTests cover them. The
+        // authorize, token and consent endpoints exist only when the access is switched on, which this app is not, so
+        // they have no row either; ConnectTests and TokenTests call them as every kind of caller.
+        new(AnyMethod, "/oauth/{**rest}", NotFound, NotFound, NotFound, NotFound, NotFound,
+            At("/oauth/authorize")),
+        new(AnyMethod, "/.well-known/{**rest}", NotFound, NotFound, NotFound, NotFound, NotFound,
             At("/.well-known/oauth-authorization-server")),
-        new(AnyMethod, "/mcp/{**rest}",          NotFound,  NotFound,  NotFound,   NotFound,   At("/mcp")),
+        new(AnyMethod, "/mcp/{**rest}", NotFound, NotFound, NotFound, NotFound, NotFound, At("/mcp")),
 
         // App Service's health check and the deploy's smoke test send no credentials. Readiness runs the database
         // check, which passes here.
-        new(AnyMethod, "/healthz",               OK,        OK,        OK,         OK),
-        new(AnyMethod, "/healthz/ready",         OK,        OK,        OK,         OK),
+        new(AnyMethod, "/healthz", OK, OK, OK, OK, OK),
+        new(AnyMethod, "/healthz/ready", OK, OK, OK, OK, OK),
 
         // The API (design.md §6), in the /api group. The sign-in page needs an antiforgery token before anyone is
-        // signed in (§6.2). Each signed-in user gets themselves from /api/auth/me, in their own organisation.
-        new(Get,       "/api/auth/antiforgery",  NoContent, NoContent, NoContent,  NoContent),
-        new(Get,       "/api/auth/me",           Unauthorized, OK,     OK,         OK),
+        // signed in (§6.2). Each signed-in user, Support included, gets themselves from /api/auth/me, in their own
+        // organisation, under the SignedIn policy.
+        new(Get,       "/api/auth/antiforgery", NoContent, NoContent, NoContent, NoContent, NoContent),
+        new(Get,       "/api/auth/me", Unauthorized, OK, OK, OK, OK),
 
-        // Each signed-in user signs out of every session of theirs (§8.5, A99). The test-only sign-in has no session
-        // cookie, so a call deletes none: it gives the caller a new security stamp, which the test-only sign-in never
-        // checks, and adds one auth.signed_out to the caller's organisation (tests/README.md, the seeded-rows rule's
-        // one exception).
-        new(Post,      "/api/auth/logout",       Unauthorized, NoContent, NoContent, NoContent),
+        // Each signed-in user, Support included, signs out of every session of theirs (§8.5, A99). The test-only
+        // sign-in has no session cookie, so a call deletes none: it gives the caller a new security stamp, which the
+        // test-only sign-in never checks, and adds one auth.signed_out to the caller's organisation (tests/README.md,
+        // the seeded-rows rule's one exception).
+        new(Post,      "/api/auth/logout", Unauthorized, NoContent, NoContent, NoContent, NoContent),
 
-        // Each signed-in user may press Stay signed in on the warning before the idle sign-out (§8.5): the ping changes
-        // nothing, and the session check renews the session as on any request.
-        new(Post,      "/api/auth/ping",         Unauthorized, NoContent, NoContent, NoContent),
+        // Each signed-in user, Support included, may press Stay signed in on the warning before the idle sign-out
+        // (§8.5): the ping changes nothing, and the session check renews the session as on any request.
+        new(Post,      "/api/auth/ping", Unauthorized, NoContent, NoContent, NoContent, NoContent),
 
         // Setup starts from an invite's link, before anyone is signed in (§8.1 step 3), and a made-up link gets the
         // one answer of a link that does not check, whoever calls.
-        new(Post,      "/api/auth/setup/start",  Gone,      Gone,      Gone,       Gone,
+        new(Post,      "/api/auth/setup/start", Gone, Gone, Gone, Gone, Gone,
             WithJson("/api/auth/setup/start", new { userId = Guid.NewGuid(), token = "made-up" })),
 
         // Each later setup step needs the enrolment cookie that the start issues, which no caller here has: a session
         // does not stand in for it (§8.1 step 3).
-        new(Get,       "/api/auth/setup/authenticator", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
-        new(Get,       "/api/auth/setup/authenticator/qr.png", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
-        new(Post,      "/api/auth/setup/password", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+        new(Get,       "/api/auth/setup/authenticator",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Get,       "/api/auth/setup/authenticator/qr.png",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Post,      "/api/auth/setup/password", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/password", new { password = "made-up password", totpCode = "123456" })),
-        new(Post,      "/api/auth/setup/passkey/options", Unauthorized, Unauthorized, Unauthorized, Unauthorized),
-        new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+        new(Post,      "/api/auth/setup/passkey/options",
+            Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized),
+        new(Post,      "/api/auth/setup/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/setup/passkey", new { credentialJson = "{}", name = "Grow2Notes" })),
 
         // Anyone may ask for the options to sign in with a passkey (§6.2), signed in or not: they name no user. Anyone
         // may sign in with a passkey too, and a passkey that no account holds is refused, whoever sends it.
-        new(Post,      "/api/auth/passkey/options", OK,     OK,        OK,         OK),
-        new(Post,      "/api/auth/passkey",      Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+        new(Post,      "/api/auth/passkey/options", OK, OK, OK, OK, OK),
+        new(Post,      "/api/auth/passkey", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithAPasskeyNoAccountHolds),
 
         // Anyone may sign in with a password too, and an email that no account holds is refused, whoever sends it,
         // before any password is checked, so the call changes nothing.
-        new(Post,      "/api/auth/login",        Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+        new(Post,      "/api/auth/login", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login", new { email = $"{Guid.NewGuid():N}@example.org", password = "made-up" })),
 
         // The code step reads its account from the two-factor cookie that a password step sets, which no caller here
         // has, so a made-up code is refused, whoever sends it, with nothing checked or written (§8.2).
-        new(Post,      "/api/auth/login/totp",   Unauthorized, Unauthorized, Unauthorized, Unauthorized,
+        new(Post,      "/api/auth/login/totp", Unauthorized, Unauthorized, Unauthorized, Unauthorized, Unauthorized,
             WithJson("/api/auth/login/totp", new { code = "123456" })),
 
         // The Today list (§6.3), for every signed-in user, each of whom gets their own organisation's active
         // participants: its participants hold the caller's own organisation's seeded participant and not the other's
         // (§5.9 item 7).
-        new(Get,       "/api/today",             Unauthorized, OK,     OK,         OK,
+        new(Get,       "/api/today", Unauthorized, OK, OK, OK, Forbidden,
             Answer: HoldsTheCallersOwnSeeded(
                 "participant", organisation => [organisation.ParticipantId], listedIn: "participants")),
 
@@ -154,12 +166,12 @@ internal static class EndpointMatrix
         // first starts one of A's worker's in A, whose participant its DraftedInA option names: A's worker's list holds
         // it, and neither A's manager's, whose working copy it is not, nor B's manager's, which holds nothing of A's
         // (§5.9 item 7); reading writes nothing (A28).
-        new(Get,       "/api/me/drafts",         Unauthorized, OK,     OK,         OK,
+        new(Get,       "/api/me/drafts", Unauthorized, OK, OK, OK, Forbidden,
             MyDraftsAfterADraftStartedInA, HoldsTheDraftStartedInAForAsWorkerAlone),
 
         // A participant's header (§6.3), for every signed-in user, at A's seeded participant, whom B's manager does not
         // find (§9.2).
-        new(Get,       "/api/participants/{participantId:guid}", Unauthorized, OK, OK, NotFound,
+        new(Get,       "/api/participants/{participantId:guid}", Unauthorized, OK, OK, NotFound, Forbidden,
             call => Task.FromResult(
                 new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}"))),
 
@@ -167,23 +179,23 @@ internal static class EndpointMatrix
         // adds to A, submitted by A's worker, so each of A's users reads it, and reading writes nothing (A28). B's
         // manager does not find the participant (§9.2).
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}", Unauthorized, OK, OK,
-            NotFound, ANoteSubmittedInA),
+            NotFound, Forbidden, ANoteSubmittedInA),
 
         // A submitted note's versions (§6.3), for managers. Each call lists the versions of a note that its request
         // first adds to A, submitted by A's worker, so A's manager gets the one version and A's worker 403. B's manager
         // does not find the participant (§9.2). Reading writes nothing (A28).
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
-            Forbidden, OK, NotFound, TheVersionsOfANoteSubmittedInA),
+            Forbidden, OK, NotFound, Forbidden, TheVersionsOfANoteSubmittedInA),
 
         // One version of it (§6.3), for managers, the same way.
         new(Get,
             "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions/{versionNumber:int:min(1)}",
-            Unauthorized, Forbidden, OK, NotFound, VersionOneOfANoteSubmittedInA),
+            Unauthorized, Forbidden, OK, NotFound, Forbidden, VersionOneOfANoteSubmittedInA),
 
         // A participant's history (§6.3), for every signed-in user, at A's seeded participant, whose notes no test
         // starts (tests/README.md), so each of A's users gets an empty page, and reading writes nothing (A28). B's
         // manager does not find the participant (§9.2).
-        new(Get,       "/api/participants/{participantId:guid}/notes", Unauthorized, OK, OK, NotFound,
+        new(Get,       "/api/participants/{participantId:guid}/notes", Unauthorized, OK, OK, NotFound, Forbidden,
             call => Task.FromResult(
                 new HttpRequestMessage(call.Method, $"/api/participants/{call.Seeded.A.ParticipantId}/notes"))),
 
@@ -191,203 +203,215 @@ internal static class EndpointMatrix
         // starts (tests/README.md), so each of A's users gets the template and opening it writes nothing (§3.3). B's
         // manager does not find the participant (§9.2).
         new(Get,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, OK, OK,
-            NotFound, TodaysNoteFormOfTheSeededParticipantOfA),
+            NotFound, Forbidden, TodaysNoteFormOfTheSeededParticipantOfA),
 
         // The note's autosave (§6.3), for every signed-in user. Each call is the first save of today's note of a
         // participant whom its request first adds to A, as a call commits (tests/README.md), so each of A's users
         // starts a note of their own and gets 201. B's manager does not find the participant (§9.2).
         new(Put,       "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized, Created,
-            Created, NotFound, StartingTodaysNoteOfAParticipantOfItsOwn),
+            Created, NotFound, Forbidden, StartingTodaysNoteOfAParticipantOfItsOwn),
 
         // Submit (§6.3), for every signed-in user. Each call submits a draft that A's worker started for today, of a
         // participant whom its request first adds to A, as a call commits (tests/README.md), with a key of its own, so
         // A's worker, its author, gets 201, and A's manager 409 note.in_progress_by_other, as only the author creates
         // version 1 (§5.8 step 2). B's manager does not find the participant (§9.2).
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/versions", Unauthorized,
-            Created, Conflict, NotFound, SubmittingADraftOfTheWorkerOfA),
+            Created, Conflict, NotFound, Forbidden, SubmittingADraftOfTheWorkerOfA),
 
         // Discard draft (§6.3), for every signed-in user. Each call discards a draft that A's worker started for today,
         // of a participant whom its request first adds to A, as a call commits (tests/README.md), so A's worker, its
         // author, and A's manager each get 204 (§3.4). B's manager does not find the participant (§9.2).
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/discard", Unauthorized,
-            NoContent, NoContent, NotFound, DiscardingADraftOfTheWorkerOfA),
+            NoContent, NoContent, NotFound, Forbidden, DiscardingADraftOfTheWorkerOfA),
 
         // Mark reviewed (§6.4), for managers. Each call reviews a note that A's worker submitted flagged, of a
         // participant whom its request first adds to A, as a call commits (tests/README.md), so A's manager gets 201
         // and A's worker 403. B's manager does not find the participant (§9.2).
         new(Post,      "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/reviews", Unauthorized,
-            Forbidden, Created, NotFound, ReviewingAFlaggedNoteOfTheWorkerOfA),
+            Forbidden, Created, NotFound, Forbidden, ReviewingAFlaggedNoteOfTheWorkerOfA),
 
         // Cancel (§6.3, A71), for every signed-in user. Each call cancels the pending edit of today's note of a
         // participant whom its request first adds to A, submitted by A's worker, and A's worker and A's manager each
         // hold a pending edit of it, as a call commits (tests/README.md), so each gets 204, and the answer is never
         // 403. B's manager does not find the participant (§9.2).
         new(Delete,    "/api/participants/{participantId:guid}/notes/{noteDate:isodate}/draft", Unauthorized,
-            NoContent, NoContent, NotFound, CancellingAPendingEditOfTheWorkerOfAAndTheManagerOfA),
+            NoContent, NoContent, NotFound, Forbidden, CancellingAPendingEditOfTheWorkerOfAAndTheManagerOfA),
 
         // The To review list (§6.4), outside /api/admin with the Manager policy of its own, so for managers alone. The
         // seeded organisations have no flagged note, so each call first flags one in A, and A's manager's list holds
         // it and B's manager's does not (§5.9 item 7); reading writes nothing (A28).
-        new(Get,       "/api/reviews",           Unauthorized, Forbidden, OK,     OK,
+        new(Get,       "/api/reviews", Unauthorized, Forbidden, OK, OK, Forbidden,
             ToReviewAfterANoteFlaggedInA, HoldsTheNoteFlaggedInAForAsManagerAlone),
 
         // The daily report (§6.5), outside /api/admin with the Manager policy of its own, so for managers alone. Each
         // call first submits a note in A on a day that no test seeds in B, so A's manager gets the file and B's manager
         // gets 404 for a day with no notes of B's (§5.9 item 7).
-        new(Get,       "/api/reports/daily/{date:isodate}/export", Unauthorized, Forbidden, OK, NotFound,
+        new(Get,       "/api/reports/daily/{date:isodate}/export", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             TheDailyReportOfANoteSubmittedInA),
 
         // Whether that day has a note (§6.5), for managers alone. It is the same call, so A's manager hears true and
         // B's hears false, with 200 and not 404, so that nothing shows B that A has notes (§5.9 item 7). The export
         // has one row, for Word: the PDF's refusals are DailyReportEndpointTests'.
-        new(Get,       "/api/reports/daily/{date:isodate}/has-notes", Unauthorized, Forbidden, OK, OK,
+        new(Get,       "/api/reports/daily/{date:isodate}/has-notes", Unauthorized, Forbidden, OK, OK, Forbidden,
             WhetherTheDayOfANoteSubmittedInAHasNotes, HasNotesForManagerOfAAlone),
 
         // A participant's record (§6.5), outside /api/admin with the Manager policy of its own, so for managers alone.
         // Each call first submits a note in A for a participant of its own, so A's manager gets the file and B's manager
         // gets 404 for a participant who is not in B (§9.2).
-        new(Get,       "/api/reports/participants/{participantId:guid}/export", Unauthorized, Forbidden, OK, NotFound,
+        new(Get,       "/api/reports/participants/{participantId:guid}/export",
+            Unauthorized, Forbidden, OK, NotFound, Forbidden,
             TheRecordOfAParticipantWithANoteSubmittedInA),
 
         // The user list (§6.6), in the /api/admin group, which only managers may call (§2). Each manager's list holds
         // their own organisation's users and none of the other's (§5.9 items 5 and 7).
-        new(Get,       "/api/admin/users",       Unauthorized, Forbidden, OK, OK,
+        new(Get,       "/api/admin/users", Unauthorized, Forbidden, OK, OK, Forbidden,
             Answer: HoldsTheCallersOwnSeeded("user", organisation => [organisation.ManagerId, organisation.WorkerId])),
 
         // Each manager invites into their own organisation, which a call commits, so each call invites an address of
         // its own (tests/README.md).
-        new(Post,      "/api/admin/users",       Unauthorized, Forbidden, Created, Created,
+        new(Post,      "/api/admin/users", Unauthorized, Forbidden, Created, Created, Forbidden,
             AnInviteOfANewAddress),
 
         // Each call renames, resends the invite of, deactivates or reactivates a user it first invites into A, as a
         // call commits (tests/README.md), with the user's ETag. B's manager does not find A's user (§9.2).
         // Reactivating someone who is not Deactivated changes nothing, and answers as a reactivation does.
-        new(Put,       "/api/admin/users/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+        new(Put,       "/api/admin/users/{id:guid}", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             ARenameOfANewInviteInA),
-        new(Post,      "/api/admin/users/{id:guid}/setup-link", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/users/{id:guid}/setup-link", Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             OnANewInviteInA("setup-link")),
-        new(Post,      "/api/admin/users/{id:guid}/deactivate", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/users/{id:guid}/deactivate", Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             OnANewInviteInA("deactivate")),
-        new(Post,      "/api/admin/users/{id:guid}/reactivate", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/users/{id:guid}/reactivate", Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             OnANewInviteInA("reactivate")),
 
         // The guide prompts (§6.6), each manager's own organisation's, as the tenant is the caller's (§5.9 item 7). A
         // PUT with no If-Match is refused before anything is saved, so the calls change nothing.
-        new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK),
-        new(Put,       "/api/admin/guide-prompts", Unauthorized, Forbidden, PreconditionRequired, PreconditionRequired,
+        new(Get,       "/api/admin/guide-prompts", Unauthorized, Forbidden, OK, OK, Forbidden),
+        new(Put,       "/api/admin/guide-prompts",
+            Unauthorized, Forbidden, PreconditionRequired, PreconditionRequired, Forbidden,
             WithJson("/api/admin/guide-prompts", new { text = "What did they enjoy today?" })),
 
         // The participant list (§6.6), in the same group. Each manager's list holds their own organisation's seeded
         // participant and not the other's.
-        new(Get,       "/api/admin/participants", Unauthorized, Forbidden, OK, OK,
+        new(Get,       "/api/admin/participants", Unauthorized, Forbidden, OK, OK, Forbidden,
             Answer: HoldsTheCallersOwnSeeded("participant", organisation => [organisation.ParticipantId])),
 
         // Adding a participant (§6.6), in the same group. The policy refuses A's worker before the handler runs, so
         // the worker's call adds no one. Each manager's call adds a made-up participant to their own organisation,
         // which the seeded-rows rule allows (tests/README.md), and loads nothing of another's, so B's manager gets
         // what A's does.
-        new(Post,      "/api/admin/participants", Unauthorized, Forbidden, Created, Created,
+        new(Post,      "/api/admin/participants", Unauthorized, Forbidden, Created, Created, Forbidden,
             WithJson("/api/admin/participants",
                 new { givenName = "Matrix", familyName = "Caller", dateOfBirth = "1990-01-01" })),
 
         // Correcting a participant (§6.6), in the same group. Each call corrects a participant of its own, whom its
         // request first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
-        new(Put,       "/api/admin/participants/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+        new(Put,       "/api/admin/participants/{id:guid}", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             CorrectingAParticipantOfItsOwn),
 
         // Archiving and restoring a participant (§6.6), in the same group, as the correction is: each call archives an
         // active participant, or restores an archived one, of its own in A, so B's manager gets 404.
-        new(Post,      "/api/admin/participants/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/participants/{id:guid}/archive",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "archive", archived: false)),
-        new(Post,      "/api/admin/participants/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/participants/{id:guid}/restore",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingTheStatusOfAParticipantOfItsOwn(call, "restore", archived: true)),
 
         // A participant's goals (§6.6), in the same group, at A's seeded participant, whom B's manager does not find
         // (§9.2): the list belongs to that one participant, so the 404 is its isolation check.
-        new(Get,       "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, OK, NotFound,
+        new(Get,       "/api/admin/participants/{participantId:guid}/goals",
+            Unauthorized, Forbidden, OK, NotFound, Forbidden,
             call => Task.FromResult(
                 new HttpRequestMessage(call.Method, $"/api/admin/participants/{call.Seeded.A.ParticipantId}/goals"))),
 
         // Adding a goal (§6.6), in the same group. Each call adds a goal to a participant of its own, whom its request
         // first adds to A, so B's manager, to whom A's participants are not found, gets 404 (§9.2).
-        new(Post,      "/api/admin/participants/{participantId:guid}/goals", Unauthorized, Forbidden, Created, NotFound,
+        new(Post,      "/api/admin/participants/{participantId:guid}/goals",
+            Unauthorized, Forbidden, Created, NotFound, Forbidden,
             AddingAGoalToAParticipantOfItsOwn),
 
         // Rewording a goal (§6.6), in the same group. Each call rewords a goal of its own, which its request first adds
         // to a participant whom it adds to A, so B's manager, to whom A's goals are not found, gets 404 (§9.2).
-        new(Put,       "/api/admin/goals/{goalId:guid}", Unauthorized, Forbidden, OK, NotFound,
+        new(Put,       "/api/admin/goals/{goalId:guid}", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             RewordingAGoalOfItsOwn),
 
         // Reordering a participant's goals (§6.6), in the same group. Each call reorders the active goals of a
         // participant of its own, whom its request first adds to A, so B's manager, to whom A's participants are not
         // found, gets 404 (§9.2).
         new(Put,       "/api/admin/participants/{participantId:guid}/goals/order", Unauthorized, Forbidden, NoContent,
-            NotFound, ReorderingTheGoalsOfAParticipantOfItsOwn),
+            NotFound, Forbidden, ReorderingTheGoalsOfAParticipantOfItsOwn),
 
         // Archiving and restoring a goal (§6.6), in the same group, as the reword is: each call archives an active
         // goal, or restores an archived one, of its own, which its request first adds to a participant whom it adds to
         // A, so B's manager gets 404.
-        new(Post,      "/api/admin/goals/{goalId:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/goals/{goalId:guid}/archive",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "archive", archived: false)),
-        new(Post,      "/api/admin/goals/{goalId:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/goals/{goalId:guid}/restore",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingThePlaceOfAGoalOfItsOwn(call, "restore", archived: true)),
 
         // The common item groups with their items (§6.6), in the same group. The list loads no record of A's, so B's
         // manager gets B's own list, which must hold B's seeded Every note and not A's; tests add other groups to the
         // seeded organisations, so the seeded Every note groups alone are looked for.
-        new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK,
+        new(Get,       "/api/admin/common-item-groups", Unauthorized, Forbidden, OK, OK, Forbidden,
             Answer: HoldsTheCallersOwnSeeded("common item group", organisation => [organisation.EveryNoteGroupId])),
 
         // Adding a common item group (§6.6), in the same group, as adding a participant is: the policy refuses A's
         // worker before the handler runs, so the worker's call adds no group, and each manager's call adds a made-up
         // group at the end of their own organisation's, which the seeded-rows rule allows (tests/README.md), and loads
         // nothing of another's, so B's manager gets what A's does.
-        new(Post,      "/api/admin/common-item-groups", Unauthorized, Forbidden, Created, Created,
+        new(Post,      "/api/admin/common-item-groups", Unauthorized, Forbidden, Created, Created, Forbidden,
             WithJson("/api/admin/common-item-groups", new { name = "Community outing" })),
 
         // Renaming a common item group (§6.6), in the same group. Each call renames a group of its own, which its
         // request first adds to A, never the seeded Every note, so B's manager, to whom A's groups are not found, gets
         // 404 (§9.2).
-        new(Put,       "/api/admin/common-item-groups/{groupId:guid}", Unauthorized, Forbidden, OK, NotFound,
+        new(Put,       "/api/admin/common-item-groups/{groupId:guid}", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             RenamingAGroupOfItsOwn),
 
         // Reordering the common item groups (§6.6), in the same group. Each call adds two groups of its own to A and
         // sends them with A's other active groups but Every note, so A's manager's call moves them. The IDs are checked
         // against the caller's own organisation's groups, so B's manager, whose groups those are not, gets
         // 422 config.order_mismatch, and A's order stays as it was (§9.2).
-        new(Put,       "/api/admin/common-item-groups/order", Unauthorized, Forbidden, NoContent, UnprocessableEntity,
+        new(Put,       "/api/admin/common-item-groups/order",
+            Unauthorized, Forbidden, NoContent, UnprocessableEntity, Forbidden,
             ReorderingTheGroupsWithTwoOfItsOwn),
 
         // Archiving and restoring a common item group (§6.6), in the same group, as the rename is: each call archives
         // an active group, or restores an archived one, of its own, which its request first adds to A, never the seeded
         // Every note, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/archive", Unauthorized, Forbidden, NoContent,
-            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "archive", archived: false)),
+            NotFound, Forbidden, call => ChangingTheStateOfAGroupOfItsOwn(call, "archive", archived: false)),
         new(Post,      "/api/admin/common-item-groups/{groupId:guid}/restore", Unauthorized, Forbidden, NoContent,
-            NotFound, call => ChangingTheStateOfAGroupOfItsOwn(call, "restore", archived: true)),
+            NotFound, Forbidden, call => ChangingTheStateOfAGroupOfItsOwn(call, "restore", archived: true)),
 
         // Adding a common item (§6.6), in the same group. Each call adds an item to a group of its own, which its
         // request first adds to A, so B's manager, to whom A's groups are not found, gets 404 (§9.2).
-        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items", Unauthorized, Forbidden, Created, NotFound,
+        new(Post,      "/api/admin/common-item-groups/{groupId:guid}/items",
+            Unauthorized, Forbidden, Created, NotFound, Forbidden,
             AddingAnItemToAGroupOfItsOwn),
 
         // Rewording a common item (§6.6), in the same group. Each call rewords an item of its own, which its request
         // first adds to a group that it adds to A, so B's manager, to whom A's items are not found, gets 404 (§9.2).
-        new(Put,       "/api/admin/common-items/{id:guid}", Unauthorized, Forbidden, OK, NotFound,
+        new(Put,       "/api/admin/common-items/{id:guid}", Unauthorized, Forbidden, OK, NotFound, Forbidden,
             RewordingAnItemOfItsOwn),
 
         // Reordering a group's common items (§6.6), in the same group. Each call reorders the active items of a group
         // of its own, which its request first adds to A, so B's manager, to whom A's groups are not found, gets 404
         // (§9.2).
         new(Put,       "/api/admin/common-item-groups/{groupId:guid}/items/order", Unauthorized, Forbidden, NoContent,
-            NotFound, ReorderingTheItemsOfAGroupOfItsOwn),
+            NotFound, Forbidden, ReorderingTheItemsOfAGroupOfItsOwn),
 
         // Archiving and restoring a common item (§6.6), in the same group, as the reword is: each call archives an
         // active item, or restores an archived one, of its own, which its request first adds to a group that it adds
         // to A, so B's manager gets 404.
-        new(Post,      "/api/admin/common-items/{id:guid}/archive", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/common-items/{id:guid}/archive",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingThePlaceOfAnItemOfItsOwn(call, "archive", archived: false)),
-        new(Post,      "/api/admin/common-items/{id:guid}/restore", Unauthorized, Forbidden, NoContent, NotFound,
+        new(Post,      "/api/admin/common-items/{id:guid}/restore",
+            Unauthorized, Forbidden, NoContent, NotFound, Forbidden,
             call => ChangingThePlaceOfAnItemOfItsOwn(call, "restore", archived: true)),
     ];
 
@@ -1076,6 +1100,7 @@ internal sealed record EndpointRow(
     HttpStatusCode WorkerOfA,
     HttpStatusCode ManagerOfA,
     HttpStatusCode ManagerOfB,
+    HttpStatusCode SupportOfA,
     Func<EndpointCall, Task<HttpRequestMessage>>? Request = null,
     Func<HttpResponseMessage, Caller, SeededOrganisations, Task<IReadOnlyList<string>>>? Answer = null)
 {
@@ -1086,6 +1111,7 @@ internal sealed record EndpointRow(
         Caller.WorkerOfA => WorkerOfA,
         Caller.ManagerOfA => ManagerOfA,
         Caller.ManagerOfB => ManagerOfB,
+        Caller.SupportOfA => SupportOfA,
         _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
     };
 }

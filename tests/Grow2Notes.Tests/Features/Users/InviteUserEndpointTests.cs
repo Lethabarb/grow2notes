@@ -47,6 +47,7 @@ public sealed class InviteUserEndpointTests : IClassFixture<Grow2NotesFactory>, 
     [Theory]
     [InlineData(Caller.ManagerOfA, "Worker")]
     [InlineData(Caller.ManagerOfB, "Manager")]
+    [InlineData(Caller.ManagerOfA, "Support")]
     public async Task A_manager_s_invite_creates_an_Invited_user_in_their_organisation_with_its_event_and_email(
         Caller caller, string role)
     {
@@ -148,7 +149,7 @@ public sealed class InviteUserEndpointTests : IClassFixture<Grow2NotesFactory>, 
 
     [Theory]
     [MemberData(nameof(InvalidUserDetails.Roles), MemberType = typeof(InvalidUserDetails))]
-    public Task A_missing_role_or_one_that_is_neither_Worker_nor_Manager_gets_a_422_for_role_and_nothing_is_done(
+    public Task A_missing_role_or_one_that_is_none_of_Worker_Manager_and_Support_gets_a_422_for_role_and_nothing_is_done(
         string? role) =>
         AssertInvalidAsync(Body(DisplayName, NewAddress(), role), ("role", UserDetailsChecks.RoleMissing));
 

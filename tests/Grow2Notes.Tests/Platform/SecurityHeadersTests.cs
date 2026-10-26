@@ -24,14 +24,14 @@ public sealed class SecurityHeadersTests(Grow2NotesFactory factory, SqlServerFix
 
     // The page through the client-route fallback (/, as every client route takes it) and from the static assets
     // (/index.html); /api/auth/me's JSON for A's worker, the session cookie's 401 signed out, and the 403 for a role
-    // that no policy names, Release 2's Support; the antiforgery token's 204; the unknown /api path's 404; the 404 of
-    // the catch-all for a path with a file extension that is no file; and liveness.
+    // that no policy names; the antiforgery token's 204; the unknown /api path's 404; the 404 of the
+    // catch-all for a path with a file extension that is no file; and liveness.
     [Theory]
     [InlineData("/", Caller.SignedOut, null, HttpStatusCode.OK, "text/html")]
     [InlineData("/index.html", Caller.SignedOut, null, HttpStatusCode.OK, "text/html")]
     [InlineData("/api/auth/me", Caller.WorkerOfA, null, HttpStatusCode.OK, "application/json")]
     [InlineData("/api/auth/me", Caller.SignedOut, null, HttpStatusCode.Unauthorized, "application/problem+json")]
-    [InlineData("/api/auth/me", Caller.WorkerOfA, "Support", HttpStatusCode.Forbidden, "application/problem+json")]
+    [InlineData("/api/auth/me", Caller.WorkerOfA, "Admin", HttpStatusCode.Forbidden, "application/problem+json")]
     [InlineData("/api/auth/antiforgery", Caller.SignedOut, null, HttpStatusCode.NoContent, null)]
     [InlineData("/api/no-such-endpoint", Caller.SignedOut, null, HttpStatusCode.NotFound, "application/problem+json")]
     [InlineData("/favicon.ico", Caller.SignedOut, null, HttpStatusCode.NotFound, "application/problem+json")]

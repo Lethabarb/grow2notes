@@ -12,10 +12,10 @@ internal static class TestOrganisations
 
     /// <summary>
     /// Adds an organisation of its own to the shared database, through the app's context and <c>UserManager</c>, as
-    /// <see cref="SqlServerFixture"/> adds the seeded ones: with its Every note group, an Active manager and an Active
-    /// worker, who cannot sign in but are called as with the test-only sign-in, and an active participant. It is for a
-    /// test that must know every row of a list that the seeded organisations' lists share with other tests, such as
-    /// the Reviewed list's pages or a count of notes in To review (tests/README.md).
+    /// <see cref="SqlServerFixture"/> adds the seeded ones: with its Every note group, an Active manager, an Active
+    /// worker and an Active Support person, who cannot sign in but are called as with the test-only sign-in, and an
+    /// active participant. It is for a test that must know every row of a list that the seeded organisations' lists
+    /// share with other tests, such as the Reviewed list's pages or a count of notes in To review (tests/README.md).
     /// </summary>
     public static async Task<SeededOrganisation> AddOrganisationAsync(this IServiceProvider services)
     {
@@ -49,7 +49,8 @@ internal static class TestOrganisations
 
         var managerId = await AddUserAsync(users, organisation.Id, UserRole.Manager, invitedByUserId: null);
         var workerId = await AddUserAsync(users, organisation.Id, UserRole.Worker, invitedByUserId: managerId);
-        return new(organisation.Id, managerId, workerId, participant.Id, everyNote.Id);
+        var supportId = await AddUserAsync(users, organisation.Id, UserRole.Support, invitedByUserId: managerId);
+        return new(organisation.Id, managerId, workerId, supportId, participant.Id, everyNote.Id);
     }
 
     private static async Task<Guid> AddUserAsync(

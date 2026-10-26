@@ -83,6 +83,7 @@ internal static class TestSignIn
             Caller.WorkerOfA => client.SignInAs(seeded.A.WorkerId),
             Caller.ManagerOfA => client.SignInAs(seeded.A.ManagerId),
             Caller.ManagerOfB => client.SignInAs(seeded.B.ManagerId),
+            Caller.SupportOfA => client.SignInAs(seeded.A.SupportId),
             _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
         };
 
