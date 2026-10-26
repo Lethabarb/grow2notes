@@ -21,7 +21,8 @@ public sealed class ModelTenancyTests
 {
     // Organisation is the tenant, not one of its rows (design.md §5.3). The rest are design.md §5.9 item 5's: Identity
     // reads AspNetUsers by email before there is a tenant, and its child tables and DataProtectionKeys have no
-    // OrganisationId. So have OpenIddict's four tables, which hold the approved AI assistants and no participant data. A name here that the model does not have is a breach too, so the list keeps up with the model.
+    // OrganisationId. So have OpenIddict's four tables, which hold the approved AI assistants and no participant
+    // data. A name here that the model does not have is a breach too, so the list keeps up with the model.
     private static readonly string[] NamedExceptions =
     [
         "Organisation",

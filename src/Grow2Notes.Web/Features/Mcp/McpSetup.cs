@@ -14,7 +14,9 @@ internal static class McpSetup
     /// <summary>The setting that switches the access on. No setting means off.</summary>
     public const string EnabledKey = "Mcp:Enabled";
 
-    /// <summary>The one scope an approved assistant is given: the managers' and admins' actions (mcp-server.md §4).</summary>
+    /// <summary>
+    /// The one scope an approved assistant is given: the managers' and admins' actions (mcp-server.md §4).
+    /// </summary>
     public const string AdminScope = "grow2notes.admin";
 
     /// <summary>Whether <paramref name="configuration"/> switches the access on.</summary>
