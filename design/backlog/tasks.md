@@ -6486,7 +6486,7 @@ Planned when the lane starts it.
 
 ```yaml
 id: T30
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -6514,6 +6514,39 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 
 - From here Release 2 runs one task after another in lane A, because each MCP tool edits the shared `tools/list`
   snapshot and tool matrix.
+
+### Plan
+
+- Outcome: server side only. OpenIddict 7.7.1 stores, the `Mcp:Enabled` off switch, the authorisation server's
+  discovery document and the operator command `admin mcp-client` (add, list, remove). No SPA, route, copy or limits.ts
+  change. The AI rule: support workers who write notes get no AI feature (D48); this access is for managers and admins
+  editing their setup and options (owner, 26 October 2026).
+- Design: `McpSetup.AddMcp` always registers OpenIddict core and the EF stores (Guid keys, entity caching off), so the
+  command works before switch-on. Only when `Mcp:Enabled` is true does it add the server: authorisation code with PKCE
+  S256 and refresh token only, `openid` and `plain` removed, ephemeral in-memory keys, Data Protection token format, no
+  JWKS, and one discovery handler adding `client_id_metadata_document_supported` and narrowing auth methods to `none`.
+  Three always-mapped 404 catch-alls (`/oauth`, `/.well-known`, `/mcp`) mean nothing is served off-switch and no code is
+  issued before T31's consent step. Test turns the switch on through a committed `mcpEnabled` Bicep parameter.
+- Domain: one expand-only migration, `AddOpenIddict` (four library tables, named exceptions to tenant isolation, no
+  participant data). Limits `McpClientId` 100, `McpAssistantName` 100, `McpCompany` 200, `McpDataLocation` 200. Three
+  operator audit events, one per organisation, no entity type.
+- Reuse: `AdminCommands` dispatch, `InTransactionAsync`, `SignOutAllCommand` audit shape, `AppOrigin`, the Data
+  Protection key ring, OpenIddict's managers (including `DeleteAsync` with children), the typed `HttpClient` pattern.
+- Decisions where design.md is silent: A108 (Q9) and A109 (Q10) accepted; A110 remove hard-deletes the registration;
+  A111 refresh token without `offline_access`; A112 reuse leeway 15 seconds; A113 the command's fetch and value checks
+  (no redirects, 64 KB, 30 s, plain-form URL, loopback literals, no control or format characters). Spike answers go in
+  mcp-server.md; question 5 stays unverified until CI passes. Hand-offs to T31, T32 and T38 go in the Notes.
+- By hand: ops/first-use-in-test.md steps 160 to 164.
+
+### Verticals
+
+- v1: Foundation: OpenIddict stores, migration, `Mcp:Enabled` switch, 404 catch-alls, Bicep parameter; depends_on: none;
+  R01 R02 R07 R16
+- v2: Operator command `admin mcp-client` (add, list, remove) with audit; depends_on: v1;
+  R08 R09 R10 R11 R12 R13 R14 R15 R21
+- v3: Authorisation server behind the switch: discovery, PKCE-only flows, token no-store, no code before consent;
+  depends_on: v1; R03 R04 R05 R06 R22
+- v4: Docs, spike answers and backlog close-out; depends_on: v1, v2, v3; R17 R18 R19 R20 R23 R24 R25 R26
 
 ### Steps
 
