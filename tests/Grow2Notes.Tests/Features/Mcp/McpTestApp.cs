@@ -20,6 +20,9 @@ internal static class McpTestApp
 {
     public const string Resource = Grow2NotesFactory.Origin + "/mcp";
 
+    /// <summary>The PKCE verifier whose S256 challenge <see cref="AuthorizeQuery"/> sends.</summary>
+    public const string CodeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+
     /// <summary>
     /// The app with <c>Mcp:Enabled</c> on, on a database that only the caller uses. <see cref="McpSetup.AddMcp"/> reads
     /// the setting while the app is built, so it is a host setting and not a service. xUnit makes a new test class

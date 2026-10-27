@@ -90,6 +90,10 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         AssertExactly(metadata, "code_challenge_methods_supported", "S256");
         AssertExactly(metadata, "scopes_supported", "grow2notes.admin", "offline_access");
         AssertExactly(metadata, "token_endpoint_auth_methods_supported", "none");
+        Assert.Equal(
+            "https://grow2notes.example/oauth/revoke", metadata.GetProperty("revocation_endpoint").GetString());
+        AssertExactly(metadata, "revocation_endpoint_auth_methods_supported", "none");
+        AssertExactly(metadata, "response_modes_supported", "query");
         Assert.True(metadata.GetProperty("authorization_response_iss_parameter_supported").GetBoolean());
         Assert.True(metadata.GetProperty("client_id_metadata_document_supported").GetBoolean());
         Assert.False(metadata.TryGetProperty("registration_endpoint", out _));
@@ -121,6 +125,18 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         Assert.True(services.GetRequiredService<IOptions<OpenIddictCoreOptions>>().Value.DisableEntityCaching);
     }
 
+    [Fact]
+    public void Access_tokens_last_10_minutes_and_refresh_tokens_30_rolling_with_a_leeway_of_15_seconds()
+    {
+        var server = app.Services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value;
+
+        Assert.Equal(TimeSpan.FromMinutes(10), server.AccessTokenLifetime);
+        Assert.Equal(TimeSpan.FromMinutes(30), server.RefreshTokenLifetime);
+        Assert.Equal(TimeSpan.FromSeconds(15), server.RefreshTokenReuseLeeway);
+        Assert.False(server.DisableRollingRefreshTokens);
+        Assert.False(server.DisableSlidingRefreshTokenExpiration);
+    }
+
     [Theory]
     [MemberData(nameof(UnsupportedGrants))]
     public async Task The_token_endpoint_refuses_any_other_grant_and_is_never_cached(string grantType)
@@ -140,15 +156,13 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         Assert.Equal("unsupported_grant_type", error.RootElement.GetProperty("error").GetString());
     }
 
-    [Theory]
-    [InlineData("GET", "/.well-known/oauth-protected-resource")]
-    [InlineData("POST", "/oauth/revoke")]
-    public async Task What_a_later_task_adds_is_still_a_404_problem(string method, string path)
+    [Fact]
+    public async Task What_a_later_task_adds_is_still_a_404_problem()
     {
         using var client = app.CreateAssistantClient();
-        using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
-        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(
+            "/.well-known/oauth-protected-resource", TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }
