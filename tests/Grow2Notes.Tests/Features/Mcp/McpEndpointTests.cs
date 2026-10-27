@@ -3,10 +3,12 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp;
 using Grow2Notes.Web.Platform;
+using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -17,7 +19,8 @@ namespace Grow2Notes.Tests.Features.Mcp;
 /// protected-resource document, the sign-in kept apart from the session cookie, the <c>Origin</c> rule, both protocol
 /// revisions, and the checks on each call that follow the person: the role and organisation come from the row and the
 /// token, never from the token alone. Every case calls the real endpoint with a token from the real flow; the tools
-/// are <see cref="ProbeTools"/>, because the app ships none yet. Each case has an app of its own on a fake clock.
+/// are <see cref="ProbeTools"/> and the app's own, and the app's own alone where the case asks for production's setup.
+/// Each case has an app of its own on a fake clock.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
@@ -212,7 +215,7 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
 
     [Theory]
     [MemberData(nameof(Revisions))]
-    public async Task The_production_setup_lists_no_tools_on_either_revision(string revision)
+    public async Task The_production_setup_lists_the_snapshot_tools_on_either_revision(string revision)
     {
         await using var production = await AssistantFlow.StartAsync(factory, sqlServer, "McpProduction", probes: false);
         using var productionBrowser = await production.SignInAsync(await production.AddUserAsync(UserRole.Manager));
@@ -221,7 +224,17 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
         await using var client = await production.McpClientAsync(tokens.AccessToken, revision);
 
         Assert.NotNull(client.ServerCapabilities.Tools);
-        Assert.Empty(await client.ListToolsAsync(cancellationToken: Ct));
+        var listed = await client.ListToolsAsync(cancellationToken: Ct);
+
+        // What a model is told is reviewed in the diff of tools-list.json: a tool, a title, a description or a schema
+        // changes only with that file.
+        var actual = new JsonArray([.. listed.OrderBy(tool => tool.Name, StringComparer.Ordinal).Select(Project)]);
+        var expected = JsonNode.Parse(await File.ReadAllTextAsync(
+            Path.Combine(Repository.Root(), "tests", "Grow2Notes.Tests", "Features", "Mcp", "tools-list.json"), Ct));
+        Assert.True(
+            JsonNode.DeepEquals(expected, actual),
+            "The tools production lists are not those of tools-list.json. If the change is meant, the file is:\n"
+                + actual.ToJsonString(new() { WriteIndented = true }));
     }
 
     [Theory]
@@ -408,6 +421,22 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
         ProbeTools.ReadWhoAmI(await client.CallToolAsync("probe_whoami", cancellationToken: Ct));
 
         Assert.Empty(flow.Outbound.Requests);
+    }
+
+    // The parts of a tool that a model reads, as the wire has them. Its icons, execution and _meta are left out.
+    private static JsonObject Project(McpClientTool tool)
+    {
+        var wire = JsonSerializer.SerializeToNode(tool.ProtocolTool, McpJsonUtilities.DefaultOptions)!.AsObject();
+        var projected = new JsonObject();
+        foreach (var key in new[] { "name", "title", "description", "inputSchema", "outputSchema", "annotations" })
+        {
+            if (wire[key] is { } value)
+            {
+                projected[key] = value.DeepClone();
+            }
+        }
+
+        return projected;
     }
 
     private static string[] Strings(JsonElement document, string name) =>

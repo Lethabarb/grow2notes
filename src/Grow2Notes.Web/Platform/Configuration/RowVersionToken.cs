@@ -8,7 +8,10 @@ namespace Grow2Notes.Web.Platform.Configuration;
 internal static class RowVersionToken
 {
     /// <summary>The row's <c>RowVersion</c> as base64: the token, and the row's <c>rowVersion</c> in a list.</summary>
-    public static string Of(IVersionedRow row) => Convert.ToBase64String(row.RowVersion);
+    public static string Of(IVersionedRow row) => Of(row.RowVersion);
+
+    /// <summary>The same token from a <c>RowVersion</c> that a projection read without loading the row.</summary>
+    public static string Of(byte[] rowVersion) => Convert.ToBase64String(rowVersion);
 
     /// <summary>
     /// The row's <c>ETag</c> header, its token in quotes (<see cref="IfMatch.ETag"/>): the one <c>If-Match</c> value

@@ -6814,7 +6814,7 @@ call gets `401`.
   changes the next real token once (another audience, no or another stamp hash, another organisation). They replace
   the dropped `AccessTokenReader`: `AccessTokenTests` now pins the audience, the claims, the absent role and the
   10-minute expiry through the endpoint's real validation, and S07.01.06's access-token criterion is ticked naming it.
-  The production setup (`probes: false`) lists an empty tool list on both revisions.
+  The production setup (`probes: false`) listed an empty tool list on both revisions until T33 (A119).
 - Departures from the requirements: (1) a missing stamp hash stays a unit case in `AssistantTokensTests` and is also
   proven through `/mcp` with `IssuedTokenEdits`, as the owner's text asks. (2) R05 says revoke on every failure, but a
   call past 12 hours from `auth_time` is refused without revoking (A122), as at the token endpoint. (3) The status for
@@ -6894,7 +6894,7 @@ Planned 27 October 2026.
 
 ```yaml
 id: T33
-status: new
+status: done
 release: R2
 lane: A
 size: M
@@ -6917,10 +6917,106 @@ could return note content.
 
 - Builds once: the tool matrix, the contract allow-list, the `tools/list` snapshot and the note canary. Every later tool
   joins them.
+- Assumed defaults A124 to A127 (design.md §13, 27 October 2026): the search (every word contained in the given or
+  family name, case ignored, in memory, no normalisation; trimmed minimum 2 and maximum 100; at most 10 and
+  `moreMatches`; no match is no error); arguments and messages (an invalid ID is `not_found`, arguments the SDK cannot
+  bind give `mcp.refused` `unexpected`, the refused-character set that allows ZWJ, ZWNJ and the soft hyphen); results
+  (lower-case statuses, archived participants readable, archived goals after active ones, `expectedVersion` is the
+  ETag token, a count of 1 plus the goals, two reads); enforcement (NetArchTest.Rules 1.3.2, `ToolHandlers`, the
+  deny-list, string, bool, int and Guid leaves, one `tools-list.json`, probes off for the guard tests). A119 is amended:
+  production lists `find_participants` and `get_participant`. The `CS8524` `NoWarn` in `Directory.Build.props` is
+  recorded in A127: exhaustive switch expressions name every member, and a member added later is an error.
+- Departures from the final design as built: (1) A127 says whole dotted names, not prefixes. NetArchTest 1.3.2 matches
+  whole names, so `NoNoteContentRulesTests` lists every `Data.Note*` and `Data.AuditEvent*` type and every type of the
+  four feature namespaces in full, computed from the assembly. (2) The volume statement behind the in-memory match is
+  design.md §5.1 *Volumes*, not §6.1. (3) The minimum of 2 characters does not prevent enumeration, as A124 reasons, so
+  the sentence in mcp-server.md §5.4 that said it did was amended. (4) No CI fallback was needed: no SDK `-32602`
+  for unbindable arguments, no IL check, no change to `Platform/Telemetry.cs`, and the hand-written `tools-list.json`
+  matched on the first run.
+- Tests removed: `McpEndpointTests.The_production_setup_lists_no_tools_on_either_revision`, because T33 deliberately
+  ends the behaviour it pinned (A119). It is replaced in the same place by
+  `The_production_setup_lists_the_snapshot_tools_on_either_revision`, which compares both revisions with
+  `tests/Grow2Notes.Tests/Features/Mcp/tools-list.json`. S07.02.01's criterion names the new test.
+- Other tests changed: `McpAuditTests` lost its private helpers, which moved verbatim to `McpAuditRows.cs`
+  (`AssertRead` is generalised; the participants-only overload still pins exactly five keys). `TelemetryCanaryTests`
+  lost its private `Sinks` class and `RouteEverythingToSinks`, which moved to `Fixtures/TelemetrySinks.cs` with no
+  assertion changed (the `TestOnlyEndpoints` registration stays beside its call). `AssistantFlow` gained `ToolCall`, a
+  `body` on `McpRequest` and `PostMcpAsync`, and a `TelemetrySinks` option on `StartAsync`. Header comments of
+  `McpEndpointTests` and `ProbeTools` were reworded. No other test was changed, removed or weakened.
+- CI cost of the guards (review finding): the first run started about 75 apps, each with its own database, and the job
+  took 50m42s against a timeout of 60 minutes. Every later tool adds a `ToolMatrix` row, and a row cost about 15
+  starts. `ToolWorld` (a class fixture: one app, one `ToolScene` and a client for each `ToolCaller`) now serves
+  `ToolMatrixTests` and `ParticipantsToolsTests`, whose cases only read or add data under names of their own, so the
+  two classes start 2 apps between them plus 2 per tool for the token cases that need one: `expired` moves the clock
+  and `removed registration` removes the registration, both the whole app's. The other token cases use a manager
+  added for the case. `timeout-minutes` is unchanged. A test class that changes what the whole app shares keeps an app
+  of its own. `ToolMatrix` gained the case "a null search" (`unexpected`), which pins what a JSON `null` for a required
+  string does.
+- Carry-overs from T32, done: tools never add a `via` key (said once in the `IAuditWriter` and `ChangeDetails` docs
+  and in mcp-server.md §3.5 convention 3); `AssistantCallCheck` is a switch expression with an explicit
+  `PastAbsoluteLimit` arm; the `UserEdit.EditAsync` summary is re-flowed.
+- Choices for the owner to approve or reword (new text the model sees; the titles and descriptions are in
+  `tools-list.json`): the titles "Find participants by name" and "Get a participant and their goals"; the two
+  descriptions and three parameter descriptions; "Some arguments are not valid. See fields."; "Search must be at least
+  2 characters"; "Search must be 100 characters or less"; "Search has a control or formatting character"; "No
+  participant has that ID in this organisation. Find them with find_participants."; and "More matches: narrow the
+  search." (mcp-server.md §5.2). Other choices: lower-case statuses (A126); `participantId` is a string the tool
+  parses (A125); NFC normalisation declined (A124).
+- Limits to know: the canary checks a search argument only from 4 characters, because shorter ones match almost any
+  text. Matching is in memory (A124), which is right for tens of participants and would move into SQL for thousands.
+- For the owner: `TokenEndpoint`'s switch on `AssistantTokenCheck` has the same silent default for
+  `PastAbsoluteLimit` that `AssistantCallCheck` had. It was not changed, as T33 was not asked to.
+- Hand-offs. T34 and later: add every handler a tool calls to `NoNoteContentRulesTests.ToolHandlers`, a `ToolMatrix`
+  row (argument generators and error cases), the tool to `tools-list.json`, and every text input through
+  `TextInput.Refusal`; a name that `add_participant` takes keeps ZWJ and ZWNJ, as `TextInput` allows them. T35:
+  decides whether `set_guide_prompts` allows line breaks (`TextInput` refuses U+000A today), adds the `McpCall` keys
+  `userIds`, `groupIds` and `commonItemIds`, and extends the matrix's result-to-key mapping (`participantId` to
+  `participantIds`, `goalId` to `goalIds`). T36: confirmation forms join `ContractRulesTests.Problems` and the canary.
+  T38: the `/mcp` rate limits must cover `tools/call` `find_participants` (the only way to list names, and the search
+  text is deliberately not audited) and `McpOriginRule`, which lists every registered application and reads each one's
+  redirect URIs from the database on every `/mcp` request that carries an `Origin`, before authentication.
+- By hand: first-use steps 172 and 174 amended and step 175 added, with a new heading for steps 174 and 175 (*The
+  participant look-ups in test, once T33 is on main*). Step 175 is the interoperability check on a one-letter search
+  in a real client. None of them holds T33 open.
+
+### Plan
+
+- Outcome: `find_participants` and `get_participant`, read-only, on the production MCP server; plus the four guards every
+  later tool joins (tool matrix, contract allow-list and deny-list with the architecture rule, `tools/list` snapshot,
+  note canary).
+- Design: no migration, endpoint, setting, SPA change or audit event type. Tools write `mcp.read` or `mcp.refused`
+  only through T32's `McpCall.Returned`, `McpAuditFilter` and `ToolError`. A scoped `ParticipantLookups` read query
+  (no tracking, tenant filter on, never `DateOfBirth`) backs a thin `ParticipantsTools`. New contract records,
+  `TextInput.Refusal` (shared text check), `ToolResults.Of`.
+- Domain changes: none persisted. New `McpCall.GoalIds`, `ParticipantList.InListOrder`, `RowVersionToken.Of(byte[])`.
+- Reuse: `GoalList.InListOrder`, `Limits.ParticipantName`, `AssistantFlow`, `TestOrganisations`, `TestNotes`; audit
+  helpers and telemetry sinks are moved, not copied.
+- Carry-overs from T32: no `via` key in tool handlers (three doc sentences); explicit `PastAbsoluteLimit` case in
+  `AssistantCallCheck` (CS8524 off so the compiler checks named members); re-flow `UserEdit.EditAsync` summary.
+- Decisions where design is silent (recorded as A124 to A127 in design.md section 13): word-contains, case-insensitive
+  match in memory; trimmed minimum 2, maximum 100; `includeArchived` default false; empty result is not an error;
+  invalid, unknown and other-organisation IDs all give `not_found`; lower-case statuses; archived participants
+  readable, archived goals after active ones; unbindable arguments are the SDK's own error, audited `unexpected`;
+  NetArchTest.Rules 1.3.2; one `tools-list.json` snapshot. The empty-list test is deliberately replaced by the
+  snapshot test (A119 superseded).
+
+### Verticals
+
+- v1: Participant look-up tools, matrix, snapshot, T32 carry-overs; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R15 R16 R20 R23 R24 R25 R26 R27 R30
+- v2: No-note-content architecture rule and contract rules with planted violations; depends_on: v1; R17 R18 R19
+- v3: Note canary and telemetry canary over assistant calls; depends_on: v1; R21 R22
+- v4: Close-out: assumed defaults, by-hand checks, backlog updates; depends_on: v1 v2 v3; R28 R29
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Look-up tools (#169; v1): `find_participants`, `get_participant`, `ParticipantLookups`, `TextInput`, the contracts,
+  the tool matrix, the snapshot and the T32 carry-overs.
+- [x] Note-free rules (#170; v2): NetArchTest.Rules 1.3.2, `NoNoteContentRulesTests` and `ContractRulesTests`, with
+  planted violations.
+- [x] Canary (#171; v3): `TelemetrySinks` and `McpCanaryTests`.
+- [x] Close-out (#172; v4): A119 amended and A124 to A127, first-use steps 172, 174 and 175, S07.02.04, S07.02.06 and
+  S07.02.07 done, coverage.md and these Notes.
 
 ---
 

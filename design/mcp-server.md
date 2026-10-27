@@ -204,7 +204,7 @@ src/Grow2Notes.Web/Features/Mcp/
 Release 2 then needs no rewrite of Release 1 if Release 1 follows four conventions, none of which changes its scope:
 1. The admin logic for users, participants, goals, common items and guide prompts lives in handler classes that take the acting user and a channel (`App` or `Mcp`), not inside endpoint lambdas.
 2. `UserRole` keeps explicit numeric values (design §5.1), so `3 = Support` can be added.
-3. The audit writer accepts extra keys in `Details`.
+3. The audit writer accepts extra keys in `Details`. During an assistant's call `AuditWriter` adds `via`, `client` and `tool` itself (A121), so a tool or a handler never adds a `via` key.
 4. **Roles are named, never inferred.** The fallback authorisation policy requires role Worker or Manager by name, not just a signed-in, active user (design §2 and §6.1 say so). Every role check uses exact equality, never "not Worker" or "not Manager". `/api/auth/me` returns `toReviewCount` only when the role equals Manager (design §6.2). Otherwise, when `3 = Support` is added, Support would pass the fallback policy and could read every note through Today and the note endpoints, and any "not Manager means Worker" check would fail open.
 
 Release 2 changes to Release 1 parts. All are additive except one, because of convention 4: the endpoints Support may use (sign-in, setup, session and the consent endpoints) gain an explicit policy that allows Support.
@@ -463,7 +463,7 @@ Other changes mirror the app, which archives goals, groups and items without ask
 
 **Participants and goals (tools 2, 3, 6–14)**
 - No result ever contains a date of birth (MA5). `add_participant` needs one, because the retention rule needs it (A5).
-- `find_participants` needs a `search` of at least 2 characters, so it never lists every participant, and returns at most 10 matches, with names and status only, sorted by family name then given name (A5). With more than 10 matches it says "More matches: narrow the search." Two participants with the same name are told apart by `get_participant`'s goals and by the person. If the model is unsure, the descriptions tell it to ask.
+- `find_participants` needs a `search` of at least 2 characters, which only keeps out one-letter searches (many searches can still list everyone, so the bounds are 10 results and one audit row a call and the rate limits of T38; A124), and returns at most 10 matches, with names and status only, sorted by family name then given name (A5). With more than 10 matches it says "More matches: narrow the search." Two participants with the same name are told apart by `get_participant`'s goals and by the person. If the model is unsure, the descriptions tell it to ask.
 - An archived participant is read-only, as on the app's detail screen (design §4.8): adding, rewording, reordering, archiving or restoring their goals is refused with `participant.archived` (use Release 1's code if it named this refusal differently). Restore the participant first.
 - `reorder_goals` needs exactly the active goals (`config.order_mismatch` otherwise). A restored goal goes to the end (A2).
 
@@ -510,7 +510,7 @@ A confirmation form that the person declines or cancels is not an error: the res
 | `400` | Header and body mismatch (`-32020 HeaderMismatch`) or an unsupported protocol version, handled by the SDK [Spec] |
 | `405` | `GET` or `DELETE` to `/mcp` from a client of an earlier revision [Spec] |
 | `429` + `Retry-After` | Over the endpoint limit in §5.6 |
-| JSON-RPC `-32602` | Unknown tool or malformed arguments [Spec] |
+| JSON-RPC `-32602` | Unknown tool [Spec]. Arguments the SDK cannot bind (a missing required argument, a wrong JSON type) are the SDK's own `isError` result with a generic message that echoes nothing, audited as `mcp.refused` with code `unexpected` (A125) |
 
 ### 5.6 Rate limits
 

@@ -31,12 +31,16 @@ internal sealed class ParticipantList(Grow2NotesDbContext db)
             participants = participants.Where(participant => participant.Status == ParticipantStatus.Active);
         }
 
-        // The ID last, so that two people of the same name keep one order from one call to the next.
-        var sorted = await participants
-            .OrderBy(participant => participant.FamilyName)
-            .ThenBy(participant => participant.GivenName)
-            .ThenBy(participant => participant.Id)
-            .ToListAsync(cancellationToken);
+        var sorted = await InListOrder(participants).ToListAsync(cancellationToken);
         return [.. sorted.Select(AdminParticipant.Of)];
     }
+
+    /// <summary>
+    /// <paramref name="participants"/> sorted by family name, then given name (A5), in SQL Server's collation, as the
+    /// list is shown. The ID comes last, so that two people of the same name keep one order from one call to the next.
+    /// </summary>
+    public static IQueryable<Participant> InListOrder(IQueryable<Participant> participants) =>
+        participants.OrderBy(participant => participant.FamilyName)
+            .ThenBy(participant => participant.GivenName)
+            .ThenBy(participant => participant.Id);
 }

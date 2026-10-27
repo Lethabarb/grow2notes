@@ -51,6 +51,8 @@
          mode, which takes `dotnet test Grow2Notes.slnx` as written. The plain xunit.v3 package brings in Microsoft
          Testing Platform v2, which stops dotnet test in that mode. -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <!-- Architecture rules over the compiled Web assembly (MIT). -->
+    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Reads the text of the PDF files back (Apache-2.0). The package id is PdfPig; UglyToad.PdfPig on the feed has
          no stable release. -->
     <PackageVersion Include="PdfPig" Version="0.1.16" />

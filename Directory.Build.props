@@ -7,6 +7,12 @@
     <AnalysisLevel>latest</AnalysisLevel>
   </PropertyGroup>
 
+  <!-- A switch expression over an enum that names every member needs no discard: with CS8524 off, a member added later
+       is CS8509, an error, instead of being hidden. An undefined value still throws at run time. -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CS8524</NoWarn>
+  </PropertyGroup>
+
   <!-- NuGet Audit on every restore, over transitive packages too, and every advisory is reported (design.md §9.11).
        TreatWarningsAsErrors turns the high (NU1903) and critical (NU1904) ones into errors that fail the restore; low
        (NU1901) and moderate (NU1902) ones stay warnings, because the design fails CI only on high and critical. -->

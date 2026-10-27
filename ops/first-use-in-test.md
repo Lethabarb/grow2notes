@@ -1462,13 +1462,13 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      holds nothing open. (S07.02.01; MA10; A120.)
 172. With a real approved assistant, or the MCP Inspector, registered as in step 162, add test's `/mcp` address as a
      remote server. Look for: it follows the `401` to the sign-in and the Connect screen of step 167 (a manager signs
-     in, with MFA, and chooses **Allow**), connects, and lists an empty list of tools, because no tool ships until
-     T33. Write down which assistant it was, the protocol revision it reports (2025-11-25 or 2026-07-28) and, from
-     the browser's Network panel when it runs in a browser, the `Origin` its calls carry, or that it sends none. A
-     `403` on its calls means that its `Origin` is not the origin of a redirect URI of its registration: correct the
-     registration (`admin mcp-client add` again) and note it. Read the audit rows as in step 15, with
-     `EventType LIKE 'mcp.%'`: one `mcp.authorised` and no `mcp.read`, because listing tools is not audited. This
-     step holds nothing open. (S07.02.01; MA10; A119.)
+     in, with MFA, and chooses **Allow**), connects, and lists two tools, `find_participants` and
+     `get_participant` (later tasks add more). Write down which assistant it was, the protocol revision it reports
+     (2025-11-25 or 2026-07-28) and, from the browser's Network panel when it runs in a browser, the `Origin` its
+     calls carry, or that it sends none. A `403` on its calls means that its `Origin` is not the origin of a redirect
+     URI of its registration: correct the registration (`admin mcp-client add` again) and note it. Read the audit
+     rows as in step 15, with `EventType LIKE 'mcp.%'`: one `mcp.authorised` and no `mcp.read`, because listing
+     tools is not audited. This step holds nothing open. (S07.02.01; MA10; A119.)
 173. Connect an assistant as in step 172 for a made-up manager of the test organisation, and make one `/mcp` call.
      Then end that person's access, using a new made-up manager and a new connection for each way: the person signs
      out of the app in a browser (Account, then **Sign out**); another manager deactivates the person on the Users
@@ -1480,10 +1480,27 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      one row for each change you made. Then set `Mcp__Enabled` to `False` on test's web app in the Azure portal, wait
      for the restart, and sign out, deactivate and reset another made-up person: each works exactly as before, and
      `/mcp` answers `404`. Set `Mcp__Enabled` back to `True`. This step holds nothing open. (S07.02.02; A118.)
-174. Once T33 ships its first tool, connect an assistant as in step 172 and ask it to find a made-up participant by
-     name, then to find one that does not exist. Read the audit rows as in step 15, with
-     `EventType IN ('mcp.read', 'mcp.refused')`. Look for: `mcp.read` for the first, with `via` of `mcp`, the
-     assistant's client ID, the tool's name, `participantIds` holding the one ID and a `count` of `1` and no name or
-     date of birth, and `ParticipantId` set; for the second, `mcp.refused` with a `code` (such as `not_found`) and
-     the same `via`, `client` and `tool`. The assistant's reply shows the participant's name, and the audit row
-     does not. This step can only be run after T33 is in test, and holds nothing open. (S07.02.03; MA8.)
+
+### The participant look-ups in test, once T33 is on main
+
+174. Connect an assistant as in step 172, in a test organisation with made-up participants, and ask it to find a
+     made-up participant by name, then a name that matches nobody, then to get a participant by a made-up ID. Read
+     the audit rows as in step 15, with `EventType IN ('mcp.read', 'mcp.refused')`. Look for: `mcp.read` for the
+     first, with `via` of `mcp`, the assistant's client ID, the tool's name, `participantIds` holding the one ID, a
+     `count` of `1` and no name or date of birth, and `ParticipantId` set; `mcp.read` for the second, with
+     `participantIds` empty and a `count` of `0`, and no `mcp.refused`, because finding nobody is not an error; and
+     `mcp.refused` with `code` of `not_found` for the third, with the same `via`, `client` and `tool`. The
+     assistant's reply shows the participant's name, and the audit row does not. This step holds nothing open.
+     (S07.02.03; S07.02.04; MA8.)
+175. In the same test organisation, with a participant who has a date of birth and both active and archived goals,
+     ask the assistant to describe that participant. Look for: it gives the name, the status and the goals, the
+     active ones first and then the archived ones, and no date of birth and nothing about notes. Add enough
+     participants that more than 10 match a search of two letters or more such as `an` (or give them a shared family
+     name and search for it), then ask the assistant to find them: it shows 10 and the line "More matches: narrow
+     the search." Ask it to find `J` on its own (one letter): a real client
+     must show the refusal "Search must be at least 2 characters" and let the assistant correct itself, not a client
+     error. This is the interoperability check on error results: if a real client rejects them because their
+     structured content does not match the tool's output schema, the one place to fix is `ToolError.ToResult`, with
+     a change to mcp-server.md §5.5. Last, connect an assistant for a manager of a second test organisation and ask
+     it to find the first organisation's participant by name and to get that participant by its ID: it finds
+     nobody and gets `not_found`. This step holds nothing open. (S07.02.04; MA5; A124 to A126.)

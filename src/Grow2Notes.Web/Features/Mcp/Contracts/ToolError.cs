@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Grow2Notes.Web.Platform;
 using ModelContextProtocol.Protocol;
 
 namespace Grow2Notes.Web.Features.Mcp.Contracts;
@@ -16,6 +17,22 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
 {
     /// <summary>Anything that no tool refused for: the transaction is rolled back and nothing was changed.</summary>
     public static ToolError Unexpected { get; } = new("unexpected", "Something went wrong. Nothing was changed.");
+
+    /// <summary>
+    /// The refusal of one argument (<c>validation.failed</c>): <paramref name="fieldMessage"/> says what is wrong with
+    /// <paramref name="field"/>, and never echoes its value.
+    /// </summary>
+    public static ToolError ValidationFailed(string field, string fieldMessage) =>
+        new(
+            ErrorCode.ValidationFailed.Code,
+            "Some arguments are not valid. See fields.",
+            new Dictionary<string, string[]> { [field] = [fieldMessage] });
+
+    /// <summary>
+    /// The refusal for a row that does not exist in the organisation, whether it exists in another or nowhere
+    /// (<c>not_found</c>).
+    /// </summary>
+    public static ToolError NotFound(string message) => new("not_found", message);
 
     /// <summary>
     /// The error code of <paramref name="result"/>, or null when it is not an error. An error that names no code is

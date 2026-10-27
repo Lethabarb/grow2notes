@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using static Grow2Notes.Tests.Features.Mcp.McpAuditRows;
 
 namespace Grow2Notes.Tests.Features.Mcp;
 
@@ -49,7 +50,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
         var tokens = await flow.ConnectAsync(browser);
         var canary = Guid.NewGuid().ToString("N");
         var promptsBefore = await GuidePromptsAsync();
-        var lastEventId = await LastEventIdAsync();
+        var lastEventId = await LastEventIdAsync(flow);
 
         await using var client = await flow.McpClientAsync(tokens.AccessToken, Revision);
         var result = await client.CallToolAsync(
@@ -66,7 +67,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
 
         // The change was rolled back with its own event, and the refusal was kept.
         Assert.Equal(promptsBefore, await GuidePromptsAsync());
-        var row = Assert.Single(await EventsAfterAsync(lastEventId));
+        var row = Assert.Single(await EventsAfterAsync(flow, lastEventId));
         Assert.Equal(managerId, row.ActorUserId);
         AssertRefused(row, "probe_fail", "unexpected");
 
@@ -86,11 +87,11 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
         var first = await flow.AddParticipantAsync(flow.OrganisationId);
         await using var client = await flow.McpClientAsync(tokens.AccessToken, Revision, AssistantAddress);
 
-        var lastEventId = await LastEventIdAsync();
+        var lastEventId = await LastEventIdAsync(flow);
         ProbeTools.ReadWhoAmI(await client.CallToolAsync("probe_whoami", cancellationToken: Ct));
 
         // One participant: it is the row's participant.
-        var row = Assert.Single(await EventsAfterAsync(lastEventId));
+        var row = Assert.Single(await EventsAfterAsync(flow, lastEventId));
         Assert.Equal(AuditEventTypes.Mcp.Read, row.EventType);
         Assert.Equal(managerId, row.ActorUserId);
         Assert.Equal(first, row.ParticipantId);
@@ -99,10 +100,10 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
 
         // Two: the row names none, and the details list both.
         var second = await flow.AddParticipantAsync(flow.OrganisationId);
-        lastEventId = await LastEventIdAsync();
+        lastEventId = await LastEventIdAsync(flow);
         ProbeTools.ReadWhoAmI(await client.CallToolAsync("probe_whoami", cancellationToken: Ct));
 
-        row = Assert.Single(await EventsAfterAsync(lastEventId));
+        row = Assert.Single(await EventsAfterAsync(flow, lastEventId));
         Assert.Equal(AuditEventTypes.Mcp.Read, row.EventType);
         Assert.Null(row.ParticipantId);
         AssertRead(row, "probe_whoami", first, second);
@@ -112,7 +113,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
     public async Task A_change_writes_the_app_event_with_via_client_and_tool_and_no_mcp_read()
     {
         var tokens = await flow.ConnectAsync(browser);
-        var lastEventId = await LastEventIdAsync();
+        var lastEventId = await LastEventIdAsync(flow);
 
         await using var client = await flow.McpClientAsync(tokens.AccessToken, Revision);
         var result = await client.CallToolAsync(
@@ -122,7 +123,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
 
         Assert.NotEqual(true, result.IsError);
         Assert.Equal("Ask what went well.", await GuidePromptsAsync());
-        var row = Assert.Single(await EventsAfterAsync(lastEventId));
+        var row = Assert.Single(await EventsAfterAsync(flow, lastEventId));
         Assert.Equal(AuditEventTypes.GuidePrompts.Updated, row.EventType);
         Assert.Equal(managerId, row.ActorUserId);
 
@@ -139,13 +140,13 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
     public async Task A_tool_error_writes_mcp_refused_with_the_client_the_tool_and_the_code()
     {
         var tokens = await flow.ConnectAsync(browser);
-        var lastEventId = await LastEventIdAsync();
+        var lastEventId = await LastEventIdAsync(flow);
 
         await using var client = await flow.McpClientAsync(tokens.AccessToken, Revision);
         var result = await client.CallToolAsync("probe_refuse", cancellationToken: Ct);
 
         Assert.True(result.IsError);
-        var row = Assert.Single(await EventsAfterAsync(lastEventId));
+        var row = Assert.Single(await EventsAfterAsync(flow, lastEventId));
         Assert.Equal(managerId, row.ActorUserId);
         Assert.Null(row.ParticipantId);
         AssertRefused(row, "probe_refuse", "not_found");
@@ -156,7 +157,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
     {
         var tokens = await flow.ConnectAsync(browser);
         var participant = await flow.AddParticipantAsync(flow.OrganisationId);
-        var lastEventId = await LastEventIdAsync();
+        var lastEventId = await LastEventIdAsync(flow);
 
         await using (var client = await flow.McpClientAsync(tokens.AccessToken, Revision))
         {
@@ -170,7 +171,7 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
         List<AuditRow> rows = [];
         for (var attempt = 0; attempt < 100 && rows.Count == 0; attempt++)
         {
-            rows = await EventsAfterAsync(lastEventId);
+            rows = await EventsAfterAsync(flow, lastEventId);
             if (rows.Count == 0)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(100), Ct);
@@ -183,35 +184,6 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
         AssertRead(row, "probe_abort", participant);
     }
 
-    // An mcp.refused row: the code, the client and the tool, alone.
-    private static void AssertRefused(AuditRow row, string tool, string code)
-    {
-        Assert.Equal(AuditEventTypes.Mcp.Refused, row.EventType);
-        var expected = new JsonObject
-        {
-            ["code"] = code,
-            ["via"] = "mcp",
-            ["client"] = AssistantFlow.ClientId,
-            ["tool"] = tool,
-        };
-        var details = JsonNode.Parse(Assert.IsType<string>(row.Details));
-        Assert.True(JsonNode.DeepEquals(expected, details), $"Details: expected {expected}, written {details}.");
-    }
-
-    // An mcp.read row: the participants listed in any order, their count, and the client and the tool.
-    private static void AssertRead(AuditRow row, string tool, params Guid[] participants)
-    {
-        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!.AsObject();
-        Assert.Equal(
-            participants.Select(id => id.ToString("D")).Order(StringComparer.Ordinal),
-            details["participantIds"]!.AsArray().Select(id => id!.GetValue<string>()).Order(StringComparer.Ordinal));
-        Assert.Equal(participants.Length, details["count"]!.GetValue<int>());
-        Assert.Equal("mcp", details["via"]!.GetValue<string>());
-        Assert.Equal(AssistantFlow.ClientId, details["client"]!.GetValue<string>());
-        Assert.Equal(tool, details["tool"]!.GetValue<string>());
-        Assert.Equal(5, details.Count);
-    }
-
     // An organisation is the tenant, not tenant-owned, so this needs no tenant.
     private async Task<string> GuidePromptsAsync()
     {
@@ -221,28 +193,4 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
             .Select(organisation => organisation.GuidePrompts)
             .SingleAsync(Ct);
     }
-
-    // The ID of the last event written on the app's database. Each case has a database of its own.
-    private async Task<long> LastEventIdAsync()
-    {
-        await using var scope = flow.App.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database
-            .SqlQuery<long>($"SELECT COALESCE(MAX([Id]), 0) AS [Value] FROM [AuditEvent]")
-            .SingleAsync(Ct);
-    }
-
-    // Read in SQL, so the query filter, which would need a tenant, does not decide what is seen.
-    private async Task<List<AuditRow>> EventsAfterAsync(long eventId)
-    {
-        await using var scope = flow.App.Services.CreateAsyncScope();
-        return await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Database.SqlQuery<AuditRow>($"""
-            SELECT [EventType], [ActorUserId], [ParticipantId], [Details], [IpAddress]
-            FROM [AuditEvent]
-            WHERE [Id] > {eventId}
-            ORDER BY [Id]
-            """).ToListAsync(Ct);
-    }
-
-    private sealed record AuditRow(
-        string EventType, Guid? ActorUserId, Guid? ParticipantId, string? Details, string? IpAddress);
 }

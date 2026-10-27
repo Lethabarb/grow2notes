@@ -17,8 +17,9 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
-/// Tools that only the tests have, so that they can see a call as the server runs it: the app ships no tool in T32, and
-/// <see cref="AssistantFlow.StartAsync"/> adds these to its app unless it is asked for the app as production has it.
+/// Tools that only the tests have, so that they can see a call as the server runs it, and change what no real tool
+/// changes: <see cref="AssistantFlow.StartAsync"/> adds these to its app, beside the app's own tools, unless it is
+/// asked for the app as production has it.
 /// </summary>
 [McpServerToolType]
 internal sealed class ProbeTools
