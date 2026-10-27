@@ -6894,7 +6894,7 @@ Planned 27 October 2026.
 
 ```yaml
 id: T33
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -6917,6 +6917,35 @@ could return note content.
 
 - Builds once: the tool matrix, the contract allow-list, the `tools/list` snapshot and the note canary. Every later tool
   joins them.
+
+### Plan
+
+- Outcome: `find_participants` and `get_participant`, read-only, on the production MCP server; plus the four guards every
+  later tool joins (tool matrix, contract allow-list and deny-list with the architecture rule, `tools/list` snapshot,
+  note canary).
+- Design: no migration, endpoint, setting, SPA change or audit event type. Tools write `mcp.read` or `mcp.refused`
+  only through T32's `McpCall.Returned`, `McpAuditFilter` and `ToolError`. A scoped `ParticipantLookups` read query
+  (no tracking, tenant filter on, never `DateOfBirth`) backs a thin `ParticipantsTools`. New contract records,
+  `TextInput.Refusal` (shared text check), `ToolResults.Of`.
+- Domain changes: none persisted. New `McpCall.GoalIds`, `ParticipantList.InListOrder`, `RowVersionToken.Of(byte[])`.
+- Reuse: `GoalList.InListOrder`, `Limits.ParticipantName`, `AssistantFlow`, `TestOrganisations`, `TestNotes`; audit
+  helpers and telemetry sinks are moved, not copied.
+- Carry-overs from T32: no `via` key in tool handlers (three doc sentences); explicit `PastAbsoluteLimit` case in
+  `AssistantCallCheck` (CS8524 off so the compiler checks named members); re-flow `UserEdit.EditAsync` summary.
+- Decisions where design is silent (recorded as A124 to A127 in design.md section 13): word-contains, case-insensitive
+  match in memory; trimmed minimum 2, maximum 100; `includeArchived` default false; empty result is not an error;
+  invalid, unknown and other-organisation IDs all give `not_found`; lower-case statuses; archived participants
+  readable, archived goals after active ones; unbindable arguments are the SDK's own error, audited `unexpected`;
+  NetArchTest.Rules 1.3.2; one `tools-list.json` snapshot. The empty-list test is deliberately replaced by the
+  snapshot test (A119 superseded).
+
+### Verticals
+
+- v1: Participant look-up tools, matrix, snapshot, T32 carry-overs; depends_on: none;
+  R01 R02 R03 R04 R05 R06 R07 R08 R09 R10 R11 R12 R13 R14 R15 R16 R20 R23 R24 R25 R26 R27 R30
+- v2: No-note-content architecture rule and contract rules with planted violations; depends_on: v1; R17 R18 R19
+- v3: Note canary and telemetry canary over assistant calls; depends_on: v1; R21 R22
+- v4: Close-out: assumed defaults, by-hand checks, backlog updates; depends_on: v1 v2 v3; R28 R29
 
 ### Steps
 
