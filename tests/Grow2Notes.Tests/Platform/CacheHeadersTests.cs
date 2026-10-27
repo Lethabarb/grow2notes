@@ -19,6 +19,9 @@ public sealed class CacheHeadersTests : IClassFixture<Grow2NotesFactory>, IAsync
     public static MatrixTheoryData<string, string> UnknownApiRequests { get; } =
         new(["GET", "POST", "PUT", "DELETE"], ["/api", "/api/no-such-endpoint"]);
 
+    public static MatrixTheoryData<string, string> McpRequests { get; } =
+        new(["GET", "POST", "DELETE"], ["/mcp", "/mcp/no-such-path"]);
+
     private readonly FakeTimeProvider clock = new(TestClock.Start);
     private readonly Grow2NotesFactory factory;
 
@@ -117,6 +120,20 @@ public sealed class CacheHeadersTests : IClassFixture<Grow2NotesFactory>, IAsync
     [Theory]
     [MemberData(nameof(UnknownApiRequests))]
     public async Task Api_responses_are_never_stored(string method, string path)
+    {
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal("no-store", CacheControl(response));
+    }
+
+    // An assistant's calls carry the organisation's data. While the access is off these are 404s; the answers of the
+    // endpoint itself, which McpEndpointTests checks, are covered by the same rule.
+    [Theory]
+    [MemberData(nameof(McpRequests))]
+    public async Task Mcp_responses_are_never_stored(string method, string path)
     {
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(new HttpMethod(method), path);

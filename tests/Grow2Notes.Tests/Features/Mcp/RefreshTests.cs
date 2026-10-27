@@ -15,8 +15,6 @@ namespace Grow2Notes.Tests.Features.Mcp;
 public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     : IClassFixture<Grow2NotesFactory>, IAsyncLifetime
 {
-    private static readonly TimeSpan Wait = TimeSpan.FromMinutes(29);
-
     private AssistantFlow flow = null!;
     private Guid managerId;
     private HttpClient browser = null!;
@@ -99,7 +97,7 @@ public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sql
     {
         var tokens = await flow.ConnectAsync(browser);
         var limit = TestClock.Start + TimeSpan.FromHours(12);
-        tokens = await RefreshEveryAsync(tokens, limit);
+        tokens = await flow.RefreshEveryAsync(tokens, limit);
 
         flow.Clock.Advance(limit - flow.Clock.GetUtcNow());
         tokens = await RefreshAsync(tokens.RefreshToken);
@@ -112,7 +110,7 @@ public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sql
     public async Task An_assistant_past_12_hours_is_refused_without_ending_another_connected_from_a_later_sign_in()
     {
         var a = await flow.ConnectAsync(browser);
-        a = await RefreshEveryAsync(a, TestClock.Start + TimeSpan.FromHours(12));
+        a = await flow.RefreshEveryAsync(a, TestClock.Start + TimeSpan.FromHours(12));
         using var laterBrowser = await flow.SignInAsync(managerId);
         var b = await flow.ConnectAsync(laterBrowser);
 
@@ -176,17 +174,5 @@ public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sql
     {
         using var response = await flow.RefreshAsync(refreshToken);
         Assert.Equal(Errors.InvalidGrant, await AssistantFlow.ErrorAsync(response));
-    }
-
-    // Refreshes every 29 minutes, as an assistant in use does, for as long as that stays within the time given.
-    private async Task<AssistantTokenSet> RefreshEveryAsync(AssistantTokenSet tokens, DateTimeOffset until)
-    {
-        while (flow.Clock.GetUtcNow() + Wait <= until)
-        {
-            flow.Clock.Advance(Wait);
-            tokens = await RefreshAsync(tokens.RefreshToken);
-        }
-
-        return tokens;
     }
 }

@@ -157,17 +157,6 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
     }
 
     [Fact]
-    public async Task What_a_later_task_adds_is_still_a_404_problem()
-    {
-        using var client = app.CreateAssistantClient();
-
-        using var response = await client.GetAsync(
-            "/.well-known/oauth-protected-resource", TestContext.Current.CancellationToken);
-
-        await response.ReadProblemAsync(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
     public async Task A_valid_authorisation_request_is_handed_to_the_Connect_screen_with_no_code()
     {
         using var client = app.CreateAssistantClient();
