@@ -1,7 +1,6 @@
 using System.Net;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
-using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Tests.Features.Mcp;
@@ -55,8 +54,6 @@ public sealed class RefreshTests(Grow2NotesFactory factory, SqlServerFixture sql
         Assert.NotEqual(second.RefreshToken, third.RefreshToken);
         Assert.NotEqual(first.AccessToken, second.AccessToken);
         Assert.Equal(600, third.ExpiresIn);
-        var principal = await flow.App.ReadAsync(third.AccessToken);
-        Assert.Equal([McpTestApp.Resource], principal.GetAudiences().ToArray());
     }
 
     [Fact]

@@ -79,10 +79,14 @@ internal sealed class AssistantFlow : IAsyncDisposable
             body.GetProperty("expires_in").GetInt32());
     }
 
-    /// <summary>The OpenIddict error code that <paramref name="response"/> carries, once it is a 400.</summary>
-    public static async Task<string?> ErrorAsync(HttpResponseMessage response)
+    /// <summary>
+    /// The OpenIddict error code that <paramref name="response"/> carries, once it has the status OpenIddict gives that
+    /// error: a 400, but a 401 for <c>invalid_client</c>.
+    /// </summary>
+    public static async Task<string?> ErrorAsync(
+        HttpResponseMessage response, HttpStatusCode status = HttpStatusCode.BadRequest)
     {
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(status, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>(Ct);
         return body.GetProperty("error").GetString();
     }

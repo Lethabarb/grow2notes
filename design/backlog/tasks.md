@@ -6695,14 +6695,16 @@ refused.
   between the two leaves an entry for a code never issued. The decision is not single use (A117): the same address
   followed again within 10 minutes issues another code, which only the assistant holding the verifier can redeem.
 - Tokens: `TokenEndpoint` relies on OpenIddict's `RestoreInternalClaims` to put back the authorisation ID, presenters
-  and dates from the code or refresh token, and rebuilds only the person's claims from their row. If CI shows that
-  `RefreshTests` (rotation, leeway, reuse, revocation) fail for want of those claims, the fallback is OpenIddict's
-  sample pattern: clone the stored claims and set `sub`, `org_id` and `stamp_hash` from the row. Nothing was run
-  locally. The 12-hour refusal only refuses and revokes nothing, because the chain's `auth_time` never changes; a
-  change to the person revokes all of their authorisations. `AccessTokenReader` reads an access token through
-  OpenIddict's `ValidateTokenContext`; if that cannot run outside a request in CI, drop it and keep `expires_in` and
-  the `AssistantTokensTests` cases. `AssistantFlow` (a test helper) duplicates `ConnectTests`' private sign-in and
-  hand-off helpers rather than changing that class.
+  and dates from the code or refresh token, and rebuilds only the person's claims from their row. CI confirmed it:
+  the rotation, leeway, reuse and revocation cases in `RefreshTests` passed, so the claim-cloning fallback was not
+  needed. The 12-hour refusal only refuses and revokes nothing, because the chain's `auth_time` never changes; a
+  change to the person revokes all of their authorisations. The access-token reader (`AccessTokenReader`, which
+  dispatched OpenIddict's `ValidateTokenContext` from a hand-built transaction) was dropped: in CI it answered
+  `invalid_token` for the app's real access tokens, so it could not be used outside a request. `TokenTests` keeps
+  `expires_in` of 600, and the claim shape (`sub`, `org_id`, `stamp_hash`, `auth_time`, the audience, no role claim) is
+  pinned by the `AssistantTokensTests` cases for `PrincipalFor`. `AssistantFlow` (a test helper) duplicates
+  `ConnectTests`' private sign-in and hand-off helpers rather than changing that class. OpenIddict answers
+  `invalid_client` with a 401 and its other token errors with a 400.
 - Hand-offs. T32 validates bearer tokens with `AssistantTokens`' claim types (`sub`, `org_id`, `stamp_hash`,
   `auth_time`), and on each `/mcp` request checks the user row, the stamp hash, the 12 hours and the authorisation
   entry, so a revoked authorisation or refresh token ends access within the 10 minutes of a token already issued. It

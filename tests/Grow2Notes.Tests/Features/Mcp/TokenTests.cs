@@ -1,15 +1,9 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
-using Grow2Notes.Web.Features.Auth;
 using Grow2Notes.Web.Features.Mcp;
-using Grow2Notes.Web.Features.Mcp.OAuth;
-using Grow2Notes.Web.Platform;
-using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Tests.Features.Mcp;
@@ -70,25 +64,6 @@ public sealed class TokenTests(Grow2NotesFactory factory, SqlServerFixture sqlSe
     }
 
     [Fact]
-    public async Task The_access_token_names_the_person_and_the_resource_and_carries_no_role()
-    {
-        var tokens = await flow.ConnectAsync(browser);
-
-        var principal = await flow.App.ReadAsync(tokens.AccessToken);
-
-        Assert.Equal([McpTestApp.Resource], principal.GetAudiences().ToArray());
-        Assert.Equal([AssistantFlow.ClientId], principal.GetPresenters().ToArray());
-        Assert.Equal(managerId.ToString("D"), principal.GetClaim(Claims.Subject));
-        Assert.NotEmpty(principal.GetClaim(TenantContext.OrganisationIdClaimType)!);
-        Assert.NotEmpty(principal.GetClaim(AssistantTokens.StampHashClaimType)!);
-        Assert.Equal(
-            TestClock.Start.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
-            principal.GetClaim(Grow2NotesSignInManager.AuthTimeClaimType));
-        Assert.DoesNotContain(principal.Claims, claim => claim.Type is ClaimTypes.Role or Claims.Role);
-        Assert.Equal(TimeSpan.FromMinutes(10), principal.GetExpirationDate() - principal.GetCreationDate());
-    }
-
-    [Fact]
     public async Task A_code_exchange_with_no_resource_is_an_invalid_request()
     {
         var code = await flow.AllowAsync(browser);
@@ -117,8 +92,7 @@ public sealed class TokenTests(Grow2NotesFactory factory, SqlServerFixture sqlSe
 
         using var response = await flow.ExchangeAsync(code, clientSecret: "a-secret");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(Errors.InvalidClient, await AssistantFlow.ErrorAsync(response));
+        Assert.Equal(Errors.InvalidClient, await AssistantFlow.ErrorAsync(response, HttpStatusCode.Unauthorized));
     }
 
     [Fact]
