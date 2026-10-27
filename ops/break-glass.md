@@ -170,8 +170,10 @@ alone.
 It does what a manager's Reset sign-in does in the app (design.md §4.11, §8.6), and prints the new setup link instead
 of emailing it. For an Active person, it removes their password and passkeys, turns off their authenticator app's
 codes, gives them a new authenticator key and makes them Invited, which ends every session of theirs on every device
-on its next request; they then set up again from the link (§8.1 steps 3 to 5). For an Invited person, it gives them a
-new key and link, as Resend invite does. Either way, every link made for them before stops working.
+on its next request, and revokes the assistant authorisations they gave (mcp-server.md §4.6), which ends their
+connections of an AI assistant on its next call; they then set up again from the link (§8.1 steps 3 to 5). For an
+Invited person, it gives them a new key and link, as Resend invite does. Either way, every link made for them before
+stops working.
 
 ### When to run it
 
@@ -218,6 +220,7 @@ of it or none of it, writes:
   security stamp, and the status Invited; the dates of their invite and activation, their confirmed address and their
   lockout stay as they were, as a manager's reset leaves them;
 - for an Invited person: a new authenticator key and so a new security stamp, and nothing else;
+- for either: their assistant authorisations revoked, which ends any AI assistant connection of theirs;
 - the audit event `admin.signin_reset`, with no actor, for the person's organisation, about the person by their ID,
   and never their name or address (A28).
 
@@ -255,7 +258,9 @@ a passkey, or a password and an authenticator app, and is signed in.
 
 Ends every session of every user, in every organisation in the environment, at once, to contain a breach (design.md
 §7.4, §9.10 *Contain*). Each person's next request finds them signed out, and they sign in again as before: it
-removes no passkey, password or authenticator app, and changes no one's status or role.
+removes no passkey, password or authenticator app, and changes no one's status or role. It also ends every
+connection of an AI assistant, as each person's authorisations are revoked, so each assistant's next call is refused
+and the person connects it again (mcp-server.md §4.6).
 
 ### When to run it
 
@@ -291,6 +296,7 @@ cd /home/site/wwwroot && {
 In one transaction (design.md §5.9), so all of it or none of it, it writes:
 
 - a new security stamp for every user in every organisation, Invited and Deactivated ones included;
+- every assistant authorisation of those users revoked, with no audit event of its own;
 - one audit event `admin.signout_all` for each organisation, with no actor, about the organisation, so that each
   organisation's audit records show it (A28).
 

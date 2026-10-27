@@ -1443,8 +1443,8 @@ The app binary carries four commands, run by the developer from the App Service 
 | Command | Use |
 |---|---|
 | `admin bootstrap` | Once: create the organisation (with its Every note group, A43) and the first manager's invite; prints the setup link. |
-| `admin reset-signin <email>` | Break-glass when no manager can sign in, after the organisation confirms who the person is. Prints a setup link. |
-| `admin signout-all` | Breach containment: rotates every user's security stamp, ending all sessions. |
+| `admin reset-signin <email>` | Break-glass when no manager can sign in, after the organisation confirms who the person is. Prints a setup link. It also ends the person's assistant connections. |
+| `admin signout-all` | Breach containment: rotates every user's security stamp, ending all sessions, and revokes every user's assistant authorisations, ending all assistant connections. |
 | `admin mcp-client add`, `list`, `remove` | Release 2, only at the provider's written request (mcp-server.md §11.2): registers, lists or removes an AI assistant the provider approved, with the name, company and data location the consent screen shows. It works whether or not `Mcp:Enabled` is on, and `add` and `remove` write one audit event for each organisation (§5.4). Its checks are in mcp-server.md §11.2 and A114. |
 
 ### 7.5 Key libraries
@@ -1666,9 +1666,9 @@ builder.Services.ConfigureApplicationCookie(o =>
 
 ### 8.6 Deactivation, reset and recovery
 
-- **Deactivate:** `Status = Deactivated`, lockout set to the maximum, security stamp rotated. Every open session on every device gets `401` on its next request. Reactivation is a manager action and is audited. It ends the lockout and sets `Status = Active` for a person who has a password or a passkey, and `Status = Invited` for one with neither, who then gets a link through Resend invite (D75).
+- **Deactivate:** `Status = Deactivated`, lockout set to the maximum, security stamp rotated. Every open session on every device gets `401` on its next request, and the person's assistant authorisations are revoked in the same transaction, so each assistant connection of theirs is refused on its next call (mcp-server.md §4.6). Reactivation is a manager action and is audited. It ends the lockout and sets `Status = Active` for a person who has a password or a passkey, and `Status = Invited` for one with neither, who then gets a link through Resend invite (D75).
 - **An email change on a Deactivated person** removes the sign-in methods and rotates the stamp, as any email change does, but sets no status and sends no link: the person stays Deactivated until a manager reactivates them (D75).
-- **Reset sign-in** (lost phone, new phone without a synced passkey, forgotten password): the person contacts a manager by phone or in person, and the manager confirms who they are; in an organisation this size the manager knows them. The manager taps Reset sign-in and confirms it in a dialog that asks them to check who is asking (D74). In one transaction the app removes the password and passkeys, turns off TOTP, generates a new authenticator key (rotating the stamp, which ends every session, invalidates older links and ends any setup started from them, A53), sets `Status = Invited`, and emails a new setup link. The person then repeats 8.1 steps 3–5.
+- **Reset sign-in** (lost phone, new phone without a synced passkey, forgotten password): the person contacts a manager by phone or in person, and the manager confirms who they are; in an organisation this size the manager knows them. The manager taps Reset sign-in and confirms it in a dialog that asks them to check who is asking (D74). In one transaction the app removes the password and passkeys, turns off TOTP, generates a new authenticator key (rotating the stamp, which ends every session, invalidates older links and ends any setup started from them, A53), revokes the person's assistant authorisations in the same transaction (mcp-server.md §4.6), sets `Status = Invited`, and emails a new setup link. The person then repeats 8.1 steps 3–5.
 - **Last active manager:** cannot be deactivated, made a worker or reset in the app (A26). With at least two active managers (go-live checklist) one can always reset the other.
 - **Break-glass** when no manager can sign in: `admin reset-signin <email>` (7.4).
 
@@ -1765,7 +1765,7 @@ Over-limit requests get `429` with `Retry-After`. Identity lockout adds 5 failed
 **The legal position.** Participants' health information is covered by the Privacy Act's NDB scheme regardless of the provider's size. If there are reasonable grounds to suspect an eligible data breach, the **organisation** (the provider, not the developer's business that operates Grow2Notes) must take reasonable steps to complete an assessment within 30 days, and, if the breach is eligible, notify the OAIC and the affected individuals as soon as practicable.
 
 What the platform provides:
-- **Contain.** Deactivate affected accounts (effective on the next request). `admin signout-all` ends every session. If needed, the developer stops the web app.
+- **Contain.** Deactivate affected accounts (effective on the next request). `admin signout-all` ends every session and every assistant connection. If needed, the developer stops the web app.
 - **Work out what was exposed.** The audit log records sign-ins, note writes (draft started, submitted, edited, discarded), flag reviews, configuration and user changes, and report downloads and participant record exports. It does **not** record opening a note or a participant's history (A28). Because every user can read every participant's notes (D20), a misused account must be assumed to have exposed every participant's notes, unless other evidence narrows it. Azure Activity Log covers infrastructure changes.
 - **Preserve evidence.** Export the relevant audit rows and logs before any clean-up; a point-in-time restore copy can preserve the database state.
 - **Prepare in advance.** `ops/breach-response.md` names who decides (the managers), who supports (the developer's business, as operator), the OAIC notification form, and a record of decisions and dates. The organisation separately considers its own NDIS Commission and insurer obligations, outside the app.
