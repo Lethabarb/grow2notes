@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
@@ -171,16 +172,15 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
     public async Task No_response_from_mcp_carries_cors_headers()
     {
         var tokens = await flow.ConnectAsync(browser);
-        var responses = new List<HttpResponseMessage>
-        {
-            await SendAsync(tokens.AccessToken, "none"),
-            await SendAsync(token: null, "none"),
-            await SendAsync(tokens.AccessToken, "https://other.example"),
-            await flow.PostMcpAsync(tokens.AccessToken, AssistantOrigin, HttpMethod.Options),
-        };
+        var responses = new List<HttpResponseMessage>();
 
         try
         {
+            responses.Add(await SendAsync(tokens.AccessToken, "none"));
+            responses.Add(await SendAsync(token: null, "none"));
+            responses.Add(await SendAsync(tokens.AccessToken, "https://other.example"));
+            responses.Add(await flow.PostMcpAsync(tokens.AccessToken, AssistantOrigin, HttpMethod.Options));
+
             Assert.Equal(
                 [HttpStatusCode.OK, HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.NotFound],
                 responses.Select(response => response.StatusCode));
@@ -301,8 +301,7 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
         }
 
         var seen = await WhoAmIAsync(tokens.AccessToken);
-        Assert.Equal([nameof(UserRole.Support)], seen.Claims.Where(claim => claim.Type == Claims.Role)
-            .Select(claim => claim.Value));
+        Assert.Equal([nameof(UserRole.Support)], seen.Values(Claims.Role, ClaimTypes.Role));
         Assert.Equal([Statuses.Valid], await flow.AuthorisationStatusesAsync(managerId));
     }
 
@@ -350,6 +349,23 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
 
         await AssistantFlow.AssertChallengeAsync(past, Errors.InvalidToken);
         Assert.Equal([Statuses.Valid], await flow.AuthorisationStatusesAsync(managerId));
+    }
+
+    [Fact]
+    public async Task A_token_whose_authorisation_was_revoked_is_refused()
+    {
+        var tokens = await flow.ConnectAsync(browser);
+        using (var before = await flow.PostMcpAsync(tokens.AccessToken))
+        {
+            Assert.Equal(HttpStatusCode.OK, before.StatusCode);
+        }
+
+        await flow.RevokeAuthorisationsAsync(managerId);
+
+        using var response = await flow.PostMcpAsync(tokens.AccessToken);
+
+        await AssistantFlow.AssertChallengeAsync(response, Errors.InvalidToken);
+        Assert.Equal([Statuses.Revoked], await flow.AuthorisationStatusesAsync(managerId));
     }
 
     [Fact]

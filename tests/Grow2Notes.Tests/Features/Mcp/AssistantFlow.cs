@@ -386,6 +386,17 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
         return statuses;
     }
 
+    /// <summary>
+    /// Revokes every authorisation of <paramref name="userId"/>, as the app does when a person changes, so that what
+    /// is tested is what the next call makes of the revoked connection.
+    /// </summary>
+    public async Task RevokeAuthorisationsAsync(Guid userId)
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IOpenIddictAuthorizationManager>();
+        await manager.RevokeBySubjectAsync(userId.ToString("D"), Ct);
+    }
+
     public Task DeactivateAsync(Guid userId) => ChangeAsync(userId, async (users, user) =>
     {
         user.Status = UserStatus.Deactivated;

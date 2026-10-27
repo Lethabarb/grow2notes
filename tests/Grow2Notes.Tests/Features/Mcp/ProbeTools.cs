@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
+using OpenIddict.Abstractions;
 using ModelContextProtocol.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -40,6 +41,7 @@ internal sealed class ProbeTools
             Guid.Parse(user.FindFirstValue(Claims.Subject)!),
             services.GetRequiredService<ITenantContext>().OrganisationId,
             [.. user.Claims.Select(claim => new ClaimView(claim.Type, claim.Value))],
+            [.. user.GetAudiences()],
             await db.Participants.Select(participant => participant.Id).OrderBy(id => id).ToListAsync(ct),
             echo);
     }
@@ -47,14 +49,21 @@ internal sealed class ProbeTools
 
 /// <summary>
 /// What <c>probe_whoami</c> answers: the person the call is for, the organisation the call runs in, every claim of the
-/// principal, and the participants that the call's database context can see.
+/// principal, the audiences of the token (which OpenIddict holds in a private claim, not in <c>aud</c>), and the
+/// participants that the call's database context can see.
 /// </summary>
 public sealed record WhoAmI(
     Guid UserId,
     Guid OrganisationId,
     IReadOnlyList<ClaimView> Claims,
+    IReadOnlyList<string> Audiences,
     IReadOnlyList<Guid> ParticipantIds,
-    string? Echo);
+    string? Echo)
+{
+    /// <summary>The values of the principal's claims of any of <paramref name="types"/>.</summary>
+    public string[] Values(params string[] types) =>
+        [.. Claims.Where(claim => types.Contains(claim.Type)).Select(claim => claim.Value)];
+}
 
 /// <summary>A claim of the principal that a call runs as.</summary>
 public sealed record ClaimView(string Type, string Value);

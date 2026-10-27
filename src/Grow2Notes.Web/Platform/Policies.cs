@@ -12,9 +12,10 @@ namespace Grow2Notes.Web.Platform;
 /// </summary>
 /// <remarks>
 /// Each policy names its roles, and a role claim must equal one of the names exactly, so a role that a policy does
-/// not name is refused there (mcp-server.md §3.5, convention 4). <see cref="SignedIn"/> is the only policy that names
-/// Release 2's Support, so Support is refused everywhere else. None reads the user's status: deactivation and a reset
-/// rotate the security stamp, which ends the user's sessions (design.md §8.4, §8.6).
+/// not name is refused there (mcp-server.md §3.5, convention 4). <see cref="SignedIn"/> and <see cref="McpAdmin"/> are
+/// the only policies that name Release 2's Support, so Support is refused everywhere else; <see cref="McpAdmin"/> names
+/// it for the access token's scheme alone, never for the session cookie. None reads the user's status: deactivation
+/// and a reset rotate the security stamp, which ends the user's sessions (design.md §8.4, §8.6).
 /// </remarks>
 internal static class Policies
 {

@@ -6794,11 +6794,12 @@ Planned 27 October 2026.
 - Outcome: `/mcp` runs inside the app's pipeline, only when `Mcp:Enabled` is true. Each call is validated, checked
   against the person's current row, run in the token's organisation and audited once. Changes to a person end their
   assistant connections in the same transaction. No real tool ships, no table, migration, setting or SPA change.
-- Design: OpenIddict validation (local server, Data Protection, authorisation entry, audience set lazily to the
-  resource) plus one scoped validation handler that runs `AssistantTokens.Check` after the built-in checks and adds
-  the role claim from the row. `Policies.McpAdmin` names the validation scheme only. The ModelContextProtocol SDK
-  (2.2.0, stateless, tools capability declared) serves POST; GET and DELETE answer 405. The challenge and the
-  protected-resource document (root address only) come from the app. An Origin rule runs before authentication.
+- Design: OpenIddict validation (local server, Data Protection, audience set lazily to the resource) plus one
+  scoped validation handler that, after the built-in checks, reads the token's authorisation (OpenIddict checks it
+  only for stored tokens), runs `AssistantTokens.Check` and adds the role claim from the row. `Policies.McpAdmin`
+  names the validation scheme only. The ModelContextProtocol SDK (2.2.0, stateless, tools capability declared) serves
+  POST; GET and DELETE answer 405. The challenge and the protected-resource document (root address only) come from the
+  app. An Origin rule runs before authentication.
 - Domain: `Check` also requires the token's organisation to equal the person's; `RevokeConnectionsAsync` is the one
   revoke; `McpCall` (scoped, in memory) carries via, client and tool to `AuditWriter`; one call-tool filter chooses the
   single audit row (`mcp.refused`, the app's own event, or `mcp.read`) and turns exceptions into `unexpected`.

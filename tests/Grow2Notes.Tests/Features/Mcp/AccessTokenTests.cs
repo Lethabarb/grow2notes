@@ -49,20 +49,19 @@ public sealed class AccessTokenTests(Grow2NotesFactory factory, SqlServerFixture
         var seen = ProbeTools.ReadWhoAmI(await client.CallToolAsync(
             "probe_whoami", cancellationToken: TestContext.Current.CancellationToken));
 
-        Assert.Equal([McpTestApp.Resource], Values(seen, Claims.Audience));
-        Assert.Equal([managerId.ToString("D")], Values(seen, Claims.Subject));
-        Assert.Equal([flow.OrganisationId.ToString("D")], Values(seen, TenantContext.OrganisationIdClaimType));
-        Assert.Equal([AssistantFlow.ClientId], Values(seen, Claims.ClientId));
-        Assert.Equal([AssistantTokens.StampHash(row.SecurityStamp!)], Values(seen, AssistantTokens.StampHashClaimType));
+        Assert.Equal([McpTestApp.Resource], seen.Audiences);
+        Assert.Equal([managerId.ToString("D")], seen.Values(Claims.Subject));
+        Assert.Equal([flow.OrganisationId.ToString("D")], seen.Values(TenantContext.OrganisationIdClaimType));
+        Assert.Equal([AssistantFlow.ClientId], seen.Values(Claims.ClientId));
+        Assert.Equal([AssistantTokens.StampHash(row.SecurityStamp!)], seen.Values(AssistantTokens.StampHashClaimType));
         var signedInAt = TestClock.Start.ToUnixTimeSeconds().ToString();
-        Assert.Equal([signedInAt], Values(seen, Grow2NotesSignInManager.AuthTimeClaimType));
+        Assert.Equal([signedInAt], seen.Values(Grow2NotesSignInManager.AuthTimeClaimType));
 
         // The token lasts 10 minutes, which the next case proves to the second.
         Assert.Equal(600, tokens.ExpiresIn);
 
         // The token has no role, so the only role claim the call has is the one that the endpoint added from the row.
-        Assert.Equal([nameof(UserRole.Manager)], Values(seen, Claims.Role));
-        Assert.DoesNotContain(seen.Claims, claim => claim.Type is ClaimTypes.Role or "roles");
+        Assert.Equal([nameof(UserRole.Manager)], seen.Values(Claims.Role, ClaimTypes.Role, "roles"));
 
         Assert.Equal(managerId, seen.UserId);
         Assert.Equal(flow.OrganisationId, seen.OrganisationId);
@@ -98,7 +97,4 @@ public sealed class AccessTokenTests(Grow2NotesFactory factory, SqlServerFixture
 
         await AssistantFlow.AssertChallengeAsync(response, Errors.InvalidToken);
     }
-
-    private static string[] Values(WhoAmI seen, string type) =>
-        [.. seen.Claims.Where(claim => claim.Type == type).Select(claim => claim.Value)];
 }

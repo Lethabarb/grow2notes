@@ -212,14 +212,14 @@ internal static class McpSetup
     }
 
     // Access tokens are the ones this app issues, so the validation reads its issuer from the server's registration and
-    // its keys from Data Protection, and fetches nothing. A token is accepted only if its authorisation is still valid,
-    // which is what ends a connection that has been revoked or whose registration was removed.
+    // its keys from Data Protection, and fetches nothing. The authorisation of a token is checked by
+    // AssistantCallCheck, because OpenIddict checks it only for a token that it stores, which these self-contained
+    // ones are not.
     private static void AddAccessTokenValidation(OpenIddictValidationBuilder validation)
     {
         validation.UseLocalServer();
         validation.UseDataProtection();
         validation.UseAspNetCore();
-        validation.EnableAuthorizationEntryValidation();
         validation.AddEventHandler(AssistantCallCheck.Descriptor);
         validation.AddEventHandler(McpEndpoint.ChallengeDescriptor);
     }
