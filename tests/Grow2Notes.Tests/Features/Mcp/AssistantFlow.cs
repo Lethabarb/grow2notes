@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
@@ -137,19 +138,32 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     }
 
     /// <summary>
+    /// The JSON-RPC body of a <c>tools/call</c> of <paramref name="name"/> with <paramref name="arguments"/>.
+    /// </summary>
+    public static string ToolCall(string name, JsonObject arguments) =>
+        new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 1,
+            ["method"] = "tools/call",
+            ["params"] = new JsonObject { ["name"] = name, ["arguments"] = arguments.DeepClone() },
+        }.ToJsonString();
+
+    /// <summary>
     /// The request an assistant makes of <c>/mcp</c>: by default a <c>POST</c> of a <c>tools/list</c> call that the
-    /// stateless server answers on its own, with <paramref name="accessToken"/> as a bearer token if there is one, and
-    /// <paramref name="origin"/> as its <c>Origin</c> header if there is one.
+    /// stateless server answers on its own, or of <paramref name="body"/> if it is given (<see cref="ToolCall"/>), with
+    /// <paramref name="accessToken"/> as a bearer token if there is one, and <paramref name="origin"/> as its
+    /// <c>Origin</c> header if there is one.
     /// </summary>
     public static HttpRequestMessage McpRequest(
-        string? accessToken, string? origin = null, HttpMethod? method = null)
+        string? accessToken, string? origin = null, HttpMethod? method = null, string? body = null)
     {
         var request = new HttpRequestMessage(method ?? HttpMethod.Post, "/mcp");
         if (request.Method == HttpMethod.Post)
         {
             request.Headers.Accept.ParseAdd("application/json");
             request.Headers.Accept.ParseAdd("text/event-stream");
-            request.Content = new StringContent(ToolsListBody, Encoding.UTF8, "application/json");
+            request.Content = new StringContent(body ?? ToolsListBody, Encoding.UTF8, "application/json");
         }
 
         if (accessToken is not null)
@@ -349,10 +363,10 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     /// response.
     /// </summary>
     public async Task<HttpResponseMessage> PostMcpAsync(
-        string? accessToken, string? origin = null, HttpMethod? method = null)
+        string? accessToken, string? origin = null, HttpMethod? method = null, string? body = null)
     {
         using var client = App.CreateAssistantClient();
-        using var request = McpRequest(accessToken, origin, method);
+        using var request = McpRequest(accessToken, origin, method, body);
         return await client.SendAsync(request, Ct);
     }
 
