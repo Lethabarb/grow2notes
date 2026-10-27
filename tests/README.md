@@ -1158,8 +1158,11 @@ deactivation, a sign-out on another device or `admin signout-all` rotates the se
 ends sessions or a role: deactivation, a change of role or email, Sign out
 (`Grow2Notes.Tests/Features/Auth/LogoutEndpointTests.cs`), and the operator's `admin reset-signin` and
 `admin signout-all`; T24's, that a deactivated person is signed out everywhere (S05.03.02, the third fact of
-`Grow2Notes.Tests/Platform/PastRecordsTests.cs`); and T32's, that such a change ends a connected assistant's access as
-well as the person's own sessions.
+`Grow2Notes.Tests/Platform/PastRecordsTests.cs`). Such a change ends a connected assistant's access too, in the same
+transaction: `AccessEndsTests` (`Grow2Notes.Tests/Features/Mcp/AccessEndsTests.cs`) does each event through its real
+endpoint or command, shows every authorisation of the person revoked before any refresh or `/mcp` call, then the
+refusal of both, and the person's own session by `SignedInDevices`. T36 and T37 add the through-MCP changes of their
+tools as rows of its `Events` list, each an `AccessEnd` with the tool call as its trigger.
 
 - Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
   changes (the seeded-rows rule above).

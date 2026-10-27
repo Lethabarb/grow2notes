@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using OpenIddict.Abstractions;
 
 namespace Grow2Notes.Web.Features.Auth;
 
@@ -17,8 +19,9 @@ namespace Grow2Notes.Web.Features.Auth;
 /// It carries the <see cref="Policies.SignedIn"/> policy, which admits any signed-in Worker, Manager or Support person,
 /// and a request with no session gets the session cookie's <c>401</c>, before the <c>/api</c> group's antiforgery
 /// check, with no event. In one transaction (§5.9) it gives the person a new security stamp, which the session check
-/// finds changed on each session's next request (ops/security-review.md F-1), and writes <c>auth.signed_out</c> in the
-/// session's organisation (§5.9 item 1). If either fails, the exception handler's <c>500</c> comes before the
+/// finds changed on each session's next request (ops/security-review.md F-1), revokes the person's assistant
+/// authorisations, which ends their assistant connections on the next call, and writes <c>auth.signed_out</c> in the
+/// session's organisation (§5.9 item 1). If any fails, the exception handler's <c>500</c> comes before the
 /// sign-out, with nothing changed, so no sign-out goes unrecorded. Only then does the sign-in manager delete the
 /// session cookie and Identity's other sign-in cookies.
 /// </remarks>
@@ -40,6 +43,7 @@ internal static class LogoutEndpoint
         SignInManager<ApplicationUser> signInManager,
         Grow2NotesDbContext db,
         ITenantContext tenant,
+        IOpenIddictAuthorizationManager authorizations,
         IAuditWriter audit,
         CancellationToken cancellationToken)
     {
@@ -63,6 +67,7 @@ internal static class LogoutEndpoint
                     + $"{string.Join(" ", rotated.Errors.Select(error => error.Code))}.");
             }
 
+            await authorizations.RevokeConnectionsAsync(userId, ct);
             await audit.WriteAsync(
                 organisationId,
                 actorUserId: userId,
