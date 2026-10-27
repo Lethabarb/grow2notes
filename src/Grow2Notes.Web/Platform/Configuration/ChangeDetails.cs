@@ -20,8 +20,9 @@ internal static class ChangeDetails
     /// The row's values as it is to be saved, naming the same values as <paramref name="before"/>.
     /// </param>
     /// <param name="extraDetails">
-    /// Other keys, which go beside <c>old</c> and <c>new</c> and are not compared, such as a reorder's <c>groupId</c>
-    /// and Release 2's <c>"via": "mcp"</c> (mcp-server.md §3.5 convention 3, §9).
+    /// Other keys, which go beside <c>old</c> and <c>new</c> and are not compared, such as a reorder's <c>groupId</c>.
+    /// During an assistant's call the audit writer adds <c>via</c>, <c>client</c> and <c>tool</c> itself (A121), so a
+    /// tool or a handler never adds a <c>via</c> key (mcp-server.md §3.5 convention 3, §9).
     /// </param>
     /// <exception cref="ArgumentException">
     /// <paramref name="before"/> and <paramref name="after"/> name different values, so a change could go unrecorded;

@@ -53,25 +53,30 @@ internal sealed class AssistantCallCheck(
         var subject = principal.GetClaim(Claims.Subject);
         var user = subject is null ? null : await users.FindByIdAsync(subject);
 
-        switch (AssistantTokens.Check(user, principal, time.GetUtcNow()))
+        var check = AssistantTokens.Check(user, principal, time.GetUtcNow());
+        string? refusal = check switch
         {
-            case AssistantTokenCheck.Allowed:
-                var identity = principal.Identities.First();
-                identity.AddClaim(new(identity.RoleClaimType, user!.Role.ToString()));
-                break;
+            AssistantTokenCheck.Allowed => null,
+            AssistantTokenCheck.UserChanged => "The person is no longer allowed to use this connection.",
+            // The session that began the connection is past its limit, which never changes, so the token cannot be
+            // used again. The person's other assistants, from a later sign-in, are not touched.
+            AssistantTokenCheck.PastAbsoluteLimit => "The session that began this connection has ended.",
+        };
 
-            case AssistantTokenCheck.UserChanged:
-                // As at the token endpoint, whoever changed, every connection that person has ends, and the revocation
-                // must finish even if the assistant disconnects.
-                await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
-                context.Reject(Errors.InvalidToken, "The person is no longer allowed to use this connection.");
-                break;
-
-            default:
-                // The session that began the connection is past its limit, which never changes, so the token cannot
-                // be used again. The person's other assistants, from a later sign-in, are not touched.
-                context.Reject(Errors.InvalidToken, "The session that began this connection has ended.");
-                break;
+        if (refusal is null)
+        {
+            var identity = principal.Identities.First();
+            identity.AddClaim(new(identity.RoleClaimType, user!.Role.ToString()));
+            return;
         }
+
+        if (check == AssistantTokenCheck.UserChanged)
+        {
+            // As at the token endpoint, whoever changed, every connection that person has ends, and the revocation
+            // must finish even if the assistant disconnects.
+            await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
+        }
+
+        context.Reject(Errors.InvalidToken, refusal);
     }
 }
