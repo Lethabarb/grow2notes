@@ -83,31 +83,48 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     /// <summary>
     /// Starts the app with the access on, an organisation and the registered assistant. With <paramref name="probes"/>
     /// the app also has <see cref="ProbeTools"/>, which no real app has; without it the app has the tools production
-    /// has.
+    /// has. With <paramref name="telemetry"/> the app runs with its telemetry on, as in Azure, and everything it logs,
+    /// traces, measures and sends goes to those sinks, at the app's own log levels; <see cref="Logs"/> is then the
+    /// sinks' log provider.
     /// </summary>
     public static async Task<AssistantFlow> StartAsync(
-        Grow2NotesFactory factory, SqlServerFixture sqlServer, string name, bool probes = true)
+        Grow2NotesFactory factory,
+        SqlServerFixture sqlServer,
+        string name,
+        bool probes = true,
+        TelemetrySinks? telemetry = null)
     {
         var databaseOfItsOwn = await factory.OnDatabaseOfItsOwnAsync(sqlServer, name);
         var clock = new FakeTimeProvider(TestClock.Start);
-        var logs = new RecordingLoggerProvider();
+        var logs = telemetry?.Logs ?? new RecordingLoggerProvider();
         var outbound = new RecordingHttpHandler();
-        var app = databaseOfItsOwn.WithWebHostBuilder(builder => builder
-            .MapCookieSignIn()
-            .UseClock(clock)
-            .ConfigureTestServices(services =>
-            {
-                // Every outbound call of the app goes here, and the handler fails on any.
-                services.ConfigureAll<HttpClientFactoryOptions>(options =>
-                    options.HttpMessageHandlerBuilderActions.Add(handler => handler.PrimaryHandler = outbound));
-                services.AddSingleton<ILoggerProvider>(logs);
-                services.AddClientAddressHeader();
-                services.AddOpenIddict().AddServer(server => server.AddEventHandler(IssuedTokenEdits.Descriptor));
-                if (probes)
+        var app = databaseOfItsOwn.WithWebHostBuilder(builder =>
+        {
+            builder
+                .MapCookieSignIn()
+                .UseClock(clock)
+                .ConfigureTestServices(services =>
                 {
-                    services.AddMcpServer().WithTools<ProbeTools>();
-                }
-            }));
+                    // Every outbound call of the app goes here, and the handler fails on any.
+                    services.ConfigureAll<HttpClientFactoryOptions>(options =>
+                        options.HttpMessageHandlerBuilderActions.Add(handler => handler.PrimaryHandler = outbound));
+                    if (telemetry is null)
+                    {
+                        services.AddSingleton<ILoggerProvider>(logs);
+                    }
+
+                    services.AddClientAddressHeader();
+                    services.AddOpenIddict().AddServer(server => server.AddEventHandler(IssuedTokenEdits.Descriptor));
+                    if (probes)
+                    {
+                        services.AddMcpServer().WithTools<ProbeTools>();
+                    }
+                });
+            if (telemetry is not null)
+            {
+                builder.RouteEverythingToSinks(telemetry);
+            }
+        });
         await app.RegisterClientAsync(ClientId, applicationType: null, RedirectUri);
 
         var flow = new AssistantFlow(databaseOfItsOwn, app, clock, logs, outbound);
