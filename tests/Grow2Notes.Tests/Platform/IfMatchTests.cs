@@ -53,6 +53,39 @@ public sealed class IfMatchTests
     public void An_empty_token_throws_rather_than_matching_the_empty_tag() =>
         Assert.Throws<ArgumentException>(() => IfMatch.Check(IfMatchSent("\"\""), ""));
 
+    // The one channel rule for the version: the app is refused at once, a tool only if the call changes something.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_matching_ETag_is_refused_for_neither_channel(bool mcp) =>
+        Assert.Equal(
+            new VersionCheck(null, null), IfMatch.CheckFor(ActorOf(mcp), IfMatchSent($"\"{Token}\""), Token));
+
+    [Theory]
+    [InlineData("\"AAAAAAAAB9A=\"", "precondition.failed")]
+    [InlineData("", "precondition.required")]
+    public void The_app_is_refused_at_once_for_a_stale_or_missing_ETag(string ifMatch, string code)
+    {
+        var check = IfMatch.CheckFor(ActorOf(mcp: false), IfMatchSent(ifMatch), Token);
+
+        Assert.Equal(code, check.RefuseNow?.Code);
+        Assert.Null(check.RefuseIfChanged);
+    }
+
+    [Theory]
+    [InlineData("\"AAAAAAAAB9A=\"", "precondition.failed")]
+    [InlineData("", "precondition.required")]
+    public void A_tool_s_refusal_is_held_back_for_the_save(string ifMatch, string code)
+    {
+        var check = IfMatch.CheckFor(ActorOf(mcp: true), IfMatchSent(ifMatch), Token);
+
+        Assert.Null(check.RefuseNow);
+        Assert.Equal(code, check.RefuseIfChanged?.Code);
+    }
+
+    private static Actor ActorOf(bool mcp) =>
+        new(Guid.Parse("3a9e2c4b-5d6f-4a7b-8c9d-0e1f2a3b4c5d"), mcp ? Channel.Mcp : Channel.App);
+
     // The values as an endpoint reads them from its request, each header field one value.
     private static StringValues IfMatchSent(params string[] ifMatch)
     {

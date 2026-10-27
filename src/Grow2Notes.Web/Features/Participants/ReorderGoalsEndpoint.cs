@@ -10,8 +10,9 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <c>PUT /api/admin/participants/{participantId}/goals/order</c> (design.md §6.6): puts the active goals of a
 /// participant of the signed-in manager's organisation in the order sent, as <see cref="GoalChanges.ReorderAsync"/>
 /// puts them, and answers <c>204</c>, whether the order changed or was already stored (D84); <c>404</c> for a
-/// participant not in the organisation; or <c>422 config.order_mismatch</c> when the IDs are not the active goals,
-/// each once, or a goal changed while they were being reordered.
+/// participant not in the organisation; <c>422 participant.archived</c> for an archived one (D93); or
+/// <c>422 config.order_mismatch</c> when the IDs are not the active goals, each once, or a goal changed while they were
+/// being reordered.
 /// </summary>
 /// <remarks>
 /// It is mapped in the <c>/api/admin</c> group, whose <see cref="Policies.Manager"/> policy gives a worker a

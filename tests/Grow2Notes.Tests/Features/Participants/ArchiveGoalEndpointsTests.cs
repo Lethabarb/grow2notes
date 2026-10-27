@@ -18,11 +18,11 @@ namespace Grow2Notes.Tests.Features.Participants;
 /// test-only sign-in (<see cref="TestSignIn"/>) on a fake clock: a manager archives a goal of their own organisation,
 /// which keeps its <c>SortOrder</c>, or restores one, which goes to the end of its participant's active goals, with
 /// the goal's <c>ETag</c> as <c>If-Match</c>, and gets <c>204</c>; with no <c>If-Match</c>, <c>428</c>; with a stale
-/// one, <c>412</c>; and for a goal that is unknown, or another organisation's, <c>404</c>; each of those changing
-/// nothing and writing no event. Archiving an archived goal, or restoring an active one, answers <c>204</c> too, and
-/// saves nothing (D84). Each test acts on a goal that it adds to a participant of its own in A (tests/README.md). The
-/// endpoint matrix covers the statuses of every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the events
-/// that they write.
+/// one, <c>412</c>; for a goal of an archived participant, <c>422 participant.archived</c> (D93); and for a goal that
+/// is unknown, or another organisation's, <c>404</c>; each of those changing nothing and writing no event. Archiving
+/// an archived goal, or restoring an active one, answers <c>204</c> too, and saves nothing (D84). Each test acts on a
+/// goal that it adds to a participant of its own in A (tests/README.md). The endpoint matrix covers the statuses of
+/// every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the events that they write.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class ArchiveGoalEndpointsTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -121,6 +121,20 @@ public sealed class ArchiveGoalEndpointsTests : IClassFixture<Grow2NotesFactory>
         using var response = await PostAsync(Caller.ManagerOfA, goal.Id, action, ifMatch: null);
 
         await AssertProblemAsync(response, ErrorCode.PreconditionRequired);
+        await AssertUnchangedAsync(goal, archived: action == Restore);
+    }
+
+    // The participant is looked at before the version (D93); a goal of an active participant is still archived or
+    // restored, whichever state it is in (R18), as the tests above show.
+    [Theory]
+    [MemberData(nameof(Actions))]
+    public async Task A_goal_of_an_archived_participant_is_refused_with_422_and_not_changed(string action)
+    {
+        var (_, goal) = await AddGoalAsync(ToChange(archived: action == Restore), archivedParticipant: true);
+
+        using var response = await PostAsync(Caller.ManagerOfA, goal.Id, action, goal.ETag);
+
+        await AssertProblemAsync(response, ErrorCode.ParticipantArchived);
         await AssertUnchangedAsync(goal, archived: action == Restore);
     }
 
@@ -245,10 +259,11 @@ public sealed class ArchiveGoalEndpointsTests : IClassFixture<Grow2NotesFactory>
         Assert.Empty(await EventTypesAsync(goal.Id));
     }
 
-    // A goal, as given, of a participant added to A for the test.
-    private async Task<(Guid ParticipantId, AddedGoal Goal)> AddGoalAsync(TestGoal goal)
+    // A goal, as given, of a participant added to A for the test, active unless archivedParticipant.
+    private async Task<(Guid ParticipantId, AddedGoal Goal)> AddGoalAsync(
+        TestGoal goal, bool archivedParticipant = false)
     {
-        var participant = await app.Services.AddParticipantAsync(seeded.A);
+        var participant = await app.Services.AddParticipantAsync(seeded.A, archivedParticipant);
         return (participant.Id, await app.Services.AddGoalAsync(seeded.A, participant.Id, goal));
     }
 

@@ -2,7 +2,8 @@ namespace Grow2Notes.Web.Platform.Configuration;
 
 /// <summary>
 /// What <see cref="ConfigurationChanges.SaveAsync"/> did with a change: saved it with its audit event, found nothing to
-/// change, or found the row changed since it was loaded. The constructor is private, so these are the only three.
+/// change, found the row changed since it was loaded, or refused it as the caller asked. The constructor is private, so
+/// these are the only ways.
 /// </summary>
 internal sealed class ConfigurationSaveResult
 {
@@ -18,6 +19,12 @@ internal sealed class ConfigurationSaveResult
     /// </summary>
     public static readonly ConfigurationSaveResult PreconditionFailed =
         new(changed: false, ErrorCode.PreconditionFailed);
+
+    /// <summary>
+    /// The change would have changed a value and the caller asked for it to be refused then (<paramref name="error"/>),
+    /// so neither the change nor its event was written.
+    /// </summary>
+    public static ConfigurationSaveResult Refused(ErrorCode error) => new(changed: false, error);
 
     private ConfigurationSaveResult(bool changed, ErrorCode? error)
     {

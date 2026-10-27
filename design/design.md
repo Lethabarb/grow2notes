@@ -444,7 +444,7 @@ The screen URL is `/reports/daily/2026-10-01`: a date only, so back, forward and
 
 **States:**
 - No goals yet: "Notes will show an empty Goals section."
-- Archived participant: a read-only banner with Restore. The page is read-only on screen only: Release 1's server does not refuse detail or goal changes for an archived participant, and Release 2 adds that refusal (D86).
+- Archived participant: a read-only banner with Restore. The page is read-only on screen, and the server refuses a change to their details or goals with `422 participant.archived` until they are restored (D86, D93).
 
 **Primary action:** Save / Add goal.
 
@@ -1305,13 +1305,13 @@ Every `PUT` (except the reorder endpoints, which check the set of IDs instead), 
 | POST | /api/admin/users/{id}/setup-link | Resend an invite (Invited), or reset sign-in (Active): removes the password, authenticator key and passkeys, sets `Status = Invited`, rotates the stamp and emails a new link (§8.6). | → `204`; `409 user.last_manager`; `409 user.not_active` (§6.9) |
 | GET | /api/admin/participants?includeArchived= | Full participant records, sorted by family name, then given name (A5). `rowVersion` is the row's `RowVersion` as base64, for `If-Match` (D78). There is no single-participant admin `GET`: the detail page reads this list (D79). | → `[{id, givenName, familyName, dateOfBirth, status, rowVersion}]` |
 | POST | /api/admin/participants | Add a participant. The new participant's ID comes back in the body (D79). | `{givenName, familyName, dateOfBirth}` → `201 {id}` |
-| PUT | /api/admin/participants/{id} | Update a participant. | same body → `200` |
+| PUT | /api/admin/participants/{id} | Update a participant. | same body → `200`; `422 participant.archived` for an archived participant, before `If-Match` is checked (D93) |
 | POST | /api/admin/participants/{id}/archive · /restore | Archive or restore. Never deleted. | → `204` |
 | GET | /api/admin/participants/{participantId}/goals?includeArchived= | The participant's goals. `rowVersion` is the row's `RowVersion` as base64, for `If-Match`. | → `[{id, text, sortOrder, archivedAtUtc, rowVersion}]`; `404` for a participant not in the organisation |
-| POST | /api/admin/participants/{participantId}/goals | Add a goal at the end. | `{text}` → `201`; `404` for a participant not in the organisation |
-| PUT | /api/admin/goals/{goalId} | Reword a goal; notes keep their snapshot. | `{text}` → `200` with the goal's `ETag`, the same one when the text was already stored (D84) |
-| POST | /api/admin/goals/{goalId}/archive · /restore | Archive or restore; a restored goal goes to the end. | → `204` |
-| PUT | /api/admin/participants/{participantId}/goals/order | Reorder the active goals; the ID set must equal the current active set. | `{goalIds: [...]}` → `204`; `422 config.order_mismatch`; `404` for a participant not in the organisation |
+| POST | /api/admin/participants/{participantId}/goals | Add a goal at the end. | `{text}` → `201`; `404` for a participant not in the organisation; `422 participant.archived` for an archived one (D93) |
+| PUT | /api/admin/goals/{goalId} | Reword a goal; notes keep their snapshot. | `{text}` → `200` with the goal's `ETag`, the same one when the text was already stored (D84); `422 participant.archived` for a goal of an archived participant, before `If-Match` is checked (D93) |
+| POST | /api/admin/goals/{goalId}/archive · /restore | Archive or restore; a restored goal goes to the end. | → `204`; `422 participant.archived` for a goal of an archived participant, before `If-Match` is checked (D93) |
+| PUT | /api/admin/participants/{participantId}/goals/order | Reorder the active goals; the ID set must equal the current active set. | `{goalIds: [...]}` → `204`; `422 participant.archived` for an archived participant, whatever the IDs (D93); `422 config.order_mismatch`; `404` for a participant not in the organisation |
 | GET | /api/admin/common-item-groups?includeArchived= | The groups with their items: the Every note group first, then the other groups in order (D44, D45). Each group's and each item's `rowVersion` is its `RowVersion` as base64, for `If-Match`. | → `[{id, name, isEveryNote, sortOrder, archivedAtUtc, rowVersion, items: [{id, text, sortOrder, archivedAtUtc, rowVersion}]}]` |
 | POST | /api/admin/common-item-groups | Add a group at the end of the groups other than Every note, with no items. The new group's ID comes back in the body, with no `Location`, as for a participant (D79), so that the screen can focus the new group's New item field. | `{name}` → `201 {id}` |
 | PUT | /api/admin/common-item-groups/{groupId} | Rename a group; notes keep their snapshot. Refused for Every note. | `{name}` → `200`, with no body and no `ETag`; `422 config.every_note_fixed`; `404` for a group not in the organisation |
@@ -1361,6 +1361,7 @@ The SPA never polls in the background. `GET /api/auth/me` is called on page load
 | 422 | `note.future_date` | `noteDate` is after today in Melbourne. |
 | 422 | `note.past_date_manager_only` | A worker tries to start a note for a day other than today (D35). |
 | 422 | `note.participant_archived` | Starting a note for an archived participant. |
+| 422 | `participant.archived` | Changing an archived participant's details, or adding, rewording, reordering, archiving or restoring one of their goals (D86, D93). Restore the participant first. |
 | 422 | `config.order_mismatch` | A reorder list does not match the current active items. |
 | 422 | `config.every_note_fixed` | Renaming, archiving or restoring the Every note group (A43). |
 | 422 | `validation.failed` | Field errors in `errors{}`. |
