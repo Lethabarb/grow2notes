@@ -78,7 +78,7 @@ public sealed class ConfigurationChangesTests : IAsyncDisposable
                 Manager, AuditEventTypes.CommonItem.Reordered, AuditEntityTypes.CommonItem, entityId: null,
                 participantId: null, new JsonObject { ["order"] = new JsonArray(FirstItemId, SecondItemId) },
                 new JsonObject { ["order"] = new JsonArray(SecondItemId, FirstItemId) },
-                new JsonObject { ["groupId"] = GroupId }, TestContext.Current.CancellationToken);
+                new JsonObject { ["groupId"] = GroupId }, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         Assert.Same(ConfigurationSaveResult.Saved, result);
@@ -102,6 +102,28 @@ public sealed class ConfigurationChangesTests : IAsyncDisposable
         Assert.Same(ConfigurationSaveResult.Unchanged, result);
         Assert.False(result.Changed);
         Assert.Null(result.Error);
+        Assert.Empty(store.Written);
+    }
+
+    // The version refusal that a tool holds back (VersionCheck.RefuseIfChanged): given only for a change, and before
+    // the writer is reached, so that no event is written and the change stays unsaved.
+    [Fact]
+    public async Task A_change_with_refuse_if_changed_is_refused_with_its_code_and_writes_nothing()
+    {
+        var result = await RewordGoalAsync(app, "Made lunch with help", refuseIfChanged: ErrorCode.PreconditionFailed);
+
+        Assert.Same(ErrorCode.PreconditionFailed, result.Error);
+        Assert.False(result.Changed);
+        Assert.Empty(store.Written);
+    }
+
+    // A call that changes nothing is not refused for its version (mcp-server.md §5.1).
+    [Fact]
+    public async Task A_change_of_nothing_is_unchanged_whatever_refuse_if_changed_holds()
+    {
+        var result = await RewordGoalAsync(app, "Made lunch", refuseIfChanged: ErrorCode.PreconditionRequired);
+
+        Assert.Same(ConfigurationSaveResult.Unchanged, result);
         Assert.Empty(store.Written);
     }
 
@@ -134,21 +156,24 @@ public sealed class ConfigurationChangesTests : IAsyncDisposable
 
     // A goal reworded from "Made lunch" by a manager, in a scope whose tenant is the manager's organisation.
     private static async Task<ConfigurationSaveResult> RewordGoalAsync(
-        WebApplicationFactory<Program> app, string text, JsonObject? extraDetails = null)
+        WebApplicationFactory<Program> app,
+        string text,
+        JsonObject? extraDetails = null,
+        ErrorCode? refuseIfChanged = null)
     {
         await using var scope = app.Services.CreateAsyncScope();
         using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(OrganisationId))
         {
-            return await RewordGoalInScopeAsync(scope.ServiceProvider, text, extraDetails);
+            return await RewordGoalInScopeAsync(scope.ServiceProvider, text, extraDetails, refuseIfChanged);
         }
     }
 
     private static Task<ConfigurationSaveResult> RewordGoalInScopeAsync(
-        IServiceProvider scope, string text, JsonObject? extraDetails = null) =>
+        IServiceProvider scope, string text, JsonObject? extraDetails = null, ErrorCode? refuseIfChanged = null) =>
         scope.GetRequiredService<ConfigurationChanges>().SaveAsync(
             Manager, AuditEventTypes.Goal.Updated, AuditEntityTypes.Goal, GoalId, ParticipantId,
             new JsonObject { ["text"] = "Made lunch" }, new JsonObject { ["text"] = text }, extraDetails,
-            TestContext.Current.CancellationToken);
+            refuseIfChanged, TestContext.Current.CancellationToken);
 
     // As EF Core does when an update's concurrency token matches no row, but for the first save only, so that a later
     // save reaches the store.

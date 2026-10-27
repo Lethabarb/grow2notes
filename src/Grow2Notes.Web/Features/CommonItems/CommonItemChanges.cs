@@ -206,7 +206,7 @@ internal sealed class CommonItemChanges(
             reordered.Before,
             reordered.After,
             new JsonObject { ["groupId"] = groupId },
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return saved.Error is null
             ? CommonItemChangeResult.Saved
             : CommonItemChangeResult.Refused(ErrorCode.OrderMismatch);

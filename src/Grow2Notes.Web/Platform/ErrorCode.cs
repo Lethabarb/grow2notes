@@ -107,9 +107,20 @@ internal sealed class ErrorCode
     public static readonly ErrorCode PastDateManagerOnly =
         new(StatusCodes.Status422UnprocessableEntity, "note.past_date_manager_only");
 
-    /// <summary>A note's first save for an archived participant, who gets no new notes (§3.7, §5.5 item 4).</summary>
-    public static readonly ErrorCode ParticipantArchived =
+    /// <summary>
+    /// A note's first save for an archived participant, who gets no new notes (§3.7, §5.5 item 4). A change to their
+    /// details or goals is <see cref="ParticipantArchived"/> instead.
+    /// </summary>
+    public static readonly ErrorCode NoteParticipantArchived =
         new(StatusCodes.Status422UnprocessableEntity, "note.participant_archived");
+
+    /// <summary>
+    /// A change to an archived participant's details, or to one of their goals, which is restored first (D86, D93).
+    /// Archiving a participant leaves their version and their goals' as they were, so no <c>If-Match</c> could catch
+    /// it. A note's first save for an archived participant is <see cref="NoteParticipantArchived"/> instead.
+    /// </summary>
+    public static readonly ErrorCode ParticipantArchived =
+        new(StatusCodes.Status422UnprocessableEntity, "participant.archived");
 
     /// <summary>
     /// A reorder's IDs are not the list's active rows, each exactly once
