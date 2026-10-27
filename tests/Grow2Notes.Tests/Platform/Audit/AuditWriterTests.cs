@@ -7,6 +7,7 @@ using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -100,6 +101,55 @@ public sealed class AuditWriterTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task
+        An_event_written_during_an_mcp_call_carries_via_client_and_tool_and_leaves_the_callers_details_unchanged()
+    {
+        await using var scope = app.Services.CreateAsyncScope();
+        var organisationId = Guid.NewGuid();
+        var call = scope.ServiceProvider.GetRequiredService<McpCall>();
+        var details = new JsonObject { ["text"] = "new" };
+
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            // Outside a call, an event is as the caller gave it, and does not count as the call's.
+            await WriteAsync(scope.ServiceProvider, organisationId, details);
+            Assert.False(call.EventWritten);
+
+            call.Begin("assistant-1", "set_guide_prompts");
+            await WriteAsync(scope.ServiceProvider, organisationId, details);
+            await WriteAsync(scope.ServiceProvider, organisationId);
+        }
+
+        Assert.Equal("""{"text":"new"}""", details.ToJsonString());
+        Assert.Equal(
+            ["""{"text":"new"}""",
+             """{"text":"new","via":"mcp","client":"assistant-1","tool":"set_guide_prompts"}""",
+             """{"via":"mcp","client":"assistant-1","tool":"set_guide_prompts"}"""],
+            store.Written.Select(written => written.Row.Details));
+        Assert.True(call.EventWritten);
+    }
+
+    [Fact]
+    public void IAuditWriter_is_write_only_in_its_own_namespace()
+    {
+        var writer = typeof(IAuditWriter);
+
+        Assert.Equal("Grow2Notes.Web.Platform.Audit", writer.Namespace);
+        Assert.Equal(nameof(IAuditWriter.WriteAsync), Assert.Single(writer.GetMembers()).Name);
+
+        var method = Assert.Single(writer.GetMethods());
+        var types = method.GetParameters().Select(parameter => parameter.ParameterType)
+            .Append(method.ReturnType)
+            .SelectMany(Unwrapped);
+        Assert.DoesNotContain(types, type =>
+            type == typeof(AuditEvent)
+            || type == typeof(IQueryable)
+            || (type.IsGenericType
+                && type.GetGenericTypeDefinition() is var open
+                && (open == typeof(IQueryable<>) || open == typeof(DbSet<>))));
+    }
+
+    [Fact]
     public async Task An_operator_command_s_event_can_have_no_actor_entity_participant_or_details()
     {
         await using var scope = app.Services.CreateAsyncScope();
@@ -170,6 +220,9 @@ public sealed class AuditWriterTests : IAsyncDisposable
 
     // Disposing the factory the app was derived from disposes the app too.
     public ValueTask DisposeAsync() => host.DisposeAsync();
+
+    private static IEnumerable<Type> Unwrapped(Type type) =>
+        type.IsGenericType ? type.GetGenericArguments().SelectMany(Unwrapped).Prepend(type) : [type];
 
     private static Task WriteAsync(IServiceProvider services, Guid organisationId, JsonObject? details = null) =>
         services.GetRequiredService<IAuditWriter>().WriteAsync(
