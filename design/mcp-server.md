@@ -463,7 +463,7 @@ Other changes mirror the app, which archives goals, groups and items without ask
 
 **Participants and goals (tools 2, 3, 6–14)**
 - No result ever contains a date of birth (MA5). `add_participant` needs one, because the retention rule needs it (A5).
-- `find_participants` needs a `search` of at least 2 characters, so it never lists every participant, and returns at most 10 matches, with names and status only, sorted by family name then given name (A5). With more than 10 matches it says "More matches: narrow the search." Two participants with the same name are told apart by `get_participant`'s goals and by the person. If the model is unsure, the descriptions tell it to ask.
+- `find_participants` needs a `search` of at least 2 characters, which only keeps out one-letter searches (many searches can still list everyone, so the bounds are 10 results and one audit row a call and the rate limits of T38; A124), and returns at most 10 matches, with names and status only, sorted by family name then given name (A5). With more than 10 matches it says "More matches: narrow the search." Two participants with the same name are told apart by `get_participant`'s goals and by the person. If the model is unsure, the descriptions tell it to ask.
 - An archived participant is read-only, as on the app's detail screen (design §4.8): adding, rewording, reordering, archiving or restoring their goals is refused with `participant.archived` (use Release 1's code if it named this refusal differently). Restore the participant first.
 - `reorder_goals` needs exactly the active goals (`config.order_mismatch` otherwise). A restored goal goes to the end (A2).
 
