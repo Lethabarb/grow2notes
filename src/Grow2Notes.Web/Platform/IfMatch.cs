@@ -56,6 +56,13 @@ internal static class IfMatch
     }
 
     /// <summary>
+    /// The <c>If-Match</c> values for a tool's <c>expectedVersion</c>: none when it is missing or empty, so that
+    /// <see cref="Check"/> gives <see cref="ErrorCode.PreconditionRequired"/>, and otherwise its <see cref="ETag"/>.
+    /// </summary>
+    public static StringValues FromExpectedVersion(string? expectedVersion) =>
+        string.IsNullOrEmpty(expectedVersion) ? StringValues.Empty : ETag(expectedVersion);
+
+    /// <summary>
     /// The ETag of a row whose token is <paramref name="token"/>: the token in quotes, the one <c>If-Match</c> value
     /// that <see cref="Check"/> accepts for it.
     /// </summary>
