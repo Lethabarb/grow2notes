@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp;
+using Grow2Notes.Web.Features.Mcp.Contracts;
 using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Features.Notes;
 using Grow2Notes.Web.Platform;
@@ -16,6 +18,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
 using OpenIddict.Abstractions;
 
 namespace Grow2Notes.Tests.Platform.Audit;
@@ -92,6 +95,8 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         [AuditEventTypes.Admin.McpClientRemoved] = test => test.RunMcpClientRemoveAsync(),
         [AuditEventTypes.Mcp.Authorised] = test => test.AllowAssistantAsync(),
         [AuditEventTypes.Mcp.AuthorisationRefused] = test => test.CancelAssistantAsync(),
+        [AuditEventTypes.Mcp.Read] = test => test.ReadForAssistantAsync(),
+        [AuditEventTypes.Mcp.Refused] = test => test.RefuseAssistantAsync(),
     };
 
     /// <summary>
@@ -114,6 +119,7 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
 
     private const string McpClientId = "audit-assistant";
     private const string McpClientName = "Audit Assistant";
+    private const string McpToolName = "audit_tool";
 
     private static readonly string[] McpClientAdd =
     [
@@ -1573,6 +1579,52 @@ public sealed class AuditEventsTests(Grow2NotesFactory factory, SqlServerFixture
         var details = new JsonObject { ["client"] = McpClientId, ["why"] = "cancelled" };
 
         return await TakeConsentAsync(allow: false, AuditEventTypes.Mcp.AuthorisationRefused, details);
+    }
+
+    /// <summary>
+    /// <c>mcp.read</c>: a tool call of A's manager ends without an error and without an event of its own, which
+    /// <c>McpAuditFilter.WriteAsync</c> records as the filter does just before the result goes back. The tool
+    /// reported no IDs, so the entry lists none and counts 0, and records the manager as the actor, with no entity and
+    /// no participant. The access is off on the collection's app, so the row calls the filter, which is registered
+    /// either way, and the call through <c>/mcp</c> is covered in <c>McpAuditTests</c>.
+    /// </summary>
+    private async Task<WrittenEvent> ReadForAssistantAsync()
+    {
+        var details = new JsonObject
+        {
+            ["count"] = 0, ["via"] = "mcp", ["client"] = McpClientId, ["tool"] = McpToolName,
+        };
+
+        return await EndToolCallAsync(AuditEventTypes.Mcp.Read, new(), details);
+    }
+
+    /// <summary>
+    /// <c>mcp.refused</c>: a tool call of A's manager ends in a <c>not_found</c> error, which records the manager as
+    /// the actor, with no entity and no participant, and the code, the client ID and the tool in <c>Details</c>.
+    /// </summary>
+    private async Task<WrittenEvent> RefuseAssistantAsync()
+    {
+        var details = new JsonObject
+        {
+            ["code"] = "not_found", ["via"] = "mcp", ["client"] = McpClientId, ["tool"] = McpToolName,
+        };
+
+        return await EndToolCallAsync(
+            AuditEventTypes.Mcp.Refused, new ToolError("not_found", "Nothing here.").ToResult(), details);
+    }
+
+    private async Task<WrittenEvent> EndToolCallAsync(string eventType, CallToolResult result, JsonObject details)
+    {
+        await using var scope = App.Services.CreateAsyncScope();
+        scope.ServiceProvider.GetRequiredService<McpCall>().Begin(McpClientId, McpToolName);
+
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(a.OrganisationId))
+        {
+            await scope.ServiceProvider.GetRequiredService<McpAuditFilter>()
+                .WriteAsync(new Actor(a.ManagerId, Channel.Mcp), result);
+        }
+
+        return new(eventType, a.OrganisationId, a.ManagerId, null, null, null, details.ToJsonString());
     }
 
     private async Task<WrittenEvent> TakeConsentAsync(bool allow, string eventType, JsonObject details)

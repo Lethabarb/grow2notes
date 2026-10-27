@@ -1006,7 +1006,9 @@ Audit rows for changes are written in the same transaction as the change (5.9). 
 | Notes | `note.draft_started`, `note.discarded`, `note.submitted` (v1), `note.edited` (v2 and later), `note.reviewed` |
 | Reports | `report.downloaded` (date, format), `participant.exported` (date range, format, earlier versions included or not) |
 | Operator | `admin.bootstrap`, `admin.signin_reset`, `admin.signout_all`, `admin.mcp_client_added`, `admin.mcp_client_updated`, `admin.mcp_client_removed` |
-| AI assistant (Release 2) | `mcp.authorised` (client, scope), `mcp.authorisation_refused` (client, why: not_allowed or cancelled) |
+| AI assistant (Release 2) | `mcp.authorised` (client, scope), `mcp.authorisation_refused` (client, why: not_allowed or cancelled), `mcp.read` (client, tool, the IDs returned, count), `mcp.refused` (client, tool, code) |
+
+Each MCP tool call writes exactly one row: `mcp.refused` when it ends in an error, the app's own event when it changes something (which then also carries via, client and tool in its details), otherwise `mcp.read` (mcp-server.md §9).
 
 Reading a note, a participant's history or version history is **not** audited (A28). §9.10 explains what this means for a breach assessment.
 

@@ -231,6 +231,10 @@ builder.Services.AddSingleton<MelbourneClock>();
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 
+// One per scope, as the audit writer reads it: who the assistant is and which tool it called, for the events written
+// during an MCP tool call.
+builder.Services.AddScoped<McpCall>();
+
 // One per scope, for the same reason: it saves a configuration change through the scope's audit writer, so the change
 // and its event are saved by one SaveChanges on the scope's context.
 builder.Services.AddScoped<ConfigurationChanges>();

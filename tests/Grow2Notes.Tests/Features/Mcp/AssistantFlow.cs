@@ -100,6 +100,7 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
                 services.ConfigureAll<HttpClientFactoryOptions>(options =>
                     options.HttpMessageHandlerBuilderActions.Add(handler => handler.PrimaryHandler = outbound));
                 services.AddSingleton<ILoggerProvider>(logs);
+                services.AddClientAddressHeader();
                 services.AddOpenIddict().AddServer(server => server.AddEventHandler(IssuedTokenEdits.Descriptor));
                 if (probes)
                 {
@@ -358,12 +359,19 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     /// <summary>
     /// An MCP client of the revision <paramref name="protocolVersion"/> (<c>2025-11-25</c>, which opens with the
     /// initialize handshake, or <c>2026-07-28</c>, which sends its details with each request) that calls <c>/mcp</c>
-    /// with <paramref name="accessToken"/>. The caller disposes it.
+    /// with <paramref name="accessToken"/>, from <paramref name="clientAddress"/> if it is given. The caller disposes
+    /// it.
     /// </summary>
-    public async Task<McpClient> McpClientAsync(string accessToken, string protocolVersion)
+    public async Task<McpClient> McpClientAsync(
+        string accessToken, string protocolVersion, string? clientAddress = null)
     {
         var http = App.CreateAssistantClient();
         http.DefaultRequestHeaders.Authorization = new("Bearer", accessToken);
+        if (clientAddress is not null)
+        {
+            http.DefaultRequestHeaders.Add(ClientAddressHeader.Name, clientAddress);
+        }
+
         var transport = new HttpClientTransport(
             new() { Endpoint = new(McpTestApp.Resource), TransportMode = HttpTransportMode.StreamableHttp },
             http,
