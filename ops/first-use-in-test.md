@@ -1495,8 +1495,9 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 175. In the same test organisation, with a participant who has a date of birth and both active and archived goals,
      ask the assistant to describe that participant. Look for: it gives the name, the status and the goals, the
      active ones first and then the archived ones, and no date of birth and nothing about notes. Add enough
-     participants that more than 10 match a short search such as `a`, then ask the assistant to find them: it shows
-     10 and the line "More matches: narrow the search." Ask it to find `J` on its own (one letter): a real client
+     participants that more than 10 match a search of two letters or more such as `an` (or give them a shared family
+     name and search for it), then ask the assistant to find them: it shows 10 and the line "More matches: narrow
+     the search." Ask it to find `J` on its own (one letter): a real client
      must show the refusal "Search must be at least 2 characters" and let the assistant correct itself, not a client
      error. This is the interoperability check on error results: if a real client rejects them because their
      structured content does not match the tool's output schema, the one place to fix is `ToolError.ToResult`, with
