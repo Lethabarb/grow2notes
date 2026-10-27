@@ -148,7 +148,8 @@ public sealed class NoNoteContentRulesTests
             .Select(type => type.FullName!)
             .Where(name => ForbiddenTypePrefixes.Any(prefix => name.StartsWith(prefix, StringComparison.Ordinal)));
         var forbiddenNamespaces = types
-            .Select(type => type.Namespace!)
+            .Select(type => type.Namespace)
+            .OfType<string>()
             .Where(name => ForbiddenNamespaces.Any(
                 forbidden => name == forbidden || name.StartsWith(forbidden + ".", StringComparison.Ordinal)))
             .Distinct();
