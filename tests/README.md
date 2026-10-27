@@ -1158,8 +1158,11 @@ deactivation, a sign-out on another device or `admin signout-all` rotates the se
 ends sessions or a role: deactivation, a change of role or email, Sign out
 (`Grow2Notes.Tests/Features/Auth/LogoutEndpointTests.cs`), and the operator's `admin reset-signin` and
 `admin signout-all`; T24's, that a deactivated person is signed out everywhere (S05.03.02, the third fact of
-`Grow2Notes.Tests/Platform/PastRecordsTests.cs`); and T32's, that such a change ends a connected assistant's access as
-well as the person's own sessions.
+`Grow2Notes.Tests/Platform/PastRecordsTests.cs`). Such a change ends a connected assistant's access too, in the same
+transaction: `AccessEndsTests` (`Grow2Notes.Tests/Features/Mcp/AccessEndsTests.cs`) does each event through its real
+endpoint or command, shows every authorisation of the person revoked before any refresh or `/mcp` call, then the
+refusal of both, and the person's own session by `SignedInDevices`. T36 and T37 add the through-MCP changes of their
+tools as rows of its `Events` list, each an `AccessEnd` with the tool call as its trigger.
 
 - Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
   changes (the seeded-rows rule above).
@@ -1184,6 +1187,42 @@ using var devices = await SignedInDevices.SignInAsync(app, clock, userId);
 
 await devices.AssertNextRequestsAsync(HttpStatusCode.Unauthorized, SignedInDevices.Me, SignedInDevices.Ping);
 ```
+
+### Calling /mcp in a test
+
+A test of the AI-assistant access calls `/mcp` as an approved assistant does, with an access token that the real flow
+issued, so that what it proves is what the endpoint's own validation does with a real token (mcp-server.md §4.5).
+`AssistantFlow` (`Grow2Notes.Tests/Features/Mcp/AssistantFlow.cs`) is the fixture: the app with `Mcp:Enabled` on, on a
+database and a fake clock of its own, with the approved assistant registered. `AccessTokenTests` and `McpEndpointTests`
+are the examples.
+
+- `AssistantFlow.StartAsync(factory, sqlServer, name)` starts the app, and `AddUserAsync(role)` adds a person to its
+  organisation, or to another with `AddOrganisationAsync()` and `AddUserAsync(role, organisationId)`. `SignInAsync`
+  signs the person in with the real session cookie, and `ConnectAsync(browser)` has them press Allow and the assistant
+  exchange the code: the tokens of a connection. `RefreshEveryAsync` keeps a connection going on the fake clock.
+- `PostMcpAsync(accessToken, origin, method)` makes one call as `AssistantFlow.McpRequest` builds it (a `tools/list`
+  `POST` that the stateless server answers on its own), and `AssertChallengeAsync(response, error)` asserts the 401 of
+  mcp-server.md §4.2: the document and the scope it names, and the `error` it carries, or none for a call with no token.
+  `McpClientAsync(accessToken, revision)` is the SDK's own client for `2025-11-25` (the initialize handshake) or
+  `2026-07-28` (details with each request); dispose it.
+- `ProbeTools` are tools that only the tests have, because the app ships none until its look-ups are added. They are in
+  the app unless `StartAsync` is called with `probes: false`, which is the app as production has it. `probe_whoami`
+  answers who the call is for, every claim of the principal it runs as, the organisation it runs in and the
+  participants that its database context sees; `ProbeTools.ReadWhoAmI` reads the answer. A new tool of the tests
+  belongs in `ProbeTools`.
+- `flow.TokenEdits.Queue(edit)` changes the next access token that the app issues (`TokenEdit`: another audience, no
+  stamp hash, another stamp hash, another organisation), so that a real token can be one the endpoint must refuse. It
+  applies once, so give each case its own flow, which xUnit's one class instance for each test already does.
+- `flow.DeactivateAsync`, `ResetSignInAsync` and `ChangeRoleAsync` change the person's row and revoke nothing, so they
+  are for the checks made on each call. Use the app's own endpoint or command, or `SignOutOfTheAppAsync`, wherever the
+  test is about what ends a connection and when.
+- `flow.Logs` and `flow.Outbound` hold what the app logged, at its own levels, and every outbound call it tried, which
+  fails the test.
+- A token lasts 10 minutes and the session 12 hours from sign-in, both on the fake clock: `flow.Clock.Advance`. To
+  check the 12 hours, refresh up to a minute before, so that the access token is still valid after and only the check on
+  the session can refuse it.
+- `/mcp` takes bearer tokens only: the session cookie is refused there (a 401 challenge), and a bearer token is
+  ignored under `/api`.
 
 ### Setting up an account, with a test-only passkey handler or a computed code
 

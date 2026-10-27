@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Grow2Notes.Tests.Platform;
 
@@ -66,6 +67,22 @@ public sealed class PoliciesTests : IAsyncDisposable
         Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
         Assert.False(await AdmitsAsync(policy, SignedIn("Worker")));
         Assert.False(await AdmitsAsync(policy, SignedIn("Support")));
+        Assert.False(await AdmitsAsync(policy, SignedOut("Manager")));
+    }
+
+    [Fact]
+    public async Task The_McpAdmin_policy_admits_a_manager_or_Support_by_exact_name_and_the_access_token_scheme_only()
+    {
+        var policy = await app.Services.GetRequiredService<IAuthorizationPolicyProvider>()
+            .GetPolicyAsync(Policies.McpAdmin);
+        Assert.NotNull(policy);
+
+        Assert.Equal([OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme], policy.AuthenticationSchemes);
+        Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
+        Assert.True(await AdmitsAsync(policy, SignedIn("Support")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("Worker")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("support")));
+        Assert.False(await AdmitsAsync(policy, SignedIn(role: null)));
         Assert.False(await AdmitsAsync(policy, SignedOut("Manager")));
     }
 

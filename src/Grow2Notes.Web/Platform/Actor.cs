@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
+using OpenIddict.Abstractions;
 
 namespace Grow2Notes.Web.Platform;
 
@@ -24,4 +25,15 @@ internal sealed record Actor(Guid UserId, Channel Channel)
                 ?? throw new InvalidOperationException(
                     "The signed-in user has no user ID claim, so there is no one to act as.")),
             Channel.App);
+
+    /// <summary>
+    /// The user that an MCP call is for: the ID in the <c>sub</c> claim of the access token, which has no user ID claim
+    /// of Identity's, with <see cref="Channel.Mcp"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The principal has no <c>sub</c> claim.</exception>
+    public static Actor InMcp(ClaimsPrincipal user) =>
+        new(
+            Guid.Parse(user.FindFirstValue(OpenIddictConstants.Claims.Subject)
+                ?? throw new InvalidOperationException("The access token has no subject, so nobody to act as.")),
+            Channel.Mcp);
 }

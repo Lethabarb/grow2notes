@@ -128,6 +128,15 @@ public sealed class AssistantTokensTests
     }
 
     [Fact]
+    public void A_token_for_another_organisation_than_the_person_is_UserChanged()
+    {
+        var stored = Stored();
+        user.OrganisationId = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
+        Assert.Equal(AssistantTokenCheck.UserChanged, AssistantTokens.Check(user, stored, SignedInAt));
+    }
+
+    [Fact]
     public void A_changed_security_stamp_is_a_changed_user()
     {
         var stored = Stored();

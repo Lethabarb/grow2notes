@@ -6762,7 +6762,7 @@ Planned 27 October 2026.
 
 ```yaml
 id: T32
-status: new
+status: done
 release: R2
 lane: A
 size: M
@@ -6786,10 +6786,107 @@ call gets `401`.
 ### Notes
 
 - Builds the access-ends test that T36 and T37 add their through-MCP rows to. Reuses T04's session-revocation helper.
+- Assumed defaults A118 to A123 (design.md §13, 27 October 2026): signing out, a change to worker and an email change
+  also end assistant connections; no real tool ships; the challenge and the protected resource document come from the
+  app; one audit row per tool call, chosen by its outcome; the 12-hour limit applies on every call and revokes
+  nothing; a token must name the person's own organisation. A118, A122 and A123 add to mcp-server.md §4.5 step 4 and
+  the §4.6 rows, and A121 refines §9; mcp-server.md was left as written, so those rows are the record of the
+  difference.
+- No table, migration, app setting, SPA file or copy. The one line in `appsettings.json`, `"ModelContextProtocol":
+  "Warning"` under `Logging:LogLevel`, is a log level pin like the existing ones for Azure and EF Core, so overriding
+  `Default` cannot lower the SDK; `LoggingTests` asserts it. The branch diff against `main` touches nothing under
+  `src/grow2notes-spa` or `Data/Migrations`. Packages added: `ModelContextProtocol.AspNetCore` 2.2.0 and
+  `OpenIddict.Validation.AspNetCore`, `.DataProtection` and `.ServerIntegration` 7.7.1 (design.md §7.5).
+- Settled names: `McpCall` (the scoped carrier of `via`, `client` and `tool`, with `EventWritten`, `Returned` and
+  `ParticipantIds`), `Actor.InMcp`, `AssistantTokens.RevokeConnectionsAsync` (the one way a person's connections are
+  revoked, called inside five existing transactions: deactivation, sign-in reset, a change to worker, logout and the
+  per-person loop of `admin signout-all`), `McpAuditFilter`, `ToolError`, `AssistantCallCheck`, `McpOriginRule`,
+  `McpEndpoint`, `Policies.McpAdmin`, `McpSetup.ServerInstructions`, `AuditEventTypes.Mcp.Read` and `Refused`.
+- Audit: exactly one row per tool call (A121). T33 to T37 must not write their own `mcp.read`: a tool calls
+  `McpCall.Returned(McpCall.ParticipantIds, ids)` (or the other keys `userIds`, `goalIds`, `groupIds`, `commonItemIds`)
+  for the IDs it returns and the filter writes the row. `mcp.refused` is written after `ChangeTracker.Clear()`, on the
+  same scope, with no transaction open. The row is saved with `CancellationToken.None` before the result goes back, so
+  an assistant that disconnects cannot cancel it, and a failed audit write replaces the data with the SDK's own error
+  result; no test forces an audit insert to fail. An unexpected error logs one Error line (tool name, exception type,
+  SQL error number) and never the message or the exception object, because the SDK would otherwise log the exception.
+- Test-only stand-ins in `tests/Grow2Notes.Tests/Features/Mcp`: `ProbeTools` (`probe_whoami`, `probe_set_guide_prompts`,
+  `probe_refuse`, `probe_fail`, `probe_abort`), added only to `AssistantFlow`'s host, and `IssuedTokenEdits`, which
+  changes the next real token once (another audience, no or another stamp hash, another organisation). They replace
+  the dropped `AccessTokenReader`: `AccessTokenTests` now pins the audience, the claims, the absent role and the
+  10-minute expiry through the endpoint's real validation, and S07.01.06's access-token criterion is ticked naming it.
+  The production setup (`probes: false`) lists an empty tool list on both revisions.
+- Departures from the requirements: (1) a missing stamp hash stays a unit case in `AssistantTokensTests` and is also
+  proven through `/mcp` with `IssuedTokenEdits`, as the owner's text asks. (2) R05 says revoke on every failure, but a
+  call past 12 hours from `auth_time` is refused without revoking (A122), as at the token endpoint. (3) The status for
+  an unknown JSON-RPC method is the SDK's own and is not re-tested; the header-mismatch 400 is tested.
+- Departures from the final design as built: `McpSetup` does not call `EnableAuthorizationEntryValidation()`, which
+  checks an authorisation only for a stored token, and an access token here is self-contained; `AssistantCallCheck`
+  finds the authorisation itself and answers `invalid_token` with "The connection has ended.", a third app string
+  beside the two that the design names. Its revoke for a changed person parses the token's `sub` as a `Guid`, which
+  every issued token carries, so a token without one cannot reach it. The unexpected-error detail goes to one Error
+  log line, not to a telemetry sink (S07.02.07 extends the canary there). `AccessTokenTests` asserts `expires_in` of
+  600 and the accepted call at 9 minutes 59 seconds and the refused one at 10 minutes 1 second, rather than comparing
+  the token's own dates. `AuthorisationServerTests.What_a_later_task_adds_is_still_a_404_problem` was removed on
+  purpose, because the protected resource document it asserted a 404 for is now served; the address with `/mcp` after
+  it, which stays 404, is in `McpEndpointTests`. No security test was removed or weakened otherwise.
+- `EndpointMatrix` needs no row: its app runs with the switch off, so it cannot reach `/mcp`. `McpEndpointTests`
+  covers the same callers with the switch on (no token, the session cookie, a bearer at `/api`, a person made a worker,
+  another organisation), and `McpOffSwitchTests` gains `DELETE`.
+- What the stories leave to later tasks: `invite_user` as the proof that a manager changed to Support is Support on
+  the next call is S07.04.03's; the through-MCP rows of `AccessEndsTests` are T36's and T37's; previews and
+  confirmation forms in `mcp.read` are T36's; the telemetry canary is S07.02.07.
+- Hand-offs. T33: calls `McpCall.Returned` in every look-up and maps malformed arguments to `ToolError`; its tool
+  matrix asserts that `mcp.read`'s IDs equal the IDs in the result; it replaces the empty-list test with its tool list;
+  it adds step 174. T36: `InputRequiredException` and `mcp.read` for confirmation forms. T36 and T37: add their
+  through-MCP rows to `AccessEndsTests`. T38: the `/mcp` rate limits (step 6 of §4.5) and the MCP Inspector check.
+- `sprint` is left blank in the three stories, as in every other done story of this epic.
+- By hand: first-use steps 171 to 174, under *The /mcp endpoint in test, once T32 is on main*, and step 163 amended
+  (the protected resource document's four fields) and step 167 pointing to step 172. Step 174 can only be run after
+  T33. None of them holds T32 open.
+
+### Plan
+
+Planned 27 October 2026.
+
+- Outcome: `/mcp` runs inside the app's pipeline, only when `Mcp:Enabled` is true. Each call is validated, checked
+  against the person's current row, run in the token's organisation and audited once. Changes to a person end their
+  assistant connections in the same transaction. No real tool ships, no table, migration, setting or SPA change.
+- Design: OpenIddict validation (local server, Data Protection, audience set lazily to the resource) plus one
+  scoped validation handler that, after the built-in checks, reads the token's authorisation (OpenIddict checks it
+  only for stored tokens), runs `AssistantTokens.Check` and adds the role claim from the row. `Policies.McpAdmin`
+  names the validation scheme only. The ModelContextProtocol SDK (2.2.0, stateless, tools capability declared) serves
+  POST; GET and DELETE answer 405. The challenge and the protected-resource document (root address only) come from the
+  app. An Origin rule runs before authentication.
+- Domain: `Check` also requires the token's organisation to equal the person's; `RevokeConnectionsAsync` is the one
+  revoke; `McpCall` (scoped, in memory) carries via, client and tool to `AuditWriter`; one call-tool filter chooses the
+  single audit row (`mcp.refused`, the app's own event, or `mcp.read`) and turns exceptions into `unexpected`.
+- Reuse: `AssistantTokens`, `McpSetup`, `Policies.SignedInAs`, `TenantContext`, `IAuditWriter`, `CacheHeaders`, the
+  logging pins, `AssistantFlow`, `SignedInDevices` and the existing transactions of deactivate, reset, edit, logout and
+  sign-out-all.
+- Where the design is silent (recorded as A118 to A123): sign-out and an email change also end connections; test-only
+  stand-in tools; the challenge and document come from the app; the 12-hour limit refuses without revoking; the
+  organisation check; the audit write is fail-closed and cannot be cancelled. Test-only `ProbeTools` and
+  `IssuedTokenEdits` replace the dropped `AccessTokenReader` and pin the access-token properties through the real
+  endpoint.
+
+### Verticals
+
+- v1 | MCP endpoint: validation, per-call checks, challenge, document, Origin rule and the real-token tests | depends_on:
+  none | R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R14, R25, R26
+- v2 | MCP audit: call-tool filter, `McpCall`, `ToolError` and the unexpected-error rule | depends_on: v1 |
+  R13, R15, R16, R17, R18
+- v3 | Access that ends on the next call: revocation in the existing transactions and `AccessEndsTests` | depends_on:
+  v1 | R19, R20, R21, R22, R23
+- v4 | Close-out: backlog ticks, coverage, assumed defaults, by-hand checks | depends_on: v1, v2, v3 | R24, R27
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Endpoint (#164; v1): bearer validation, the per-call check, the challenge and document, the Origin rule,
+  `Policies.McpAdmin`, the SDK in stateless mode and the real-token tests.
+- [x] Access that ends (#165; v3): `RevokeConnectionsAsync` inside the existing transactions and `AccessEndsTests`.
+- [x] Audit (#166; v2): `McpCall`, the one call-tool filter, `ToolError`, the unexpected-error rule and `McpAuditTests`.
+- [x] Close-out (#167; v4): S07.01.06's access-token criterion re-ticked, the F07.02 ticks, coverage.md, A118 to A123,
+  first-use steps 163 and 171 to 174.
 
 ---
 

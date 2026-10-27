@@ -19,7 +19,10 @@ internal enum AssistantTokenCheck
     /// <summary>The session that began the connection is more than 12 hours old.</summary>
     PastAbsoluteLimit,
 
-    /// <summary>The person is gone, no longer active, no longer a manager or Support, or has signed out.</summary>
+    /// <summary>
+    /// The person is gone, no longer active, no longer a manager or Support, in another organisation, or has signed
+    /// out.
+    /// </summary>
     UserChanged,
 }
 
@@ -81,9 +84,9 @@ internal static class AssistantTokens
                 Role: UserRole.Manager or UserRole.Support,
                 SecurityStamp: { } stamp,
             }
-            || stored.FindFirstValue(StampHashClaimType) is not { } storedHash
-            || !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(storedHash), Encoding.UTF8.GetBytes(StampHash(stamp))))
+            || !SameValue(stored.FindFirstValue(StampHashClaimType), StampHash(stamp))
+            || !SameValue(
+                stored.FindFirstValue(TenantContext.OrganisationIdClaimType), user.OrganisationId.ToString("D")))
         {
             return AssistantTokenCheck.UserChanged;
         }
@@ -92,4 +95,17 @@ internal static class AssistantTokens
             ? AssistantTokenCheck.Allowed
             : AssistantTokenCheck.PastAbsoluteLimit;
     }
+
+    /// <summary>
+    /// Ends every connection that <paramref name="userId"/> has: revokes their authorisations, which refuses the
+    /// refresh tokens and every access token already issued. It is the one way a change to a person ends their
+    /// connections, and it joins the transaction it is called in.
+    /// </summary>
+    public static Task RevokeConnectionsAsync(
+        this IOpenIddictAuthorizationManager authorizations, Guid userId, CancellationToken ct) =>
+        authorizations.RevokeBySubjectAsync(userId.ToString("D"), ct).AsTask();
+
+    private static bool SameValue(string? stored, string current) =>
+        stored is not null
+        && CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(stored), Encoding.UTF8.GetBytes(current));
 }

@@ -8,10 +8,12 @@ namespace Grow2Notes.Web.Platform.Audit;
 /// The app's <see cref="IAuditWriter"/>, one per request or command scope, so it saves through that scope's context and
 /// its transaction. It logs nothing: <c>Details</c> reach the database and nowhere else, because the audit log is a
 /// table, not telemetry (design.md §9.5). A failed save reaches telemetry as any database failure does, with the
-/// exception type and SQL error number only.
+/// exception type and SQL error number only. During an MCP tool call every event it writes also carries <c>via</c>,
+/// <c>client</c> and <c>tool</c> in its <c>Details</c> (mcp-server.md §9), so that no handler has to add them.
 /// </summary>
 internal sealed class AuditWriter(
-    Grow2NotesDbContext db, TimeProvider timeProvider, IHttpContextAccessor httpContextAccessor) : IAuditWriter
+    Grow2NotesDbContext db, TimeProvider timeProvider, IHttpContextAccessor httpContextAccessor, McpCall mcpCall)
+    : IAuditWriter
 {
     public async Task WriteAsync(
         Guid organisationId,
@@ -23,6 +25,15 @@ internal sealed class AuditWriter(
         JsonObject? details,
         CancellationToken cancellationToken = default)
     {
+        if (mcpCall.Client is not null)
+        {
+            // A copy, so the caller's object is never changed.
+            details = details?.DeepClone().AsObject() ?? [];
+            details["via"] = "mcp";
+            details["client"] = mcpCall.Client;
+            details["tool"] = mcpCall.Tool;
+        }
+
         var entry = db.AuditEvents.Add(new AuditEvent
         {
             OrganisationId = organisationId,
@@ -45,6 +56,11 @@ internal sealed class AuditWriter(
             // Saved or refused, the event leaves the change tracker: a refused one must not be written by the caller's
             // next save, and nothing reads a saved one back through this context.
             entry.State = EntityState.Detached;
+        }
+
+        if (mcpCall.Client is not null)
+        {
+            mcpCall.MarkEventWritten();
         }
     }
 

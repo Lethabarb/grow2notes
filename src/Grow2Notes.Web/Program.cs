@@ -231,6 +231,10 @@ builder.Services.AddSingleton<MelbourneClock>();
 // or rolling back with the change it records (design.md §5.9).
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 
+// One per scope, as the audit writer reads it: who the assistant is and which tool it called, for the events written
+// during an MCP tool call.
+builder.Services.AddScoped<McpCall>();
+
 // One per scope, for the same reason: it saves a configuration change through the scope's audit writer, so the change
 // and its event are saved by one SaveChanges on the scope's context.
 builder.Services.AddScoped<ConfigurationChanges>();
@@ -360,6 +364,12 @@ app.UseCacheHeaders();
 // environment.
 app.UseStatusCodePages();
 app.UseExceptionHandler();
+
+// The AI-assistant access refuses a browser page of another site before it reads a token (mcp-server.md §4.5 step 2).
+if (McpSetup.IsEnabled(builder.Configuration))
+{
+    app.UseMcpOriginRule();
+}
 
 // After the exception handling, so the 401 and 403 that authorization answers get problem details and the caching
 // rules too, and an exception while authenticating is handled like any other. Without these calls, the host would add

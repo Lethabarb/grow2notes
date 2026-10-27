@@ -7,14 +7,14 @@ namespace Grow2Notes.Tests.Features.Mcp;
 /// With <c>Mcp:Enabled</c> unset, which the default factory leaves it, every address of the AI-assistant access and of
 /// its discovery documents answers a 404 problem, never the SPA page (mcp-server.md §3.5, §10 item 6). The endpoint
 /// matrix covers the four callers, so this one is anonymous. <c>/api/connect</c> is the Connect screen's data, which
-/// falls to the <c>/api</c> catch-all; <c>/connect</c> is an ordinary SPA route and is not listed. The <c>/mcp</c>
-/// cases join it with the task that adds that endpoint.
+/// falls to the <c>/api</c> catch-all; <c>/connect</c> is an ordinary SPA route and is not listed. <c>/mcp</c> is
+/// the MCP endpoint, which also takes <c>DELETE</c> while it is on.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class McpOffSwitchTests(Grow2NotesFactory factory) : IClassFixture<Grow2NotesFactory>
 {
     public static MatrixTheoryData<string, string> Addresses { get; } = new(
-        ["GET", "POST"],
+        ["GET", "POST", "DELETE"],
         [
             "/mcp",
             "/api/connect",

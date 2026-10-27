@@ -3,9 +3,9 @@ using Microsoft.Net.Http.Headers;
 namespace Grow2Notes.Web.Platform;
 
 /// <summary>
-/// Applies the design.md §7.2 caching rules: <c>no-store</c> under /api, <c>no-cache</c> for index.html, and a one-year
-/// immutable cache for Vite's hashed /assets files. A page or asset response that sets a cookie, as the session check
-/// does when it renews the session cookie (§8.4), is <c>private</c>, so no shared cache keeps it.
+/// Applies the design.md §7.2 caching rules: <c>no-store</c> under /api and at /mcp, <c>no-cache</c> for index.html,
+/// and a one-year immutable cache for Vite's hashed /assets files. A page or asset response that sets a cookie, as the
+/// session check does when it renews the session cookie (§8.4), is <c>private</c>, so no shared cache keeps it.
 /// </summary>
 internal static class CacheHeaders
 {
@@ -32,9 +32,10 @@ internal static class CacheHeaders
         // (RFC 9111 §7.3), so only the browser that the cookie was set for may keep it.
         var setsCookie = response.Headers.SetCookie.Count > 0;
 
-        if (path.StartsWithSegments("/api"))
+        if (path.StartsWithSegments("/api") || path.StartsWithSegments("/mcp"))
         {
-            // Covers every API response, including the unknown-path 404, handled errors and endpoints added later.
+            // Covers every API response, including the unknown-path 404, handled errors and endpoints added later. An
+            // assistant's calls carry the organisation's data, so /mcp is never stored either.
             response.Headers.CacheControl = "no-store";
         }
         else if (response.ContentType?.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) == true)
