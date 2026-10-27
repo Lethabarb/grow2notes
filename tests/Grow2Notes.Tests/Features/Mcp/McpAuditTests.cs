@@ -128,7 +128,8 @@ public sealed class McpAuditTests(Grow2NotesFactory factory, SqlServerFixture sq
 
         // The app's own values stay in the details, and the call's three keys are added to them.
         var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!.AsObject();
-        Assert.NotNull(details["text"]);
+        Assert.Equal("Ask what went well.", details["new"]!["text"]!.GetValue<string>());
+        Assert.NotNull(details["old"]);
         Assert.Equal("mcp", details["via"]!.GetValue<string>());
         Assert.Equal(AssistantFlow.ClientId, details["client"]!.GetValue<string>());
         Assert.Equal("probe_set_guide_prompts", details["tool"]!.GetValue<string>());
