@@ -6762,7 +6762,7 @@ Planned 27 October 2026.
 
 ```yaml
 id: T32
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -6786,6 +6786,40 @@ call gets `401`.
 ### Notes
 
 - Builds the access-ends test that T36 and T37 add their through-MCP rows to. Reuses T04's session-revocation helper.
+
+### Plan
+
+Planned 27 October 2026.
+
+- Outcome: `/mcp` runs inside the app's pipeline, only when `Mcp:Enabled` is true. Each call is validated, checked
+  against the person's current row, run in the token's organisation and audited once. Changes to a person end their
+  assistant connections in the same transaction. No real tool ships, no table, migration, setting or SPA change.
+- Design: OpenIddict validation (local server, Data Protection, authorisation entry, audience set lazily to the
+  resource) plus one scoped validation handler that runs `AssistantTokens.Check` after the built-in checks and adds
+  the role claim from the row. `Policies.McpAdmin` names the validation scheme only. The ModelContextProtocol SDK
+  (2.2.0, stateless, tools capability declared) serves POST; GET and DELETE answer 405. The challenge and the
+  protected-resource document (root address only) come from the app. An Origin rule runs before authentication.
+- Domain: `Check` also requires the token's organisation to equal the person's; `RevokeConnectionsAsync` is the one
+  revoke; `McpCall` (scoped, in memory) carries via, client and tool to `AuditWriter`; one call-tool filter chooses the
+  single audit row (`mcp.refused`, the app's own event, or `mcp.read`) and turns exceptions into `unexpected`.
+- Reuse: `AssistantTokens`, `McpSetup`, `Policies.SignedInAs`, `TenantContext`, `IAuditWriter`, `CacheHeaders`, the
+  logging pins, `AssistantFlow`, `SignedInDevices` and the existing transactions of deactivate, reset, edit, logout and
+  sign-out-all.
+- Where the design is silent (recorded as A118 to A123): sign-out and an email change also end connections; test-only
+  stand-in tools; the challenge and document come from the app; the 12-hour limit refuses without revoking; the
+  organisation check; the audit write is fail-closed and cannot be cancelled. Test-only `ProbeTools` and
+  `IssuedTokenEdits` replace the dropped `AccessTokenReader` and pin the access-token properties through the real
+  endpoint.
+
+### Verticals
+
+- v1 | MCP endpoint: validation, per-call checks, challenge, document, Origin rule and the real-token tests | depends_on:
+  none | R01, R02, R03, R04, R05, R06, R07, R08, R09, R10, R11, R12, R14, R25, R26
+- v2 | MCP audit: call-tool filter, `McpCall`, `ToolError` and the unexpected-error rule | depends_on: v1 |
+  R13, R15, R16, R17, R18
+- v3 | Access that ends on the next call: revocation in the existing transactions and `AccessEndsTests` | depends_on:
+  v1 | R19, R20, R21, R22, R23
+- v4 | Close-out: backlog ticks, coverage, assumed defaults, by-hand checks | depends_on: v1, v2, v3 | R24, R27
 
 ### Steps
 
