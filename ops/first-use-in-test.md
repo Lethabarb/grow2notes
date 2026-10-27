@@ -1362,8 +1362,11 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      data location you typed and no token data. Leave it registered for step 163. If the assistant's address does not
      answer, or its document is refused, the refusal names why; that is not a bug in Grow2Notes, and you may use a
      different assistant. This step holds nothing open. (S07.01.05; MA1, MA2; A114.)
-163. Open `https://app-grow2notes-test.azurewebsites.net/.well-known/oauth-protected-resource`: it answers `404`
-     with a short problem-details answer, not the app's screens, because the protected-resource document is T32's.
+163. Open `https://app-grow2notes-test.azurewebsites.net/.well-known/oauth-protected-resource`. Until T32 is in
+     test it answers `404` with a short problem-details answer, not the app's screens. From T32 it answers `200`
+     with four fields: `resource` of `https://app-grow2notes-test.azurewebsites.net/mcp`, `authorization_servers`
+     holding the one address `https://app-grow2notes-test.azurewebsites.net/`, `scopes_supported` holding
+     `grow2notes.admin`, and `bearer_methods_supported` holding `header`.
      With the assistant that step 162 registered, open `/oauth/authorize` on the same address in a browser, with that
      assistant's client ID and one of its redirect URIs, `response_type=code`, any 43-character `code_challenge` of
      letters and digits with `code_challenge_method=S256`, `resource=https://app-grow2notes-test.azurewebsites.net/mcp`,
@@ -1426,7 +1429,7 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      `refresh_token`. Repeat with the same code: `invalid_grant`. Then refresh with `grant_type=refresh_token`, the
      `refresh_token` and `client_id`: a new pair comes back. Read the audit rows as in step 15, with
      `EventType LIKE 'mcp.%'`: one `mcp.authorised`, with the client ID and `grow2notes.admin offline_access`. A
-     real assistant's own connection waits for T32's `/mcp` challenge. Remove the made-up assistant with
+     real assistant's own connection is step 172. Remove the made-up assistant with
      `admin mcp-client remove`. This step holds nothing open. (S07.01.06, S07.01.08; MA2, MA3, MA4.)
 168. As a worker in test, open an `/oauth/authorize` link as in step 167 (register the made-up assistant again). Look
      for: the line "Only managers can connect an AI assistant to Grow2Notes." and **Cancel** only. Press **Cancel**:
@@ -1443,3 +1446,44 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      order, the buttons say what they do, and the loopback warning, when it shows, is read with the rest. Any
      failure becomes a bug. This step holds nothing open and does not hold go-live (A107). (S07.01.06, S07.01.07,
      S07.01.02; A107.)
+
+
+### The /mcp endpoint in test, once T32 is on main
+
+171. From a laptop, with curl and no sign-in, `POST` an empty JSON object to test's `/mcp` address with
+     `curl -i -X POST -H "Content-Type: application/json" -d "{}"`. Look for: `401`; a `WWW-Authenticate` header that
+     starts `Bearer`, with `resource_metadata` naming test's `/.well-known/oauth-protected-resource` address and
+     `scope="grow2notes.admin"`, and no `error` parameter; `Cache-Control: no-store`; and no header that starts with
+     `Access-Control-`. Repeat with `-H "Authorization: Bearer not-a-token"`: the same `401`, now with
+     `error="invalid_token"`. Repeat with `-H "Origin: https://unapproved.example"` and no token: `403` with a short
+     problem-details answer, not a `401`, because the Origin is checked first. Then sign in to the app in a browser
+     as a manager and, in the same browser, open `/mcp` in a new tab: a `401` answer, not the app, because the
+     session cookie is not accepted there. Last, open `/.well-known/oauth-protected-resource/mcp`: `404`. This step
+     holds nothing open. (S07.02.01; MA10; A120.)
+172. With a real approved assistant, or the MCP Inspector, registered as in step 162, add test's `/mcp` address as a
+     remote server. Look for: it follows the `401` to the sign-in and the Connect screen of step 167 (a manager signs
+     in, with MFA, and chooses **Allow**), connects, and lists an empty list of tools, because no tool ships until
+     T33. Write down which assistant it was, the protocol revision it reports (2025-11-25 or 2026-07-28) and, from
+     the browser's Network panel when it runs in a browser, the `Origin` its calls carry, or that it sends none. A
+     `403` on its calls means that its `Origin` is not the origin of a redirect URI of its registration: correct the
+     registration (`admin mcp-client add` again) and note it. Read the audit rows as in step 15, with
+     `EventType LIKE 'mcp.%'`: one `mcp.authorised` and no `mcp.read`, because listing tools is not audited. This
+     step holds nothing open. (S07.02.01; MA10; A119.)
+173. Connect an assistant as in step 172 for a made-up manager of the test organisation, and make one `/mcp` call.
+     Then end that person's access, using a new made-up manager and a new connection for each way: the person signs
+     out of the app in a browser (Account, then **Sign out**); another manager deactivates the person on the Users
+     screen; another manager resets the person's sign-in (the link is sent, not used); another manager changes the
+     person's role to Worker. Look for: the assistant's next call fails with `401`, and it can only reconnect by
+     running the Connect screen again, with MFA (a reactivated or reset person reconnects that way; a worker is
+     refused with `access_denied`). Changing a manager to Support does not end the connection. Read the audit rows
+     as in step 15, with `EventType IN ('auth.signed_out', 'user.deactivated', 'user.setup_link_sent', 'user.updated')`:
+     one row for each change you made. Then set `Mcp__Enabled` to `False` on test's web app in the Azure portal, wait
+     for the restart, and sign out, deactivate and reset another made-up person: each works exactly as before, and
+     `/mcp` answers `404`. Set `Mcp__Enabled` back to `True`. This step holds nothing open. (S07.02.02; A118.)
+174. Once T33 ships its first tool, connect an assistant as in step 172 and ask it to find a made-up participant by
+     name, then to find one that does not exist. Read the audit rows as in step 15, with
+     `EventType IN ('mcp.read', 'mcp.refused')`. Look for: `mcp.read` for the first, with `via` of `mcp`, the
+     assistant's client ID, the tool's name, `participantIds` holding the one ID and a `count` of `1` and no name or
+     date of birth, and `ParticipantId` set; for the second, `mcp.refused` with a `code` (such as `not_found`) and
+     the same `via`, `client` and `tool`. The assistant's reply shows the participant's name, and the audit row
+     does not. This step can only be run after T33 is in test, and holds nothing open. (S07.02.03; MA8.)
