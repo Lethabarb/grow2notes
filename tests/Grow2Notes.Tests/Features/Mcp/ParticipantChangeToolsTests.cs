@@ -88,8 +88,8 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     public async Task A_zero_width_joiner_and_non_joiner_in_a_name_are_kept()
     {
         var unique = Unique();
-        var given = $"Ann‍{unique}";
-        var family = $"Rowe‌{unique}";
+        var given = $"Ann\u200D{unique}";
+        var family = $"Rowe\u200C{unique}";
 
         var (result, _) = await CallAsync(Add, NewParticipant(given, family, "1987-04-09"));
 
@@ -244,7 +244,7 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     }
 
     // Both orders (R13): the tool answers a call that changes nothing before it looks at the version, and the app
-    // refuses the same stale version at once.
+    // refuses the same stale version (412) or a missing one (428) at once.
     [Theory]
     [MemberData(nameof(WrongVersions))]
     public async Task A_call_that_changes_nothing_answers_changed_false_whatever_the_version_but_the_app_refuses(
@@ -280,14 +280,16 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
                 familyName = stored.FamilyName,
                 dateOfBirth = stored.DateOfBirth.ToString("yyyy-MM-dd"),
             },
-            participant.ETag);
-        Assert.Equal(HttpStatusCode.PreconditionFailed, response.StatusCode);
+            version == "stale" ? participant.ETag : null);
+        Assert.Equal(
+            version == "stale" ? HttpStatusCode.PreconditionFailed : HttpStatusCode.PreconditionRequired,
+            response.StatusCode);
         await AssertUnchangedAsync(participant.Id, stored);
     }
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];
 
-    private static string Sent(string value) => value.Replace("{BEL}", "\u0007").Replace("{RLO}", "‮");
+    private static string Sent(string value) => value.Replace("{BEL}", "\u0007").Replace("{RLO}", "\u202E");
 
     private static JsonObject NewParticipant(string givenName, string familyName, string dateOfBirth) => new()
     {
