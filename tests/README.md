@@ -1205,11 +1205,26 @@ are the examples.
   mcp-server.md §4.2: the document and the scope it names, and the `error` it carries, or none for a call with no token.
   `McpClientAsync(accessToken, revision)` is the SDK's own client for `2025-11-25` (the initialize handshake) or
   `2026-07-28` (details with each request); dispose it.
-- `ProbeTools` are tools that only the tests have, because the app ships none until its look-ups are added. They are in
-  the app unless `StartAsync` is called with `probes: false`, which is the app as production has it. `probe_whoami`
-  answers who the call is for, every claim of the principal it runs as, the organisation it runs in and the
-  participants that its database context sees; `ProbeTools.ReadWhoAmI` reads the answer. A new tool of the tests
-  belongs in `ProbeTools`.
+- `ProbeTools` are tools that only the tests have, to see a call as the server runs it and to do what no real tool
+  does. They are in the app, beside the app's own tools, unless `StartAsync` is called with `probes: false`, which is
+  the app as production has it. `probe_whoami` answers who the call is for, every claim of the principal it runs as,
+  the organisation it runs in and the participants that its database context sees; `ProbeTools.ReadWhoAmI` reads the
+  answer. A new tool of the tests belongs in `ProbeTools`. A test of a real tool, or of what every tool must do, uses
+  `probes: false`, so that the tools listed are the ones a model gets.
+- `AssistantFlow.ToolCall(name, arguments)` is the JSON-RPC body of a `tools/call`, which `PostMcpAsync` and
+  `McpRequest` send as their `body` for a raw call, such as one with a token that must be refused. A call whose result
+  is read goes through `McpClientAsync`, and `ToolScene.CallAsync` takes its arguments as a `JsonObject`.
+- `ToolScene.CreateAsync(flow)` is the world that the tests of the tools share: two organisations (made with
+  `TestOrganisations`, so each has a manager and a Support person), a participant with names and goals that are unique to
+  the scene, an archived participant and a date of birth. `ToolMatrix.Rows` holds one row for each tool the app lists
+  (valid arguments, error cases with their codes, and what a manager of another organisation gets), and
+  `ToolMatrixTests` holds every tool to its row; a new tool adds a row there. `McpAuditRows` reads back and asserts the
+  audit rows of a call.
+- `Features/Mcp/tools-list.json` is the reviewed surface of the production tools: for each tool its name, title,
+  description, input and output schemas and annotations, sorted by name, which
+  `McpEndpointTests.The_production_setup_lists_the_snapshot_tools_on_either_revision` compares with what `tools/list`
+  answers on both protocol revisions. A change to a tool changes that file in the same PR. When the test fails it prints
+  the whole file as it would be: copy it from `gh run view <id> --log-failed`, and review the diff.
 - `flow.TokenEdits.Queue(edit)` changes the next access token that the app issues (`TokenEdit`: another audience, no
   stamp hash, another stamp hash, another organisation), so that a real token can be one the endpoint must refuse. It
   applies once, so give each case its own flow, which xUnit's one class instance for each test already does.

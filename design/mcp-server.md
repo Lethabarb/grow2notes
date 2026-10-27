@@ -204,7 +204,7 @@ src/Grow2Notes.Web/Features/Mcp/
 Release 2 then needs no rewrite of Release 1 if Release 1 follows four conventions, none of which changes its scope:
 1. The admin logic for users, participants, goals, common items and guide prompts lives in handler classes that take the acting user and a channel (`App` or `Mcp`), not inside endpoint lambdas.
 2. `UserRole` keeps explicit numeric values (design §5.1), so `3 = Support` can be added.
-3. The audit writer accepts extra keys in `Details`.
+3. The audit writer accepts extra keys in `Details`. During an assistant's call `AuditWriter` adds `via`, `client` and `tool` itself (A121), so a tool or a handler never adds a `via` key.
 4. **Roles are named, never inferred.** The fallback authorisation policy requires role Worker or Manager by name, not just a signed-in, active user (design §2 and §6.1 say so). Every role check uses exact equality, never "not Worker" or "not Manager". `/api/auth/me` returns `toReviewCount` only when the role equals Manager (design §6.2). Otherwise, when `3 = Support` is added, Support would pass the fallback policy and could read every note through Today and the note endpoints, and any "not Manager means Worker" check would fail open.
 
 Release 2 changes to Release 1 parts. All are additive except one, because of convention 4: the endpoints Support may use (sign-in, setup, session and the consent endpoints) gain an explicit policy that allows Support.
@@ -510,7 +510,7 @@ A confirmation form that the person declines or cancels is not an error: the res
 | `400` | Header and body mismatch (`-32020 HeaderMismatch`) or an unsupported protocol version, handled by the SDK [Spec] |
 | `405` | `GET` or `DELETE` to `/mcp` from a client of an earlier revision [Spec] |
 | `429` + `Retry-After` | Over the endpoint limit in §5.6 |
-| JSON-RPC `-32602` | Unknown tool or malformed arguments [Spec] |
+| JSON-RPC `-32602` | Unknown tool [Spec]. Arguments the SDK cannot bind (a missing required argument, a wrong JSON type) are the SDK's own `isError` result with a generic message that echoes nothing, audited as `mcp.refused` with code `unexpected` (A125) |
 
 ### 5.6 Rate limits
 
