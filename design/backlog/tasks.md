@@ -6885,7 +6885,7 @@ Planned 27 October 2026.
   `Policies.McpAdmin`, the SDK in stateless mode and the real-token tests.
 - [x] Access that ends (#165; v3): `RevokeConnectionsAsync` inside the existing transactions and `AccessEndsTests`.
 - [x] Audit (#166; v2): `McpCall`, the one call-tool filter, `ToolError`, the unexpected-error rule and `McpAuditTests`.
-- [x] Close-out (#PR; v4): S07.01.06's access-token criterion re-ticked, the F07.02 ticks, coverage.md, A118 to A123,
+- [x] Close-out (#167; v4): S07.01.06's access-token criterion re-ticked, the F07.02 ticks, coverage.md, A118 to A123,
   first-use steps 163 and 171 to 174.
 
 ---
