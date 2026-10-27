@@ -204,7 +204,8 @@ managers.
 | **archive / Archived / Restore** | Stop using a participant, goal, common item or group for new notes, without losing anything | "Archive", "Restore", toggle "Active / Archived", "Archived goals", "Archived groups" | delete, remove, hide, disable, deactivate | M |
 | **deactivate / Deactivated / Reactivate** | Stop a user signing in. Their notes stay. | "Deactivate", "Reactivate", status "Deactivated" | archive, disable, suspend, remove, delete | M |
 | **user / Users** | A person who can sign in | Manage > Users, "Invite user" | account holder, member, staff, employee | M |
-| **Worker / Manager** | The two roles (D24). Lower case inside a sentence. | Role options, "(manager)" after a name | admin, supervisor, staff, carer, support worker (as a role label) | M |
+| **Worker / Manager** | The first two roles (D24). Lower case inside a sentence. | Role options, "(manager)" after a name | admin, supervisor, staff, carer, support worker (as a role label) | M |
+| **Support** | The Release 2 role for the operator's IT support person (mcp-server.md §2.2). "Support (IT operator)" as the Invite and Edit option; "Support", capitalised even inside a sentence, in the list, the detail page and "(Support)" after a name, because lower case reads as the support workers who write notes (A115). | Role options, "Active · Support", "Signed in as Jo Lee (Support)." | support worker (as a role label), IT, admin | M |
 | **invite / Invited / Send invite / Resend invite** | Add a person; the app emails them a setup link | Exactly these | register, add user, enrol | M |
 | **setup link** | The single-use link in the email, valid 7 days (A23) | "setup link" (noun, one word); "Set up your account" (verb, two words) | activation link, invitation link, magic link | W M |
 | **sign in / sign-in / sign out** | "Sign in" and "sign out" are verbs; "sign-in" is the noun or adjective | "Sign in", "Signed in as …", "Sign-in failed", "Reset sign-in", "Sign out" | log in, login, log on, log out, logout | W M |
@@ -717,7 +718,7 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
 ### 4.11 Users
 
 - Columns: name, email, role, status ("Invited", "Active", "Deactivated") **(V)**.
-- Invite: "Name", "Email address", "Role" with "Worker" / "Manager", "Send invite" **(V/P)**. Success: "Invite sent to
+- Invite: "Name", "Email address", "Role" with "Worker" / "Manager" / "Support (IT operator)", "Send invite" **(V/P)**. Success: "Invite sent to
   alex.park@example.org".
 - Actions "Edit", "Resend invite", "Reset sign-in", "Deactivate", "Reactivate" **(V)**.
 - Deactivate body: "Sam Lee will be signed out everywhere now and can't sign in. Their notes stay." **(V)**

@@ -44,7 +44,7 @@ ORDER BY o.Name, o.Id, p.FamilyName, p.GivenName, p.Id;
 SELECT
     o.Name AS [Organisation],
     u.DisplayName AS [Name],
-    CASE u.Role WHEN 1 THEN N'Worker' WHEN 2 THEN N'Manager' END AS [Role],
+    CASE u.Role WHEN 1 THEN N'Worker' WHEN 2 THEN N'Manager' WHEN 3 THEN N'Support' END AS [Role],
     CASE u.Status WHEN 0 THEN N'Invited' WHEN 1 THEN N'Active' WHEN 2 THEN N'Deactivated' END AS [Status],
     u.Id AS [User ID]
 FROM dbo.AspNetUsers AS u

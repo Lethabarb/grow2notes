@@ -4,6 +4,10 @@ import { msg } from './messages.ts';
 import { pageName } from './pageNames.ts';
 
 describe('msg.pageTitle', () => {
+  it('has the name that the Support page and the Connect screen share', () => {
+    expect(msg.pageTitle(pageName.connectAnAiAssistant)).toBe('Grow2Notes – Connect an AI assistant');
+  });
+
   it('puts "Grow2Notes", an en dash and the page name together, with a space either side of the dash', () => {
     expect(msg.pageTitle(pageName.today)).toBe('Grow2Notes – Today');
   });

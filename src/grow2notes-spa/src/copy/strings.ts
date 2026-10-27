@@ -46,6 +46,26 @@ export const strings = {
     tooManyExports: 'Not exported: too many exports in the last minute. Wait a minute, then try again.',
     theForm: 'The export form',
   },
+  /** The one line of the Support page, the only screen a Support account sees (app-shell.md component 3). */
+  supportPage: 'This account is only used to connect an AI assistant.',
+  /**
+   * The Connect an AI assistant screen's words that have no slots (mcp-server.md §4.4 steps 3 and 4, the (P) copy that
+   * ships as proposed, A116), plain sentences with no bold: for a manager or Support account, the heading, what the
+   * assistant will be able to do, the loopback warning, Allow and the busy labels; for a worker, the refusal line.
+   */
+  connect: {
+    heading: 'Connect an AI assistant to Grow2Notes',
+    canDo:
+      'It will be able to look up and change Grow2Notes setup for you: users, participants and their goals, common ' +
+      'items and guide prompts. It cannot see notes.',
+    loopbackWarning: 'This assistant runs on your computer. Other programs on this computer could pretend to be it.',
+    allow: 'Allow',
+    connecting: 'Connecting…',
+    cancelling: 'Cancelling…',
+    workerRefusal: 'Only managers can connect an AI assistant to Grow2Notes.',
+    loading: 'Loading the assistant’s details…',
+    what: 'The assistant’s details',
+  },
   /** The header's Account button (app-shell.md component 2d). */
   account: 'Account',
   /** The Account panel's Sign out button (component 2d). */
@@ -313,10 +333,13 @@ export const strings = {
     /** Invite user's hints (users.md component B items 4 and 5), under the labels `name` and `emailAddress`. */
     nameHint: 'Shown on the notes they write',
     inviteEmailHint: 'Grow2Notes will email them a setup link. It works once and lasts 7 days.',
+    /** The Role radio for `Support`, whose label says who it is for, as "Support" alone reads as a support worker. */
+    supportOption: 'Support (IT operator)',
     /** The hint under each of the Role radios, by the role's name in the API (users.md component B item 6). */
     roleHint: {
       Worker: 'Writes notes and reads past notes',
       Manager: 'Can also review flagged notes, download reports, and set up participants and users',
+      Support: 'Only connects an AI assistant. Sees no participants or notes.',
     },
     /**
      * Edit user's hints under Email address (users.md component D item 5), for someone else, then on your own page;
@@ -339,13 +362,15 @@ export const strings = {
      */
     enterName: 'Enter the person’s name',
     enterEmail: 'Enter an email address',
-    chooseRole: 'Choose Worker or Manager',
+    chooseRole: 'Choose Worker, Manager or Support',
     /**
      * Role's and Email address's messages on your own Edit user page as the only active manager (users.md *States* ›
      * Edit user), for Worker and for a new address, from Save's own check or the server's `409 user.last_manager`.
      */
     lastManagerRole:
       'You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first.',
+    lastManagerSupport:
+      'You are the only active manager, so you cannot make yourself Support. Make someone else a manager first.',
     lastManagerEmail:
       'You are the only active manager, so you cannot change your email. Make someone else a manager first.',
     /** In the alert above Edit user's Save, for a save refused as stale (`412`), the typed values kept. */
@@ -733,7 +758,7 @@ export const strings = {
    */
   userStatus: { Invited: 'Invited', Active: 'Active', Deactivated: 'Deactivated' },
   /** A user's role, by its name in the API (design.md §2). */
-  role: { Worker: 'Worker', Manager: 'Manager' },
+  role: { Worker: 'Worker', Manager: 'Manager', Support: 'Support' },
   /** The error summary's heading (form-validation.md). */
   errorSummaryHeading: 'There is a problem',
   /**

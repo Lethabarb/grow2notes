@@ -30,9 +30,9 @@ Example people: **Sam Lee** is the signed-in manager; **Alex Park** is a worker;
 
 **Rules this screen must show and respect (4.11, A26, A27):**
 - One email address per account across the whole app (A27).
-- The last active manager cannot be deactivated, made a worker or reset (A26). Because only an active manager can open
-  this screen, the only active manager is **always the person viewing it**. Every last-manager message on this screen
-  therefore talks to "you".
+- The last active manager cannot be deactivated, made a worker or Support, or reset (A26). Because only an active
+  manager can open this screen, the only active manager is **always the person viewing it**. Every last-manager
+  message on this screen therefore talks to "you".
 - Users are never deleted. There is no Delete anywhere.
 
 **Routes and page titles** (IDs only in URLs, no names in titles, 4.0):
@@ -120,7 +120,9 @@ Content column = 375 px minus two 16 px gutters = 343 px. One column. Nothing is
 |     Can also review flagged notes,    |
 |     download reports, and set up      |
 |     participants and users            |
-|                                       |
+| ( ) Support (IT operator)             |
+|     Only connects an AI assistant.    |
+|     Sees no participants or notes.    |
 |                                       |  <p role="alert">, always present, empty
 | [           Send invite             ] |  primary, type="submit", 48 px
 +---------------------------------------+
@@ -215,6 +217,7 @@ Invited                                   Deactivated
 | Role                                  |
 | (●) Worker  + hint                    |  starts on the person's current role
 | ( ) Manager + hint                    |
+| ( ) Support (IT operator) + hint      |
 |                                       |  <p role="alert">
 | [               Save                ] |  primary, type="submit"
 ```
@@ -290,8 +293,9 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
      id>` linked by `aria-describedby` [Convention: GOV.UK task list pattern, via participant-list-rows.md]. The
      link's `::after` stretches over the whole row: one action per row, nothing else inside is interactive.
    - Detail line 1: the email. Detail line 2: `{Status}<Sep/>{Role}` = "Invited · Worker", "Active · Manager",
-     "Deactivated · Worker" (V words). Status first, so the odd ones out ("Invited", "Deactivated") are at the start of
-     a line. `<Sep/>` is the middle dot with `aria-hidden="true"` plus a visually hidden ", " (microcopy.md).
+     "Deactivated · Worker", "Active · Support" (V words; Support is capitalised, A115).
+     Status first, so the odd ones out ("Invited", "Deactivated") are at the start of a line. `<Sep/>` is the middle
+     dot with `aria-hidden="true"` plus a visually hidden ", " (microcopy.md).
    - Status is **plain text** in `--colour-text-secondary` (9.0:1). No tag, no fill, no colour coding, no fading,
      including Deactivated [Standard SC 1.4.1, 1.4.3; Convention status-tags.md].
    - Decorative chevron, `aria-hidden="true" focusable="false"`, at 3:1 or more.
@@ -328,12 +332,15 @@ exactly as stored, never truncated, wrapping with `overflow-wrap: anywhere`; no 
      https://www.w3.org/WAI/WCAG22/Understanding/identify-input-purpose.html].
    - No "confirm email" field [Convention GOV.UK: only if research shows it works]. A typo is fixed with Edit.
 6. **Role** — native radios in `<fieldset id="role">` + `<legend>Role</legend>` (V) [Standard H71
-   https://www.w3.org/WAI/WCAG22/Techniques/html/H71]. Two stacked options, **Worker** then **Manager** (V), each a
+   https://www.w3.org/WAI/WCAG22/Techniques/html/H71]. Three stacked options, **Worker**, **Manager** then
+   **Support (IT operator)** (V, A115), each a
    whole-row `<label>` at least 56 px tall (foundations.md) with a 40 px circle drawn with `appearance: none` and a
    border-drawn dot so it survives forced colours (same technique and size as the tick box in
    [checkbox-list](../components/checkbox-list.md)). Item hints linked by `aria-describedby` on each radio:
    - Worker: "Writes notes and reads past notes" (P, from §2)
    - Manager: "Can also review flagged notes, download reports, and set up participants and users" (P, from §2)
+   - Support (IT operator): "Only connects an AI assistant. Sees no participants or notes." (P, A115; Release 2,
+     mcp-server.md §2.2)
    - **Worker is preselected** on Invite [Opinion, weighing Convention]: least privilege (a forgotten change gives
      less access, not more), most invites are workers (D2, D24), and the new row shows "Invited · Worker" at once.
      GOV.UK says don't preselect (https://design-system.service.gov.uk/components/radios/); AgDS allows a default
@@ -494,7 +501,7 @@ Shared failure shapes (S, microcopy.md §9, used for loads and actions alike; a 
 | Name over 100 | "Name must be 100 characters or less" (S). |
 | Email empty | "Enter an email address" (S). |
 | Email malformed (loose check: text, one "@", text) | "Enter an email address in the correct format, like name@example.com" (S, GOV.UK). |
-| Role missing (only via a server `422`; Worker is preselected) | "Choose Worker or Manager" (S). |
+| Role missing (only via a server `422`; Worker is preselected) | "Choose Worker, Manager or Support" (S, A115). |
 | Email in use (`409 user.email_in_use`) | On Email: "Another account already uses this email address. Use a different one, or find the person in the Users list." (S, microcopy.md canonical). The likely cause is a returning worker under **Deactivated**, who needs Reactivate. |
 | Server field errors (`422 validation.failed`) | Mapped by key (`displayName`, `email`, `role`) to the same fields and wording; unknown keys become unlinked summary items. |
 | Busy | Send invite `aria-disabled`, "Sending…" after 400 ms. Fields stay editable and are never cleared. |
@@ -561,6 +568,7 @@ Shared failure shapes (S, microcopy.md §9, used for loads and actions alike; a 
 | Only active manager (your own page) | Notice under the `<h1>`: "You are the only active manager, so you cannot change your email or make yourself a worker. First make someone else a manager." (P) |
 | Field errors | Same as Invite. |
 | You changed your own role to Worker while the only active manager | On Role: "You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first." (P, "you" form of microcopy.md) |
+| You changed your own role to Support while the only active manager | On Role: "You are the only active manager, so you cannot make yourself Support. Make someone else a manager first." (P, A115) |
 | You changed your own email while the only active manager | On Email: "You are the only active manager, so you cannot change your email. Make someone else a manager first." (P) |
 | `409 user.last_manager` from the server | Same two messages, on the field that changed (race only). |
 | `409 user.email_in_use` | Same as Invite. |
@@ -569,6 +577,7 @@ Shared failure shapes (S, microcopy.md §9, used for loads and actions alike; a 
 | Saved (someone else) | Detail page with the new values, focus on its `<h1>` (Detail table). No banner. |
 | Saved, your own name | Detail page, focus on the `<h1>`; `/me` refetched so the Account panel's "Signed in as …" updates. |
 | Saved, your own role → Worker | Today, focus on Today's `<h1>`; the nav rebuilds without Manage. No banner (today.md shows a banner only after Submit). |
+| Saved, your own role → Support | Today, which shows the Support page (app-shell.md): one line and Sign out, no navigation. No banner (A115). |
 | Saved, your own email | Full reload to sign-in (`window.location.replace('/')`): you have been signed out. |
 
 ---
@@ -807,6 +816,7 @@ Redundant Entry (values kept after any error; Edit prefilled) · 4.1.2 Name, Rol
 - AC37. A `412` on Save shows the stale-save sentence in the alert above Save (not the summary), keeps every typed
   value and focus on Save, and a second Save succeeds with the new ETag.
 - AC38. Saving your own role as Worker lands on Today with focus on its `<h1>`, no banner, and a nav without Manage;
+  saving your own role as Support lands on Today, which shows the Support page's `<h1>` with no banner and no nav;
   saving your own new email reloads to sign-in.
 
 **General**

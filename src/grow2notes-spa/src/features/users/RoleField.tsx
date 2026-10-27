@@ -3,8 +3,8 @@ import { ChoiceRow } from '../../components/ChoiceRow.tsx';
 import { FieldGroup } from '../../components/FieldGroup.tsx';
 import { strings } from '../../copy/strings.ts';
 
-// In the order they show: the least access first (users.md component B item 6).
-const roles: readonly Role[] = ['Worker', 'Manager'];
+// In the order they show (users.md component B item 6).
+const roles: readonly Role[] = ['Worker', 'Manager', 'Support'];
 
 // The group's id, which its radios' ids, its message's and the API's key for the field start with.
 const fieldId = 'role';
@@ -26,8 +26,8 @@ type RoleFieldProps = {
 
 /**
  * The Role radios of Invite user and Edit user (users.md component B item 6): a `<fieldset>` whose legend is "Role",
- * with its message under the legend, and Worker then Manager, each with the hint that says what the role can do. One
- * Tab stop, in which the arrow keys move and choose, as the browser's own radios do.
+ * with its message under the legend, and Worker, Manager then Support, each with the hint that says what the role can
+ * do. One Tab stop, in which the arrow keys move and choose, as the browser's own radios do.
  */
 export function RoleField({ value, onChange, error }: RoleFieldProps) {
   return (
@@ -37,7 +37,7 @@ export function RoleField({ value, onChange, error }: RoleFieldProps) {
           key={role}
           id={radioId(role)}
           name={fieldId}
-          label={strings.role[role]}
+          label={role === 'Support' ? strings.users.supportOption : strings.role[role]}
           hint={strings.users.roleHint[role]}
           checked={value === role}
           onChange={() => onChange(role)}

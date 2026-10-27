@@ -8,9 +8,14 @@ namespace Grow2Notes.Tests.Fixtures;
 public sealed record SeededOrganisations(SeededOrganisation A, SeededOrganisation B);
 
 /// <summary>
-/// A seeded organisation, its two users, an Active manager and an Active worker, as setup leaves them: with a confirmed
-/// <c>example.org</c> address and a security stamp, but no passkey or password yet; its one active participant; and
-/// its Every note group, as <c>admin bootstrap</c> adds it, with no items.
+/// A seeded organisation, its three users, an Active manager, an Active worker and an Active Support person, as setup
+/// leaves them: with a confirmed <c>example.org</c> address and a security stamp, but no passkey or password yet; its
+/// one active participant; and its Every note group, as <c>admin bootstrap</c> adds it, with no items.
 /// </summary>
 public sealed record SeededOrganisation(
-    Guid OrganisationId, Guid ManagerId, Guid WorkerId, Guid ParticipantId, Guid EveryNoteGroupId);
+    Guid OrganisationId,
+    Guid ManagerId,
+    Guid WorkerId,
+    Guid SupportId,
+    Guid ParticipantId,
+    Guid EveryNoteGroupId);

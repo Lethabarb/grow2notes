@@ -443,7 +443,13 @@ api.MapAdminGroup()
 // filter never answers in its place.
 app.Map("/api/{**rest}", () => Results.NotFound()).AllowAnonymous();
 
-// The same for the paths of the AI-assistant access and its discovery documents, switched on or off.
+// The AI-assistant access exists only where it is switched on; its paths and its discovery documents answer 404
+// whether it is or not.
+if (McpSetup.IsEnabled(builder.Configuration))
+{
+    app.MapMcpEndpoints(api);
+}
+
 app.MapMcpFallbacks();
 
 // Client-side routes get index.html, for GET and HEAD. The default pattern skips paths with a file extension.

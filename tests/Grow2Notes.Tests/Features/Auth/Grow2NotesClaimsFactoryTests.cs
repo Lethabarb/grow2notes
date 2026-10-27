@@ -30,6 +30,7 @@ public sealed class Grow2NotesClaimsFactoryTests(Grow2NotesFactory factory, SqlS
         {
             (a.WorkerId, a.OrganisationId, "Worker"),
             (a.ManagerId, a.OrganisationId, "Manager"),
+            (a.SupportId, a.OrganisationId, "Support"),
             (b.WorkerId, b.OrganisationId, "Worker"),
             (b.ManagerId, b.OrganisationId, "Manager"),
         })

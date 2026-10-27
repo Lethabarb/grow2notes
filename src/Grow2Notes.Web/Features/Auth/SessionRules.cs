@@ -62,7 +62,7 @@ internal static class SessionRules
 
     // In whole seconds since 1970, as the sign-in manager writes it. A session is let in at exactly 12 hours, and
     // refused only once they are exceeded (design.md §8.4).
-    private static bool IsWithinAbsoluteLimit(ClaimsPrincipal principal, DateTimeOffset now) =>
+    internal static bool IsWithinAbsoluteLimit(ClaimsPrincipal principal, DateTimeOffset now) =>
         long.TryParse(
             principal.FindFirstValue(Grow2NotesSignInManager.AuthTimeClaimType),
             NumberStyles.None,

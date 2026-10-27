@@ -5,6 +5,7 @@ import {
   allowedActions,
   isNewAddress,
   isOnlyActiveManager,
+  lastManagerMessage,
   userRefusal,
   validateUser,
   type UserValues,
@@ -17,9 +18,11 @@ const enterName = 'Enter the person’s name';
 const nameTooLong = 'Name must be 100 characters or less';
 const enterEmail = 'Enter an email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
-const chooseRole = 'Choose Worker or Manager';
+const chooseRole = 'Choose Worker, Manager or Support';
 const lastManagerRole =
   'You are the only active manager, so you cannot make yourself a worker. Make someone else a manager first.';
+const lastManagerSupport =
+  'You are the only active manager, so you cannot make yourself Support. Make someone else a manager first.';
 const lastManagerEmail =
   'You are the only active manager, so you cannot change your email. Make someone else a manager first.';
 
@@ -124,6 +127,13 @@ describe('validateUser', () => {
   });
 });
 
+describe('lastManagerMessage', () => {
+  it('words the refusal of Support in its own words, and of any other role as a worker', () => {
+    expect(lastManagerMessage('Support')).toBe(lastManagerSupport);
+    expect(lastManagerMessage('Worker')).toBe(lastManagerRole);
+  });
+});
+
 describe('isNewAddress', () => {
   it('is false for the same address in other letter case, or with spaces round it that are trimmed (D76)', () => {
     expect(isNewAddress('sam.lee@example.org', 'Sam.Lee@example.org')).toBe(false);
@@ -144,6 +154,10 @@ describe('validateUser on your own Edit user page as the only active manager', (
       role: lastManagerRole,
       email: lastManagerEmail,
     });
+  });
+
+  it('refuses Support on Role in its own words, as Worker is refused in its', () => {
+    expect(validateUser({ ...sam, role: 'Support' }, sam)).toEqual({ role: lastManagerSupport });
   });
 
   it('passes a new name, and the address in other letter case, which is no new address (D76)', () => {
@@ -199,6 +213,7 @@ describe('userRefusal', () => {
 
   it.each<{ given: string; sent: UserValues; errors: Record<string, string> }>([
     { given: 'Worker', sent: { ...sam, role: 'Worker' }, errors: { role: lastManagerRole } },
+    { given: 'Support', sent: { ...sam, role: 'Support' }, errors: { role: lastManagerSupport } },
     { given: 'a new address', sent: { ...sam, email: 'sam.leigh@example.org' }, errors: { email: lastManagerEmail } },
     {
       given: 'both',

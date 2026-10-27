@@ -53,6 +53,7 @@ const sam = madeUp(manager.userId, 'Sam Lee', 'sam.lee@example.org', 'Active', '
 const jo = madeUp('0c6f2e8a-4b17-4d39-a5e2-7f1b3c9d0a64', 'Jo Smith', 'jo.smith@example.org', 'Active');
 const alex = madeUp('3e8b5d1f-9a26-4c70-b4f3-2d6a8e0c1b95', 'Alex Park', 'alex.park@example.org', 'Invited');
 const chris = madeUp('7a1d4f9c-2e53-4b86-9c07-5f3e1a8d6b20', 'Chris Ng', 'chris.ng@example.org', 'Deactivated');
+const ivy = madeUp('d4a9c1e7-6b38-4f02-8e5a-0c7b2d9f1a63', 'Ivy Chen', 'ivy.chen@example.org', 'Active', 'Support');
 
 // In no particular order, as the API sorts nothing (design.md §6.6).
 const people = [sam, chris, jo, alex];
@@ -299,10 +300,15 @@ describe('Users', () => {
       lines: ['chris.ng@example.org', `Deactivated${nbsp}· Worker`],
       description: 'chris.ng@example.org, Deactivated, Worker',
     },
+    {
+      user: ivy,
+      lines: ['ivy.chen@example.org', `Active${nbsp}· Support`],
+      description: 'ivy.chen@example.org, Active, Support',
+    },
   ])(
     "gives $user.displayName's row one link, named by the name alone, described by the email, status and role",
     async ({ user, lines, description }) => {
-      serve(usersPath, json(people));
+      serve(usersPath, json([...people, ivy]));
       renderApp('/manage/users');
       await settle();
 

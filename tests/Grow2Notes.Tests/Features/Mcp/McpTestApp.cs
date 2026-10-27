@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Features.Mcp;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -17,6 +19,9 @@ namespace Grow2Notes.Tests.Features.Mcp;
 internal static class McpTestApp
 {
     public const string Resource = Grow2NotesFactory.Origin + "/mcp";
+
+    /// <summary>The PKCE verifier whose S256 challenge <see cref="AuthorizeQuery"/> sends.</summary>
+    public const string CodeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
 
     /// <summary>
     /// The app with <c>Mcp:Enabled</c> on, on a database that only the caller uses. <see cref="McpSetup.AddMcp"/> reads
@@ -46,15 +51,34 @@ internal static class McpTestApp
     /// Registers a public client with <paramref name="redirectUris"/>, as the operator command does, with
     /// <paramref name="applicationType"/>, <see cref="ApplicationTypes.Native"/> for the loopback matching or none.
     /// </summary>
+    public static Task RegisterClientAsync(
+        this WebApplicationFactory<Program> app,
+        string clientId,
+        string? applicationType,
+        params string[] redirectUris) =>
+        app.RegisterClientAsync(clientId, applicationType, new AssistantDetails(), redirectUris);
+
+    /// <summary>
+    /// Registers a public client as above, with the name, company and data location that the consent screen shows.
+    /// </summary>
     public static async Task RegisterClientAsync(
-        this WebApplicationFactory<Program> app, string clientId, string? applicationType, params string[] redirectUris)
+        this WebApplicationFactory<Program> app,
+        string clientId,
+        string? applicationType,
+        AssistantDetails details,
+        params string[] redirectUris)
     {
         var descriptor = new OpenIddictApplicationDescriptor
         {
             ClientId = clientId,
             ClientType = ClientTypes.Public,
             ApplicationType = applicationType,
-            DisplayName = "Test assistant",
+            DisplayName = details.DisplayName,
+            Properties =
+            {
+                [ApprovedAssistantProperties.Company] = JsonSerializer.SerializeToElement(details.Company),
+                [ApprovedAssistantProperties.DataLocation] = JsonSerializer.SerializeToElement(details.DataLocation),
+            },
             Permissions =
             {
                 Permissions.Endpoints.Authorization,
@@ -106,3 +130,7 @@ internal static class McpTestApp
             .Select(parameter => $"{parameter.Key}={Uri.EscapeDataString(parameter.Value!)}"));
     }
 }
+
+/// <summary>What the operator gives an approved assistant, and the consent screen shows.</summary>
+internal sealed record AssistantDetails(
+    string DisplayName = "Test assistant", string Company = "Example AI", string DataLocation = "In the United States");

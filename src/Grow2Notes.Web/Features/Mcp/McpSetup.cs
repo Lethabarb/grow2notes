@@ -1,9 +1,11 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 using static OpenIddict.Server.OpenIddictServerEvents;
+using static OpenIddict.Server.OpenIddictServerHandlers.Authentication;
 using static OpenIddict.Server.OpenIddictServerHandlers.Discovery;
 
 namespace Grow2Notes.Web.Features.Mcp;
@@ -24,6 +26,21 @@ internal static class McpSetup
     /// </summary>
     public const string AdminScope = "grow2notes.admin";
 
+    /// <summary>How long an access token lasts: short, so that a change to a person takes hold quickly.</summary>
+    public static readonly TimeSpan AccessTokenLifetime = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// How long a refresh token lasts after it was issued. Each refresh issues a new one, so an assistant in use stays
+    /// connected, and one idle for longer than this has to be connected again; the 12 hours from sign-in still apply.
+    /// </summary>
+    public static readonly TimeSpan RefreshTokenLifetime = TimeSpan.FromMinutes(30);
+
+    /// <summary>
+    /// How long after a refresh token has been used that using it again is let through, for an assistant whose
+    /// response was lost (A113). Outside it, the reuse revokes the whole chain.
+    /// </summary>
+    public static readonly TimeSpan RefreshTokenReuseLeeway = TimeSpan.FromSeconds(15);
+
     /// <summary>Whether <paramref name="configuration"/> switches the access on.</summary>
     public static bool IsEnabled(IConfiguration configuration) => configuration.GetValue<bool>(EnabledKey);
 
@@ -39,6 +56,11 @@ internal static class McpSetup
 
     public static IServiceCollection AddMcp(this IServiceCollection services, IConfiguration configuration)
     {
+        // The consent step's classes are registered whether or not the access is on: the handler writes audit events
+        // that a test calls on an app with the access off.
+        services.AddScoped<ConsentRequests>();
+        services.AddScoped<ConsentDecisions>();
+
         var openIddict = services.AddOpenIddict();
 
         // The stores save through the scoped Grow2NotesDbContext, so the operator command's changes join its
@@ -63,14 +85,16 @@ internal static class McpSetup
         return services;
     }
 
-    // Only the authorize and token endpoints exist: no JWKS, revocation or other endpoint. A code is exchanged with
-    // PKCE S256 alone, by a public client, and no identity token is ever issued, so openid is not a scope. Tokens are
-    // in Data Protection format on the app's key ring; the two keys OpenIddict will not start without are made in
-    // memory at each start and protect nothing that is issued.
+    // Only the authorize, token and revocation endpoints exist: no JWKS or other endpoint. A code is exchanged with
+    // PKCE S256 alone, by a public client, and no identity token is ever issued, so openid is not a scope. Responses
+    // go in the query only, so no page has to post a form under the CSP. Tokens are in Data Protection format on the
+    // app's key ring; the two keys OpenIddict will not start without are made in memory at each start and protect
+    // nothing that is issued.
     private static void AddAuthorisationServer(OpenIddictServerBuilder server)
     {
         server.SetAuthorizationEndpointUris("oauth/authorize")
             .SetTokenEndpointUris("oauth/token")
+            .SetRevocationEndpointUris("oauth/revoke")
             // OpenIddict serves a JWKS endpoint unless told otherwise; no issued token needs one.
             .SetJsonWebKeySetEndpointUris(Array.Empty<string>())
             .AllowAuthorizationCodeFlow()
@@ -80,15 +104,68 @@ internal static class McpSetup
             {
                 options.CodeChallengeMethods.Remove(CodeChallengeMethods.Plain);
                 options.Scopes.Remove(Scopes.OpenId);
+                options.ResponseModes.Remove(ResponseModes.FormPost);
+                options.ResponseModes.Remove(ResponseModes.Fragment);
             })
+            .SetAccessTokenLifetime(AccessTokenLifetime)
+            // Refresh tokens are rolling and their expiry slides, which are OpenIddict's defaults.
+            .SetRefreshTokenLifetime(RefreshTokenLifetime)
+            .SetRefreshTokenReuseLeeway(RefreshTokenReuseLeeway)
             .RegisterScopes(AdminScope, Scopes.OfflineAccess)
             .AddEphemeralEncryptionKey()
             .AddEphemeralSigningKey()
             .UseDataProtection();
 
-        // The authorize request is validated by OpenIddict and then passed on, to the 404 of /oauth/{**rest}, until
-        // the consent step takes it, so no code can be issued without consent.
-        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough();
+        // The authorize request is validated by OpenIddict and then passed on to AuthoriseEndpoint, so no code can be
+        // issued without consent. A token request is passed on to TokenEndpoint in the same way, so no token can be
+        // issued for a person who has changed. OpenIddict answers its own errors at the token and revocation
+        // endpoints as JSON.
+        server.UseAspNetCore().EnableAuthorizationEndpointPassthrough().EnableTokenEndpointPassthrough();
+
+        // OpenIddict sends the assistant only the errors that the app itself raises, and answers any other on the
+        // spot. A request whose client and redirect URI have been accepted gets its errors at that redirect URI, with
+        // iss (RFC 9207); AuthorisationRefusals answers the rest, which have no redirect URI to use.
+        server.AddEventHandler<ValidateAuthorizationRequestContext>(handler => handler
+            .UseInlineHandler(context =>
+            {
+                context.Transaction.Properties[AuthorisationRefusals.ValidatedRedirectUri] = context.RedirectUri;
+                return default;
+            })
+            .SetOrder(ValidateClientRedirectUri.Descriptor.Order + 500));
+        server.AddEventHandler(AuthorisationRefusals.Descriptor);
+
+        // An assistant is sent back to a state it chose and a resource it asked for (RFC 8707), and it must tell the
+        // person's browser apart from any other, so the request must hold exactly one resource and a state. It runs
+        // after the built-in checks, so the redirect URI is validated and the refusal can be sent to it.
+        server.AddEventHandler<ValidateAuthorizationRequestContext>(handler => handler
+            .UseInlineHandler(context =>
+            {
+                if (string.IsNullOrEmpty(context.Request.State))
+                {
+                    context.Reject(Errors.InvalidRequest, "The state parameter is required.");
+                }
+                else if (context.Request.Resources?.Count() != 1)
+                {
+                    context.Reject(Errors.InvalidRequest, "Exactly one resource parameter is required.");
+                }
+
+                return default;
+            })
+            .SetOrder(ValidateAuthorizedParty.Descriptor.Order + 1_000));
+
+        // The code is exchanged for the resource that was authorised (RFC 8707), so that exchange must name exactly
+        // one. A refresh may leave it out: OpenIddict itself refuses one that was not granted.
+        server.AddEventHandler<ValidateTokenRequestContext>(handler => handler
+            .UseInlineHandler(context =>
+            {
+                if (context.Request.IsAuthorizationCodeGrantType() && context.Request.Resources?.Count() != 1)
+                {
+                    context.Reject(Errors.InvalidRequest, "Exactly one resource parameter is required.");
+                }
+
+                return default;
+            })
+            .SetOrder(OpenIddictServerHandlers.Exchange.ValidateAuthorizedParty.Descriptor.Order + 1_000));
 
         // OpenIddict 7.7.1 has neither a way to advertise client ID metadata documents nor a way to leave out the
         // client authentication methods it advertises: every approved assistant is a public client.
@@ -98,9 +175,24 @@ internal static class McpSetup
                 context.Metadata["client_id_metadata_document_supported"] = true;
                 context.TokenEndpointAuthenticationMethods.Clear();
                 context.TokenEndpointAuthenticationMethods.Add(ClientAuthenticationMethods.None);
+                context.RevocationEndpointAuthenticationMethods.Clear();
+                context.RevocationEndpointAuthenticationMethods.Add(ClientAuthenticationMethods.None);
                 return default;
             })
             .SetOrder(AttachAdditionalMetadata.Descriptor.Order + 1_000));
+    }
+
+    /// <summary>
+    /// Maps the endpoints of the consent step, which exist only where the access is switched on: the authorise
+    /// endpoint, the token endpoint, and the Connect screen's two in the <c>/api</c> group, <paramref name="api"/>.
+    /// OpenIddict maps the revocation endpoint itself. Where it is off they are unmapped, so each falls to a 404
+    /// catch-all.
+    /// </summary>
+    public static void MapMcpEndpoints(this WebApplication app, RouteGroupBuilder api)
+    {
+        app.MapAuthoriseEndpoint();
+        app.MapTokenEndpoint();
+        api.MapConnectEndpoints();
     }
 
     /// <summary>

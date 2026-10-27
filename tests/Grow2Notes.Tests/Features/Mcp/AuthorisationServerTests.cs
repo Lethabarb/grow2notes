@@ -15,8 +15,9 @@ namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
 /// The authorisation server that <c>Mcp:Enabled</c> adds (mcp-server.md §4.1, §4.2): what its discovery document says,
-/// what its token endpoint refuses, and that no authorisation request gets a code before the consent step exists. The
-/// app runs on a database of its own, because the tests register an assistant. The host starting at all is the
+/// what its token endpoint refuses, and that no authorisation request gets a code without the consent step, which hands
+/// every valid request to the Connect screen (ConnectTests covers what follows). The app runs on a database of its own,
+/// because the tests register an assistant. The host starting at all is the
 /// evidence that OpenIddict 7.7.1 accepts the keys and the endpoints chosen for it.
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -50,6 +51,10 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         { "response_type", "token" },
         { "scope", "openid" },
         { "resource", "https://grow2notes.example/other" },
+        { "resource", null },
+        { "state", null },
+        { "response_mode", "form_post" },
+        { "response_mode", "fragment" },
         { "redirect_uri", "https://assistant.example/elsewhere" },
         { "client_id", "https://unknown.example/client.json" },
     };
@@ -85,6 +90,10 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         AssertExactly(metadata, "code_challenge_methods_supported", "S256");
         AssertExactly(metadata, "scopes_supported", "grow2notes.admin", "offline_access");
         AssertExactly(metadata, "token_endpoint_auth_methods_supported", "none");
+        Assert.Equal(
+            "https://grow2notes.example/oauth/revoke", metadata.GetProperty("revocation_endpoint").GetString());
+        AssertExactly(metadata, "revocation_endpoint_auth_methods_supported", "none");
+        AssertExactly(metadata, "response_modes_supported", "query");
         Assert.True(metadata.GetProperty("authorization_response_iss_parameter_supported").GetBoolean());
         Assert.True(metadata.GetProperty("client_id_metadata_document_supported").GetBoolean());
         Assert.False(metadata.TryGetProperty("registration_endpoint", out _));
@@ -116,6 +125,18 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         Assert.True(services.GetRequiredService<IOptions<OpenIddictCoreOptions>>().Value.DisableEntityCaching);
     }
 
+    [Fact]
+    public void Access_tokens_last_10_minutes_and_refresh_tokens_30_rolling_with_a_leeway_of_15_seconds()
+    {
+        var server = app.Services.GetRequiredService<IOptions<OpenIddictServerOptions>>().Value;
+
+        Assert.Equal(TimeSpan.FromMinutes(10), server.AccessTokenLifetime);
+        Assert.Equal(TimeSpan.FromMinutes(30), server.RefreshTokenLifetime);
+        Assert.Equal(TimeSpan.FromSeconds(15), server.RefreshTokenReuseLeeway);
+        Assert.False(server.DisableRollingRefreshTokens);
+        Assert.False(server.DisableSlidingRefreshTokenExpiration);
+    }
+
     [Theory]
     [MemberData(nameof(UnsupportedGrants))]
     public async Task The_token_endpoint_refuses_any_other_grant_and_is_never_cached(string grantType)
@@ -135,21 +156,19 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
         Assert.Equal("unsupported_grant_type", error.RootElement.GetProperty("error").GetString());
     }
 
-    [Theory]
-    [InlineData("GET", "/.well-known/oauth-protected-resource")]
-    [InlineData("POST", "/oauth/revoke")]
-    public async Task What_a_later_task_adds_is_still_a_404_problem(string method, string path)
+    [Fact]
+    public async Task What_a_later_task_adds_is_still_a_404_problem()
     {
         using var client = app.CreateAssistantClient();
-        using var request = new HttpRequestMessage(new HttpMethod(method), path);
 
-        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        using var response = await client.GetAsync(
+            "/.well-known/oauth-protected-resource", TestContext.Current.CancellationToken);
 
         await response.ReadProblemAsync(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task A_valid_authorisation_request_is_passed_on_and_is_a_404_with_no_code()
+    public async Task A_valid_authorisation_request_is_handed_to_the_Connect_screen_with_no_code()
     {
         using var client = app.CreateAssistantClient();
 
@@ -157,9 +176,76 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
             "/oauth/authorize?" + McpTestApp.AuthorizeQuery(ClientId, RedirectUri),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Null(response.Headers.Location);
-        Assert.DoesNotContain("code=", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = Assert.IsType<Uri>(response.Headers.Location);
+        Assert.False(location.IsAbsoluteUri, location.ToString());
+        var parts = location.OriginalString.Split('?');
+        Assert.Equal("/connect", parts[0]);
+        var returned = QueryHelpers.ParseQuery(parts[1]);
+        Assert.NotEmpty(returned["request"].ToString());
+        Assert.DoesNotContain("code", returned.Keys);
+    }
+
+    [Fact]
+    public async Task An_unknown_client_is_sent_to_the_Connect_screen_with_no_request()
+    {
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?" + McpTestApp.AuthorizeQuery(
+                ClientId, RedirectUri, ("client_id", "https://unknown.example/client.json")),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/connect", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task A_redirect_URI_that_is_not_registered_is_sent_to_the_Connect_screen_with_no_request()
+    {
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?" + McpTestApp.AuthorizeQuery(
+                ClientId, RedirectUri, ("redirect_uri", "https://assistant.example/elsewhere")),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/connect", response.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
+    [InlineData("scope", "grow2notes.other", "invalid_scope")]
+    [InlineData("state", null, "invalid_request")]
+    public async Task An_error_with_a_registered_redirect_URI_is_still_sent_there_with_the_error_and_iss(
+        string parameter, string? value, string error)
+    {
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?" + McpTestApp.AuthorizeQuery(ClientId, RedirectUri, (parameter, value)),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = Assert.IsType<Uri>(response.Headers.Location);
+        Assert.Equal(RedirectUri, location.GetLeftPart(UriPartial.Path));
+        var returned = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal(error, returned["error"]);
+        Assert.Equal("https://grow2notes.example/", returned["iss"]);
+        Assert.DoesNotContain("code", returned.Keys);
+    }
+
+    [Fact]
+    public async Task An_authorisation_request_with_two_resources_is_refused_and_gets_no_code()
+    {
+        using var client = app.CreateAssistantClient();
+
+        using var response = await client.GetAsync(
+            "/oauth/authorize?" + McpTestApp.AuthorizeQuery(ClientId, RedirectUri)
+                + "&resource=" + Uri.EscapeDataString(McpTestApp.Resource),
+            TestContext.Current.CancellationToken);
+
+        AssertRefusedWithNoCode(response);
     }
 
     [Theory]
@@ -173,13 +259,26 @@ public sealed class AuthorisationServerTests(Grow2NotesFactory factory, SqlServe
             "/oauth/authorize?" + McpTestApp.AuthorizeQuery(ClientId, RedirectUri, (parameter, value)),
             TestContext.Current.CancellationToken);
 
-        Assert.NotEqual(HttpStatusCode.NotFound, response.StatusCode);
-        if (response.Headers.Location is { } location)
+        AssertRefusedWithNoCode(response);
+    }
+
+    // An error that OpenIddict has no redirect URI for goes to the Connect screen with no request, and any other to the
+    // redirect URI with its error and iss: neither has a code.
+    private static void AssertRefusedWithNoCode(HttpResponseMessage response)
+    {
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = Assert.IsType<Uri>(response.Headers.Location);
+        if (location.IsAbsoluteUri)
         {
-            var returned = QueryHelpers.ParseQuery(location.Query + "&" + location.Fragment.TrimStart('#'));
+            var returned = QueryHelpers.ParseQuery(location.Query);
+            Assert.Equal(RedirectUri, location.GetLeftPart(UriPartial.Path));
             Assert.DoesNotContain("code", returned.Keys);
             Assert.True(returned.ContainsKey("error"), location.ToString());
             Assert.Equal("https://grow2notes.example/", returned["iss"]);
+        }
+        else
+        {
+            Assert.Equal("/connect", location.OriginalString);
         }
     }
 

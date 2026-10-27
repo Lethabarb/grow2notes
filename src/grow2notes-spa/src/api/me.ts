@@ -6,7 +6,7 @@ import { api } from './api.ts';
  * A user's role as the API gives it, the role's `UserRole` name (user-management.md's `Role`), so that a comparison
  * with any other spelling, such as `'manager'`, does not compile.
  */
-export type Role = 'Worker' | 'Manager';
+export type Role = 'Worker' | 'Manager' | 'Support';
 
 /** The signed-in user (design.md §6.2), as `GET /api/auth/me` and the calls that sign someone in answer. */
 export type Me = {

@@ -6650,7 +6650,7 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 
 ```yaml
 id: T31
-status: new
+status: done
 release: R2
 lane: A
 size: L
@@ -6676,10 +6676,85 @@ refused.
 ### Notes
 
 - Owner question Q10, the Support option shipping before switch-on, is answered by design.md A110 (26 October 2026).
+- The Connect screen stays locked once Allow or Cancel has been answered, as the page is on its way to the assistant. If
+  the browser restores it from its back/forward cache when the person presses Back, both buttons are still disabled and
+  a reload shows the screen again (the request has usually expired by then). Accepted as the simplest option.
+- Owner question Q9, confirming the four access tools inside the assistant, is answered by design.md A109, and Q10 by
+  A110; both read as answered and need nothing more from T31. The new assumed defaults are A115 (Support copy and
+  landing), A116 (the Connect screen copy ships as proposed) and A117 (the consent handle and decision are Data
+  Protection tokens, not single use).
+- No migration. `Role` is a `tinyint` with no check constraint, converter or seed data, so `Support = 3` is a new
+  value of the existing column and the model snapshot does not change. This was confirmed by reading
+  `Grow2NotesDbContext` and the snapshot; `dotnet ef` is never run (compile and lint only, D90). CI decides.
+- R12 is met without matrix rows for the consent and token endpoints. They are mapped only where `Mcp:Enabled` is
+  true and the matrix app runs with it off, as T30 decided for OpenIddict's addresses. The matrix gains the Support
+  column for every row, and `ConnectTests` and `TokenTests` call the new endpoints as every kind of caller.
+- A signed-out person who follows a bad link signs in first, because the shell gates every route on `/me`, and then
+  sees the general error. Accepted as the simplest option.
+- `mcp.authorised` is written just before OpenIddict issues the code, by `ConsentDecisions.TakeAsync`, so a failure
+  between the two leaves an entry for a code never issued. The decision is not single use (A117): the same address
+  followed again within 10 minutes issues another code, which only the assistant holding the verifier can redeem.
+- Tokens: `TokenEndpoint` relies on OpenIddict's `RestoreInternalClaims` to put back the authorisation ID, presenters
+  and dates from the code or refresh token, and rebuilds only the person's claims from their row. CI confirmed it:
+  the rotation, leeway, reuse and revocation cases in `RefreshTests` passed, so the claim-cloning fallback was not
+  needed. The 12-hour refusal only refuses and revokes nothing, because the chain's `auth_time` never changes; a
+  change to the person revokes all of their authorisations. The access-token reader (`AccessTokenReader`, which
+  dispatched OpenIddict's `ValidateTokenContext` from a hand-built transaction) was dropped: in CI it answered
+  `invalid_token` for the app's real access tokens, so it could not be used outside a request. `TokenTests` keeps
+  `expires_in` of 600, and the claim shape (`sub`, `org_id`, `stamp_hash`, `auth_time`, the audience, no role claim) is
+  pinned by the `AssistantTokensTests` cases for `PrincipalFor`. `AssistantFlow` (a test helper) duplicates
+  `ConnectTests`' private sign-in and hand-off helpers rather than changing that class. OpenIddict answers
+  `invalid_client` with a 401 and its other token errors with a 400.
+- Hand-offs. T32 validates bearer tokens with `AssistantTokens`' claim types (`sub`, `org_id`, `stamp_hash`,
+  `auth_time`), and on each `/mcp` request checks the user row, the stamp hash, the 12 hours and the authorisation
+  entry, so a revoked authorisation or refresh token ends access within the 10 minutes of a token already issued. It
+  also adds the `/mcp` challenge, and revokes in the same transaction on deactivate, reset and sign-out (F07.02). T38
+  places the `/oauth` and `/api/connect` rate limits. A real assistant's connection in test waits for T32.
+- By hand: first-use steps 166 to 170, under *Support accounts and the Connect screen in test, once T31 is on main*,
+  and step 163 amended. None of them holds T31 open.
+
+### Plan
+
+Planned 27 October 2026.
+
+- Outcome: a third role, Support, with one page and its own Sign out. Managers and Support people connect an approved
+  assistant on the Connect screen, and the token endpoint keeps it connected within the session limits. Workers are
+  refused. Nothing changes for the support workers who write notes. No table, migration or cache.
+- Design: `UserRole.Support = 3` (a tinyint value, so no migration; `dotnet ef` is never run). `Policies.SignedIn`
+  (Worker, Manager or Support, by name) is the only policy that admits Support, on me, logout, ping and
+  `/api/connect`. The authorise request and the decision travel as Data Protection tokens (10 minutes, the decision
+  bound to a hash of the query and the user). Allow and Cancel post to `/api/connect`, which answers a same-origin
+  `/oauth/authorize?...&decision=` address; OpenIddict then issues the code or `access_denied` with its own redirect, so
+  the CSP is unchanged. `/oauth/token` is a passthrough that rebuilds the principal from the user row.
+- Domain: `ConsentRequests`, `ConsentDecisions` and `AssistantTokens` (`PrincipalFor`, `Check`); audit events
+  `mcp.authorised` and `mcp.authorisation_refused`; access tokens 10 minutes, refresh tokens 30 minutes sliding with a
+  15-second reuse leeway; a changed user revokes by subject, the 12-hour limit only refuses.
+- Reuse: OpenIddict 7.7.1 for the protocol, `McpSetup` from T30, `SessionRules`, the Data Protection key ring,
+  `ManagerOnly`, `AccountPanel`'s sign-out (extracted as `useSignOut`), the general error screen and the existing test
+  fixtures.
+- Where the design is silent: the last-manager guard is `role != Manager`; Support copy, the Connect copy and the
+  not-single-use decision are recorded as assumed defaults A115 to A117; a seeded Support user is used in the shared
+  test database; with the switch off `/api/connect` is a 404 and `/connect` shows the general error.
+
+### Verticals
+
+- v1 | Server: the Support role, the SignedIn policy and the Support caller in the matrix | depends_on: none |
+  R01, R02, R06, R07, R08, R10, R11, R12, R13
+- v2 | SPA: Support role option, Support page and Sign out hook | depends_on: v1 | R03, R04, R05, R09, R14
+- v3 | Server: consent hand-off, Connect API, Allow and Cancel with audit | depends_on: v1 |
+  R16, R17, R22, R23, R26, R32
+- v4 | SPA: Connect an AI assistant screen | depends_on: v2, v3 | R15, R18, R19, R20, R21, R24, R35
+- v5 | Server tokens (code exchange, refresh, revocation), then docs and backlog close-out | depends_on: v1, v2, v3, v4 |
+  R25, R27, R28, R29, R30, R31, R33, R34, R36
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Server (#158; v1): the Support role, the SignedIn policy and the Support caller in the matrix.
+- [x] SPA (#159; v2): Support role option, Support page and Sign out hook.
+- [x] Server (#160; v3): consent hand-off, Connect API, Allow and Cancel with audit.
+- [x] SPA (#161; v4): the Connect an AI assistant screen.
+- [x] Server tokens and close-out (#162; v5): code exchange, refresh and revocation; design.md, mcp-server.md, users.md,
+  microcopy.md, the F07.01 stories, coverage.md, first-use steps 166 to 170, A115 to A117, Q9 and Q10 read as answered.
 
 ---
 

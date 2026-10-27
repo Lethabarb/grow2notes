@@ -24,7 +24,8 @@ namespace Grow2Notes.Tests.Features.Auth;
 /// once its expiry has passed, and <see cref="SessionRules"/> only once more than 12 hours have, so the <c>401</c>s are
 /// tested a second past 30 minutes and a minute past 12 hours. Each request is to <c>GET /api/auth/me</c>, which names
 /// the organisation in the principal that the session check rebuilds from the user's row, so each answer also shows
-/// that <c>org_id</c> survives the rebuild (design.md §14 M0 <i>Done when</i>).
+/// that <c>org_id</c> survives the rebuild (design.md §14 M0 <i>Done when</i>). The limits are the same for a worker, a
+/// manager and a Support person: no code in them depends on the role.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -36,18 +37,27 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
     // Signing in changes no row, so the tests sign in as A's seeded worker (tests/README.md).
     private readonly Guid userId;
     private readonly Guid organisationId;
+    private readonly SeededOrganisation a;
 
     private readonly WebApplicationFactory<Program> app;
 
     public SessionLimitTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
     {
-        organisationId = sqlServer.Seeded.A.OrganisationId;
+        a = sqlServer.Seeded.A;
+        organisationId = a.OrganisationId;
         userId = sqlServer.Seeded.A.WorkerId;
         app = factory.WithWebHostBuilder(builder => builder
             .MapCookieSignIn()
             .UseClock(clock)
             .ConfigureServices(services => services.AddSingleton<IStartupFilter>(new SignInOutsideTheSignInManager())));
     }
+
+    public static TheoryData<Caller> SignedInRoles { get; } = new()
+    {
+        Caller.WorkerOfA,
+        Caller.ManagerOfA,
+        Caller.SupportOfA,
+    };
 
     // 58 minutes after sign-in, the second request comes after the expiry of the cookie that the sign-in set, so only
     // the renewed cookie lets it in.
@@ -112,6 +122,51 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
         refused.AssertClearsTheSessionCookie();
     }
 
+    [Theory]
+    [MemberData(nameof(SignedInRoles))]
+    public async Task A_session_of_any_role_is_let_in_after_29_minutes_idle_and_ends_after_30_minutes_and_1_second(
+        Caller caller)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var organisationName = await OrganisationNameAsync();
+        using var client = app.CreateHttpsClient();
+        await client.SignInWithCookieAsync(UserOf(caller));
+
+        clock.Advance(TimeSpan.FromMinutes(29));
+        using var letIn = await client.GetAsync(MePath, cancellationToken);
+        await AssertNamesTheOrganisationAsync(letIn, organisationName);
+
+        clock.Advance(TimeSpan.FromMinutes(30) + TimeSpan.FromSeconds(1));
+        using var refused = await client.GetAsync(MePath, cancellationToken);
+
+        await refused.ReadProblemAsync(HttpStatusCode.Unauthorized);
+    }
+
+    [Theory]
+    [MemberData(nameof(SignedInRoles))]
+    public async Task A_session_of_any_role_ends_at_12_hours_and_1_minute_however_active_it_is(Caller caller)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var client = app.CreateHttpsClient();
+        var signedInAt = clock.GetUtcNow();
+        await client.SignInWithCookieAsync(UserOf(caller));
+
+        var twentyMinutes = TimeSpan.FromMinutes(20);
+        for (var sinceSignIn = twentyMinutes; sinceSignIn <= TimeSpan.FromHours(12); sinceSignIn += twentyMinutes)
+        {
+            clock.SetUtcNow(signedInAt + sinceSignIn);
+            using var response = await client.GetAsync(MePath, cancellationToken);
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        clock.SetUtcNow(signedInAt + TimeSpan.FromHours(12) + TimeSpan.FromMinutes(1));
+        using var refused = await client.GetAsync(MePath, cancellationToken);
+
+        await refused.ReadProblemAsync(HttpStatusCode.Unauthorized);
+        refused.AssertClearsTheSessionCookie();
+    }
+
     // The cookie is the session cookie, with the user's own claims and security stamp, so the stamp check lets it
     // through; it ends only because, with no auth_time, the 12-hour limit has nothing to count from.
     [Fact]
@@ -132,6 +187,14 @@ public sealed class SessionLimitTests : IClassFixture<Grow2NotesFactory>, IAsync
     }
 
     public ValueTask DisposeAsync() => app.DisposeAsync();
+
+    private Guid UserOf(Caller caller) => caller switch
+    {
+        Caller.WorkerOfA => a.WorkerId,
+        Caller.ManagerOfA => a.ManagerId,
+        Caller.SupportOfA => a.SupportId,
+        _ => throw new ArgumentOutOfRangeException(nameof(caller), caller, null),
+    };
 
     private static async Task AssertNamesTheOrganisationAsync(HttpResponseMessage response, string organisationName)
     {

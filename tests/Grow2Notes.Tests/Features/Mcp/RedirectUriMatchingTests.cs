@@ -32,9 +32,9 @@ public sealed class RedirectUriMatchingTests(Grow2NotesFactory factory, SqlServe
     [InlineData("http://localhost:3118/cb")]
     public async Task A_loopback_redirect_URI_matches_on_any_port(string redirectUri)
     {
-        var status = await AuthorizeAsync(redirectUri);
+        var location = await AuthorizeAsync(redirectUri);
 
-        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.StartsWith("/connect?request=", location?.OriginalString, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -42,18 +42,20 @@ public sealed class RedirectUriMatchingTests(Grow2NotesFactory factory, SqlServe
     [InlineData("http://localhost:3118/other")]
     public async Task A_loopback_redirect_URI_on_another_path_is_refused(string redirectUri)
     {
-        var status = await AuthorizeAsync(redirectUri);
+        var location = await AuthorizeAsync(redirectUri);
 
-        Assert.NotEqual(HttpStatusCode.NotFound, status);
+        Assert.Equal("/connect", location?.OriginalString);
     }
 
-    // Validated and passed on is a 404 (the consent step is a later task's), so 404 means OpenIddict accepted it.
-    private async Task<HttpStatusCode> AuthorizeAsync(string redirectUri)
+    // A request that OpenIddict accepts is handed to the Connect screen with a request; one whose redirect URI it
+    // refuses has nowhere to send an error, and goes there with none.
+    private async Task<Uri?> AuthorizeAsync(string redirectUri)
     {
         using var client = app.CreateAssistantClient();
         using var response = await client.GetAsync(
             "/oauth/authorize?" + McpTestApp.AuthorizeQuery(ClientId, redirectUri),
             TestContext.Current.CancellationToken);
-        return response.StatusCode;
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        return response.Headers.Location;
     }
 }

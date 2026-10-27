@@ -302,8 +302,9 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
     // S00.06.06's fourth criterion (A26), with a new name besides, which is not saved either.
     [Theory]
     [InlineData("Worker", false)]
+    [InlineData("Support", false)]
     [InlineData("Manager", true)]
-    public async Task The_only_active_manager_making_themselves_a_worker_or_giving_themselves_a_new_address_gets_409(
+    public async Task The_only_active_manager_making_themselves_a_non_manager_or_changing_their_address_gets_409(
         string role, bool newAddress)
     {
         var manager = await AddTheOnlyActiveManagerAsync();
@@ -311,6 +312,28 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
 
         await AssertRefusedAsync(
             manager.Id, manager.Id, body, await ETagAsync(manager.Id), HttpStatusCode.Conflict, "user.last_manager");
+    }
+
+    // A26: Support never counts as a manager, so a manager who is not the last may become Support, and the stamp stays,
+    // as for any role change.
+    [Fact]
+    public async Task A_manager_who_is_not_the_last_made_Support_is_saved_with_user_updated_from_Manager_to_Support()
+    {
+        var manager = await AddUserAsync(a.OrganisationId, UserRole.Manager, UserStatus.Active);
+
+        using var response = await PutAsync(
+            app, a.ManagerId, manager.Id, Body(Name, manager.Email, "Support"), await ETagAsync(manager.Id));
+
+        await AssertOkAsync(response);
+        Assert.Equal(UserRole.Support, (await StoredAsync(manager.Id)).Role);
+        Assert.Equal(
+            [
+                new StoredEvent(
+                    a.OrganisationId, clock.GetUtcNow().UtcDateTime, a.ManagerId, AuditEventTypes.User.Updated,
+                    AuditEntityTypes.User, manager.Id, ParticipantId: null,
+                    Details("""{"role":"Manager"}""", """{"role":"Support"}""")),
+            ],
+            await StoredEventsAboutAsync(manager.Id));
     }
 
     // A26 refuses only what would leave the organisation with no Active manager.
@@ -358,7 +381,7 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
 
     [Theory]
     [MemberData(nameof(InvalidUserDetails.Roles), MemberType = typeof(InvalidUserDetails))]
-    public Task A_missing_role_or_one_that_is_neither_Worker_nor_Manager_gets_a_422_for_role_and_nothing_is_done(
+    public Task A_missing_role_or_one_that_is_not_Worker_Manager_or_Support_gets_a_422_for_role_and_nothing_is_done(
         string? role) =>
         AssertInvalidAsync(worker => Body(Name, worker.Email, role), ("role", UserDetailsChecks.RoleMissing));
 
@@ -486,6 +509,16 @@ public sealed class UserEditEndpointTests : IClassFixture<Grow2NotesFactory>, IA
 
         await AssertRefusedAsync(
             a.WorkerId, worker.Id, ANewNameRoleAndAddress(), await ETagAsync(worker.Id), HttpStatusCode.Forbidden,
+            code: null);
+    }
+
+    [Fact]
+    public async Task A_Support_person_gets_403_and_nothing_is_done()
+    {
+        var worker = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active);
+
+        await AssertRefusedAsync(
+            a.SupportId, worker.Id, ANewNameRoleAndAddress(), await ETagAsync(worker.Id), HttpStatusCode.Forbidden,
             code: null);
     }
 

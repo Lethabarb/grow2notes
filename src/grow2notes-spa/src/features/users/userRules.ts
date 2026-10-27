@@ -70,14 +70,19 @@ export function isNewAddress(typed: string, stored: string): boolean {
   return typed.trim().toUpperCase() !== stored.toUpperCase();
 }
 
+/** The message of the last-manager rule (A26) for the role that the only active manager chose in place of Manager. */
+export function lastManagerMessage(role: Role): string {
+  return role === 'Support' ? strings.users.lastManagerSupport : strings.users.lastManagerRole;
+}
+
 /**
  * What the last-manager rule (A26) refuses of `values` on your own Edit user page while you are the only Active
- * manager, against you as `stored`: making yourself a worker, and a new address, each in its "you" words.
+ * manager, against you as `stored`: making yourself a worker or Support, and a new address, each in its "you" words.
  */
 function lastManagerErrors({ email, role }: UserValues, stored: UserValues): UserErrors {
   const errors: UserErrors = {};
-  if (role === 'Worker' && stored.role === 'Manager') {
-    errors.role = strings.users.lastManagerRole;
+  if (role !== 'Manager' && stored.role === 'Manager') {
+    errors.role = lastManagerMessage(role);
   }
 
   if (isNewAddress(email, stored.email)) {
@@ -93,7 +98,7 @@ function lastManagerErrors({ email, role }: UserValues, stored: UserValues): Use
  * the server counts it; and an address that is empty or not text, one "@" and text, form-validation.md's loose check,
  * which leaves the rest to the server. The role needs no check of its own, as one of its radios is always chosen. With
  * `onlyManager`, you as your own Edit user page took you while you are the only Active manager, the last-manager rule
- * refuses Worker and a new address too, an address's own fault first.
+ * refuses Worker or Support and a new address too, an address's own fault first.
  */
 export function validateUser(values: UserValues, onlyManager?: UserValues): UserErrors {
   const { displayName, email } = values;

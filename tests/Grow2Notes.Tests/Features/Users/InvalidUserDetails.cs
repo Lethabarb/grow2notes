@@ -34,5 +34,5 @@ public static class InvalidUserDetails
     };
 
     // A role is named exactly, never by its number or in another letter case (mcp-server.md §3.5, convention 4).
-    public static TheoryData<string?> Roles { get; } = [(string?)null, "", "Admin", "worker", "1"];
+    public static TheoryData<string?> Roles { get; } = [(string?)null, "", "Admin", "worker", "support", "1", "3"];
 }

@@ -14,9 +14,9 @@ namespace Grow2Notes.Tests.Platform;
 
 /// <summary>
 /// Each policy through the app's pipeline, at a test-only endpoint behind it, called signed out and, with the test-only
-/// sign-in, as seeded organisation A's worker and manager and B's manager; and every endpoint that is not
-/// <c>AllowAnonymous</c>, called as a seeded user whose role claim no policy names. <see cref="PoliciesTests"/> covers
-/// the policies without a database.
+/// sign-in, as seeded organisation A's worker, manager and Support person and B's manager; and every endpoint that is
+/// not <c>AllowAnonymous</c>, called as a seeded user whose role claim no policy names. <see cref="PoliciesTests"/>
+/// covers the policies without a database.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -25,6 +25,7 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
     // the API's caching rule.
     private const string FallbackPolicyPath = "/api/test-only/fallback-policy";
     private const string ManagerPolicyPath = "/api/test-only/manager-policy";
+    private const string SignedInPolicyPath = "/api/test-only/signed-in-policy";
 
     private readonly SeededOrganisations seeded;
     private readonly WebApplicationFactory<Program> app;
@@ -39,8 +40,11 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
     public static TheoryData<string, Caller, HttpStatusCode> Refusals { get; } = new()
     {
         { FallbackPolicyPath, Caller.SignedOut, HttpStatusCode.Unauthorized },
+        { FallbackPolicyPath, Caller.SupportOfA, HttpStatusCode.Forbidden },
         { ManagerPolicyPath, Caller.SignedOut, HttpStatusCode.Unauthorized },
         { ManagerPolicyPath, Caller.WorkerOfA, HttpStatusCode.Forbidden },
+        { ManagerPolicyPath, Caller.SupportOfA, HttpStatusCode.Forbidden },
+        { SignedInPolicyPath, Caller.SignedOut, HttpStatusCode.Unauthorized },
     };
 
     public static TheoryData<string, Caller> Admissions { get; } = new()
@@ -50,13 +54,17 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         { FallbackPolicyPath, Caller.ManagerOfB },
         { ManagerPolicyPath, Caller.ManagerOfA },
         { ManagerPolicyPath, Caller.ManagerOfB },
+        { SignedInPolicyPath, Caller.WorkerOfA },
+        { SignedInPolicyPath, Caller.ManagerOfA },
+        { SignedInPolicyPath, Caller.ManagerOfB },
+        { SignedInPolicyPath, Caller.SupportOfA },
     };
 
-    // Roles are named, never inferred (mcp-server.md §3.5, convention 4): Release 2's Support, which UserRole does not
-    // have, Worker's name in the wrong case, Worker's stored value, and no role claim at all.
+    // Roles are named, never inferred (mcp-server.md §3.5, convention 4): a role that UserRole does not have, Worker's
+    // name in the wrong case, Worker's stored value, and no role claim at all.
     public static TheoryData<string> RolesNoPolicyNames { get; } = new()
     {
-        "Support",
+        "Administrator",
         "worker",
         ((int)UserRole.Worker).ToString(CultureInfo.InvariantCulture),
         TestSignIn.NoRole,
@@ -129,9 +137,10 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
         response.Headers.NonValidated.TryGetValues("Cache-Control", out var values) ? values.ToString() : null;
 
     /// <summary>
-    /// Maps an endpoint with no policy of its own, which the fallback policy covers, and one with the
-    /// <see cref="Policies.Manager"/> policy. They are routed ahead of the app's own routing, which then leaves the
-    /// endpoint already chosen, so they run where the app's own endpoints do, after the app's authorization.
+    /// Maps an endpoint with no policy of its own, which the fallback policy covers, one with the
+    /// <see cref="Policies.Manager"/> policy, and one with the <see cref="Policies.SignedIn"/> policy. They are routed
+    /// ahead of the app's own routing, which then leaves the endpoint already chosen, so they run where the app's own
+    /// endpoints do, after the app's authorization.
     /// </summary>
     private sealed class TestOnlyEndpoints : IStartupFilter
     {
@@ -144,6 +153,8 @@ public sealed class PoliciesOnSqlServerTests : IClassFixture<Grow2NotesFactory>,
                 endpoints.MapGet(FallbackPolicyPath, () => TypedResults.NoContent());
                 endpoints.MapGet(ManagerPolicyPath, () => TypedResults.NoContent())
                     .RequireAuthorization(Policies.Manager);
+                endpoints.MapGet(SignedInPolicyPath, () => TypedResults.NoContent())
+                    .RequireAuthorization(Policies.SignedIn);
             });
         };
     }

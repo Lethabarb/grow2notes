@@ -25,8 +25,35 @@ public sealed class PoliciesTests : IAsyncDisposable
 
         Assert.True(await AdmitsAsync(policy, SignedIn("Worker")));
         Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("Support")));
         Assert.False(await AdmitsAsync(policy, SignedIn(role: null)));
         Assert.False(await AdmitsAsync(policy, SignedOut("Worker")));
+    }
+
+    [Fact]
+    public async Task The_default_policy_refuses_Support_as_the_fallback_does()
+    {
+        var policy = await app.Services.GetRequiredService<IAuthorizationPolicyProvider>().GetDefaultPolicyAsync();
+
+        Assert.True(await AdmitsAsync(policy, SignedIn("Worker")));
+        Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("Support")));
+    }
+
+    [Fact]
+    public async Task The_SignedIn_policy_admits_a_signed_in_worker_manager_or_Support_by_exact_name_and_nobody_else()
+    {
+        var policy = await app.Services.GetRequiredService<IAuthorizationPolicyProvider>()
+            .GetPolicyAsync(Policies.SignedIn);
+        Assert.NotNull(policy);
+
+        Assert.True(await AdmitsAsync(policy, SignedIn("Worker")));
+        Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
+        Assert.True(await AdmitsAsync(policy, SignedIn("Support")));
+        Assert.False(await AdmitsAsync(policy, SignedIn(role: null)));
+        Assert.False(await AdmitsAsync(policy, SignedIn("support")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("3")));
+        Assert.False(await AdmitsAsync(policy, SignedOut("Support")));
     }
 
     [Fact]
@@ -38,6 +65,7 @@ public sealed class PoliciesTests : IAsyncDisposable
 
         Assert.True(await AdmitsAsync(policy, SignedIn("Manager")));
         Assert.False(await AdmitsAsync(policy, SignedIn("Worker")));
+        Assert.False(await AdmitsAsync(policy, SignedIn("Support")));
         Assert.False(await AdmitsAsync(policy, SignedOut("Manager")));
     }
 

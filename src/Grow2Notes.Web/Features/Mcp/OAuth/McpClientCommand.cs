@@ -461,7 +461,7 @@ internal sealed class McpClientCommand(
 
     // Decided on the host as it is written, since Uri turns "loopback" into "localhost" and other spellings into
     // 127.0.0.1, and Uri.IsLoopback accepts all of 127.0.0.0/8: RFC 8252 §7.3 names these three hosts only.
-    private static bool IsLoopback(string value)
+    internal static bool IsLoopback(string value)
     {
         var schemeEnd = value.IndexOf("://", StringComparison.Ordinal);
         if (schemeEnd < 0)

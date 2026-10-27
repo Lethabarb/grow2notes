@@ -62,7 +62,7 @@ const enterEmail = 'Enter an email address';
 const emailFormat = 'Enter an email address in the correct format, like name@example.com';
 const emailInUse =
   'Another account already uses this email address. Use a different one, or find the person in the Users list.';
-const chooseRole = 'Choose Worker or Manager';
+const chooseRole = 'Choose Worker, Manager or Support';
 const noConnectionSentence = 'Not sent: no connection. Try again.';
 const somethingWentWrong = 'Not sent: something went wrong. Try again.';
 
@@ -173,6 +173,7 @@ const emailField = () => within(main()).getByRole('textbox', { name: 'Email addr
 const roleGroup = () => within(main()).getByRole('group', { name: 'Role' });
 const workerRadio = () => within(main()).getByRole('radio', { name: 'Worker' });
 const managerRadio = () => within(main()).getByRole('radio', { name: 'Manager' });
+const supportRadio = () => within(main()).getByRole('radio', { name: 'Support (IT operator)' });
 const sendInvite = () => within(main()).getByRole('button', { name: /^(Send invite|Sending…)$/ });
 const alertLine = () => within(main()).getByRole('alert');
 
@@ -346,13 +347,16 @@ describe('Invite user', () => {
       expect(field).not.toHaveAttribute('required');
     }
 
-    expect(within(roleGroup()).getAllByRole('radio')).toEqual([workerRadio(), managerRadio()]);
+    expect(within(roleGroup()).getAllByRole('radio')).toEqual([workerRadio(), managerRadio(), supportRadio()]);
     expect(workerRadio()).toHaveAccessibleDescription('Writes notes and reads past notes');
     expect(managerRadio()).toHaveAccessibleDescription(
       'Can also review flagged notes, download reports, and set up participants and users',
     );
+    expect(supportRadio()).toHaveAccessibleDescription('Only connects an AI assistant. Sees no participants or notes.');
+    expect(supportRadio()).toHaveAttribute('id', 'role-support');
     expect(workerRadio()).toHaveAttribute('name', 'role');
     expect(managerRadio()).toHaveAttribute('name', 'role');
+    expect(supportRadio()).toHaveAttribute('name', 'role');
   });
 
   it('chooses Manager with a tap on its label, and sends nothing as it does', async () => {
@@ -516,6 +520,20 @@ describe('Invite user, checked before it sends', () => {
 });
 
 describe('Invite user, sending', () => {
+  it('sends Support as "Support" when its radio is chosen', async () => {
+    serve('POST', usersPath, noAnswer);
+    renderApp(['/manage/users/new']);
+    await settle();
+    fillAlex();
+
+    fireEvent.click(supportRadio());
+    pressSend();
+    await settle();
+
+    expect(supportRadio()).toBeChecked();
+    expect(invitesSent()).toEqual([{ displayName: 'Alex Park', email: 'alex.park@example.org', role: 'Support' }]);
+  });
+
   it('sends the fields trimmed with the role chosen, once however often hit, "Sending…" from 400 ms', async () => {
     serve('POST', usersPath, noAnswer);
     renderApp(['/manage/users/new']);
