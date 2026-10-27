@@ -58,6 +58,15 @@ public sealed class LoggingTests
         Assert.False(own.IsEnabled(LogLevel.Debug));
         Assert.True(own.IsEnabled(LogLevel.Information));
 
+        // The MCP SDK's categories are pinned at Warning, so that lowering Default cannot make it log what an assistant
+        // sent or was sent (mcp-server.md §8).
+        foreach (var category in new[] { "ModelContextProtocol.Server.McpServer", "ModelContextProtocol.AspNetCore" })
+        {
+            var sdk = loggers.CreateLogger(category);
+            Assert.False(sdk.IsEnabled(LogLevel.Information));
+            Assert.True(sdk.IsEnabled(LogLevel.Warning));
+        }
+
         // A SQL Server error message can hold the values that failed, such as a truncated value or a duplicate key. EF
         // Core logs the exception, message included, under Update when a save fails and under Query when a query or
         // ExecuteUpdate fails, and the SQL of a failed command under Database.Command. DatabaseFailureHandler logs
