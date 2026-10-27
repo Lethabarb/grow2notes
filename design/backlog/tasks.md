@@ -6650,7 +6650,7 @@ discovery documents. Wherever `Mcp:Enabled` is off (the default, and production)
 
 ```yaml
 id: T31
-status: doing
+status: done
 release: R2
 lane: A
 size: L
@@ -6679,6 +6679,37 @@ refused.
 - The Connect screen stays locked once Allow or Cancel has been answered, as the page is on its way to the assistant. If
   the browser restores it from its back/forward cache when the person presses Back, both buttons are still disabled and
   a reload shows the screen again (the request has usually expired by then). Accepted as the simplest option.
+- Owner question Q9, confirming the four access tools inside the assistant, is answered by design.md A109, and Q10 by
+  A110; both read as answered and need nothing more from T31. The new assumed defaults are A115 (Support copy and
+  landing), A116 (the Connect screen copy ships as proposed) and A117 (the consent handle and decision are Data
+  Protection tokens, not single use).
+- No migration. `Role` is a `tinyint` with no check constraint, converter or seed data, so `Support = 3` is a new
+  value of the existing column and the model snapshot does not change. This was confirmed by reading
+  `Grow2NotesDbContext` and the snapshot; `dotnet ef` is never run (compile and lint only, D90). CI decides.
+- R12 is met without matrix rows for the consent and token endpoints. They are mapped only where `Mcp:Enabled` is
+  true and the matrix app runs with it off, as T30 decided for OpenIddict's addresses. The matrix gains the Support
+  column for every row, and `ConnectTests` and `TokenTests` call the new endpoints as every kind of caller.
+- A signed-out person who follows a bad link signs in first, because the shell gates every route on `/me`, and then
+  sees the general error. Accepted as the simplest option.
+- `mcp.authorised` is written just before OpenIddict issues the code, by `ConsentDecisions.TakeAsync`, so a failure
+  between the two leaves an entry for a code never issued. The decision is not single use (A117): the same address
+  followed again within 10 minutes issues another code, which only the assistant holding the verifier can redeem.
+- Tokens: `TokenEndpoint` relies on OpenIddict's `RestoreInternalClaims` to put back the authorisation ID, presenters
+  and dates from the code or refresh token, and rebuilds only the person's claims from their row. If CI shows that
+  `RefreshTests` (rotation, leeway, reuse, revocation) fail for want of those claims, the fallback is OpenIddict's
+  sample pattern: clone the stored claims and set `sub`, `org_id` and `stamp_hash` from the row. Nothing was run
+  locally. The 12-hour refusal only refuses and revokes nothing, because the chain's `auth_time` never changes; a
+  change to the person revokes all of their authorisations. `AccessTokenReader` reads an access token through
+  OpenIddict's `ValidateTokenContext`; if that cannot run outside a request in CI, drop it and keep `expires_in` and
+  the `AssistantTokensTests` cases. `AssistantFlow` (a test helper) duplicates `ConnectTests`' private sign-in and
+  hand-off helpers rather than changing that class.
+- Hand-offs. T32 validates bearer tokens with `AssistantTokens`' claim types (`sub`, `org_id`, `stamp_hash`,
+  `auth_time`), and on each `/mcp` request checks the user row, the stamp hash, the 12 hours and the authorisation
+  entry, so a revoked authorisation or refresh token ends access within the 10 minutes of a token already issued. It
+  also adds the `/mcp` challenge, and revokes in the same transaction on deactivate, reset and sign-out (F07.02). T38
+  places the `/oauth` and `/api/connect` rate limits. A real assistant's connection in test waits for T32.
+- By hand: first-use steps 166 to 170, under *Support accounts and the Connect screen in test, once T31 is on main*,
+  and step 163 amended. None of them holds T31 open.
 
 ### Plan
 
@@ -6716,7 +6747,12 @@ Planned 27 October 2026.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Server (#158; v1): the Support role, the SignedIn policy and the Support caller in the matrix.
+- [x] SPA (#159; v2): Support role option, Support page and Sign out hook.
+- [x] Server (#160; v3): consent hand-off, Connect API, Allow and Cancel with audit.
+- [x] SPA (#161; v4): the Connect an AI assistant screen.
+- [x] Server tokens and close-out (#162; v5): code exchange, refresh and revocation; design.md, mcp-server.md, users.md,
+  microcopy.md, the F07.01 stories, coverage.md, first-use steps 166 to 170, A115 to A117, Q9 and Q10 read as answered.
 
 ---
 
