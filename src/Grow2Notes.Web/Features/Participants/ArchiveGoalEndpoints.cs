@@ -10,8 +10,9 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <c>POST /api/admin/goals/{goalId}/archive</c> and <c>/restore</c> (design.md §6.6): archive or restore a goal of
 /// the signed-in manager's organisation, as <see cref="GoalChanges.ArchiveAsync"/> and
 /// <see cref="GoalChanges.RestoreAsync"/> do, never deleting one (A2, A29). Each answers <c>204</c>, whether it changed
-/// the goal or found it so already (D84); <c>404</c> for a goal not in the organisation; or <c>428</c> or <c>412</c>
-/// for a missing or stale <c>If-Match</c>.
+/// the goal or found it so already (D84); <c>404</c> for a goal not in the organisation; <c>422
+/// participant.archived</c> for a goal of an archived participant (D93); or <c>428</c> or <c>412</c> for a missing or
+/// stale <c>If-Match</c>.
 /// </summary>
 /// <remarks>
 /// They are mapped in the <c>/api/admin</c> group, whose <see cref="Policies.Manager"/> policy gives a worker a

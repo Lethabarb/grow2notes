@@ -20,9 +20,10 @@ namespace Grow2Notes.Tests.Features.Participants;
 /// order, and gets <c>204</c> with the goals rewritten as 0 to n-1 and one <c>goal.reordered</c>; the order already
 /// stored answers <c>204</c> and writes nothing (D84); IDs that are not the active goals, each once, and a goal changed
 /// after the list was read, <c>422 config.order_mismatch</c>; a body with no IDs, <c>422 validation.failed</c>; and a
-/// participant who is unknown, or another organisation's, <c>404</c>; each refusal changing nothing and writing no
-/// event. Each test reorders the goals of a participant of its own in A (tests/README.md). The endpoint matrix covers
-/// the statuses of every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the fields of the
+/// participant who is archived, <c>422 participant.archived</c> (D86, D93), whatever the IDs; and a participant who
+/// is unknown, or another organisation's, <c>404</c>; each refusal changing nothing and writing no event. Each test
+/// reorders the goals of a participant of its own in A (tests/README.md). The endpoint matrix covers the statuses of
+/// every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the fields of the
 /// <c>goal.reordered</c> that it writes.
 /// </summary>
 [Collection<SqlServerCollection>]
@@ -204,18 +205,24 @@ public sealed class ReorderGoalsEndpointTests(Grow2NotesFactory factory, SqlServ
         Assert.Empty(await EventsAsync(participant.Id));
     }
 
-    [Fact]
-    public async Task An_archived_participant_s_goals_are_reordered()
+    // The archived participant is looked at before the IDs, so a wrong set gets the same 422 as the right one (D93).
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task An_archived_participant_s_goals_are_refused_and_not_reordered(bool rightIdSet)
     {
         var participant = await factory.Services.AddParticipantAsync(seeded.A, archived: true);
         var goals = await factory.Services.AddGoalsAsync(
             seeded.A, participant.Id, new("Makes own breakfast", 0), new("Phones her sister", 1));
+        var before = await StoredGoalsAsync(participant.Id);
 
-        using var response = await PutAsync(
-            Caller.ManagerOfA, participant.Id, new { goalIds = new[] { goals[1], goals[0] } });
+        Guid[] goalIds = rightIdSet ? [goals[1], goals[0]] : [goals[0]];
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Equal([1, 0], await SortOrdersAsync(goals));
+        using var response = await PutAsync(Caller.ManagerOfA, participant.Id, new { goalIds });
+
+        await AssertProblemAsync(response, ErrorCode.ParticipantArchived);
+        Assert.Equal(before, await StoredGoalsAsync(participant.Id));
+        Assert.Empty(await EventsAsync(participant.Id));
     }
 
     // B's manager, sending the goals' own IDs, as one who had them would: the tenant filter finds no such participant

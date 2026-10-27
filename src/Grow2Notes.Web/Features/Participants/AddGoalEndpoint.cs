@@ -10,7 +10,8 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <c>POST /api/admin/participants/{participantId}/goals</c> (design.md §6.6): adds a goal at the end of the goals
 /// of a participant of the signed-in manager's organisation, as <see cref="GoalChanges.AddAsync"/> adds it, and answers
 /// <c>201</c> with no body and no <c>Location</c>, as the screen reads the list again after every write (T05's Notes);
-/// <c>404</c> for a participant not in the organisation; or <c>422 validation.failed</c> with the text's message.
+/// <c>404</c> for a participant not in the organisation; <c>422 participant.archived</c> for an archived one (D93); or
+/// <c>422 validation.failed</c> with the text's message.
 /// </summary>
 /// <remarks>
 /// It is mapped in the <c>/api/admin</c> group, whose <see cref="Policies.Manager"/> policy gives a worker a
@@ -42,6 +43,11 @@ internal static class AddGoalEndpoint
         if (!result.Found)
         {
             return TypedResults.NotFound();
+        }
+
+        if (result.Error is { } error)
+        {
+            return error.Problem();
         }
 
         return result.Errors is { } errors ? ValidationProblems.Fields(errors) : TypedResults.Created();
