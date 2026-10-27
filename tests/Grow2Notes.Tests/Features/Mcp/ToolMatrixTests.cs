@@ -17,14 +17,14 @@ namespace Grow2Notes.Tests.Features.Mcp;
 /// <see cref="ToolMatrix"/>: each caller gets the outcome the row says, each error case its code with one
 /// <c>mcp.refused</c> row, no text input lets in a control or bidirectional character, and no token that is no longer
 /// good gets past the endpoint. A tool with no row fails
-/// <see cref="Every_listed_tool_has_a_row_and_every_row_is_listed"/>. Each case has an app of its own, as production
-/// has it.
+/// <see cref="Every_listed_tool_has_a_row_and_every_row_is_listed"/>. Every later tool adds a row, and so cases, so the
+/// cases share the app of <see cref="ToolWorld"/> unless they change what the whole app shares: a token case that
+/// moves the clock or removes the registration starts an app of its own, and the others use a person of their own.
 /// </summary>
 [Collection<SqlServerCollection>]
-public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)
-    : IClassFixture<Grow2NotesFactory>
+public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture sqlServer, ToolWorld world)
+    : IClassFixture<Grow2NotesFactory>, IClassFixture<ToolWorld>
 {
-    private const string Revision = "2025-11-25";
 
     // Every way for a token to stop being good that the endpoint must answer with 401, and the absence of one.
     private static readonly string[] TokenCases =
@@ -50,12 +50,14 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
+    private AssistantFlow Flow => world.Flow;
+
+    private ToolScene Scene => world.Scene;
+
     [Fact]
     public async Task Every_listed_tool_has_a_row_and_every_row_is_listed()
     {
-        await using var flow = await StartAsync();
-        var scene = await ToolScene.CreateAsync(flow);
-        await using var client = await flow.McpClientAsync(await scene.ConnectAsync(ToolCaller.Manager), Revision);
+        var client = world.ClientOf(ToolCaller.Manager);
 
         var listed = (await client.ListToolsAsync(cancellationToken: Ct)).Select(tool => tool.Name);
 
@@ -69,14 +71,11 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     public async Task Each_tool_answers_each_caller_as_its_row_says(string tool, ToolCaller caller)
     {
         var row = RowOf(tool);
-        await using var flow = await StartAsync();
-        var scene = await ToolScene.CreateAsync(flow);
-        await using var client = await flow.McpClientAsync(await scene.ConnectAsync(caller), Revision);
-        var lastEventId = await LastEventIdAsync(flow);
+        var lastEventId = await LastEventIdAsync(Flow);
 
-        var result = await ToolScene.CallAsync(client, tool, row.ValidArguments(scene));
+        var result = await ToolScene.CallAsync(world.ClientOf(caller), tool, row.ValidArguments(Scene));
 
-        var audit = Assert.Single(await EventsAfterAsync(flow, lastEventId));
+        var audit = Assert.Single(await EventsAfterAsync(Flow, lastEventId));
         if (caller == ToolCaller.ManagerOfAnotherOrganisation && row.OtherOrganisationCode is { } code)
         {
             Assert.True(result.IsError);
@@ -92,7 +91,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
         if (caller == ToolCaller.ManagerOfAnotherOrganisation)
         {
             // Not an ID, a name or a goal of the first organisation, in either form of the result.
-            foreach (var secret in new[] { scene.Participant.Id.ToString(), scene.Token })
+            foreach (var secret in new[] { Scene.Participant.Id.ToString(), Scene.Token })
             {
                 Assert.DoesNotContain(secret, JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions));
             }
@@ -104,16 +103,14 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     public async Task Each_error_case_answers_its_code(string tool, string caseName)
     {
         var errorCase = RowOf(tool).ErrorCases.Single(candidate => candidate.Name == caseName);
-        await using var flow = await StartAsync();
-        var scene = await ToolScene.CreateAsync(flow);
-        await using var client = await flow.McpClientAsync(await scene.ConnectAsync(ToolCaller.Manager), Revision);
-        var lastEventId = await LastEventIdAsync(flow);
+        var lastEventId = await LastEventIdAsync(Flow);
 
-        var result = await ToolScene.CallAsync(client, tool, errorCase.Arguments(scene));
+        var result = await ToolScene.CallAsync(
+            world.ClientOf(ToolCaller.Manager), tool, errorCase.Arguments(Scene));
 
         Assert.True(result.IsError);
         Assert.Equal(errorCase.Code, ToolError.CodeOf(result));
-        AssertRefused(Assert.Single(await EventsAfterAsync(flow, lastEventId)), tool, errorCase.Code);
+        AssertRefused(Assert.Single(await EventsAfterAsync(Flow, lastEventId)), tool, errorCase.Code);
     }
 
     [Theory]
@@ -121,9 +118,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     public async Task Every_string_input_refuses_a_control_or_bidi_character(string tool)
     {
         var row = RowOf(tool);
-        await using var flow = await StartAsync();
-        var scene = await ToolScene.CreateAsync(flow);
-        await using var client = await flow.McpClientAsync(await scene.ConnectAsync(ToolCaller.Manager), Revision);
+        var client = world.ClientOf(ToolCaller.Manager);
         var listed = Assert.Single(await client.ListToolsAsync(cancellationToken: Ct), found => found.Name == tool);
         var strings = listed.JsonSchema.GetProperty("properties").EnumerateObject()
             .Where(property => property.Value.GetProperty("type") is { ValueKind: JsonValueKind.String } type
@@ -134,9 +129,9 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
 
         foreach (var name in strings)
         {
-            var arguments = row.ValidArguments(scene);
+            var arguments = row.ValidArguments(Scene);
             var valid = arguments[name]!.GetValue<string>();
-            arguments[name] = valid[..1] + "‮" + valid[1..];
+            arguments[name] = valid[..1] + "\u202E" + valid[1..];
 
             var result = await ToolScene.CallAsync(client, tool, arguments);
 
@@ -149,15 +144,22 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     [MemberData(nameof(ToolsAndTokenCases))]
     public async Task Every_tool_refuses_each_token_case_with_401(string tool, string tokenCase)
     {
-        await using var flow = await StartAsync();
-        var scene = await ToolScene.CreateAsync(flow);
-        var userId = scene.UserOf(ToolCaller.Manager);
+        // The clock and the registration are the whole app's, so these two cases have one to themselves.
+        await using var appOfItsOwn = tokenCase is "expired" or "removed registration" ? await StartAsync() : null;
+        var flow = appOfItsOwn ?? Flow;
+        var userId = await flow.AddUserAsync(UserRole.Manager);
         if (tokenCase == "wrong audience")
         {
             flow.TokenEdits.Queue(TokenEdit.AnotherAudience);
         }
 
-        var token = tokenCase == "no token" ? null : await scene.ConnectAsync(ToolCaller.Manager);
+        string? token = null;
+        if (tokenCase != "no token")
+        {
+            using var browser = await flow.SignInAsync(userId);
+            token = (await flow.ConnectAsync(browser)).AccessToken;
+        }
+
         if (tokenCase == "expired")
         {
             flow.Clock.Advance(TimeSpan.FromMinutes(10) + TimeSpan.FromSeconds(1));
@@ -171,7 +173,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
             "removed registration" => RemoveRegistrationAsync(flow),
             _ => Task.CompletedTask,
         });
-        var body = AssistantFlow.ToolCall(tool, RowOf(tool).ValidArguments(scene));
+        var body = AssistantFlow.ToolCall(tool, RowOf(tool).ValidArguments(Scene));
 
         using var response = await flow.PostMcpAsync(token, body: body);
 

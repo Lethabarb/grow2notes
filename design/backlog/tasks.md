@@ -6943,6 +6943,15 @@ could return note content.
   assertion changed (the `TestOnlyEndpoints` registration stays beside its call). `AssistantFlow` gained `ToolCall`, a
   `body` on `McpRequest` and `PostMcpAsync`, and a `TelemetrySinks` option on `StartAsync`. Header comments of
   `McpEndpointTests` and `ProbeTools` were reworded. No other test was changed, removed or weakened.
+- CI cost of the guards (review finding): the first run started about 75 apps, each with its own database, and the job
+  took 50m42s against a timeout of 60 minutes. Every later tool adds a `ToolMatrix` row, and a row cost about 15
+  starts. `ToolWorld` (a class fixture: one app, one `ToolScene` and a client for each `ToolCaller`) now serves
+  `ToolMatrixTests` and `ParticipantsToolsTests`, whose cases only read or add data under names of their own, so the
+  two classes start 2 apps between them plus 2 per tool for the token cases that need one: `expired` moves the clock
+  and `removed registration` removes the registration, both the whole app's. The other token cases use a manager
+  added for the case. `timeout-minutes` is unchanged. A test class that changes what the whole app shares keeps an app
+  of its own. `ToolMatrix` gained the case "a null search" (`unexpected`), which pins what a JSON `null` for a required
+  string does.
 - Carry-overs from T32, done: tools never add a `via` key (said once in the `IAuditWriter` and `ChangeDetails` docs
   and in mcp-server.md §3.5 convention 3); `AssistantCallCheck` is a switch expression with an explicit
   `PastAbsoluteLimit` arm; the `UserEdit.EditAsync` summary is re-flowed.

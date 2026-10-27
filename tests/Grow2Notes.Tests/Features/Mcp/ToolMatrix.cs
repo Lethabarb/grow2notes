@@ -44,6 +44,7 @@ internal static class ToolMatrix
                     "validation.failed"),
                 new("too long", _ => new() { ["search"] = new string('a', 101) }, "validation.failed"),
                 new("no search", _ => new(), "unexpected"),
+                new("a null search", _ => new() { ["search"] = null }, "unexpected"),
                 new(
                     "includeArchived of the wrong type",
                     scene => new() { ["search"] = scene.FamilyName, ["includeArchived"] = scene.FamilyName },

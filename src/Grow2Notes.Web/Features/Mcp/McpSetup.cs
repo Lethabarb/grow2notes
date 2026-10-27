@@ -102,9 +102,10 @@ internal static class McpSetup
             services.AddOptions<OpenIddictValidationOptions>().Configure<IConfiguration>(
                 (options, config) => options.Audiences.Add(Resource(config)));
 
-            // Stateless, so no session is kept between calls and the checks of each call are those of its token.
-            // Declaring the tools capability makes tools/list answer even before a tool is added to it.
             services.AddScoped<ParticipantLookups>();
+
+            // Stateless, so no session is kept between calls and the checks of each call are those of its token.
+            // Declaring the tools capability makes tools/list answer whatever tools are registered.
             services.AddMcpServer(options =>
                 {
                     options.ServerInfo = new() { Name = "Grow2Notes", Version = "2.0" };

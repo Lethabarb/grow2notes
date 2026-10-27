@@ -13,8 +13,8 @@ public sealed class TextInputTests
 
     public static TheoryData<string> Allowed { get; } =
     [
-        "Zoë", "Chloé Müller", "O'Brien", "O’Brien", "Smith-Jones", "Mary Anne", "‌", "‍", "­",
-        "ش‌ه",
+        "Zoë", "Chloé Müller", "O'Brien", "O’Brien", "Smith-Jones", "Mary Anne", "\u200C", "\u200D", "\u00AD",
+        "ش\u200Cه",
     ];
 
     [Theory]

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Grow2Notes.Web.Platform;
 using ModelContextProtocol.Protocol;
 
 namespace Grow2Notes.Web.Features.Mcp.Contracts;
@@ -23,7 +24,7 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
     /// </summary>
     public static ToolError ValidationFailed(string field, string fieldMessage) =>
         new(
-            "validation.failed",
+            ErrorCode.ValidationFailed.Code,
             "Some arguments are not valid. See fields.",
             new Dictionary<string, string[]> { [field] = [fieldMessage] });
 

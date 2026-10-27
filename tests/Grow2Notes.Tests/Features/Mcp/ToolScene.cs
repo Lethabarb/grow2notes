@@ -124,7 +124,9 @@ internal sealed class ToolScene
         return (await flow.ConnectAsync(browser)).AccessToken;
     }
 
-    /// <summary>Calls <paramref name="tool"/> with <paramref name="arguments"/> as <paramref name="client"/> does.</summary>
+    /// <summary>
+    /// Calls <paramref name="tool"/> with <paramref name="arguments"/> as <paramref name="client"/> does.
+    /// </summary>
     public static ValueTask<CallToolResult> CallAsync(McpClient client, string tool, JsonObject arguments) =>
         client.CallToolAsync(
             tool,
