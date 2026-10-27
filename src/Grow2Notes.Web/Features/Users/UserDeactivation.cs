@@ -1,8 +1,10 @@
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Primitives;
+using OpenIddict.Abstractions;
 
 namespace Grow2Notes.Web.Features.Users;
 
@@ -11,7 +13,8 @@ namespace Grow2Notes.Web.Features.Users;
 /// <i>Deactivate</i> and <i>Reactivate</i>, §6.6, §8.6 <i>Deactivate</i>, D75), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/users/{id}/deactivate</c> and
 /// <c>…/reactivate</c> call it with <see cref="Actor.InApp"/>, and Release 2's <c>deactivate_user</c> tool will call it
-/// with <see cref="Channel.Mcp"/>, with the same checks and audit event. Neither sends an email.
+/// with <see cref="Channel.Mcp"/>, with the same checks and audit event. Neither sends an email. Deactivating also
+/// ends the user's assistant connections, in the same transaction.
 /// </summary>
 /// <remarks>
 /// One per scope, as the transaction, the last-manager rule, the user manager's saves and the audit writer all use the
@@ -21,6 +24,7 @@ internal sealed class UserDeactivation(
     UserChanges changes,
     LastManagerRule lastManager,
     UserManager<ApplicationUser> users,
+    IOpenIddictAuthorizationManager authorizations,
     IAuditWriter audit,
     TimeProvider timeProvider)
 {
@@ -28,9 +32,11 @@ internal sealed class UserDeactivation(
     /// In one transaction (<see cref="UserChanges.ChangeAsync"/>), which loads the user and checks
     /// <paramref name="ifMatch"/> first: unless the user is their organisation's only Active manager (A26), sets them
     /// Deactivated, with the time, locks them out for good and rotates their security stamp, which ends every session
-    /// of theirs on its next request and every setup link made for them; then writes <c>user.deactivated</c>, with no
-    /// details, as the actor and the user's ID say who did it to whom. A user already Deactivated is left as they are,
-    /// with nothing written, and the call succeeds, as mcp-server.md §5.1 has such a call succeed with nothing changed.
+    /// of theirs on its next request and every setup link made for them, and revokes their assistant authorisations,
+    /// which ends every assistant connection of theirs on its next call and refuses its refresh; then writes
+    /// <c>user.deactivated</c>, with no details, as the actor and the user's ID say who did it to whom. A user already
+    /// Deactivated is left as they are, with nothing written, and the call succeeds, as mcp-server.md §5.1 has such a
+    /// call succeed with nothing changed.
     /// </summary>
     /// <returns>
     /// <see cref="UserChangeResult.Done"/>; <see cref="UserChangeResult.NotFound"/>, or
@@ -61,6 +67,7 @@ internal sealed class UserDeactivation(
             }
 
             ThrowIfRefused(await users.UpdateSecurityStampAsync(user));
+            await authorizations.RevokeConnectionsAsync(user.Id, ct);
             await WriteAsync(actor, user, AuditEventTypes.User.Deactivated, ct);
             return UserChangeResult.Done;
         }, cancellationToken);
