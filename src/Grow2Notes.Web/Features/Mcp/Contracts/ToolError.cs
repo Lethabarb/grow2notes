@@ -18,6 +18,22 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
     public static ToolError Unexpected { get; } = new("unexpected", "Something went wrong. Nothing was changed.");
 
     /// <summary>
+    /// The refusal of one argument (<c>validation.failed</c>): <paramref name="fieldMessage"/> says what is wrong with
+    /// <paramref name="field"/>, and never echoes its value.
+    /// </summary>
+    public static ToolError ValidationFailed(string field, string fieldMessage) =>
+        new(
+            "validation.failed",
+            "Some arguments are not valid. See fields.",
+            new Dictionary<string, string[]> { [field] = [fieldMessage] });
+
+    /// <summary>
+    /// The refusal for a row that does not exist in the organisation, whether it exists in another or nowhere
+    /// (<c>not_found</c>).
+    /// </summary>
+    public static ToolError NotFound(string message) => new("not_found", message);
+
+    /// <summary>
     /// The error code of <paramref name="result"/>, or null when it is not an error. An error that names no code is
     /// <see cref="Unexpected"/>.
     /// </summary>
