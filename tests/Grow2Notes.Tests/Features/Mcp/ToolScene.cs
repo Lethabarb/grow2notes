@@ -20,9 +20,12 @@ internal sealed record SceneGoal(Guid Id, string Text, bool Archived, string ETa
 /// <summary>
 /// The world that the tests of the MCP tools share, in the database of an <see cref="AssistantFlow"/>: a first
 /// organisation with a manager, a Support person, a participant whose names and goals are unique to the scene, an
-/// archived participant and that participant's date of birth; and a second organisation with a manager and a
+/// archived participant with no goals, another with an active goal, and that participant's date of birth; and a second
+/// organisation with a manager and a
 /// participant. Every later tool joins the matrix, the contract rules and the canary through this scene, which is also
-/// where they find the organisation to add what they need to (<see cref="Organisation"/>).
+/// where they find the organisation to add what they need to (<see cref="Organisation"/>). A tool that changes a row
+/// changes one that it adds (<see cref="AddParticipantAsync"/>, <see cref="AddGoalAsync"/>), never the rows of the
+/// scene, which the error cases of every tool share.
 /// </summary>
 internal sealed class ToolScene
 {
@@ -40,7 +43,9 @@ internal sealed class ToolScene
         string token,
         TestParticipant participant,
         IReadOnlyList<SceneGoal> goals,
-        TestParticipant archived)
+        TestParticipant archived,
+        TestParticipant archivedParticipant,
+        SceneGoal archivedGoal)
     {
         this.flow = flow;
         Organisation = organisation;
@@ -49,6 +54,8 @@ internal sealed class ToolScene
         Participant = participant;
         Goals = goals;
         Archived = archived;
+        ArchivedParticipant = archivedParticipant;
+        ArchivedGoal = archivedGoal;
     }
 
     /// <summary>The first organisation: the one that every tool is called in, and the one that tests add to.</summary>
@@ -80,10 +87,19 @@ internal sealed class ToolScene
 
     public string ArchivedFamilyName => $"Dusk{Token}";
 
+    /// <summary>
+    /// An archived participant who has a goal, <see cref="ArchivedGoal"/>: the participant of a change that is refused
+    /// because they are archived. Their names are <c>Ida{token} Fern{token}</c>.
+    /// </summary>
+    public TestParticipant ArchivedParticipant { get; }
+
+    /// <summary>An active goal of <see cref="ArchivedParticipant"/>, <c>Goal F {token}</c>.</summary>
+    public SceneGoal ArchivedGoal { get; }
+
     public static async Task<ToolScene> CreateAsync(AssistantFlow flow)
     {
         var services = flow.App.Services;
-        var token = Guid.NewGuid().ToString("N")[..12];
+        var token = NewHex();
         var organisation = await services.AddOrganisationAsync();
         var other = await services.AddOrganisationAsync();
 
@@ -91,13 +107,18 @@ internal sealed class ToolScene
             organisation, givenName: $"Gwen{token}", familyName: $"Vale{token}", dateOfBirth: BornOn);
         var archived = await services.AddParticipantAsync(
             organisation, archived: true, givenName: $"Ned{token}", familyName: $"Dusk{token}");
+        var archivedWithGoal = await services.AddParticipantAsync(
+            organisation, archived: true, givenName: $"Ida{token}", familyName: $"Fern{token}");
 
         // Added in an order that is not the list's, so that only the ordering can put them right.
-        var archivedLate = await AddGoalAsync(services, organisation, participant, $"Goal E {token}", 15, 0, true);
-        var activeTied = await AddGoalAsync(services, organisation, participant, $"Goal C {token}", 30, 1, false);
-        var activeFirst = await AddGoalAsync(services, organisation, participant, $"Goal A {token}", 10, 0, false);
-        var archivedEarly = await AddGoalAsync(services, organisation, participant, $"Goal D {token}", 5, 0, true);
-        var activeSecond = await AddGoalAsync(services, organisation, participant, $"Goal B {token}", 30, 0, false);
+        var archivedLate = await SeedGoalAsync(services, organisation, participant.Id, $"Goal E {token}", 15, 0, true);
+        var activeTied = await SeedGoalAsync(services, organisation, participant.Id, $"Goal C {token}", 30, 1, false);
+        var activeFirst = await SeedGoalAsync(services, organisation, participant.Id, $"Goal A {token}", 10, 0, false);
+        var archivedEarly = await SeedGoalAsync(services, organisation, participant.Id, $"Goal D {token}", 5, 0, true);
+        var activeSecond = await SeedGoalAsync(services, organisation, participant.Id, $"Goal B {token}", 30, 0, false);
+
+        var archivedGoal = await SeedGoalAsync(
+            services, organisation, archivedWithGoal.Id, $"Goal F {token}", 10, 0, false);
 
         return new(
             flow,
@@ -106,7 +127,50 @@ internal sealed class ToolScene
             token,
             participant,
             [activeFirst, activeSecond, activeTied, archivedEarly, archivedLate],
-            archived);
+            archived,
+            archivedWithGoal,
+            archivedGoal);
+    }
+
+    /// <summary>
+    /// The value that a change sends as <c>expectedVersion</c> for a row with <paramref name="etag"/>: the token, as
+    /// the look-ups give it, without the quotes of an <c>ETag</c>.
+    /// </summary>
+    public static string ExpectedVersion(string etag) => etag.Trim('"');
+
+    /// <summary>
+    /// Adds an active participant of the first organisation, with names that are made up each time and do not hold
+    /// <see cref="Token"/>, so that no search or count of the scene finds them. Nothing is audited.
+    /// </summary>
+    public Task<TestParticipant> AddParticipantAsync()
+    {
+        var unique = NewHex();
+        return flow.App.Services.AddParticipantAsync(
+            Organisation, givenName: $"Zed{unique}", familyName: $"Mott{unique}");
+    }
+
+    /// <summary>
+    /// Adds a goal to <paramref name="participantId"/>, a participant of the first organisation whom the test added,
+    /// with wording that is made up each time and does not hold <see cref="Token"/>; archived or active.
+    /// </summary>
+    public Task<SceneGoal> AddGoalAsync(Guid participantId, bool archived) =>
+        SeedGoalAsync(flow.App.Services, Organisation, participantId, $"Goal {NewHex()}", 0, 0, archived);
+
+    /// <summary>
+    /// Adds <paramref name="count"/> active goals to <paramref name="participantId"/> as <see cref="AddGoalAsync"/>
+    /// does, in the order given: the first is first.
+    /// </summary>
+    public async Task<IReadOnlyList<SceneGoal>> AddGoalsAsync(Guid participantId, int count)
+    {
+        var unique = NewHex();
+        var goals = new List<SceneGoal>();
+        for (var index = 0; index < count; index++)
+        {
+            goals.Add(await SeedGoalAsync(
+                flow.App.Services, Organisation, participantId, $"Goal {unique} {index}", index, index, false));
+        }
+
+        return goals;
     }
 
     /// <summary>The person of <paramref name="caller"/>.</summary>
@@ -137,10 +201,12 @@ internal sealed class ToolScene
                     : (object?)JsonSerializer.Deserialize<JsonElement>(argument.Value.ToJsonString())),
             cancellationToken: TestContext.Current.CancellationToken);
 
-    private static async Task<SceneGoal> AddGoalAsync(
+    private static string NewHex() => Guid.NewGuid().ToString("N")[..12];
+
+    private static async Task<SceneGoal> SeedGoalAsync(
         IServiceProvider services,
         SeededOrganisation organisation,
-        TestParticipant participant,
+        Guid participantId,
         string text,
         int sortOrder,
         int addedMinutesAfterFirst,
@@ -148,7 +214,7 @@ internal sealed class ToolScene
     {
         var added = await services.AddGoalAsync(
             organisation,
-            participant.Id,
+            participantId,
             new(
                 text,
                 sortOrder,

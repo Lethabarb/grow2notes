@@ -197,7 +197,7 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
 
         foreach (var row in ToolMatrix.Rows)
         {
-            var result = await ToolScene.CallAsync(client, row.Name, row.ValidArguments(scene));
+            var result = await ToolScene.CallAsync(client, row.Name, await row.ValidArguments(scene));
 
             Assert.NotEqual(true, result.IsError);
             var content = Assert.NotNull(result.StructuredContent);
