@@ -1367,9 +1367,11 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      With the assistant that step 162 registered, open `/oauth/authorize` on the same address in a browser, with that
      assistant's client ID and one of its redirect URIs, `response_type=code`, any 43-character `code_challenge` of
      letters and digits with `code_challenge_method=S256`, `resource=https://app-grow2notes-test.azurewebsites.net/mcp`,
-     `scope=grow2notes.admin` and any `state`. It answers `404`, with no redirect to the assistant and no code,
-     because the consent step is T31's (MA4). This step holds nothing open, and a code that does arrive is a bug.
-     (S07.01.04; MA4, MA11.)
+     `scope=grow2notes.admin` and any `state`. Until T31 is on main it answers `404`, with no redirect to the
+     assistant and no code. From T31 it answers `302` to `/connect?request=` and a long handle, and still no code
+     goes to the assistant, because the person has not chosen Allow (MA4); steps 166 to 170 cover what follows. This
+     step holds nothing open, and a code that arrives at the assistant before Allow is a bug. (S07.01.04; MA4,
+     MA11.)
 164. In the same console, run `admin mcp-client add --client-id` with a made-up client ID such as
      `step-164-sample-client`, one `--redirect-uri` of `https://sample.example/callback` and one of
      `http://127.0.0.1/callback`, and a made-up name, company and data location. Run the same command again with
@@ -1397,3 +1399,47 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      `/.well-known/oauth-authorization-server` on that address: each answers `404`. Production stays this way until
      T39 switches the access on at an agreed time (mcp-server.md §11.1). This step holds nothing open.
      (S07.01.04; MA11; D90.)
+
+### Support accounts and the Connect screen in test, once T31 is on main
+
+166. In test, as a manager, invite a made-up person with the role **Support (IT operator)** on the Users screen
+     (Release 2 turns the access on in test, so the option is there; production ships the option before switch-on,
+     A110). Open the setup link in a private window, set up with a passkey, or a password and an authenticator, and
+     sign in. Look for: the one line "This account is only used to connect an AI assistant." with a **Sign out**
+     button, and no navigation. Open `/`, `/manage/users` and `/no-such-page` on the same address: each shows the
+     same page. Press **Sign out**, sign in again and use Account, then **Sign out**, to check both. As the manager,
+     the new person shows as "Active · Support". This step holds nothing open. (S07.01.01, S07.01.02; A115.)
+167. In test's SSH console, as [break-glass.md](break-glass.md) says, run `admin mcp-client add --client-id` with a
+     made-up client ID such as `step-167-sample-client`, one `--redirect-uri` of `https://sample.example/callback`,
+     and a made-up name, company and data location. Make a PKCE pair: a `code_verifier` of 43 letters and digits, and
+     its `code_challenge`, the base64url of its SHA-256 without padding. With no session in the browser, open
+     `/oauth/authorize` on test's address with that client ID, the redirect URI,
+     `response_type=code`, the challenge with `code_challenge_method=S256`,
+     `resource=https://app-grow2notes-test.azurewebsites.net/mcp`, `scope=grow2notes.admin offline_access` and a
+     `state` of your own. Do this on Safari and Chrome, on a phone and a laptop. Look for: the sign-in screen, then,
+     after a passkey or a password and 6-digit code, the same Connect screen; the made-up name, company and data
+     location and the two hosts (`step-167-sample-client` as the client ID and `sample.example`), and no
+     loopback warning. Press **Allow**. The browser goes to `https://sample.example/callback` (which does not
+     answer) with `code`, your `state` and `iss` in the address. Copy the code and, with curl, `POST` to
+     `/oauth/token` the form fields `grant_type=authorization_code`, `code`, `redirect_uri`, `client_id`,
+     `code_verifier` and `resource`, and no secret. Look for: `token_type` of `Bearer`, `expires_in` of `600`, and a
+     `refresh_token`. Repeat with the same code: `invalid_grant`. Then refresh with `grant_type=refresh_token`, the
+     `refresh_token` and `client_id`: a new pair comes back. Read the audit rows as in step 15, with
+     `EventType LIKE 'mcp.%'`: one `mcp.authorised`, with the client ID and `grow2notes.admin offline_access`. A
+     real assistant's own connection waits for T32's `/mcp` challenge. Remove the made-up assistant with
+     `admin mcp-client remove`. This step holds nothing open. (S07.01.06, S07.01.08; MA2, MA3, MA4.)
+168. As a worker in test, open an `/oauth/authorize` link as in step 167 (register the made-up assistant again). Look
+     for: the line "Only managers can connect an AI assistant to Grow2Notes." and **Cancel** only. Press **Cancel**:
+     the browser goes to the redirect URI with `error=access_denied`, your `state` and `iss`, and no code. The audit
+     rows show one `mcp.authorisation_refused` with `why` of `not_allowed`. Do the same as a manager and press
+     **Cancel**: `why` is `cancelled`. This step holds nothing open. (S07.01.07; MA4.)
+169. Open an `/oauth/authorize` link with a client ID that is not registered, such as
+     `https://unregistered.example/client.json`. Look for: "There is a problem with Grow2Notes", the browser never
+     leaving test's address, and no redirect to the made-up address. In the application log (Log stream in the Azure
+     portal, or the log search), find the warning "Refused an authorisation request from client" with that client ID.
+     This step holds nothing open. (S07.01.06; MA2, MA4.)
+170. With VoiceOver on a phone and a screen reader on a laptop, go through the Connect screen as a manager and the
+     Support page: the heading is announced when the page opens, **Allow** and **Cancel** are reachable in that
+     order, the buttons say what they do, and the loopback warning, when it shows, is read with the rest. Any
+     failure becomes a bug. This step holds nothing open and does not hold go-live (A107). (S07.01.06, S07.01.07,
+     S07.01.02; A107.)

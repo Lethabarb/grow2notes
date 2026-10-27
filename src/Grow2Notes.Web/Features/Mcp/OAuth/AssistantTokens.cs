@@ -10,6 +10,19 @@ using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Web.Features.Mcp.OAuth;
 
+/// <summary>What <see cref="AssistantTokens.Check"/> finds when a code or a refresh token is presented.</summary>
+internal enum AssistantTokenCheck
+{
+    /// <summary>The person is as they were and the session is within its limit.</summary>
+    Allowed,
+
+    /// <summary>The session that began the connection is more than 12 hours old.</summary>
+    PastAbsoluteLimit,
+
+    /// <summary>The person is gone, no longer active, no longer a manager or Support, or has signed out.</summary>
+    UserChanged,
+}
+
 /// <summary>
 /// What an approved assistant's tokens carry (mcp-server.md §4.2, §6.1): who the person is and when they signed in, and
 /// nothing about their role. The role is read from the person's row whenever a token is used, never from a token.
@@ -53,5 +66,30 @@ internal static class AssistantTokens
         principal.SetScopes(scopes);
         principal.SetResources(resource);
         return principal;
+    }
+
+    /// <summary>
+    /// Whether the connection that <paramref name="stored"/> (the principal inside a code or a refresh token) belongs
+    /// to may go on, by <paramref name="user"/>'s row now. A person who has changed is found first, so that a
+    /// deactivated person past the 12 hours still has their authorisations revoked.
+    /// </summary>
+    public static AssistantTokenCheck Check(ApplicationUser? user, ClaimsPrincipal stored, DateTimeOffset now)
+    {
+        if (user is not
+            {
+                Status: UserStatus.Active,
+                Role: UserRole.Manager or UserRole.Support,
+                SecurityStamp: { } stamp,
+            }
+            || stored.FindFirstValue(StampHashClaimType) is not { } storedHash
+            || !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(storedHash), Encoding.UTF8.GetBytes(StampHash(stamp))))
+        {
+            return AssistantTokenCheck.UserChanged;
+        }
+
+        return SessionRules.IsWithinAbsoluteLimit(stored, now)
+            ? AssistantTokenCheck.Allowed
+            : AssistantTokenCheck.PastAbsoluteLimit;
     }
 }
