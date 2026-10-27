@@ -53,8 +53,9 @@ internal static class TokenEndpoint
                     authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
 
             case AssistantTokenCheck.UserChanged:
-                // Whoever changed, every connection that person has ends, not only this one.
-                await authorizations.RevokeBySubjectAsync(subject!);
+                // Whoever changed, every connection that person has ends, not only this one. The subject is the "D" ID
+                // that PrincipalFor wrote, and the revocation must finish even if the assistant disconnects.
+                await authorizations.RevokeConnectionsAsync(Guid.Parse(subject!), CancellationToken.None);
                 return Refused("The person is no longer allowed to connect an assistant.");
 
             default:

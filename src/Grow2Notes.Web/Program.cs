@@ -361,6 +361,12 @@ app.UseCacheHeaders();
 app.UseStatusCodePages();
 app.UseExceptionHandler();
 
+// The AI-assistant access refuses a browser page of another site before it reads a token (mcp-server.md §4.5 step 2).
+if (McpSetup.IsEnabled(builder.Configuration))
+{
+    app.UseMcpOriginRule();
+}
+
 // After the exception handling, so the 401 and 403 that authorization answers get problem details and the caching
 // rules too, and an exception while authenticating is handled like any other. Without these calls, the host would add
 // both ahead of all the app's middleware.

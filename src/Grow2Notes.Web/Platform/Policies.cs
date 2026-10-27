@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Microsoft.AspNetCore.Authorization;
+using OpenIddict.Validation.AspNetCore;
 
 namespace Grow2Notes.Web.Platform;
 
@@ -26,6 +27,14 @@ internal static class Policies
     /// </summary>
     public const string SignedIn = nameof(SignedIn);
 
+    /// <summary>
+    /// The policy of <c>/mcp</c>, for <c>RequireAuthorization</c>: a Manager or Support person, signed in by an access
+    /// token and never by the session cookie (mcp-server.md §4.7). The role is the claim that
+    /// <c>AssistantCallCheck</c> adds from the person's row on each call. It is registered whether or not the access
+    /// is switched on.
+    /// </summary>
+    public const string McpAdmin = nameof(McpAdmin);
+
     public static IServiceCollection AddPolicies(this IServiceCollection services)
     {
         // The default policy, for a bare RequireAuthorization() or [Authorize], is the fallback's too, so neither
@@ -35,15 +44,22 @@ internal static class Policies
             .SetFallbackPolicy(workerOrManager)
             .SetDefaultPolicy(workerOrManager)
             .AddPolicy(Manager, SignedInAs(UserRole.Manager))
-            .AddPolicy(SignedIn, SignedInAs(UserRole.Worker, UserRole.Manager, UserRole.Support));
+            .AddPolicy(SignedIn, SignedInAs(UserRole.Worker, UserRole.Manager, UserRole.Support))
+            .AddPolicy(
+                McpAdmin,
+                SignedInAs(
+                    [OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme], UserRole.Manager, UserRole.Support));
 
         return services;
     }
 
     // By each role's UserRole name, which design.md §8.4's claims factory puts in the role claim. RequireRole compares
     // the claim with each name ordinally, so neither "worker" nor "1", Worker's stored value, is a role here.
-    private static AuthorizationPolicy SignedInAs(params UserRole[] roles) =>
-        new AuthorizationPolicyBuilder()
+    private static AuthorizationPolicy SignedInAs(params UserRole[] roles) => SignedInAs([], roles);
+
+    // With schemes, only those authenticate the request; with none, the default scheme does.
+    private static AuthorizationPolicy SignedInAs(string[] schemes, params UserRole[] roles) =>
+        new AuthorizationPolicyBuilder(schemes)
             .RequireAuthenticatedUser()
             .RequireRole(roles.Select(role => role.ToString()))
             .Build();
