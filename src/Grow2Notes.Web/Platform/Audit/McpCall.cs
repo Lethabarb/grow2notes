@@ -13,6 +13,9 @@ internal sealed class McpCall
     /// </summary>
     public const string ParticipantIds = "participantIds";
 
+    /// <summary>The key of the goals that a look-up returned.</summary>
+    public const string GoalIds = "goalIds";
+
     private readonly Dictionary<string, IReadOnlyCollection<Guid>> returned = [];
 
     /// <summary>

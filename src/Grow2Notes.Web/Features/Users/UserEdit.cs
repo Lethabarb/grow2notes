@@ -35,14 +35,13 @@ internal sealed class UserEdit(
     /// the user the request's name, address and role in one save, and writes <c>user.updated</c> with the old and new
     /// values of those that changed. That save leaves the security stamp, so after a new name or role the user's
     /// sessions go on, a new role applying on their next request (§8.4), and so they do after an address that differs
-    /// from theirs in letter case alone, which is saved as typed (D76). A role of Worker, from Manager or Support,
-    /// also revokes the user's assistant authorisations, as a Worker may not use one; Manager to Support does not. A
-    /// new address also marks the address
-    /// unconfirmed, until setup confirms it, and resets the user's sign-in as Reset sign-in does
-    /// (<see cref="SignInReset.ResetAsync"/>), which ends their sessions and their links: an Invited or Active user is
-    /// then Invited, <c>user.setup_link_sent</c> is written, and the link is sent to the new address, before the
-    /// commit, so that a send that fails leaves the user as they were and writes nothing; a Deactivated user stays so,
-    /// and gets no link (D75). Values that the user has already change and write nothing.
+    /// from theirs in letter case alone, which is saved as typed (D76). A role of Worker, from Manager or Support, also
+    /// revokes the user's assistant authorisations, as a Worker may not use one; Manager to Support does not. A new
+    /// address also marks the address unconfirmed, until setup confirms it, and resets the user's sign-in as Reset
+    /// sign-in does (<see cref="SignInReset.ResetAsync"/>), which ends their sessions and their links: an Invited or
+    /// Active user is then Invited, <c>user.setup_link_sent</c> is written, and the link is sent to the new address,
+    /// before the commit, so that a send that fails leaves the user as they were and writes nothing; a Deactivated user
+    /// stays so, and gets no link (D75). Values that the user already has change nothing and write nothing.
     /// </summary>
     /// <returns>
     /// <see cref="UserChangeResult.Done"/>; <see cref="ErrorCode.ValidationFailed"/> for a field, as an invite gives

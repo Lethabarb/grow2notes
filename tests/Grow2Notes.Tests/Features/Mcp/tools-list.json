@@ -1,0 +1,153 @@
+[
+  {
+    "name": "find_participants",
+    "title": "Find participants by name",
+    "description": "Finds participants of this organisation by name. Every word of search must appear in the given or family name; case is ignored. Returns at most 10, sorted by family name then given name, each with its status (active or archived); archived participants only with includeArchived. If two people have the same name, or you are not sure which one the person means, ask them. Never returns a date of birth or anything about notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "search": {
+          "description": "Part of the participant's name: at least 2 characters and at most 100. Each word must appear in the given or family name.",
+          "type": "string"
+        },
+        "includeArchived": {
+          "description": "Also find archived participants.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "required": [
+        "search"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "participants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "participantId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "givenName": {
+                "type": "string"
+              },
+              "familyName": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "participantId",
+              "givenName",
+              "familyName",
+              "status"
+            ]
+          }
+        },
+        "moreMatches": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "participants"
+      ]
+    },
+    "annotations": {
+      "title": "Find participants by name",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "get_participant",
+    "title": "Get a participant and their goals",
+    "description": "One participant of this organisation with their goals: active goals in their order, then archived goals. Use a participantId from find_participants. A later change to the participant or a goal needs its expectedVersion. Never returns a date of birth or anything about notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "description": "The participantId that find_participants returned.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participantId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "givenName": {
+          "type": "string"
+        },
+        "familyName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "goalId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "text": {
+                "type": "string"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "expectedVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "goalId",
+              "text",
+              "archived",
+              "expectedVersion"
+            ]
+          }
+        }
+      },
+      "required": [
+        "participantId",
+        "givenName",
+        "familyName",
+        "status",
+        "expectedVersion",
+        "goals"
+      ]
+    },
+    "annotations": {
+      "title": "Get a participant and their goals",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  }
+]

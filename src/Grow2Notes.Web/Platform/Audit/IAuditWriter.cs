@@ -33,8 +33,9 @@ internal interface IAuditWriter
     /// <param name="entityId">The ID of the row the event is about, or null.</param>
     /// <param name="participantId">The participant, set on every participant-related event.</param>
     /// <param name="details">
-    /// IDs, and the old and new values of a change, never note text. It is stored as given, so a caller can add any
-    /// key, such as Release 2's <c>"via": "mcp"</c> (mcp-server.md §3.5 convention 3).
+    /// IDs, and the old and new values of a change, never note text. It is stored as given. During an assistant's call
+    /// <see cref="AuditWriter"/> adds <c>via</c>, <c>client</c> and <c>tool</c> itself (A121), so a tool or a handler
+    /// never adds a <c>via</c> key (mcp-server.md §3.5 convention 3).
     /// </param>
     /// <param name="cancellationToken">Cancels the save.</param>
     Task WriteAsync(

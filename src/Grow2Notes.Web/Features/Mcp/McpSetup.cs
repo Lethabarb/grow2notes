@@ -1,5 +1,6 @@
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp.OAuth;
+using Grow2Notes.Web.Features.Mcp.Tools;
 using Grow2Notes.Web.Platform;
 using OpenIddict.Abstractions;
 using OpenIddict.Server;
@@ -102,7 +103,8 @@ internal static class McpSetup
                 (options, config) => options.Audiences.Add(Resource(config)));
 
             // Stateless, so no session is kept between calls and the checks of each call are those of its token.
-            // Declaring the tools capability makes tools/list answer, with an empty list while no tool exists.
+            // Declaring the tools capability makes tools/list answer even before a tool is added to it.
+            services.AddScoped<ParticipantLookups>();
             services.AddMcpServer(options =>
                 {
                     options.ServerInfo = new() { Name = "Grow2Notes", Version = "2.0" };
@@ -110,6 +112,7 @@ internal static class McpSetup
                     options.Capabilities = new() { Tools = new() };
                 })
                 .WithHttpTransport(transport => transport.Stateless = true)
+                .WithTools<ParticipantsTools>()
                 .WithRequestFilters(filters => filters.AddCallToolFilter(McpAuditFilter.Wrap));
         }
 
