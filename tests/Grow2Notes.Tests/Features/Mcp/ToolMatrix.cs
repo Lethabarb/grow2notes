@@ -12,17 +12,24 @@ internal sealed record ToolErrorCase(string Name, Func<ToolScene, JsonObject> Ar
 
 /// <summary>What the tests of every tool need to know about one tool.</summary>
 /// <param name="Name">The tool's name, as <c>tools/list</c> gives it.</param>
-/// <param name="ValidArguments">Arguments that succeed in the scene's first organisation, and hold something.</param>
+/// <param name="ValidArguments">
+/// Arguments that succeed in the scene's first organisation, and hold something. A tool that changes a row seeds one
+/// of its own, without an audit row, which is why this is asynchronous.
+/// </param>
 /// <param name="ErrorCases">The calls it refuses, with the code of each.</param>
 /// <param name="OtherOrganisationCode">
 /// The code the tool refuses the valid arguments with when a manager of another organisation sends them, or null when
 /// the tool succeeds and returns nothing of the first organisation.
 /// </param>
+/// <param name="Event">
+/// The audit event type that the valid arguments make the tool write, or null for a look-up.
+/// </param>
 internal sealed record ToolRow(
     string Name,
-    Func<ToolScene, JsonObject> ValidArguments,
+    Func<ToolScene, Task<JsonObject>> ValidArguments,
     IReadOnlyList<ToolErrorCase> ErrorCases,
-    string? OtherOrganisationCode);
+    string? OtherOrganisationCode,
+    string? Event);
 
 /// <summary>
 /// One row for each tool the app lists, which <see cref="ToolMatrixTests"/> holds to what every tool must do, and the
@@ -35,7 +42,7 @@ internal static class ToolMatrix
     [
         new(
             "find_participants",
-            scene => new() { ["search"] = scene.FamilyName },
+            scene => Task.FromResult(new JsonObject { ["search"] = scene.FamilyName }),
             [
                 new("a short search", _ => new() { ["search"] = "J" }, "validation.failed"),
                 new(
@@ -50,15 +57,17 @@ internal static class ToolMatrix
                     scene => new() { ["search"] = scene.FamilyName, ["includeArchived"] = scene.FamilyName },
                     "unexpected"),
             ],
-            OtherOrganisationCode: null),
+            OtherOrganisationCode: null,
+            Event: null),
         new(
             "get_participant",
-            scene => new() { ["participantId"] = scene.Participant.Id.ToString() },
+            scene => Task.FromResult(new JsonObject { ["participantId"] = scene.Participant.Id.ToString() }),
             [
                 new("an unknown ID", _ => new() { ["participantId"] = Guid.NewGuid().ToString() }, "not_found"),
                 new("not an ID", _ => new() { ["participantId"] = "not-a-guid" }, "not_found"),
                 new("no ID", _ => new(), "unexpected"),
             ],
-            OtherOrganisationCode: "not_found"),
+            OtherOrganisationCode: "not_found",
+            Event: null),
     ];
 }

@@ -56,7 +56,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             Assert.Equal(1, await StoredAsync(flow, note));
         }
 
-        var responses = await CallEveryToolAsync(flow, scene, sinks);
+        var responses = await CallEveryToolAsync(flow, scene, await CallsOfEveryToolAsync(scene), sinks);
 
         // Each text starts with the canary, which alone would find them; each is looked for too, so a failure names it.
         var leaks = notes.Select(note => note.Text).Prepend(canary)
@@ -77,27 +77,31 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         var scene = await ToolScene.CreateAsync(flow);
         var email = Assert.IsType<string>((await flow.UserAsync(scene.Organisation.ManagerId)).Email);
 
-        var responses = await CallEveryToolAsync(flow, scene, sinks);
 
-        // A search that is a letter or two is in almost every text, so it can say nothing about a leak. The family
+        // The arguments are made once and kept, so that what is looked for is what was sent: a tool that changes
+        // something makes up names of its own each time it is asked for its arguments.
+        var calls = await CallsOfEveryToolAsync(scene);
+        var responses = await CallEveryToolAsync(flow, scene, calls, sinks);
+
+        // A value that is a letter or two is in almost every text, so it can say nothing about a leak. The family
         // name is also sent as includeArchived, wrongly typed, which is why that argument is read too.
-        var searches = ToolMatrix.Rows
-            .SelectMany(row => CallsOf(row, scene))
-            .SelectMany(arguments => arguments)
-            .Where(argument => argument.Key is "search" or "includeArchived")
+        var sent = calls
+            .SelectMany(call => call.Arguments)
+            .Where(argument => argument.Key is "search" or "includeArchived"
+                or "givenName" or "familyName" or "text" or "dateOfBirth")
             .Select(argument => argument.Value?.ToString())
             .OfType<string>()
-            .Where(search => search.Length >= 4)
+            .Where(value => value.Length >= 4)
             .Distinct()
             .ToList();
-        Assert.Contains(scene.FamilyName, searches);
+        Assert.Contains(scene.FamilyName, sent);
         string[] secrets =
         [
             scene.GivenName,
             scene.FamilyName,
             .. scene.Goals.Select(goal => goal.Text),
             email,
-            .. searches,
+            .. sent,
         ];
 
         // Ignoring case, as the M0 canary does, so no text is missed because of how it is written.
@@ -179,17 +183,32 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             .SingleAsync(Ct);
     }
 
-    /// <summary>The arguments of every call of a tool: the valid ones, then those of each error case.</summary>
-    private static IEnumerable<JsonObject> CallsOf(ToolRow row, ToolScene scene) =>
-        row.ErrorCases.Select(errorCase => errorCase.Arguments(scene)).Prepend(row.ValidArguments(scene));
+    /// <summary>
+    /// Every call of every tool, with its arguments: for each tool the valid ones, then those of each error case.
+    /// </summary>
+    private static async Task<IReadOnlyList<(string Tool, JsonObject Arguments)>> CallsOfEveryToolAsync(
+        ToolScene scene)
+    {
+        var calls = new List<(string Tool, JsonObject Arguments)>();
+        foreach (var row in ToolMatrix.Rows)
+        {
+            calls.Add((row.Name, await row.ValidArguments(scene)));
+            calls.AddRange(row.ErrorCases.Select(errorCase => (row.Name, errorCase.Arguments(scene))));
+        }
+
+        return calls;
+    }
 
     /// <summary>
-    /// Connects an assistant as the scene's manager and calls every tool the app lists, raw, with its valid arguments
-    /// and then with each of its error cases; and gives the bodies and headers of the answers, once the telemetry that
+    /// Connects an assistant as the scene's manager and calls every tool the app lists, raw, with the arguments given
+    /// (<see cref="CallsOfEveryToolAsync"/>); and gives the bodies and headers of the answers, once the telemetry that
     /// the calls made has been exported, so that a check of it cannot pass by looking too soon.
     /// </summary>
     private static async Task<IReadOnlyList<(string Sink, string? Text)>> CallEveryToolAsync(
-        AssistantFlow flow, ToolScene scene, TelemetrySinks sinks)
+        AssistantFlow flow,
+        ToolScene scene,
+        IReadOnlyList<(string Tool, JsonObject Arguments)> calls,
+        TelemetrySinks sinks)
     {
         var token = await scene.ConnectAsync(ToolCaller.Manager);
         await using var client = await flow.McpClientAsync(token, Revision);
@@ -200,24 +219,19 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             $"No argument generator: add a ToolMatrix row for {string.Join(", ", withoutRow)}.");
 
         var answers = new List<(string Sink, string? Text)>();
-        var calls = 0;
-        foreach (var row in ToolMatrix.Rows)
+        foreach (var (tool, arguments) in calls)
         {
-            foreach (var arguments in CallsOf(row, scene))
-            {
-                using var response = await flow.PostMcpAsync(token, body: AssistantFlow.ToolCall(row.Name, arguments));
-                answers.Add(("response body", await response.Content.ReadAsStringAsync(Ct)));
-                answers.AddRange(response.Headers.Concat(response.Content.Headers).Select(
-                    header => ("response header", (string?)$"{header.Key}: {string.Join(", ", header.Value)}")));
-                calls++;
-            }
+            using var response = await flow.PostMcpAsync(token, body: AssistantFlow.ToolCall(tool, arguments));
+            answers.Add(("response body", await response.Content.ReadAsStringAsync(Ct)));
+            answers.AddRange(response.Headers.Concat(response.Content.Headers).Select(
+                header => ("response header", (string?)$"{header.Key}: {string.Join(", ", header.Value)}")));
         }
 
         // The test server answers before a request's span ends, and the exporters send on their own schedules.
         Assert.True(
             SpinWait.SpinUntil(
                 () => sinks.Spans.Spans.Count(span => span.Kind == ActivityKind.Server
-                    && span.GetTagItem("url.path") as string == "/mcp") >= calls,
+                    && span.GetTagItem("url.path") as string == "/mcp") >= calls.Count,
                 TimeSpan.FromSeconds(10)),
             "The calls' spans did not end.");
         Assert.True(flow.App.Services.GetRequiredService<TracerProvider>().ForceFlush());

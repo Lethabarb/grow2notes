@@ -50,6 +50,18 @@ internal static class McpAuditRows
         Assert.True(JsonNode.DeepEquals(expected, details), $"Details: expected {expected}, written {details}.");
     }
 
+    // The event that a change tool's save wrote, as the app writes it, by the person who called: the event type, the
+    // actor, and the way, the client and the tool that the call added to the details.
+    public static void AssertChanged(AuditRow row, string eventType, string tool, Guid actorId)
+    {
+        Assert.Equal(eventType, row.EventType);
+        Assert.Equal(actorId, row.ActorUserId);
+        var details = JsonNode.Parse(Assert.IsType<string>(row.Details))!.AsObject();
+        Assert.Equal("mcp", details["via"]!.GetValue<string>());
+        Assert.Equal(AssistantFlow.ClientId, details["client"]!.GetValue<string>());
+        Assert.Equal(tool, details["tool"]!.GetValue<string>());
+    }
+
     // An mcp.read row: the participants listed in any order, their count, and the client and the tool.
     public static void AssertRead(AuditRow row, string tool, params Guid[] participants) =>
         AssertRead(row, AssistantFlow.ClientId, tool, ("participantIds", participants));

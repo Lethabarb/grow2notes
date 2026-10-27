@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
@@ -19,7 +20,9 @@ namespace Grow2Notes.Tests.Features.Mcp;
 /// good gets past the endpoint. A tool with no row fails
 /// <see cref="Every_listed_tool_has_a_row_and_every_row_is_listed"/>. Every later tool adds a row, and so cases, so the
 /// cases share the app of <see cref="ToolWorld"/> unless they change what the whole app shares: a token case that
-/// moves the clock or removes the registration starts an app of its own, and the others use a person of their own.
+/// moves the clock or removes the registration starts an app of its own, and the others use a person of their own. A
+/// token case makes one person and one connect for all the tools, so that a tool added to the matrix costs one more
+/// request in each case and not another sign-in.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture sqlServer, ToolWorld world)
@@ -45,8 +48,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
 
     public static TheoryData<string, string> ErrorCases { get; } = ErrorCasesOfEveryTool();
 
-    public static MatrixTheoryData<string, string> ToolsAndTokenCases { get; } =
-        new(ToolMatrix.Rows.Select(row => row.Name), TokenCases);
+    public static TheoryData<string> TokenCaseNames { get; } = [.. TokenCases];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -73,7 +75,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
         var row = RowOf(tool);
         var lastEventId = await LastEventIdAsync(Flow);
 
-        var result = await ToolScene.CallAsync(world.ClientOf(caller), tool, row.ValidArguments(Scene));
+        var result = await ToolScene.CallAsync(world.ClientOf(caller), tool, await row.ValidArguments(Scene));
 
         var audit = Assert.Single(await EventsAfterAsync(Flow, lastEventId));
         if (caller == ToolCaller.ManagerOfAnotherOrganisation && row.OtherOrganisationCode is { } code)
@@ -85,7 +87,14 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
         else
         {
             Assert.NotEqual(true, result.IsError);
-            AssertAuditHoldsTheIdsReturned(audit, tool, IdsOf(Assert.NotNull(result.StructuredContent)));
+            if (row.Event is { } eventType)
+            {
+                AssertChanged(audit, eventType, tool, Scene.UserOf(caller));
+            }
+            else
+            {
+                AssertAuditHoldsTheIdsReturned(audit, tool, IdsOf(Assert.NotNull(result.StructuredContent)));
+            }
         }
 
         if (caller == ToolCaller.ManagerOfAnotherOrganisation)
@@ -121,15 +130,14 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
         var client = world.ClientOf(ToolCaller.Manager);
         var listed = Assert.Single(await client.ListToolsAsync(cancellationToken: Ct), found => found.Name == tool);
         var strings = listed.JsonSchema.GetProperty("properties").EnumerateObject()
-            .Where(property => property.Value.GetProperty("type") is { ValueKind: JsonValueKind.String } type
-                && type.GetString() == "string")
+            .Where(property => IsString(property.Value))
             .Select(property => property.Name)
             .ToList();
         Assert.NotEmpty(strings);
 
         foreach (var name in strings)
         {
-            var arguments = row.ValidArguments(Scene);
+            var arguments = await row.ValidArguments(Scene);
             var valid = arguments[name]!.GetValue<string>();
             arguments[name] = valid[..1] + "\u202E" + valid[1..];
 
@@ -141,8 +149,8 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     }
 
     [Theory]
-    [MemberData(nameof(ToolsAndTokenCases))]
-    public async Task Every_tool_refuses_each_token_case_with_401(string tool, string tokenCase)
+    [MemberData(nameof(TokenCaseNames))]
+    public async Task Every_tool_refuses_the_token_case_with_401(string tokenCase)
     {
         // The clock and the registration are the whole app's, so these two cases have one to themselves.
         await using var appOfItsOwn = tokenCase is "expired" or "removed registration" ? await StartAsync() : null;
@@ -173,11 +181,27 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
             "removed registration" => RemoveRegistrationAsync(flow),
             _ => Task.CompletedTask,
         });
-        var body = AssistantFlow.ToolCall(tool, RowOf(tool).ValidArguments(Scene));
 
-        using var response = await flow.PostMcpAsync(token, body: body);
+        // Every row, so that a tool added to the matrix cannot be left out. A tool that is not challenged is named,
+        // with the rest, and not only the first.
+        var notChallenged = new List<string>();
+        foreach (var row in ToolMatrix.Rows)
+        {
+            var body = AssistantFlow.ToolCall(row.Name, await row.ValidArguments(Scene));
 
-        await AssistantFlow.AssertChallengeAsync(response, token is null ? null : Errors.InvalidToken);
+            using var response = await flow.PostMcpAsync(token, body: body);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                await AssistantFlow.AssertChallengeAsync(response, token is null ? null : Errors.InvalidToken);
+            }
+            else
+            {
+                notChallenged.Add($"{row.Name} ({(int)response.StatusCode})");
+            }
+        }
+
+        Assert.True(notChallenged.Count == 0, $"Not refused with 401: {string.Join(", ", notChallenged)}.");
     }
 
     private static TheoryData<string, string> ErrorCasesOfEveryTool()
@@ -190,6 +214,17 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
 
         return cases;
     }
+
+    // A property that takes a string, whether its schema says "string" or a list of types that holds it, as an
+    // optional one does: ["string", "null"].
+    private static bool IsString(JsonElement schema) =>
+        schema.TryGetProperty("type", out var type) && type.ValueKind switch
+        {
+            JsonValueKind.String => type.GetString() == "string",
+            JsonValueKind.Array => type.EnumerateArray().Any(
+                kind => kind is { ValueKind: JsonValueKind.String } && kind.GetString() == "string"),
+            _ => false,
+        };
 
     private static ToolRow RowOf(string tool) => ToolMatrix.Rows.Single(row => row.Name == tool);
 
