@@ -83,6 +83,31 @@ public sealed class IfMatchTests
         Assert.Equal(code, check.RefuseIfChanged?.Code);
     }
 
+    // A tool's expectedVersion is the token without quotes, as the look-ups give it.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void A_missing_or_empty_expected_version_names_no_version(string? expectedVersion)
+    {
+        var sent = IfMatch.FromExpectedVersion(expectedVersion);
+
+        Assert.Equal(0, sent.Count);
+        Assert.Same(ErrorCode.PreconditionRequired, IfMatch.Check(sent, Token));
+    }
+
+    [Fact]
+    public void An_expected_version_is_sent_as_the_rows_ETag_so_the_current_one_passes()
+    {
+        var sent = IfMatch.FromExpectedVersion(Token);
+
+        Assert.Equal(IfMatch.ETag(Token), Assert.Single(sent));
+        Assert.Null(IfMatch.Check(sent, Token));
+    }
+
+    [Fact]
+    public void A_stale_expected_version_gives_precondition_failed() =>
+        Assert.Same(ErrorCode.PreconditionFailed, IfMatch.Check(IfMatch.FromExpectedVersion("AAAAAAAAB9A="), Token));
+
     private static Actor ActorOf(bool mcp) =>
         new(Guid.Parse("3a9e2c4b-5d6f-4a7b-8c9d-0e1f2a3b4c5d"), mcp ? Channel.Mcp : Channel.App);
 
