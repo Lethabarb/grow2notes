@@ -74,6 +74,7 @@ internal static class McpSetup
         // that a test calls on an app with the access off.
         services.AddScoped<ConsentRequests>();
         services.AddScoped<ConsentDecisions>();
+        services.AddScoped<McpAuditFilter>();
 
         var openIddict = services.AddOpenIddict();
 
@@ -108,7 +109,8 @@ internal static class McpSetup
                     options.ServerInstructions = ServerInstructions;
                     options.Capabilities = new() { Tools = new() };
                 })
-                .WithHttpTransport(transport => transport.Stateless = true);
+                .WithHttpTransport(transport => transport.Stateless = true)
+                .WithRequestFilters(filters => filters.AddCallToolFilter(McpAuditFilter.Wrap));
         }
 
         return services;

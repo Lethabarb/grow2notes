@@ -145,5 +145,11 @@ internal static class AuditEventTypes
 
         /// <summary>A cancel, or an allow by someone who may not connect an assistant.</summary>
         public const string AuthorisationRefused = "mcp.authorisation_refused";
+
+        /// <summary>A tool call that returned data and changed nothing: what was disclosed to the assistant.</summary>
+        public const string Read = "mcp.read";
+
+        /// <summary>A tool call that ended in an error result.</summary>
+        public const string Refused = "mcp.refused";
     }
 }
