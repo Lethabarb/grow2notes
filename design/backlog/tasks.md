@@ -7024,7 +7024,7 @@ could return note content.
 
 ```yaml
 id: T34
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -7047,6 +7047,44 @@ archive or restore goals, under the same handlers, version checks and audit as M
 
 - Adds the archived-participant refusal once, in the shared handlers for both channels, and its code to design.md §6.9
   (D86).
+
+### Plan
+
+- Outcome: seven tools in `ParticipantsTools` (`add_participant`, `update_participant`, `add_goal`, `update_goal`,
+  `reorder_goals`, `archive_goal`, `restore_goal`) for Manager and Support, under the app's own handlers, version checks
+  and audit events. Results are read back through `ParticipantLookups`, so no date of birth is returned.
+- Design: each tool checks the form of its arguments (`TextInput.Refusal`, exact `YYYY-MM-DD`, at least one field,
+  ID parse), calls the shared handler with `Actor.InMcp`, maps the outcome to a `ToolError`, then answers from a fresh
+  read. Order: argument form, not found, `participant.archived`, field rules, `changed: false` when nothing would change
+  (whatever the version), `precondition.required` or `precondition.failed`, save.
+- Domain changes: none persisted, no migration, endpoint, setting, audit event type or SPA change. The shared handlers
+  gain the archived-participant refusal (D86, recorded as D93): `participant.archived`, 422, for the details and for
+  adding, rewording, reordering, archiving and restoring goals; restoring a participant is never refused.
+  `IfMatch.CheckFor` gives the app its refusal at once and the tool a refusal held back into `ConfigurationChanges.SaveAsync`, which
+  answers `Unchanged` first when `ChangeDetails.Of` finds nothing to change. `GoalChangeResult` gains `Changed` and
+  `GoalId`.
+- Reuse: `ParticipantChanges`, `GoalChanges`, `ConfigurationChanges`, `ChangeDetails`, `IfMatch`, `ItemText`,
+  `ListOrder`, `Archiving`, `TextInput`, `ToolError`, `McpCall`, `McpAuditFilter`, `ParticipantLookups`, `ToolWorld`,
+  `ToolScene`, `AssistantFlow`.
+- Decisions where design is silent (A128, A129 in design.md section 13): 422 for `participant.archived` (as
+  `note.participant_archived`); no SPA words for it (a stale page shows its generic alert); `expectedVersion` optional
+  in the schema; omitted `update_participant` fields keep stored values (assistant only); `dateOfBirth` is exactly
+  `yyyy-MM-dd` and an invalid one says "Date of birth must be a real date"; a goal line break is refused; a non-GUID
+  `goalIds` entry is an order mismatch; `reorder_goals` returns every goal as `get_participant` lists them; a change
+  tool's `changed: false` call writes `mcp.read`; new titles, descriptions and messages are copy for the owner.
+- Tests: the two app tests that expect an archived participant's goals to change become refusals and are named in the
+  PR body; the token-case theory is regrouped per case to hold CI time, keeping every tool-and-case check.
+
+### Verticals
+
+- v1: Archived-participant refusal and one channel rule for the version check, in the shared handlers; depends_on: none;
+  R14 R15 R18 R19 R25 R28
+- v2: Tool matrix infrastructure (async rows, token cases grouped per case, archived participant with a goal in
+  `ToolScene`), tests only; depends_on: none; R27
+- v3: `add_participant` and `update_participant`; depends_on: v1 v2; R1 R2 R3 R4 R5 R12 R20 R21 R22
+- v4: `add_goal`, `update_goal`, `reorder_goals`, `archive_goal`, `restore_goal`; depends_on: v3;
+  R6 R7 R8 R9 R10 R11 R13 R23 R24
+- v5: Close-out: A128, A129, A126 fix, mcp-server.md, by-hand checks, backlog updates; depends_on: v4; R16 R17 R26
 
 ### Steps
 
