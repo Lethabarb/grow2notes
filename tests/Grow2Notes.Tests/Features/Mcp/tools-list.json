@@ -1,5 +1,67 @@
 [
   {
+    "name": "add_participant",
+    "title": "Add a participant",
+    "description": "Adds an active participant to this organisation. Returns their participantId and the expectedVersion that a later change needs. Never returns a date of birth.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "givenName": {
+          "description": "The given name: at most 100 characters.",
+          "type": "string"
+        },
+        "familyName": {
+          "description": "The family name: at most 100 characters.",
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "description": "The date of birth, written YYYY-MM-DD and before today.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "givenName",
+        "familyName",
+        "dateOfBirth"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "givenName": {
+          "type": "string"
+        },
+        "familyName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "expectedVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "participantId",
+        "givenName",
+        "familyName",
+        "status",
+        "expectedVersion"
+      ]
+    },
+    "annotations": {
+      "title": "Add a participant",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "find_participants",
     "title": "Find participants by name",
     "description": "Finds participants of this organisation by name. Every word of search must appear in the given or family name; case is ignored. Returns at most 10, sorted by family name then given name, each with its status (active or archived); archived participants only with includeArchived. If two people have the same name, or you are not sure which one the person means, ask them. Never returns a date of birth or anything about notes.",
@@ -146,6 +208,89 @@
       "title": "Get a participant and their goals",
       "readOnlyHint": true,
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_participant",
+    "title": "Correct a participant's name or date of birth",
+    "description": "Corrects a participant's given name, family name or date of birth: send only the fields to change. Needs the participantId and expectedVersion that get_participant returned. A call that would change nothing answers changed: false. An archived participant cannot be changed: restore the participant first. Never returns a date of birth.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "description": "The participantId that find_participants or get_participant returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_participant returned for this participant.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "givenName": {
+          "description": "The new given name: at most 100 characters.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "familyName": {
+          "description": "The new family name: at most 100 characters.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dateOfBirth": {
+          "description": "The new date of birth, written YYYY-MM-DD and before today.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "participantId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "givenName": {
+          "type": "string"
+        },
+        "familyName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "givenName",
+        "familyName",
+        "status",
+        "changed",
+        "expectedVersion"
+      ]
+    },
+    "annotations": {
+      "title": "Correct a participant's name or date of birth",
+      "readOnlyHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false
     }

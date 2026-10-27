@@ -4,6 +4,7 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp;
 using Grow2Notes.Web.Features.Mcp.Tools;
 using Grow2Notes.Web.Features.Participants;
+using Grow2Notes.Web.Platform.Configuration;
 using Mono.Cecil;
 using NetArchTest.Rules;
 
@@ -49,7 +50,8 @@ public sealed class NoNoteContentRulesTests
 
     // The classes, outside Features.Mcp, whose members the tools call. Each later task adds every handler its tools
     // call, so that what they read is held to this rule too.
-    internal static IReadOnlyList<Type> ToolHandlers { get; } = [typeof(ParticipantList), typeof(GoalList)];
+    internal static IReadOnlyList<Type> ToolHandlers { get; } =
+        [typeof(ParticipantList), typeof(GoalList), typeof(ParticipantChanges), typeof(ConfigurationChanges)];
 
     public static TheoryData<string> PlantedViolations { get; } =
     [
