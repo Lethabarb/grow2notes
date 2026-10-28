@@ -67,27 +67,35 @@ internal sealed class CommonItemGroupChanges(
 
     /// <summary>
     /// Renames a group of the tenant's organisation (S01.03.05): loads it through the tenant filter, so that another
-    /// organisation's is not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version; refuses
-    /// Every note, which is never renamed (A43); reads the name that <see cref="ItemText.GroupName"/> reads from
-    /// <paramref name="request"/>, by the add's rules; then saves it with <c>common_item_group.updated</c>, whose
-    /// <c>Details</c> hold the old and new <c>name</c>, and which names no participant; or, when the name is already
-    /// stored, saves nothing and writes no event, and answers as a save does (D84). Notes already started keep the name
+    /// organisation's is not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version as the
+    /// channel orders it (<see cref="IfMatch.CheckFor"/>); refuses Every note, which is never renamed (A43); reads the
+    /// name that <see cref="ItemText.GroupName"/> reads from <paramref name="request"/>, by the add's rules; then saves
+    /// it with <c>common_item_group.updated</c>, whose <c>Details</c> hold the old and new <c>name</c>, and which names
+    /// no participant; or, when the name is already stored, saves nothing and writes no event, and answers
+    /// <see cref="CommonItemChangeResult.Changed"/> <see langword="false"/> (D84). Notes already started keep the name
     /// they were started with (A3). An archived group is renamed too, as design.md §6.6 names no refusal, though the
     /// screen offers Rename on active groups alone (T07's Notes).
     /// </summary>
+    /// <remarks>
+    /// <see cref="Channel.App"/> has the version checked first, so that a missing or stale <c>If-Match</c> is refused
+    /// whatever follows. <see cref="Channel.Mcp"/> has it checked last, by the save, so that a call that changes
+    /// nothing is not refused for its version, while Every note, the name's rules and the rest are refused first
+    /// (A132).
+    /// </remarks>
     /// <param name="actor">Who renames it.</param>
     /// <param name="groupId">The group.</param>
     /// <param name="ifMatch">
     /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
-    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
+    /// <c>expectedVersion</c> through <see cref="IfMatch.FromExpectedVersion"/>.
     /// </param>
     /// <param name="request">The name as sent.</param>
     /// <param name="cancellationToken">Cancels the rename.</param>
     /// <returns>
-    /// <see cref="CommonItemChangeResult.Saved"/>, whether the name changed or not; or, each with nothing written,
-    /// checked in this order: <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the organisation; the
-    /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; the name's
-    /// message; and <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it was loaded.
+    /// A result with <see cref="CommonItemChangeResult.Changed"/> true or false and no error, whether the name changed
+    /// or not; or, each with nothing written, <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the
+    /// organisation; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; the name's message; and the code that
+    /// <see cref="IfMatch.Check"/> gives or <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it
+    /// was loaded. For <see cref="Channel.App"/> the version's code comes before Every note.
     /// </returns>
     public Task<CommonItemChangeResult> RenameAsync(
         Actor actor,
@@ -96,9 +104,10 @@ internal sealed class CommonItemGroupChanges(
         CommonItemGroupNameRequest request,
         CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             groupId,
             ifMatch,
-            group =>
+            (group, refuseIfChanged) =>
             {
                 if (!ItemText.GroupName.TryRead(request.Name, out var name, out var errors))
                 {
@@ -113,6 +122,7 @@ internal sealed class CommonItemGroupChanges(
                     group,
                     before,
                     NameValues(group),
+                    refuseIfChanged,
                     cancellationToken);
             },
             cancellationToken);
@@ -130,8 +140,9 @@ internal sealed class CommonItemGroupChanges(
     /// <param name="groupIds">The IDs of the active groups other than Every note, in their new order.</param>
     /// <param name="cancellationToken">Cancels the reorder.</param>
     /// <returns>
-    /// <see cref="CommonItemChangeResult.Saved"/>, whether the order changed or not; or
-    /// <see cref="ErrorCode.OrderMismatch"/>, with nothing written, when the IDs are not the active groups other than
+    /// A result with <see cref="CommonItemChangeResult.Changed"/> true or false and no error, whether the order changed
+    /// or not; or <see cref="ErrorCode.OrderMismatch"/>, with nothing written, when the IDs are not the active groups
+    /// other than
     /// Every note, each once, or when a group changed after the list was read, which the save finds as
     /// <see cref="ErrorCode.PreconditionFailed"/>: a reorder sends no <c>If-Match</c>, and the screen reads the list
     /// again for either (list-editor.md <i>Request errors</i>), so both are the one code.
@@ -160,32 +171,35 @@ internal sealed class CommonItemGroupChanges(
             reordered.After,
             cancellationToken: cancellationToken);
         return saved.Error is null
-            ? CommonItemChangeResult.Saved
+            ? CommonItemChangeResult.Of(saved)
             : CommonItemChangeResult.Refused(ErrorCode.OrderMismatch);
     }
 
     /// <summary>
-    /// Archives a group of the tenant's organisation (design.md §3.7, S01.03.07), checked as <see cref="RenameAsync"/>
-    /// checks a rename, Every note refused as never archived (A43): sets <c>ArchivedAtUtc</c> through
-    /// <see cref="Archiving.Archive"/>, which leaves its <c>SortOrder</c>, and saves it with
-    /// <c>common_item_group.archived</c>, which names no participant. Its items are left as they are, each with its own
-    /// archived state and version (design.md §5.3), so that a restore brings back its active ones, and an item add or
-    /// reword in the group is refused for the group's own state (<see cref="ErrorCode.GroupArchived"/>), which no
-    /// <c>If-Match</c> could catch. A group archived already keeps the time it was archived at, so nothing is saved and
-    /// no event written, and the answer is as a save's (D84).
+    /// Archives a group of the tenant's organisation (design.md §3.7, S01.03.07), checked in both channels' orders as
+    /// <see cref="RenameAsync"/> checks a rename, Every note refused as never archived (A43): sets
+    /// <c>ArchivedAtUtc</c> through <see cref="Archiving.Archive"/>, which leaves its <c>SortOrder</c>, and saves it
+    /// with <c>common_item_group.archived</c>, which names no participant. Its items are left as they are, each with
+    /// its own archived state and version (design.md §5.3), so that a restore brings back its active ones, and an item
+    /// add or reword in the group is refused for the group's own state (<see cref="ErrorCode.GroupArchived"/>), which
+    /// no <c>If-Match</c> could catch. A group archived already keeps the time it was archived at, so nothing is saved
+    /// and no event written, and the answer is <see cref="CommonItemChangeResult.Changed"/>
+    /// <see langword="false"/> (D84).
     /// </summary>
     /// <returns>
-    /// <see cref="CommonItemChangeResult.Saved"/>, whether the group changed or not; or, each with nothing written,
-    /// checked in this order: <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the organisation; the
-    /// code that <see cref="IfMatch.Check"/> gives; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; and
-    /// <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it was loaded.
+    /// A result with <see cref="CommonItemChangeResult.Changed"/> true or false and no error, whether the group changed
+    /// or not; or, each with nothing written, <see cref="CommonItemChangeResult.NotFound"/>, for a group not in the
+    /// organisation; <see cref="ErrorCode.EveryNoteFixed"/>, for Every note; and the code that
+    /// <see cref="IfMatch.Check"/> gives or <see cref="ErrorCode.PreconditionFailed"/>, when the group changed after it
+    /// was loaded. For <see cref="Channel.App"/> the version's code comes before Every note.
     /// </returns>
     public Task<CommonItemChangeResult> ArchiveAsync(
         Actor actor, Guid groupId, StringValues ifMatch, CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             groupId,
             ifMatch,
-            group =>
+            (group, refuseIfChanged) =>
             {
                 var before = PlaceValues(group);
                 Archiving.Archive(group, timeProvider);
@@ -195,6 +209,7 @@ internal sealed class CommonItemGroupChanges(
                     group,
                     before,
                     PlaceValues(group),
+                    refuseIfChanged,
                     cancellationToken);
             },
             cancellationToken);
@@ -206,15 +221,17 @@ internal sealed class CommonItemGroupChanges(
     /// items as they were, so that its active items show with it again; and saves it with
     /// <c>common_item_group.restored</c>, which names no participant, and whose <c>Details</c> hold its
     /// <c>sortOrder</c> only when the end was not already its place. An active group stays where it is, so nothing is
-    /// saved and no event written, and the answer is as a save's (D84).
+    /// saved and no event written, and the answer is <see cref="CommonItemChangeResult.Changed"/>
+    /// <see langword="false"/> (D84).
     /// </summary>
     /// <returns>As <see cref="ArchiveAsync"/>'s.</returns>
     public Task<CommonItemChangeResult> RestoreAsync(
         Actor actor, Guid groupId, StringValues ifMatch, CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             groupId,
             ifMatch,
-            async group =>
+            async (group, refuseIfChanged) =>
             {
                 var before = PlaceValues(group);
                 var activeGroups = await db.CommonItemGroups.AsNoTracking()
@@ -227,19 +244,23 @@ internal sealed class CommonItemGroupChanges(
                     group,
                     before,
                     PlaceValues(group),
+                    refuseIfChanged,
                     cancellationToken);
             },
             cancellationToken);
 
     /// <summary>
     /// Loads the group through the tenant filter, so that another organisation's is not found (design.md §9.2); checks
-    /// <paramref name="ifMatch"/> against its version; and refuses Every note, which is never renamed, archived or
-    /// restored (A43), before <paramref name="change"/> changes and saves it.
+    /// <paramref name="ifMatch"/> against its version (<see cref="IfMatch.CheckFor"/>), which <see cref="Channel.App"/>
+    /// has refused at once; and refuses Every note, which is never renamed, archived or restored (A43), before
+    /// <paramref name="change"/> changes and saves it, with the refusal to pass on to the save when the channel holds
+    /// it back.
     /// </summary>
     private async Task<CommonItemChangeResult> ChangeAsync(
+        Actor actor,
         Guid groupId,
         StringValues ifMatch,
-        Func<CommonItemGroup, Task<CommonItemChangeResult>> change,
+        Func<CommonItemGroup, ErrorCode?, Task<CommonItemChangeResult>> change,
         CancellationToken cancellationToken)
     {
         var group = await db.CommonItemGroups.SingleOrDefaultAsync(g => g.Id == groupId, cancellationToken);
@@ -248,12 +269,15 @@ internal sealed class CommonItemGroupChanges(
             return CommonItemChangeResult.NotFound;
         }
 
-        if (IfMatch.Check(ifMatch, RowVersionToken.Of(group)) is { } refused)
+        var version = IfMatch.CheckFor(actor, ifMatch, RowVersionToken.Of(group));
+        if (version.RefuseNow is { } refused)
         {
             return CommonItemChangeResult.Refused(refused);
         }
 
-        return group.IsEveryNote ? CommonItemChangeResult.Refused(ErrorCode.EveryNoteFixed) : await change(group);
+        return group.IsEveryNote
+            ? CommonItemChangeResult.Refused(ErrorCode.EveryNoteFixed)
+            : await change(group, version.RefuseIfChanged);
     }
 
     // A change to a loaded group, with its event, whose entity is the group, which names no participant, and whose
@@ -264,9 +288,9 @@ internal sealed class CommonItemGroupChanges(
         CommonItemGroup group,
         JsonObject before,
         JsonObject after,
-        CancellationToken cancellationToken)
-    {
-        var saved = await changes.SaveAsync(
+        ErrorCode? refuseIfChanged,
+        CancellationToken cancellationToken) =>
+        CommonItemChangeResult.Of(await changes.SaveAsync(
             actor,
             eventType,
             AuditEntityTypes.CommonItemGroup,
@@ -274,9 +298,8 @@ internal sealed class CommonItemGroupChanges(
             participantId: null,
             before,
             after,
-            cancellationToken: cancellationToken);
-        return saved.Error is { } error ? CommonItemChangeResult.Refused(error) : CommonItemChangeResult.Saved;
-    }
+            refuseIfChanged: refuseIfChanged,
+            cancellationToken: cancellationToken));
 
     /// <summary>
     /// A group's values as an audit event records them, named and written as design.md §6.6's list gives them, never
