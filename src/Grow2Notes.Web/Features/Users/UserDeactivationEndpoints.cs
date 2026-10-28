@@ -39,7 +39,7 @@ internal static class UserDeactivationEndpoints
         UserDeactivation deactivation,
         CancellationToken cancellationToken) =>
         Answer(await deactivation.DeactivateAsync(
-            Actor.InApp(user, identityOptions.Value), id, request.Headers.IfMatch, cancellationToken));
+            Actor.InApp(user, identityOptions.Value), id, request.Headers.IfMatch, reason: null, cancellationToken));
 
     private static async Task<Results<NoContent, NotFound, ProblemHttpResult>> ReactivateAsync(
         Guid id,

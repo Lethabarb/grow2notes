@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp.OAuth;
 using Grow2Notes.Web.Platform;
@@ -29,34 +30,45 @@ internal sealed class UserDeactivation(
     TimeProvider timeProvider)
 {
     /// <summary>
-    /// In one transaction (<see cref="UserChanges.ChangeAsync"/>), which loads the user and checks
-    /// <paramref name="ifMatch"/> first: unless the user is their organisation's only Active manager (A26), sets them
-    /// Deactivated, with the time, locks them out for good and rotates their security stamp, which ends every session
-    /// of theirs on its next request and every setup link made for them, and revokes their assistant authorisations,
-    /// which ends every assistant connection of theirs on its next call and refuses its refresh; then writes
-    /// <c>user.deactivated</c>, with no details, as the actor and the user's ID say who did it to whom. A user already
-    /// Deactivated is left as they are, with nothing written, and the call succeeds, as mcp-server.md §5.1 has such a
-    /// call succeed with nothing changed.
+    /// In one transaction (<see cref="UserChanges"/>), which loads the user and checks <paramref name="ifMatch"/> for
+    /// the app first: unless the user is already Deactivated or is their organisation's only Active manager (A26),
+    /// sets them Deactivated, with the time, locks them out for good and rotates their security stamp, which ends every
+    /// session of theirs on its next request and every setup link made for them, and revokes their assistant
+    /// authorisations, which ends every assistant connection of theirs on its next call and refuses its refresh; then
+    /// writes <c>user.deactivated</c>, with the reason, when one is given, as the actor and the user's ID say who did
+    /// it to whom. A user already Deactivated is left as they are, with nothing written, and the call succeeds, as
+    /// mcp-server.md §5.1 has such a call succeed with nothing changed. For an assistant's tool that check, then the
+    /// last-manager rule, come before the version refusal that the channel holds back (A134).
     /// </summary>
+    /// <param name="actor">Who deactivates the user, and by which channel.</param>
+    /// <param name="userId">The user to deactivate.</param>
+    /// <param name="ifMatch">The request's <c>If-Match</c> values, or the tool's <c>expectedVersion</c>.</param>
+    /// <param name="reason">The reason to keep in the audit event, trimmed, or <see langword="null"/> for none.</param>
+    /// <param name="cancellationToken">Cancels the work.</param>
     /// <returns>
-    /// <see cref="UserChangeResult.Done"/>; <see cref="UserChangeResult.NotFound"/>, or
-    /// <see cref="ErrorCode.PreconditionRequired"/> or <see cref="ErrorCode.PreconditionFailed"/> for the version, as
-    /// <see cref="UserChanges.ChangeAsync"/> gives them; <see cref="ErrorCode.LastManager"/> for the organisation's
-    /// only Active manager, the actor themselves among them; or <see cref="ErrorCode.PreconditionFailed"/> when the
-    /// user changed after they were loaded. A refusal changes and writes nothing.
+    /// <see cref="UserChangeResult.Done"/>; <see cref="UserChangeResult.Unchanged"/> for a user already Deactivated;
+    /// <see cref="UserChangeResult.NotFound"/>; <see cref="ErrorCode.LastManager"/> for the organisation's only Active
+    /// manager, the actor themselves among them; or <see cref="ErrorCode.PreconditionRequired"/> or
+    /// <see cref="ErrorCode.PreconditionFailed"/> for the version, or the latter when the user changed after they were
+    /// loaded. A refusal changes and writes nothing.
     /// </returns>
     public Task<UserChangeResult> DeactivateAsync(
-        Actor actor, Guid userId, StringValues ifMatch, CancellationToken cancellationToken) =>
-        changes.ChangeAsync(userId, ifMatch, async (user, ct) =>
+        Actor actor, Guid userId, StringValues ifMatch, string? reason, CancellationToken cancellationToken) =>
+        changes.ChangeAsync(actor, userId, ifMatch, async (user, refuseIfChanged, ct) =>
         {
             if (user.Status == UserStatus.Deactivated)
             {
-                return UserChangeResult.Done;
+                return UserChangeResult.Unchanged;
             }
 
             if (await lastManager.IsOnlyActiveManagerAsync(user, ct))
             {
                 return UserChangeResult.Refused(ErrorCode.LastManager);
+            }
+
+            if (refuseIfChanged is { } refused)
+            {
+                return UserChangeResult.Refused(refused);
             }
 
             user.Status = UserStatus.Deactivated;
@@ -68,23 +80,26 @@ internal sealed class UserDeactivation(
 
             ThrowIfRefused(await users.UpdateSecurityStampAsync(user));
             await authorizations.RevokeConnectionsAsync(user.Id, ct);
-            await WriteAsync(actor, user, AuditEventTypes.User.Deactivated, ct);
+            var details = reason is null ? null : new JsonObject { ["reason"] = reason };
+            await WriteAsync(actor, user, AuditEventTypes.User.Deactivated, details, ct);
             return UserChangeResult.Done;
         }, cancellationToken);
 
     /// <summary>
-    /// In one transaction (<see cref="UserChanges.ChangeAsync"/>), which loads the user and checks
-    /// <paramref name="ifMatch"/> first: ends a Deactivated user's lockout and clears the time they were deactivated,
+    /// In one transaction (<see cref="UserChanges"/>), which loads the user and checks <paramref name="ifMatch"/>
+    /// first: ends a Deactivated user's lockout and clears the time they were deactivated,
     /// so that the list gives one only while they are Deactivated; sets them Active if they have a password or a
     /// passkey, with which they sign in again, otherwise Invited, for Resend invite to send them a link (D75); then
     /// writes <c>user.reactivated</c>, with no details. It leaves their security stamp, which no session or link of
     /// theirs holds since their deactivation, and their count of failed sign-ins. A user who is not Deactivated is left
-    /// as they are, with nothing written, and the call succeeds.
+    /// as they are, with nothing written, and the call succeeds with
+    /// <see cref="UserChangeResult.Unchanged"/>.
     /// </summary>
     /// <returns>
-    /// <see cref="UserChangeResult.Done"/>; <see cref="UserChangeResult.NotFound"/>, or
+    /// <see cref="UserChangeResult.Done"/>; <see cref="UserChangeResult.Unchanged"/>;
+    /// <see cref="UserChangeResult.NotFound"/>, or
     /// <see cref="ErrorCode.PreconditionRequired"/> or <see cref="ErrorCode.PreconditionFailed"/> for the version, as
-    /// <see cref="UserChanges.ChangeAsync"/> gives them; or <see cref="ErrorCode.PreconditionFailed"/> when the user
+    /// <see cref="UserChanges"/> gives them; or <see cref="ErrorCode.PreconditionFailed"/> when the user
     /// changed after they were loaded. A refusal changes and writes nothing.
     /// </returns>
     public Task<UserChangeResult> ReactivateAsync(
@@ -93,7 +108,7 @@ internal sealed class UserDeactivation(
         {
             if (user.Status != UserStatus.Deactivated)
             {
-                return UserChangeResult.Done;
+                return UserChangeResult.Unchanged;
             }
 
             user.Status = await users.HasPasswordAsync(user) || (await users.GetPasskeysAsync(user)).Count > 0
@@ -105,7 +120,7 @@ internal sealed class UserDeactivation(
                 return UserChangeResult.Refused(ErrorCode.PreconditionFailed);
             }
 
-            await WriteAsync(actor, user, AuditEventTypes.User.Reactivated, ct);
+            await WriteAsync(actor, user, AuditEventTypes.User.Reactivated, details: null, ct);
             return UserChangeResult.Done;
         }, cancellationToken);
 
@@ -134,8 +149,13 @@ internal sealed class UserDeactivation(
         return true;
     }
 
-    private Task WriteAsync(Actor actor, ApplicationUser user, string eventType, CancellationToken cancellationToken) =>
+    private Task WriteAsync(
+        Actor actor,
+        ApplicationUser user,
+        string eventType,
+        JsonObject? details,
+        CancellationToken cancellationToken) =>
         audit.WriteAsync(
             user.OrganisationId, actor.UserId, eventType, AuditEntityTypes.User, user.Id, participantId: null,
-            details: null, cancellationToken);
+            details, cancellationToken);
 }
