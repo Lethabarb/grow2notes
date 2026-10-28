@@ -22,7 +22,10 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// </remarks>
 internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
 {
-    /// <summary>The guide prompts as stored, with the row's version token.</summary>
+    /// <summary>
+    /// The guide prompts as stored, with the row's version token. The <c>get_guide_prompts</c> tool calls it with
+    /// <see cref="Channel.Mcp"/>.
+    /// </summary>
     /// <remarks>
     /// Nothing here uses the actor, as reading writes no audit event in the app (design.md §5.4, A28). It is taken so
     /// that every admin handler has the same shape.

@@ -10,23 +10,31 @@ internal static class TestUsers
     private static readonly DateTime AddedAtUtc = new(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
 
     /// <summary>
-    /// Adds an Active user to <paramref name="organisation"/>, invited by its seeded manager, through the app's
+    /// Adds a user to <paramref name="organisation"/>, invited by its seeded manager, through the app's
     /// <c>UserManager</c>, as setup leaves one but with no way to sign in, so that a test calls as them with the
-    /// test-only sign-in (tests/README.md); and gives their ID. Each call adds one more, with an address of its own.
+    /// test-only sign-in (tests/README.md); and gives their ID. By default the user is Active, with an address of their
+    /// own on every call; an Invited user has not activated, and a Deactivated one has. A test that looks a user up by
+    /// address gives it as <paramref name="email"/>.
     /// </summary>
     public static async Task<Guid> AddUserAsync(
-        this IServiceProvider services, SeededOrganisation organisation, UserRole role, string displayName)
+        this IServiceProvider services,
+        SeededOrganisation organisation,
+        UserRole role,
+        string displayName,
+        UserStatus status = UserStatus.Active,
+        string? email = null)
     {
-        var email = $"user.{Guid.NewGuid():N}@example.org";
+        email ??= $"user.{Guid.NewGuid():N}@example.org";
         var user = new ApplicationUser
         {
             OrganisationId = organisation.OrganisationId,
             DisplayName = displayName,
             Role = role,
-            Status = UserStatus.Active,
+            Status = status,
             InvitedAtUtc = AddedAtUtc,
             InvitedByUserId = organisation.ManagerId,
-            ActivatedAtUtc = AddedAtUtc,
+            ActivatedAtUtc = status == UserStatus.Invited ? null : AddedAtUtc,
+            DeactivatedAtUtc = status == UserStatus.Deactivated ? AddedAtUtc : null,
             UserName = email,
             Email = email,
             EmailConfirmed = true,

@@ -140,7 +140,8 @@ internal sealed class ParticipantsTools(
             return refusal.ToResult();
         }
 
-        var added = await changes.AddAsync(ActingUser(), new(givenName, familyName, born), cancellationToken);
+        var added = await changes.AddAsync(
+            ToolActor.Of(httpContextAccessor), new(givenName, familyName, born), cancellationToken);
         if (added.Errors is { } errors)
         {
             return ToolError.ValidationFailed(errors).ToResult();
@@ -191,7 +192,7 @@ internal sealed class ParticipantsTools(
         }
 
         var result = await changes.UpdateAsync(
-            ActingUser(),
+            ToolActor.Of(httpContextAccessor),
             id,
             IfMatch.FromExpectedVersion(expectedVersion),
             new(givenName, familyName, born),
@@ -249,7 +250,7 @@ internal sealed class ParticipantsTools(
             return ToolError.NotFound(ParticipantNotFound).ToResult();
         }
 
-        var result = await goals.AddAsync(ActingUser(), id, new(text), cancellationToken);
+        var result = await goals.AddAsync(ToolActor.Of(httpContextAccessor), id, new(text), cancellationToken);
         if (RefusalOf(result, ParticipantNotFound) is { } error)
         {
             return error.ToResult();
@@ -292,7 +293,11 @@ internal sealed class ParticipantsTools(
         }
 
         var result = await goals.UpdateAsync(
-            ActingUser(), id, IfMatch.FromExpectedVersion(expectedVersion), new(text), cancellationToken);
+            ToolActor.Of(httpContextAccessor),
+            id,
+            IfMatch.FromExpectedVersion(expectedVersion),
+            new(text),
+            cancellationToken);
         if (RefusalOf(result, GoalNotFound) is { } error)
         {
             return error.ToResult();
@@ -332,7 +337,7 @@ internal sealed class ParticipantsTools(
         // An ID that is not a GUID cannot be one of the participant's goals: Guid.Empty is none, so the handler's check
         // of the set of IDs refuses it with the rest.
         var ordered = goalIds.Select(goalId => Guid.TryParse(goalId, out var parsed) ? parsed : Guid.Empty).ToList();
-        var result = await goals.ReorderAsync(ActingUser(), id, ordered, cancellationToken);
+        var result = await goals.ReorderAsync(ToolActor.Of(httpContextAccessor), id, ordered, cancellationToken);
         if (RefusalOf(result, ParticipantNotFound) is { } error)
         {
             return error.ToResult();
@@ -438,7 +443,8 @@ internal sealed class ParticipantsTools(
             return ToolError.NotFound(GoalNotFound).ToResult();
         }
 
-        var result = await change(ActingUser(), id, IfMatch.FromExpectedVersion(expectedVersion), cancellationToken);
+        var result = await change(
+            ToolActor.Of(httpContextAccessor), id, IfMatch.FromExpectedVersion(expectedVersion), cancellationToken);
         if (RefusalOf(result, GoalNotFound) is { } error)
         {
             return error.ToResult();
@@ -492,8 +498,4 @@ internal sealed class ParticipantsTools(
 
         throw new UnreachableException($"A participant tool cannot be refused with {code.Code}.");
     }
-
-    private Actor ActingUser() => Actor.InMcp(
-        httpContextAccessor.HttpContext?.User
-        ?? throw new InvalidOperationException("The call has no signed-in principal."));
 }

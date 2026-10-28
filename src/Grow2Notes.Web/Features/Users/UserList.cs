@@ -7,8 +7,7 @@ namespace Grow2Notes.Web.Features.Users;
 /// <summary>
 /// The handler that lists an organisation's users (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/>, the acting user and the channel (mcp-server.md §3.5, convention 1): <c>GET /api/admin/users</c>
-/// calls it with <see cref="Actor.InApp"/>, and Release 2's <c>list_users</c> tool will call it with
-/// <see cref="Channel.Mcp"/>.
+/// calls it with <see cref="Actor.InApp"/>, and the <c>list_users</c> tool calls it with <see cref="Channel.Mcp"/>.
 /// </summary>
 internal sealed class UserList(Grow2NotesDbContext db, ITenantContext tenant)
 {
@@ -20,9 +19,9 @@ internal sealed class UserList(Grow2NotesDbContext db, ITenantContext tenant)
     /// <remarks>
     /// <c>AspNetUsers</c> has no tenant query filter, so the query names the tenant's organisation itself (design.md
     /// §5.9 item 5), from <see cref="ITenantContext"/>, as every other read and write of the request does. Nothing here
-    /// uses the actor: reading writes no audit event in the app (§5.4, A28), and Release 2's <c>mcp.read</c> is written
-    /// by the MCP server's call filter, not the handler (mcp-server.md §9). It is taken so that every admin handler has
-    /// the same shape.
+    /// uses the actor: reading writes no audit event in the app (§5.4, A28), and the <c>mcp.read</c> of a tool call is
+    /// written by the MCP server's call filter, not the handler (mcp-server.md §9). It is taken so that every admin
+    /// handler has the same shape.
     /// </remarks>
     public async Task<IReadOnlyList<AdminUser>> ListAsync(Actor actor, CancellationToken cancellationToken)
     {
