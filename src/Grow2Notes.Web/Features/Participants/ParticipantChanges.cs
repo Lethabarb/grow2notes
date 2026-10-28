@@ -13,7 +13,7 @@ namespace Grow2Notes.Web.Features.Participants;
 /// The handler that changes an organisation's participants (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants</c>,
 /// <c>PUT /api/admin/participants/{id}</c> and <c>POST /api/admin/participants/{id}/archive</c> and <c>/restore</c>
-/// call it with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>.
+/// call it with <see cref="Actor.InApp"/>, and the assistant's tools call it with <see cref="Channel.Mcp"/>.
 /// Each change is saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class ParticipantChanges(
@@ -67,13 +67,17 @@ internal sealed class ParticipantChanges(
     /// <paramref name="request"/> by the add's rules (<see cref="ParticipantDetails.TryRead"/>); then saves the details
     /// with <c>participant.updated</c>, whose <c>Details</c> hold the old and new value of each changed field alone;
     /// or, when no value changed, saves nothing and writes no event, and answers as a save does (D84). An archived
-    /// participant is corrected too, as Release 1's server refuses nothing on one (D86).
+    /// participant is not corrected (D86, D93): they are refused with <see cref="ErrorCode.ParticipantArchived"/>
+    /// before <paramref name="ifMatch"/> is looked at. A call by <see cref="Channel.Mcp"/> may leave a field out, which
+    /// keeps its stored value (<see cref="ParticipantDetailsRequest.OrStored"/>); the app's correction replaces all
+    /// three.
     /// </summary>
     /// <param name="actor">Who corrects them.</param>
     /// <param name="participantId">The participant.</param>
     /// <param name="ifMatch">
     /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
-    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>.
+    /// <c>expectedVersion</c> through <see cref="IfMatch.ETag"/>; <see cref="IfMatch.CheckFor"/> gives the app's
+    /// refusal at once and Release 2's when a value would change.
     /// </param>
     /// <param name="request">The details as sent.</param>
     /// <param name="cancellationToken">Cancels the correction.</param>
@@ -84,11 +88,14 @@ internal sealed class ParticipantChanges(
         ParticipantDetailsRequest request,
         CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             participantId,
             ifMatch,
-            async participant =>
+            refuseArchived: true,
+            async (participant, refuseIfChanged) =>
             {
-                if (!ParticipantDetails.TryRead(request, clock.Today(), out var details, out var errors))
+                var sent = actor.Channel == Channel.Mcp ? request.OrStored(participant) : request;
+                if (!ParticipantDetails.TryRead(sent, clock.Today(), out var details, out var errors))
                 {
                     return ParticipantChangeResult.Invalid(errors);
                 }
@@ -99,7 +106,7 @@ internal sealed class ParticipantChanges(
                 participant.DateOfBirth = details.DateOfBirth;
                 return await SaveAsync(
                     actor, AuditEventTypes.Participant.Updated, participant, before, Values(participant),
-                    cancellationToken);
+                    refuseIfChanged, cancellationToken);
             },
             cancellationToken);
 
@@ -113,16 +120,18 @@ internal sealed class ParticipantChanges(
     public Task<ParticipantChangeResult> ArchiveAsync(
         Actor actor, Guid participantId, StringValues ifMatch, CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             participantId,
             ifMatch,
-            participant =>
+            refuseArchived: false,
+            (participant, refuseIfChanged) =>
             {
                 var before = StatusValues(participant);
                 Archiving.Archive(participant, timeProvider);
                 participant.Status = ParticipantStatus.Archived;
                 return SaveAsync(
                     actor, AuditEventTypes.Participant.Archived, participant, before, StatusValues(participant),
-                    cancellationToken);
+                    refuseIfChanged, cancellationToken);
             },
             cancellationToken);
 
@@ -131,33 +140,43 @@ internal sealed class ParticipantChanges(
     /// is their version: sets <c>Status</c> back to active and clears <c>ArchivedAtUtc</c> itself, as
     /// <see cref="Archiving.Restore"/> is for a row of an ordered list, and saves them with
     /// <c>participant.restored</c>. An active participant changes nothing, so nothing is saved and no event written,
-    /// and the answer is as a save's (D84).
+    /// and the answer is as a save's (D84). It is how an archived participant's details and goals can be changed
+    /// again (D93).
     /// </summary>
     public Task<ParticipantChangeResult> RestoreAsync(
         Actor actor, Guid participantId, StringValues ifMatch, CancellationToken cancellationToken) =>
         ChangeAsync(
+            actor,
             participantId,
             ifMatch,
-            participant =>
+            refuseArchived: false,
+            (participant, refuseIfChanged) =>
             {
                 var before = StatusValues(participant);
                 participant.Status = ParticipantStatus.Active;
                 participant.ArchivedAtUtc = null;
                 return SaveAsync(
                     actor, AuditEventTypes.Participant.Restored, participant, before, StatusValues(participant),
-                    cancellationToken);
+                    refuseIfChanged, cancellationToken);
             },
             cancellationToken);
 
     /// <summary>
     /// Loads the participant through the tenant filter, so that another organisation's is not found (design.md §9.2),
-    /// and checks <paramref name="ifMatch"/> against their version before <paramref name="change"/> changes and saves
-    /// them.
+    /// refuses an archived one when <paramref name="refuseArchived"/> (D93), and checks <paramref name="ifMatch"/>
+    /// against their version (<see cref="IfMatch.CheckFor"/>) before <paramref name="change"/> changes and saves them,
+    /// with the refusal to pass on to the save when the channel holds it back.
     /// </summary>
+    /// <param name="refuseArchived">
+    /// Whether an archived participant is refused: for a correction, not for archiving or restoring them, which is how
+    /// an archived participant is restored.
+    /// </param>
     private async Task<ParticipantChangeResult> ChangeAsync(
+        Actor actor,
         Guid participantId,
         StringValues ifMatch,
-        Func<Participant, Task<ParticipantChangeResult>> change,
+        bool refuseArchived,
+        Func<Participant, ErrorCode?, Task<ParticipantChangeResult>> change,
         CancellationToken cancellationToken)
     {
         var participant = await db.Participants.SingleOrDefaultAsync(p => p.Id == participantId, cancellationToken);
@@ -166,9 +185,15 @@ internal sealed class ParticipantChanges(
             return ParticipantChangeResult.NotFound;
         }
 
-        return IfMatch.Check(ifMatch, RowVersionToken.Of(participant)) is { } refused
+        if (refuseArchived && participant.Status == ParticipantStatus.Archived)
+        {
+            return ParticipantChangeResult.Refused(ErrorCode.ParticipantArchived);
+        }
+
+        var version = IfMatch.CheckFor(actor, ifMatch, RowVersionToken.Of(participant));
+        return version.RefuseNow is { } refused
             ? ParticipantChangeResult.Refused(refused)
-            : await change(participant);
+            : await change(participant, version.RefuseIfChanged);
     }
 
     // The change to a participant who exists, with its event, whose entity and participant are both them; or nothing
@@ -179,6 +204,7 @@ internal sealed class ParticipantChanges(
         Participant participant,
         JsonObject before,
         JsonObject after,
+        ErrorCode? refuseIfChanged,
         CancellationToken cancellationToken) =>
         ParticipantChangeResult.Of(await changes.SaveAsync(
             actor,
@@ -188,6 +214,7 @@ internal sealed class ParticipantChanges(
             participant.Id,
             before,
             after,
+            refuseIfChanged: refuseIfChanged,
             cancellationToken: cancellationToken));
 
     /// <summary>

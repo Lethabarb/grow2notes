@@ -14,10 +14,10 @@ namespace Grow2Notes.Tests.Features.Participants;
 /// <summary>
 /// <c>POST /api/admin/participants/{participantId}/goals</c> (design.md §6.6, S01.02.05), called with the test-only
 /// sign-in (<see cref="TestSignIn"/>) on a fake clock: a manager adds a goal at the end of the goals of a participant
-/// of their own organisation, archived or not (D86), its text on one line with its ends trimmed, and gets <c>201</c>
-/// with no body; a text that is empty or too long once cleaned gets <c>422 validation.failed</c> in the screen's words;
-/// and a participant who is unknown, or another organisation's, <c>404</c>; each refusal adding nothing and writing no
-/// event.
+/// of their own organisation, its text on one line with its ends trimmed, and gets <c>201</c> with no body; a text
+/// that is empty or too long once cleaned gets <c>422 validation.failed</c> in the screen's words; a participant who is
+/// archived, <c>422 participant.archived</c> (D86, D93); and a participant who is unknown, or another organisation's,
+/// <c>404</c>; each refusal adding nothing and writing no event.
 /// The tests add their own participants and goals to the seeded organisations and change no seeded row
 /// (tests/README.md). The endpoint matrix covers the statuses of every caller, and
 /// <see cref="Platform.Audit.AuditEventsTests"/> the <c>goal.created</c> that an add writes.
@@ -150,16 +150,24 @@ public sealed class AddGoalEndpointTests : IClassFixture<Grow2NotesFactory>, IAs
         await AssertRefusedAsync(new { goal = "Makes own breakfast" }, EnterTheGoal);
     }
 
-    // Only the screen is read-only for an archived participant: Release 1's server refuses nothing on one (D86).
-    [Fact]
-    public async Task An_archived_participant_s_goal_is_added()
+    // The archived participant is looked at before the text, so even a text that would be refused gets the 422 that
+    // names the participant (D93).
+    [Theory]
+    [InlineData("Makes own breakfast")]
+    [InlineData("")]
+    public async Task An_archived_participant_s_goal_is_refused_and_nothing_is_added(
+        string text)
     {
         var participant = await app.Services.AddParticipantAsync(seeded.A, archived: true);
+        var lastEventId = await LastEventIdAsync();
 
-        using var response = await PostAsync(Caller.ManagerOfA, participant.Id, new { text = "Makes own breakfast" });
+        using var response = await PostAsync(Caller.ManagerOfA, participant.Id, new { text });
 
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        Assert.Equal("Makes own breakfast", Assert.Single(await StoredAsync(participant.Id)).Text);
+        using var problem = JsonDocument.Parse(await response.ReadProblemAsync(HttpStatusCode.UnprocessableEntity));
+        Assert.Equal(
+            ErrorCode.ParticipantArchived.Code, problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
+        Assert.Equal(0, await GoalCountAsync(participant.Id));
+        Assert.Equal(lastEventId, await LastEventIdAsync());
     }
 
     // B's manager does not find A's participant, nor A's B's (§9.2), so neither adds a goal to the other's.

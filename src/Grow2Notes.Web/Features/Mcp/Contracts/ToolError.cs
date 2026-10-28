@@ -29,6 +29,22 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
             new Dictionary<string, string[]> { [field] = [fieldMessage] });
 
     /// <summary>
+    /// A change that sent no <c>expectedVersion</c> (<c>precondition.required</c>), which the look-up of the row gives.
+    /// </summary>
+    public static ToolError PreconditionRequired { get; } =
+        new(ErrorCode.PreconditionRequired.Code, "Send the expectedVersion that the look-up returned.");
+
+    /// <summary>
+    /// The refusal of the arguments that a handler refused (<c>validation.failed</c>), each message under its
+    /// argument's name: the handler's keys are its members' names, which are camel-cased as the arguments are.
+    /// </summary>
+    public static ToolError ValidationFailed(IReadOnlyDictionary<string, string[]> errors) =>
+        new(
+            ErrorCode.ValidationFailed.Code,
+            "Some arguments are not valid. See fields.",
+            errors.ToDictionary(error => JsonNamingPolicy.CamelCase.ConvertName(error.Key), error => error.Value));
+
+    /// <summary>
     /// The refusal for a row that does not exist in the organisation, whether it exists in another or nowhere
     /// (<c>not_found</c>).
     /// </summary>

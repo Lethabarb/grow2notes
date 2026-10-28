@@ -16,8 +16,9 @@ namespace Grow2Notes.Tests.Features.Participants;
 /// <c>PUT /api/admin/participants/{id}</c> (design.md §6.6, S01.02.03), called with the test-only sign-in
 /// (<see cref="TestSignIn"/>) on a fake clock: a manager corrects a participant of their own organisation with the
 /// participant's <c>ETag</c> as <c>If-Match</c>, by the add's rules, and gets <c>200</c> with no body; with no
-/// <c>If-Match</c>, <c>428</c>; with a stale one, <c>412</c>; for another organisation's participant, <c>404</c>; and
-/// for a field that breaks a rule, <c>422 validation.failed</c>; each changing nothing and writing no event. A
+/// <c>If-Match</c>, <c>428</c>; with a stale one, <c>412</c>; for another organisation's participant, <c>404</c>; for
+/// an archived one, <c>422 participant.archived</c> whatever <c>If-Match</c> says (D93); and for a field that breaks a
+/// rule, <c>422 validation.failed</c>; each changing nothing and writing no event. A
 /// correction that changes no value answers <c>200</c> too, and writes nothing (D84). Each test corrects a participant
 /// that it adds to a seeded organisation (tests/README.md). The endpoint matrix covers the statuses of every caller,
 /// and <see cref="Platform.Audit.AuditEventsTests"/> the <c>participant.updated</c> that a correction writes.
@@ -152,6 +153,28 @@ public sealed class UpdateParticipantEndpointTests : IClassFixture<Grow2NotesFac
             (afterFirst.GivenName, afterFirst.FamilyName, afterFirst.DateOfBirth, RowVersionToken.ETag(afterFirst)),
             (stored.GivenName, stored.FamilyName, stored.DateOfBirth, RowVersionToken.ETag(stored)));
         Assert.Equal([AuditEventTypes.Participant.Updated], await EventTypesAsync(participant.Id));
+    }
+
+    // The archived participant is looked at before the version, so the same 422 answers a current, a stale and a
+    // missing If-Match (D86, D93).
+    [Theory]
+    [InlineData("current")]
+    [InlineData("stale")]
+    [InlineData("missing")]
+    public async Task An_archived_participant_is_refused_with_422_and_not_changed(string ifMatchKind)
+    {
+        var participant = await app.Services.AddParticipantAsync(seeded.A, archived: true);
+        var ifMatch = ifMatchKind switch
+        {
+            "current" => participant.ETag,
+            "stale" => IfMatch.ETag("AAAAAAAAB9E="),
+            _ => null,
+        };
+
+        using var response = await PutAsync(Caller.ManagerOfA, participant.Id, Corrected, ifMatch);
+
+        await AssertProblemAsync(response, ErrorCode.ParticipantArchived);
+        await AssertUnchangedAsync(participant);
     }
 
     // B's manager, sending the participant's current ETag, as one who had it would: the tenant filter finds no such

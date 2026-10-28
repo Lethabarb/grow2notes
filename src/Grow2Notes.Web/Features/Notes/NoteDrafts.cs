@@ -400,7 +400,7 @@ internal sealed class NoteDrafts(
     {
         if (status == ParticipantStatus.Archived)
         {
-            return ErrorCode.ParticipantArchived;
+            return ErrorCode.NoteParticipantArchived;
         }
 
         var today = clock.Today();

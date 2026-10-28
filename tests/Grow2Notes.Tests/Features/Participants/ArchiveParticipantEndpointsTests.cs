@@ -100,22 +100,14 @@ public sealed class ArchiveParticipantEndpointsTests : IClassFixture<Grow2NotesF
         await AssertUnchangedAsync(participant, archived: action == Restore);
     }
 
-    // As when another manager corrected the participant first: the action, sent with the version both loaded, changes
+    // As when another manager changed the participant first: the action, sent with the version both loaded, changes
     // nothing.
     [Theory]
     [MemberData(nameof(Actions))]
     public async Task With_a_stale_If_Match_it_answers_412_and_writes_nothing(string action)
     {
         var participant = await AddToChangeAsync(action);
-        using (var client = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded))
-        using (var correction = await client.PutWithTokenAsync(
-                   $"/api/admin/participants/{participant.Id}",
-                   await client.FetchTokenAsync(),
-                   new { givenName = "Jane", familyName = "Smith", dateOfBirth = "1987-03-07" },
-                   participant.ETag))
-        {
-            Assert.Equal(HttpStatusCode.OK, correction.StatusCode);
-        }
+        var firstEvents = await ChangeFirstAsync(participant, action);
 
         var corrected = RowVersionToken.ETag(await StoredAsync(participant.Id));
 
@@ -126,7 +118,7 @@ public sealed class ArchiveParticipantEndpointsTests : IClassFixture<Grow2NotesF
         Assert.Equal(
             (action == Restore ? ParticipantStatus.Archived : ParticipantStatus.Active, corrected),
             (stored.Status, RowVersionToken.ETag(stored)));
-        Assert.Equal([AuditEventTypes.Participant.Updated], await EventTypesAsync(participant.Id));
+        Assert.Equal(firstEvents, await EventTypesAsync(participant.Id));
     }
 
     // B's manager, sending the participant's current ETag, as one who had it would: the tenant filter finds no such
@@ -195,6 +187,37 @@ public sealed class ArchiveParticipantEndpointsTests : IClassFixture<Grow2NotesF
     {
         using var problem = JsonDocument.Parse(await response.ReadProblemAsync((HttpStatusCode)code.Status));
         Assert.Equal(code.Code, problem.RootElement.GetProperty(ErrorCode.Extension).GetString());
+    }
+
+    // What another manager does first, which moves the version and leaves the participant's status as it was found: a
+    // correction of an active participant; for an archived one, whom a correction no longer reaches (D93), a restore
+    // and an archive again. Gives the events that it writes.
+    private async Task<List<string>> ChangeFirstAsync(TestParticipant participant, string action)
+    {
+        if (action == Archive)
+        {
+            using var client = app.CreateHttpsClient().SignInAs(Caller.ManagerOfA, seeded);
+            using var correction = await client.PutWithTokenAsync(
+                $"/api/admin/participants/{participant.Id}",
+                await client.FetchTokenAsync(),
+                new { givenName = "Jane", familyName = "Smith", dateOfBirth = "1987-03-07" },
+                participant.ETag);
+            Assert.Equal(HttpStatusCode.OK, correction.StatusCode);
+            return [AuditEventTypes.Participant.Updated];
+        }
+
+        using (var restored = await PostAsync(Caller.ManagerOfA, participant.Id, Restore, participant.ETag))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, restored.StatusCode);
+        }
+
+        var restoredETag = RowVersionToken.ETag(await StoredAsync(participant.Id));
+        using (var archived = await PostAsync(Caller.ManagerOfA, participant.Id, Archive, restoredETag))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, archived.StatusCode);
+        }
+
+        return [AuditEventTypes.Participant.Restored, AuditEventTypes.Participant.Archived];
     }
 
     // A participant whom the action changes: an active one to archive, an archived one to restore.

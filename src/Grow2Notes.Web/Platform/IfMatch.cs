@@ -40,6 +40,29 @@ internal static class IfMatch
     }
 
     /// <summary>
+    /// <see cref="Check"/>, with the refusal given when the channel gives it: at once for <see cref="Channel.App"/>,
+    /// and held back for <see cref="Channel.Mcp"/>, whose call that changes nothing is not refused (mcp-server.md
+    /// §5.1). The one place the channel decides this, for every handler that checks a version.
+    /// </summary>
+    /// <param name="actor">Who changes the row, and by which channel.</param>
+    /// <param name="ifMatch">
+    /// The <c>If-Match</c> values, or the tool's <c>expectedVersion</c> through <see cref="ETag"/>.
+    /// </param>
+    /// <param name="currentToken">The token of the row as it is stored now.</param>
+    public static VersionCheck CheckFor(Actor actor, StringValues ifMatch, string currentToken)
+    {
+        var refusal = Check(ifMatch, currentToken);
+        return actor.Channel == Channel.Mcp ? new(null, refusal) : new(refusal, null);
+    }
+
+    /// <summary>
+    /// The <c>If-Match</c> values for a tool's <c>expectedVersion</c>: none when it is missing or empty, so that
+    /// <see cref="Check"/> gives <see cref="ErrorCode.PreconditionRequired"/>, and otherwise its <see cref="ETag"/>.
+    /// </summary>
+    public static StringValues FromExpectedVersion(string? expectedVersion) =>
+        string.IsNullOrEmpty(expectedVersion) ? StringValues.Empty : ETag(expectedVersion);
+
+    /// <summary>
     /// The ETag of a row whose token is <paramref name="token"/>: the token in quotes, the one <c>If-Match</c> value
     /// that <see cref="Check"/> accepts for it.
     /// </summary>

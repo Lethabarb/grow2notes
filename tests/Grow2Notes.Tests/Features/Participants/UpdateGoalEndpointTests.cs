@@ -21,10 +21,11 @@ namespace Grow2Notes.Tests.Features.Participants;
 /// and the goal's new <c>ETag</c>; the text already stored answers <c>200</c> with the same <c>ETag</c> and writes
 /// nothing (D84); with no <c>If-Match</c>, <c>428</c>; with a stale one, or a goal changed after the handler loaded
 /// it, <c>412</c>; a text that the add refuses, <c>422 validation.failed</c> in the screen's words; and a goal that is
-/// unknown, or another organisation's, <c>404</c>; each refusal changing nothing and writing no event. Each test
-/// rewords a goal that it adds to a participant of its own in A (tests/README.md). The endpoint matrix covers the
-/// statuses of every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the <c>goal.updated</c> that a reword
-/// writes.
+/// unknown, or another organisation's, <c>404</c>, and a goal of an archived participant <c>422
+/// participant.archived</c> whatever <c>If-Match</c> says (D93); each refusal changing nothing and writing no event.
+/// Each test rewords a goal that it adds to a participant of its own in A (tests/README.md). The endpoint matrix
+/// covers the statuses of every caller, and <see cref="Platform.Audit.AuditEventsTests"/> the <c>goal.updated</c>
+/// that a reword writes.
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class UpdateGoalEndpointTests : IClassFixture<Grow2NotesFactory>, IAsyncDisposable
@@ -183,7 +184,8 @@ public sealed class UpdateGoalEndpointTests : IClassFixture<Grow2NotesFactory>, 
         await AssertRefusedAsync(new { goal = "Makes own lunch" }, EnterTheGoal);
     }
 
-    // The screen offers Edit on active goals alone, but the server refuses nothing on an archived one (T05's Notes).
+    // The screen offers Edit on active goals alone, but the server refuses nothing on an archived goal of an active
+    // participant (T05's Notes, R18).
     [Fact]
     public async Task An_archived_goal_is_reworded_and_stays_archived_in_its_place()
     {
@@ -196,6 +198,25 @@ public sealed class UpdateGoalEndpointTests : IClassFixture<Grow2NotesFactory>, 
         Assert.Equal(
             ("Makes own lunch", 4, (DateTime?)TestGoals.AddedAtUtc),
             (stored.Text, stored.SortOrder, stored.ArchivedAtUtc));
+    }
+
+    // The participant is looked at before the version, so the same 422 answers a current and a stale If-Match (D93);
+    // an archived goal of an active participant is still reworded, as the test above shows.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_goal_of_an_archived_participant_is_refused_with_422_and_not_changed(bool currentIfMatch)
+    {
+        var (_, goal) = await AddGoalAsync(new(StoredText, 0), archivedParticipant: true);
+
+        using var response = await PutAsync(
+            Caller.ManagerOfA,
+            goal.Id,
+            new { text = "Makes own lunch" },
+            currentIfMatch ? goal.ETag : IfMatch.ETag("AAAAAAAAB9E="));
+
+        await AssertProblemAsync(response, ErrorCode.ParticipantArchived);
+        await AssertUnchangedAsync(goal);
     }
 
     // B's manager, sending the goal's current ETag, as one who had it would: the tenant filter finds no such goal in B,
@@ -298,10 +319,11 @@ public sealed class UpdateGoalEndpointTests : IClassFixture<Grow2NotesFactory>, 
         Assert.Empty(await EventTypesAsync(goal.Id));
     }
 
-    // A goal, as given, of a participant added to A for the test.
-    private async Task<(Guid ParticipantId, AddedGoal Goal)> AddGoalAsync(TestGoal goal)
+    // A goal, as given, of a participant added to A for the test, active unless archivedParticipant.
+    private async Task<(Guid ParticipantId, AddedGoal Goal)> AddGoalAsync(
+        TestGoal goal, bool archivedParticipant = false)
     {
-        var participant = await app.Services.AddParticipantAsync(seeded.A);
+        var participant = await app.Services.AddParticipantAsync(seeded.A, archivedParticipant);
         return (participant.Id, await app.Services.AddGoalAsync(seeded.A, participant.Id, goal));
     }
 

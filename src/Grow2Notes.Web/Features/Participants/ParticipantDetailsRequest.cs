@@ -1,3 +1,5 @@
+using Grow2Notes.Web.Data;
+
 namespace Grow2Notes.Web.Features.Participants;
 
 /// <summary>
@@ -10,4 +12,12 @@ namespace Grow2Notes.Web.Features.Participants;
 /// Nothing else is read: any other field in the body, such as a government identifier, is passed over, so none is
 /// stored (A5).
 /// </remarks>
-internal sealed record ParticipantDetailsRequest(string? GivenName, string? FamilyName, DateOnly? DateOfBirth);
+internal sealed record ParticipantDetailsRequest(string? GivenName, string? FamilyName, DateOnly? DateOfBirth)
+{
+    /// <summary>
+    /// This request with each field it leaves out (<see langword="null"/>) taken from <paramref name="stored"/>, for a
+    /// tool that sends only the fields to change. A field sent empty is kept as sent, so its rule refuses it.
+    /// </summary>
+    public ParticipantDetailsRequest OrStored(Participant stored) =>
+        new(GivenName ?? stored.GivenName, FamilyName ?? stored.FamilyName, DateOfBirth ?? stored.DateOfBirth);
+}

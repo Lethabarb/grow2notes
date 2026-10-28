@@ -101,7 +101,7 @@ public sealed class GoalListEndpointTests(Grow2NotesFactory factory, SqlServerFi
         Assert.Equal(added, goals.Select(Id));
     }
 
-    // An archived participant's goals are listed as an active one's are: only the screen is read-only (D86).
+    // An archived participant's goals are listed as an active one's are: reads are not refused, only writes are (D93).
     [Fact]
     public async Task An_archived_participant_s_goals_are_listed()
     {

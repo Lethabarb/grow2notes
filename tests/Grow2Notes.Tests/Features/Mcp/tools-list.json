@@ -1,5 +1,167 @@
 [
   {
+    "name": "add_goal",
+    "title": "Add a goal",
+    "description": "Adds a goal to a participant, at the end of their active goals. Returns its goalId and the expectedVersion that a later change needs. An archived participant's goals cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "description": "The participantId that find_participants or get_participant returned.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The goal's wording: at most 200 characters, on one line.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participantId",
+        "text"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "text": {
+          "type": "string"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "goalId",
+        "text",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Add a goal",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "add_participant",
+    "title": "Add a participant",
+    "description": "Adds an active participant to this organisation. Returns their participantId and the expectedVersion that a later change needs. Never returns a date of birth.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "givenName": {
+          "description": "The given name: at most 100 characters.",
+          "type": "string"
+        },
+        "familyName": {
+          "description": "The family name: at most 100 characters.",
+          "type": "string"
+        },
+        "dateOfBirth": {
+          "description": "The date of birth, written YYYY-MM-DD and before today.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "givenName",
+        "familyName",
+        "dateOfBirth"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "givenName": {
+          "type": "string"
+        },
+        "familyName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "expectedVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "participantId",
+        "givenName",
+        "familyName",
+        "status",
+        "expectedVersion"
+      ]
+    },
+    "annotations": {
+      "title": "Add a participant",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "archive_goal",
+    "title": "Archive a goal",
+    "description": "Archives a goal, which acts at once. Needs the goalId and expectedVersion that get_participant returned. An archived goal answers changed: false. The result has no version: look the goal up again with get_participant before the next change. A goal of an archived participant cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "description": "The goalId that get_participant returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_participant returned for this goal.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "goalId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Archive a goal",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "find_participants",
     "title": "Find participants by name",
     "description": "Finds participants of this organisation by name. Every word of search must appear in the given or family name; case is ignored. Returns at most 10, sorted by family name then given name, each with its status (active or archived); archived participants only with includeArchived. If two people have the same name, or you are not sure which one the person means, ask them. Never returns a date of birth or anything about notes.",
@@ -146,6 +308,271 @@
       "title": "Get a participant and their goals",
       "readOnlyHint": true,
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "reorder_goals",
+    "title": "Reorder a participant's goals",
+    "description": "Puts a participant's active goals in a new order. goalIds must hold every active goal of the participant exactly once, in the order wanted; an archived goal is not one of them. Needs no expectedVersion. An order that is already stored answers changed: false. Returns the goals as get_participant lists them, every expectedVersion current. An archived participant's goals cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "description": "The participantId that find_participants or get_participant returned.",
+          "type": "string"
+        },
+        "goalIds": {
+          "description": "The goalId of every active goal of the participant, once each, in the new order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "participantId",
+        "goalIds"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "goalId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "text": {
+                "type": "string"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "expectedVersion": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "goalId",
+              "text",
+              "archived",
+              "expectedVersion"
+            ]
+          }
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed",
+        "goals",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Reorder a participant's goals",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "restore_goal",
+    "title": "Restore a goal",
+    "description": "Restores an archived goal, which acts at once, and puts it at the end of the participant's active goals. Needs the goalId and expectedVersion that get_participant returned. An active goal answers changed: false. The result has no version: look the goal up again with get_participant before the next change. A goal of an archived participant cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "description": "The goalId that get_participant returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_participant returned for this goal.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "goalId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Restore a goal",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_goal",
+    "title": "Reword a goal",
+    "description": "Rewords a goal. Needs the goalId and expectedVersion that get_participant returned. A call that would change nothing answers changed: false. A goal of an archived participant cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "goalId": {
+          "description": "The goalId that get_participant returned.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The new wording: at most 200 characters, on one line.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_participant returned for this goal.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "goalId",
+        "text"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Reword a goal",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "update_participant",
+    "title": "Correct a participant's name or date of birth",
+    "description": "Corrects a participant's given name, family name or date of birth: send only the fields to change. Needs the participantId and expectedVersion that get_participant returned. A call that would change nothing answers changed: false. An archived participant cannot be changed: restore the participant first. Never returns a date of birth.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "participantId": {
+          "description": "The participantId that find_participants or get_participant returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_participant returned for this participant.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "givenName": {
+          "description": "The new given name: at most 100 characters.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "familyName": {
+          "description": "The new family name: at most 100 characters.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "dateOfBirth": {
+          "description": "The new date of birth, written YYYY-MM-DD and before today.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "participantId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "givenName": {
+          "type": "string"
+        },
+        "familyName": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "givenName",
+        "familyName",
+        "status",
+        "changed",
+        "expectedVersion"
+      ]
+    },
+    "annotations": {
+      "title": "Correct a participant's name or date of birth",
+      "readOnlyHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false
     }

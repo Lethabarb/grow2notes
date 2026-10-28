@@ -18,6 +18,9 @@ internal sealed record ParticipantDetails(string GivenName, string FamilyName, D
     /// <summary>The message for a date of birth that is missing.</summary>
     public const string EnterDateOfBirth = "Enter the date of birth";
 
+    /// <summary>The message for a date of birth that is not a calendar date written <c>yyyy-MM-dd</c>.</summary>
+    public const string DateOfBirthRealDate = "Date of birth must be a real date";
+
     /// <summary>The message for a date of birth that is today or later in Melbourne.</summary>
     public const string DateOfBirthInThePast = "Date of birth must be in the past";
 
