@@ -7342,7 +7342,7 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 
 ```yaml
 id: T36
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -7366,6 +7366,44 @@ gives a reason.
 
 - Builds the MCP confirmation code that T37 reuses, and adds the through-MCP deactivate row to T32's access-ends test.
   Owner question Q9 (MA6) is answered by design.md A109 (26 October 2026).
+
+### Plan
+
+Outcome: one new tool, deactivate_user (the 24th), and the shared confirmation path that T37 reuses unchanged. No
+migration, table, audit event type, endpoint or SPA change.
+
+Design: a scoped `ToolConfirmation` offers the assistant's own form only when the call is MRTR-capable and its
+per-request client capabilities declare form elicitation; every other call gets the preview, then confirm with the
+preview's expectedVersion. The form's `requestState` is a Data Protection token (purpose
+`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the row version, alive 5 minutes, so the
+server keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes the form's one `mcp.read` row and
+rethrows `InputRequiredException`.
+
+Domain: none persisted. `UserChangeResult` gains `Changed` and `Unchanged`; `UserChanges` gains an actor-aware overload
+(App refuses before the change, Mcp hands `refuseIfChanged` to it); `UserDeactivation` takes a reason (stored in the
+audit Details) and answers Unchanged for a deactivated user, which the app still answers 204. Support acts on workers
+only and must give a reason (200 characters, trimmed), checked in the user tools from the database-built role claim.
+
+Reuse: UserDeactivation and its LastManagerRule, UserList for the email look-up (A132), IfMatch.CheckFor,
+ConsentRequests' Data Protection pattern (Seal, Open and Hash move to `ProtectedJson`), McpCall, ToolError, TextInput, the tool matrix,
+canary, contract and access-ends tests.
+
+Decisions where the design is silent: A136 (confirmation: when the form is offered, state contents and lifetime, only
+true is yes, ElicitAsync rejected); A137 (deactivate_user: check order, last-manager reported at confirm rather than
+foreseen, preview echoes no reason, status is the outcome, MCP-only codes role.not_allowed and reason.required, one
+sentence for every target, the typed-by-people line on 18 tools, new model-facing words for the owner at ops step 194);
+A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split). Carry-overs from T35 are in the Steps.
+
+### Verticals
+
+- v1: Shared confirmation: ProtectedJson, ToolConfirmation, the audit filter catch, the probe_confirm test tool and the
+  raw 2026-07-28 test helper. Depends on: none. R3, R4, R6, R8.
+- v2: Shared deactivate handler: actor-aware UserChanges, Unchanged result, reason in the audit details. Depends on:
+  none. R9, R20.
+- v3: deactivate_user, AccessChange, the typed-by-people line on 18 tools, and all tool tests. Depends on: v1, v2.
+  R1, R2, R5, R7, R10 to R19, R21 to R24.
+- v4: Records: design.md A136 and A137, mcp-server.md fixes, coverage, F07.04, tasks.md, ops steps 191 to 194.
+  Depends on: v3. R25 to R27.
 
 ### Steps
 
