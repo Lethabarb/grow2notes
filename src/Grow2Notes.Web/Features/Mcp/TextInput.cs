@@ -19,7 +19,7 @@ internal static class TextInput
     /// <param name="label">What the messages call it, capitalised.</param>
     /// <param name="value">The argument as the assistant sent it.</param>
     /// <param name="limit">The most characters it may have once trimmed.</param>
-    /// <param name="allowLineBreaks">Whether the text may hold line breaks, as the guide prompts do (A131).</param>
+    /// <param name="allowLineBreaks">Whether the text may hold line breaks, as the guide prompts do (A133).</param>
     public static ToolError? Refusal(string field, string label, string value, int limit, bool allowLineBreaks = false)
     {
         if (value.Trim().Length > limit)

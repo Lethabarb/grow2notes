@@ -99,7 +99,7 @@ internal sealed class CommonItemChanges(
     /// <remarks>
     /// <see cref="Channel.App"/> has the version checked first, so that a missing or stale <c>If-Match</c> is refused
     /// whatever follows. <see cref="Channel.Mcp"/> has it checked last, by the save, so that a call that changes
-    /// nothing is not refused for its version, while the groups' refusals and the text's rules come first (A132).
+    /// nothing is not refused for its version, while the groups' refusals and the text's rules come first (A134).
     ///
     /// The groups are read just before the save, and carry no token that the save checks (design.md §6.9), so a group
     /// archived in that instant is not caught (T06's Notes); and two items put at the end of one group at once can read

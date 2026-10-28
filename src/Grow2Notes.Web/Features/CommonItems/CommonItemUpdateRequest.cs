@@ -12,7 +12,7 @@ internal sealed record CommonItemUpdateRequest(string? Text, Guid? GroupId)
 {
     /// <summary>
     /// This request with the stored item's text where it sent none, for a tool whose <c>text</c> is optional so that
-    /// it can move an item alone (A132). The app's request is not completed, so its missing text is still refused.
+    /// it can move an item alone (A134). The app's request is not completed, so its missing text is still refused.
     /// </summary>
     public CommonItemUpdateRequest OrStored(CommonItem stored) => this with { Text = Text ?? stored.Text };
 }

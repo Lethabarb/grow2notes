@@ -80,7 +80,7 @@ internal sealed class CommonItemGroupChanges(
     /// <see cref="Channel.App"/> has the version checked first, so that a missing or stale <c>If-Match</c> is refused
     /// whatever follows. <see cref="Channel.Mcp"/> has it checked last, by the save, so that a call that changes
     /// nothing is not refused for its version, while Every note, the name's rules and the rest are refused first
-    /// (A132).
+    /// (A134).
     /// </remarks>
     /// <param name="actor">Who renames it.</param>
     /// <param name="groupId">The group.</param>
