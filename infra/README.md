@@ -84,7 +84,7 @@ You need:
    Each environment's deployment identity client ID is that GitHub environment's `AZURE_CLIENT_ID`. Nothing needs the
    app identities' client IDs copied: `main.bicep` finds each app identity by its name (S00.02.02).
 
-6. Create the GitHub `test` environment, and give it seven secrets, which `deploy.yml` reads (D65):
+6. Create the GitHub `test` environment, and give it eight secrets, which `deploy.yml` reads (D65, D94):
    - `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_SUBSCRIPTION_ID`: the test deployment identity's client ID and the
      tenant and subscription IDs, which `deploy.yml` passes to `azure/login`'s `client-id`, `tenant-id` and
      `subscription-id`;
@@ -92,12 +92,14 @@ You need:
      "Grow2Notes SQL admins", the SQL server's Entra admin in both environments, whose only member is the developer
      (D64);
    - `ALERT_EMAIL`: the address the operations alerts are sent to;
-   - `EMAIL_SENDER_ADDRESS`: the address the app sends its setup-link email from, on the domain set up in "Email
-     through Resend" below.
+   - `EMAIL_SENDER_ADDRESS` and `RESEND_API_KEY`: the address the app sends its setup-link email from, and the Resend
+     API key. The owner sets these two, not the operator, as [What the owner sets](#what-the-owner-sets) says, so
+     the commands below leave them out.
 
-   `deploy.yml` passes the last four to `main.bicep` as `sqlAdminGroupName`, `sqlAdminGroupObjectId`, `alertEmail` and
-   `emailSenderAddress`, in place of the empty placeholders in `test.bicepparam`. `read` asks for the addresses, as in
-   step 3:
+   `deploy.yml` passes `SQL_ADMIN_GROUP_NAME`, `SQL_ADMIN_GROUP_OBJECT_ID`, `ALERT_EMAIL` and `EMAIL_SENDER_ADDRESS` to
+   `main.bicep` as `sqlAdminGroupName`, `sqlAdminGroupObjectId`, `alertEmail` and `emailSenderAddress`, in place of the
+   empty placeholders in `test.bicepparam`, and `RESEND_API_KEY` as the secure parameter `resendApiKey`. `read` asks
+   for the alert address, as in step 3:
 
    ```shell
    # Only if the environment does not exist yet:
@@ -120,16 +122,16 @@ You need:
      --body "$(az ad group show --group 'Grow2Notes SQL admins' --query id --output tsv)"
    read -rp 'Alert email address: ' alert_email
    gh secret set ALERT_EMAIL --env test --body "$alert_email"
-   read -rp 'Email sender address, bare or as Grow2Notes <address>: ' email_sender_address
-   gh secret set EMAIL_SENDER_ADDRESS --env test --body "$email_sender_address"
 
    gh secret list --env test
    gh secret list
    ```
 
-   The environment should hold exactly those seven secrets, and neither it nor the repository should hold a client
-   secret or a publish profile. The `prod` environment gets the same seven, with the prod row's client ID, and its
-   deployment branches restricted to `main`: `ops/go-live.md` has the steps.
+   The environment should hold exactly those eight secrets once the owner has set the last two, and neither it nor the
+   repository should hold a client secret or a publish profile. The `prod` environment gets the same eight, with the
+   prod row's client ID, and its deployment branches restricted to `main`: `ops/go-live.md` has the steps. The `test`
+   environment's deployment branches are restricted to `main` too, before the owner sets `RESEND_API_KEY`
+   (`ops/first-use-in-test.md` step 151).
 
 ### Running it again
 
@@ -179,53 +181,84 @@ the command again afterwards.
 
 ## Email through Resend
 
-The app sends one kind of email, the setup link, through Resend's HTTP API (D92). The app identity reads Resend's API
-key from the environment's Key Vault at each send, as the secret `resend-api-key`. The key is in no template, no app
-setting, no GitHub secret and no deployment history: `Email__ApiKeySecretUri` holds only the secret's address, and
-`Email__SenderAddress` is the `EMAIL_SENDER_ADDRESS` secret. Everything here is done by hand.
+The app sends one kind of email, the setup link, through Resend's HTTP API (D92, D94). The owner sets two secrets on
+each GitHub environment and every deploy copies them in, so email needs no operator step in Azure: no Key Vault role,
+no firewall rule, and no terminal command that handles the key.
 
-The owner sets up Resend once:
+### What the owner sets
+
+| Environment | Secret | What the value is |
+|---|---|---|
+| `test` | `RESEND_API_KEY` | A Resend API key, sending access only, limited to the verified domain, for `test` alone |
+| `test` | `EMAIL_SENDER_ADDRESS` | The from address on the verified domain, bare or as `Grow2Notes <address>` |
+| `prod` | `RESEND_API_KEY` | A second Resend API key, sending access only, limited to the verified domain, for `prod` |
+| `prod` | `EMAIL_SENDER_ADDRESS` | The from address on the verified domain, bare or as `Grow2Notes <address>` |
+
+Set each one on the repository's *Settings*, *Environments* page, or with `gh secret set <name> --env <env>`, which asks
+for the value without showing it. GitHub keeps an environment secret encrypted and write-only: nobody can read it back.
+The steps, in order, are `ops/first-use-in-test.md` step 151 for `test` and `ops/go-live.md` A4 for `prod`.
+
+Before that, the owner sets up Resend once:
 - Verify one sending domain that belongs to Grow2Notes. It is never the parent company's domain or a subdomain of it
   (D42). Both environments share it.
 - Add the DNS records Resend gives, and a DMARC record. Turn open and click tracking off for the domain, because click
   tracking would send the setup link through Resend's redirect.
-- Create one API key per environment, with the sending-only permission.
+- Create one API key per environment, with the sending-only permission, limited to that domain.
 - Protect the Resend account with multi-factor sign-in and the fewest members it can have. Resend's dashboard shows the
   messages it sent, including setup links that have not been used yet (A102).
 
-The operator then stores each environment's key. The vault accepts only the web app's subnet, and creating a secret
-needs a role that no identity holds, so for the few minutes this takes the operator gives themselves
-`Key Vault Secrets Officer` on the vault and adds their address to the vault's firewall, then removes both. A new role
-assignment can take a few minutes to apply. `read -s` keeps the key out of the shell's history and the screen, and
-`--output none` stops `az` printing the value back:
+### What each deploy does with them
 
-```shell
-vault=kv-grow2notes-<env>
-my_ip=$(curl -fsS --max-time 10 https://api.ipify.org)
-vault_id=$(az keyvault show --name "$vault" --query id --output tsv)
-me=$(az ad signed-in-user show --query id --output tsv)
-az role assignment create --assignee "$me" --role 'Key Vault Secrets Officer' --scope "$vault_id" --output none
-az keyvault network-rule add --name "$vault" --ip-address "$my_ip" --output none
+- `deploy.yml` passes `RESEND_API_KEY` to `main.bicep` as the `@secure()` parameter `resendApiKey`, and
+  `EMAIL_SENDER_ADDRESS` as `emailSenderAddress`. A secret that is not set is left off the command, and its parameter
+  keeps its empty default. The key is never an app setting, an output or a line in a parameters file; ARM keeps a secure
+  parameter's value out of the deployment's history, and GitHub masks the value wherever it would appear in the log.
+- When `resendApiKey` is not empty, `keyvault.bicep` writes it as the secret `resend-api-key` in
+  `kv-grow2notes-<env>`, through the management plane. Each such deploy adds a version, which does no harm because the
+  app reads the current one; purge protection means old versions cannot be destroyed early.
+- When it is empty, the secret is not in the deployment, so a deploy in Incremental mode leaves an existing secret
+  alone. Deploys must never use Complete mode, and `deploy.yml` never sets one (`InfraTemplateTests`).
+- The app reads the key from the vault at each send as its managed identity (the Key Vault Secrets User role that
+  `bootstrap.bicep` grants), with no Key Vault reference, so a changed key works at the next send.
+  `Email__ApiKeySecretUri` holds only the secret's address.
 
-read -rsp 'Resend API key for <env>: ' resend_api_key; echo
-az keyvault secret set --vault-name "$vault" --name resend-api-key --value "$resend_api_key" --output none
-unset resend_api_key
+### When a value is missing
 
-az keyvault network-rule remove --name "$vault" --ip-address "$my_ip" --output none
-az role assignment delete --assignee "$me" --role 'Key Vault Secrets Officer' --scope "$vault_id"
-```
+No deploy stops for a missing value. With `EMAIL_SENDER_ADDRESS` empty, or the secret's address blank, the app starts,
+writes one warning at start that names the missing setting and no value (`Email is not configured: ... not set`), and
+every email answers "Not sent: something went wrong. Try again." With `RESEND_API_KEY` empty, the deploy writes no key
+and puts a warning, `Resend key not written`, on the run; a key already in the vault is kept. The app does not read the
+vault at start, so a key that is in neither GitHub nor the vault shows only as that warning and as "Not sent" at the
+first send. The app never writes its emails to the console in Azure: only the setting `Email:UseConsole` chooses the
+console sender, and no template or workflow sets it.
 
-Then set the sender, a bare address or `Grow2Notes <address>` on the verified domain, with `read` as in the bootstrap's
-step 6:
+### Rotating the key
 
-```shell
-read -rp 'Email sender address: ' email_sender_address
-gh secret set EMAIL_SENDER_ADDRESS --env <env> --body "$email_sender_address"
-```
+Create a new key in Resend, change the environment's `RESEND_API_KEY` secret, run a deploy, check that the next setup
+link arrives, and then revoke the old key in Resend.
 
-Until `EMAIL_SENDER_ADDRESS` is set, a deploy stops at its what-if, before any change, because `app.bicep` refuses an
-empty address. Until the secret exists, or while the app identity lacks `Key Vault Secrets User`, the app is
-unaffected except that each send answers "Not sent".
+### Can the deploy identity write the secret? (R05)
 
-To rotate the key, create a new one in Resend, store it with `az keyvault secret set` as above, which adds a version
-the app reads at its next send, and then revoke the old key in Resend.
+Expected yes, and the first test deploy with the key set is the proof (`ops/first-use-in-test.md` step 151). The
+deployment identity has only Contributor on its resource group (`bootstrap-environment.bicep`), and the vault uses RBAC
+with its firewall set to Deny.
+- For: Microsoft's *Configure network security for Azure Key Vault* page says the firewall applies to data-plane
+  operations only, and that deploying secrets or keys through ARM templates uses the control plane, which firewall rules
+  do not restrict. Writing a secret through ARM is the action `Microsoft.KeyVault/vaults/secrets/write`, which
+  Contributor's `*` covers; the roles that lack secret access lack data actions, not this one. The same identity already
+  creates the vault's data-protection key through ARM in this vault.
+- Against: the repository's own record disagrees with that page in one case. The first deployment, run by hand as Owner,
+  failed at the key with `ForbiddenByFirewall` on 7 October 2026 while the bypass setting was `None`, and succeeded once
+  it was `AzureServices`, which it still is. No secret has been written through ARM here yet, and no Microsoft page says
+  which role an ARM secret write needs on an RBAC vault.
+
+If the first deploy with the key fails, change nothing in Azure and read the exact error:
+- `ForbiddenByFirewall`: not expected. Check that the vault's bypass is still `AzureServices` and report it.
+- An authorisation refusal that names a secrets data action (for example
+  `Microsoft.KeyVault/vaults/secrets/setSecret/action`): the smallest built-in grant is `Key Vault Secrets Officer` for
+  `id-grow2notes-<env>-deploy` at resource-group scope only. It is a change to `bootstrap-environment.bicep` that the
+  operator applies by a by-hand re-run of the bootstrap (steps 1 to 4), and only once the owner has accepted its reach:
+  the deploy jobs could then read and delete the vault's secrets. Today that is the Resend key, which those jobs
+  already receive from GitHub, and a deleted secret can be recovered for 90 days. A custom role that can only write
+  secrets is narrower, but it means owning a role definition, so it is not chosen unless the owner asks.
+- Anything else: report the exact error and the action it names.

@@ -27,7 +27,8 @@ param pointInTimeRestoreDays = 35
 // Placeholders only. Every deploy passes the real values as parameters, from the prod environment's secrets, because
 // the object ID belongs to the operator's tenant and the addresses may contain the company's name (D42, D60, D64, D65);
 // sql.bicep and monitoring.bicep refuse the first three empty, and an empty sender address makes the app warn and
-// answer every email Not sent (D93). The Resend key is not here either: deploy.yml passes it as a secure parameter.
+// answer every email Not sent (design.md §10.4 step 2). The Resend key is not here either: deploy.yml passes it as a
+// secure parameter.
 param sqlAdminGroupName = ''
 param sqlAdminGroupObjectId = ''
 param alertEmail = ''

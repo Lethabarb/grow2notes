@@ -26,7 +26,8 @@ param healthCheckPath string
 param appSettings { *: string }
 
 // Passed in by every deploy that has one and never committed, because the address may contain the company's name
-// (D42, D65). It is written as given, empty included, and the app treats a blank address as missing (D93).
+// (D42, D65). It is written as given, empty included, and the app treats a blank address as missing (design.md
+// §10.4 step 2).
 @description('The address the app sends email from, the Email:SenderAddress setting, written as it is on each message.')
 param emailSenderAddress string
 

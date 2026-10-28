@@ -183,9 +183,10 @@ jobs:
       # deploy's create, which prints nothing.
       # A secret that is not set is left out, so its parameter keeps the parameters file's or main.bicep's empty value:
       # an unset sender address makes the app warn and answer every email Not sent, and an unset Resend key leaves the
-      # vault's secret as it is (D93). The key is a secure parameter, which ARM keeps out of the deployment's history,
-      # and GitHub masks its value wherever it appears in the log. The step never turns on tracing and never picks a
-      # deployment mode, so it stays Incremental, which is what keeps an existing secret when no key is passed.
+      # vault's secret as it is (design.md §10.4 step 2). The key is a secure parameter, which ARM keeps out of the
+      # deployment's history, and GitHub masks its value wherever it appears in the log. The step never turns on tracing
+      # and never picks a deployment mode, so it stays Incremental, which is what keeps an existing secret when no
+      # key is passed.
       - name: Deploy main.bicep
         env:
           SQL_ADMIN_GROUP_NAME: ${{ secrets.SQL_ADMIN_GROUP_NAME }}
