@@ -7,7 +7,7 @@ namespace Grow2Notes.Web.Platform.Configuration;
 /// <summary>
 /// The one save of a change to a configuration row, with its audit event (design.md §5.4, §6.6, A28, D84), one per
 /// request or command scope. The handler loads the row through the tenant filter, checks its version with
-/// <see cref="IfMatch.Check"/> and changes it on the scope's context; this then saves the change and its event through
+/// <see cref="IfMatch"/> and changes it on the scope's context; this then saves the change and its event through
 /// the audit writer's one <c>SaveChanges</c>, so they commit or fail together without <c>InTransactionAsync</c>, which
 /// design.md §5.9 keeps for work of several saves.
 /// </summary>

@@ -155,7 +155,7 @@ public sealed class AddGoalEndpointTests : IClassFixture<Grow2NotesFactory>, IAs
     [Theory]
     [InlineData("Makes own breakfast")]
     [InlineData("")]
-    public async Task An_archived_participant_s_goal_is_refused_with_422_participant_archived_and_nothing_is_added(
+    public async Task An_archived_participant_s_goal_is_refused_and_nothing_is_added(
         string text)
     {
         var participant = await app.Services.AddParticipantAsync(seeded.A, archived: true);

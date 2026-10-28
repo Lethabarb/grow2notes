@@ -291,7 +291,7 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     // refuses the same stale version (412) or a missing one (428) at once.
     [Theory]
     [MemberData(nameof(WrongVersions))]
-    public async Task A_call_that_changes_nothing_answers_changed_false_whatever_the_version_but_the_app_refuses(
+    public async Task A_no_change_call_answers_changed_false_whatever_the_version_but_the_app_refuses(
         string version)
     {
         var participant = await Scene.AddParticipantAsync();
@@ -659,7 +659,7 @@ public sealed class ParticipantChangeToolsTests(ToolWorld world) : IClassFixture
     // the app refuses the same stale version (412) or a missing one (428) at once.
     [Theory]
     [MemberData(nameof(GoalCallsThatChangeNothing))]
-    public async Task A_goal_call_that_changes_nothing_answers_changed_false_whatever_the_version_but_the_app_refuses(
+    public async Task A_no_change_goal_call_answers_changed_false_whatever_the_version_but_the_app_refuses(
         string tool, string version)
     {
         var participant = await Scene.AddParticipantAsync();

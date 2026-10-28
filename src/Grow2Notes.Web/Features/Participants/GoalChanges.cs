@@ -13,7 +13,7 @@ namespace Grow2Notes.Web.Features.Participants;
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants/{participantId}/goals</c>,
 /// <c>PUT /api/admin/goals/{goalId}</c>, <c>PUT /api/admin/participants/{participantId}/goals/order</c> and
 /// <c>POST /api/admin/goals/{goalId}/archive</c> and <c>/restore</c> call it with <see cref="Actor.InApp"/>, and
-/// Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
+/// the assistant's tools call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
 /// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class GoalChanges(

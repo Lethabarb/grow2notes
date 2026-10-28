@@ -13,7 +13,7 @@ namespace Grow2Notes.Web.Features.Participants;
 /// The handler that changes an organisation's participants (design.md §6.6), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/participants</c>,
 /// <c>PUT /api/admin/participants/{id}</c> and <c>POST /api/admin/participants/{id}/archive</c> and <c>/restore</c>
-/// call it with <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>.
+/// call it with <see cref="Actor.InApp"/>, and the assistant's tools call it with <see cref="Channel.Mcp"/>.
 /// Each change is saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class ParticipantChanges(

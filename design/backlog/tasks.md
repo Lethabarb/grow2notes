@@ -7064,7 +7064,7 @@ archive or restore goals, under the same handlers, version checks and audit as M
   action, and the test asserts the events that the helper returns.
 - Tests changed on purpose, because the behaviour they pinned is ended by D93 (the PR bodies name them):
   `AddGoalEndpointTests.An_archived_participant_s_goal_is_added` is now
-  `An_archived_participant_s_goal_is_refused_with_422_participant_archived_and_nothing_is_added`;
+  `An_archived_participant_s_goal_is_refused_and_nothing_is_added`;
   `ReorderGoalsEndpointTests.An_archived_participant_s_goals_are_reordered` is now
   `An_archived_participant_s_goals_are_refused_and_not_reordered` (right and wrong ID set, both
   `participant.archived`); `ArchiveParticipantEndpointsTests.With_a_stale_If_Match_it_answers_412_and_writes_nothing`
@@ -7075,7 +7075,8 @@ archive or restore goals, under the same handlers, version checks and audit as M
   `ContractRulesTests` awaits the asynchronous `ValidArguments`. No security test was removed or weakened. New app
   tests: refusals in `UpdateParticipantEndpointTests`, `UpdateGoalEndpointTests`, `ArchiveGoalEndpointsTests`, with
   the archived goal of an active participant still allowed
-  (`An_archived_goal_is_reworded_and_stays_archived_in_its_place`); unit tests in `ConfigurationChangesTests` and `IfMatchTests`; and `ParticipantChangeToolsTests` (28 tests).
+  (`An_archived_goal_is_reworded_and_stays_archived_in_its_place`); unit tests in `ConfigurationChangesTests` and
+  `IfMatchTests`; and `ParticipantChangeToolsTests` (28 tests).
 - CI cost (the plan's budget): the v2 PR (#174, the regrouped matrix) took 43m04s of the 60 minutes, below the 45
   minutes at which the fallback was to be used, so the separate job for the Mcp test classes was not built. The v1
   PR (#175, on the old matrix) took 46m01s, v3 (#176) 30m47s and v4 (#177) 41m50s, so run times on the shared runner
@@ -7119,9 +7120,9 @@ archive or restore goals, under the same handlers, version checks and audit as M
 - Domain changes: none persisted, no migration, endpoint, setting, audit event type or SPA change. The shared handlers
   gain the archived-participant refusal (D86, recorded as D93): `participant.archived`, 422, for the details and for
   adding, rewording, reordering, archiving and restoring goals; restoring a participant is never refused.
-  `IfMatch.CheckFor` gives the app its refusal at once and the tool a refusal held back into `ConfigurationChanges.SaveAsync`, which
-  answers `Unchanged` first when `ChangeDetails.Of` finds nothing to change. `GoalChangeResult` gains `Changed` and
-  `GoalId`.
+  `IfMatch.CheckFor` gives the app its refusal at once and the tool a refusal held back into
+  `ConfigurationChanges.SaveAsync`, which answers `Unchanged` first when `ChangeDetails.Of` finds nothing to change.
+  `GoalChangeResult` gains `Changed` and `GoalId`.
 - Reuse: `ParticipantChanges`, `GoalChanges`, `ConfigurationChanges`, `ChangeDetails`, `IfMatch`, `ItemText`,
   `ListOrder`, `Archiving`, `TextInput`, `ToolError`, `McpCall`, `McpAuditFilter`, `ParticipantLookups`, `ToolWorld`,
   `ToolScene`, `AssistantFlow`.

@@ -1536,7 +1536,9 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 181. In the audit rows (step 15), read the rows that steps 176 to 180 made. Look for: each change is the app's own
      event, with the same old and new values as a change made in the app, plus `via` of `mcp`, the client ID and the
      tool's name; a request that changed nothing is an `mcp.read`; a refusal is an `mcp.refused` with its code; and
-     no row holds a date of birth. This step holds nothing open. (S07.03.01 to S07.03.03; A121, A129.)
+     no `mcp.read` or `mcp.refused` row holds a date of birth (the `participant.created` and `participant.updated`
+     rows hold it, as they do for a change made in the app). This step holds nothing open. (S07.03.01 to S07.03.03;
+     A121, A129.)
 182. For the owner: read the model-facing words and approve or reword them (they are in
      `tests/Grow2Notes.Tests/Features/Mcp/tools-list.json` and A129 in design.md): the seven titles and descriptions,
      the messages of the codes, and the new field messages "Date of birth must be a real date", the control or

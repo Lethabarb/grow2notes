@@ -28,7 +28,6 @@ namespace Grow2Notes.Tests.Features.Mcp;
 public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture sqlServer, ToolWorld world)
     : IClassFixture<Grow2NotesFactory>, IClassFixture<ToolWorld>
 {
-
     // Every way for a token to stop being good that the endpoint must answer with 401, and the absence of one.
     private static readonly string[] TokenCases =
     [

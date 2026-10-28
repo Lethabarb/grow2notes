@@ -77,7 +77,6 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         var scene = await ToolScene.CreateAsync(flow);
         var email = Assert.IsType<string>((await flow.UserAsync(scene.Organisation.ManagerId)).Email);
 
-
         // The arguments are made once and kept, so that what is looked for is what was sent: a tool that changes
         // something makes up names of its own each time it is asked for its arguments.
         var calls = await CallsOfEveryToolAsync(scene);
