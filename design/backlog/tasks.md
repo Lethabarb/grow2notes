@@ -5,6 +5,9 @@ delivered as the 39 tasks below: 28 for Release 1 (T01 to T28) and 11 for Releas
 T39). Each task is one pull request that a person can see working end to end. The tasks absorb 138 stories, and 7 are
 cut ([Cut stories](#cut-stories)).
 
+T40, added on 28 October 2026 (D93), is a Release 1 task in lane D with one new story, S00.02.08: Resend's settings
+come from GitHub environment secrets.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -7341,6 +7344,75 @@ Planned when the lane starts it.
 
 ---
 
+## T40 Resend settings from GitHub environment secrets
+
+```yaml
+id: T40
+status: doing
+release: R1
+lane: D
+size: S
+depends_on: [T22]
+stories: [S00.02.08]
+```
+
+### Outcome
+
+The owner sets the Resend key and the sender address as GitHub environment secrets on test and prod, and each deploy
+copies them in: the key is written to Key Vault as `resend-api-key` through the management plane, so email needs no
+operator role, firewall rule or terminal step. A missing value never stops a deploy; the app starts, says so once in
+its log, and every email answers Not sent. The console sender is chosen only by an explicit setting.
+
+### Absorbs
+
+- [S00.02.08][] Resend's settings come from GitHub environment secrets
+
+### Notes
+
+- Owner decision, 28 October 2026 (D93 amends D92): environment secrets, chosen over D92's "no GitHub secret" rule for
+  simplicity. The owner's other answers of that day: a Claude Code onboarding flow for a new provider comes later as
+  T41, and with one provider row-level security stays deferred (design.md §5.9 item 6).
+- Deviation from the brief, stated openly: the app does not read the vault at start, so a key missing from the vault
+  shows only at a send, plus a deploy annotation when `RESEND_API_KEY` is empty. The app's one startup warning names
+  missing settings (the sender address, the secret's address), never a value.
+- Exposure: any workflow run that enters an environment can read its key. Before this task the key was reachable only
+  by deploying code that runs as the app identity. Both environments therefore take deployments from main only
+  (prod: go-live A2; test: the owner's by-hand step 151 of `ops/first-use-in-test.md`).
+- Whether the deploy identity (Contributor) can write the secret with the vault firewall on is expected yes, and the
+  first test deploy with the key set is the proof. The fallback is written by error in `infra/README.md` and not built.
+- Tests changed on purpose, to be named in the PR body:
+  `EmailSendingTests.Without_an_api_key_secret_the_email_goes_to_the_console` (its Production-with-no-settings case,
+  replaced by stricter switch-only tests) and `A_secret_uri_without_the_other_setting_stops_the_app_starting` (its
+  `Email:SenderAddress` case now starts, warns and answers Not sent). No security test is weakened.
+- Rollback: a build from before this task stops at start on an empty sender, so set `EMAIL_SENDER_ADDRESS` before
+  rolling back to one.
+- Assumed defaults, renumbered at merge: A128 (the console switch and the missing-settings warning) and A129 (the key
+  is written whenever given; empty leaves it; Incremental mode only).
+
+### Plan
+
+Outcome: as above. Approach: `Email:UseConsole` (a bool, default false) chooses the console, set only in
+`appsettings.Development.json` and CI's end-to-end app start. Otherwise a wrong value stops the start (the identity
+setting missing, a secret address that is not one) and an absent value (secret address or sender) registers a sender
+that fails every send before any call, plus a hosted service that logs one warning naming the settings. Operator
+commands never start the host, so their output stays one link. Infra: `resendApiKey` is a secure parameter, written by
+a conditional `vaults/secrets` resource in `keyvault.bicep` when non-empty; `app.bicep` loses its `@minLength` gate;
+`deploy.yml` passes each value only when non-empty and annotates an empty key. Reuse: the Not sent path
+(`SetupLinkEmail`), the existing readers and the vault. No domain, table or migration change. Where the design was
+silent the simplest option is taken and recorded as A128 and A129.
+
+### Verticals
+
+- v1: App: explicit console switch, not-configured sender and startup warning; depends_on none; R04, R07 to R14.
+- v2: Infra and deploy: secure `resendApiKey`, conditional vault secret, no what-if gate; depends_on none; R01 to R03, R06.
+- v3: Docs and backlog: D93, design.md, infra README table, ops steps, T40 Notes; depends_on v1, v2; R05, R15 to R24.
+
+### Steps
+
+Planned with the verticals above.
+
+---
+
 ## Cut stories
 
 Cut on 14 October 2026 (D87), 15 points in all. Each keeps its section with `status: cut` and a dated Note.
@@ -7429,6 +7501,7 @@ assumed defaults, which the owner may overturn:
 [S00.02.04]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000204-production-environment-and-manual-deploy
 [S00.02.05]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000205-database-delete-lock
 [S00.02.07]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000207-setup-link-email
+[S00.02.08]: E00-skeleton-hosting-sign-in/F00.02-azure-hosting-and-deployment.md#s000208-resends-settings-come-from-github-environment-secrets
 [S00.03.06]: E00-skeleton-hosting-sign-in/F00.03-tenancy-audit-operator-commands.md#s000306-break-glass-reset-and-sign-out-of-everyone
 [S00.04.08]: E00-skeleton-hosting-sign-in/F00.04-sign-in-setup-sessions.md#s000408-sign-in-again-where-i-was
 [S00.05.02]: E00-skeleton-hosting-sign-in/F00.05-app-shell.md#s000502-keep-my-place-when-i-move-between-screens
