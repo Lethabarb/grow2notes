@@ -99,6 +99,19 @@ internal sealed class ParticipantLookups(Grow2NotesDbContext db)
     }
 
     /// <summary>
+    /// The goal of <paramref name="goalId"/> with its current version, archived or not, or null when the organisation
+    /// has no such goal, another organisation's included (design.md §9.2). One untracked, projected read.
+    /// </summary>
+    public async Task<ParticipantGoal?> GetGoalAsync(Guid goalId, CancellationToken cancellationToken)
+    {
+        var goal = await db.Goals.AsNoTracking()
+            .Where(goal => goal.Id == goalId)
+            .Select(goal => new { goal.Id, goal.Text, Archived = goal.ArchivedAtUtc != null, goal.RowVersion })
+            .SingleOrDefaultAsync(cancellationToken);
+        return goal is null ? null : new(goal.Id, goal.Text, goal.Archived, RowVersionToken.Of(goal.RowVersion));
+    }
+
+    /// <summary>
     /// Whether every word is held, ignoring case, by the given name or the family name, in any order. Nothing is
     /// normalised: <c>zoe</c> does not match <c>Zoë</c>, and the two apostrophes are two characters (A124).
     /// </summary>
