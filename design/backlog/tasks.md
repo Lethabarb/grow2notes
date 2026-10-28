@@ -7375,8 +7375,9 @@ migration, table, audit event type, endpoint or SPA change.
 Design: a scoped `ToolConfirmation` offers the assistant's own form only when the call is MRTR-capable and its
 per-request client capabilities declare form elicitation; every other call gets the preview, then confirm with the
 preview's expectedVersion. The form's `requestState` is a Data Protection token (purpose
-`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the row version, alive 5 minutes, so the
-server keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes the form's one `mcp.read` row and
+`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the row
+version, alive 5 minutes, so the server
+keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes the form's one `mcp.read` row and
 rethrows `InputRequiredException`.
 
 Domain: none persisted. `UserChangeResult` gains `Changed` and `Unchanged`; `UserChanges` gains an actor-aware overload
@@ -7385,7 +7386,8 @@ audit Details) and answers Unchanged for a deactivated user, which the app still
 only and must give a reason (200 characters, trimmed), checked in the user tools from the database-built role claim.
 
 Reuse: UserDeactivation and its LastManagerRule, UserList for the email look-up (A132), IfMatch.CheckFor,
-ConsentRequests' Data Protection pattern (Seal, Open and Hash move to `ProtectedJson`), McpCall, ToolError, TextInput, the tool matrix,
+ConsentRequests' Data Protection pattern (Seal, Open and Hash move to `ProtectedJson`), McpCall, ToolError, TextInput,
+the tool matrix,
 canary, contract and access-ends tests.
 
 Decisions where the design is silent: A136 (confirmation: when the form is offered, state contents and lifetime, only
