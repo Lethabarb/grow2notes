@@ -1504,3 +1504,41 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      a change to mcp-server.md §5.5. Last, connect an assistant for a manager of a second test organisation and ask
      it to find the first organisation's participant by name and to get that participant by its ID: it finds
      nobody and gets `not_found`. This step holds nothing open. (S07.02.04; MA5; A124 to A126.)
+
+### The participant and goal tools in test, once T34 is on main
+
+176. Connect an assistant as a manager, as in step 172, in a test organisation with made-up people, and ask it to add a
+     made-up participant with a date of birth. Look for: the assistant says the participant was added and shows the
+     name and that they are active, but does not repeat the date of birth; in the app, the participant shows as
+     active in the list and on their page, with the date of birth you gave. In the audit rows (step 15, with
+     `EventType = 'participant.created'`), one row with `via` of `mcp`, the assistant's client ID and the tool's name
+     `add_participant`. This step holds nothing open. (S07.03.01; MA5; A128, A129.)
+177. Ask the assistant to change that participant's family name, then to change it to the same name again. Look for:
+     the app shows the new family name and keeps the given name and the date of birth; the second request is
+     answered by the assistant as "nothing changed", and the app's audit rows show one `participant.updated`, not
+     two, and one `mcp.read` for the second request, naming the participant. This step holds nothing open.
+     (S07.03.01; A129.)
+178. Ask the assistant to add two goals for the participant, reword one, put them in the opposite order, archive one
+     and restore it. Look for: the app shows the wording and the order after each change, the restored goal at the
+     end of the active goals, and the assistant mentions that changes apply to notes started from now on. Each change
+     is one audit row (`goal.created`, `goal.updated`, `goal.reordered`, `goal.archived`, `goal.restored`), each
+     with `via` of `mcp`. This step holds nothing open. (S07.03.02, S07.03.03; A128, A129.)
+179. In the app, archive the participant. Ask the assistant to add a goal for them and to change their family name.
+     Look for: both are refused, and the assistant says the participant is archived and must be restored first; the
+     app shows nothing changed, and the audit rows show one `mcp.refused` with `code` of `participant.archived` for
+     each request. Restore the participant in the app and repeat the requests: they work. This step holds nothing
+     open. (S07.03.02; D86, D93.)
+180. Invite a made-up Support person as in step 166 (if you have none), connect an assistant for them as in step 172,
+     and repeat step 176 or step 178. Look for: the change works, as it does for a manager (Support may change
+     participants and goals through the assistant), and the audit rows show the Support person as the actor. In the
+     app itself, Support has no access to the Manage screens. A worker cannot connect an assistant at all (step
+     168). This step holds nothing open. (S07.03.01, S07.03.02; MA7, A129.)
+181. In the audit rows (step 15), read the rows that steps 176 to 180 made. Look for: each change is the app's own
+     event, with the same old and new values as a change made in the app, plus `via` of `mcp`, the client ID and the
+     tool's name; a request that changed nothing is an `mcp.read`; a refusal is an `mcp.refused` with its code; and
+     no row holds a date of birth. This step holds nothing open. (S07.03.01 to S07.03.03; A121, A129.)
+182. For the owner: read the model-facing words and approve or reword them (they are in
+     `tests/Grow2Notes.Tests/Features/Mcp/tools-list.json` and A129 in design.md): the seven titles and descriptions,
+     the messages of the codes, and the new field messages "Date of birth must be a real date", the control or
+     formatting character messages and "Send at least one of givenName, familyName and dateOfBirth." The answer
+     is a decision, not a test, and it does not hold T34 open. (A128, A129.)
