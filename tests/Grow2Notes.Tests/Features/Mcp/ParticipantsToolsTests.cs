@@ -3,10 +3,10 @@ using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
-using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using static Grow2Notes.Tests.Features.Mcp.McpAuditRows;
+using static Grow2Notes.Tests.Features.Mcp.ToolCalls;
 
 namespace Grow2Notes.Tests.Features.Mcp;
 
@@ -319,34 +319,11 @@ public sealed class ParticipantsToolsTests(ToolWorld world) : IClassFixture<Tool
         }
     }
 
-    private static JsonElement Content(CallToolResult result) => Assert.NotNull(result.StructuredContent);
-
-    private static string Body(CallToolResult result) =>
-        JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions);
-
     private static List<Guid> ParticipantIds(JsonElement content) =>
     [
         .. content.GetProperty("participants").EnumerateArray()
             .Select(match => match.GetProperty("participantId").GetGuid()),
     ];
-
-    private static IEnumerable<string> PropertyNames(JsonElement element) => element.ValueKind switch
-    {
-        JsonValueKind.Object => element.EnumerateObject()
-            .SelectMany(property => PropertyNames(property.Value).Prepend(property.Name)),
-        JsonValueKind.Array => element.EnumerateArray().SelectMany(PropertyNames),
-        _ => [],
-    };
-
-    private static void AssertValidationFailed(CallToolResult result, string field, string message)
-    {
-        Assert.True(result.IsError);
-        var error = Content(result).GetProperty("error");
-        Assert.Equal("validation.failed", error.GetProperty("code").GetString());
-        Assert.Equal("Some arguments are not valid. See fields.", error.GetProperty("message").GetString());
-        Assert.Equal(
-            [message], error.GetProperty("fields").GetProperty(field).EnumerateArray().Select(m => m.GetString()));
-    }
 
     private async Task<(CallToolResult Result, AuditRow Row)> CallAsync(string tool, JsonObject arguments)
     {

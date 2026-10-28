@@ -1,6 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Platform.Configuration;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -17,15 +21,25 @@ public enum ToolCaller
 /// <summary>A goal of <see cref="ToolScene.Participant"/>, with its <c>ETag</c>.</summary>
 internal sealed record SceneGoal(Guid Id, string Text, bool Archived, string ETag);
 
+/// <summary>A common item group of the scene's first organisation, with its <c>ETag</c>.</summary>
+internal sealed record SceneGroup(Guid Id, string Name, bool Archived, string ETag);
+
+/// <summary>A common item of the scene's first organisation, with its <c>ETag</c>.</summary>
+internal sealed record SceneItem(Guid Id, string Text, bool Archived, string ETag);
+
+/// <summary>A user account of the scene's first organisation, with the address it signs in with.</summary>
+internal sealed record SceneUser(Guid Id, string Email, string DisplayName);
+
 /// <summary>
 /// The world that the tests of the MCP tools share, in the database of an <see cref="AssistantFlow"/>: a first
 /// organisation with a manager, a Support person, a participant whose names and goals are unique to the scene, an
-/// archived participant with no goals, another with an active goal, and that participant's date of birth; and a second
-/// organisation with a manager and a
+/// archived participant with no goals, another with an active goal, and that participant's date of birth; common item
+/// groups, items and users whose names hold the scene's token; and a second organisation with a manager and a
 /// participant. Every later tool joins the matrix, the contract rules and the canary through this scene, which is also
 /// where they find the organisation to add what they need to (<see cref="Organisation"/>). A tool that changes a row
-/// changes one that it adds (<see cref="AddParticipantAsync"/>, <see cref="AddGoalAsync"/>), never the rows of the
-/// scene, which the error cases of every tool share.
+/// changes one that it adds (<see cref="AddParticipantAsync"/>, <see cref="AddGoalAsync"/>,
+/// <see cref="AddGroupAsync"/>, <see cref="AddItemAsync"/>), never the rows of the scene, which the error cases of
+/// every tool share.
 /// </summary>
 internal sealed class ToolScene
 {
@@ -45,7 +59,13 @@ internal sealed class ToolScene
         IReadOnlyList<SceneGoal> goals,
         TestParticipant archived,
         TestParticipant archivedParticipant,
-        SceneGoal archivedGoal)
+        SceneGoal archivedGoal,
+        SceneGroup group,
+        IReadOnlyList<SceneItem> items,
+        SceneGroup archivedGroup,
+        SceneItem archivedGroupItem,
+        SceneUser invitedUser,
+        SceneUser deactivatedUser)
     {
         this.flow = flow;
         Organisation = organisation;
@@ -56,6 +76,12 @@ internal sealed class ToolScene
         Archived = archived;
         ArchivedParticipant = archivedParticipant;
         ArchivedGoal = archivedGoal;
+        Group = group;
+        Items = items;
+        ArchivedGroup = archivedGroup;
+        ArchivedGroupItem = archivedGroupItem;
+        InvitedUser = invitedUser;
+        DeactivatedUser = deactivatedUser;
     }
 
     /// <summary>The first organisation: the one that every tool is called in, and the one that tests add to.</summary>
@@ -96,6 +122,34 @@ internal sealed class ToolScene
     /// <summary>An active goal of <see cref="ArchivedParticipant"/>, <c>Goal F {token}</c>.</summary>
     public SceneGoal ArchivedGoal { get; }
 
+    /// <summary>The Every note group of the first organisation, which has no items.</summary>
+    public Guid EveryNoteGroupId => Organisation.EveryNoteGroupId;
+
+    /// <summary>An active group, <c>Group A {token}</c>, whose items are <see cref="Items"/>.</summary>
+    public SceneGroup Group { get; }
+
+    /// <summary>
+    /// The items of <see cref="Group"/> in the order that <c>list_common_items</c> lists them: the active
+    /// <c>Item A {token}</c> and <c>Item B {token}</c>, then the archived <c>Item C {token}</c>, which the app's order
+    /// puts first.
+    /// </summary>
+    public IReadOnlyList<SceneItem> Items { get; }
+
+    /// <summary>
+    /// An archived group, <c>Group Z {token}</c>, which the app's order puts before <see cref="Group"/>, with an
+    /// active item, <see cref="ArchivedGroupItem"/>.
+    /// </summary>
+    public SceneGroup ArchivedGroup { get; }
+
+    /// <summary>The active item <c>Item Z {token}</c> of <see cref="ArchivedGroup"/>.</summary>
+    public SceneItem ArchivedGroupItem { get; }
+
+    /// <summary>An invited worker, <c>Una{token} Kerr</c>, with an example.test address.</summary>
+    public SceneUser InvitedUser { get; }
+
+    /// <summary>A deactivated worker, <c>Vic{token} Lane</c>, with an example.test address.</summary>
+    public SceneUser DeactivatedUser { get; }
+
     public static async Task<ToolScene> CreateAsync(AssistantFlow flow)
     {
         var services = flow.App.Services;
@@ -120,6 +174,20 @@ internal sealed class ToolScene
         var archivedGoal = await SeedGoalAsync(
             services, organisation, archivedWithGoal.Id, $"Goal F {token}", 10, 0, false);
 
+        // The archived group and item come first in the app's order, so that only the tools' own order puts them last.
+        var group = await SeedGroupAsync(services, organisation, $"Group A {token}", 10, false);
+        var itemA = await SeedItemAsync(services, organisation, group.Id, $"Item A {token}", 10, false);
+        var itemB = await SeedItemAsync(services, organisation, group.Id, $"Item B {token}", 20, false);
+        var itemC = await SeedItemAsync(services, organisation, group.Id, $"Item C {token}", 5, true);
+        var archivedGroup = await SeedGroupAsync(services, organisation, $"Group Z {token}", 5, true);
+        var archivedGroupItem = await SeedItemAsync(
+            services, organisation, archivedGroup.Id, $"Item Z {token}", 10, false);
+
+        var invited = await SeedUserAsync(
+            services, organisation, $"Una{token} Kerr", $"una.{token}@example.test", UserStatus.Invited);
+        var deactivated = await SeedUserAsync(
+            services, organisation, $"Vic{token} Lane", $"vic.{token}@example.test", UserStatus.Deactivated);
+
         return new(
             flow,
             organisation,
@@ -129,7 +197,13 @@ internal sealed class ToolScene
             [activeFirst, activeSecond, activeTied, archivedEarly, archivedLate],
             archived,
             archivedWithGoal,
-            archivedGoal);
+            archivedGoal,
+            group,
+            [itemA, itemB, itemC],
+            archivedGroup,
+            archivedGroupItem,
+            invited,
+            deactivated);
     }
 
     /// <summary>
@@ -155,6 +229,46 @@ internal sealed class ToolScene
     /// </summary>
     public Task<SceneGoal> AddGoalAsync(Guid participantId, bool archived) =>
         SeedGoalAsync(flow.App.Services, Organisation, participantId, $"Goal {NewHex()}", 0, 0, archived);
+
+    /// <summary>
+    /// Adds a group to the first organisation, after the scene's groups, with a name that is made up each time and does
+    /// not hold <see cref="Token"/>; archived or active, and empty.
+    /// </summary>
+    public Task<SceneGroup> AddGroupAsync(bool archived = false) =>
+        SeedGroupAsync(flow.App.Services, Organisation, $"Group {NewHex()}", 100, archived);
+
+    /// <summary>
+    /// Adds an item to <paramref name="groupId"/>, a group of the first organisation, after its other items, with
+    /// wording that is made up each time and does not hold <see cref="Token"/>; archived or active.
+    /// </summary>
+    public Task<SceneItem> AddItemAsync(Guid groupId, bool archived = false) =>
+        SeedItemAsync(flow.App.Services, Organisation, groupId, $"Item {NewHex()}", 100, archived);
+
+    /// <summary>
+    /// The version of the first organisation's guide prompts as the tools give it: the token of the organisation row,
+    /// read now.
+    /// </summary>
+    public async Task<string> GuidePromptsVersionAsync()
+    {
+        await using var scope = flow.App.Services.CreateAsyncScope();
+        var organisation = await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Organisations
+            .AsNoTracking()
+            .SingleAsync(row => row.Id == Organisation.OrganisationId, TestContext.Current.CancellationToken);
+        return RowVersionToken.Of(organisation);
+    }
+
+    /// <summary>
+    /// Stores <paramref name="text"/> as the first organisation's guide prompts, as it is given, without the app's
+    /// checks and with no audit event, so that a test starts from prompts of any shape.
+    /// </summary>
+    public async Task SetGuidePromptsAsync(string text)
+    {
+        await using var scope = flow.App.Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Organisations
+            .Where(row => row.Id == Organisation.OrganisationId)
+            .ExecuteUpdateAsync(
+                update => update.SetProperty(row => row.GuidePrompts, text), TestContext.Current.CancellationToken);
+    }
 
     /// <summary>
     /// Adds <paramref name="count"/> active goals to <paramref name="participantId"/> as <see cref="AddGoalAsync"/>
@@ -202,6 +316,41 @@ internal sealed class ToolScene
             cancellationToken: TestContext.Current.CancellationToken);
 
     private static string NewHex() => Guid.NewGuid().ToString("N")[..12];
+
+    private static async Task<SceneGroup> SeedGroupAsync(
+        IServiceProvider services, SeededOrganisation organisation, string name, int sortOrder, bool archived)
+    {
+        var added = await services.AddGroupAsync(
+            organisation.OrganisationId,
+            new(name, sortOrder, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        return new(added.Id, name, archived, added.ETag);
+    }
+
+    private static async Task<SceneItem> SeedItemAsync(
+        IServiceProvider services,
+        SeededOrganisation organisation,
+        Guid groupId,
+        string text,
+        int sortOrder,
+        bool archived)
+    {
+        var added = await services.AddItemAsync(
+            organisation.OrganisationId,
+            groupId,
+            new(text, sortOrder, ArchivedAtUtc: archived ? TestCommonItems.AddedAtUtc : null));
+        return new(added.Id, text, archived, added.ETag);
+    }
+
+    private static async Task<SceneUser> SeedUserAsync(
+        IServiceProvider services,
+        SeededOrganisation organisation,
+        string displayName,
+        string email,
+        UserStatus status)
+    {
+        var id = await services.AddUserAsync(organisation, UserRole.Worker, displayName, status, email);
+        return new(id, email, displayName);
+    }
 
     private static async Task<SceneGoal> SeedGoalAsync(
         IServiceProvider services,
