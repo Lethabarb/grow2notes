@@ -191,7 +191,7 @@ no firewall rule, and no terminal command that handles the key.
 |---|---|---|
 | `test` | `RESEND_API_KEY` | A Resend API key, sending access only, limited to the verified domain, for `test` alone |
 | `test` | `EMAIL_SENDER_ADDRESS` | The from address on the verified domain, bare or as `Grow2Notes <address>` |
-| `prod` | `RESEND_API_KEY` | A second Resend API key, sending access only, limited to the verified domain, for `prod` alone |
+| `prod` | `RESEND_API_KEY` | A second Resend API key, sending access only, limited to the verified domain, for `prod` |
 | `prod` | `EMAIL_SENDER_ADDRESS` | The from address on the verified domain, bare or as `Grow2Notes <address>` |
 
 Set each one on the repository's *Settings*, *Environments* page, or with `gh secret set <name> --env <env>`, which asks
