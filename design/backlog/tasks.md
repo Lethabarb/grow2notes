@@ -7316,7 +7316,7 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
   contracts, `CommonItemGroupToolsTests` and `GuidePromptsToolsTests`.
 - [x] The five item tools (#187; v4): `add_common_item`, `update_common_item`, `reorder_common_items`,
   `archive_common_item` and `restore_common_item`, and `CommonItemToolsTests`. No CI split.
-- [x] Close-out (#TBD; v5): A132 to A135 (renumbered after T40), mcp-server.md sections 5.1, 5.2, 5.4, 5.5 and 9,
+- [x] Close-out (#188; v5): A132 to A135 (renumbered after T40), mcp-server.md sections 5.1, 5.2, 5.4, 5.5 and 9,
   first-use steps 183 to 189, S07.02.05 and S07.03.04 to S07.03.08 done, coverage.md and these Notes.
 
 ---
