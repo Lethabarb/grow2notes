@@ -52,7 +52,8 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
     // The tools that take no string, which Every_string_input_refuses_a_control_or_bidi_character therefore has nothing
     // to try on. A tool added to the matrix has a string input unless it is added here, so a tool that loses its last
     // one fails too.
-    private static readonly string[] ToolsWithNoStringInput = ["get_guide_prompts", "list_common_items"];
+    private static readonly string[] ToolsWithNoStringInput =
+        ["get_guide_prompts", "list_common_items", "reorder_common_item_groups"];
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
