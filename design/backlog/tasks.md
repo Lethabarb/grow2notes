@@ -7329,7 +7329,7 @@ silent the simplest option is taken and recorded as A130 and A131.
 
 - [x] App (#181; v1): the explicit console switch, the not-configured sender and the startup warning, with the tests.
 - [x] Infra (#180; v2): the secure `resendApiKey`, the conditional vault secret, no what-if gate, and the deploy step.
-- [x] Docs (#PR; v3): D94, design.md, A130 and A131, the infra README table, the first-use and go-live steps, the
+- [x] Docs (#184; v3): D94, design.md, A130 and A131, the infra README table, the first-use and go-live steps, the
       security review, T01 and T22 Notes, S00.02.08 and coverage.md.
 
 ---
