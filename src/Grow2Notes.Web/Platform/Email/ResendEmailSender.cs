@@ -5,9 +5,9 @@ using Azure.Security.KeyVault.Secrets;
 namespace Grow2Notes.Web.Platform.Email;
 
 /// <summary>
-/// Sends email through Resend's HTTP API (design.md D92), from <paramref name="senderAddress"/>, with the API key that
-/// the operator keeps in Key Vault as <paramref name="apiKeySecretName"/>, read as the app's user-assigned identity
-/// (<see cref="EmailSending.AddEmailWhenConfigured"/>).
+/// Sends email through Resend's HTTP API (design.md §9.4), from <paramref name="senderAddress"/>, with the API key
+/// that each deploy writes to Key Vault as <paramref name="apiKeySecretName"/> from the environment's RESEND_API_KEY
+/// secret, read as the app's user-assigned identity (<see cref="EmailSending.AddEmail"/>).
 /// </summary>
 /// <param name="http">A client with no base address and no default headers: each request carries its own.</param>
 /// <param name="secrets">The client of the vault that holds the API key.</param>
