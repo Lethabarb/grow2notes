@@ -296,6 +296,11 @@ with their typing kept (checked with a half-filled Invite form), and a different
   S00.02.07, S00.06.02, S00.06.03 and S00.04.08 are done. S00.02.07's second and third criteria stay unticked, both in
   one Note: the second's deployed half is ops/first-use-in-test.md step 148, added here (its CI half is
   `EmailSendingTests`), and the third is step 17. The other by-hand checks are steps 11 to 13 and 18.
+- 28 October 2026 (T40, D94): the bullet "How the sender is chosen" above is history. D92 replaced Communication
+  Services with Resend, and T40 replaced the rule that chose the console: only `Email:UseConsole`, set in
+  `appsettings.Development.json` and CI's end-to-end run, now chooses it, and a missing setting in Azure gives a startup
+  warning and Not sent, never the console. The step 148 reasoning that an Azure app must not write links to its console
+  stands, with `Email__UseConsole` and `ASPNETCORE_ENVIRONMENT` added to what step 148 looks for.
 
 ### Steps
 
@@ -5682,7 +5687,8 @@ email alerts to the operator, setup-link email through Resend (D92), and a read-
   not the parent company's, tracking off, one sending-only key per environment), A101 (passkeys bind to the default
   host; add any custom domain before real staff enrol), A102 (Resend as an email sub-processor, and the setup links its
   dashboard holds), A103 (no required reviewer on `prod`; the dispatch from `main` is the approval) and A104 (the
-  pre-merge step 151).
+  pre-merge step 151). Superseded by T40 (D94): A100 now has the owner setting the key as `RESEND_API_KEY`, which each
+  deploy writes to the vault, and A104 is replaced (no deploy stops at what-if).
 - Alert thresholds, where design.md §10.1 was silent. All three are production only, hold resource metrics only and
   resolve by themselves; the free-amount alert stays test only. HTTP 5xx: total above 0 over 5 minutes, severity 2.
   Health check: average below 50 over 15 minutes, severity 1, so a sustained failure fires and a deploy restart does
@@ -5701,9 +5707,12 @@ email alerts to the operator, setup-link email through Resend (D92), and a read-
 - The first production deploy is made by hand, as `grow2notes-prod-main`, from a chosen CI run's artifact (S00.02.02's
   precedent), because the vault and server exist only after `main.bicep`, and `grant-identities.sql` must run before any
   migration. The order is the hand deploy, the key, the grants, then the first dispatch (`ops/go-live.md` A6 to A9).
+  Superseded by T40 (D94): no step stores the key; the first dispatch writes it from `prod`'s `RESEND_API_KEY`, and A7
+  is a check after A9.
 - Seven GitHub secrets per environment, not six: `EMAIL_SENDER_ADDRESS` is the only addition. A deploy without it stops
   at what-if, before any change, so until the owner does step 151 every test deploy is red and test keeps its previous
-  build. That blocks other lanes' "deployed to test", and it is expected, not a defect.
+  build. That blocks other lanes' "deployed to test", and it is expected, not a defect. Superseded by T40 (D94): eight
+  secrets, with `RESEND_API_KEY`, and no deploy stops at what-if for a missing value.
 - Cold start: the app has one 5-second deadline for the vault read and the Resend post. If first-use step 152 (an
   invite sent within a minute of a restart) answers "Not sent", raise `SendTimeout` in `EmailSending.cs` to 8 seconds,
   which is still under the SPA's 10 seconds.
@@ -5711,7 +5720,8 @@ email alerts to the operator, setup-link email through Resend (D92), and a read-
   fix is `weekOfYear: 0` in `sql.bicep`.
 - `app.bicep` refuses an empty sender with `@minLength(3)` on a separate `emailSenderAddress` parameter that is merged
   into the settings, not through the `appSettings` type that the plan named. The documents say only "refused at
-  what-if".
+  what-if". Superseded by T40 (D94): the `@minLength(3)` is gone, and a blank address makes the app warn and answer
+  every email Not sent.
 - Findings for the owner, none changed here: `ops/go-live.md` A needs the owner's decision on security-review.md F-7
   (a 3072-bit Key Vault key) before the first production deploy; S06.05.02's third criterion says the setup email comes
   "from the product domain", which D92 changes to the owner's verified Resend domain (noted in S06.05.01); and
@@ -5737,7 +5747,8 @@ merged into the feature branch; the feature branch goes to main as one unit beca
 - Design: `ResendEmailSender` posts to Resend's HTTP API with a key read from Key Vault (`resend-api-key`) at each send
   by the app identity (Key Vault Secrets User at group scope, granted by bootstrap). One 5-second deadline covers the
   vault read and the one POST; every failure reaches callers as `EmailNotSentException`. `Email:ApiKeySecretUri` is the
-  switch: unset means the console sender. `deploy.yml` becomes one workflow with a `Check the CI run` job and one
+  switch: unset means the console sender (superseded by T40, D94: only `Email:UseConsole` chooses the console, and a
+  blank setting gives a warning and Not sent). `deploy.yml` becomes one workflow with a `Check the CI run` job and one
   parameterised `Deploy to <env>` job. The CI run is linked to its test deploy through the Deploy run-name. Alerts live
   in `modules/alerts.bicep` (prod only); the lock lives in `locks.bicep`, run by the operator, never in `main.bicep`.
 - Domain: none. Existing entities are used read-only (`ApplicationUser.Email` as the recipient, `AuditEvent` rows
@@ -5749,10 +5760,11 @@ merged into the feature branch; the feature branch goes to main as one unit beca
   `grant-identities.sql` and `check-database.sql`, `restore-drill.md` and `break-glass.md`.
 - Where design.md is silent: alert thresholds (5xx Total > 0 over 5 minutes; health check Average < 50 over
   15 minutes; DTU Average > 80 over 15 minutes), no required reviewer on prod (A103), seven GitHub secrets (adds
-  `EMAIL_SENDER_ADDRESS`), fake key `test-api-key`, health-check failure tested by deleting the SQL VNet rule, old
-  Communication resources deleted by hand. New assumed defaults A100 to A104; decisions D91 and D92.
+  `EMAIL_SENDER_ADDRESS`; eight under T40, D94), fake key `test-api-key`, health-check failure tested by deleting the
+  SQL VNet rule, old Communication resources deleted by hand. New assumed defaults A100 to A104; decisions D91 and D92.
 - Owner flags: pre-merge first-use step 151 (Resend domain and test key, test's `EMAIL_SENDER_ADDRESS`, bootstrap
-  re-run with the GitHub subject prefix); test deploys stop at what-if until that secret is set; a custom domain added
+  re-run with the GitHub subject prefix); test deploys stop at what-if until that secret is set (superseded by T40,
+  D94: they never stop for it); a custom domain added
   after the first production enrolment means everyone enrols again; setup emails now leave Australia through Resend.
 
 ### Verticals
