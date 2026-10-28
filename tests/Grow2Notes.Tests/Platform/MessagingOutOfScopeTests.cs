@@ -39,6 +39,7 @@ public sealed partial class MessagingOutOfScopeTests
         "Platform/Email/EmailNotSentException.cs",
         "Platform/Email/EmailSending.cs",
         "Platform/Email/IEmailSender.cs",
+        "Platform/Email/NotConfiguredEmailSender.cs",
         "Platform/Email/ResendEmailSender.cs",
     ];
 
