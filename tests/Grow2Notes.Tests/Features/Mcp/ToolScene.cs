@@ -122,7 +122,7 @@ internal sealed class ToolScene
     /// <summary>An active goal of <see cref="ArchivedParticipant"/>, <c>Goal F {token}</c>.</summary>
     public SceneGoal ArchivedGoal { get; }
 
-    /// <summary>The Every note group of the first organisation, which has no items.</summary>
+    /// <summary>The Every note group of the first organisation, which has no items unless a test adds one.</summary>
     public Guid EveryNoteGroupId => Organisation.EveryNoteGroupId;
 
     /// <summary>An active group, <c>Group A {token}</c>, whose items are <see cref="Items"/>.</summary>
@@ -250,6 +250,13 @@ internal sealed class ToolScene
     /// </summary>
     public Task<List<Guid>> ActiveGroupIdsAsync() =>
         flow.App.Services.ActiveGroupIdsAsync(Organisation.OrganisationId);
+
+    /// <summary>
+    /// The IDs of the active items of <paramref name="groupId"/>, a group of the first organisation, in the order that
+    /// <c>list_common_items</c> lists them, as a reorder of every item sends them.
+    /// </summary>
+    public Task<List<Guid>> ActiveItemIdsAsync(Guid groupId) =>
+        flow.App.Services.ActiveItemIdsAsync(Organisation.OrganisationId, groupId);
 
     /// <summary>
     /// The version of the first organisation's guide prompts as the tools give it: the token of the organisation row,
