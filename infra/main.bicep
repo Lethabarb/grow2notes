@@ -28,8 +28,8 @@ param alertEmail string
 @description('The address the app sends its setup-link email from, a bare address or "Grow2Notes <address>" (D92).')
 param emailSenderAddress string
 
-// The Resend API key, which each deploy writes to Key Vault when it is not empty (D93). It is secure so that ARM keeps
-// the value out of the deployment's history, and it is in no parameters file, setting or output.
+// The Resend API key, which each deploy writes to Key Vault when it is not empty (design.md §9.4). It is secure so
+// that ARM keeps the value out of the deployment's history, and it is in no parameters file, setting or output.
 @description('The Resend API key, from the environment\'s GitHub secret. Empty leaves the vault\'s secret as it is.')
 @secure()
 param resendApiKey string = ''
@@ -144,7 +144,8 @@ module app 'modules/app.bicep' = {
       Mcp__Enabled: string(mcpEnabled)
       // Read as Email:ApiKeySecretUri. It is where the app finds the Resend API key it sends its setup-link email with:
       // it reads the key from Key Vault as the app identity at each send, so the key is in no setting. Every deploy
-      // sets it, so an app in Azure never falls back to writing its emails, links and all, to its console (D92, D93).
+      // sets it, so an app in Azure never falls back to writing its emails, links and all, to its console
+      // (design.md §10.3).
       Email__ApiKeySecretUri: keyVault.outputs.emailApiKeySecretUri
       // App Service mounts the deployed zip read-only as wwwroot, so a running build never loads a later build's files,
       // and sends traffic to a newly started build only once /healthz answers 200 (design.md §10.4 step 7, A49).
