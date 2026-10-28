@@ -114,6 +114,9 @@ internal static class McpSetup
                 })
                 .WithHttpTransport(transport => transport.Stateless = true)
                 .WithTools<ParticipantsTools>()
+                .WithTools<UsersTools>()
+                .WithTools<CommonItemsTools>()
+                .WithTools<GuidePromptsTools>()
                 .WithRequestFilters(filters => filters.AddCallToolFilter(McpAuditFilter.Wrap));
         }
 

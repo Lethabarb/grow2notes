@@ -7,7 +7,8 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <summary>
 /// The handler that lists an organisation's common item groups with their items (design.md §6.6), as a handler class
 /// that takes the <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>GET /api/admin/common-item-groups</c>
-/// calls it with <see cref="Actor.InApp"/>.
+/// calls it with <see cref="Actor.InApp"/>, and the <c>list_common_items</c> tool calls it with
+/// <see cref="Channel.Mcp"/>.
 /// </summary>
 internal sealed class CommonItemGroupList(Grow2NotesDbContext db)
 {

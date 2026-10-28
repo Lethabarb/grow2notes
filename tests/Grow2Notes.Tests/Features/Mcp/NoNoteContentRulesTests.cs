@@ -1,9 +1,12 @@
 using System.Reflection;
 using Grow2Notes.Tests.Features.Mcp.Planted;
 using Grow2Notes.Web.Data;
+using Grow2Notes.Web.Features.CommonItems;
+using Grow2Notes.Web.Features.GuidePrompts;
 using Grow2Notes.Web.Features.Mcp;
 using Grow2Notes.Web.Features.Mcp.Tools;
 using Grow2Notes.Web.Features.Participants;
+using Grow2Notes.Web.Features.Users;
 using Grow2Notes.Web.Platform.Configuration;
 using Mono.Cecil;
 using NetArchTest.Rules;
@@ -57,6 +60,9 @@ public sealed class NoNoteContentRulesTests
             typeof(ParticipantChanges),
             typeof(GoalChanges),
             typeof(ConfigurationChanges),
+            typeof(UserList),
+            typeof(CommonItemGroupList),
+            typeof(GuidePromptsHandler),
         ];
 
     public static TheoryData<string> PlantedViolations { get; } =

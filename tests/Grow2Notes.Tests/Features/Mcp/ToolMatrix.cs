@@ -335,6 +335,32 @@ internal static class ToolMatrix
             PlaceErrorCases(scene => scene.Goals[3]),
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.Goal.Restored),
+        new(
+            "list_users",
+            scene => Task.FromResult(new JsonObject { ["search"] = scene.Token }),
+            [
+                new("a control character", scene => new() { ["search"] = scene.Token + "" }, "validation.failed"),
+                new("too long", _ => new() { ["search"] = new string('a', 257) }, "validation.failed"),
+            ],
+            OtherOrganisationCode: null,
+            Event: null),
+        new(
+            "list_common_items",
+            _ => Task.FromResult(new JsonObject { ["includeArchived"] = true }),
+            [
+                new(
+                    "includeArchived of the wrong type",
+                    scene => new() { ["includeArchived"] = scene.Token },
+                    "unexpected"),
+            ],
+            OtherOrganisationCode: null,
+            Event: null),
+        new(
+            "get_guide_prompts",
+            _ => Task.FromResult(new JsonObject()),
+            [],
+            OtherOrganisationCode: null,
+            Event: null),
     ];
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];

@@ -194,6 +194,7 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
         var scene = await ToolScene.CreateAsync(flow);
         await using var client = await flow.McpClientAsync(await scene.ConnectAsync(ToolCaller.Manager), Revision);
         var listed = (await client.ListToolsAsync(cancellationToken: Ct)).ToDictionary(tool => tool.Name);
+        var visited = new HashSet<string>();
 
         foreach (var row in ToolMatrix.Rows)
         {
@@ -202,8 +203,12 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
             Assert.NotEqual(true, result.IsError);
             var content = Assert.NotNull(result.StructuredContent);
             var schema = Assert.NotNull(listed[row.Name].ProtocolTool.OutputSchema);
-            Assert.Empty(ResultProblems(content, [schema], row.Name));
+            Assert.Empty(ResultProblems(content, [schema], row.Name, visited));
         }
+
+        // The walk went into arrays: a key inside an array inside an array was checked, so a walk that stopped at the
+        // top of the result would fail here and not pass for want of anything to find.
+        Assert.Contains("list_common_items.groups[].items[].text", visited);
     }
 
     [Theory]
@@ -327,7 +332,8 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
 
     // A key of the result must be in the schema at the same path (each alternative of an anyOf counts) and pass the
     // deny-list; only a success is walked, because an error has its own shape.
-    private static List<string> ResultProblems(JsonElement result, IReadOnlyList<JsonElement> schemas, string path)
+    private static List<string> ResultProblems(
+        JsonElement result, IReadOnlyList<JsonElement> schemas, string path, ISet<string>? visited = null)
     {
         var problems = new List<string>();
         var alternatives = schemas.SelectMany(Alternatives).ToList();
@@ -337,6 +343,7 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
                 foreach (var member in result.EnumerateObject())
                 {
                     var memberPath = $"{path}.{member.Name}";
+                    visited?.Add(memberPath);
                     if (IsDenied(member.Name))
                     {
                         problems.Add($"{memberPath}: {OnTheDenyList}");
@@ -351,7 +358,7 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
                         problems.Add($"{memberPath}: the key is not in the output schema");
                     }
 
-                    problems.AddRange(ResultProblems(member.Value, declared, memberPath));
+                    problems.AddRange(ResultProblems(member.Value, declared, memberPath, visited));
                 }
 
                 break;
@@ -365,7 +372,7 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
 
                 foreach (var element in elements)
                 {
-                    problems.AddRange(ResultProblems(element, items, $"{path}[]"));
+                    problems.AddRange(ResultProblems(element, items, $"{path}[]", visited));
                 }
 
                 break;

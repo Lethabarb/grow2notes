@@ -35,6 +35,20 @@ internal static class McpAuditRows
             """).ToListAsync(Ct);
     }
 
+    // The IDs of the users of these addresses, in one read of AspNetUsers, for a look-up that returns addresses and no
+    // ID (list_users) and whose audit row holds the IDs. Each address must be a user's.
+    public static async Task<Guid[]> UserIdsByEmailAsync(AssistantFlow flow, IReadOnlyCollection<string> emails)
+    {
+        string[] addresses = [.. emails];
+        await using var scope = flow.App.Services.CreateAsyncScope();
+        var ids = await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Users.AsNoTracking()
+            .Where(user => addresses.Contains(user.Email!))
+            .Select(user => user.Id)
+            .ToArrayAsync(Ct);
+        Assert.Equal(addresses.Length, ids.Length);
+        return ids;
+    }
+
     // An mcp.refused row: the code, the client and the tool, alone.
     public static void AssertRefused(AuditRow row, string tool, string code)
     {

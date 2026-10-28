@@ -112,12 +112,12 @@ internal sealed class ParticipantLookups(Grow2NotesDbContext db)
     }
 
     /// <summary>
-    /// Whether every word is held, ignoring case, by the given name or the family name, in any order. Nothing is
-    /// normalised: <c>zoe</c> does not match <c>Zoë</c>, and the two apostrophes are two characters (A124).
+    /// Whether every word is held, ignoring case, by either text, in any order; nothing is normalised (A124):
+    /// <c>zoe</c> does not match <c>Zoë</c>, and the two apostrophes are two characters.
     /// </summary>
-    public static bool Matches(IReadOnlyCollection<string> words, string givenName, string familyName) =>
-        words.All(word => givenName.Contains(word, StringComparison.OrdinalIgnoreCase)
-            || familyName.Contains(word, StringComparison.OrdinalIgnoreCase));
+    public static bool Matches(IReadOnlyCollection<string> words, string first, string second) =>
+        words.All(word => first.Contains(word, StringComparison.OrdinalIgnoreCase)
+            || second.Contains(word, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The status as the tools say it, in lower case (A126).</summary>
     public static string StatusOf(ParticipantStatus status) => status switch

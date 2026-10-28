@@ -49,6 +49,11 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
 
     public static TheoryData<string> TokenCaseNames { get; } = [.. TokenCases];
 
+    // The tools that take no string, which Every_string_input_refuses_a_control_or_bidi_character therefore has nothing
+    // to try on. A tool added to the matrix has a string input unless it is added here, so a tool that loses its last
+    // one fails too.
+    private static readonly string[] ToolsWithNoStringInput = ["get_guide_prompts", "list_common_items"];
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     private AssistantFlow Flow => world.Flow;
@@ -92,7 +97,8 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
             }
             else
             {
-                AssertAuditHoldsTheIdsReturned(audit, tool, IdsOf(Assert.NotNull(result.StructuredContent)));
+                var content = Assert.NotNull(result.StructuredContent);
+                AssertAuditHoldsTheIdsReturned(audit, tool, await IdsReturnedAsync(tool, content));
             }
         }
 
@@ -132,7 +138,7 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
             .Where(property => IsString(property.Value))
             .Select(property => property.Name)
             .ToList();
-        Assert.NotEmpty(strings);
+        Assert.Equal(ToolsWithNoStringInput.Contains(tool), strings.Count == 0);
 
         foreach (var name in strings)
         {
@@ -233,6 +239,22 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
         Assert.Equal(0, removal.ExitCode);
     }
 
+    // The IDs a result holds, as IdsOf finds them. list_users returns addresses and no ID, and its audit row holds the
+    // IDs of the accounts it listed, which are read by their addresses.
+    private async Task<Dictionary<string, List<Guid>>> IdsReturnedAsync(string tool, JsonElement result)
+    {
+        var ids = IdsOf(result);
+        if (tool == "list_users")
+        {
+            var emails = result.GetProperty("users").EnumerateArray()
+                .Select(user => user.GetProperty("email").GetString()!)
+                .ToList();
+            ids["userIds"] = [.. await UserIdsByEmailAsync(Flow, emails)];
+        }
+
+        return ids;
+    }
+
     // The IDs a result holds, under the key that the audit row records them under: a participantId is a participantIds.
     // Each task that adds a kind of ID to a result adds it here.
     private static Dictionary<string, List<Guid>> IdsOf(JsonElement result)
@@ -252,6 +274,8 @@ public sealed class ToolMatrixTests(Grow2NotesFactory factory, SqlServerFixture 
                         {
                             "participantId" => "participantIds",
                             "goalId" => "goalIds",
+                            "groupId" => "groupIds",
+                            "itemId" => "commonItemIds",
                             _ => null,
                         };
                         if (key is not null && property.Value.ValueKind == JsonValueKind.String)
