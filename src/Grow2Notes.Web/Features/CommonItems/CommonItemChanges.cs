@@ -13,8 +13,8 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>,
 /// <c>PUT /api/admin/common-items/{id}</c>, <c>PUT /api/admin/common-item-groups/{groupId}/items/order</c> and
 /// <c>POST /api/admin/common-items/{id}/archive</c> and <c>/restore</c> call it with <see cref="Actor.InApp"/>, and
-/// the item tools of the assistant access call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
-/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// the item tools of the assistant access call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit
+/// event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemChanges(
     Grow2NotesDbContext db,
@@ -99,7 +99,7 @@ internal sealed class CommonItemChanges(
     /// <remarks>
     /// <see cref="Channel.App"/> has the version checked first, so that a missing or stale <c>If-Match</c> is refused
     /// whatever follows. <see cref="Channel.Mcp"/> has it checked last, by the save, so that a call that changes
-    /// nothing is not refused for its version, while the groups' refusals and the text's rules come first (A132).
+    /// nothing is not refused for its version, while the groups' refusals and the text's rules come first (A134).
     ///
     /// The groups are read just before the save, and carry no token that the save checks (design.md §6.9), so a group
     /// archived in that instant is not caught (T06's Notes); and two items put at the end of one group at once can read

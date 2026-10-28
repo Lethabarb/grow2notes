@@ -44,7 +44,7 @@ internal sealed class GuidePromptsHandler(
     /// writes no event (D84). The version is checked in the channel's order (<see cref="IfMatch.CheckFor"/>): for
     /// <see cref="Channel.App"/>, first, so that a missing or stale <c>If-Match</c> is refused whatever the text; for
     /// <see cref="Channel.Mcp"/>, only when the text would change, so that a call that changes nothing answers
-    /// <see cref="GuidePromptsSaveResult.Changed"/> <see langword="false"/> whatever version it sent (A132).
+    /// <see cref="GuidePromptsSaveResult.Changed"/> <see langword="false"/> whatever version it sent (A134).
     /// </summary>
     /// <param name="actor">Who replaces the prompts, whom the event records.</param>
     /// <param name="ifMatch">

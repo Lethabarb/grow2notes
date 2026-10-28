@@ -35,7 +35,9 @@ internal sealed class McpCall
     /// <summary>The tool that was called.</summary>
     public string? Tool { get; private set; }
 
-    /// <summary>Whether an event has been saved since <see cref="Begin"/>, so that the call has its audit row.</summary>
+    /// <summary>
+    /// Whether an event has been saved since <see cref="Begin"/>, so that the call has its audit row.
+    /// </summary>
     public bool EventWritten { get; private set; }
 
     /// <summary>The IDs reported by <see cref="Returned"/>, by key.</summary>
