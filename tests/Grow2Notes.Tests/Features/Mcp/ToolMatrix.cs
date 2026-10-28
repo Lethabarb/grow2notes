@@ -339,7 +339,10 @@ internal static class ToolMatrix
             "list_users",
             scene => Task.FromResult(new JsonObject { ["search"] = scene.Token }),
             [
-                new("a control character", scene => new() { ["search"] = scene.Token + "" }, "validation.failed"),
+                new(
+                    "a control character",
+                    scene => new() { ["search"] = scene.Token + "\u0007" },
+                    "validation.failed"),
                 new("too long", _ => new() { ["search"] = new string('a', 257) }, "validation.failed"),
             ],
             OtherOrganisationCode: null,
@@ -361,9 +364,178 @@ internal static class ToolMatrix
             [],
             OtherOrganisationCode: null,
             Event: null),
+        new(
+            "set_guide_prompts",
+            async scene => PromptsCall($"Prompt {Unique()}\nNext {Unique()}", await scene.GuidePromptsVersionAsync()),
+            [
+                new(
+                    "a made-up version and a change",
+                    _ => PromptsCall($"Prompt {Unique()}", "AAAAAAAAAAA="),
+                    "precondition.failed"),
+                new(
+                    "no version and a change",
+                    _ => PromptsCall($"Prompt {Unique()}"),
+                    "precondition.required"),
+                new(
+                    "an empty version and a change",
+                    _ => PromptsCall($"Prompt {Unique()}", ""),
+                    "precondition.required"),
+                new("a tab", _ => PromptsCall("Prompt\tx", "AAAAAAAAAAA="), "validation.failed"),
+                new("a bidi character", _ => PromptsCall("Prompt" + Bidi + "x", "AAAAAAAAAAA="), "validation.failed"),
+                new("1,001 characters", _ => PromptsCall(new string('a', 1001), "AAAAAAAAAAA="), "validation.failed"),
+                new("no text", _ => new() { ["expectedVersion"] = "AAAAAAAAAAA=" }, "unexpected"),
+            ],
+            OtherOrganisationCode: "precondition.failed",
+            Event: AuditEventTypes.GuidePrompts.Updated),
+        new(
+            "add_common_item_group",
+            _ => Task.FromResult(new JsonObject { ["name"] = $"Group {Unique()}" }),
+            [
+                new("an empty name", _ => new() { ["name"] = "" }, "validation.failed"),
+                new("201 characters", _ => new() { ["name"] = new string('a', 201) }, "validation.failed"),
+                new("a control character", _ => new() { ["name"] = "Group\u0007x" }, "validation.failed"),
+                new("a line break", _ => new() { ["name"] = "Group\nx" }, "validation.failed"),
+                new("a bidi character", _ => new() { ["name"] = "Group" + Bidi + "x" }, "validation.failed"),
+                new("no name", _ => new(), "unexpected"),
+            ],
+            OtherOrganisationCode: null,
+            Event: AuditEventTypes.CommonItemGroup.Created),
+        new(
+            "rename_common_item_group",
+            async scene => GroupCall(await scene.AddGroupAsync(), $"Renamed {Unique()}"),
+            [
+                .. NameErrorCases(scene => GroupCall(scene.Group, $"Rename {scene.Token}")),
+                new(
+                    "Every note with a made-up version",
+                    scene => GroupCall(scene.EveryNoteGroupId, "AAAAAAAAAAA=", "Renamed"),
+                    "config.every_note_fixed"),
+                .. GroupErrorCases(scene => GroupCall(scene.Group, $"Rename {scene.Token}")),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItemGroup.Updated),
+        new(
+            "reorder_common_item_groups",
+            async scene =>
+            {
+                await scene.AddGroupAsync();
+                await scene.AddGroupAsync();
+                var ids = await scene.ActiveGroupIdsAsync();
+                return GroupIdsCall([.. ids[1..].Append(ids[0]).Select(id => id.ToString())]);
+            },
+            [
+                new(
+                    "Every note's ID",
+                    scene => GroupIdsCall(scene.EveryNoteGroupId.ToString(), scene.Group.Id.ToString()),
+                    "config.order_mismatch"),
+                new(
+                    "an archived group",
+                    scene => GroupIdsCall(scene.ArchivedGroup.Id.ToString()),
+                    "config.order_mismatch"),
+                new(
+                    "a repeat",
+                    scene => GroupIdsCall(scene.Group.Id.ToString(), scene.Group.Id.ToString()),
+                    "config.order_mismatch"),
+                new("an empty list", _ => GroupIdsCall(), "config.order_mismatch"),
+                new("not an ID", _ => GroupIdsCall("not-a-guid"), "config.order_mismatch"),
+                new(
+                    "a bidi character in an ID",
+                    scene => GroupIdsCall(scene.Group.Id + Bidi),
+                    "config.order_mismatch"),
+                new("no groupIds", _ => new(), "unexpected"),
+            ],
+            OtherOrganisationCode: "config.order_mismatch",
+            Event: AuditEventTypes.CommonItemGroup.Reordered),
+        new(
+            "archive_common_item_group",
+            async scene => GroupCall(await scene.AddGroupAsync()),
+            [
+                new(
+                    "Every note with a made-up version",
+                    scene => GroupCall(scene.EveryNoteGroupId, "AAAAAAAAAAA="),
+                    "config.every_note_fixed"),
+                .. GroupErrorCases(scene => GroupCall(scene.Group)),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItemGroup.Archived),
+        new(
+            "restore_common_item_group",
+            async scene => GroupCall(await scene.AddGroupAsync(archived: true)),
+            [
+                new(
+                    "Every note with a made-up version",
+                    scene => GroupCall(scene.EveryNoteGroupId, "AAAAAAAAAAA="),
+                    "config.every_note_fixed"),
+                .. GroupErrorCases(scene => GroupCall(scene.ArchivedGroup)),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItemGroup.Restored),
     ];
 
+    private static readonly string Bidi = char.ConvertFromUtf32(0x202E);
+
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];
+
+    private static JsonObject PromptsCall(string text, string? version = null)
+    {
+        var arguments = new JsonObject { ["text"] = text };
+        if (version is not null)
+        {
+            arguments["expectedVersion"] = version;
+        }
+
+        return arguments;
+    }
+
+    private static JsonObject GroupCall(SceneGroup group, string? name = null) =>
+        GroupCall(group.Id, ToolScene.ExpectedVersion(group.ETag), name);
+
+    // A change to a group that sends the version given, and the name if one is given.
+    private static JsonObject GroupCall(Guid groupId, string version, string? name = null)
+    {
+        var arguments = new JsonObject { ["groupId"] = groupId.ToString(), ["expectedVersion"] = version };
+        if (name is not null)
+        {
+            arguments["name"] = name;
+        }
+
+        return arguments;
+    }
+
+    private static JsonObject GroupIdsCall(params string[] groupIds) => new()
+    {
+        ["groupIds"] = new JsonArray([.. groupIds.Select(id => (JsonNode?)JsonValue.Create(id))]),
+    };
+
+    // The refusals of a name, which differ in the name sent and not in the group, so the group is the scene's.
+    private static IReadOnlyList<ToolErrorCase> NameErrorCases(Func<ToolScene, JsonObject> change) =>
+    [
+        new("an empty name", scene => With(change(scene), "name", ""), "validation.failed"),
+        new("201 characters", scene => With(change(scene), "name", new string('a', 201)), "validation.failed"),
+        new("a control character", scene => With(change(scene), "name", "Group\u0007x"), "validation.failed"),
+        new("a line break", scene => With(change(scene), "name", "Group\nx"), "validation.failed"),
+        new("a bidi character", scene => With(change(scene), "name", "Group" + Bidi + "x"), "validation.failed"),
+    ];
+
+    // The refusals of a change to a group that the version and the ID decide, which differ in the scene's group that
+    // they change and so, for a rename, in the name that they send.
+    private static IReadOnlyList<ToolErrorCase> GroupErrorCases(Func<ToolScene, JsonObject> change) =>
+    [
+        new(
+            "a made-up version and a change",
+            scene => With(change(scene), "expectedVersion", "AAAAAAAAAAA="),
+            "precondition.failed"),
+        new(
+            "no version and a change",
+            scene => Without("expectedVersion", change(scene)),
+            "precondition.required"),
+        new(
+            "an empty version and a change",
+            scene => With(change(scene), "expectedVersion", ""),
+            "precondition.required"),
+        new("an unknown ID", scene => With(change(scene), "groupId", Guid.NewGuid().ToString()), "not_found"),
+        new("not an ID", scene => With(change(scene), "groupId", "not-a-guid"), "not_found"),
+        new("no ID", scene => Without("groupId", change(scene)), "unexpected"),
+    ];
 
     private static JsonObject AddGoalCall(string participantId, string text) => new()
     {

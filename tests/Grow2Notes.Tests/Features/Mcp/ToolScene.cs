@@ -245,6 +245,13 @@ internal sealed class ToolScene
         SeedItemAsync(flow.App.Services, Organisation, groupId, $"Item {NewHex()}", 100, archived);
 
     /// <summary>
+    /// The IDs of the first organisation's active groups other than Every note, in the order that
+    /// <c>list_common_items</c> lists them, as a reorder of every group sends them.
+    /// </summary>
+    public Task<List<Guid>> ActiveGroupIdsAsync() =>
+        flow.App.Services.ActiveGroupIdsAsync(Organisation.OrganisationId);
+
+    /// <summary>
     /// The version of the first organisation's guide prompts as the tools give it: the token of the organisation row,
     /// read now.
     /// </summary>
