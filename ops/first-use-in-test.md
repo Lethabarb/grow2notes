@@ -1556,8 +1556,11 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      messages for an unknown group or item, a changed group, item or set of guide prompts, Every note, an archived
      group and an order mismatch, and "Send at least one of text and groupId." Also confirm or overturn the four
      assumed defaults: A132 (the user list and the deactivated rule), A133 (line breaks in guide prompts), A134 (the
-     order of the checks, and `expectedVersion` optional in every schema) and A135 (the results and help lines). The
-     answer is a decision, not a test, and it does not hold T35 open. Rewording changes the words the model sees, so
+     order of the checks, and `expectedVersion` optional in every schema) and A135 (the results and help lines). Also
+     accept or refuse two changes to a security test, described in T35's Notes: `McpCanaryTests` now reads only the
+     arguments that were sent as strings (a boolean is no canary value), and its argument names still omit a group's
+     `name`, so a group name is not checked for a leak. The answer is a decision, not a test, and it does not hold
+     T35 open. Rewording changes the words the model sees, so
      it means regenerating `tools-list.json` from the JSON that its snapshot test prints. (A132 to A135.)
 184. Connect an assistant as a manager, as in step 172, in a test organisation with made-up people that includes an
      invited person and a deactivated one, and ask it to list the users. Look for: the invited and active people with
@@ -1593,3 +1596,9 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 189. Call the tools list from a connected assistant. Look for: 23 tools, and a Support person can call the new ones
      (steps 185 and 187 already used one). A worker still cannot connect an assistant (step 168). This step holds
      nothing open. (S07.03.04 to S07.03.08; MA7.)
+190. For the owner: decide whether to split the Mcp tests into a second CI job now. The Build and test job took
+     35 to 47 minutes across the five T35 PRs (46m39s on the last, with no new tests) against a 60-minute timeout,
+     and T36 and T37 add rows. To split, ask for a change to the CI workflow only (not the deploy workflow) that runs
+     the `Grow2Notes.Tests.Features.Mcp` namespace in a new job and its negation in the existing one, which keeps its
+     name; then add the new job as a required status check on main in the repository settings. This is a decision,
+     not a test, and it does not hold T35 open. (R33.)

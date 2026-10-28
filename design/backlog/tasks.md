@@ -7240,7 +7240,7 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 - Departures from the final design as built: `UserList.cs` and `CommonItemGroupList.cs` changed in their doc
   comments only; the helpers `Content`, `Body`, `PropertyNames` and `AssertValidationFailed` moved from
   `ParticipantsToolsTests` to the new `ToolCalls.cs` so that the new test classes share them (no behaviour change);
-  no CI split, so no step 190.
+  no CI split built; step 190 asks the owner whether to split now (see the CI cost note below).
 - Tests changed on purpose (the PR bodies name them). `ReorderCommonItemGroupsEndpointTests` and
   `ReorderCommonItemsEndpointTests` (app tests) asserted the handlers' old `Saved` result and now assert no error and
   `Changed`, because `Saved` was replaced by `Of` and `Added`; every answer of the app is the same.
@@ -7288,21 +7288,25 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 - CI cost (R33): the Build and test job took 38m20s on the v1 PR (#182, green first time), 44m12s on v2 (#183, run
   40689748538, after a first run that failed on the snapshot theories and the canary above), 36m14s on v3 (#186, after
   two failed runs: the snapshot, then a wrong group ID in the restored-group test of `CommonItemGroupToolsTests`)
-  and 35m19s on v4 (#187, after one run that failed on the snapshot only). None passed the 45 minutes at which v4 was
-  to move the Mcp test classes into a second job, so the workflow is unchanged and there is no new required check;
-  v2 was one minute short, so if a run on main goes past 45 minutes after T36 and T37 add their rows, split them then.
+  and 35m19s on v4 (#187, after one run that failed on the snapshot only). The v5 run (#188, a docs-only change with no
+  new tests) took 46m39s, so the job time varies by about ten minutes between runs and v5 passed the 45 minutes at
+  which v4 was to move the Mcp test classes into a second job, with 13 minutes left before the job's 60-minute
+  timeout. The workflow is unchanged, so there is no new required check, but the margin is thin and T36 and T37 add
+  rows. Whether to split the Mcp test classes into a second job now is a decision for the owner (ops step 190), not a
+  later contingency; the filter is the one in the plan (the `Grow2Notes.Tests.Features.Mcp` namespace in the new job
+  and its negation in the existing one, in the CI workflow only), and the new job would be added as a required check.
   The snapshot `tools-list.json` was regenerated from each first failure (12, 18 and 23 tools in the three PRs); it
   is regenerated again if the owner rewords any model-facing words.
-- Line length: three comments in files this task touched are over 120 characters and were not reflowed in this
-  docs-only vertical: the summary line 16 of `CommonItemChanges.cs` (132 characters) and line 38 of `McpCall.cs` (121).
-  A later change to those files should wrap them.
 - Choices for the owner to approve or reword (ops step 183 asks): the fourteen titles; the descriptions and parameter
   descriptions; the "data typed by people" line; the empty-group line; the refusal messages; the help lines (reused
-  from design.md sections 4.8 and 4.10); and A132 to A135.
+  from design.md sections 4.8 and 4.10); A132 to A135; the narrowing of `McpCanaryTests` to string arguments, and its
+  gap for group names (both described above); and whether to split the Mcp tests into a second CI job now (step 190).
 - Merge note for the feature branch into main: design.md line 7 (it now reads A1-A135 and keeps D1-D92, while main's
   reads D1-D94 and A1-A131) and the end of the section 13 table conflict with T40's A130 and A131 rows; keep both.
+  Rebase the feature branch onto origin/main before the final merge and resolve that conflict then, so that the
+  table has no gap from A129 to A132 and the header reads D1-D94 and A1-A135.
   `ops/first-use-in-test.md` and the other docs merge cleanly.
-- By hand: first-use steps 183 to 189 added under the heading *The user list, common item and guide prompt tools in
+- By hand: first-use steps 183 to 190 added under the heading *The user list, common item and guide prompt tools in
   test, once T35 is on main*. Step 183 is the owner's to approve or reword the new words. None of them holds T35 open.
   The stories' `sprint` stays blank, as for T34.
 
@@ -7315,9 +7319,9 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 - [x] `set_guide_prompts` and the five group tools (#186; v3): the `TextInput` line-break flag and N0 limit, the
   contracts, `CommonItemGroupToolsTests` and `GuidePromptsToolsTests`.
 - [x] The five item tools (#187; v4): `add_common_item`, `update_common_item`, `reorder_common_items`,
-  `archive_common_item` and `restore_common_item`, and `CommonItemToolsTests`. No CI split.
+  `archive_common_item` and `restore_common_item`, and `CommonItemToolsTests`. No CI split built (see step 190).
 - [x] Close-out (#188; v5): A132 to A135 (renumbered after T40), mcp-server.md sections 5.1, 5.2, 5.4, 5.5 and 9,
-  first-use steps 183 to 189, S07.02.05 and S07.03.04 to S07.03.08 done, coverage.md and these Notes.
+  first-use steps 183 to 190, S07.02.05 and S07.03.04 to S07.03.08 done, coverage.md and these Notes.
 
 ---
 

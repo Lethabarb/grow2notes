@@ -13,8 +13,8 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups/{groupId}/items</c>,
 /// <c>PUT /api/admin/common-items/{id}</c>, <c>PUT /api/admin/common-item-groups/{groupId}/items/order</c> and
 /// <c>POST /api/admin/common-items/{id}/archive</c> and <c>/restore</c> call it with <see cref="Actor.InApp"/>, and
-/// the item tools of the assistant access call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit event through
-/// <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// the item tools of the assistant access call it with <see cref="Channel.Mcp"/>. Each change is saved with its audit
+/// event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemChanges(
     Grow2NotesDbContext db,
