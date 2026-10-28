@@ -267,8 +267,8 @@ await answerInvites(page, { status: 500 });
 ```
 
 The tests that meet the app's own invite sign in for real, as above, and invite a made-up person with a new
-`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets no
-`Email__ApiKeySecretUri` and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
+`example.org` address (A35), whose email the app writes to its standard output, as CI's run sets
+`Email__UseConsole` and so sends no real email (T01's Notes). `e2e/invite-user.spec.ts` is the example of each.
 
 Resend invite on an Invited user's page sends `POST /api/admin/users/{id}/setup-link`, whose path `setupLinks` in
 `e2e/users.ts` matches for any user. `answerSetupLinks(page, answer)` answers each resend in the browser:
@@ -954,8 +954,9 @@ every key. Yesterday comes from the server's today, which the nav's Report link 
   app without one in `AppWithoutDatabase`, so it runs without Docker. `Grow2Notes.Tests/Platform/LoggingTests.cs` is
   the example, and `Grow2Notes.Tests/Data/ModelTenancyTests.cs` reads the app's model that way. It hosts the app
   without the test-only sign-in (below), as the app is deployed, so `Grow2Notes.Tests/SignedOutTests.cs` uses it to
-  show what a signed-out caller gets. For the same reason it keeps the app's own email sender, the console one, as
-  local development has (below).
+  show what a signed-out caller gets. In Development it has the app's console email sender, from
+  `appsettings.Development.json`, as local development has (below), and otherwise the not-configured sender, which
+  fails every send.
 - The rate limits (design.md §9.9) are lifted in both hosts, `Grow2NotesFactory` and `AppWithoutDatabase`: every test
   of a suite calls one host, and all its clients have the same null address, so with the design's numbers the suite
   would soon be refused. `TestRateLimits.LiftRateLimits()` replaces the `RateLimitPermits` service, which is the only
@@ -1378,9 +1379,10 @@ Each app has a recorder of its own. One made with `WithWebHostBuilder` starts wi
 that nothing was sent, or exactly what was, uses such an app, as
 `Grow2Notes.Tests/Platform/OperatorCommands/BootstrapCommandTests.cs` shows that `admin bootstrap` sends nothing. The
 class fixture's app is shared by the class's tests, so a test that calls it finds its own messages by the address it
-used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` keeps the app's console sender, which
-writes each message to standard output; the app sends through Resend only where `Email:ApiKeySecretUri` is
-set, which no test sets but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
+used, which no other test uses (the seeded-rows rule above). `AppWithoutDatabase` has the app's console sender in
+Development, from `Email:UseConsole` in `appsettings.Development.json`, which writes each message to standard output;
+the app sends through Resend only where `Email:ApiKeySecretUri` and `Email:SenderAddress` are set, which no test sets
+but `Grow2Notes.Tests/Platform/Email/EmailSendingTests.cs`, whose apps send nothing.
 
 `SetupLinks.FromEmail(email)` (`Grow2Notes.Tests/Fixtures/SetupLinks.cs`) reads the link in a setup-link email, and
 `SetupLinks.Read(link, email)` one that an operator command printed, as `SetupLinks.InviteAsync` reads the invite

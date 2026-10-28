@@ -25,6 +25,11 @@ public sealed class Grow2NotesFactory(SqlServerFixture sqlServer) : WebApplicati
         // Not Development, whose settings point at LocalDB.
         builder.UseEnvironment("Testing");
 
+        // The tests replace the email sender, so the host should not warn at start that no email service is
+        // configured, which would add a log entry to every test that counts the app's. A host setting, because
+        // Program.cs reads it as it registers services, before configuration sources like those below are added.
+        builder.UseSetting("Email:UseConsole", "true");
+
         // MapStaticAssets reads the build's manifest here rather than the published one. Its gzip and Brotli copies of
         // each file sit under obj/, not wwwroot, and only Development maps them in by default; without this, a request
         // that accepts compression gets an empty body.

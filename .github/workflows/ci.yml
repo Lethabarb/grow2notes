@@ -223,10 +223,12 @@ jobs:
       # The unzipped app.zip, run as App Service runs it, and left running in the background for the tests. In
       # Production the app loads appsettings.json only, so the connection string and App__Origin, the address that
       # setup links start with and passkeys are made for, come from the environment, and it keeps its Data Protection
-      # keys in the migrated database.
+      # keys in the migrated database. Email__UseConsole sends the setup-link emails to the app's standard output, as
+      # no email service is configured and CI never sends real email.
       - name: Start the app from app.zip
         env:
           ASPNETCORE_ENVIRONMENT: Production
+          Email__UseConsole: 'true'
           ASPNETCORE_URLS: ${{ env.E2E_BASE_URL }}
           App__Origin: ${{ env.E2E_BASE_URL }}
           ConnectionStrings__Grow2Notes: Server=localhost,1433;Database=Grow2Notes;User ID=sa;Password=${{ env.E2E_SA_PASSWORD }};TrustServerCertificate=True
