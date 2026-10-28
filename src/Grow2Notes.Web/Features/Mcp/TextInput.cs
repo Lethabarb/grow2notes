@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Grow2Notes.Web.Features.Mcp.Contracts;
 
@@ -18,14 +19,16 @@ internal static class TextInput
     /// <param name="label">What the messages call it, capitalised.</param>
     /// <param name="value">The argument as the assistant sent it.</param>
     /// <param name="limit">The most characters it may have once trimmed.</param>
-    public static ToolError? Refusal(string field, string label, string value, int limit)
+    /// <param name="allowLineBreaks">Whether the text may hold line breaks, as the guide prompts do (A133).</param>
+    public static ToolError? Refusal(string field, string label, string value, int limit, bool allowLineBreaks = false)
     {
         if (value.Trim().Length > limit)
         {
-            return ToolError.ValidationFailed(field, $"{label} must be {limit} characters or less");
+            return ToolError.ValidationFailed(
+                field, string.Create(CultureInfo.InvariantCulture, $"{label} must be {limit:N0} characters or less"));
         }
 
-        return HasRefusedCharacter(value)
+        return HasRefusedCharacter(value, allowLineBreaks)
             ? ToolError.ValidationFailed(field, $"{label} has a control or formatting character")
             : null;
     }
@@ -33,12 +36,18 @@ internal static class TextInput
     /// <summary>
     /// Whether <paramref name="value"/> holds a control character (which includes line breaks and tabs), a
     /// bidirectional control, or a tag character, which shows nothing. The zero-width joiner and non-joiner and the
-    /// soft hyphen are allowed, as names in some scripts need them and the app stores them.
+    /// soft hyphen are allowed, as names in some scripts need them and the app stores them. With
+    /// <paramref name="allowLineBreaks"/>, a line feed and a carriage return pass and nothing else changes.
     /// </summary>
-    public static bool HasRefusedCharacter(string value)
+    public static bool HasRefusedCharacter(string value, bool allowLineBreaks = false)
     {
         foreach (var rune in value.EnumerateRunes())
         {
+            if (allowLineBreaks && rune.Value is '\n' or '\r')
+            {
+                continue;
+            }
+
             if (Rune.IsControl(rune) || IsBidirectionalControl(rune.Value) || rune.Value is >= 0xE0000 and <= 0xE007F)
             {
                 return true;

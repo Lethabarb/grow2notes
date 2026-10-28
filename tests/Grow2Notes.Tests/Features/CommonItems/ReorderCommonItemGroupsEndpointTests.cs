@@ -180,7 +180,8 @@ public sealed class ReorderCommonItemGroupsEndpointTests(Grow2NotesFactory facto
         {
             var renamed = await second.ServiceProvider.GetRequiredService<CommonItemGroupChanges>().RenameAsync(
                 manager, outing.Id, outing.ETag, new("Outings"), TestContext.Current.CancellationToken);
-            Assert.Same(CommonItemChangeResult.Saved, renamed);
+            Assert.Null(renamed.Error);
+            Assert.True(renamed.Changed);
         }
 
         var afterSecond = await StoredGroupsAsync(organisationId);

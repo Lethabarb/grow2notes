@@ -16,6 +16,15 @@ internal sealed class McpCall
     /// <summary>The key of the goals that a look-up returned.</summary>
     public const string GoalIds = "goalIds";
 
+    /// <summary>The key of the user accounts that a look-up returned.</summary>
+    public const string UserIds = "userIds";
+
+    /// <summary>The key of the common item groups that a tool returned.</summary>
+    public const string GroupIds = "groupIds";
+
+    /// <summary>The key of the common items that a tool returned.</summary>
+    public const string CommonItemIds = "commonItemIds";
+
     private readonly Dictionary<string, IReadOnlyCollection<Guid>> returned = [];
 
     /// <summary>
@@ -26,7 +35,9 @@ internal sealed class McpCall
     /// <summary>The tool that was called.</summary>
     public string? Tool { get; private set; }
 
-    /// <summary>Whether an event has been saved since <see cref="Begin"/>, so that the call has its audit row.</summary>
+    /// <summary>
+    /// Whether an event has been saved since <see cref="Begin"/>, so that the call has its audit row.
+    /// </summary>
     public bool EventWritten { get; private set; }
 
     /// <summary>The IDs reported by <see cref="Returned"/>, by key.</summary>

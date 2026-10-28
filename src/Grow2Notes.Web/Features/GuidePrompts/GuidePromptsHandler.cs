@@ -11,8 +11,8 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// <summary>
 /// The handler that reads and replaces an organisation's guide prompts (design.md §4.10, §6.6), as a handler class
 /// that takes the <see cref="Actor"/>, the acting user and the channel (mcp-server.md §3.5, convention 1):
-/// <c>GET</c> and <c>PUT /api/admin/guide-prompts</c> call it with <see cref="Actor.InApp"/>, and Release 2's
-/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> tools will call it with <see cref="Channel.Mcp"/>.
+/// <c>GET</c> and <c>PUT /api/admin/guide-prompts</c> call it with <see cref="Actor.InApp"/>, and the
+/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> tools call it with <see cref="Channel.Mcp"/>.
 /// </summary>
 /// <remarks>
 /// The prompts are a column of the tenant's own <see cref="Organisation"/> row, whose <c>RowVersion</c> is their
@@ -22,7 +22,10 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// </remarks>
 internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
 {
-    /// <summary>The guide prompts as stored, with the row's version token.</summary>
+    /// <summary>
+    /// The guide prompts as stored, with the row's version token. The <c>get_guide_prompts</c> tool calls it with
+    /// <see cref="Channel.Mcp"/>.
+    /// </summary>
     /// <remarks>
     /// Nothing here uses the actor, as reading writes no audit event in the app (design.md §5.4, A28). It is taken so
     /// that every admin handler has the same shape.
@@ -35,23 +38,31 @@ internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext
     }
 
     /// <summary>
-    /// Replaces the guide prompts with <paramref name="text"/>, as it is given, when <paramref name="ifMatch"/> is the
-    /// ETag of the row as it is stored, and writes one <c>guide_prompts.updated</c> with the old and new text; or, when
-    /// the text is already stored, changes nothing and writes no event (D84).
+    /// Replaces the guide prompts with <paramref name="text"/>, as it is given, and writes one
+    /// <c>guide_prompts.updated</c> with the old and new text; or, when the text is already stored, changes nothing and
+    /// writes no event (D84). The version is checked in the channel's order (<see cref="IfMatch.CheckFor"/>): for
+    /// <see cref="Channel.App"/>, first, so that a missing or stale <c>If-Match</c> is refused whatever the text; for
+    /// <see cref="Channel.Mcp"/>, only when the text would change, so that a call that changes nothing answers
+    /// <see cref="GuidePromptsSaveResult.Changed"/> <see langword="false"/> whatever version it sent (A134).
     /// </summary>
     /// <param name="actor">Who replaces the prompts, whom the event records.</param>
-    /// <param name="ifMatch">The request's <c>If-Match</c> values, which <see cref="IfMatch.Check"/> takes.</param>
+    /// <param name="ifMatch">
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or a tool's
+    /// <c>expectedVersion</c> through <see cref="IfMatch.FromExpectedVersion"/>.
+    /// </param>
     /// <param name="text">The new prompts, whose length the caller has checked against the column's.</param>
     /// <param name="cancellationToken">Cancels the load and the save.</param>
     /// <returns>
-    /// The row's version token once the text is stored; or the code that <see cref="IfMatch.Check"/> gives, or
+    /// The row's version token once the text is stored, a new one after a save and, when nothing changed, the stored
+    /// row's, whatever version was sent; or the code that <see cref="IfMatch.Check"/> gives, or
     /// <see cref="ErrorCode.PreconditionFailed"/> when the row changed after it was loaded, with nothing written.
     /// </returns>
     public async Task<GuidePromptsSaveResult> SaveAsync(
         Actor actor, StringValues ifMatch, string text, CancellationToken cancellationToken)
     {
         var organisation = await db.Organisations.SingleAsync(o => o.Id == tenant.OrganisationId, cancellationToken);
-        if (IfMatch.Check(ifMatch, RowVersionToken.Of(organisation)) is { } refused)
+        var version = IfMatch.CheckFor(actor, ifMatch, RowVersionToken.Of(organisation));
+        if (version.RefuseNow is { } refused)
         {
             return GuidePromptsSaveResult.Refused(refused);
         }
@@ -60,13 +71,14 @@ internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext
         organisation.GuidePrompts = text;
         var saved = await changes.SaveAsync(
             actor, AuditEventTypes.GuidePrompts.Updated, AuditEntityTypes.Organisation, organisation.Id,
-            participantId: null, before, Values(organisation), cancellationToken: cancellationToken);
+            participantId: null, before, Values(organisation), refuseIfChanged: version.RefuseIfChanged,
+            cancellationToken: cancellationToken);
 
         // EF Core reads back the version that SQL Server gave the row as it saved it, so after a save this is the new
         // token, and when nothing changed it is the one the If-Match matched.
         return saved.Error is { } error
             ? GuidePromptsSaveResult.Refused(error)
-            : GuidePromptsSaveResult.Stored(RowVersionToken.Of(organisation));
+            : GuidePromptsSaveResult.Stored(RowVersionToken.Of(organisation), saved.Changed);
     }
 
     // The values that the event's Details give, named as design.md §6.6 names the text.
