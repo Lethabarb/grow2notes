@@ -51,8 +51,9 @@ Result: ____ (date), ____ (pass or fail), by ____
 ### A2. The `prod` GitHub environment
 
 Restrict deployments to `main`, add no required reviewer (A103: the repository is public, so the branch rule is
-available, and the dispatch from `main` is the approval), and give it the same seven secrets as `test`, with the prod
-deployment identity's client ID (`infra/README.md`, bootstrap step 6). Create the environment with its branch rule
+available, and the dispatch from `main` is the approval), and give it the same eight secrets as `test`, with the prod
+deployment identity's client ID (`infra/README.md`, bootstrap step 6; the last two are the owner's, in A4 and in
+[What the owner sets](../infra/README.md#what-the-owner-sets)). Create the environment with its branch rule
 first, so that GitHub never makes it without one:
 
 ```shell
@@ -72,33 +73,34 @@ gh secret set SQL_ADMIN_GROUP_OBJECT_ID --env prod \
   --body "$(az ad group show --group 'Grow2Notes SQL admins' --query id --output tsv)"
 read -rp 'Alert email address: ' alert_email
 gh secret set ALERT_EMAIL --env prod --body "$alert_email"
-read -rp 'Email sender address, bare or as Grow2Notes <address>: ' email_sender_address
-gh secret set EMAIL_SENDER_ADDRESS --env prod --body "$email_sender_address"
 ```
 
-Look for `gh secret list --env prod` naming exactly those seven, no client secret or publish profile in the repository's
-secrets, and, in the repository's Settings, Environments, `prod` with *Deployment branches and tags* set to `main` and
-no required reviewer. `EMAIL_SENDER_ADDRESS` is an address on the domain the owner verified in Resend (first-use step
-151), which both environments share.
+The Resend key and the sender address are the owner's to set, in A4. Look for `gh secret list --env prod` naming exactly
+those six now, and the eight once A4 is done, no client secret or publish profile in the repository's secrets, and, in
+the repository's Settings, Environments, `prod` with *Deployment branches and tags* set to `main` and no required
+reviewer. The branch rule matters more now: any workflow run that enters `prod` can read its Resend key (D94).
 
 Result: ____ (date), ____ (pass or fail), by ____
 
 ### A3. The bootstrap is current, and the old email role is gone
 
-First-use step 151 re-ran the bootstrap for both groups from the T22 branch, which gave the app identity
-`Key Vault Secrets User` in the prod group too. If step 151 has not been done, do it now (`infra/README.md`, *Running it
-again*, steps 1 to 4, passing the GitHub subject prefix at run time). Then delete the old
+Look at the prod group's role assignments for `id-grow2notes-prod-app`. If `Key Vault Secrets User` is missing, as it is
+when no bootstrap re-run has happened since T22, re-run the bootstrap (`infra/README.md`, *Running it again*, steps 1 to
+4, passing the GitHub subject prefix at run time). Then delete the old
 `Communication and Email Service Owner` assignment in the prod group, with the loop in *Running it again* limited to
 `prod`. Look for the prod group's role assignments for `id-grow2notes-prod-app` being Key Vault Crypto Service
 Encryption User, Key Vault Secrets User and Monitoring Metrics Publisher, and no Communication or Email role.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
-### A4. The production Resend key (Owner of the Resend account)
+### A4. The production Resend secrets (Owner of the Resend account)
 
-In Resend, create a sending-only API key for production on the shared verified domain (A100). Confirm tracking is off
-for the domain and that the account has multi-factor sign-in and the fewest members it can have (A102). Keep the key
-for A7 only; it is never written down.
+In Resend, create a second sending-only API key for production on the shared verified domain, limited to it (A100).
+Confirm tracking is off for the domain and that the account has multi-factor sign-in and the fewest members it can have
+(A102). Then set the `prod` environment's two secrets, `RESEND_API_KEY` (that key) and `EMAIL_SENDER_ADDRESS` (an
+address on the verified domain), as the table [What the owner sets](../infra/README.md#what-the-owner-sets) says, in the
+repository's Settings, Environments, `prod`. Do this after A2, so that the branch rule is already in place. The key is
+never written down, and no deploy waits for it: until A9 writes it, every email would answer "Not sent".
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -129,7 +131,6 @@ chosen run's artifact, so production gets exactly what test ran:
 ci_run=<the CI run ID from A5>
 gh run download "$ci_run" --name grow2notes --dir artifacts
 read -rp 'Alert email address: ' alert_email
-read -rp 'Email sender address: ' email_sender_address
 deployment=(
   --resource-group rg-grow2notes-prod-ause
   --name grow2notes-prod-main
@@ -137,7 +138,7 @@ deployment=(
   --parameters @artifacts/infra/prod.parameters.json
   --parameters sqlAdminGroupName='Grow2Notes SQL admins'
     sqlAdminGroupObjectId="$(az ad group show --group 'Grow2Notes SQL admins' --query id --output tsv)"
-    alertEmail="$alert_email" emailSenderAddress="$email_sender_address"
+    alertEmail="$alert_email"
   --only-show-errors
 )
 az deployment group what-if "${deployment[@]}"
@@ -147,8 +148,9 @@ az deployment group create "${deployment[@]}" --output none
 Look for the what-if creating the resources of design.md §10.1 (including the three alerts and the long-term retention
 policy) and nothing outside the prod group, then the create succeeding. If the key creation is refused by the vault's
 firewall, that is the precedent of 7 October 2026 and the template already allows it. The web app has no build yet, so
-its health check fails: the health-check alert fires until A9 and that is expected. The app's settings must already
-name `Email__ApiKeySecretUri` and `Email__SenderAddress`.
+its health check fails: the health-check alert fires until A9 and that is expected. The hand deploy passes no Resend
+key and no sender address, so it writes no key; A9's deploy passes both from the `prod` secrets. The app's settings must
+already name `Email__ApiKeySecretUri`.
 
 **Owner's decision before this step:** `ops/security-review.md` F-7 says a 3072-bit Key Vault wrapping key is best made
 when production is first deployed. Decide now whether to ask for it. If yes, stop and ask the developer for the change
@@ -156,20 +158,15 @@ to `keyvault.bicep` first. If no, the finding stays accepted.
 
 Result: ____ (date), ____ (pass or fail), by ____ (F-7 decision: ____)
 
-### A7. Store the Resend key in `kv-grow2notes-prod`
+### A7. Check the Resend key in `kv-grow2notes-prod`, after A9
 
-Follow `infra/README.md`, *Email through Resend*, for `kv-grow2notes-prod`: give yourself Key Vault Secrets Officer on
-the vault, add your address to its firewall, `read -s` the key from A4 into `az keyvault secret set --name
-resend-api-key`, then remove both. While your address is still allowed, list the vault's contents by name:
-
-```shell
-az resource list --resource-group rg-grow2notes-prod-ause --resource-type Microsoft.KeyVault/vaults/keys --query '[].name' --output tsv
-az keyvault secret list --vault-name kv-grow2notes-prod --query '[].name' --output tsv
-```
-
-Look for one key, `data-protection` (listed through Resource Manager, because your role covers secrets only; the name
-shows as `kv-grow2notes-prod/data-protection`), and one secret, `resend-api-key`. Then look for the firewall rule and
-your role assignment gone.
+Nothing is stored by hand. Do this once A9's first dispatch has succeeded, which passed `RESEND_API_KEY` to the
+deployment. In the portal, open the deployment in the prod resource group (Deployments, `grow2notes-prod-main`) and look
+at its operation details: the vault's key `data-protection` and its secret `resend-api-key` are both listed as created
+or updated, and the deployment's inputs show no value for `resendApiKey`. The portal's list of the vault's secrets is
+behind its firewall, so do not add your address to look. Then send the first invite a manager makes from Users and
+look for the email arriving from the production sender address. If the create was refused for the secret, change nothing
+in Azure and follow `infra/README.md`, *Can the deploy identity write the secret?*
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -199,7 +196,8 @@ gh run list --workflow deploy.yml --limit 3
 Look for a run titled `Deploy CI run <id> to prod` whose `Check the CI run` job and `Deploy to prod` job both succeed,
 and whose log shows the migration applying and the smoke test passing. A 5xx alert around the deploy is expected (the
 restart), and the health-check alert from A6 resolves. If the deploy fails, nothing is rolled back for you: read the log
-and `restore-drill.md`, and tell the developer.
+and `restore-drill.md`, and tell the developer. The run should carry no `Resend key not written` annotation; if it does,
+`RESEND_API_KEY` is not set on `prod` (A4). Then do A7's check.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -322,11 +320,11 @@ Each check names what to look for and nothing else. Run them after A, and again 
 
    Result: ____ (date), ____ (pass or fail), by ____
 
-9. **No drift.** Run the what-if of A6 again, with the same arguments and the artifact of the last production deploy.
-   Look for no create, modify or delete of a setting that §10.1 lists. Azure sometimes reports properties it adds
-   itself as changes; if the long-term policy shows `weekOfYear`, the fix is `weekOfYear: 0` in `sql.bicep` (T22's
-   Notes), and if the database SKU shows a change, `databaseSku` in `prod.bicepparam` is in the wrong shape. Tell the
-   developer in either case. (S06.03.01's first criterion.)
+9. **No drift.** Run the what-if of A6 again, with the same arguments, `emailSenderAddress` as set in A4 and the
+   artifact of the last production deploy. Look for no create, modify or delete of a setting that §10.1 lists. Azure
+   sometimes reports properties it adds itself as changes; if the long-term policy shows `weekOfYear`, the fix is
+   `weekOfYear: 0` in `sql.bicep` (T22's Notes), and if the database SKU shows a change, `databaseSku` in
+   `prod.bicepparam` is in the wrong shape. Tell the developer in either case. (S06.03.01's first criterion.)
 
    Result: ____ (date), ____ (pass or fail), by ____
 
