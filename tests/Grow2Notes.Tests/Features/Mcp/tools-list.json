@@ -1,5 +1,61 @@
 [
   {
+    "name": "add_common_item_group",
+    "title": "Add a common item group",
+    "description": "Adds an empty group of common items at the end of the active groups. A group with no items does not show on notes. Returns the new group's groupId and expectedVersion, which a later change needs. The result's helpText says what a change to a group does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "The group's name: at most 200 characters, on one line.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupId",
+        "name",
+        "archived",
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Add a common item group",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "add_goal",
     "title": "Add a goal",
     "description": "Adds a goal to a participant, at the end of their active goals. Returns its goalId and the expectedVersion that a later change needs. An archived participant's goals cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
@@ -111,6 +167,70 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "archive_common_item_group",
+    "title": "Archive a common item group",
+    "description": "Archives a group, which acts at once. Needs the groupId and expectedVersion that list_common_items returned. An archived group answers changed: false. The Every note group cannot be archived. Its items stay as they are and return with it when it is restored. The result holds the group's new expectedVersion, and its helpText says what a change to a group does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "description": "The groupId that list_common_items returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that list_common_items returned for this group.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "groupId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupId",
+        "name",
+        "archived",
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Archive a common item group",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
       "openWorldHint": false
     }
   },
@@ -496,6 +616,177 @@
     }
   },
   {
+    "name": "rename_common_item_group",
+    "title": "Rename a common item group",
+    "description": "Renames a group. Needs the groupId and expectedVersion that list_common_items returned. A call that would change nothing answers changed: false. The Every note group cannot be renamed. An archived group can be renamed. Notes already started keep the name they were started with. The result holds the group's new expectedVersion, and its helpText says what a change to a group does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "description": "The groupId that list_common_items returned.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The new name: at most 200 characters, on one line.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that list_common_items returned for this group.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "groupId",
+        "name"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupId",
+        "name",
+        "archived",
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Rename a common item group",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "reorder_common_item_groups",
+    "title": "Reorder the common item groups",
+    "description": "Puts the active groups in a new order. groupIds must hold every active group except Every note exactly once, in the order wanted; Every note is never in groupIds and always comes first, and an archived group is not one of them. Needs no expectedVersion. An order that is already stored answers changed: false. Returns the groups as list_common_items lists them, every expectedVersion current. The result's helpText says what a change to a group does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "groupIds": {
+          "description": "The groupId of every active group except Every note, once each, in the new order.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "groupIds"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "groupId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "isEveryNote": {
+                "type": "boolean"
+              },
+              "archived": {
+                "type": "boolean"
+              },
+              "expectedVersion": {
+                "type": "string"
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "itemId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "archived": {
+                      "type": "boolean"
+                    },
+                    "expectedVersion": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "itemId",
+                    "text",
+                    "archived",
+                    "expectedVersion"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "groupId",
+              "name",
+              "isEveryNote",
+              "archived",
+              "expectedVersion",
+              "items"
+            ]
+          }
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed",
+        "groups",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Reorder the common item groups",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "reorder_goals",
     "title": "Reorder a participant's goals",
     "description": "Puts a participant's active goals in a new order. goalIds must hold every active goal of the participant exactly once, in the order wanted; an archived goal is not one of them. Needs no expectedVersion. An order that is already stored answers changed: false. Returns the goals as get_participant lists them, every expectedVersion current. An archived participant's goals cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
@@ -571,6 +862,70 @@
     }
   },
   {
+    "name": "restore_common_item_group",
+    "title": "Restore a common item group",
+    "description": "Restores an archived group, which acts at once, and puts it at the end of the active groups with its active items. Needs the groupId and expectedVersion that list_common_items returned. An active group answers changed: false. The Every note group cannot be restored. The result holds the group's new expectedVersion, and its helpText says what a change to a group does to notes.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "description": "The groupId that list_common_items returned.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that list_common_items returned for this group.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "groupId"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupId",
+        "name",
+        "archived",
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Restore a common item group",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
     "name": "restore_goal",
     "title": "Restore a goal",
     "description": "Restores an archived goal, which acts at once, and puts it at the end of the participant's active goals. Needs the goalId and expectedVersion that get_participant returned. An active goal answers changed: false. The result has no version: look the goal up again with get_participant before the next change. A goal of an archived participant cannot be changed: restore the participant first. The result's helpText says what a change to a goal does to notes.",
@@ -613,6 +968,57 @@
       "title": "Restore a goal",
       "readOnlyHint": false,
       "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "set_guide_prompts",
+    "title": "Replace the guide prompts",
+    "description": "Replaces the guide prompts, the grey text in an empty Guided notes box. Needs the expectedVersion that get_guide_prompts returned. Line breaks are kept, the ends are trimmed, and empty text means no prompts. At most 1,000 characters. Text that is already stored answers changed: false. The result holds the new expectedVersion, and its helpText says what a change does.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "description": "The new prompts: at most 1,000 characters, line breaks allowed. Empty text means no prompts.",
+          "type": "string"
+        },
+        "expectedVersion": {
+          "description": "The expectedVersion that get_guide_prompts returned.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text"
+      ]
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean"
+        },
+        "expectedVersion": {
+          "type": "string"
+        },
+        "helpText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "changed",
+        "expectedVersion",
+        "helpText"
+      ]
+    },
+    "annotations": {
+      "title": "Replace the guide prompts",
+      "readOnlyHint": false,
+      "destructiveHint": true,
       "idempotentHint": true,
       "openWorldHint": false
     }
