@@ -5,15 +5,16 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 
 /// <summary>
 /// What <see cref="GuidePromptsHandler.SaveAsync"/> did with the text: stored it, or found it already stored, and gave
-/// the row's version token; or refused it with a design.md §6.9 code and changed nothing. The constructor is private,
-/// so it is always one or the other.
+/// the row's version token and whether it changed (<see cref="Changed"/>); or refused it with a design.md §6.9 code
+/// and changed nothing. The constructor is private, so it is always one or the other.
 /// </summary>
 internal sealed class GuidePromptsSaveResult
 {
-    private GuidePromptsSaveResult(ErrorCode? error, string? token)
+    private GuidePromptsSaveResult(ErrorCode? error, string? token, bool changed)
     {
         Error = error;
         Token = token;
+        Changed = changed;
         Succeeded = error is null;
     }
 
@@ -33,7 +34,13 @@ internal sealed class GuidePromptsSaveResult
     /// </summary>
     public string? Token { get; }
 
-    public static GuidePromptsSaveResult Stored(string token) => new(error: null, token);
+    /// <summary>
+    /// Whether the text was saved, with its event: <see langword="false"/> when it was already stored, which
+    /// Release 2's <c>set_guide_prompts</c> gives as <c>changed</c> (mcp-server.md §5.1).
+    /// </summary>
+    public bool Changed { get; }
 
-    public static GuidePromptsSaveResult Refused(ErrorCode error) => new(error, token: null);
+    public static GuidePromptsSaveResult Stored(string token, bool changed) => new(error: null, token, changed);
+
+    public static GuidePromptsSaveResult Refused(ErrorCode error) => new(error, token: null, changed: false);
 }
