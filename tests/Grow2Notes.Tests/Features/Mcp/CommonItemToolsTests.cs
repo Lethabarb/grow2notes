@@ -11,7 +11,7 @@ namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
 /// <c>add_common_item</c>, <c>update_common_item</c>, <c>reorder_common_items</c>, <c>archive_common_item</c> and
-/// <c>restore_common_item</c> (mcp-server.md §5.2, S07.03.04, S07.03.05) through the real <c>/mcp</c>: what each
+/// <c>restore_common_item</c> (mcp-server.md §5.2, S07.03.06, S07.03.07) through the real <c>/mcp</c>: what each
 /// returns and stores, the event or the one refusal row that each call writes, and the order of the checks, which the
 /// app's own endpoints give in the other order. The guards that every tool shares, including who may call each and
 /// that another organisation's rows are not found, are in <see cref="ToolMatrixTests"/>. The cases share the app of

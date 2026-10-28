@@ -28,7 +28,7 @@ internal sealed record SceneGroup(Guid Id, string Name, bool Archived, string ET
 internal sealed record SceneItem(Guid Id, string Text, bool Archived, string ETag);
 
 /// <summary>A user account of the scene's first organisation, with the address it signs in with.</summary>
-internal sealed record SceneUser(Guid Id, string Email, string DisplayName);
+internal sealed record SceneUser(string Email);
 
 /// <summary>
 /// The world that the tests of the MCP tools share, in the database of an <see cref="AssistantFlow"/>: a first
@@ -362,8 +362,8 @@ internal sealed class ToolScene
         string email,
         UserStatus status)
     {
-        var id = await services.AddUserAsync(organisation, UserRole.Worker, displayName, status, email);
-        return new(id, email, displayName);
+        await services.AddUserAsync(organisation, UserRole.Worker, displayName, status, email);
+        return new(email);
     }
 
     private static async Task<SceneGoal> SeedGoalAsync(

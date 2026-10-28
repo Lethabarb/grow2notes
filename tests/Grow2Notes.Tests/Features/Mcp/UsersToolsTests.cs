@@ -9,7 +9,7 @@ using static Grow2Notes.Tests.Features.Mcp.ToolCalls;
 namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
-/// <c>list_users</c> (mcp-server.md §5.2, S07.03.05) through the real <c>/mcp</c>: which accounts it lists and in what
+/// <c>list_users</c> (mcp-server.md §5.2, S07.02.05) through the real <c>/mcp</c>: which accounts it lists and in what
 /// order, what it says of each, what it searches, and the one audit row each call writes. The guards that every tool
 /// shares are in <see cref="ToolMatrixTests"/>. The cases share the app of <see cref="ToolWorld"/>, so each adds users
 /// whose names and addresses hold a hex tag of its own, and searches for it.

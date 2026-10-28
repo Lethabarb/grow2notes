@@ -7,7 +7,7 @@ using static Grow2Notes.Tests.Features.Mcp.ToolCalls;
 namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
-/// <c>list_common_items</c> (mcp-server.md §5.2, S07.03.04) through the real <c>/mcp</c>: the groups and items it
+/// <c>list_common_items</c> (mcp-server.md §5.2, S07.02.05) through the real <c>/mcp</c>: the groups and items it
 /// lists and in what order, the versions it gives, and the one audit row each call writes. The guards that every tool
 /// shares are in <see cref="ToolMatrixTests"/>. The cases share the app of <see cref="ToolWorld"/>, so each looks at
 /// the rows of the scene, which no case changes, and at the rows it adds itself.

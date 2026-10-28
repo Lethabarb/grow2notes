@@ -142,8 +142,7 @@ internal sealed class CommonItemGroupChanges(
     /// <returns>
     /// A result with <see cref="CommonItemChangeResult.Changed"/> true or false and no error, whether the order changed
     /// or not; or <see cref="ErrorCode.OrderMismatch"/>, with nothing written, when the IDs are not the active groups
-    /// other than
-    /// Every note, each once, or when a group changed after the list was read, which the save finds as
+    /// other than Every note, each once, or when a group changed after the list was read, which the save finds as
     /// <see cref="ErrorCode.PreconditionFailed"/>: a reorder sends no <c>If-Match</c>, and the screen reads the list
     /// again for either (list-editor.md <i>Request errors</i>), so both are the one code.
     /// </returns>

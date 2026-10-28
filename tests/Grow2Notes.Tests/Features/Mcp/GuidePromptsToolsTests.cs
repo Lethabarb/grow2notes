@@ -8,7 +8,7 @@ using static Grow2Notes.Tests.Features.Mcp.ToolCalls;
 namespace Grow2Notes.Tests.Features.Mcp;
 
 /// <summary>
-/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> (mcp-server.md §5.2, S07.03.06, S07.03.07) through the real
+/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> (mcp-server.md §5.2, S07.02.05, S07.03.08) through the real
 /// <c>/mcp</c>: the text as stored, its version, what a change stores and answers, and the one audit row each call
 /// writes. The guards that every tool shares are in <see cref="ToolMatrixTests"/>. The cases share the app of
 /// <see cref="ToolWorld"/> and run one after the other, each storing the prompts it reads or changes.

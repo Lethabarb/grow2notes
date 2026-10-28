@@ -83,10 +83,10 @@ internal sealed class CommonItemChanges(
     /// <paramref name="request"/> names one (S01.03.02, S01.03.08): loads it through the tenant filter, so that another
     /// organisation's is not found (design.md §9.2); checks <paramref name="ifMatch"/> against its version as the
     /// channel orders it (<see cref="IfMatch.CheckFor"/>); refuses an item whose own group is archived, which is
-    /// restored first; finds the chosen group through the tenant filter too,
-    /// as the add finds its group, and refuses an archived one; reads the text from <paramref name="request"/> by the
-    /// add's rules (<see cref="ItemText.CommonItem"/>); then puts a moved item at the end of the chosen group's active
-    /// items (<see cref="ListOrder.End"/>, A42), keeping its archived state, and saves it with
+    /// restored first; finds the chosen group through the tenant filter too, as the add finds its group, and refuses
+    /// an archived one; reads the text from <paramref name="request"/> by the add's rules
+    /// (<see cref="ItemText.CommonItem"/>); then puts a moved item at the end of the chosen group's active items
+    /// (<see cref="ListOrder.End"/>, A42), keeping its archived state, and saves it with
     /// <c>common_item.updated</c>, which names no participant, and whose <c>Details</c> hold the old and new values of
     /// those of its <c>groupId</c>, <c>sortOrder</c> and <c>text</c> that changed (S01.03.08's Note); or, when none
     /// changed, saves nothing and writes no event, and answers <see cref="CommonItemChangeResult.Changed"/>

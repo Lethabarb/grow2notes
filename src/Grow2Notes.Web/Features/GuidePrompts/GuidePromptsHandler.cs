@@ -20,8 +20,7 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// of the request is, so no caller can reach another organisation's prompts (§5.9 item 7), and there is no <c>404</c>
 /// to give.
 /// </remarks>
-internal sealed class GuidePromptsHandler(
-    Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
+internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
 {
     /// <summary>
     /// The guide prompts as stored, with the row's version token. The <c>get_guide_prompts</c> tool calls it with

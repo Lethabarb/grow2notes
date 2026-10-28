@@ -63,7 +63,7 @@ internal sealed class UsersTools(UserList users, IHttpContextAccessor httpContex
                 user.Email, user.DisplayName, RoleOf(user), StatusOf(user), user.ConcurrencyStamp))]));
     }
 
-    // The enum names that the Users screen's list gives, in lower case as every tool says a role (A126).
+    // The enum names that the Users screen's list gives, in lower case as every tool says a role (A132).
     private static string RoleOf(AdminUser user) => user.Role.ToLowerInvariant();
 
     private static string StatusOf(AdminUser user) => user.Status.ToLowerInvariant();
