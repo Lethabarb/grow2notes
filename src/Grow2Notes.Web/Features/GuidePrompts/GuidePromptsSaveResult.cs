@@ -36,7 +36,7 @@ internal sealed class GuidePromptsSaveResult
 
     /// <summary>
     /// Whether the text was saved, with its event: <see langword="false"/> when it was already stored, which
-    /// Release 2's <c>set_guide_prompts</c> gives as <c>changed</c> (mcp-server.md §5.1).
+    /// <c>set_guide_prompts</c> gives as <c>changed</c> (mcp-server.md §5.1).
     /// </summary>
     public bool Changed { get; }
 
