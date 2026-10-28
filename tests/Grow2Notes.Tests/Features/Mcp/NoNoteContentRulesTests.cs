@@ -51,7 +51,13 @@ public sealed class NoNoteContentRulesTests
     // The classes, outside Features.Mcp, whose members the tools call. Each later task adds every handler its tools
     // call, so that what they read is held to this rule too.
     internal static IReadOnlyList<Type> ToolHandlers { get; } =
-        [typeof(ParticipantList), typeof(GoalList), typeof(ParticipantChanges), typeof(ConfigurationChanges)];
+        [
+            typeof(ParticipantList),
+            typeof(GoalList),
+            typeof(ParticipantChanges),
+            typeof(GoalChanges),
+            typeof(ConfigurationChanges),
+        ];
 
     public static TheoryData<string> PlantedViolations { get; } =
     [
