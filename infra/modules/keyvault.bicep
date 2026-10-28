@@ -1,8 +1,8 @@
 // The Key Vault, which holds one key and one secret (design.md §7.1, §9.3, §9.4, D92). The key is an RSA key, which
 // wraps the Data Protection key ring that the app keeps in SQL. The secret is the Resend API key, resend-api-key, which
-// the operator stores by hand and which no template holds or changes. The app identity's rights to wrap and unwrap and
-// to read the secret come from the roles that bootstrap.bicep assigns on the resource group, so this file has no role
-// assignment.
+// each deploy writes from the environment's GitHub secret when it is given one. The app identity's rights to wrap and
+// unwrap and to read the secret come from the roles that bootstrap.bicep assigns on the resource group, so this file
+// has no role assignment.
 targetScope = 'resourceGroup'
 
 @description('The environment, test or prod.')
@@ -16,6 +16,11 @@ param tags object = resourceGroup().tags
 
 @description('The VNet integration subnet, from network.bicep: the only network the vault accepts.')
 param subnetId string
+
+// Secure, so that ARM keeps the value out of the deployment's history. The module's parameter in main.bicep is too.
+@description('The Resend API key, from the environment\'s GitHub secret. Empty leaves the vault\'s secret as it is.')
+@secure()
+param resendApiKey string
 
 resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
   name: 'kv-grow2notes-${environmentName}'
@@ -36,8 +41,9 @@ resource vault 'Microsoft.KeyVault/vaults@2026-02-01' = {
     softDeleteRetentionInDays: 90
     enablePurgeProtection: true
     // The app reaches the vault through the subnet's Microsoft.KeyVault service endpoint (design.md §7.7); every other
-    // address is refused. ARM creates the key below through Key Vault's management plane, which the firewall does check:
-    // with bypass 'None' the deploy fails with ForbiddenByFirewall (seen 7 Oct 2026), so trusted Azure services bypass.
+    // address is refused. ARM writes the key and the secret below through Key Vault's management plane. Bypass 'None'
+    // made the deploy fail with ForbiddenByFirewall when it created the key (seen 7 Oct 2026), so trusted Azure
+    // services bypass. The first deploy with the Resend key set is what shows that the secret's write is accepted too.
     publicNetworkAccess: 'Enabled'
     networkAcls: {
       defaultAction: 'Deny'
@@ -65,12 +71,24 @@ resource dataProtectionKey 'Microsoft.KeyVault/vaults/keys@2026-02-01' = {
   }
 }
 
+// With a key, every deploy writes it and so adds a version, which does no harm because the app reads the current one.
+// With none, the secret is not declared and an existing one is left alone, because the deploy uses Incremental mode,
+// which must never become Complete. To rotate the key, change the environment's secret, deploy, and then revoke the old
+// key in Resend.
+resource resendApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2026-02-01' = if (!empty(resendApiKey)) {
+  parent: vault
+  name: 'resend-api-key'
+  properties: {
+    value: resendApiKey
+  }
+}
+
 // Data Protection stores this URI in each key it wraps and unwraps with the key's current version, so the key must keep
 // its one version: it has no rotation policy, and it must not be rotated by hand.
 @description('The URI of the Data Protection wrapping key, without a version.')
 output keyUri string = dataProtectionKey.properties.keyUri
 
-// The secret itself is not declared here, so a deploy never creates, changes or reads it. The app reads its current
-// version at each send, so a rotated key needs no deploy.
+// The URI does not depend on the secret above, so the app setting is the same whether or not a deploy writes the key.
+// The app reads the current version at each send.
 @description('The URI of the Resend API key secret, without a version, which the app reads as Email:ApiKeySecretUri.')
 output emailApiKeySecretUri string = '${vault.properties.vaultUri}secrets/resend-api-key'
