@@ -21,6 +21,12 @@ namespace Grow2Notes.Web.Features.Mcp;
 /// <c>mcp.read</c>. The write is not cancellable: an assistant that disconnects after a look-up cannot undo the record
 /// of what was disclosed. It comes before the result, so a call that cannot be audited returns no data (the SDK
 /// answers its own generic error in its place).
+/// <para>
+/// A tool that asks the person to confirm (<see cref="ToolConfirmation"/>) ends in an
+/// <see cref="InputRequiredException"/> instead of a result. That call changed nothing and disclosed what the tool
+/// reported, so it is audited as any other call that returns, and the exception goes on to the SDK, which sends the
+/// form.
+/// </para>
 /// </remarks>
 internal sealed partial class McpAuditFilter(
     McpCall call,
@@ -39,13 +45,19 @@ internal sealed partial class McpAuditFilter(
     /// <paramref name="actor"/> in the tenant: <c>mcp.refused</c> for an error, else <c>mcp.read</c> unless the call
     /// has already written an event. The call must have begun (<see cref="McpCall.Begin"/>).
     /// </summary>
-    public async Task WriteAsync(Actor actor, CallToolResult result)
+    public Task WriteAsync(Actor actor, CallToolResult result) => WriteOutcomeAsync(actor, ToolError.CodeOf(result));
+
+    /// <summary>
+    /// Writes the row of a call that ended in <paramref name="refusedCode"/> if it was refused, else as a call that
+    /// returned what it reported.
+    /// </summary>
+    private async Task WriteOutcomeAsync(Actor actor, string? refusedCode)
     {
-        if (ToolError.CodeOf(result) is { } code)
+        if (refusedCode is not null)
         {
             // The refused change may have left entities in the tracker, which this save would write.
             db.ChangeTracker.Clear();
-            await WriteAsync(actor, AuditEventTypes.Mcp.Refused, participantId: null, new() { ["code"] = code });
+            await WriteAsync(actor, AuditEventTypes.Mcp.Refused, participantId: null, new() { ["code"] = refusedCode });
             return;
         }
 
@@ -86,6 +98,12 @@ internal sealed partial class McpAuditFilter(
         try
         {
             result = await next(context, cancellationToken);
+        }
+        catch (InputRequiredException)
+        {
+            // Asking the person is not a failure: it is the call's one success row, and the SDK sends the form.
+            await WriteOutcomeAsync(Actor.InMcp(principal), refusedCode: null);
+            throw;
         }
         catch (Exception exception) when (
             exception is not McpProtocolException
