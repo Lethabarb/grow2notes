@@ -7024,7 +7024,7 @@ could return note content.
 
 ```yaml
 id: T34
-status: doing
+status: done
 release: R2
 lane: A
 size: M
@@ -7046,7 +7046,66 @@ archive or restore goals, under the same handlers, version checks and audit as M
 ### Notes
 
 - Adds the archived-participant refusal once, in the shared handlers for both channels, and its code to design.md §6.9
-  (D86).
+  (D86, recorded as D93). It is `422 participant.archived`, "This participant is archived. Restore the participant
+  first.", for the details and for adding, rewording, reordering, archiving and restoring a goal. Restoring and
+  archiving the participant, reads, and the goals of an active participant are never refused. The app's order is 404,
+  then this refusal, then `If-Match`, then the field rules, then the save.
+- Assumed defaults A128 and A129 (design.md section 13, 27 October 2026): the tool inputs and the order of the checks
+  (argument form, not found, archived, field rules, `changed: false`, version, save; `expectedVersion` optional in the
+  schema; `update_participant` fills omitted fields for the assistant only; `dateOfBirth` exactly `yyyy-MM-dd`;
+  `TextInput` on names and goal text, so a goal line break is refused; a non-GUID `goalIds` entry is an order
+  mismatch; no SPA words for `participant.archived`) and the results and audit (the result shapes, `helpText`,
+  `reorder_goals` returns every goal with current versions, a change tool's `changed: false` call writes `mcp.read`,
+  Support may change through MCP but not through the app's endpoints, the new copy for the owner). A126 said
+  `restore_participant` was T34's; it is T37's (S07.04.06) and the guard never refuses it.
+- Departures from the final design as built: `ArchiveParticipantEndpointsTests` was not left untouched. For the restore
+  action, its stale-`If-Match` test moved the version with a `PUT` on an archived participant, which D93 now refuses;
+  the new helper `ChangeFirstAsync` restores and archives again for that action, keeps the `PUT` for the archive
+  action, and the test asserts the events that the helper returns.
+- Tests changed on purpose, because the behaviour they pinned is ended by D93 (the PR bodies name them):
+  `AddGoalEndpointTests.An_archived_participant_s_goal_is_added` is now
+  `An_archived_participant_s_goal_is_refused_with_422_participant_archived_and_nothing_is_added`;
+  `ReorderGoalsEndpointTests.An_archived_participant_s_goals_are_reordered` is now
+  `An_archived_participant_s_goals_are_refused_and_not_reordered` (right and wrong ID set, both
+  `participant.archived`); `ArchiveParticipantEndpointsTests.With_a_stale_If_Match_it_answers_412_and_writes_nothing`
+  (above); and `ToolMatrixTests.Every_tool_refuses_each_token_case_with_401(tool, case)` is regrouped as
+  `Every_tool_refuses_the_token_case_with_401(case)`: one user and one connect per case, then every tool of
+  `ToolMatrix.Rows` posts its valid call and each tool that was not challenged is named. Every tool-and-case `401`
+  check is kept. `McpCanaryTests` now generates each call's arguments once and keeps them, and
+  `ContractRulesTests` awaits the asynchronous `ValidArguments`. No security test was removed or weakened. New app
+  tests: refusals in `UpdateParticipantEndpointTests`, `UpdateGoalEndpointTests`, `ArchiveGoalEndpointsTests`, with
+  the archived goal of an active participant still allowed
+  (`An_archived_goal_is_reworded_and_stays_archived_in_its_place`); unit tests in `ConfigurationChangesTests` and `IfMatchTests`; and `ParticipantChangeToolsTests` (28 tests).
+- CI cost (the plan's budget): the v2 PR (#174, the regrouped matrix) took 43m04s of the 60 minutes, below the 45
+  minutes at which the fallback was to be used, so the separate job for the Mcp test classes was not built. The v1
+  PR (#175, on the old matrix) took 46m01s, v3 (#176) 30m47s and v4 (#177) 41m50s, so run times on the shared runner
+  vary by about 15 minutes. If a run on main goes past 45 minutes after T35 to T37 add their rows, split the Mcp test
+  classes into a second job in the workflow file (repo code); `timeout-minutes` is unchanged.
+- The namespaces: `participant.archived` is both the new error code and the audit event type of archiving a
+  participant (`AuditEventTypes.Participant.Archived`); they are separate namespaces. The code's member is
+  `ErrorCode.ParticipantArchived`, and the note's code member was renamed `NoteParticipantArchived` (same code and
+  status).
+- Accepted race (D93): the goal handlers read the participant's status without a lock, so a goal change in flight while
+  the participant is archived can still land. It is audited and the participant can be restored. Nothing saves between
+  a refused handler result and the error result, and `McpAuditFilter` clears the change tracker before it writes
+  `mcp.refused`, so a held-back refusal never saves its edit.
+- Choices for the owner to approve or reword (new text the model sees; the titles and descriptions are in
+  `tools-list.json`, and ops step 182 asks): the seven titles; the descriptions and parameter descriptions; the code
+  messages for a changed participant, a changed goal, an unknown goal, an archived participant and an order mismatch;
+  "Send the expectedVersion that the look-up returned."; "Send at least one of givenName, familyName and
+  dateOfBirth."; "Date of birth must be a real date"; and the helpText sentence (design.md section 4.8, unchanged).
+- Hand-offs. T35 to T37: a change tool needs the `IfMatch.FromExpectedVersion` for its optional `expectedVersion`, the
+  handler's `IfMatch.CheckFor` (the app is refused at once, a tool's refusal is held back) and the
+  `refuseIfChanged` of `ConfigurationChanges.SaveAsync`, `ToolError.ValidationFailed(errors)`, `ToolResults.HelpText`,
+  a `ToolMatrix` row with `Event` set (its valid generator adds rows of its own and changes something, and an error
+  case asks for a real change, because a call that would change nothing answers `changed: false`), the handler in
+  `NoNoteContentRulesTests.ToolHandlers`, and `McpAuditRows.AssertChanged`. `restore_participant` (T37) must not be
+  refused by the guard: `ParticipantChanges.ChangeAsync` takes `refuseArchived`, set only by `UpdateAsync`.
+- For T38: the regrouped token theory sends one `/mcp` request for each listed tool (nine now, about 28 once T37
+  ships) from one token in a burst, so the rate limits must leave room for it; and `goalIds` has no cap of its own
+  beyond the request-size limit.
+- By hand: first-use steps 176 to 182 added under the heading *The participant and goal tools in test, once T34 is on
+  main*. Step 182 is the owner's to approve or reword the new words. None of them holds T34 open.
 
 ### Plan
 
@@ -7088,7 +7147,17 @@ archive or restore goals, under the same handlers, version checks and audit as M
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Archived-participant refusal (#175; v1): `ErrorCode.ParticipantArchived`, `VersionCheck` and `IfMatch.CheckFor`,
+  `refuseIfChanged` in `ConfigurationChanges`, both handlers, the app endpoint tests, design.md sections 4.8, 6.6 and
+  6.9, and D93.
+- [x] Matrix infrastructure (#174; v2): asynchronous rows with `Event`, the token cases grouped per case, `ToolScene`
+  additions and `McpAuditRows.AssertChanged`.
+- [x] `add_participant` and `update_participant` (#176; v3): the tools, `IfMatch.FromExpectedVersion`, the `ToolError`
+  additions and `ParticipantChangeToolsTests`.
+- [x] The five goal tools (#177; v4): `add_goal`, `update_goal`, `reorder_goals`, `archive_goal` and `restore_goal`,
+  `ParticipantLookups.GetGoalAsync`, the contracts and `ToolResults.HelpText`.
+- [x] Close-out (#178; v5): A126 corrected and A128 and A129, mcp-server.md sections 5.1, 5.2, 5.4, 5.5 and 9,
+  first-use steps 176 to 182, S07.03.01 to S07.03.03 done, coverage.md and these Notes.
 
 ---
 

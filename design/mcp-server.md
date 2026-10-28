@@ -347,9 +347,9 @@ There is no IP check (MA10). Hosted assistants call from their providers' clouds
 
 - **Names** are lower case with underscores, within the specification's recommended character set (1–128 characters; letters, digits, `_`, `-`, `.`) [Spec]. Every tool also has a `title` and a description written for the model. The server identifies itself as **Grow2Notes**, and no tool, description, consent screen or result ever names the parent company (D42).
 - **Identifiers.** Participants, goals, groups and items are addressed by the IDs the look-up tools return. **Users are addressed by email** (unique across the app, A27), so any approval prompt or confirmation form the assistant shows reads "deactivate_user: alex.p@example.com", not a GUID.
-- **`expectedVersion`.** Every change to an existing row needs the `expectedVersion` the look-up returned: the row's `RowVersion` in base64, or `ConcurrencyStamp` for users. This is the MCP form of `If-Match` (design §6.6, §6.7). Reorders check the set of IDs instead. If the row is already in the requested state (archiving something archived, deactivating someone deactivated, or an edit that changes nothing), the call succeeds with `changed: false`, whatever the version, so these tools are idempotent. The confirmation form (§5.3) carries the version for the person, so they do not supply it.
+- **`expectedVersion`.** Every change to an existing row needs the `expectedVersion` the look-up returned: the row's `RowVersion` in base64, or `ConcurrencyStamp` for users. This is the MCP form of `If-Match` (design §6.6, §6.7). It is optional in each tool's schema, so a missing or empty one reaches the check and is answered `precondition.required` in words the model can act on, not by the SDK's own error. Reorders check the set of IDs instead. If the row is already in the requested state (archiving something archived, deactivating someone deactivated, or an edit that changes nothing), the call succeeds with `changed: false`, whatever the version, even a missing one, so these tools are idempotent. A refusal for an archived participant (§5.4) comes before that answer. The confirmation form (§5.3) carries the version for the person, so they do not supply it.
 - **Results** are JSON in `structuredContent`, described by an `outputSchema`, with the same JSON repeated in a text block for older clients, as the specification suggests [Spec].
-- **Changes apply to notes started from now on.** Results of goal, group, item and guide-prompt changes include the app's own help line, for example "Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written with." (design §4.8).
+- **Changes apply to notes started from now on.** Results of goal, group, item and guide-prompt changes include the app's own help line, as `helpText`, for example "Changes apply to notes started from now on. Notes already started or submitted keep the wording they were written with." (design §4.8).
 - **Text inputs** use the same length limits as the app (design §5.1, A6). Control characters and Unicode bidirectional override characters are refused in every text input.
 - **Annotations.** Every tool declares `title`, `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint`, set explicitly because the defaults are the cautious ones (`destructiveHint` and `openWorldHint` default to true) [Spec]. Clients must treat annotations from untrusted servers as untrusted [Spec], so they help the assistant and the person but are **not** a security control. In the SDK they are properties of `[McpServerTool]`: `Title`, `ReadOnly`, `Destructive`, `Idempotent`, `OpenWorld` [Doc].
 - **Server instructions (P)**, sent to the client with the server's details:
@@ -367,14 +367,14 @@ Twenty-eight tools; the three reorder tools are kept (D59). Who: **M** = Manager
 | 4 | `list_common_items` | The groups and their items, Every note first | `includeArchived?` | `groups[]`: `groupId`, `name`, `isEveryNote`, `archived`, `expectedVersion`, `items[]`: `itemId`, `text`, `archived`, `expectedVersion` | M, S | R I | |
 | 5 | `get_guide_prompts` | The current guide prompts | none | `text`, `expectedVersion` | M, S | R I | |
 | 6 | `add_participant` | Add a participant | `givenName`, `familyName`, `dateOfBirth` (YYYY-MM-DD) | `participantId`, names, `status`, `expectedVersion` | M, S | | |
-| 7 | `update_participant` | Change name or date of birth | `participantId`, `expectedVersion`, at least one of `givenName?`, `familyName?`, `dateOfBirth?` | names, `status`, `changed`, `expectedVersion` | M, S | D I | |
+| 7 | `update_participant` | Change name or date of birth | `participantId`, `expectedVersion?`, at least one of `givenName?`, `familyName?`, `dateOfBirth?` | names, `status`, `changed`, `expectedVersion` | M, S | D I | |
 | 8 | `archive_participant` | Archive a participant | `participantId`, `confirm?`, `expectedVersion` (required with `confirm: true`) | a preview or confirmation form, or names, `status`, `changed` | M, S | D I | Yes |
 | 9 | `restore_participant` | Restore an archived participant | `participantId`, `expectedVersion` | names, `status`, `changed` | M, S | I | |
-| 10 | `add_goal` | Add a goal at the end | `participantId`, `text` | `goalId`, `text`, `expectedVersion` | M, S | | |
-| 11 | `update_goal` | Reword a goal | `goalId`, `text`, `expectedVersion` | `text`, `changed`, `expectedVersion` | M, S | D I | |
-| 12 | `reorder_goals` | Put the active goals in a new order | `participantId`, `goalIds[]` (every active goal, once) | the goals in order | M, S | D I | |
-| 13 | `archive_goal` | Archive a goal | `goalId`, `expectedVersion` | `changed` | M, S | D I | |
-| 14 | `restore_goal` | Restore a goal, at the end | `goalId`, `expectedVersion` | `changed` | M, S | I | |
+| 10 | `add_goal` | Add a goal at the end | `participantId`, `text` | `goalId`, `text`, `expectedVersion`, `helpText` | M, S | | |
+| 11 | `update_goal` | Reword a goal | `goalId`, `text`, `expectedVersion?` | `text`, `changed`, `expectedVersion`, `helpText` | M, S | D I | |
+| 12 | `reorder_goals` | Put the active goals in a new order | `participantId`, `goalIds[]` (every active goal, once) | `changed`, `goals[]` as `get_participant` lists them (the active goals in the new order, then the archived ones), each with `goalId`, `text`, `archived` and its current `expectedVersion`, and `helpText` | M, S | D I | |
+| 13 | `archive_goal` | Archive a goal | `goalId`, `expectedVersion?` | `changed`, `helpText` | M, S | D I | |
+| 14 | `restore_goal` | Restore a goal, at the end | `goalId`, `expectedVersion?` | `changed`, `helpText` | M, S | I | |
 | 15 | `add_common_item_group` | Add an empty group at the end | `name` | `groupId`, `name`, `expectedVersion` | M, S | | |
 | 16 | `rename_common_item_group` | Rename a group | `groupId`, `name`, `expectedVersion` | `name`, `changed`, `expectedVersion` | M, S | D I | |
 | 17 | `reorder_common_item_groups` | Reorder the active groups (Every note always stays first) | `groupIds[]` (every active group except Every note, once) | the groups in order | M, S | D I | |
@@ -464,7 +464,7 @@ Other changes mirror the app, which archives goals, groups and items without ask
 **Participants and goals (tools 2, 3, 6–14)**
 - No result ever contains a date of birth (MA5). `add_participant` needs one, because the retention rule needs it (A5).
 - `find_participants` needs a `search` of at least 2 characters, which only keeps out one-letter searches (many searches can still list everyone, so the bounds are 10 results and one audit row a call and the rate limits of T38; A124), and returns at most 10 matches, with names and status only, sorted by family name then given name (A5). With more than 10 matches it says "More matches: narrow the search." Two participants with the same name are told apart by `get_participant`'s goals and by the person. If the model is unsure, the descriptions tell it to ask.
-- An archived participant is read-only, as on the app's detail screen (design §4.8): adding, rewording, reordering, archiving or restoring their goals is refused with `participant.archived` (use Release 1's code if it named this refusal differently). Restore the participant first.
+- An archived participant is read-only, as on the app's detail screen (design §4.8): adding, rewording, reordering, archiving or restoring their goals, and correcting their name or date of birth, are refused with `participant.archived`, whatever `expectedVersion` is sent. Restore the participant first. Archiving and restoring the participant are never refused.
 - `reorder_goals` needs exactly the active goals (`config.order_mismatch` otherwise). A restored goal goes to the end (A2).
 
 **Common item groups and items (tools 4, 15–24)**
@@ -485,12 +485,12 @@ Other changes mirror the app, which archives goals, groups and items without ask
 
 | `code` | When |
 |---|---|
-| `validation.failed` | Field rules; `fields` lists each field's messages, worded as in the app (for example "Goal must be 200 characters or less"), never echoing the value |
+| `validation.failed` | Field rules; `fields` lists each field's messages, worded as in the app (for example "Goal must be 200 characters or less"), never echoing the value; also `update_participant` sent with none of its three fields, with `fields` null |
 | `not_found` | No such ID or email in this organisation, including any row of another organisation (design §9.2) |
-| `precondition.required` | A change without `expectedVersion`, or `confirm: true` without it |
+| `precondition.required` | A change that would change something, sent without `expectedVersion` (a call that would change nothing answers `changed: false` instead), or `confirm: true` without it |
 | `precondition.failed` | `expectedVersion` is stale, or the row changed between the confirmation form and the answer: look it up again |
 | `config.order_mismatch`, `config.every_note_fixed`, `config.group_archived` | As in design §6.9 |
-| `participant.archived` | A goal change on an archived participant (§5.4) |
+| `participant.archived` | A change to an archived participant's details or goals (§5.4) |
 | `user.email_in_use`, `user.last_manager` | As in design §6.9 |
 | `user.not_active` | Reset sign-in on a deactivated user |
 | `role.not_allowed` | Support inviting a manager; Support deactivating or resetting the sign-in of a manager or Support account; or an invite with any role other than `worker` or `manager` |
@@ -678,7 +678,7 @@ Every MCP call writes to the existing append-only `AuditEvent` table (design §5
 | Event | When | `Details` (JSON, IDs only, never note text) |
 |---|---|---|
 | The app's existing event, for example `participant.updated`, `goal.archived`, `user.invited` (design §5.4) | Every change made through MCP | The app's usual old and new values, plus `"via": "mcp"`, `"client": "<client id>"`, `"tool": "<name>"`, and `"reason"` for Support user changes |
-| `mcp.read` | Every look-up, every preview, and every confirmation form | `client`, `tool`, the IDs of every participant, user, goal, group or item returned, and a count. `ParticipantId` is set when exactly one participant was returned. |
+| `mcp.read` | Every look-up, every preview, every confirmation form, and every change tool's call that answered `changed: false`, which wrote no event | `client`, `tool`, the IDs of every participant, user, goal, group or item returned, and a count. `ParticipantId` is set when exactly one participant was returned. |
 | `mcp.refused` | Every tool error | `client`, `tool`, `code` |
 | `mcp.authorised` | A person approves the Connect an AI assistant screen | `client`, `scope` |
 | `mcp.authorisation_refused` | A worker tries to connect, or a person cancels | `client`, `why` (`not_allowed` or `cancelled`) |
