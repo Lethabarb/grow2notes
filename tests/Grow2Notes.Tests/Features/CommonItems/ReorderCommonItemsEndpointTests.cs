@@ -174,7 +174,8 @@ public sealed class ReorderCommonItemsEndpointTests(Grow2NotesFactory factory, S
                 paid.ETag,
                 new("Paid at the machine", groupId),
                 TestContext.Current.CancellationToken);
-            Assert.Same(CommonItemChangeResult.Saved, reworded);
+            Assert.Null(reworded.Error);
+            Assert.True(reworded.Changed);
         }
 
         var afterSecond = await StoredItemsAsync(item => item.GroupId == groupId);
