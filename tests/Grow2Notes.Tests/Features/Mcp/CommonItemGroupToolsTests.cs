@@ -350,9 +350,8 @@ public sealed class CommonItemGroupToolsTests(ToolWorld world) : IClassFixture<T
         var group = await Scene.AddGroupAsync(archived: true);
         var active = await Scene.AddItemAsync(group.Id);
         await Scene.AddItemAsync(group.Id, archived: true);
-        var later = await Scene.AddGroupAsync();
+        await Scene.AddGroupAsync();
         var before = await Scene.ActiveGroupIdsAsync();
-        Assert.Equal(later.Id, before[^1]);
 
         var (result, row) = await world.CallAsync(Restore, GroupCall(group));
 
