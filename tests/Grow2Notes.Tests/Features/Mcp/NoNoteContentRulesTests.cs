@@ -64,6 +64,7 @@ public sealed class NoNoteContentRulesTests
             typeof(CommonItemGroupList),
             typeof(GuidePromptsHandler),
             typeof(CommonItemGroupChanges),
+            typeof(CommonItemChanges),
         ];
 
     public static TheoryData<string> PlantedViolations { get; } =

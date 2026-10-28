@@ -469,6 +469,124 @@ internal static class ToolMatrix
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.CommonItemGroup.Restored),
+        new(
+            "add_common_item",
+            async scene => AddItemCall((await scene.AddGroupAsync()).Id, $"Item {Unique()}"),
+            [
+                new(
+                    "an archived group",
+                    scene => AddItemCall(scene.ArchivedGroup.Id, "Item x"),
+                    "config.group_archived"),
+                new("an unknown group", _ => AddItemCall(Guid.NewGuid(), "Item x"), "not_found"),
+                new(
+                    "not a group ID",
+                    _ => With(AddItemCall(Guid.NewGuid(), "Item x"), "groupId", "not-a-guid"),
+                    "not_found"),
+                new("no group ID", _ => new() { ["text"] = "Item x" }, "unexpected"),
+                .. TextErrorCases(scene => AddItemCall(scene.Group.Id, "Item x")),
+                new("no text", scene => new() { ["groupId"] = scene.Group.Id.ToString() }, "unexpected"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItem.Created),
+        new(
+            "update_common_item",
+            async scene =>
+            {
+                var group = await scene.AddGroupAsync();
+                var item = await scene.AddItemAsync(group.Id);
+                return With(ItemTextCall(item, $"Reworded {Unique()}"), "groupId", group.Id);
+            },
+            [
+                .. TextErrorCases(scene => ItemTextCall(scene.Items[0], "Reword")),
+                new("neither text nor groupId", scene => ItemCall(scene.Items[0]), "validation.failed"),
+                new(
+                    "an item of an archived group with its own groupId",
+                    scene => With(
+                        ItemTextCall(scene.ArchivedGroupItem, "Reword"), "groupId", scene.ArchivedGroup.Id),
+                    "config.group_archived"),
+                new(
+                    "an item of an archived group with no groupId",
+                    scene => ItemTextCall(scene.ArchivedGroupItem, "Reword"),
+                    "config.group_archived"),
+                new(
+                    "a move into an archived group",
+                    scene => With(ItemCall(scene.Items[0]), "groupId", scene.ArchivedGroup.Id),
+                    "config.group_archived"),
+                new(
+                    "an unknown groupId",
+                    scene => With(ItemCall(scene.Items[0]), "groupId", Guid.NewGuid()),
+                    "not_found"),
+                new(
+                    "a groupId that is not an ID",
+                    scene => With(ItemTextCall(scene.Items[0], "Reword"), "groupId", "not-a-guid"),
+                    "not_found"),
+                .. ItemErrorCases(scene => ItemTextCall(scene.Items[0], "Reword")),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItem.Updated),
+        new(
+            "archive_common_item",
+            async scene => ItemCall(await FreshItemAsync(scene, archived: false)),
+            ItemErrorCases(scene => ItemCall(scene.Items[0])),
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItem.Archived),
+        new(
+            "restore_common_item",
+            async scene => ItemCall(await FreshItemAsync(scene, archived: true)),
+            ItemErrorCases(scene => ItemCall(scene.Items[2])),
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItem.Restored),
+        new(
+            "reorder_common_items",
+            async scene =>
+            {
+                var group = await scene.AddGroupAsync();
+                await scene.AddItemAsync(group.Id);
+                await scene.AddItemAsync(group.Id);
+                var ids = await scene.ActiveItemIdsAsync(group.Id);
+                return ItemIdsCall(group.Id, [.. ids.AsEnumerable().Reverse().Select(id => id.ToString())]);
+            },
+            [
+                new(
+                    "an archived item",
+                    scene => ItemIdsCall(scene.Group.Id, [.. scene.Items.Select(item => item.Id.ToString())]),
+                    "config.order_mismatch"),
+                new(
+                    "a missing item",
+                    scene => ItemIdsCall(scene.Group.Id, scene.Items[0].Id.ToString()),
+                    "config.order_mismatch"),
+                new(
+                    "a repeat",
+                    scene => ItemIdsCall(
+                        scene.Group.Id, scene.Items[0].Id.ToString(), scene.Items[0].Id.ToString()),
+                    "config.order_mismatch"),
+                new(
+                    "an item of another group",
+                    scene => ItemIdsCall(
+                        scene.Group.Id,
+                        scene.Items[0].Id.ToString(),
+                        scene.Items[1].Id.ToString(),
+                        scene.ArchivedGroupItem.Id.ToString()),
+                    "config.order_mismatch"),
+                new("an empty list", scene => ItemIdsCall(scene.Group.Id), "config.order_mismatch"),
+                new("not an ID", scene => ItemIdsCall(scene.Group.Id, "not-a-guid"), "config.order_mismatch"),
+                new(
+                    "a bidi character in an ID",
+                    scene => ItemIdsCall(scene.Group.Id, scene.Items[0].Id + Bidi, scene.Items[1].Id.ToString()),
+                    "config.order_mismatch"),
+                new(
+                    "an unknown group",
+                    scene => ItemIdsCall(Guid.NewGuid(), scene.Items[0].Id.ToString()),
+                    "not_found"),
+                new(
+                    "a group that is not an ID",
+                    scene => With(ItemIdsCall(scene.Group.Id), "groupId", "not-a-guid"),
+                    "not_found"),
+                new("no group ID", scene => Without("groupId", ItemIdsCall(scene.Group.Id)), "unexpected"),
+                new("no itemIds", scene => Without("itemIds", ItemIdsCall(scene.Group.Id)), "unexpected"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.CommonItem.Reordered),
     ];
 
     private static readonly string Bidi = char.ConvertFromUtf32(0x202E);
@@ -536,6 +654,64 @@ internal static class ToolMatrix
         new("not an ID", scene => With(change(scene), "groupId", "not-a-guid"), "not_found"),
         new("no ID", scene => Without("groupId", change(scene)), "unexpected"),
     ];
+
+    private static JsonObject AddItemCall(Guid groupId, string text) => new()
+    {
+        ["groupId"] = groupId.ToString(),
+        ["text"] = text,
+    };
+
+    // A change to an item that sends the version it is at.
+    private static JsonObject ItemCall(SceneItem item) => new()
+    {
+        ["itemId"] = item.Id.ToString(),
+        ["expectedVersion"] = ToolScene.ExpectedVersion(item.ETag),
+    };
+
+    private static JsonObject ItemTextCall(SceneItem item, string text) => With(ItemCall(item), "text", text);
+
+    private static JsonObject ItemIdsCall(Guid groupId, params string[] itemIds) => new()
+    {
+        ["groupId"] = groupId.ToString(),
+        ["itemIds"] = new JsonArray([.. itemIds.Select(id => (JsonNode?)JsonValue.Create(id))]),
+    };
+
+    // An item that the call adds, in a group of its own, so that the call changes a row of its own.
+    private static async Task<SceneItem> FreshItemAsync(ToolScene scene, bool archived) =>
+        await scene.AddItemAsync((await scene.AddGroupAsync()).Id, archived);
+
+    // The refusals of a text, which differ in the text sent and not in the row, so the row is the scene's.
+    private static IReadOnlyList<ToolErrorCase> TextErrorCases(Func<ToolScene, JsonObject> change) =>
+    [
+        new("an empty text", scene => With(change(scene), "text", ""), "validation.failed"),
+        new("201 characters", scene => With(change(scene), "text", new string('a', 201)), "validation.failed"),
+        new("a control character", scene => With(change(scene), "text", "Item\u0007x"), "validation.failed"),
+        new("a line break", scene => With(change(scene), "text", "Item\nx"), "validation.failed"),
+        new("a bidi character", scene => With(change(scene), "text", "Item" + Bidi + "x"), "validation.failed"),
+    ];
+
+    // The refusals of a change to an item that the version and the ID decide, as GroupErrorCases gives for a group.
+    private static IReadOnlyList<ToolErrorCase> ItemErrorCases(Func<ToolScene, JsonObject> change) =>
+    [
+        new(
+            "a made-up version and a change",
+            scene => With(change(scene), "expectedVersion", "AAAAAAAAAAA="),
+            "precondition.failed"),
+        new(
+            "no version and a change",
+            scene => Without("expectedVersion", change(scene)),
+            "precondition.required"),
+        new(
+            "an empty version and a change",
+            scene => With(change(scene), "expectedVersion", ""),
+            "precondition.required"),
+        new("an unknown ID", scene => With(change(scene), "itemId", Guid.NewGuid()), "not_found"),
+        new("not an ID", scene => With(change(scene), "itemId", "not-a-guid"), "not_found"),
+        new("no ID", scene => Without("itemId", change(scene)), "unexpected"),
+    ];
+
+    private static JsonObject With(JsonObject arguments, string name, Guid value) =>
+        With(arguments, name, value.ToString());
 
     private static JsonObject AddGoalCall(string participantId, string text) => new()
     {

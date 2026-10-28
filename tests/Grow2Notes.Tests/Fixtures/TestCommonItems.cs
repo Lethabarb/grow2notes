@@ -85,6 +85,25 @@ internal static class TestCommonItems
     }
 
     /// <summary>
+    /// The IDs of the active items of the group of ID <paramref name="groupId"/> in the organisation of ID
+    /// <paramref name="organisationId"/>, in the list's order, as a reorder of every item sends them, read through the
+    /// app's context under its tenant.
+    /// </summary>
+    public static async Task<List<Guid>> ActiveItemIdsAsync(
+        this IServiceProvider services, Guid organisationId, Guid groupId)
+    {
+        await using var scope = services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>();
+        using (scope.ServiceProvider.GetRequiredService<ITenantContext>().Use(organisationId))
+        {
+            return await CommonItemGroupList.InListOrder(
+                    db.CommonItems.AsNoTracking().Where(item => item.GroupId == groupId && item.ArchivedAtUtc == null))
+                .Select(item => item.Id)
+                .ToListAsync(TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Adds the items to the group of ID <paramref name="groupId"/> in the organisation of ID
     /// <paramref name="organisationId"/>, as <see cref="AddGroupsAsync"/> adds groups; and gives their IDs in the order
     /// given.
