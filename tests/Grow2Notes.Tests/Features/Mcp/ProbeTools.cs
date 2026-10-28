@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.GuidePrompts;
+using Grow2Notes.Web.Features.Mcp;
 using Grow2Notes.Web.Features.Mcp.Contracts;
 using Grow2Notes.Web.Platform;
 using Grow2Notes.Web.Platform.Audit;
@@ -10,8 +11,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Protocol;
-using OpenIddict.Abstractions;
 using ModelContextProtocol.Server;
+using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
 namespace Grow2Notes.Tests.Features.Mcp;
@@ -83,12 +84,41 @@ internal sealed class ProbeTools
             ct);
     }
 
+    [McpServerTool(Name = "probe_confirm")]
+    [Description("Test stand-in: asks for the confirmation that an access change needs, about a row at version 1.")]
+    public static CallToolResult Confirm(
+        IServiceProvider services,
+        RequestContext<CallToolRequestParams> context,
+        [Description("The account the person is asked about.")] string email,
+        [Description("True once the person has said yes, for a client that shows no form.")] bool confirm = false,
+        [Description("The version the preview gave.")] string? expectedVersion = null)
+    {
+        services.GetRequiredService<McpCall>().Returned(McpCall.UserIds, []);
+        var confirmation = services.GetRequiredService<ToolConfirmation>();
+        var actor = ActorOf(services);
+        var answer = confirmation.Read(context, actor, confirm, expectedVersion);
+        return answer.Step switch
+        {
+            ConfirmationStep.Ask => confirmation.Ask(
+                context, actor, "1", "Confirm the change?", "Yes, change it", Step(answer)),
+            ConfirmationStep.StateRefused => ToolConfirmation.StateRefused.ToResult(),
+            _ => Step(answer),
+        };
+    }
+
     [McpServerTool(Name = "probe_abort", ReadOnly = true)]
     [Description("Test stand-in: looks up the participants, then drops the connection before the answer is sent.")]
     public static async Task AbortAsync(IServiceProvider services, CancellationToken ct = default)
     {
         await ReturnParticipantsAsync(services, ct);
         services.GetRequiredService<IHttpContextAccessor>().HttpContext!.Abort();
+    }
+
+    // What probe_confirm answers: the step that ToolConfirmation found, and the version when it was confirmed.
+    private static CallToolResult Step(ConfirmationAnswer answer)
+    {
+        var json = JsonSerializer.Serialize(new ConfirmStep(answer.Step.ToString(), answer.ExpectedVersion), Json);
+        return new() { Content = [new TextContentBlock { Text = json }] };
     }
 
     private static Actor ActorOf(IServiceProvider services) =>
@@ -121,6 +151,9 @@ public sealed record WhoAmI(
     public string[] Values(params string[] types) =>
         [.. Claims.Where(claim => types.Contains(claim.Type)).Select(claim => claim.Value)];
 }
+
+/// <summary>What <c>probe_confirm</c> answers: the name of the confirmation step, and the version it holds.</summary>
+public sealed record ConfirmStep(string Step, string? Version);
 
 /// <summary>A claim of the principal that a call runs as.</summary>
 public sealed record ClaimView(string Type, string Value);

@@ -1,8 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.WebUtilities;
 
 namespace Grow2Notes.Web.Features.Mcp.OAuth;
 
@@ -32,49 +30,33 @@ internal sealed class ConsentRequests(IDataProtectionProvider dataProtection, Ti
     private readonly IDataProtector decisions = dataProtection.CreateProtector(DecisionPurpose);
 
     /// <summary>The handle for <paramref name="query"/>, the request's query string without its <c>?</c>.</summary>
-    public string Protect(string query) => Seal(requests, new ConsentRequest(query, time.GetUtcNow()));
+    public string Protect(string query) => ProtectedJson.Seal(requests, new ConsentRequest(query, time.GetUtcNow()));
 
     /// <summary>The request that <paramref name="handle"/> holds, or null if it is unreadable or has lapsed.</summary>
     public ConsentRequest? Read(string handle) =>
-        Open<ConsentRequest>(requests, handle) is { } request && IsLive(request.StartedAt) ? request : null;
+        ProtectedJson.Open<ConsentRequest>(requests, handle) is { } request && IsLive(request.StartedAt)
+            ? request
+            : null;
 
     /// <summary>The decision token for <paramref name="request"/>, which keeps the request's start.</summary>
     public string Decide(ConsentRequest request, Guid userId, bool allow) =>
-        Seal(decisions, new ConsentDecision(Hash(request.Query), userId, allow, request.StartedAt));
+        ProtectedJson.Seal(
+            decisions, new ConsentDecision(ProtectedJson.Hash(request.Query), userId, allow, request.StartedAt));
 
     /// <summary>
     /// The decision that <paramref name="token"/> holds, or null unless it is readable, has not lapsed, was made on
     /// exactly <paramref name="query"/>, and was made by <paramref name="userId"/>.
     /// </summary>
     public ConsentDecision? ReadDecision(string token, string query, Guid userId) =>
-        Open<ConsentDecision>(decisions, token) is { } decision
+        ProtectedJson.Open<ConsentDecision>(decisions, token) is { } decision
         && IsLive(decision.StartedAt)
         && CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(Hash(query)), Encoding.UTF8.GetBytes(decision.QueryHash))
+            Encoding.UTF8.GetBytes(ProtectedJson.Hash(query)), Encoding.UTF8.GetBytes(decision.QueryHash))
         && decision.UserId == userId
             ? decision
             : null;
 
     private bool IsLive(DateTimeOffset startedAt) => time.GetUtcNow() - startedAt <= Lifetime;
-
-    private static string Hash(string query) =>
-        WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.UTF8.GetBytes(query)));
-
-    private static string Seal<T>(IDataProtector protector, T value) =>
-        WebEncoders.Base64UrlEncode(protector.Protect(JsonSerializer.SerializeToUtf8Bytes(value)));
-
-    private static T? Open<T>(IDataProtector protector, string text)
-        where T : class
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<T>(protector.Unprotect(WebEncoders.Base64UrlDecode(text)));
-        }
-        catch (Exception exception) when (exception is CryptographicException or FormatException or JsonException)
-        {
-            return null;
-        }
-    }
 }
 
 /// <summary>An authorise request waiting for consent: its query string without the <c>?</c>, and its start.</summary>
