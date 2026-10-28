@@ -7181,7 +7181,7 @@ archive or restore goals, under the same handlers, version checks and audit as M
 
 ```yaml
 id: T35
-status: new
+status: doing
 release: R2
 lane: A
 size: L
@@ -7193,6 +7193,39 @@ stories: [S07.02.05, S07.03.04, S07.03.05, S07.03.06, S07.03.07, S07.03.08]
 
 Through an assistant, a manager or Support person lists users, groups, items and the guide prompts, changes groups and
 items, and replaces the guide prompts, all under the app's own rules. Every note stays fixed.
+
+### Plan
+
+Outcome: 14 MCP tools (list_users, list_common_items, get_guide_prompts, set_guide_prompts, five group tools, five item
+tools) take tools/list from 9 to 23. Managers and Support may call all of them; the app endpoints stay Manager-only.
+
+Design: each tool follows ParticipantsTools: check the argument form, call the same admin handler as the app endpoint
+(as Actor.InMcp), map a refusal to a ToolError that says what to do next, read the row back, report its IDs to McpCall.
+Reads and read-backs reuse UserList, CommonItemGroupList and GuidePromptsHandler; there is no new lookup class.
+
+Domain: none. No entity, column, migration, audit event type, error code, endpoint or SPA change. Code only:
+`Changed` and `ItemId` on CommonItemChangeResult, `Changed` on GuidePromptsSaveResult, CommonItemUpdateRequest.OrStored
+(MCP only), three McpCall keys, a TextInput line-break flag, and the Contracts records.
+
+Reuse: the handlers with IfMatch.CheckFor and refuseIfChanged (so Channel.Mcp answers `changed: false` whatever the
+version while Channel.App keeps its order), ParticipantLookups.Matches, TextInput, ToolResults, the tool matrix, canary,
+contract and no-note-content rules.
+
+Decisions where the design is silent (A130 to A133, written in v5): the user list search and deactivated rule; line
+breaks in guide prompts; check order and inputs; result shapes, help lines and words. Carry-overs from T34 and the
+T38 and T41 pacing notes go in the Notes at close-out.
+
+### Verticals
+
+- v1 (fix/t35-v1-handler-channel): Handlers answer by channel: CheckFor, refuseIfChanged, Changed. Depends on: none.
+  R18, R19, R31.
+- v2 (feat/t35-v2-look-ups): list_users, list_common_items, get_guide_prompts and the shared pieces and test scaffolding.
+  Depends on: none. R01 to R07, R24 to R27, R29.
+- v3 (feat/t35-v3-groups-and-prompts): set_guide_prompts (with line breaks) and the five group tools. Depends on: v1, v2.
+  R08 to R11, R16, R17, R20, R21, R23, R32.
+- v4 (feat/t35-v4-items): the five item tools, and the CI split if needed. Depends on: v1, v3. R12 to R15, R22, R28, R33.
+- v5 (docs/t35-v5-close-out): assumed defaults, mcp-server.md, stories, coverage, Notes, by-hand steps. Depends on: v4.
+  R30.
 
 ### Absorbs
 
