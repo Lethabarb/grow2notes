@@ -82,13 +82,16 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         var calls = await CallsOfEveryToolAsync(scene);
         var responses = await CallEveryToolAsync(flow, scene, calls, sinks);
 
-        // A value that is a letter or two is in almost every text, so it can say nothing about a leak. The family
+        // A value that is a letter or two is in almost every text, so it can say nothing about a leak; nor can a
+        // boolean, whose JSON is the word true or false, so only the arguments sent as strings are read. The family
         // name is also sent as includeArchived, wrongly typed, which is why that argument is read too.
         var sent = calls
             .SelectMany(call => call.Arguments)
             .Where(argument => argument.Key is "search" or "includeArchived"
                 or "givenName" or "familyName" or "text" or "dateOfBirth")
-            .Select(argument => argument.Value?.ToString())
+            .Select(argument => argument.Value is JsonValue value && value.TryGetValue<string>(out var text)
+                ? text
+                : null)
             .OfType<string>()
             .Where(value => value.Length >= 4)
             .Distinct()
