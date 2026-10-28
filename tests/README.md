@@ -1215,6 +1215,15 @@ are the examples.
 - `AssistantFlow.ToolCall(name, arguments)` is the JSON-RPC body of a `tools/call`, which `PostMcpAsync` and
   `McpRequest` send as their `body` for a raw call, such as one with a token that must be refused. A call whose result
   is read goes through `McpClientAsync`, and `ToolScene.CallAsync` takes its arguments as a `JsonObject`.
+- A tool that confirms a change (`ToolConfirmation`, mcp-server.md §5.3) answers by what the request's own `_meta`
+  declares, which the SDK's client does not let a test choose per call. `PostToolCallAsync(accessToken, name,
+  arguments, capabilities, requestState, inputResponses)` makes a raw `2026-07-28` `tools/call` that declares the
+  capabilities it is given (`{}`, `{"elicitation":{"form":{}}}`, a blank `{"elicitation":{}}`, or URL only) and, to
+  answer a form, retries with the `requestState` it returned and the answer by input request key. It returns the
+  JSON-RPC `result`, from a JSON or an event stream body, so a test sees `input_required` as the wire has it.
+  `McpClientAsync(..., elicitation)` takes a handler, then declares form elicitation and answers forms with it, to
+  prove the SDK's own client. `probe_confirm` is the tool to try it on before a real tool uses it;
+  `ToolConfirmationTests` shows how.
 - `ToolScene.CreateAsync(flow)` is the world that the tests of the tools share: two organisations (made with
   `TestOrganisations`, so each has a manager and a Support person), a participant with names and goals that are unique to
   the scene, an archived participant and a date of birth. `ToolMatrix.Rows` holds one row for each tool the app lists
