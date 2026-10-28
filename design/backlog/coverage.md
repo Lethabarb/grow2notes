@@ -112,6 +112,7 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 5 | Manager screen: invite, edit, reset sign-in, deactivate and reactivate users | F00.06 | | |
 | 6 | The audit table, starting with sign-in and user events. The operator commands | F00.03 | F00.04 and F00.06 write the sign-in and user events | |
 | 7 | Telemetry in Australia Southeast that never records request bodies or SQL error text | F00.02 | | |
+| 8 | Resend's key and sender address come from GitHub environment secrets, written to Key Vault by each deploy (D94, added 28 October 2026) | F00.02 | | S00.02.08, built in T40 |
 
 **design.md §14 M0 Done when**
 

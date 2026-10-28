@@ -181,12 +181,19 @@ jobs:
       # app's settings, and the instrumentation key and application ID in it, the same way. Until a deploy has created
       # Application Insights, az reports it not found and nothing is masked: the string does not exist before that
       # deploy's create, which prints nothing.
+      # A secret that is not set is left out, so its parameter keeps the parameters file's or main.bicep's empty value:
+      # an unset sender address makes the app warn and answer every email Not sent, and an unset Resend key leaves the
+      # vault's secret as it is (design.md §10.4 step 2). The key is a secure parameter, which ARM keeps out of the
+      # deployment's history, and GitHub masks its value wherever it appears in the log. The step never turns on tracing
+      # and never picks a deployment mode, so it stays Incremental, which is what keeps an existing secret when no
+      # key is passed.
       - name: Deploy main.bicep
         env:
           SQL_ADMIN_GROUP_NAME: ${{ secrets.SQL_ADMIN_GROUP_NAME }}
           SQL_ADMIN_GROUP_OBJECT_ID: ${{ secrets.SQL_ADMIN_GROUP_OBJECT_ID }}
           ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
           EMAIL_SENDER_ADDRESS: ${{ secrets.EMAIL_SENDER_ADDRESS }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           for id in $(az identity show --resource-group "$RESOURCE_GROUP" --name "$APP_IDENTITY" \
                         --query '[clientId, principalId]' --output tsv --only-show-errors); do
@@ -204,9 +211,17 @@ jobs:
             --template-file artifacts/infra/main.json
             --parameters "@$PARAMETERS"
             --parameters sqlAdminGroupName="$SQL_ADMIN_GROUP_NAME" sqlAdminGroupObjectId="$SQL_ADMIN_GROUP_OBJECT_ID"
-              alertEmail="$ALERT_EMAIL" emailSenderAddress="$EMAIL_SENDER_ADDRESS"
+              alertEmail="$ALERT_EMAIL"
             --only-show-errors
           )
+          if [[ -n $EMAIL_SENDER_ADDRESS ]]; then
+            deployment+=(--parameters emailSenderAddress="$EMAIL_SENDER_ADDRESS")
+          fi
+          if [[ -n $RESEND_API_KEY ]]; then
+            deployment+=(--parameters resendApiKey="$RESEND_API_KEY")
+          else
+            echo "::warning title=Resend key not written::RESEND_API_KEY is empty for this environment, so this deploy wrote no Resend key. A key already in Key Vault is kept; with none, every email answers Not sent."
+          fi
           az deployment group what-if "${deployment[@]}"
           az deployment group create "${deployment[@]}" --output none
 

@@ -20,7 +20,8 @@ here. Each step ends with what it confirms.
   per-second figure for the free plan. Nothing here comes near 100 a day, but an invite or a resend over a limit says
   "Not sent: something went wrong. Try again." and changes nothing: wait and press again. Check the page again if a
   limit seems to have changed. The email is sent from the address in the `test` environment's `EMAIL_SENDER_ADDRESS`,
-  and a missing key in `kv-grow2notes-test`, or a missing role, answers "Not sent" the same way (step 151).
+  with the key from its `RESEND_API_KEY`, which each deploy writes to `kv-grow2notes-test` (D94). A missing value, a
+  missing key in the vault or a missing role answers "Not sent" the same way (step 151).
 - Have ready: a laptop with Chrome, Edge and NVDA, an iPhone with VoiceOver and an authenticator app (such as Google
   Authenticator or Microsoft Authenticator), the testing mailbox open on both, and the Azure portal signed in with
   your own account. Let each browser keep the name and email address it already offers on forms of your own, as
@@ -1228,7 +1229,9 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 
 148. In the Azure portal, signed in with your own account, open the web app `app-grow2notes-test`, then Settings,
      Environment variables. Look at the names only. Look for: `Email__ApiKeySecretUri` and `Email__SenderAddress`
-     among them and no other `Email__` name; and no setting whose value is a key or a connection string. The secret's
+     among them and no other `Email__` name, so no `Email__UseConsole`; no `ASPNETCORE_ENVIRONMENT`, which would make
+     the app load the Development settings and write its emails to the console; and no setting whose value is a key or
+     a connection string. The secret's
      address holds the vault's name and `resend-api-key`, and no key. The only connection-string names expected are
      `ConnectionStrings__Grow2Notes` and `APPLICATIONINSIGHTS_CONNECTION_STRING`. If a name looks wrong, open that one
      value. Do not write any value down. (S00.02.07's second criterion, its deployed half: its app half is
@@ -1261,26 +1264,43 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
 
 ### Email through Resend and the database lock, once T22 is in test
 
-151. Before T22 merges (A104). First the owner: in Resend, verify one sending domain that belongs to Grow2Notes and is
-     never the parent company's or a subdomain of it, add the DNS records Resend gives and a DMARC record, turn open and
-     click tracking off, protect the account with multi-factor sign-in and the fewest members, and create a
-     sending-only API key for test (`infra/README.md`, *Email through Resend*). Then the operator, in one Git Bash shell
-     and signed in to the Azure CLI as Owner and to the GitHub CLI as an admin of the repository: store the key as
-     `resend-api-key` in `kv-grow2notes-test` as that section says, set the `test` environment's secret
-     `EMAIL_SENDER_ADDRESS` with `gh secret set --env test`, and run *Running it again* from a clone of the T22 branch,
-     steps 1 to 4, passing the GitHub subject prefix at run time (D89) and the budgets' start date. Look for the
-     what-if showing one new role assignment, `Key Vault Secrets User`, in each group and nothing else, then for the
-     deployment to succeed. The old `Communication and Email Service Owner` assignment stays until step 153, so test
-     keeps sending through the old sender until T22 deploys. Do not write down the key, the prefix, an ID or an address.
-     (A104, D92, D89. Until `EMAIL_SENDER_ADDRESS` is set, every test deploy stops at its what-if, before any change,
-     and test keeps its previous build: expected, not a defect. Step 150's record of "no change" is of the earlier
-     bootstrap and stands.)
+151. First the owner. In the repository's Settings, Environments, `test`, restrict Deployment branches and tags to the
+     selected branch `main`, as `ops/go-live.md` A2 does for `prod`: any workflow run that enters an environment can
+     read its secrets, and test deploys run from `main`, so nothing legitimate is blocked. In Resend, verify one sending
+     domain that belongs to Grow2Notes and is never the parent company's or a subdomain of it, add the DNS records
+     Resend gives and a DMARC record, turn open and click tracking off, protect the account with multi-factor sign-in
+     and the fewest members, and create a sending-only API key for test, limited to that domain. Then set the `test`
+     environment's two secrets, `RESEND_API_KEY` and `EMAIL_SENDER_ADDRESS`, as the table
+     [What the owner sets](../infra/README.md#what-the-owner-sets) says. If the app identity does not yet have the Key
+     Vault Secrets User role (the portal's Access control for `rg-grow2notes-test-ause`, role assignments, shows it for
+     `id-grow2notes-test-app`), the operator re-runs the bootstrap from a clone of `main`, steps 1 to 4 of
+     `infra/README.md`'s *Running it again*, passing the GitHub subject prefix at run time (D89) and the budgets' start
+     date, and looks for the what-if showing one new role assignment, `Key Vault Secrets User`, in each group and
+     nothing else. Do not write down the key, the prefix, an ID or an address.
+     Before the secrets are set, a test deploy needs no part of this: look for it going green with no stop at its
+     what-if, the annotation `Resend key not written` on the run, one `Email is not configured` warning in the web
+     app's log stream after the start that names `Email:SenderAddress` and no value, and, when you resend a setup link,
+     "Not sent: something went wrong. Try again."
+     After the secrets are set, look at the first test deploy for these. The what-if output and the log show no key
+     value, at most GitHub's `***`. The create step succeeds: this is the proof that the deploy identity can write the
+     secret with the vault's firewall on (`infra/README.md`, *Can the deploy identity write the secret?*); if it is
+     refused, change nothing in Azure and follow that section. The deployment's inputs in the portal (the resource
+     group's Deployments) show no value for `resendApiKey`, and its operation details list `resend-api-key` as created;
+     the portal's list of the vault's secrets is behind its firewall, so do not add your address to look. The app
+     settings hold no `Email__UseConsole` and no `ASPNETCORE_ENVIRONMENT` (step 148). After a restart of the web app the
+     `Email is not configured` warning is gone, and an invite to the testing mailbox arrives from the
+     sender address. A "Not sent" with no startup warning means the key is not in the vault or the role is missing: look
+     for the deploy's `Resend key not written` annotation and for the role.
+     To rotate the key, make a new one in Resend, replace the `RESEND_API_KEY` secret, run a deploy,
+     look for the next setup link arriving, and then revoke the old key in Resend. (A104,
+     A130, A131, D92, D94, D89. Step 150's record of "no change" is of the earlier bootstrap and stands.)
 152. After T22's first test deploy, the cold-start check. Restart the web app `app-grow2notes-test` in the Azure portal
      and, within a minute of it starting, invite a new worker from Users to the testing mailbox. Look for the invite
      arriving within 5 minutes and no "Not sent" on screen. If it answers "Not sent", wait a minute and invite again: if
      only the first fails, the first send's 5 seconds were too short for the cold start, and the developer raises
-     `SendTimeout` in `EmailSending.cs` to 8 seconds (T22's Notes). If every send fails, the key or the role is
-     missing: look at step 151. (D92, the one 5-second deadline over the vault read and the post.)
+     `SendTimeout` in `EmailSending.cs` to 8 seconds (T22's Notes). If every send fails, look in the log stream for
+     the `Email is not configured` warning, which names a missing setting; with none, the key is not in the vault or
+     the role is missing: look at step 151. (D92, the one 5-second deadline over the vault read and the post.)
 153. After T22's first test deploy has sent an invite (step 152), delete the old email resources. In the Azure portal,
      delete `acs-grow2notes-test` and `ecs-grow2notes-test` from the test resource group; the production group should
      never have had any. Then delete the app identity's old `Communication and Email Service Owner` role assignment in

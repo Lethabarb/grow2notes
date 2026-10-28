@@ -25,7 +25,8 @@ var contributorRoleDefinitionId = subscriptionResourceId(
   'b24988ac-6180-42a0-ab88-20f7382dd24c'
 )
 
-// The pipeline signs in as this identity with OIDC, so GitHub holds only IDs and no credential (design.md §9.4, D65).
+// The pipeline signs in as this identity with OIDC, so GitHub holds no Azure credential, only IDs and, per
+// environment, the Resend key (design.md §9.4, D65).
 resource deploymentIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: 'id-grow2notes-${environmentName}-deploy'
   location: resourceGroup().location

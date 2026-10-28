@@ -8,6 +8,8 @@ using Grow2Notes.Web.Platform.Email;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Grow2Notes.Tests.Platform.Email;
 
@@ -36,15 +38,63 @@ public sealed class EmailSendingTests
         ("ManagedIdentity:ClientId", ClientId),
     ];
 
-    // Development is local development; Production is what App Service runs, and what CI's end-to-end run runs.
+    private const string SenderAddressKey = "Email:SenderAddress";
+
+    // Development is local development, which gets the switch from appsettings.Development.json; Production is what
+    // App Service runs, with the switch set as CI's end-to-end run sets it. Either way no warning is registered.
     [Theory]
-    [InlineData("Development")]
-    [InlineData("Production")]
-    public async Task Without_an_api_key_secret_the_email_goes_to_the_console(string environment)
+    [InlineData("Development", null)]
+    [InlineData("Production", "true")]
+    public async Task The_console_is_chosen_only_by_Email_UseConsole(string environment, string? useConsole)
     {
-        await using var app = new AppWithoutDatabase(environment);
+        await using var factory = new AppWithoutDatabase(environment);
+        await using var app = useConsole is null ? factory : WithSettings(factory, [("Email:UseConsole", useConsole)]);
 
         Assert.IsType<ConsoleEmailSender>(app.Services.GetRequiredService<IEmailSender>());
+        Assert.DoesNotContain(
+            app.Services.GetServices<IHostedService>(), service => service is EmailNotConfiguredWarning);
+    }
+
+    // The other settings are present in every case, and Email:UseConsole is absent or false, so a missing setting is
+    // all that differs: never the console, never a start that fails, and a send that fails before it calls out.
+    [Theory]
+    [InlineData(false, SenderAddress, null, "Email:ApiKeySecretUri")]
+    [InlineData(true, null, null, SenderAddressKey)]
+    [InlineData(true, "", null, SenderAddressKey)]
+    [InlineData(true, "   ", null, SenderAddressKey)]
+    [InlineData(false, null, null, "Email:ApiKeySecretUri, Email:SenderAddress")]
+    [InlineData(true, null, "false", SenderAddressKey)]
+    public async Task Without_Email_UseConsole_a_missing_setting_warns_once_and_every_send_fails(
+        bool hasSecretUri, string? sender, string? useConsole, string missingSettings)
+    {
+        var logs = new RecordingLoggerProvider();
+        (string Key, string Value)[] settings =
+        [
+            .. Settings.Where(setting => setting.Key == "ManagedIdentity:ClientId"),
+            .. hasSecretUri ? [(SecretUriKey, SecretUri)] : Array.Empty<(string, string)>(),
+            .. sender is null ? Array.Empty<(string, string)>() : [(SenderAddressKey, sender)],
+            .. useConsole is null ? Array.Empty<(string, string)>() : [("Email:UseConsole", useConsole)],
+        ];
+        await using var factory = new AppWithoutDatabase("Production");
+        await using var configured = WithSettings(factory, settings);
+        await using var app = configured.WithWebHostBuilder(
+            builder => builder.ConfigureLogging(logging => logging.ClearProviders().AddProvider(logs)));
+
+        var emailSender = Assert.IsType<NotConfiguredEmailSender>(app.Services.GetRequiredService<IEmailSender>());
+
+        // Values only: the settings' names, which the warning must hold, contain the words SecretUri and SenderAddress.
+        string[] values = [VaultAddress, SecretUri, SenderAddress, ClientId];
+        var warning = Assert.Single(
+            logs.Entries, entry => entry.Category == typeof(EmailNotConfiguredWarning).FullName);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.All(missingSettings.Split(", "), name => Assert.True(warning.Holds(name)));
+        Assert.All(values, value => Assert.False(warning.Holds(value)));
+
+        var message = new EmailMessage("sam.taylor@example.org", "A subject", "A text");
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => emailSender.SendAsync(message, TestContext.Current.CancellationToken));
+        Assert.Contains(missingSettings, exception.Message);
+        Assert.All(values, value => Assert.DoesNotContain(value, exception.Message));
     }
 
     [Fact]
@@ -68,28 +118,38 @@ public sealed class EmailSendingTests
         Assert.Contains("resend-api-key", reachable.OfType<string>());
         Assert.Contains(SenderAddress, reachable.OfType<string>());
         Assert.Contains(TimeSpan.FromSeconds(5), reachable.OfType<TimeSpan>());
+        Assert.DoesNotContain(
+            app.Services.GetServices<IHostedService>(), service => service is EmailNotConfiguredWarning);
     }
 
+    // A wrong value stops the start even when the sender is missing too.
     [Theory]
-    [InlineData("ManagedIdentity:ClientId")]
-    [InlineData("Email:SenderAddress")]
-    public async Task A_secret_uri_without_the_other_setting_stops_the_app_starting(string missing)
-    {
-        await using var factory = new AppWithoutDatabase("Production");
-        await using var app = WithSettings(factory, [.. Settings.Where(setting => setting.Key != missing)]);
-
-        var exception = Assert.Throws<InvalidOperationException>(() => app.Services);
-        Assert.Contains($"Email:ApiKeySecretUri is set but {missing} is not", exception.Message);
-    }
-
-    // An address with no secret in it is not where a key is.
-    [Fact]
-    public async Task A_setting_that_is_not_a_secret_uri_stops_the_app_starting()
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_secret_uri_without_the_identity_client_id_stops_the_app_starting(bool hasSender)
     {
         await using var factory = new AppWithoutDatabase("Production");
         await using var app = WithSettings(
             factory,
-            [.. Settings.Where(setting => setting.Key != SecretUriKey), (SecretUriKey, VaultAddress)]);
+            [.. Settings.Where(setting => setting.Key != "ManagedIdentity:ClientId"
+                && (hasSender || setting.Key != SenderAddressKey))]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => app.Services);
+        Assert.Contains("Email:ApiKeySecretUri is set but ManagedIdentity:ClientId is not", exception.Message);
+    }
+
+    // An address with no secret in it is not where a key is, whether or not the sender is there to send from.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_setting_that_is_not_a_secret_uri_stops_the_app_starting(bool hasSender)
+    {
+        await using var factory = new AppWithoutDatabase("Production");
+        await using var app = WithSettings(
+            factory,
+            [.. Settings.Where(
+                setting => setting.Key != SecretUriKey && (hasSender || setting.Key != SenderAddressKey)),
+                (SecretUriKey, VaultAddress)]);
 
         Assert.ThrowsAny<ArgumentException>(() => app.Services);
     }

@@ -1,7 +1,7 @@
 namespace Grow2Notes.Web.Platform.Email;
 
 /// <summary>
-/// Writes each email to standard output in place of sending it, where no email service is configured: in
+/// Writes each email to standard output in place of sending it, where <c>Email:UseConsole</c> chooses it: in
 /// local development, which uses no Azure resource (design.md §10.3), and in CI's end-to-end run, so CI never sends
 /// real email. It never writes through <see cref="ILogger"/>, so a setup link, which holds a token, and the address
 /// it goes to never reach logs or telemetry (§9.5).

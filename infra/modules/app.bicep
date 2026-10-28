@@ -25,12 +25,10 @@ param healthCheckPath string
 @description('The app settings, by name, other than the sender address. Every deploy replaces the whole set.')
 param appSettings { *: string }
 
-// Passed in by every deploy and never committed, because the address may contain the company's name (D42, D65). The
-// parameters files hold an empty placeholder, so a deploy that forgets it fails on this length at what-if, before any
-// change. It is checked here rather than in main.bicep, because there Bicep would refuse to build the parameters
-// files' placeholder.
+// Passed in by every deploy that has one and never committed, because the address may contain the company's name
+// (D42, D65). It is written as given, empty included, and the app treats a blank address as missing (design.md
+// §10.4 step 2).
 @description('The address the app sends email from, the Email:SenderAddress setting, written as it is on each message.')
-@minLength(3)
 param emailSenderAddress string
 
 var allAppSettings = union(appSettings, {

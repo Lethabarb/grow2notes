@@ -32,9 +32,10 @@ var builder = WebApplication.CreateBuilder(operatorCommand is null ? args : []);
 // settings are read here, as the services are registered, for the same reasons as the Key Vault settings below.
 builder.Services.AddTelemetryWhenConfigured(builder.Configuration);
 
-// The setup-link email goes through the email service where it is configured, as in Azure, and to the console
-// elsewhere (design.md §10.3). Its settings are read here, for the same reasons as the Key Vault settings below.
-builder.Services.AddEmailWhenConfigured(builder.Configuration);
+// The setup-link email goes through the email service where it is configured, as in Azure, to the console where
+// Email:UseConsole says so, and otherwise nowhere, with every send answering Not sent (design.md §10.3 and §10.4).
+// Its settings are read here, for the same reasons as the Key Vault settings below.
+builder.Services.AddEmail(builder.Configuration);
 
 // OpenIddict's stores are always registered, so the operator command for approved AI assistants works before the
 // feature is switched on; the authorisation server itself is added only where Mcp:Enabled is true (mcp-server.md §3.5).
