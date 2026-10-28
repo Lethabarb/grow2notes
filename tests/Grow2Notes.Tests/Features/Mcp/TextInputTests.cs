@@ -72,4 +72,54 @@ public sealed class TextInputTests
         Assert.NotNull(refusal);
         Assert.Equal(["Name must be 50 characters or less"], refusal.Fields!["name"]);
     }
+
+    // The line breaks, then the kinds of character that stay refused whatever the flag.
+    public static TheoryData<string> LineBreaks { get; } = ["\n", "\r", "\r\n"];
+
+    public static TheoryData<int> RefusedWithLineBreaks { get; } = [0x0007, 0x0009, 0x202E, 0xE0041];
+
+    [Theory]
+    [MemberData(nameof(LineBreaks))]
+    public void Line_breaks_pass_when_they_are_allowed_and_are_refused_when_they_are_not(string lineBreak)
+    {
+        var value = "One" + lineBreak + "Two";
+
+        Assert.False(TextInput.HasRefusedCharacter(value, allowLineBreaks: true));
+        Assert.Null(TextInput.Refusal("text", "Guide prompts", value, 1000, allowLineBreaks: true));
+        Assert.True(TextInput.HasRefusedCharacter(value));
+        Assert.NotNull(TextInput.Refusal("text", "Guide prompts", value, 1000));
+    }
+
+    [Theory]
+    [MemberData(nameof(RefusedWithLineBreaks))]
+    public void Other_controls_bidirectional_and_tag_characters_are_refused_when_line_breaks_are_allowed(int codePoint)
+    {
+        var value = "One\nTw" + char.ConvertFromUtf32(codePoint) + "o";
+
+        var refusal = TextInput.Refusal("text", "Guide prompts", value, 1000, allowLineBreaks: true);
+
+        Assert.NotNull(refusal);
+        Assert.Equal(["Guide prompts has a control or formatting character"], refusal.Fields!["text"]);
+        Assert.DoesNotContain("Two", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_limit_of_1000_gives_the_length_message_with_a_thousands_separator()
+    {
+        var refusal = TextInput.Refusal("text", "Guide prompts", new string('a', 1001), 1000, allowLineBreaks: true);
+
+        Assert.NotNull(refusal);
+        Assert.Equal(["Guide prompts must be 1,000 characters or less"], refusal.Fields!["text"]);
+    }
+
+    [Fact]
+    public void The_limits_of_200_and_256_give_the_messages_they_always_did()
+    {
+        Assert.Equal(
+            ["Group name must be 200 characters or less"],
+            TextInput.Refusal("name", "Group name", new string('a', 201), 200)!.Fields!["name"]);
+        Assert.Equal(
+            ["Search must be 256 characters or less"],
+            TextInput.Refusal("search", "Search", new string('a', 257), 256)!.Fields!["search"]);
+    }
 }

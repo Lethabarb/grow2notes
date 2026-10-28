@@ -13,8 +13,8 @@ namespace Grow2Notes.Web.Features.CommonItems;
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/common-item-groups</c>,
 /// <c>PUT /api/admin/common-item-groups/{groupId}</c>, <c>PUT /api/admin/common-item-groups/order</c> and
 /// <c>POST /api/admin/common-item-groups/{groupId}/archive</c> and <c>/restore</c> call it with
-/// <see cref="Actor.InApp"/>, and Release 2's tools will call it with <see cref="Channel.Mcp"/>. Each change is saved
-/// with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
+/// <see cref="Actor.InApp"/>, and the common item group tools call it with <see cref="Channel.Mcp"/>. Each change is
+/// saved with its audit event through <see cref="ConfigurationChanges"/>, in the tenant's organisation.
 /// </summary>
 internal sealed class CommonItemGroupChanges(
     Grow2NotesDbContext db,
@@ -85,7 +85,7 @@ internal sealed class CommonItemGroupChanges(
     /// <param name="actor">Who renames it.</param>
     /// <param name="groupId">The group.</param>
     /// <param name="ifMatch">
-    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or a tool's
     /// <c>expectedVersion</c> through <see cref="IfMatch.FromExpectedVersion"/>.
     /// </param>
     /// <param name="request">The name as sent.</param>

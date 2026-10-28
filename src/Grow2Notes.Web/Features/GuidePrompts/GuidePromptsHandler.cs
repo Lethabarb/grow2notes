@@ -11,8 +11,8 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// <summary>
 /// The handler that reads and replaces an organisation's guide prompts (design.md §4.10, §6.6), as a handler class
 /// that takes the <see cref="Actor"/>, the acting user and the channel (mcp-server.md §3.5, convention 1):
-/// <c>GET</c> and <c>PUT /api/admin/guide-prompts</c> call it with <see cref="Actor.InApp"/>, and Release 2's
-/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> tools will call it with <see cref="Channel.Mcp"/>.
+/// <c>GET</c> and <c>PUT /api/admin/guide-prompts</c> call it with <see cref="Actor.InApp"/>, and the
+/// <c>get_guide_prompts</c> and <c>set_guide_prompts</c> tools call it with <see cref="Channel.Mcp"/>.
 /// </summary>
 /// <remarks>
 /// The prompts are a column of the tenant's own <see cref="Organisation"/> row, whose <c>RowVersion</c> is their
@@ -20,7 +20,8 @@ namespace Grow2Notes.Web.Features.GuidePrompts;
 /// of the request is, so no caller can reach another organisation's prompts (§5.9 item 7), and there is no <c>404</c>
 /// to give.
 /// </remarks>
-internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
+internal sealed class GuidePromptsHandler(
+    Grow2NotesDbContext db, ITenantContext tenant, ConfigurationChanges changes)
 {
     /// <summary>
     /// The guide prompts as stored, with the row's version token. The <c>get_guide_prompts</c> tool calls it with
@@ -47,7 +48,7 @@ internal sealed class GuidePromptsHandler(Grow2NotesDbContext db, ITenantContext
     /// </summary>
     /// <param name="actor">Who replaces the prompts, whom the event records.</param>
     /// <param name="ifMatch">
-    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or Release 2's
+    /// The request's <c>If-Match</c> values, as <c>Headers.IfMatch</c> gives them, or a tool's
     /// <c>expectedVersion</c> through <see cref="IfMatch.FromExpectedVersion"/>.
     /// </param>
     /// <param name="text">The new prompts, whose length the caller has checked against the column's.</param>
