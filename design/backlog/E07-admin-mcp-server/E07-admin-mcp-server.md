@@ -42,8 +42,5 @@ to one ([README §3.4](../README.md#34-how-far-ahead-to-write)). Two placements 
 This epic's rows are in [coverage.md](../coverage.md), under E07.
 
 ## Open question
-- [mcp-server.md §12](../../mcp-server.md#12-open-questions) **Q4** (owner): is confirmation by the assistant enough
-  for `invite_user`, `reset_user_sign_in`, `deactivate_user` and `archive_participant`, or should these four be
-  confirmed on a Grow2Notes page? Stories S07.04.01–S07.04.06 are not Ready until it is answered, and the answer is
-  needed by Release 2 planning (Sprint 31 planning), because a Grow2Notes confirmation page would change Release 2's
-  scope and dates. The recommendation is to keep the default (MA6), which the Release 2 forecast assumes.
+- [mcp-server.md §12](../../mcp-server.md#12-open-questions) **Q4** (owner) is answered: keep the default (MA6),
+  confirmation by the assistant (A109). Stories S07.04.01 to S07.04.06 are no longer held for it.
