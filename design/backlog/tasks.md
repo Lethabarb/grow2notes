@@ -7460,7 +7460,7 @@ A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split)
 
 ```yaml
 id: T37
-status: doing
+status: done
 release: R2
 lane: A
 size: M
@@ -7481,7 +7481,54 @@ confirmed) or restore a participant, with Support limited to workers.
 
 ### Notes
 
-- Adds the through-MCP reset row to T32's access-ends test.
+- Adds the through-MCP reset row to T32's access-ends test (`AccessEndsTests`, *reset sign-in through an assistant*,
+  with `AccessEndScene.ResetThroughAnAssistantAsync`).
+- Assumed defaults A138 (design.md section 13, 29 October 2026), which the owner may overturn. The check order for the
+  four tools; `role` a plain string that must be exactly `worker` or `manager`, anything else `role.not_allowed` for
+  every caller, a blank role `validation.failed` and an absent role the SDK's binding failure (the plan's "missing
+  role" is read that way); the invite preview and form built from the trimmed arguments with no version;
+  `user.email_in_use`, Identity's address check, `user.not_active` and `user.last_manager` refused at confirm only; a
+  Deactivated account previewed with the reset wording; the result shapes `AccessChange`, `ParticipantArchiveChange`
+  and `UpdatedParticipant`; `changed: false` for a repeated archive or restore; no reason on archive and restore; the
+  setup email's wording unchanged when Support acts; and the data line on 25 of the 28 tools. There is no decisions.md
+  entry and D95 stays free: none of it is owner-level. A139 is not taken (see the CI time below).
+- The owner's answer of 29 October 2026 on T36's two deviations is recorded in A137: keep them as built and look at
+  them later only when required. T37 follows the same pattern: no tool echoes a reason, and every refusal that is the
+  handler's own comes only when the person confirms.
+- Carry-overs, as built. The canary reads every typed string argument (email, `displayName`, reason, and each
+  confirming call's named person or participant) through a preview, a form and the accepted retry, from one list of
+  confirming calls: `deactivate_user`, `reset_user_sign_in`, `invite_user` and `archive_participant`. The three
+  literal typed-by-people sentences of T35 use `ToolResults.TypedByPeople`, and `tools-list.json` kept their text. The
+  doc comments in `UserSetupLink.cs`, `UserInvite.cs` and `UserDetailsRequest.cs` are in the present tense. The
+  Sprint 31 Q4 row of releases.md is marked answered by A109. Two doc comments still name an earlier A-number
+  (`UserSetupLink.cs` cites A134 for the Deactivated-then-last-manager order that A137 and A138 settle, and
+  `ParticipantArchiveChange.cs` cites A137 for a shape that A138 settles); whichever later task touches those files
+  can correct them, as this close-out changes no code.
+- Test helpers moved on purpose, with no assertion changed: `ConfirmationCalls` (test-only, static) now holds
+  `FormCapabilities`, `StaleVersion`, `AcceptedYes`, `StateRefused`, `CapabilitiesThatGetThePreview`,
+  `CapabilitiesThatGetTheForm`, `AnswersThatAreNotYes`, `AssertJson` (two overloads), `AssertError`, `AssertRawError`,
+  `Flip` and `RawAsync`, cut from `DeactivateUserToolTests`, which uses them through `using static` and
+  `MemberType = typeof(ConfirmationCalls)`. `InviteUserToolTests`, `ResetUserSignInToolTests` and
+  `ParticipantArchiveToolsTests` use them too. `ToolConfirmationTests` is unchanged.
+- Hand-offs to T38 (rate limits). (1) MA9's 10 confirmed user changes an hour counts `invite_user` and
+  `reset_user_sign_in`, as it counts `deactivate_user`. T41's paced onboarding of about 20 workers in one sitting
+  needs the owner to say, before T38 is planned, whether invites count or what the number is. (2) `invite_user`'s
+  confirmed calls are the only way an assistant can probe whether an address has an account anywhere
+  (`user.email_in_use`, A27), so the confirmed-change limit is what bounds that and must cover `invite_user`. (3) T37
+  builds no limit. (4) T41's Support path, `invite_user` with role `worker` and a reason, the preview, then
+  `confirm: true`, is kept and tested (`InviteUserToolTests.Support_invites_a_worker_with_a_reason_through_the_preview_and_then_the_confirmation`).
+- CI time (Build and test, against the 60-minute timeout): v1 47m31s on its passing run, after a first run of 32m25s
+  that failed on the `tools-list.json` snapshot, which the plan expected to regenerate, and on the
+  `Any_answer_but_an_accepted_true_declines_and_creates_nothing` theories of `InviteUserToolTests` (fixed in the same
+  PR); v2 40m10s, after a first run of 30m57s
+  that failed only on the snapshot. None passed 50 minutes, so the timeout stays at 60, no split was made (step 190
+  is the owner's) and A139 is not taken. v1 was within three minutes of the line, so T38, which adds rows too,
+  should watch it.
+- Tests changed on purpose: none. No test was removed or weakened.
+- By hand: first-use steps 195 to 201 under the heading *Invite, reset and archive through an assistant (T37)*, step
+  189's count of tools from 24 to 28, and step 194 reworded to record the owner's 29 October answer. Step 201 is the
+  owner's to approve or reword the four tools' words, A138's readings, and the setup email's wording when Support
+  acts. None of them holds T37 open. The stories' `sprint` stays blank, as for T34 to T36.
 
 ### Plan
 
@@ -7526,7 +7573,15 @@ is marked answered by A109; A137 and ops step 194 record the owner's 29 October 
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Users tools (#195; v1): the reason parameters of `UserInvite.InviteAsync` and `UserSetupLink.SendAsync`, the
+  actor-aware `UserChanges.ChangeAsync` for the setup link, the nullable confirmation version, `invite_user`,
+  `reset_user_sign_in`, `ConfirmationCalls`, `InviteUserToolTests`, `ResetUserSignInToolTests`, the two tool matrix
+  rows, the access-ends reset row, the invite part of `McpEndpointTests`, the canary restructure and
+  `tools-list.json` (26 tools).
+- [x] Participant tools (#196; v2): `archive_participant`, `restore_participant`, `ParticipantArchiveChange`,
+  `ParticipantArchiveToolsTests`, the two tool matrix rows, the canary entry and `tools-list.json` (28 tools).
+- [x] Close-out (#197; v3): A137's owner answer and A138, the mcp-server.md fixes, S07.04.03, S07.04.04 and S07.04.06
+  done, the F07.02 and F07.03 notes, coverage.md, releases.md, these Notes and first-use steps 189 and 194 to 201.
 
 ---
 
