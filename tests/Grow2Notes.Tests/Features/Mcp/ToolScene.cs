@@ -216,14 +216,15 @@ internal sealed class ToolScene
     public static string ExpectedVersion(string etag) => etag.Trim('"');
 
     /// <summary>
-    /// Adds an active participant of the first organisation, with names that are made up each time and do not hold
-    /// <see cref="Token"/>, so that no search or count of the scene finds them. Nothing is audited.
+    /// Adds a participant of the first organisation, active or <paramref name="archived"/>, with names that are made up
+    /// each time and do not hold <see cref="Token"/>, so that no search or count of the scene finds them. Nothing is
+    /// audited.
     /// </summary>
-    public Task<TestParticipant> AddParticipantAsync()
+    public Task<TestParticipant> AddParticipantAsync(bool archived = false)
     {
         var unique = NewHex();
         return flow.App.Services.AddParticipantAsync(
-            Organisation, givenName: $"Zed{unique}", familyName: $"Mott{unique}");
+            Organisation, archived, givenName: $"Zed{unique}", familyName: $"Mott{unique}");
     }
 
     /// <summary>

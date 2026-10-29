@@ -19,15 +19,19 @@ namespace Grow2Notes.Web.Features.Mcp.Tools;
 /// notes. A look-up reports the IDs it returned to <see cref="McpCall"/>, which <see cref="McpAuditFilter"/> writes as
 /// the call's one audit row, and a change writes its own event through the handler: the tools add no <c>via</c> key.
 /// Nothing saves between a refused handler result and the error result, so a refused change is never written.
+/// <c>archive_participant</c> asks the person to confirm (<see cref="ToolConfirmation"/>) before the handler acts.
 /// </summary>
 [McpServerToolType]
 internal sealed class ParticipantsTools(
     ParticipantLookups lookups,
     ParticipantChanges changes,
     GoalChanges goals,
+    ToolConfirmation confirmation,
     IHttpContextAccessor httpContextAccessor,
     McpCall call)
 {
+    private const string ArchiveAction = "archive_participant";
+
     private const string DateFormat = "yyyy-MM-dd";
 
     private const string ParticipantNotFound =
@@ -35,6 +39,10 @@ internal sealed class ParticipantsTools(
 
     private const string ParticipantChanged =
         "This participant was changed since you looked them up. Look them up again with get_participant, then retry.";
+
+    private const string ParticipantAskedChanged =
+        "This participant changed after the person was asked. Nothing was changed. " +
+        "Call the tool again to ask them afresh.";
 
     private const string ParticipantArchived = "This participant is archived. Restore the participant first.";
 
@@ -214,6 +222,142 @@ internal sealed class ParticipantsTools(
         if (result.Errors is { } errors)
         {
             return ToolError.ValidationFailed(errors).ToResult();
+        }
+
+        var participant = await lookups.GetAsync(id, cancellationToken) ?? throw new UnreachableException();
+        call.Returned(McpCall.ParticipantIds, [id]);
+        return ToolResults.Of(new UpdatedParticipant(
+            participant.GivenName,
+            participant.FamilyName,
+            participant.Status,
+            result.Changed,
+            participant.ExpectedVersion));
+    }
+
+    [McpServerTool(
+        Name = ArchiveAction,
+        Title = "Archive a participant",
+        ReadOnly = false,
+        Destructive = true,
+        Idempotent = true,
+        OpenWorld = false,
+        UseStructuredContent = true,
+        OutputSchemaType = typeof(ParticipantArchiveChange))]
+    [Description(
+        "Archives a participant of this organisation: they are removed from Today and search and no new notes can be " +
+        "started for them; their notes, reports and exports are unchanged, and they can be restored. Never acts on " +
+        "the first call. If your app shows Grow2Notes' confirmation form, the person answers it there. Otherwise " +
+        "call first without confirm, show the person the preview, and call again with confirm: true and the " +
+        "preview's expectedVersion only after they say yes in this conversation. An archived participant answers " +
+        "changed: false. The result has no version: look the participant up again with get_participant before " +
+        "restoring. Never returns a date of birth. " +
+        ToolResults.TypedByPeople)]
+    public async Task<CallToolResult> ArchiveParticipantAsync(
+        RequestContext<CallToolRequestParams> context,
+        [Description("The participantId that find_participants or get_participant returned.")] string participantId,
+        [Description("true only after the person has seen the preview and said yes in this conversation.")]
+        bool confirm = false,
+        [Description("The expectedVersion that the preview returned. Needed with confirm: true.")]
+        string? expectedVersion = null,
+        CancellationToken cancellationToken = default)
+    {
+        var participant = Guid.TryParse(participantId, out var id)
+            ? await lookups.GetAsync(id, cancellationToken)
+            : null;
+        if (participant is null)
+        {
+            return ToolError.NotFound(ParticipantNotFound).ToResult();
+        }
+
+        call.Returned(McpCall.ParticipantIds, [id]);
+        var named = new ParticipantMatch(id, participant.GivenName, participant.FamilyName, participant.Status);
+        var archived = ParticipantLookups.StatusOf(ParticipantStatus.Archived);
+        if (participant.Status == archived)
+        {
+            return ToolResults.Of(new ParticipantArchiveChange("done", ArchiveAction, named, Changed: false));
+        }
+
+        var actor = ToolActor.Of(httpContextAccessor);
+        var answer = confirmation.Read(context, actor, confirm, expectedVersion);
+        switch (answer.Step)
+        {
+            case ConfirmationStep.Ask:
+                var effect = $"{participant.GivenName} {participant.FamilyName} will be removed from Today and " +
+                    "search, and no new notes can be started for them. Their notes, reports and exports are " +
+                    "unchanged. You can restore them later.";
+                return confirmation.Ask(
+                    context,
+                    actor,
+                    participant.ExpectedVersion,
+                    $"Archive {participant.GivenName} {participant.FamilyName}? {effect}",
+                    $"Yes, archive {participant.GivenName} {participant.FamilyName}",
+                    ToolResults.Of(new ParticipantArchiveChange(
+                        "preview",
+                        ArchiveAction,
+                        named,
+                        effect,
+                        participant.ExpectedVersion,
+                        "Show this to the person. If they say yes, call archive_participant again with confirm: " +
+                        "true and this expectedVersion.")));
+            case ConfirmationStep.StateRefused:
+                return ToolConfirmation.StateRefused.ToResult();
+            case ConfirmationStep.Declined:
+                return ToolResults.Of(new ParticipantArchiveChange(
+                    "declined", ArchiveAction, Message: "Nothing was changed."));
+            case ConfirmationStep.Confirmed:
+                var result = await changes.ArchiveAsync(
+                    actor, id, IfMatch.FromExpectedVersion(answer.ExpectedVersion), cancellationToken);
+                if (!result.Found)
+                {
+                    return ToolError.NotFound(ParticipantNotFound).ToResult();
+                }
+
+                // The participant is as it was read before the change, so the state it ends in is said here.
+                return result.Error is { } code
+                    ? ErrorOf(code, ParticipantAskedChanged).ToResult()
+                    : ToolResults.Of(new ParticipantArchiveChange(
+                        "done", ArchiveAction, named with { Status = archived }, Changed: result.Changed));
+            default:
+                throw new UnreachableException($"A confirmation cannot be at {answer.Step}.");
+        }
+    }
+
+    [McpServerTool(
+        Name = "restore_participant",
+        Title = "Restore a participant",
+        ReadOnly = false,
+        Destructive = false,
+        Idempotent = true,
+        OpenWorld = false,
+        UseStructuredContent = true,
+        OutputSchemaType = typeof(UpdatedParticipant))]
+    [Description(
+        "Restores an archived participant, which acts at once: they are back in Today and search, and their details " +
+        "and goals can be changed again. Needs the participantId and expectedVersion that get_participant returned; " +
+        "find_participants finds archived participants with includeArchived. An active participant answers " +
+        "changed: false. Never returns a date of birth. " +
+        ToolResults.TypedByPeople)]
+    public async Task<CallToolResult> RestoreParticipantAsync(
+        [Description("The participantId that find_participants or get_participant returned.")] string participantId,
+        [Description("The expectedVersion that get_participant returned for this participant.")]
+        string? expectedVersion = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(participantId, out var id))
+        {
+            return ToolError.NotFound(ParticipantNotFound).ToResult();
+        }
+
+        var result = await changes.RestoreAsync(
+            ToolActor.Of(httpContextAccessor), id, IfMatch.FromExpectedVersion(expectedVersion), cancellationToken);
+        if (!result.Found)
+        {
+            return ToolError.NotFound(ParticipantNotFound).ToResult();
+        }
+
+        if (result.Error is { } code)
+        {
+            return ErrorOf(code, ParticipantChanged).ToResult();
         }
 
         var participant = await lookups.GetAsync(id, cancellationToken) ?? throw new UnreachableException();
