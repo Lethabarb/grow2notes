@@ -86,10 +86,12 @@ public static class ConfirmationCalls
         string? answer = null)
     {
         var lastEventId = await LastEventIdAsync(flow);
+
+        // A node has one parent, and the post adds the arguments to its request, so a call keeps its own copy.
         var result = await flow.PostToolCallAsync(
             token,
             tool,
-            arguments,
+            arguments.DeepClone().AsObject(),
             JsonNode.Parse(capabilities)!.AsObject(),
             state,
             answer is null ? null : JsonNode.Parse(answer)!.AsObject());

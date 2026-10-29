@@ -627,7 +627,8 @@ internal static class ToolMatrix
                 $"invitee.{Unique()}@example.test",
                 $"Invitee {Unique()}",
                 "worker",
-                reason: $"Asked by phone {Unique()}")),
+                reason: $"Asked by phone {Unique()}",
+                confirm: true)),
             [
                 new(
                     "the role support",
