@@ -7219,11 +7219,12 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 
 - v1 (fix/t35-v1-handler-channel): Handlers answer by channel: CheckFor, refuseIfChanged, Changed. Depends on: none.
   R18, R19, R31.
-- v2 (feat/t35-v2-look-ups): list_users, list_common_items, get_guide_prompts and the shared pieces and test scaffolding.
-  Depends on: none. R01 to R07, R24 to R27, R29.
-- v3 (feat/t35-v3-groups-and-prompts): set_guide_prompts (with line breaks) and the five group tools. Depends on: v1, v2.
-  R08 to R11, R16, R17, R20, R21, R23, R32.
-- v4 (feat/t35-v4-items): the five item tools, and the CI split if needed. Depends on: v1, v3. R12 to R15, R22, R28, R33.
+- v2 (feat/t35-v2-look-ups): list_users, list_common_items, get_guide_prompts and the shared pieces and test
+  scaffolding. Depends on: none. R01 to R07, R24 to R27, R29.
+- v3 (feat/t35-v3-groups-and-prompts): set_guide_prompts (with line breaks) and the five group tools. Depends on: v1,
+  v2. R08 to R11, R16, R17, R20, R21, R23, R32.
+- v4 (feat/t35-v4-items): the five item tools, and the CI split if needed. Depends on: v1, v3. R12 to R15, R22, R28,
+  R33.
 - v5 (docs/t35-v5-close-out): assumed defaults, mcp-server.md, stories, coverage, Notes, by-hand steps. Depends on: v4.
   R30.
 
@@ -7342,7 +7343,7 @@ shapes, help lines and words. Carry-overs from T34 and the T38 and T41 pacing no
 
 ```yaml
 id: T36
-status: new
+status: done
 release: R2
 lane: A
 size: M
@@ -7366,10 +7367,92 @@ gives a reason.
 
 - Builds the MCP confirmation code that T37 reuses, and adds the through-MCP deactivate row to T32's access-ends test.
   Owner question Q9 (MA6) is answered by design.md A109 (26 October 2026).
+- Assumed defaults A136 and A137 (design.md section 13, 29 October 2026). A136: the form is offered only when the call
+  is MRTR-capable and its per-request `_meta` capabilities declare form elicitation (a blank `elicitation` counts);
+  `confirm` and the version are ignored on the form path; `requestState` is a Data Protection token with a canonical
+  argument hash, alive 5 minutes inclusive and not single use; only JSON `true` is yes; `ElicitAsync` is rejected;
+  MA6's trust boundary stands. A137: the check order; `changed: false` for an account already deactivated before the
+  preview, the form and the state check; the reason (200 characters, trimmed, required for Support, kept for managers
+  in `Details.reason`); the MCP-only codes `role.not_allowed` and `reason.required`; Support's limits from the role
+  claim; one sentence for every target; and the data line on 18 tools (21 of the 24 with T35's). There is no
+  decisions.md entry, as for T33 to T35: none of it is owner-level. A138 is not taken (see the CI time below).
+- Two deviations from the plan, stated in A137. The plan had the tool foresee `user.last_manager` at the preview; the
+  built tool does not, because the handler's locked rule is the only definition and it comes before the version, so
+  the only active manager is previewed normally and refused when the person confirms (S07.04.05's criterion is proved
+  at the confirm). And the plan had the preview and form echo the reason; they echo nothing the caller typed.
+- Review resolutions, as built: the handlers use the delegate shape of T35 (`UserChanges.ChangeAsync` with the actor
+  and a `change` that is handed `refuseIfChanged`), with `UserChangeResult.Changed` and `Unchanged`, not a predicate;
+  the SDK question was settled from the 2.2.0 documentation and reflection, with one detection path and no
+  `McpServer.ClientCapabilities`; the cross-user state test sends the same email and reason from Support, so only the
+  caller differs; the Support rule and the email look-up live once in `UsersTools`' private helpers, beside T37's
+  tools; the arguments are hashed canonically (nulls and `confirm` and `expectedVersion` left out); the filter write
+  is `WriteOutcomeAsync`, with no placeholder result; the two `UserChanges` overloads share one private load, and their
+  docs say so; the contracts of the 17 further tools were checked before the line was added.
+- T35's carry-overs. The canary now reads `name`, `email` and `reason` among the sent keys, and sends a preview, a
+  form and its accepted retry. The data line is on every tool whose result returns typed text, and `tools-list.json`
+  was regenerated once, from the first CI failure of v3. T35's three over-long lines in its Verticals were rewrapped
+  in v4. `CommonItemChanges.UpdateAsync`'s doc ("Release 2's expectedVersion" against its neighbour's "a tool's") is
+  left as it is, because T36 does not touch that file; whichever later task changes it can reword it.
+- CI time (Build and test, against the 60-minute timeout): v1 28m35s; v2 40m47s, and 43m49s on its re-run; v3 32m07s on
+  its first run, which failed only on the `tools-list.json` snapshot that the plan expected to regenerate, and 32m38s
+  when it passed; v4 (docs only) 40m06s, and 45m00s on its re-run; the PR's final run on the same tree 44m47s. The
+  runs ranged from 28m to 45m and none passed 50 minutes, so the timeout stays at 60 and no split was made (step 190
+  is the owner's).
+- Tests changed on purpose: none. No test was removed or weakened. `tests/README.md` gained a paragraph on
+  `PostToolCallAsync` and on `McpClientAsync`'s elicitation handler.
+- By hand: first-use steps 191 to 194 under the heading *Deactivate through an assistant (T36)*, and step 189's count
+  of tools from 23 to 24. Step 191 shows which approved assistants display forms. Step 194 is the owner's to approve or
+  reword A137's copy. None of them holds T36 open. The stories' `sprint` stays blank, as for T34 and T35.
+
+### Plan
+
+Outcome: one new tool, deactivate_user (the 24th), and the shared confirmation path that T37 reuses unchanged. No
+migration, table, audit event type, endpoint or SPA change.
+
+Design: a scoped `ToolConfirmation` offers the assistant's own form only when the call is MRTR-capable and its
+per-request client capabilities declare form elicitation; every other call gets the preview, then confirm with the
+preview's expectedVersion. The form's `requestState` is a Data Protection token (purpose
+`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the
+row version, alive 5 minutes, so the server keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes
+the form's one `mcp.read` row and rethrows `InputRequiredException`.
+
+Domain: none persisted. `UserChangeResult` gains `Changed` and `Unchanged`; `UserChanges` gains an actor-aware overload
+(App refuses before the change, Mcp hands `refuseIfChanged` to it); `UserDeactivation` takes a reason (stored in the
+audit Details) and answers Unchanged for a deactivated user, which the app still answers 204. Support acts on workers
+only and must give a reason (200 characters, trimmed), checked in the user tools from the database-built role claim.
+
+Reuse: UserDeactivation and its LastManagerRule, UserList for the email look-up (A132), IfMatch.CheckFor,
+ConsentRequests' Data Protection pattern (Seal, Open and Hash move to `ProtectedJson`), McpCall, ToolError, TextInput,
+the tool matrix, canary, contract and access-ends tests.
+
+Decisions where the design is silent: A136 (confirmation: when the form is offered, state contents and lifetime, only
+true is yes, ElicitAsync rejected); A137 (deactivate_user: check order, last-manager reported at confirm rather than
+foreseen, preview echoes no reason, status is the outcome, MCP-only codes role.not_allowed and reason.required, one
+sentence for every target, the typed-by-people line on 18 tools, new model-facing words for the owner at ops step 194);
+A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split). Carry-overs from T35 are in the Steps.
+
+### Verticals
+
+- v1: Shared confirmation: ProtectedJson, ToolConfirmation, the audit filter catch, the probe_confirm test tool and the
+  raw 2026-07-28 test helper. Depends on: none. R3, R4, R6, R8.
+- v2: Shared deactivate handler: actor-aware UserChanges, Unchanged result, reason in the audit details. Depends on:
+  none. R9, R20.
+- v3: deactivate_user, AccessChange, the typed-by-people line on 18 tools, and all tool tests. Depends on: v1, v2.
+  R1, R2, R5, R7, R10 to R19, R21 to R24.
+- v4: Records: design.md A136 and A137, mcp-server.md fixes, coverage, F07.04, tasks.md, ops steps 191 to 194.
+  Depends on: v3. R25 to R27.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Shared confirmation (#191; v1): `ProtectedJson`, `ToolConfirmation`, the audit filter's
+  `InputRequiredException` catch, the test-only `probe_confirm` tool, the raw 2026-07-28 test helper and
+  `ToolConfirmationTests`.
+- [x] Shared deactivate handler (#190; v2): the actor-aware `UserChanges.ChangeAsync`, `UserChangeResult.Unchanged`
+  and a reason in the audit details, with `UserDeactivationTests`.
+- [x] `deactivate_user` (#192; v3): the tool, `AccessChange`, `ToolResults.TypedByPeople` on 18 tools, the tool matrix
+  row, `DeactivateUserToolTests`, the canary, contract and architecture rules, and the access-ends row.
+- [x] Close-out (#193; v4): A136 and A137, the mcp-server.md fixes, S07.04.01, S07.04.02 and S07.04.05 done,
+  coverage.md, these Notes and first-use steps 191 to 194.
 
 ---
 

@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Platform.Audit;
 
 namespace Grow2Notes.Tests.Features.Mcp;
@@ -587,11 +588,66 @@ internal static class ToolMatrix
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.CommonItem.Reordered),
+        new(
+            "deactivate_user",
+            async scene =>
+            {
+                var worker = await scene.AddUserAsync(UserRole.Worker);
+                return DeactivateCall(
+                    worker.Email, $"Asked by phone {Unique()}", confirm: true, version: worker.Version);
+            },
+            [
+                new("an unknown email", _ => DeactivateCall($"nobody.{Unique()}@example.test"), "not_found"),
+                new(
+                    "a control character in the email",
+                    scene => DeactivateCall(scene.InvitedUser.Email + "\u0007"),
+                    "validation.failed"),
+                new(
+                    "a line break in the reason",
+                    scene => DeactivateCall(scene.InvitedUser.Email, "Asked\nby phone"),
+                    "validation.failed"),
+                new(
+                    "a reason of 201 characters",
+                    scene => DeactivateCall(scene.InvitedUser.Email, new string('a', 201)),
+                    "validation.failed"),
+                new(
+                    "a confirmation with no version",
+                    scene => DeactivateCall(scene.InvitedUser.Email, confirm: true),
+                    "precondition.required"),
+                new(
+                    "a confirmation with a made-up version",
+                    scene => DeactivateCall(scene.InvitedUser.Email, confirm: true, version: "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.User.Deactivated),
     ];
 
     private static readonly string Bidi = char.ConvertFromUtf32(0x202E);
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];
+
+    private static JsonObject DeactivateCall(
+        string email, string? reason = null, bool confirm = false, string? version = null)
+    {
+        var arguments = new JsonObject { ["email"] = email };
+        if (reason is not null)
+        {
+            arguments["reason"] = reason;
+        }
+
+        if (confirm)
+        {
+            arguments["confirm"] = true;
+        }
+
+        if (version is not null)
+        {
+            arguments["expectedVersion"] = version;
+        }
+
+        return arguments;
+    }
 
     private static JsonObject PromptsCall(string text, string? version = null)
     {

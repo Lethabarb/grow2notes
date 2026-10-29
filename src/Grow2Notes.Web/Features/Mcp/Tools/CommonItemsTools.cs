@@ -99,7 +99,8 @@ internal sealed class CommonItemsTools(
     [Description(
         "Adds an empty group of common items at the end of the active groups. A group with no items does not show on " +
         "notes. Returns the new group's groupId and expectedVersion, which a later change needs. The result's " +
-        "helpText says what a change to a group does to notes.")]
+        "helpText says what a change to a group does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddCommonItemGroupAsync(
         [Description("The group's name: at most 200 characters, on one line.")] string name,
         CancellationToken cancellationToken = default)
@@ -133,7 +134,8 @@ internal sealed class CommonItemsTools(
         "Renames a group. Needs the groupId and expectedVersion that list_common_items returned. A call that would " +
         "change nothing answers changed: false. The Every note group cannot be renamed. An archived group can be " +
         "renamed. Notes already started keep the name they were started with. The result holds the group's new " +
-        "expectedVersion, and its helpText says what a change to a group does to notes.")]
+        "expectedVersion, and its helpText says what a change to a group does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> RenameCommonItemGroupAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The new name: at most 200 characters, on one line.")] string name,
@@ -173,7 +175,8 @@ internal sealed class CommonItemsTools(
         "once, in the order wanted; Every note is never in groupIds and always comes first, and an archived group is " +
         "not one of them. Needs no expectedVersion. An order that is already stored answers changed: false. Returns " +
         "the groups as list_common_items lists them, every expectedVersion current. The result's helpText says what " +
-        "a change to a group does to notes.")]
+        "a change to a group does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> ReorderCommonItemGroupsAsync(
         [Description("The groupId of every active group except Every note, once each, in the new order.")]
         string[] groupIds,
@@ -207,7 +210,8 @@ internal sealed class CommonItemsTools(
         "Archives a group, which acts at once. Needs the groupId and expectedVersion that list_common_items " +
         "returned. An archived group answers changed: false. The Every note group cannot be archived. Its items stay " +
         "as they are and return with it when it is restored. The result holds the group's new expectedVersion, and " +
-        "its helpText says what a change to a group does to notes.")]
+        "its helpText says what a change to a group does to notes. " +
+        ToolResults.TypedByPeople)]
     public Task<CallToolResult> ArchiveCommonItemGroupAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The expectedVersion that list_common_items returned for this group.")]
@@ -228,7 +232,8 @@ internal sealed class CommonItemsTools(
         "Restores an archived group, which acts at once, and puts it at the end of the active groups with its " +
         "active items. Needs the groupId and expectedVersion that list_common_items returned. An active group " +
         "answers changed: false. The Every note group cannot be restored. The result holds the group's new " +
-        "expectedVersion, and its helpText says what a change to a group does to notes.")]
+        "expectedVersion, and its helpText says what a change to a group does to notes. " +
+        ToolResults.TypedByPeople)]
     public Task<CallToolResult> RestoreCommonItemGroupAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The expectedVersion that list_common_items returned for this group.")]
@@ -248,7 +253,8 @@ internal sealed class CommonItemsTools(
     [Description(
         "Adds a common item at the end of the active items of a group, which can be the Every note group. An " +
         "archived group takes no item: restore it first. Returns the new item's itemId and expectedVersion, which a " +
-        "later change needs. The result's helpText says what a change to an item does to notes.")]
+        "later change needs. The result's helpText says what a change to an item does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddCommonItemAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The item's wording: at most 200 characters, on one line.")] string text,
@@ -287,7 +293,8 @@ internal sealed class CommonItemsTools(
         "items of the new group, which can be the Every note group; a groupId that is the item's own group is not a " +
         "move. An item of an archived group cannot be reworded or moved, and no item can be moved into an archived " +
         "group: restore the group first. A call that would change nothing answers changed: false. The result holds " +
-        "the item's new expectedVersion, and its helpText says what a change to an item does to notes.")]
+        "the item's new expectedVersion, and its helpText says what a change to an item does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> UpdateCommonItemAsync(
         [Description("The itemId that list_common_items returned.")] string itemId,
         [Description("The expectedVersion that list_common_items returned for this item.")]
@@ -344,7 +351,8 @@ internal sealed class CommonItemsTools(
         "once, in the order wanted; an archived item is not one of them. The items of an archived group and of the " +
         "Every note group can be reordered. Needs no expectedVersion. An order that is already stored answers " +
         "changed: false. Returns the group's active items in the new order, every expectedVersion current. The " +
-        "result's helpText says what a change to an item does to notes.")]
+        "result's helpText says what a change to an item does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> ReorderCommonItemsAsync(
         [Description("The groupId that list_common_items returned.")] string groupId,
         [Description("The itemId of every active item of the group, once each, in the new order.")]
@@ -386,7 +394,8 @@ internal sealed class CommonItemsTools(
     [Description(
         "Archives an item, which acts at once. Needs the itemId and expectedVersion that list_common_items " +
         "returned. An archived item answers changed: false. The items of an archived group can be archived. The " +
-        "result holds the item's new expectedVersion, and its helpText says what a change to an item does to notes.")]
+        "result holds the item's new expectedVersion, and its helpText says what a change to an item does to notes. " +
+        ToolResults.TypedByPeople)]
     public Task<CallToolResult> ArchiveCommonItemAsync(
         [Description("The itemId that list_common_items returned.")] string itemId,
         [Description("The expectedVersion that list_common_items returned for this item.")]
@@ -407,7 +416,8 @@ internal sealed class CommonItemsTools(
         "Restores an archived item, which acts at once, and puts it at the end of the active items of its group. " +
         "Needs the itemId and expectedVersion that list_common_items returned. An active item answers changed: " +
         "false. The items of an archived group can be restored. The result holds the item's new expectedVersion, and " +
-        "its helpText says what a change to an item does to notes.")]
+        "its helpText says what a change to an item does to notes. " +
+        ToolResults.TypedByPeople)]
     public Task<CallToolResult> RestoreCommonItemAsync(
         [Description("The itemId that list_common_items returned.")] string itemId,
         [Description("The expectedVersion that list_common_items returned for this item.")]

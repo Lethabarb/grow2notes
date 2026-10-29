@@ -103,6 +103,7 @@ internal static class McpSetup
                 (options, config) => options.Audiences.Add(Resource(config)));
 
             services.AddScoped<ParticipantLookups>();
+            services.AddScoped<ToolConfirmation>();
 
             // Stateless, so no session is kept between calls and the checks of each call are those of its token.
             // Declaring the tools capability makes tools/list answer whatever tools are registered.

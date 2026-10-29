@@ -17,6 +17,7 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -388,13 +389,79 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     }
 
     /// <summary>
+    /// A raw <c>2026-07-28</c> <c>tools/call</c> of <paramref name="name"/> with <paramref name="accessToken"/>, which
+    /// declares <paramref name="capabilities"/> as the client's capabilities in its own <c>_meta</c>, as that revision
+    /// does, and retries a form with <paramref name="requestState"/> and <paramref name="inputResponses"/> (the answers
+    /// by input request key) when they are given. It returns the JSON-RPC <c>result</c>, from a JSON or an event
+    /// stream body, so a test sees <c>input_required</c> as the wire has it.
+    /// </summary>
+    public async Task<JsonObject> PostToolCallAsync(
+        string accessToken,
+        string name,
+        JsonObject arguments,
+        JsonObject capabilities,
+        string? requestState = null,
+        JsonObject? inputResponses = null)
+    {
+        const string revision = "2026-07-28";
+        var parameters = new JsonObject
+        {
+            ["name"] = name,
+            ["arguments"] = arguments,
+            ["_meta"] = new JsonObject
+            {
+                [MetaKeys.ProtocolVersion] = revision,
+                [MetaKeys.ClientCapabilities] = capabilities,
+            },
+        };
+        if (requestState is not null)
+        {
+            parameters["requestState"] = requestState;
+        }
+
+        if (inputResponses is not null)
+        {
+            parameters["inputResponses"] = inputResponses;
+        }
+
+        var body = new JsonObject
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = 1,
+            ["method"] = "tools/call",
+            ["params"] = parameters,
+        };
+        using var client = App.CreateAssistantClient();
+        using var request = McpRequest(accessToken, body: body.ToJsonString());
+        request.Headers.Add("MCP-Protocol-Version", revision);
+        request.Headers.Add("Mcp-Method", "tools/call");
+        request.Headers.Add("Mcp-Name", name);
+
+        using var response = await client.SendAsync(request, Ct);
+        var text = await response.Content.ReadAsStringAsync(Ct);
+        Assert.True(response.IsSuccessStatusCode, $"{(int)response.StatusCode}: {text}");
+        var data = response.Content.Headers.ContentType?.MediaType == "text/event-stream"
+            ? text.Split('\n')
+                .Where(line => line.StartsWith("data:", StringComparison.Ordinal))
+                .Select(line => line["data:".Length..].Trim())
+                .First(line => line.Length > 0)
+            : text;
+        return JsonNode.Parse(data)!["result"]?.AsObject()
+            ?? throw new InvalidOperationException($"The call has no result: {data}");
+    }
+
+    /// <summary>
     /// An MCP client of the revision <paramref name="protocolVersion"/> (<c>2025-11-25</c>, which opens with the
     /// initialize handshake, or <c>2026-07-28</c>, which sends its details with each request) that calls <c>/mcp</c>
-    /// with <paramref name="accessToken"/>, from <paramref name="clientAddress"/> if it is given. The caller disposes
-    /// it.
+    /// with <paramref name="accessToken"/>, from <paramref name="clientAddress"/> if it is given. With an
+    /// <paramref name="elicitation"/> handler it declares that it shows forms, and answers them with it. The caller
+    /// disposes it.
     /// </summary>
     public async Task<McpClient> McpClientAsync(
-        string accessToken, string protocolVersion, string? clientAddress = null)
+        string accessToken,
+        string protocolVersion,
+        string? clientAddress = null,
+        Func<ElicitRequestParams?, CancellationToken, ValueTask<ElicitResult>>? elicitation = null)
     {
         var http = App.CreateAssistantClient();
         http.DefaultRequestHeaders.Authorization = new("Bearer", accessToken);
@@ -407,8 +474,14 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
             new() { Endpoint = new(McpTestApp.Resource), TransportMode = HttpTransportMode.StreamableHttp },
             http,
             ownsHttpClient: true);
-        return await McpClient.CreateAsync(
-            transport, new McpClientOptions { ProtocolVersion = protocolVersion }, cancellationToken: Ct);
+        var options = new McpClientOptions { ProtocolVersion = protocolVersion };
+        if (elicitation is not null)
+        {
+            options.Capabilities = new() { Elicitation = new() { Form = new() } };
+            options.Handlers = new() { ElicitationHandler = elicitation };
+        }
+
+        return await McpClient.CreateAsync(transport, options, cancellationToken: Ct);
     }
 
     /// <summary>The status of each authorisation that OpenIddict holds for <paramref name="userId"/>.</summary>

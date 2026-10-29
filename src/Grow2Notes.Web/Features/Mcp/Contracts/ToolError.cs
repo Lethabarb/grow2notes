@@ -35,6 +35,21 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
         new(ErrorCode.PreconditionRequired.Code, "Send the expectedVersion that the look-up returned.");
 
     /// <summary>
+    /// Support acting on an account that is not a worker's (<c>role.not_allowed</c>), an MCP-only code (mcp-server.md
+    /// §5.5) that stays out of <see cref="ErrorCode"/>.
+    /// </summary>
+    public static ToolError RoleNotAllowed { get; } = new(
+        "role.not_allowed",
+        "Support can act on worker accounts only. A manager can do this in Grow2Notes. Nothing was changed.");
+
+    /// <summary>
+    /// Support sending no reason (<c>reason.required</c>), an MCP-only code (mcp-server.md §5.5) that stays out of
+    /// <see cref="ErrorCode"/>.
+    /// </summary>
+    public static ToolError ReasonRequired { get; } =
+        new("reason.required", "Support must send a reason: why, and who asked. Nothing was changed.");
+
+    /// <summary>
     /// The refusal of the arguments that a handler refused (<c>validation.failed</c>), each message under its
     /// argument's name: the handler's keys are its members' names, which are camel-cased as the arguments are.
     /// </summary>

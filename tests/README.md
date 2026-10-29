@@ -1162,8 +1162,8 @@ ends sessions or a role: deactivation, a change of role or email, Sign out
 `Grow2Notes.Tests/Platform/PastRecordsTests.cs`). Such a change ends a connected assistant's access too, in the same
 transaction: `AccessEndsTests` (`Grow2Notes.Tests/Features/Mcp/AccessEndsTests.cs`) does each event through its real
 endpoint or command, shows every authorisation of the person revoked before any refresh or `/mcp` call, then the
-refusal of both, and the person's own session by `SignedInDevices`. T36 and T37 add the through-MCP changes of their
-tools as rows of its `Events` list, each an `AccessEnd` with the tool call as its trigger.
+refusal of both, and the person's own session by `SignedInDevices`. T36 added the through-MCP deactivation, and T37 adds
+those of its tools, as rows of its `Events` list, each an `AccessEnd` with the tool call as its trigger.
 
 - Host the app with `MapCookieSignIn()` and on a fake clock with `UseClock`, as above, and add the user the test
   changes (the seeded-rows rule above).
@@ -1215,6 +1215,15 @@ are the examples.
 - `AssistantFlow.ToolCall(name, arguments)` is the JSON-RPC body of a `tools/call`, which `PostMcpAsync` and
   `McpRequest` send as their `body` for a raw call, such as one with a token that must be refused. A call whose result
   is read goes through `McpClientAsync`, and `ToolScene.CallAsync` takes its arguments as a `JsonObject`.
+- A tool that confirms a change (`ToolConfirmation`, mcp-server.md §5.3) answers by what the request's own `_meta`
+  declares, which the SDK's client does not let a test choose per call. `PostToolCallAsync(accessToken, name,
+  arguments, capabilities, requestState, inputResponses)` makes a raw `2026-07-28` `tools/call` that declares the
+  capabilities it is given (`{}`, `{"elicitation":{"form":{}}}`, a blank `{"elicitation":{}}`, or URL only) and, to
+  answer a form, retries with the `requestState` it returned and the answer by input request key. It returns the
+  JSON-RPC `result`, from a JSON or an event stream body, so a test sees `input_required` as the wire has it.
+  `McpClientAsync(..., elicitation)` takes a handler, then declares form elicitation and answers forms with it, to
+  prove the SDK's own client. `probe_confirm` is the tool to try it on before a real tool uses it;
+  `ToolConfirmationTests` shows how.
 - `ToolScene.CreateAsync(flow)` is the world that the tests of the tools share: two organisations (made with
   `TestOrganisations`, so each has a manager and a Support person), a participant with names and goals that are unique to
   the scene, an archived participant and a date of birth. `ToolMatrix.Rows` holds one row for each tool the app lists

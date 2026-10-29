@@ -34,6 +34,10 @@ public sealed class AccessEndsTests(Grow2NotesFactory factory, SqlServerFixture 
     public static TheoryData<AccessEnd> Events { get; } =
     [
         new AccessEnd("deactivate", scene => scene.PostAsync("deactivate"), HttpStatusCode.Unauthorized),
+        new AccessEnd(
+            "deactivate through an assistant",
+            scene => scene.DeactivateThroughAnAssistantAsync(),
+            HttpStatusCode.Unauthorized),
         new AccessEnd("reset sign-in", scene => scene.PostAsync("setup-link"), HttpStatusCode.Unauthorized),
         new AccessEnd(
             "admin reset-signin", scene => scene.ResetSignInAsync(), HttpStatusCode.Unauthorized),
@@ -176,6 +180,30 @@ public sealed class AccessEndsTests(Grow2NotesFactory factory, SqlServerFixture 
                 await actor.FetchTokenAsync(),
                 ifMatch: IfMatch.ETag((await flow.UserAsync(PersonId)).ConcurrencyStamp!));
             Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+
+        /// <summary>
+        /// The second manager connects an assistant of their own and calls <c>deactivate_user</c> on the person with
+        /// their current version, which the tool changes on a confirmed call.
+        /// </summary>
+        internal async Task DeactivateThroughAnAssistantAsync()
+        {
+            var actorTokens = await flow.ConnectAsync(actor);
+            await using var client = await flow.McpClientAsync(actorTokens.AccessToken, ToolWorld.Revision);
+            var person = await flow.UserAsync(PersonId);
+
+            var result = await ToolScene.CallAsync(
+                client,
+                "deactivate_user",
+                new()
+                {
+                    ["email"] = person.Email!,
+                    ["confirm"] = true,
+                    ["expectedVersion"] = person.ConcurrencyStamp!,
+                });
+
+            Assert.NotEqual(true, result.IsError);
+            Assert.True(Assert.NotNull(result.StructuredContent).GetProperty("changed").GetBoolean());
         }
 
         /// <summary>
