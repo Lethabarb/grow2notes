@@ -186,6 +186,22 @@ public sealed class ToolConfirmationTests(ConfirmationWorld world) : IClassFixtu
     }
 
     [Fact]
+    public async Task A_state_that_one_tool_asked_is_refused_by_another_tool_for_the_same_arguments()
+    {
+        var token = await world.TokenOfAsync(world.ManagerId);
+        var workerId = await Flow.AddUserAsync(UserRole.Worker);
+        var email = (await Flow.UserAsync(workerId)).Email!;
+        var state = await AskAsync(token, email, FormCapabilities);
+
+        // Both hashes are over the email alone, so only the tool differs.
+        var result = await Flow.PostToolCallAsync(
+            token, "deactivate_user", Arguments(email), Capabilities(FormCapabilities), state, Answer(AcceptedYes));
+
+        AssertStateRefused(result);
+        Assert.Equal(UserStatus.Active, (await Flow.UserAsync(workerId)).Status);
+    }
+
+    [Fact]
     public async Task A_client_with_an_elicitation_handler_is_asked_once_and_its_accept_confirms()
     {
         var asked = new List<string?>();

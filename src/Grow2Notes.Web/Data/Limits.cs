@@ -24,6 +24,12 @@ internal static class Limits
     /// </summary>
     public const int Email = 256;
 
+    /// <summary>
+    /// The reason an assistant gives for a change to a user's access, kept in the audit event's details (A137). It is
+    /// checked in the tool only, so it has no column and no <c>limits.ts</c> entry.
+    /// </summary>
+    public const int UserChangeReason = 200;
+
     /// <summary><see cref="Participant.GivenName"/> and <see cref="Participant.FamilyName"/>, each (§5.1).</summary>
     public const int ParticipantName = 100;
 

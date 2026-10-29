@@ -27,8 +27,11 @@ internal sealed record SceneGroup(Guid Id, string Name, bool Archived, string ET
 /// <summary>A common item of the scene's first organisation, with its <c>ETag</c>.</summary>
 internal sealed record SceneItem(Guid Id, string Text, bool Archived, string ETag);
 
-/// <summary>A user account of the scene's first organisation, with the address it signs in with.</summary>
-internal sealed record SceneUser(string Email);
+/// <summary>
+/// A user account of the scene's first organisation, with the address it signs in with and its version as the tools
+/// give it: the row's <c>ConcurrencyStamp</c> when it was added.
+/// </summary>
+internal sealed record SceneUser(Guid Id, string Email, string DisplayName, string Version);
 
 /// <summary>
 /// The world that the tests of the MCP tools share, in the database of an <see cref="AssistantFlow"/>: a first
@@ -184,9 +187,9 @@ internal sealed class ToolScene
             services, organisation, archivedGroup.Id, $"Item Z {token}", 10, false);
 
         var invited = await SeedUserAsync(
-            services, organisation, $"Una{token} Kerr", $"una.{token}@example.test", UserStatus.Invited);
+            flow, organisation, $"Una{token} Kerr", $"una.{token}@example.test", UserStatus.Invited);
         var deactivated = await SeedUserAsync(
-            services, organisation, $"Vic{token} Lane", $"vic.{token}@example.test", UserStatus.Deactivated);
+            flow, organisation, $"Vic{token} Lane", $"vic.{token}@example.test", UserStatus.Deactivated);
 
         return new(
             flow,
@@ -243,6 +246,17 @@ internal sealed class ToolScene
     /// </summary>
     public Task<SceneItem> AddItemAsync(Guid groupId, bool archived = false) =>
         SeedItemAsync(flow.App.Services, Organisation, groupId, $"Item {NewHex()}", 100, archived);
+
+    /// <summary>
+    /// Adds a user of <paramref name="role"/> and <paramref name="status"/> to the first organisation, with a name
+    /// and an address that hold a hex made up each time and not <see cref="Token"/>, so that no search or count of the
+    /// scene finds them. Nothing is audited.
+    /// </summary>
+    public Task<SceneUser> AddUserAsync(UserRole role, UserStatus status = UserStatus.Active)
+    {
+        var unique = NewHex();
+        return SeedUserAsync(flow, Organisation, $"Kit{unique} Moss", $"kit.{unique}@example.test", status, role);
+    }
 
     /// <summary>
     /// The IDs of the first organisation's active groups other than Every note, in the order that
@@ -356,14 +370,15 @@ internal sealed class ToolScene
     }
 
     private static async Task<SceneUser> SeedUserAsync(
-        IServiceProvider services,
+        AssistantFlow flow,
         SeededOrganisation organisation,
         string displayName,
         string email,
-        UserStatus status)
+        UserStatus status,
+        UserRole role = UserRole.Worker)
     {
-        await services.AddUserAsync(organisation, UserRole.Worker, displayName, status, email);
-        return new(email);
+        var id = await flow.App.Services.AddUserAsync(organisation, role, displayName, status, email);
+        return new(id, email, displayName, (await flow.UserAsync(id)).ConcurrencyStamp!);
     }
 
     private static async Task<SceneGoal> SeedGoalAsync(

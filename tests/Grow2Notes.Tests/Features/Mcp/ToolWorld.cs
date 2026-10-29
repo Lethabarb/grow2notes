@@ -24,6 +24,12 @@ public sealed class ToolWorld(SqlServerFixture sqlServer) : IAsyncLifetime
 
     internal McpClient ClientOf(ToolCaller caller) => clients[caller];
 
+    /// <summary>
+    /// The access token of an assistant that <paramref name="caller"/> has just connected, for a raw call. Each call
+    /// of this connects afresh.
+    /// </summary>
+    internal Task<string> TokenOf(ToolCaller caller) => Scene.ConnectAsync(caller);
+
     public async ValueTask InitializeAsync()
     {
         factory = new(sqlServer);
