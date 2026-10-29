@@ -7452,8 +7452,8 @@ A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split)
   and a reason in the audit details, with `UserDeactivationTests`.
 - [x] `deactivate_user` (#192; v3): the tool, `AccessChange`, `ToolResults.TypedByPeople` on 18 tools, the tool matrix
   row, `DeactivateUserToolTests`, the canary, contract and architecture rules, and the access-ends row.
-- [x] Close-out (#193; v4): A136 and A137, the mcp-server.md fixes, S07.04.01, S07.04.02 and S07.04.05 done, coverage.md,
-  these Notes and first-use steps 191 to 194.
+- [x] Close-out (#193; v4): A136 and A137, the mcp-server.md fixes, S07.04.01, S07.04.02 and S07.04.05 done,
+  coverage.md, these Notes and first-use steps 191 to 194.
 
 ---
 
