@@ -36,7 +36,8 @@ internal static class InviteUserEndpoint
         UserInvite invite,
         CancellationToken cancellationToken)
     {
-        var result = await invite.InviteAsync(Actor.InApp(user, identityOptions.Value), request, cancellationToken);
+        var result = await invite.InviteAsync(
+            Actor.InApp(user, identityOptions.Value), request, reason: null, cancellationToken);
         return result.Error switch
         {
             null => TypedResults.Created(),

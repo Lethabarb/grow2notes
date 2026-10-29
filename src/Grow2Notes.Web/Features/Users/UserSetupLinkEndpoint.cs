@@ -42,7 +42,7 @@ internal static class UserSetupLinkEndpoint
         CancellationToken cancellationToken)
     {
         var result = await setupLink.SendAsync(
-            Actor.InApp(user, identityOptions.Value), id, request.Headers.IfMatch, cancellationToken);
+            Actor.InApp(user, identityOptions.Value), id, request.Headers.IfMatch, reason: null, cancellationToken);
         return result switch
         {
             { IsNotFound: true } => TypedResults.NotFound(),
