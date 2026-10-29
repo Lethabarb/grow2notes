@@ -7460,7 +7460,7 @@ A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split)
 
 ```yaml
 id: T37
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -7482,6 +7482,47 @@ confirmed) or restore a participant, with Support limited to workers.
 ### Notes
 
 - Adds the through-MCP reset row to T32's access-ends test.
+
+### Plan
+
+Outcome: four tools, taking the count from 24 to 28: invite_user and reset_user_sign_in (UsersTools),
+archive_participant and restore_participant (ParticipantsTools). Server-side MCP only: no migration, table, column,
+audit event type, Limits constant, endpoint, DI registration or SPA change.
+
+Design: every confirming tool reuses T36's `ToolConfirmation` and follows A137's order: the form of the arguments,
+not_found, role.not_allowed and reason.required for Support (also at the first call), changed:false where nothing
+would change, then the preview or form. The app's own refusals (user.email_in_use, Identity's address check,
+user.not_active, user.last_manager, then the version check) come only at confirm, per the owner's 29 October 2026
+answer: no reason is echoed and no refusal is foreseen at the preview. restore_participant acts on the first call, as
+update_participant does.
+
+Domain: none persisted. `UserInvite.InviteAsync` and `UserSetupLink.SendAsync` gain an optional reason (kept only in the
+audit Details; the app passes null, so its events are unchanged); `SendAsync` moves to the actor-aware
+`UserChanges.ChangeAsync`; `ToolConfirmation`'s version becomes nullable because an invite has no row.
+
+Reuse: AccessChange and AccessChangeUser for invite and reset, UpdatedParticipant for restore, ParticipantMatch inside
+the one new contract ParticipantArchiveChange, UserDetailsChecks, ParticipantChanges and ParticipantLookups, the tool
+matrix, canary and access-ends tests, and `ToolResults.TypedByPeople` (25 of 28 tools).
+
+Decisions where the design is silent (A138): role is a plain string that must be exactly worker or manager, anything
+else gives role.not_allowed for every caller; the invite preview is built from the arguments and has no version; a
+Deactivated account is previewed with the reset wording and refused at confirm; results use the shapes above; archive
+and restore take no reason and have no Support limit; the setup email's wording is unchanged when Support acts. A139
+only if a Build and test run passes 50 minutes (timeout 60 to 90, no split).
+
+Carry-overs: the canary reads every new typed argument through preview and form; the three literal typed-by-people
+sentences use the constant; doc comments in the invite and setup-link handlers go to present tense; the Sprint 31 Q4 row
+is marked answered by A109; A137 and ops step 194 record the owner's 29 October answer.
+
+### Verticals
+
+- v1: Users tools: the handler reason parameters, nullable confirmation version, invite_user, reset_user_sign_in,
+  ConfirmationCalls, the canary restructure, the access-ends reset row and tools-list.json (26 tools). Depends on: none.
+  R1 to R14, R20, R21, R23 to R26, R28, R29, R32, R33, R36, R37.
+- v2: Participant tools: archive_participant, restore_participant, ParticipantArchiveChange, their tests, the canary
+  entry and tools-list.json (28 tools). Depends on: v1. R15 to R19, R27, R34.
+- v3: Records: design.md A137 and A138, mcp-server.md, F07.04 and neighbouring notes, coverage.md, tasks.md, releases.md
+  and ops steps 189 and 194 to 201. Depends on: v1, v2. R22, R30, R31, R35.
 
 ### Steps
 
