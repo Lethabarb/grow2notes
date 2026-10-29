@@ -63,7 +63,8 @@ internal sealed class ParticipantsTools(
         "name; case is ignored. Returns at most 10, sorted by family name then given name, each with its status " +
         "(active or archived); archived participants only with includeArchived. If two people have the same name, " +
         "or you are not sure which one the person means, ask them. Never returns a date of birth or anything about " +
-        "notes.")]
+        "notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> FindParticipantsAsync(
         [Description(
             "Part of the participant's name: at least 2 characters and at most 100. Each word must appear in the " +
@@ -99,7 +100,8 @@ internal sealed class ParticipantsTools(
     [Description(
         "One participant of this organisation with their goals: active goals in their order, then archived goals. " +
         "Use a participantId from find_participants. A later change to the participant or a goal needs its " +
-        "expectedVersion. Never returns a date of birth or anything about notes.")]
+        "expectedVersion. Never returns a date of birth or anything about notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> GetParticipantAsync(
         [Description("The participantId that find_participants returned.")] string participantId,
         CancellationToken cancellationToken = default)
@@ -128,7 +130,8 @@ internal sealed class ParticipantsTools(
         OutputSchemaType = typeof(NewParticipant))]
     [Description(
         "Adds an active participant to this organisation. Returns their participantId and the expectedVersion that a " +
-        "later change needs. Never returns a date of birth.")]
+        "later change needs. Never returns a date of birth. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddParticipantAsync(
         [Description("The given name: at most 100 characters.")] string givenName,
         [Description("The family name: at most 100 characters.")] string familyName,
@@ -166,7 +169,8 @@ internal sealed class ParticipantsTools(
         "Corrects a participant's given name, family name or date of birth: send only the fields to change. " +
         "Needs the participantId and expectedVersion that get_participant returned. A call that would change " +
         "nothing answers changed: false. An archived participant cannot be changed: restore the participant " +
-        "first. Never returns a date of birth.")]
+        "first. Never returns a date of birth. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> UpdateParticipantAsync(
         [Description("The participantId that find_participants or get_participant returned.")] string participantId,
         [Description("The expectedVersion that get_participant returned for this participant.")]
@@ -234,7 +238,8 @@ internal sealed class ParticipantsTools(
     [Description(
         "Adds a goal to a participant, at the end of their active goals. Returns its goalId and the expectedVersion " +
         "that a later change needs. An archived participant's goals cannot be changed: restore the participant " +
-        "first. The result's helpText says what a change to a goal does to notes.")]
+        "first. The result's helpText says what a change to a goal does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> AddGoalAsync(
         [Description("The participantId that find_participants or get_participant returned.")] string participantId,
         [Description("The goal's wording: at most 200 characters, on one line.")] string text,
@@ -274,7 +279,8 @@ internal sealed class ParticipantsTools(
     [Description(
         "Rewords a goal. Needs the goalId and expectedVersion that get_participant returned. A call that would " +
         "change nothing answers changed: false. A goal of an archived participant cannot be changed: restore the " +
-        "participant first. The result's helpText says what a change to a goal does to notes.")]
+        "participant first. The result's helpText says what a change to a goal does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> UpdateGoalAsync(
         [Description("The goalId that get_participant returned.")] string goalId,
         [Description("The new wording: at most 200 characters, on one line.")] string text,
@@ -322,7 +328,8 @@ internal sealed class ParticipantsTools(
         "exactly once, in the order wanted; an archived goal is not one of them. Needs no expectedVersion. An order " +
         "that is already stored answers changed: false. Returns the goals as get_participant lists them, every " +
         "expectedVersion current. An archived participant's goals cannot be changed: restore the participant first. " +
-        "The result's helpText says what a change to a goal does to notes.")]
+        "The result's helpText says what a change to a goal does to notes. " +
+        ToolResults.TypedByPeople)]
     public async Task<CallToolResult> ReorderGoalsAsync(
         [Description("The participantId that find_participants or get_participant returned.")] string participantId,
         [Description("The goalId of every active goal of the participant, once each, in the new order.")]
