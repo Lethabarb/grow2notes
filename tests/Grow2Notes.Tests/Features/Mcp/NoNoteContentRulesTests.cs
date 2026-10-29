@@ -65,6 +65,9 @@ public sealed class NoNoteContentRulesTests
             typeof(GuidePromptsHandler),
             typeof(CommonItemGroupChanges),
             typeof(CommonItemChanges),
+            typeof(UserDeactivation),
+            typeof(UserChanges),
+            typeof(LastManagerRule),
         ];
 
     public static TheoryData<string> PlantedViolations { get; } =

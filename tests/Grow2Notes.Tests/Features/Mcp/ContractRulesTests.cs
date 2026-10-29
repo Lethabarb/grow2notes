@@ -1,7 +1,9 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Features.Mcp.Planted;
 using Grow2Notes.Tests.Fixtures;
+using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp.Contracts;
 using Grow2Notes.Web.Features.Mcp.Tools;
 using ModelContextProtocol.Protocol;
@@ -209,6 +211,41 @@ public sealed class ContractRulesTests(Grow2NotesFactory factory, SqlServerFixtu
         // The walk went into arrays: a key inside an array inside an array was checked, so a walk that stopped at the
         // top of the result would fail here and not pass for want of anything to find.
         Assert.Contains("list_common_items.groups[].items[].text", visited);
+    }
+
+    [Fact]
+    public async Task The_preview_the_declined_result_and_the_confirmation_form_pass_the_contract_rules()
+    {
+        const string tool = "deactivate_user";
+        await using var flow = await StartAsync();
+        var scene = await ToolScene.CreateAsync(flow);
+        var worker = await scene.AddUserAsync(UserRole.Worker);
+        var token = await scene.ConnectAsync(ToolCaller.Manager);
+        await using var client = await flow.McpClientAsync(token, Revision);
+        var listed = Assert.Single(await client.ListToolsAsync(cancellationToken: Ct), found => found.Name == tool);
+        var schema = Assert.NotNull(listed.ProtocolTool.OutputSchema);
+
+        var preview = await ToolScene.CallAsync(client, tool, new() { ["email"] = worker.Email });
+        var previewed = Assert.NotNull(preview.StructuredContent);
+        var declaresForms = () => new JsonObject { ["elicitation"] = new JsonObject { ["form"] = new JsonObject() } };
+        var asked = await flow.PostToolCallAsync(token, tool, new() { ["email"] = worker.Email }, declaresForms());
+        var form = JsonSerializer.SerializeToElement(
+            asked["inputRequests"]!["confirm"]!["params"]!["requestedSchema"]);
+        var declined = await flow.PostToolCallAsync(
+            token,
+            tool,
+            new() { ["email"] = worker.Email },
+            declaresForms(),
+            asked["requestState"]!.GetValue<string>(),
+            new() { ["confirm"] = new JsonObject { ["action"] = "decline" } });
+        var declinedContent = JsonSerializer.SerializeToElement(declined["structuredContent"]);
+
+        Assert.Equal("preview", previewed.GetProperty("status").GetString());
+        Assert.Empty(ResultProblems(previewed, [schema], tool));
+        Assert.Contains("confirm", form.GetProperty("properties").EnumerateObject().Select(property => property.Name));
+        Assert.Empty(SchemaProblems(form));
+        Assert.Equal("declined", declinedContent.GetProperty("status").GetString());
+        Assert.Empty(ResultProblems(declinedContent, [schema], tool));
     }
 
     [Theory]
