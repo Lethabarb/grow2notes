@@ -59,7 +59,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         }
 
         var responses = await CallEveryToolAsync(
-            flow, scene, await CallsOfEveryToolAsync(scene), await ConfirmingCallsAsync(scene), sinks);
+            flow, scene, await CallsOfEveryToolAsync(scene), await ConfirmingCallsAsync(flow, scene), sinks);
 
         // Each text starts with the canary, which alone would find them; each is looked for too, so a failure names it.
         var leaks = notes.Select(note => note.Text).Prepend(canary)
@@ -83,7 +83,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         // The arguments are made once and kept, so that what is looked for is what was sent: a tool that changes
         // something makes up names of its own each time it is asked for its arguments.
         var calls = await CallsOfEveryToolAsync(scene);
-        var confirming = await ConfirmingCallsAsync(scene);
+        var confirming = await ConfirmingCallsAsync(flow, scene);
         var responses = await CallEveryToolAsync(flow, scene, calls, confirming, sinks);
 
         // A value that is a letter or two is in almost every text, so it can say nothing about a leak; nor can a
@@ -219,14 +219,20 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
 
     /// <summary>
     /// The calls of the tools that ask the person to confirm, which <see cref="CallEveryToolAsync"/> makes through a
-    /// preview, a form and the answer to it: each changes a person of its own that no other call of the canary names,
-    /// with a reason of its own. A tool that asks for confirmation adds one line here.
+    /// preview, a form and the answer to it: each changes a person or a participant of its own that no other call of
+    /// the canary names, with a reason of its own where the tool takes one. A tool that asks for confirmation adds one
+    /// line here.
     /// </summary>
-    private static async Task<IReadOnlyList<ConfirmingCall>> ConfirmingCallsAsync(ToolScene scene)
+    private static async Task<IReadOnlyList<ConfirmingCall>> ConfirmingCallsAsync(
+        AssistantFlow flow, ToolScene scene)
     {
         var deactivated = await scene.AddUserAsync(UserRole.Worker);
         var reset = await scene.AddUserAsync(UserRole.Worker);
         var invitee = $"Invitee {Guid.NewGuid():N}";
+        var givenName = $"Zed{Guid.NewGuid():N}";
+        var familyName = $"Mott{Guid.NewGuid():N}";
+        var archived = await flow.App.Services.AddParticipantAsync(
+            scene.Organisation, givenName: givenName, familyName: familyName);
         return
         [
             new(
@@ -247,6 +253,10 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
                     ["reason"] = Reason(),
                 },
                 [invitee]),
+            new(
+                "archive_participant",
+                new() { ["participantId"] = archived.Id.ToString() },
+                [givenName, familyName]),
         ];
     }
 

@@ -192,6 +192,58 @@ internal static class ToolMatrix
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.Participant.Updated),
         new(
+            "archive_participant",
+            async scene =>
+            {
+                var added = await scene.AddParticipantAsync();
+                return ArchiveCall(added.Id.ToString(), confirm: true, ToolScene.ExpectedVersion(added.ETag));
+            },
+            [
+                new("an unknown ID", _ => ArchiveCall(Guid.NewGuid().ToString()), "not_found"),
+                new("not an ID", _ => ArchiveCall("not-a-guid"), "not_found"),
+                new("no ID", _ => Without("participantId", ArchiveCall(Guid.NewGuid().ToString())), "unexpected"),
+                new(
+                    "a confirmation with no version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true),
+                    "precondition.required"),
+                new(
+                    "a confirmation with an empty version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true, ""),
+                    "precondition.required"),
+                new(
+                    "a confirmation with a made-up version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true, "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.Participant.Archived),
+        new(
+            "restore_participant",
+            async scene =>
+            {
+                var added = await scene.AddParticipantAsync(archived: true);
+                return RestoreCall(added.Id.ToString(), ToolScene.ExpectedVersion(added.ETag));
+            },
+            [
+                new("an unknown ID", _ => RestoreCall(Guid.NewGuid().ToString(), "AAAAAAAAAAA="), "not_found"),
+                new("not an ID", _ => RestoreCall("not-a-guid", "AAAAAAAAAAA="), "not_found"),
+                new("no ID", _ => Without("participantId", RestoreCall(Guid.NewGuid().ToString())), "unexpected"),
+                new(
+                    "no version",
+                    scene => RestoreCall(scene.Archived.Id.ToString()),
+                    "precondition.required"),
+                new(
+                    "an empty version",
+                    scene => RestoreCall(scene.Archived.Id.ToString(), ""),
+                    "precondition.required"),
+                new(
+                    "a made-up version",
+                    scene => RestoreCall(scene.Archived.Id.ToString(), "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.Participant.Restored),
+        new(
             "add_goal",
             async scene =>
             {
@@ -757,6 +809,25 @@ internal static class ToolMatrix
 
         return arguments;
     }
+
+    private static JsonObject ArchiveCall(string participantId, bool confirm = false, string? version = null)
+    {
+        var arguments = new JsonObject { ["participantId"] = participantId };
+        if (confirm)
+        {
+            arguments["confirm"] = true;
+        }
+
+        if (version is not null)
+        {
+            arguments["expectedVersion"] = version;
+        }
+
+        return arguments;
+    }
+
+    private static JsonObject RestoreCall(string participantId, string? version = null) =>
+        ArchiveCall(participantId, confirm: false, version);
 
     private static JsonObject InviteCall(
         string email, string displayName, string role, string? reason = null, bool confirm = false)
