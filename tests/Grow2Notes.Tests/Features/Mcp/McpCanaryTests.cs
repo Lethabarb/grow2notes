@@ -59,7 +59,8 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         }
 
         var worker = await scene.AddUserAsync(UserRole.Worker);
-        var responses = await CallEveryToolAsync(flow, scene, await CallsOfEveryToolAsync(scene), worker, sinks);
+        var responses = await CallEveryToolAsync(
+            flow, scene, await CallsOfEveryToolAsync(scene), worker, DeactivationReason(), sinks);
 
         // Each text starts with the canary, which alone would find them; each is looked for too, so a failure names it.
         var leaks = notes.Select(note => note.Text).Prepend(canary)
@@ -84,7 +85,8 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         // something makes up names of its own each time it is asked for its arguments.
         var calls = await CallsOfEveryToolAsync(scene);
         var worker = await scene.AddUserAsync(UserRole.Worker);
-        var responses = await CallEveryToolAsync(flow, scene, calls, worker, sinks);
+        var reason = DeactivationReason();
+        var responses = await CallEveryToolAsync(flow, scene, calls, worker, reason, sinks);
 
         // A value that is a letter or two is in almost every text, so it can say nothing about a leak; nor can a
         // boolean, whose JSON is the word true or false, so only the arguments sent as strings are read. The family
@@ -109,6 +111,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             email,
             worker.DisplayName,
             worker.Email,
+            reason,
             .. sent,
         ];
 
@@ -222,6 +225,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         ToolScene scene,
         IReadOnlyList<(string Tool, JsonObject Arguments)> calls,
         SceneUser worker,
+        string reason,
         TelemetrySinks sinks)
     {
         var token = await scene.ConnectAsync(ToolCaller.Manager);
@@ -243,7 +247,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
 
         // The worker's deactivation: the preview, then the form and the retry that accepts it, each with the reason.
         const string deactivate = "deactivate_user";
-        var asked = new JsonObject { ["email"] = worker.Email, ["reason"] = $"Asked by phone {Guid.NewGuid():N}" };
+        var asked = new JsonObject { ["email"] = worker.Email, ["reason"] = reason };
         using (var response = await flow.PostMcpAsync(token, body: AssistantFlow.ToolCall(deactivate, asked)))
         {
             answers.Add(("response body", await response.Content.ReadAsStringAsync(Ct)));
@@ -280,6 +284,9 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         Assert.True(flow.App.Services.GetRequiredService<MeterProvider>().ForceFlush());
         return answers;
     }
+
+    // A reason of the deactivation's own, which the check of the second test looks for in the logs and telemetry.
+    private static string DeactivationReason() => $"Asked by phone {Guid.NewGuid():N}";
 
     // The capabilities of a 2026-07-28 client that shows forms; a node has one parent, so each call gets its own.
     private static JsonObject DeclaresForms() =>

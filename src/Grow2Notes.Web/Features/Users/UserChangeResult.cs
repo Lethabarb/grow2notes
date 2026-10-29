@@ -24,7 +24,7 @@ internal sealed class UserChangeResult
     /// <summary>
     /// No user in the tenant's organisation has the ID: none has it at all, or another organisation's user has it,
     /// which a caller is not told apart from the first (design.md §9.2). §6.9 gives it no code: the app's endpoint
-    /// answers <c>404</c>, and Release 2's tools will give <c>not_found</c> (mcp-server.md §5.5).
+    /// answers <c>404</c>, and the assistant's tools give <c>not_found</c> (mcp-server.md §5.5).
     /// </summary>
     public static readonly UserChangeResult NotFound =
         new(changed: false, isNotFound: true, error: null, NoFieldErrors());

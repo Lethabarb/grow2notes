@@ -15,8 +15,8 @@ namespace Grow2Notes.Tests.Features.Users;
 /// §3.5, A134): a user already Deactivated is <see cref="UserChangeResult.Unchanged"/> and the last-manager rule is
 /// given, both before the version refusal, which the assistant's channel gives only for a change that would be made;
 /// and the reason goes into the event's details. The app's own answers are in
-/// <see cref="UserDeactivationEndpointsTests"/>. Each test deactivates only users it adds, in seeded organisation A or, for the only Active manager, an organisation
-/// of its own (tests/README.md).
+/// <see cref="UserDeactivationEndpointsTests"/>. Each test deactivates only users it adds, in seeded organisation A or,
+/// for the only Active manager, an organisation of its own (tests/README.md).
 /// </summary>
 [Collection<SqlServerCollection>]
 public sealed class UserDeactivationTests(Grow2NotesFactory factory, SqlServerFixture sqlServer)

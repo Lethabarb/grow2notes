@@ -13,8 +13,8 @@ namespace Grow2Notes.Web.Features.Users;
 /// The handler that deactivates and reactivates a user of the tenant's organisation (design.md §3.7, §4.11
 /// <i>Deactivate</i> and <i>Reactivate</i>, §6.6, §8.6 <i>Deactivate</i>, D75), as a handler class that takes the
 /// <see cref="Actor"/> (mcp-server.md §3.5, convention 1): <c>POST /api/admin/users/{id}/deactivate</c> and
-/// <c>…/reactivate</c> call it with <see cref="Actor.InApp"/>, and Release 2's <c>deactivate_user</c> tool will call it
-/// with <see cref="Channel.Mcp"/>, with the same checks and audit event. Neither sends an email. Deactivating also
+/// <c>…/reactivate</c> call it with <see cref="Actor.InApp"/>, and the <c>deactivate_user</c> tool calls it with
+/// <see cref="Channel.Mcp"/>, with the same checks and audit event. Neither sends an email. Deactivating also
 /// ends the user's assistant connections, in the same transaction.
 /// </summary>
 /// <remarks>

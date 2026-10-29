@@ -7395,8 +7395,9 @@ gives a reason.
   left as it is, because T36 does not touch that file; whichever later task changes it can reword it.
 - CI time (Build and test, against the 60-minute timeout): v1 28m35s; v2 40m47s, and 43m49s on its re-run; v3 32m07s on
   its first run, which failed only on the `tools-list.json` snapshot that the plan expected to regenerate, and 32m38s
-  when it passed; v4 (docs only) 40m06s. None passed 50 minutes, so the timeout stays at 60 and no split was made
-  (step 190 is the owner's).
+  when it passed; v4 (docs only) 40m06s, and 45m00s on its re-run; the PR's final run on the same tree 44m47s. The
+  runs ranged from 28m to 45m and none passed 50 minutes, so the timeout stays at 60 and no split was made (step 190
+  is the owner's).
 - Tests changed on purpose: none. No test was removed or weakened. `tests/README.md` gained a paragraph on
   `PostToolCallAsync` and on `McpClientAsync`'s elicitation handler.
 - By hand: first-use steps 191 to 194 under the heading *Deactivate through an assistant (T36)*, and step 189's count
@@ -7411,10 +7412,9 @@ migration, table, audit event type, endpoint or SPA change.
 Design: a scoped `ToolConfirmation` offers the assistant's own form only when the call is MRTR-capable and its
 per-request client capabilities declare form elicitation; every other call gets the preview, then confirm with the
 preview's expectedVersion. The form's `requestState` is a Data Protection token (purpose
-`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the row
-version, alive 5 minutes, so the server
-keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes the form's one `mcp.read` row and
-rethrows `InputRequiredException`.
+`Grow2Notes.Mcp.ToolConfirmation`) tied to the caller, organisation, tool, a canonical hash of the arguments and the
+row version, alive 5 minutes, so the server keeps nothing. Only an accept with JSON true acts. `McpAuditFilter` writes
+the form's one `mcp.read` row and rethrows `InputRequiredException`.
 
 Domain: none persisted. `UserChangeResult` gains `Changed` and `Unchanged`; `UserChanges` gains an actor-aware overload
 (App refuses before the change, Mcp hands `refuseIfChanged` to it); `UserDeactivation` takes a reason (stored in the
@@ -7423,8 +7423,7 @@ only and must give a reason (200 characters, trimmed), checked in the user tools
 
 Reuse: UserDeactivation and its LastManagerRule, UserList for the email look-up (A132), IfMatch.CheckFor,
 ConsentRequests' Data Protection pattern (Seal, Open and Hash move to `ProtectedJson`), McpCall, ToolError, TextInput,
-the tool matrix,
-canary, contract and access-ends tests.
+the tool matrix, canary, contract and access-ends tests.
 
 Decisions where the design is silent: A136 (confirmation: when the form is offered, state contents and lifetime, only
 true is yes, ElicitAsync rejected); A137 (deactivate_user: check order, last-manager reported at confirm rather than
