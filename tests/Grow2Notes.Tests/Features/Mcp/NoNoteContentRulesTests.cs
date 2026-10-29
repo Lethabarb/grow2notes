@@ -68,6 +68,13 @@ public sealed class NoNoteContentRulesTests
             typeof(UserDeactivation),
             typeof(UserChanges),
             typeof(LastManagerRule),
+            typeof(UserInvite),
+            typeof(UserSetupLink),
+            typeof(UserDetailsChecks),
+            typeof(Invitations),
+            typeof(SetupLinkIssuer),
+            typeof(SignInReset),
+            typeof(SetupLinkEmail),
         ];
 
     public static TheoryData<string> PlantedViolations { get; } =
