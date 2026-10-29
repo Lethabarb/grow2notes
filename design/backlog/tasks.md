@@ -7395,7 +7395,8 @@ gives a reason.
   left as it is, because T36 does not touch that file; whichever later task changes it can reword it.
 - CI time (Build and test, against the 60-minute timeout): v1 28m35s; v2 40m47s, and 43m49s on its re-run; v3 32m07s on
   its first run, which failed only on the `tools-list.json` snapshot that the plan expected to regenerate, and 32m38s
-  when it passed. None passed 50 minutes, so the timeout stays at 60 and no split was made (step 190 is the owner's).
+  when it passed; v4 (docs only) 40m06s. None passed 50 minutes, so the timeout stays at 60 and no split was made
+  (step 190 is the owner's).
 - Tests changed on purpose: none. No test was removed or weakened. `tests/README.md` gained a paragraph on
   `PostToolCallAsync` and on `McpClientAsync`'s elicitation handler.
 - By hand: first-use steps 191 to 194 under the heading *Deactivate through an assistant (T36)*, and step 189's count
@@ -7451,7 +7452,7 @@ A138 only if a Build and test run passes 50 minutes (timeout 60 to 90, no split)
   and a reason in the audit details, with `UserDeactivationTests`.
 - [x] `deactivate_user` (#192; v3): the tool, `AccessChange`, `ToolResults.TypedByPeople` on 18 tools, the tool matrix
   row, `DeactivateUserToolTests`, the canary, contract and architecture rules, and the access-ends row.
-- [x] Close-out (v4): A136 and A137, the mcp-server.md fixes, S07.04.01, S07.04.02 and S07.04.05 done, coverage.md,
+- [x] Close-out (#193; v4): A136 and A137, the mcp-server.md fixes, S07.04.01, S07.04.02 and S07.04.05 done, coverage.md,
   these Notes and first-use steps 191 to 194.
 
 ---
