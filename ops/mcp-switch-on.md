@@ -132,9 +132,8 @@ Result: ____ (date), ____ (pass or fail), by ____
    Look for: the first 30 answer `302`, the redirect to the site's own Connect screen that shows the error page of
    first-use step 169, and the 31st answers `429`; then `curl -si "$site/oauth/authorize?client_id=not-registered"`
    shows `Retry-After: 60`. Your address is refused for the rest of that minute, so do not do this from an address that
-   others use. `/api/connect` shares the count of the
-   sign-in endpoints, and a person cannot reach the other limits by hand: CI proves them all
-   (`AssistantRateLimitsTests`).
+   others use. `/api/connect` shares the count of the sign-in endpoints, and a person cannot reach the other limits by
+   hand: CI proves them all (`AssistantRateLimitsTests`).
 
 Result: ____ (date), ____ (pass or fail), by ____
 
