@@ -7589,7 +7589,7 @@ is marked answered by A109; A137 and ops step 194 record the owner's 29 October 
 
 ```yaml
 id: T38
-status: doing
+status: done
 release: R2
 lane: A
 size: M
@@ -7619,6 +7619,49 @@ an assistant, and every mcp-server.md §8 control is matched to its test.
 
 - Writes `ops/mcp-switch-on.md`, the ordered list of every by-hand and outside step before switch-on, from the
   mcp-server.md §11.1 lines.
+- Where the by-hand steps went. On `ops/mcp-switch-on.md`: A1 to A8 in test (registering the assistants, the two-
+  assistant tests of S07.05.03, the prompt-injection test, the MCP Inspector and the `/oauth/authorize` limit, the
+  merge of the results, the one run of the monthly queries, a manager's read of the new runbook sections, and the off
+  switch with the deploy that restores it), B (the provider's lines 2 to 6 and 8), C (the briefing, line 9), D1 to D5
+  (production, by hand) and E (the routine checks after switch-on). On `ops/first-use-in-test.md`: step 202 (11
+  confirmed deactivations of made-up workers with a real assistant, and what it does with `retryAfterSeconds`) and
+  step 203 (`audit-extract.sql` with `Via=mcp`). None holds a task open (D90). T39 waits for sections A to C.
+- Assumed defaults A139 (design.md section 13, 30 October 2026), which the owner may overturn: every choice listed in
+  its row. D95 stays free, and A140 is not taken. No migration, table, column, audit event type, endpoint, SPA change or
+  app setting was added, and nothing is switched on in production: no file turns `Mcp:Enabled` on, and
+  `infra/prod.bicepparam` still has no `mcpEnabled` line (step D3 of the run sheet adds it, by the owner).
+- Hand-off to T41 (paced onboarding). The hour of confirmed changes starts at a person's first counted change, and
+  a refusal does not move it. So invite the first 10 at the start, make the setup calls (participants, goals, common
+  items, guide prompts; none is counted in the hour, and under 60 requests a minute) while the hour runs, and invite
+  the next 10 when `retryAfterSeconds` says the hour is up: about 20 invites take about an hour in one sitting, and each
+  further 10 adds an hour. A reset or a deactivation shares the count. A gap of more than 30 minutes with no call lets
+  the connection lapse (refresh tokens last 30 minutes), and the person reconnects, which loses nothing. This
+  supersedes the "two hours" first estimated. The refusal is the tool error `rate_limited` with `retryAfterSeconds`
+  inside `error`, or an HTTP `429` with `Retry-After: 60`; both mean wait and go on. The run sheet's section *The
+  limits an assistant meets* says the same for the operator.
+- Seam edits, with no assertion changed. v1: `TestRateLimits.LiftRateLimits` also lifts `AssistantRateLimitPermits`;
+  `AssistantFlow.StartAsync` gained the optional `limited`; `tests/README.md`'s rate-limit paragraph says both; the
+  carry-over comments (`UserSetupLink.cs` and `UserDeactivation.cs` cite A137 and A138, `ParticipantArchiveChange.cs`
+  cites A138, `ToolConfirmation.cs` says an invite holds no row version, `McpOriginRule.cs` says the count before it);
+  `RateLimits.ClientAddress` became internal. v2: the existing calls of `AuditExtractScriptTests` and
+  `RetentionDestroyScriptTests` to `audit-extract.sql` gained `Via=any`. `RateLimitsTests`, `SecurityHeadersTests`,
+  `tools-list.json` and `McpOffSwitchTests` are unchanged.
+- The "nine events" carry-over was in `coverage.md`, in the E07 section 10 item 5 row (it now says ten events, as
+  `AccessEndsTests.Events` has ten), and not in "Rows to watch".
+- Two corrections in v3 outside its own files: `ops/mcp-monthly.sql`'s header said the rate limits' refusals are not in
+  the log, which is true of an HTTP `429` and not of `rate_limited`, which writes an `mcp.refused` row that the
+  figures count; the comment now says so.
+- S07.05.02: the mapping of the 17 threat rows and 11 specification rows of mcp-server.md section 8 to a test or a
+  by-hand step is in the bodies of the v3 and the feature pull requests, with v1's tests named against the rate-limit
+  rows. NuGet Audit and Dependabot cover `ModelContextProtocol.AspNetCore` and OpenIddict. The MCP specification pages
+  were read on 30 October 2026: the current revision is 2026-07-28, so nothing newer needed checking and nothing was
+  upgraded.
+- CI time (Build and test, against the 60-minute timeout): v1 38m on its passing run (34m on its first), v2 39m30s.
+  None passed 50 minutes, so the timeout stays at 60, A140 is not taken and no test was split (step 190 is the owner's).
+- Tests changed on purpose: none. No test was removed or weakened.
+- Stories: S07.05.01 and S07.05.02 are done. S07.05.04 and S07.05.05 are done with criterion 4 of each unticked and a
+  dated Note: a manager's read (run sheet A7) and the one run of the monthly queries on test (A6) are by hand. S07.05.09
+  is untouched. The stories' `sprint` stays blank.
 
 ### Plan
 
@@ -7661,7 +7704,14 @@ run passes 50 minutes (timeout 60 to 90, no split).
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Limits (#200; v1): `AssistantRateLimitPermits`, `AssistantRateLimits` (the per-user `/mcp` policy and the counts
+  before authentication), `ConfirmedChangeLimit`, `ToolError.RateLimited`, the wiring, the test seams,
+  `AssistantRateLimitsTests`, `ConfirmedChangeLimitTests` and the carry-over comments.
+- [x] Runbooks and queries (#199; v2): the *AI-assistant access* section of `ops/breach-response.md`, the `Via`
+  variable of `ops/audit-extract.sql`, `ops/mcp-monthly.sql`, `ops/audit-extraction.md`, `McpMonthlyScriptTests`.
+- [x] Records (v3): `ops/mcp-switch-on.md`, first-use steps 202 and 203, A139, mcp-server.md sections 5.5, 5.6, 9, 10,
+  11.1 and 11.5, design.md 9.9 and 10.9, coverage.md, F07.05, these Notes, and the section 8 mapping in the pull
+  request bodies.
 
 ---
 
