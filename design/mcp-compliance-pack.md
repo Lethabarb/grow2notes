@@ -32,6 +32,11 @@ this pack. Nor is repeating the check (§11.5).
 Every field is in square brackets, and everything in square brackets is a field. Fields are filled in only on a copy
 of this pack kept outside this public repository, never here.
 
+The one AI provider named here is Anthropic (Claude), the operator's AI provider, in part 2's texts (design.md A140,
+A141). A company's name is not an identifier. The plural is kept on purpose. When the provider approves an assistant
+of another AI provider for its managers, the operator adds that provider beside Anthropic (Claude) on its copy, with its
+countries, before it sends the completed pack (mcp-server.md §7.4, last line).
+
 Sent to the provider: [date sent]
 
 ## Fields
@@ -40,11 +45,8 @@ Sent to the provider: [date sent]
   person uses. The operator fills them in.
 - `[answer]`, `[date checked]` and `[link]`: one of each for every check in part 1. The operator fills them in from
   the AI provider's current terms for that account type.
-- `[AI providers]`: every AI provider used for admin, and who uses it, for example: Provider A, used by our managers,
-  and Provider B, used by our IT operator. The operator fills in its own AI provider before it sends the pack. The AI
-  providers the managers use are added once the provider has approved their assistants.
-- `[countries]`: where those AI providers may store and process the information, from each one's check of where data
-  is processed and stored (check 3 in part 1, for the operator's).
+- `[countries]`: where Anthropic, and any AI provider added beside it on the copy, may store and process the
+  information, from each one's check of where data is processed and stored (check 3 in part 1, for the operator's).
 - `[privacy contact]`: who to contact with privacy questions. The provider fills it in.
 - `[Support account holders]`: the people at the operator who hold Support accounts. The operator fills it in.
 - `[date sent]`: the date the operator sends the pack to the provider.
@@ -99,7 +101,7 @@ Add to the privacy policy, beside the hosting statement already planned (`design
 > staff accounts, participants' names, dates of birth and goals, and the checklists and prompts our workers use. When
 > they do, the details they look up or change, which can include a participant's name, date of birth and goals, are
 > sent to the company that provides the AI assistant. The AI providers we and our IT operator use for this are
-> [AI providers]. They may store and process the information in [countries]. They handle it under contracts that
+> Anthropic (Claude). They may store and process the information in [countries]. They handle it under contracts that
 > limit what they can do with it. They never receive progress notes. If you have questions, contact
 > [privacy contact]. If you would rather we did not use AI assistants for your details, tell us: our managers will
 > make changes to your details in the system itself, although your name may still appear when staff search for a
@@ -108,11 +110,11 @@ Add to the privacy policy, beside the hosting statement already planned (`design
 The collection notice gains one sentence to the same effect:
 
 > Names, dates of birth and goals may be disclosed to the AI providers used for record administration,
-> [AI providers], in [countries].
+> Anthropic (Claude), in [countries].
 
 The staff privacy notice or handbook gains one sentence:
 
-> Staff names and work email addresses may be disclosed to the AI providers used for administration, [AI providers],
+> Staff names and work email addresses may be disclosed to the AI providers used for administration, Anthropic (Claude),
 > in [countries], when managers or our IT operator use AI assistants to administer staff accounts.
 
 When the approved list changes, these are updated before the operator registers the new assistant (§11.2).

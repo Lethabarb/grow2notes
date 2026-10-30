@@ -5,11 +5,11 @@ in [mcp-server.md §11.1](../design/mcp-server.md#111-switch-on-checklist-releas
 owner and evidence from the switch-on table in
 [F07.05](../design/backlog/E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md), plus the by-hand tests of
 [§10](../design/mcp-server.md#10-testing). Nothing here is a work item or holds a task open (D90): every step is by
-hand, an agent never runs one, and each belongs to the operator, the owner or the provider. The one task that waits for
-it is T39 (switch-on), which waits for sections A to C. **Production's `Mcp:Enabled` stays `false` until step D3,** and
-no file in the repository turns it on: the setting is written by every deploy from the `mcpEnabled` parameter of
-`infra/main.bicep`, and `infra/prod.bicepparam` has no `mcpEnabled` line today, so production gets its default of
-`false`.
+hand, an agent never runs one, and each belongs to the operator, the owner or the provider. T39 made this sheet ready,
+and the switch-on itself waits for sections A to C. **Production's `Mcp:Enabled` stays `false` until step D3.** Every
+deploy writes the setting from the `mcpEnabled` parameter of `infra/main.bicep` (default `false`), and
+`infra/prod.bicepparam` gets that line only from the owner's pull request in step D1. A production deploy takes its
+parameters from the CI run it names, so only D3's deploy of that merge's run turns the access on.
 
 Rules for everyone who works through it:
 
@@ -50,18 +50,21 @@ raising one is a code change by pull request.
   changed:** no account, no email, no event. One `mcp.refused` row records it. The assistant waits that long, and the
   person confirms again.
 
-**Pacing an onboarding** (the onboarding skill, T41, sets up a new provider through these tools, and relies on this
-arithmetic). The hour starts at a person's first counted change, so:
+**Pacing an onboarding** ([onboard-provider.md](onboard-provider.md) sets up a new provider through these tools, and
+relies on this arithmetic). The skill keeps no count of its own: the server's refusals are the stop (A139, A140). Calls
+go one at a time, and the owner paces the waits. The hour starts at a person's first counted change, and invites come
+last, so:
 
-1. Invite the first 10 workers at the start. The hour is running.
-2. While it runs, make the setup calls: participants, goals, common items and guide prompts. They are not counted in
-   the hour, and a few hundred of them at under 60 a minute are not refused.
-3. When `retryAfterSeconds` says the hour is up, invite the next 10.
+1. Make the set-up calls first: goals, common items and guide prompts. A manager adds participants in the app. These
+   calls are not counted, and a few hundred of them at under 60 a minute are not refused.
+2. Then invite 10. The hour starts at the first invite. An 11th is refused with `rate_limited` and changes nothing.
+3. When `retryAfterSeconds` is up, invite the next 10.
 
-So about 20 invites take about one hour in one sitting, and each further 10 adds an hour. Resets and deactivations share
-the same count, so a reset or two in the middle leaves room for fewer invites. **A gap of more than 30 minutes with no
-call lets the connection lapse** (refresh tokens last 30 minutes). The person then reconnects by signing in again,
-which loses nothing: no change is half made, and the hour's count is kept.
+So about 20 invites take about one hour from the first invite, and each further 10 adds an hour. Resets and
+deactivations share the same count, so a reset or two in the middle leaves room for fewer invites. After a `429`, wait
+the minute that `Retry-After` gives, then send the call again. **A gap of more than 30 minutes with no call lets the
+connection lapse** (refresh tokens last 30 minutes), and the wait for the next 10 is usually longer than that. The
+person then signs in again, which loses nothing: no change is half made, and the hour's count is kept.
 
 ## A. In test, on made-up data
 
@@ -70,8 +73,8 @@ which loses nothing: no change is half made, and the hour's count is kept.
 For each assistant the provider is likely to approve, register it in the test environment with `admin mcp-client add`,
 from test's SSH console, as [break-glass.md](break-glass.md#admin-mcp-client) says, and check `admin mcp-client list`.
 Use the client ID or metadata address from the assistant's own documentation. Where an assistant does not publish one,
-the first refused sign-in attempt from test shows its client ID in the authorisation server's log (mcp-server.md §11.2),
-and A2 registers it then. This is first-use steps 160 to 172, done for each assistant you will try.
+the first refused sign-in attempt from test shows its client ID in the authorisation server's log (mcp-server.md
+§11.2), and A2 registers it then. This is first-use steps 160 to 172, done for each assistant you will try.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -116,9 +119,8 @@ Result: ____ (date), ____ (pass or fail), by ____
    whole authorisation flow against the test site: the discovery documents, a refusal of an unregistered client, the
    Connect screen, the code exchange, a refresh and `/mcp`.
 2. Reconnect and refresh a few times in a row. None is refused by a limit.
-3. Check the `/oauth` limit: from a laptop with `curl`, send 31
-   requests in under a minute to `/oauth/authorize` with a client ID that is not registered, and look at the status
-   codes only:
+3. Check the `/oauth` limit: from a laptop with `curl`, send 31 requests in under a minute to `/oauth/authorize` with
+   a client ID that is not registered, and look at the status codes only:
 
    ```shell
    site=<the test site's address>
@@ -127,11 +129,11 @@ Result: ____ (date), ____ (pass or fail), by ____
    done | sort | uniq -c
    ```
 
-   Look for: the first 30 answered as usual (a redirect to the Connect screen) and the 31st a `429`; then
-   `curl -si "$site/oauth/authorize?client_id=not-registered"` shows `Retry-After: 60`. Your address is refused for the
-   rest of that minute, so do not do this from an address that others use. `/api/connect` shares the count of the
-   sign-in endpoints, and a person cannot reach the other limits by hand: CI proves them all
-   (`AssistantRateLimitsTests`).
+   Look for: the first 30 answer `302`, the redirect to the site's own Connect screen that shows the error page of
+   first-use step 169, and the 31st answers `429`; then `curl -si "$site/oauth/authorize?client_id=not-registered"`
+   shows `Retry-After: 60`. Your address is refused for the rest of that minute, so do not do this from an address that
+   others use. `/api/connect` shares the count of the sign-in endpoints, and a person cannot reach the other limits by
+   hand: CI proves them all (`AssistantRateLimitsTests`).
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -174,9 +176,9 @@ Result: ____ (date), ____ (pass or fail), by ____
 1. As the operator, set `Mcp__Enabled` to `false` on the test web app, with the command in breach-response.md,
    *AI-assistant access*, step 1, using the test resource group and app. Look for: `/mcp` and `/oauth/token` answer
    `404`.
-2. Run the next test deploy as usual. Look for: `Mcp__Enabled` reads `true` again (first-use step 165 shows where to
-   read it) and `/mcp` answers `401` to the `curl` of first-use step 171, not `404`. This is why a production deploy must be held after the setting is
-   used to contain an incident.
+2. Run the next test deploy as usual. Look for: `Mcp__Enabled` reads `True` again (first-use step 165 shows where to
+   read it) and `/mcp` answers `401` to the `curl` of first-use step 171, not `404`. This is why a production deploy
+   must be held after the setting is used to contain an incident.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
@@ -190,7 +192,11 @@ The owner and the evidence are those of the switch-on table in F07.05.
   (after the §7.1 check, using A2's record); the operator's §7.1 record for its own AI provider (S07.05.06); the
   operator's account and agreement.
 - **Line 3: the privacy policy and collection notice name the AI providers and their countries (§7.4).** Owner: the
-  provider. Evidence: the date published, and where. S07.05.10 (T39) names the approved providers in the drafts.
+  provider. Evidence: the date published, and where. The pack's part 2 texts name Anthropic (Claude) (A141). Once the
+  written approval exists, the operator, on its copy of the pack:
+  - fills in `[countries]` from part 1 check 3;
+  - adds beside Anthropic (Claude) every other AI provider whose assistant the approval names, with its countries;
+  - sends the completed pack to the provider before D2, and writes the new `[date sent]` (S07.05.10).
 - **Line 4: the staff privacy notice or handbook has the §7.4 sentence.** Owner: the provider. Evidence: the date, and
   where.
 - **Line 5: the provider's one-page decision (C5), checked by its lawyer or privacy officer.** Owner: the provider.
@@ -217,36 +223,59 @@ Result: ____ (date), ____ (pass or fail), by ____
 Do these only when A to C are done and the provider and the operator have agreed a time. The Azure subscription is
 shared with another production system, so every command here stays inside the two Grow2Notes resource groups.
 
-### D1. The CI run of the build to deploy (line 1)
+### D1. The switch-on pull request, and the CI run to deploy (line 1)
 
-Pick the CI run of the build to deploy, as [go-live.md](go-live.md) A5 does, and check that every automated test of
-mcp-server.md §10 passed in it and that its test deploy succeeded. Record the run's number outside the repository.
-Evidence for line 1: that run, and A1 to A8's results.
+- **When.** Only when sections A to C are done (switch-on lines 2 to 6, 8 and 9 have their evidence) and the time is
+  agreed.
+- **The pull request.** The owner opens, or asks the developer for, ONE pull request that changes only two things:
+  1. It adds `param mcpEnabled = true` to `infra/prod.bicepparam`.
+  2. In `tests/Grow2Notes.Tests/Platform/InfraTemplateTests.cs` it does three things:
+     - deletes only the line `Assert.DoesNotMatch(McpEnabledTrue(), Infra("prod.bicepparam"));`;
+     - keeps that test's other three assertions and its name;
+     - changes "on in test and off in prod" in the class summary to "on in test and off by default".
+
+  Its body names the removed assertion and why: the behaviour it pinned, production off, is what this pull request
+  changes (A141).
+- **Merge timing.** Merge it early enough for its push-to-main CI run (up to 47 minutes so far) and that run's test
+  deploy to finish before the agreed time.
+- **After the merge.** A production deploy of that run or a later one turns the access on, so deploy nothing
+  else to production before D3.
+- **If the switch-on is called off after the merge.** Merge a pull request that sets `param mcpEnabled = false` before
+  any production deploy, as [breach-response.md](breach-response.md), *AI-assistant access*, step 1 says.
+- **Picking the run.** Pick that merge's CI run as [go-live.md](go-live.md) A5 does. Its test deploy, titled
+  `Deploy CI run <id> attempt <n> to test`, must have succeeded: a run built before the merge would deploy with the
+  access off. Check that every automated test of mcp-server.md §10 passed in it. Record the run's number outside the
+  repository.
+- **Evidence for line 1.** That run, and A1 to A8's results.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
 ### D2. Register only the approved assistants (line 7)
 
 At the provider's written request, kept with the hosting agreement records, run `admin mcp-client add` for each approved
-assistant and no other, on production's SSH console (break-glass.md). Run `admin mcp-client list` and compare it with
-the written approval, name by name.
+assistant and no other, on production's SSH console (break-glass.md). Each registration's `--company` and
+`--data-location` are those on the operator's copy of the pack's part 2, because the Connect screen shows them next to
+the published wording. For Claude Code that is Anthropic and the countries filled in there (the onboarding skill's
+by-hand.md C2 asks the owner for them). D2 may come before D1, because the command works with the access off, but only
+after the completed pack has reached the provider (section B). Run `admin mcp-client list` and compare it with the
+written approval, name by name.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
 ### D3. Turn it on, at the agreed time (line 10)
 
-At the agreed time, the owner merges a pull request that adds `mcpEnabled = true` to `infra/prod.bicepparam` (there is
-no line to change, because production has used the default of `false`), and deploys that tested build from D1 by the
-usual deploy. Do not combine it with any other change. Nothing else turns it on.
+At the agreed time, dispatch `deploy.yml` from `main` for production with D1's run, as [go-live.md](go-live.md) A9
+does. That deploy writes `Mcp__Enabled` from the parameters that D1's run built, and nothing else turns it on.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
 ### D4. The discovery documents answer, and an unregistered client is refused
 
 From a laptop with `curl`, with no sign-in, check that `/.well-known/oauth-protected-resource` and
-`/.well-known/oauth-authorization-server` answer `200`, that `/mcp` answers `401` as in first-use step 171, and that
-`/oauth/authorize` with a client ID that is not registered goes to the Connect screen with no request, as step 169 does
-in test. Read production's web app settings as step 165 does: `Mcp__Enabled` now reads `True`, and nothing else has
+`/.well-known/oauth-authorization-server` answer `200`, and that `/mcp` answers `401` as in first-use step 171. Then, in
+a browser, `/oauth/authorize` with a client ID that is not registered shows "There is a problem with Grow2Notes" on
+production's own address, with no redirect to the client, as step 169 does in test. No look-up is made with real data
+as a check. Read production's web app settings as step 165 does: `Mcp__Enabled` now reads `True`, and nothing else has
 changed.
 
 Result: ____ (date), ____ (pass or fail), by ____
@@ -254,14 +283,19 @@ Result: ____ (date), ____ (pass or fail), by ____
 ### D5. Record the date (line 10)
 
 The switch-on date goes in [releases.md](../design/backlog/releases.md), under R2's switch-on line, and in the
-provider's copy of this sheet. S07.05.09's criteria are ticked only now, by the owner (T39).
+provider's copy of this sheet. Only now does the owner tick S07.05.09's and S07.05.10's criteria, in one pull request
+with the releases.md date.
 
 Result: ____ (date), ____ (pass or fail), by ____
 
 ## E. After switch-on
 
+From D5, production's `Mcp__Enabled` reads `True`, so first-use step 165, which expects `False`, no longer applies
+there. The next step is onboarding a provider with Claude Code: [onboard-provider.md](onboard-provider.md). Its
+production runs wait for D5's Result line to read pass.
+
 From the first month after D5, the checks of [design.md §10.9](../design/design.md#109-routine-operations-developer)
-begin: the monthly assistant figures and the invite list for the provider ([audit-extraction.md](audit-extraction.md#monthly-assistant-figures)),
-and the quarterly check of each AI provider, with `admin mcp-client add` run again for each approved assistant. The
-breach runbook's *AI-assistant access* section is how to contain an incident: turning the access off is a deploy hold,
-as A8 shows.
+begin: the monthly assistant figures and the invite list for the provider
+([audit-extraction.md](audit-extraction.md#monthly-assistant-figures)), and the quarterly check of each AI provider,
+with `admin mcp-client add` run again for each approved assistant. The breach runbook's *AI-assistant access* section is
+how to contain an incident: turning the access off is a deploy hold, as A8 shows.
