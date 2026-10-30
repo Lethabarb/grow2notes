@@ -960,12 +960,15 @@ every key. Yesterday comes from the server's today, which the nav's Report link 
 - The rate limits (design.md §9.9) are lifted in both hosts, `Grow2NotesFactory` and `AppWithoutDatabase`: every test
   of a suite calls one host, and all its clients have the same null address, so with the design's numbers the suite
   would soon be refused. `TestRateLimits.LiftRateLimits()` replaces the `RateLimitPermits` service, which is the only
-  place the app takes its limits from, so no setting changes them in production, with permits that no test reaches.
+  place the app takes its limits from, so no setting changes them in production, with permits that no test reaches. It
+  does the same for `AssistantRateLimitPermits`, the numbers of the AI-assistant access (mcp-server.md §5.6).
   A test of a limit builds a host of its own with `factory.WithWebHostBuilder`, puts `RateLimitPermits.Design` back
   with `services.AddSingleton(RateLimitPermits.Design)`, and calls from an address it chooses with
   `services.AddClientAddressHeader()`, which takes the remote address from an `X-Test-Client-Address` header.
   `Grow2Notes.Tests/Platform/RateLimitsTests.cs` is the example. Its counts are the design's numbers written out, never
-  read from the permits.
+  read from the permits. A test of an assistant limit starts its flow with
+  `AssistantFlow.StartAsync(..., limited: true)`, which puts back both `RateLimitPermits.Design` and
+  `AssistantRateLimitPermits.Design`; `Grow2Notes.Tests/Features/Mcp/AssistantRateLimitsTests.cs` is the example.
 - A test of what archiving a participant, goal, common item or group, or deactivating a user, leaves of the past
   adds an organisation of its own and changes no seeded row, and runs on a fake clock that stands still, so that the
   report's "As at" line and the export's "Exported by" line are equal before and after and whole texts can be

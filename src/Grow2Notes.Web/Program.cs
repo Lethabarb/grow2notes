@@ -369,6 +369,7 @@ app.UseExceptionHandler();
 // The AI-assistant access refuses a browser page of another site before it reads a token (mcp-server.md §4.5 step 2).
 if (McpSetup.IsEnabled(builder.Configuration))
 {
+    app.UseAssistantRateLimits();
     app.UseMcpOriginRule();
 }
 

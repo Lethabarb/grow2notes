@@ -104,6 +104,7 @@ internal static class McpSetup
 
             services.AddScoped<ParticipantLookups>();
             services.AddScoped<ToolConfirmation>();
+            services.AddAssistantRateLimits();
 
             // Stateless, so no session is kept between calls and the checks of each call are those of its token.
             // Declaring the tools capability makes tools/list answer whatever tools are registered.
@@ -245,7 +246,7 @@ internal static class McpSetup
     {
         app.MapAuthoriseEndpoint();
         app.MapTokenEndpoint();
-        api.MapConnectEndpoints();
+        api.MapSignInGroup().MapConnectEndpoints();
         app.MapMcpEndpoint();
         app.MapProtectedResourceDocument();
     }

@@ -38,7 +38,7 @@ internal sealed class UserDeactivation(
     /// writes <c>user.deactivated</c>, with the reason, when one is given, as the actor and the user's ID say who did
     /// it to whom. A user already Deactivated is left as they are, with nothing written, and the call succeeds, as
     /// mcp-server.md §5.1 has such a call succeed with nothing changed. For an assistant's tool that check, then the
-    /// last-manager rule, come before the version refusal that the channel holds back (A134).
+    /// last-manager rule, come before the version refusal that the channel holds back (A137 and A138).
     /// </summary>
     /// <param name="actor">Who deactivates the user, and by which channel.</param>
     /// <param name="userId">The user to deactivate.</param>

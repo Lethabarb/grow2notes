@@ -37,7 +37,7 @@ internal sealed class UserSetupLink(
     /// <c>user.setup_link_sent</c>, with the reason, when one is given, and sends the link in the setup-link email,
     /// before the commit, so that a send that fails leaves the user as they were and writes nothing (T01's Notes). For
     /// an assistant's tool the Deactivated check, then the last-manager rule, come before the version refusal that the
-    /// channel holds back (A134).
+    /// channel holds back (A137 and A138).
     /// </summary>
     /// <param name="actor">Who sends the link, and by which channel.</param>
     /// <param name="userId">The user to send it to.</param>
