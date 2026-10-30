@@ -382,6 +382,9 @@ Result: ____ (date), ____ (pass or fail), by ____
 The first manager's name and address are the first real personal information in production, so the operator does D with
 the owner after the gate in D1, and an agent never does. Results in D never name the provider, its first manager or
 anyone invited, and hold no address, phone number or link. Every step ends with the usual `Result:` line.
+Once the AI-assistant access is on ([mcp-switch-on.md](mcp-switch-on.md) D5), the rest of a provider's set-up can be
+entered with the onboarding skill ([onboard-provider.md](onboard-provider.md), D95). The skill points back here for the
+organisation and the first manager, and runs no step of D.
 
 ### D1. The gate (read-only)
 

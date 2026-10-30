@@ -14,6 +14,8 @@ Runbooks for the developer (design.md §7.3).
 - `mcp-switch-on.md`: the run sheet for turning on the AI-assistant access: the limits an assistant meets, the by-hand
   tests in test, the provider's lines, the briefing, and the production steps (T38). Production stays off until its
   step D3.
+- `onboard-provider.md`: onboarding a new provider with the Claude Code skill in `.claude/skills/onboard-provider/`,
+  rehearsed in test first (T41).
 - `retention-and-destruction.md`, with `retention-list.sql` and `retention-destroy.sql`: the yearly retention task.
 - `audit-extraction.md`, with `find-ids.sql`, `audit-extract.sql` and `mcp-monthly.sql`: extracting audit records for a
   manager, and the monthly AI-assistant figures.

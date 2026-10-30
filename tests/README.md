@@ -1238,6 +1238,8 @@ are the examples.
   `McpEndpointTests.The_production_setup_lists_the_snapshot_tools_on_either_revision` compares with what `tools/list`
   answers on both protocol revisions. A change to a tool changes that file in the same PR. When the test fails it prints
   the whole file as it would be: copy it from `gh run view <id> --log-failed`, and review the diff.
+  `OnboardingSkillTests` holds the onboarding skill in `.claude/skills/onboard-provider/` to this file: every tool
+  name the skill writes must be one of its tools.
 - `flow.TokenEdits.Queue(edit)` changes the next access token that the app issues (`TokenEdit`: another audience, no
   stamp hash, another stamp hash, another organisation), so that a real token can be one the endpoint must refuse. It
   applies once, so give each case its own flow, which xUnit's one class instance for each test already does.
