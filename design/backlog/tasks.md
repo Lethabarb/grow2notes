@@ -7709,7 +7709,7 @@ run passes 50 minutes (timeout 60 to 90, no split).
   `AssistantRateLimitsTests`, `ConfirmedChangeLimitTests` and the carry-over comments.
 - [x] Runbooks and queries (#199; v2): the *AI-assistant access* section of `ops/breach-response.md`, the `Via`
   variable of `ops/audit-extract.sql`, `ops/mcp-monthly.sql`, `ops/audit-extraction.md`, `McpMonthlyScriptTests`.
-- [x] Records (v3): `ops/mcp-switch-on.md`, first-use steps 202 and 203, A139, mcp-server.md sections 5.5, 5.6, 9, 10,
+- [x] Records (#201; v3): `ops/mcp-switch-on.md`, first-use steps 202 and 203, A139, mcp-server.md sections 5.5, 5.6, 9, 10,
   11.1 and 11.5, design.md 9.9 and 10.9, coverage.md, F07.05, these Notes, and the section 8 mapping in the pull
   request bodies.
 
