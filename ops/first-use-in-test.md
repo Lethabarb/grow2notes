@@ -1353,13 +1353,13 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      provider and account type (A108). The operator writes them into its copy of
      [mcp-compliance-pack.md](../design/mcp-compliance-pack.md), kept outside the repository, with the Support account
      holders in `[Support account holders]`. On that copy it answers each of part 1's seven checks from that AI
-     provider's current terms, with the date checked and a link, fills in `[AI providers]` and `[countries]` with its
-     own AI provider for now, sends the copy to the provider and writes the date sent on it. The provider names its
-     privacy contact on the copy it received, and its lawyer or privacy officer checks the wording. It confirms that
-     the provider has the operator's check and the draft wording while the server is built. This checklist only
-     points to the pack: nothing filled in is written here or anywhere in the repository. This step holds nothing
-     open: the provider's approval, its decision, publishing and signing are switch-on lines 2 to 6 (mcp-server.md
-     §11.1). (S07.05.06; S07.05.07's first and third criteria; A108, D57, D90.)
+     provider's current terms, with the date checked and a link, fills in `[countries]` for its own AI provider (part
+     2's texts already name Anthropic (Claude), A141), sends the copy to the provider and writes the date sent on it.
+     The provider names its privacy contact on the copy it received, and its lawyer or privacy officer checks the
+     wording. It confirms that the provider has the operator's check and the draft wording while the server is built.
+     This checklist only points to the pack: nothing filled in on the copy is written here or anywhere in the
+     repository. This step holds nothing open: the provider's approval, its decision, publishing and signing are
+     switch-on lines 2 to 6 (mcp-server.md §11.1). (S07.05.06; S07.05.07's first and third criteria; A108, D57, D90.)
 
 ### Approved assistants and discovery in test, once T30 is on main
 

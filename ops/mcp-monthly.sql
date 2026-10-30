@@ -93,6 +93,7 @@ SELECT
         WHEN inviter.Id IS NULL THEN N'(no longer on record)'
         ELSE REPLACE(REPLACE(REPLACE(inviter.DisplayName, CHAR(9), N' '), CHAR(10), N' '), CHAR(13), N' ')
     END AS [Invited by],
+    -- 3 is Support (UserRole.Support).
     CASE WHEN inviter.Role = 3 THEN N'Yes' ELSE N'' END AS [Support],
     ISNULL(REPLACE(REPLACE(REPLACE(JSON_VALUE(d.Document, '$.client'), CHAR(9), N' '), CHAR(10), N' '),
         CHAR(13), N' '), N'') AS [Assistant],

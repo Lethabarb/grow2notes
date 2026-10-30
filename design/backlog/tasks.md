@@ -7722,7 +7722,7 @@ run passes 50 minutes (timeout 60 to 90, no split).
 
 ```yaml
 id: T39
-status: doing
+status: done
 release: R2
 lane: A
 size: S
@@ -7744,21 +7744,64 @@ recorded.
 
 ### Notes
 
-- One of the two tasks that wait for a run sheet: `ops/mcp-switch-on.md`, which T38 writes.
+- 30 October 2026 (T39): done. Done means the run sheet and wording are ready; production is not switched on, and
+  releases.md's switch-on date stays unset until the owner's step D5. S07.05.09's and S07.05.10's by-hand criteria stay
+  unticked, because each is a run-sheet step (D1 to D5, sections B and C) that the owner or the operator does, and the
+  owner ticks them at D5.
+- The D1 and D3 correction. T38's D3 had the owner merge the `mcpEnabled = true` pull request and then deploy "that
+  tested build from D1". Production deploys the parameters of the CI run it names (`deploy.yml`, design.md section
+  10.4), so a run built before the merge would deploy with the access off. D1 is now the switch-on pull request, and the
+  run to deploy is that merge's push-to-main run after its test deploy succeeded (go-live.md A5). D3 dispatches
+  `deploy.yml` with that run (go-live.md A9). Nothing else goes to production between the merge and D3, and a call-off
+  after the merge is a pull request setting `mcpEnabled = false` before any production deploy (breach-response.md).
+- The guard removal the owner's pull request will make, named here and in A141. D1 adds `param mcpEnabled = true` to
+  `infra/prod.bicepparam`, and in `InfraTemplateTests` deletes only `Assert.DoesNotMatch(McpEnabledTrue(),
+  Infra("prod.bicepparam"));`, keeps the test's other three assertions and its name, and changes "off in prod" in the
+  class summary to "off by default". The behaviour that assertion pinned is the one that pull request changes, and its
+  body names the removal. T39 itself removes and weakens no test, and no file it changes turns `Mcp:Enabled` on for
+  production: `infra/`, `.github/` and `src/` are byte-identical.
+- The unregistered-client reading. The code sends an unknown client, or a redirect URI that is not registered, with a
+  302 to the site's own `/connect` and no request, and that screen shows "There is a problem with Grow2Notes"
+  (`AuthorisationRefusals`; `An_unknown_client_is_sent_to_the_Connect_screen_with_no_request`). It is never redirected
+  to the client. Run-sheet A4 point 3 therefore expects 302 for the first 30 requests and 429 for the 31st, and D4
+  checks the error page in a browser. mcp-server.md section 4.3 point 2 and section 4.4 step 1 said the browser is
+  "never sent anywhere" and "never redirects anywhere"; both are corrected to the class summary, and section 4.4 now
+  says any other invalid request is refused to its registered redirect URI with `state` and `iss`. No behaviour
+  changed.
+- The wording. A141 (design.md section 13) names Anthropic (Claude), the operator's AI provider under A140(3), in
+  the pack's part 2 and the three texts of mcp-server.md section 7.4, with the plural kept so that another approved
+  provider is added on the operator's copy before it is sent. Parts 1 and 3 and the `[operator's AI provider]` and
+  `[account type]` fields are unchanged. The pack header gained a paragraph, the AI providers field entry went and
+  `[countries]` was reworded, first-use step 160 says "nothing filled in on the copy", and A108 points to A141.
+  mcp-server.md section 7's introduction said it "names no AI provider", which section 7.1 already contradicted by
+  naming Anthropic and OpenAI as examples, so it now reads "Apart from examples, it names no AI provider beyond the one
+  the section 7.4 texts name". There is no D96. D2 takes `--company` and `--data-location` from the operator's copy;
+  the onboarding skill's by-hand.md C2 still says to ask the owner, which agrees.
+- The run-sheet table rows 38 to 41 stay over 120 characters, because a Markdown row cannot wrap (T41's named
+  exception; `ops/security-review.md` does the same). The pacing paragraph links `ops/onboard-provider.md` and section E
+  points to it as the next step once switched on. The T38 carry-overs are done: the A1, A4 point 3, A8 point 2 and
+  section E wraps, `True` as the portal's casing, the `mcp-monthly.sql` comment on role 3, and the `A137 and A138`
+  citation in `UserDeactivationTests`. A139's "39 minutes 30 seconds" already agrees with the T38 Notes, so it needed
+  no edit.
+- The mentions of T39 left as they are, because each still names the switch-on, which D3 does: first-use step 165,
+  design.md section 10.3 and A110, mcp-server.md section 10, the coverage.md rows, releases.md ("Switch-on date: not
+  set yet"), `ops/README.md`, go-live.md section D and the historical T29 Notes in F07.05 and this file.
+- CI: the timeout stays 60 minutes and the tests are not split (ops/first-use-in-test.md step 190 is the owner's).
+  The Build and test run times are in the pull request bodies; A142 would be taken only if one passed 50 minutes.
 
 ### Plan
 
-Outcome: the run sheet and the provider's texts are ready; nothing is switched on. Approach: documents only, plus one SQL
-comment and one C# doc comment. `ops/mcp-switch-on.md` keeps every step key and Result line; D1 becomes the owner's
-switch-on pull request (adds `param mcpEnabled = true` to `prod.bicepparam`, deletes only the production assertion in
-`InfraTemplateTests`, names it in its body) and D3 deploys that merge's CI run, because production deploys the parameters
-of the run it names. The pacing paragraph points to `ops/onboard-provider.md`, and section E points to it as the next
-step. The pack's part 2 and `mcp-server.md` section 7.4 name Anthropic (Claude) in place of `[AI providers]`; countries
-and any other approved provider are filled on the operator's copy. `mcp-server.md` sections 4.3 and 4.4 are corrected
-to the code (an unregistered client gets a 302 to the site's own `/connect`). T38's carry-overs are done. Domain
-changes: none. Reuse: the existing run sheet, pack fields, operator command and deploy workflow. Where the design was
-silent the simplest option is taken and recorded as A141 (A142 only if a CI run passes 50 minutes). S07.05.09 and
-S07.05.10 become done with their by-hand criteria unticked.
+Outcome: the run sheet and the provider's texts are ready; nothing is switched on. Approach: documents only, plus one
+SQL comment and one C# doc comment. `ops/mcp-switch-on.md` keeps every step key and Result line; D1 becomes the
+owner's switch-on pull request (adds `param mcpEnabled = true` to `prod.bicepparam`, deletes only the production
+assertion in `InfraTemplateTests`, names it in its body) and D3 deploys that merge's CI run, because production
+deploys the parameters of the run it names. The pacing paragraph points to `ops/onboard-provider.md`, and section E
+points to it as the next step. The pack's part 2 and `mcp-server.md` section 7.4 name Anthropic (Claude) in place of
+the AI providers field; countries and any other approved provider are filled on the operator's copy. `mcp-server.md`
+sections 4.3 and 4.4 are corrected to the code (an unregistered client gets a 302 to the site's own `/connect`). T38's
+carry-overs are done. Domain changes: none. Reuse: the existing run sheet, pack fields, operator command and deploy
+workflow. Where the design was silent the simplest option is taken and recorded as A141 (A142 only if a CI run passes
+50 minutes). S07.05.09 and S07.05.10 become done with their by-hand criteria unticked.
 
 ### Verticals
 
@@ -7766,7 +7809,7 @@ S07.05.10 become done with their by-hand criteria unticked.
 
 ### Steps
 
-Planned when the lane starts it.
+- [x] Run sheet, wording, carry-overs and records (#<PR>; v1)
 
 ---
 
