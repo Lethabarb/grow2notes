@@ -518,3 +518,9 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 | 10 | MA10: no IP restriction; an `Origin` header must match an approved assistant's HTTPS redirect origin; no CORS headers | F07.02 | | Done in T32 (S07.02.01): `McpEndpointTests` (the Origin theories, no CORS headers). Which `Origin` each approved assistant sends is recorded by hand (`ops/first-use-in-test.md` step 172) |
 | 11 | MA11: MCP off by default (`Mcp:Enabled = false`) until switch-on; turned off within one business day of the provider asking | F07.01 | S07.05.09 (switch-on) | Partly done in T30: off unless set, `404` on every path; switch-on is S07.05.09 |
 | 12 | MA12: no edits to a user's name, email or role, and no reactivation, through MCP | F07.04 | | Held by T36: the 24 tools of the snapshot have no tool that edits a user or reactivates one (`deactivate_user`'s description tells the model to reactivate in Grow2Notes). Held again by T37: the 28 tools of the snapshot have no tool that edits a user or reactivates one; `invite_user` and `reset_user_sign_in` edit and reactivate nobody, and the tools whose names contain `user` are exactly `list_users`, `invite_user`, `reset_user_sign_in` and `deactivate_user` (`InviteUserToolTests.The_tools_that_act_on_users_are_exactly_these_four`) |
+
+**D95 Onboarding with Claude Code**
+
+| # | Row | Owner | Also | Notes |
+|---|---|---|---|---|
+| 1 | A Claude Code skill in the repository leads the owner, as the Support person, through onboarding a new provider end to end with the tools on main, leading each by-hand step (D95, added 30 October 2026) | F07.06 | | S07.06.01, built in T41 |

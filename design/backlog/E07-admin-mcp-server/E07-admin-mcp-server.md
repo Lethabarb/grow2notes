@@ -4,7 +4,7 @@ type: epic
 title: Admin MCP server
 release: R2
 milestone:
-sources: [D48, D49, D50, D51, D55, D56, D57, D58, D59, "mcp-server.md"]
+sources: [D48, D49, D50, D51, D55, D56, D57, D58, D59, D95, "mcp-server.md"]
 github:
 azure:
 ---
@@ -26,9 +26,13 @@ The release is done when the
 - F07.03 Setup tools
 - F07.04 User tools with confirmation
 - F07.05 Hardening, manual tests and switch-on
+- F07.06 Onboarding with Claude Code
 
-The features follow the five build slices in [mcp-server.md §1.4](../../mcp-server.md#14-timing-and-build-slices) one
-to one ([README §3.4](../README.md#34-how-far-ahead-to-write)). Two placements need saying:
+F07.06 is the one feature outside the five slices: the operator's Claude Code onboarding skill (D95, T41), which uses
+the tools and adds none.
+
+The other features follow the five build slices in [mcp-server.md §1.4](../../mcp-server.md#14-timing-and-build-slices)
+one to one ([README §3.4](../README.md#34-how-far-ahead-to-write)). Two placements need saying:
 - `archive_participant` is a setup tool, but it always needs confirmation (mcp-server.md §5.3, MA6), which slice 4
   builds. So it is delivered in F07.04, with `restore_participant`.
 - The test groups that every later tool joins under the Definition of Done (the tool matrix, the no-note-content
