@@ -7908,8 +7908,8 @@ then worker invites. It adds no app code, MCP tool, server feature or operator c
   only.
 - Stories: S07.06.01 is done with criterion 8 ticked. Criteria 1 to 7 and 9 stay unticked, each with a dated Note
   (criteria 3, 4 and 7 are proven by CI only in part); the rehearsal that proves them is first-use steps 204 to 207, by
-  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request (39m11s on
-  the final head). The story's `sprint` stays blank.
+  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request, under
+  50 minutes. The story's `sprint` stays blank.
 
 ### Plan
 
@@ -7964,8 +7964,8 @@ Anthropic (Claude) in the provider's texts citing A140. Of the carry-overs T41 t
 
 ### Steps
 
-- [x] Skill and guard (#203; v1): `SKILL.md`, `by-hand.md`, `template.csv`, `ops/onboard-provider.md`, the ops README bullet,
-      go-live.md section D intro, `.gitignore`, `tests/README.md`, and `OnboardingSkillTests`.
+- [x] Skill and guard (#203; v1): `SKILL.md`, `by-hand.md`, `template.csv`, `ops/onboard-provider.md`, the ops README
+      bullet, go-live.md section D intro, `.gitignore`, `tests/README.md`, and `OnboardingSkillTests`.
 - [x] Records (v2): D95, A140, the A139 rewording, the T41 Notes and the S07.06.01 criteria CI proves,
       with first-use steps 204 to 207.
 

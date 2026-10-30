@@ -131,7 +131,7 @@ claude mcp add --transport http grow2notes https://app-grow2notes-<test|prod>.az
 - No `--client-id`: Claude Code finds the metadata document itself.
 - The name must be exactly grow2notes, or the rules in A3 would not match.
 
-Start Claude Code again the same way, from the folder, and type /onboard-provider, then choose return.
+Start Claude Code again the same way, from the folder.
 
 ### C4. Sign in
 
@@ -141,6 +141,8 @@ three things before choosing Allow:
 1. It names your Support account.
 2. It names Claude Code, with the company and data location you typed in C2.
 3. It shows the warning that this assistant runs on your computer and other programs could pretend to be it.
+
+After you choose Allow, type /onboard-provider and choose return.
 
 If you later wait more than 30 minutes without a call, sign in again from /mcp. Nothing is lost.
 
