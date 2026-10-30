@@ -52,8 +52,9 @@ invite_user
 
 ## 2 Start
 
-0. If the working folder is the repository, or inside it (it holds Grow2Notes.slnx), stop and point the owner to
-   ops/onboard-provider.md. Run only from the owner's own empty onboarding folder.
+0. If the folder Claude Code was started in is the repository, or inside it (it holds Grow2Notes.slnx), stop and
+   point the owner to ops/onboard-provider.md. Run only from the owner's own empty onboarding folder. The checkout
+   given to --add-dir holds Grow2Notes.slnx too, as expected: it is not the folder this step checks.
 1. Ask: test or production?
 2. Ask: is this a first run, or a return to one already started?
 3. Ask for the path of the main checkout that was given to --add-dir, and read ops pages only from there.
@@ -121,6 +122,8 @@ with runs of spaces collapsed. Never split a name.
 Show the plan, get one yes, then add the goals.
 
 ### D5 Invites, last
+
+Tell the owner first that Support can invite workers only: a manager invites other managers in the app.
 
 Ask once: who asked for these people to have accounts, how, when, and how the owner confirmed it was them. Draft one
 reason for each worker from that one answer, with the worker's name, such as: Asked by the manager by phone on 5
