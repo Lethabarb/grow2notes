@@ -36,7 +36,7 @@ public sealed partial class OnboardingSkillTests
         "archive_participant",
     ];
 
-    private static readonly string[] DeniedTools = ["WebSearch", "WebFetch", "Bash", "Write", "Edit"];
+    private static readonly string[] DeniedTools = ["WebSearch", "WebFetch", "Bash", "PowerShell", "Write", "Edit"];
 
     // An error code that is written like a tool name.
     private static readonly string[] ErrorCodes = ["rate_limited"];

@@ -53,14 +53,14 @@ The access tools must always ask, and nothing else may be allowed beyond the nin
       "mcp__grow2notes__add_goal",
       "mcp__grow2notes__list_users"
     ],
-    "deny": ["WebSearch", "WebFetch", "Bash", "Write", "Edit"]
+    "deny": ["WebSearch", "WebFetch", "Bash", "PowerShell", "Write", "Edit"]
   }
 }
 ```
 
 2. Claude Code is in the default permission mode: never auto, bypassPermissions or dontAsk.
-3. Run /permissions. It shows allow rules for only the nine tools in
-   the block above, and none for the whole grow2notes server.
+3. Run /permissions. It shows allow rules for only the nine tools in the block above, and none for the whole
+   grow2notes server.
 4. Run /hooks. It shows no Elicitation hook, because one could answer Grow2Notes' form for you.
 5. Run /mcp. Every other MCP server is disabled.
 6. Read every invite_user prompt before you choose Yes:

@@ -7908,8 +7908,8 @@ then worker invites. It adds no app code, MCP tool, server feature or operator c
   only.
 - Stories: S07.06.01 is done with criterion 8 ticked. Criteria 1 to 7 and 9 stay unticked, each with a dated Note
   (criteria 3, 4 and 7 are proven by CI only in part); the rehearsal that proves them is first-use steps 204 to 207, by
-  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request (40m9s). The
-  story's `sprint` stays blank.
+  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request (39m11s on
+  the final head). The story's `sprint` stays blank.
 
 ### Plan
 
@@ -7939,19 +7939,18 @@ look-ups (`includeArchived`, exact-email `list_users`, `changed: false`); `Repos
 the tests.
 
 Tests (CI only): `OnboardingSkillTests` holds every tool name the skill mentions to `tools-list.json`, pins the skill to
-its ten tools, pins the copied settings (ask four, allow nine, deny five), pins the front matter (no `allowed-tools`,
+its ten tools, pins the copied settings (ask four, allow nine, deny six), pins the front matter (no `allowed-tools`,
 `disable-model-invocation: true`), the header-only template, no email address or setup link in the skill, and no
 `.mcp.json`. The existing server tests are unchanged.
 
-Decisions where the design is silent (D95 and A140, design.md section 13; to be written in v2): the folder and
-settings above; Anthropic (Claude) as the operator's AI provider with Claude Code the Support person's assistant on a
-commercial account under a data processing agreement (T39 cites this); participants by a manager, goals only; one yes
-per section plan and each invite confirmed on its own; one reason per invite; invites last.
+Decisions where the design is silent (D95 and A140, design.md section 13): the folder and settings above; Anthropic
+(Claude) as the operator's AI provider with Claude Code the Support person's assistant on a commercial account under a
+data processing agreement (T39 cites this); participants by a manager, goals only; one yes per section plan and each
+invite confirmed on its own; one reason per invite; invites last.
 
-Differences from the requirements, to be listed in the Notes at merge: the pre-registered client ID path is recorded
-for the developer only (R09); the settings allow nine tools by exact name (R11); invites come last with no own count
-(R18); the owner paces waits (R19); the parent company's name is a review check (R22); one research record, in the ops
-page (R27).
+Differences from the requirements: the pre-registered client ID path is recorded for the developer only (R09); the
+settings allow nine tools by exact name (R11); invites come last with no own count (R18); the owner paces waits (R19);
+the parent company's name is a review check (R22); one research record, in the ops page (R27).
 
 Hand-off to T39: a pointer from `ops/mcp-switch-on.md` to the skill as the next step once switched on, the reworded
 pacing paragraph, the T38 carry-overs in that file, `ops/mcp-monthly.sql` and `UserDeactivationTests.cs`, and naming
