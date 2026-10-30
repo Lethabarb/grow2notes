@@ -523,4 +523,4 @@ design.md §14, "For every milestone". These are rules for every story, so they 
 
 | # | Row | Owner | Also | Notes |
 |---|---|---|---|---|
-| 1 | A Claude Code skill in the repository leads the owner, as the Support person, through onboarding a new provider end to end with the tools on main, leading each by-hand step (D95, added 30 October 2026) | F07.06 | | S07.06.01, built in T41 |
+| 1 | A Claude Code skill in the repository leads the owner, as the Support person, through onboarding a new provider end to end with the tools on main, leading each by-hand step (D95, added 30 October 2026) | F07.06 | | Done in T41 (S07.06.01): the skill in `.claude/skills/onboard-provider/`, its ops page and `OnboardingSkillTests`; A140. The rehearsal is by hand (`ops/first-use-in-test.md` steps 204 to 207) |
