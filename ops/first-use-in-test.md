@@ -1745,3 +1745,48 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      `mcp`, and the `mcp.read`, `mcp.refused` and `mcp.authorised` rows), each with its client in Details, and none
      made in the app itself and no `admin.mcp_client_added` row; with `any`, the rows made in the app too. This step
      holds nothing open. (S07.05.04; A139.)
+
+### Onboarding a new provider with Claude Code (T41)
+
+These steps rehearse the `/onboard-provider` skill in test with made-up data only, as
+[onboard-provider.md](onboard-provider.md) describes. Production is not used: there the operator runs the skill only
+after step D5 of [mcp-switch-on.md](mcp-switch-on.md) reads pass, and the provider's written approval of Claude Code
+is on file (MA1).
+
+204. Get the rehearsal ready, for a new made-up organisation. In test's console run `admin mcp-client list`; if Claude
+     Code is not listed, run `admin mcp-client add` with the metadata address, as the skill's by-hand.md section C2
+     says. Compare the printed line that starts Document, and both loopback redirect addresses, with Claude Code's
+     documentation. Make the empty onboarding folder outside the repository, directly under your user folder, with
+     `.claude/settings.local.json` copied from by-hand.md section A3. Fill in a copy of `template.csv` in that folder:
+     one Every note item, two groups of two items each, two guide prompt lines, three made-up participants with two
+     goals each and twelve made-up workers, each at a new testing-mailbox `+` tag. Use two more new `+` tags, one for
+     the made-up first manager and one for your Support account (A27). The file sits only in that folder and is
+     deleted at step 207; "never write down an email address" is about Results lines, notes and the repository. About
+     14 emails go out, well within Resend's 100 a day. This step holds nothing open. (S07.06.01; A140.)
+205. Run the skill end to end. Start Claude Code with the documented command from by-hand.md (auto memory off and
+     `--add-dir` to a freshly pulled main checkout). Look for: `/memory` shows auto memory off, and `/onboard-provider`
+     is offered (otherwise use the fallback copy, and record that it was needed). Let the skill lead the by-hand parts:
+     bootstrap from the block it shows, the made-up manager setting up in a private window, inviting you as 'Support
+     (IT operator)' and adding two of the three participants with a made-up date of birth; then `claude mcp add`,
+     signing in, and the Connect screen. Look for: the preconditions asked before any data is given; the setup link
+     never asked for, with the warning not to paste it; a plan and one yes before each section; the third participant
+     listed for the manager to add; each invite shown with its reason and asked about one at a time; every
+     `invite_user` call prompting, the first with no confirm, and a refusal of a `confirm: true` prompt changing
+     nothing; a web search refused; the 11th invite refused with `rate_limited`, nothing changed and the wait given;
+     and the summary. Record: whether the form path or the preview path was taken, and that sign-in worked with only
+     the metadata registration, which shows that the resource and any-port loopback matching work. In the audit rows
+     (step 15), the calls show `via` of `mcp`, Claude Code's client ID and each invite's reason. This step holds
+     nothing open. (S07.06.01; A136, A139, A140.)
+206. Continue after the hour. If more than 30 minutes have passed since the last call, sign in again from `/mcp` and
+     record the labels and what Claude Code showed. In the app, archive one of the common items and add the third
+     participant with a made-up date of birth. Run the skill again with the same file. Look for: only the third
+     participant's goals added; the archived item reported and not added; the invited workers skipped; the last 2
+     invites going; and nothing made twice. Record how an HTTP 429 showed, if one appeared; CI proves the limit
+     (`AssistantRateLimitsTests`). This step holds nothing open. (S07.06.01; A139, A140.)
+207. Clean up and check. Run `claude mcp logout grow2notes`, then `claude mcp remove grow2notes`. Delete the input
+     file, the onboarding folder and its transcript folder under `~/.claude/projects`. Check `~/.claude/history.jsonl`
+     for rows typed during the run: record whether they were there, and remove them. Look for: a new Claude Code
+     session in that folder lists no `grow2notes` server; the organisation's audit rows hold no `add_participant` or
+     `update_participant` call; and no date of birth, setup link or address appeared in the chat. Wording notes go to
+     the developer; the invite email's wording stays step 201's question. This step holds nothing open.
+     (S07.06.01; A140.)

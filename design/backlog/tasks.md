@@ -7842,7 +7842,7 @@ silent the simplest option is taken and recorded as A130 and A131.
 
 ```yaml
 id: T41
-status: doing
+status: done
 release: R2
 lane: A
 size: S
@@ -7869,6 +7869,47 @@ then worker invites. It adds no app code, MCP tool, server feature or operator c
   plan are its spec. T39 now waits for it (T39 starts from a main that includes T41).
 - `add_participant` requires a date of birth, which the skill must not handle, so a manager adds each participant in
   the app and the skill adds only their goals (the owner's brief, (d)).
+- Decisions and defaults: D95 (the owner's request, 30 October 2026) and A140 (design.md section 13; the folder, the
+  settings, Anthropic (Claude) as the operator's AI provider, participants by a manager, input, look-ups, confirmation,
+  reasons, order and pacing, the summary and the research record). The numbers were free on main at `1045aef`. No
+  migration, table, column, audit event type, endpoint, MCP tool, SPA change or app setting was added.
+- Research: Claude Code's documentation was read on 30 October 2026 (newest version named v2.1.304, v2.1.309 for
+  skills). The summary is that a server with a client ID metadata document signs in with no registration by the owner,
+  loopback redirects match on any port, form elicitation is declared (so Grow2Notes' form is expected, and the
+  preview path covers a client without it), `claude mcp logout` revokes tokens and `remove` does not, and how an HTTP
+  429 shows is not documented. The record, with the pages read, is in `ops/onboard-provider.md` (*Claude Code
+  documentation, as read on 30 October 2026*). A pre-registered client ID is the developer's fallback only.
+- Differences from the plan's requirements, stated openly (the R-ids are the plan's; they are named by subject):
+  R09, a pre-registered client ID is recorded for the developer and not given to the owner, because it would change what
+  the operator registers (MA2); R11, the copied settings allow the nine set-up and look-up tools by exact name and ask
+  before the four access tools, where the requirement banned every allow rule; R18, invites come last as the brief
+  orders, with the same arithmetic and no count of the skill's own (`rate_limited` is the stop, A139), where T38's
+  hand-off said to invite the first 10 at the start; R19, the owner paces the waits, because the skill never sleeps
+  and Bash is denied; R22, the parent company's name cannot be tested without writing it, so it is a review check of
+  each diff; R27, one research record, in the ops page, with this summary; the requirements' steps 204 to 211 are
+  merged into first-use steps 204 to 207 (four steps, each holding nothing open, D90); R32, T41 took only the
+  carry-overs in files it touches (design.md's A139 and header: A139 now reads 'It needs no decision' and 'No CI-time
+  default was needed', and agrees with the T38 Notes at 39 minutes 30 seconds), and the closed T38 Notes are left as
+  they are.
+- No test was removed or weakened. Nothing turns `Mcp:Enabled` on, and no `.mcp.json` or settings file with a site
+  address is committed (`OnboardingSkillTests.No_file_in_the_repository_connects_an_agent_to_a_site`).
+- Hand-off to T39, which takes these files in one go: `ops/mcp-switch-on.md` gets a pointer in section E to
+  `ops/onboard-provider.md` as the next step once switched on; its *Pacing an onboarding* paragraph (the T41
+  parenthetical and steps 1 to 3) is reworded to say the skill invites last, with the same arithmetic; step A8 point 2
+  and section E are re-wrapped (150 and 145 characters), and so is line 73 in step A1 (121 characters), which T38's
+  list missed; step A4 point 3's 'send 31' wrap is fixed; step A8 says 'reads True', as D4 and first-use step 165
+  do; the table rows at lines 38 to 41 are an exception, since a table row cannot wrap. `ops/mcp-monthly.sql` line 96
+  gets a comment that 3 is Support (`UserRole.Support`). `UserDeactivationTests.cs` line 15 cites A137 and A138
+  (comment only). T39 names Anthropic (Claude) in the provider's texts (S07.05.10), citing A140, and takes the next
+  free A-number only for a different default of its own. First-use step 165 already shows True and False and is not
+  touched.
+- CI time (Build and test, against the 60-minute timeout): v1 39m02s on its passing run, under 50 minutes, so the
+  timeout stays at 60, no CI-time default was taken and no test was split (step 190 is the owner's). v2 is documents
+  only.
+- Stories: S07.06.01 is done with criterion 8 ticked. Criteria 1 to 7 and 9 stay unticked, each with a dated Note
+  (criteria 3, 4 and 7 are proven by CI only in part); the rehearsal that proves them is first-use steps 204 to 207, by
+  hand, and holds nothing open. Criterion 10 is ticked when Build and test is green on the feature pull request. The
+  story's `sprint` stays blank.
 
 ### Plan
 
@@ -7924,9 +7965,9 @@ Anthropic (Claude) in the provider's texts citing A140. Of the carry-overs T41 t
 
 ### Steps
 
-- [ ] Skill and guard (v1): `SKILL.md`, `by-hand.md`, `template.csv`, `ops/onboard-provider.md`, the ops README bullet,
+- [x] Skill and guard (#203; v1): `SKILL.md`, `by-hand.md`, `template.csv`, `ops/onboard-provider.md`, the ops README bullet,
       go-live.md section D intro, `.gitignore`, `tests/README.md`, and `OnboardingSkillTests`.
-- [ ] Records (v2): D95, A140, the A139 rewording, the T41 Notes and the S07.06.01 criteria CI proves,
+- [x] Records (v2): D95, A140, the A139 rewording, the T41 Notes and the S07.06.01 criteria CI proves,
       with first-use steps 204 to 207.
 
 ---
