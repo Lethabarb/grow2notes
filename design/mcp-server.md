@@ -509,7 +509,7 @@ Other changes mirror the app, which archives goals, groups and items without ask
 | `user.not_active` | Reset sign-in on a deactivated user, given when it is confirmed (A138) |
 | `role.not_allowed` | Support inviting a manager; Support deactivating or resetting the sign-in of a manager or Support account; or an invite with any role other than `worker` or `manager` |
 | `reason.required` | Support inviting, deactivating or resetting a worker without a reason |
-| `rate_limited` | Over a tool limit in §5.6; includes `retryAfterSeconds` |
+| `rate_limited` | Over the tool limit in §5.6 (the 11th confirmed invite, reset or deactivation in an hour). `retryAfterSeconds`, the whole seconds left in the hour, rounded up and at least 1, sits inside `error` beside `code`, `message` and `fields`, and only on this error. Nothing was changed |
 | `unexpected` | Anything else: "Something went wrong. Nothing was changed." The transaction is rolled back and the detail goes to telemetry by ID only (design §9.5). |
 
 A confirmation form that the person declines or cancels is not an error: the result says "Nothing was changed." with `status: "declined"`. A `requestState` that fails its checks is refused with `precondition.failed`.
@@ -532,12 +532,14 @@ Using the app's existing rate limiter (design §9.9), keyed by user from the tok
 
 | What | Limit (MA9) |
 |---|---|
-| All requests to `/mcp` | 60 per minute per user, answered with HTTP `429` |
-| Confirmed user changes (invite, reset sign-in, deactivate) | 10 per hour per user, answered with the `rate_limited` tool error |
-| `/oauth/token` | 30 per minute per `client_id` parameter, with an overall cap of 60 per minute (requests naming an unregistered client share one small bucket). Not per client IP: a hosted assistant sends every user's refreshes from its provider's shared addresses (§3.3), so a per-IP bucket could be used up by that provider's other customers. |
-| `/oauth/authorize` and the consent endpoints | In the existing sign-in group: 30 per minute per IP |
+| All requests to `/mcp` | 60 per minute per user, answered with HTTP `429` and `Retry-After: 60`. The user is the token's subject, never the address, and the count runs after the token is checked, so a `401` or `403` uses no permit. A request that carries an `Origin` header is also counted per client address, 60 per minute, before the registered assistants are read. |
+| Confirmed user changes (invite, reset sign-in, deactivate) | 10 per hour per user, together, answered with the `rate_limited` tool error |
+| `/oauth/token` and `/oauth/revoke` | 30 per minute per `client_id` parameter, with an overall cap of 60 per minute (requests naming an unregistered client share one small bucket of 10). Not per client IP: a hosted assistant sends every user's refreshes from its provider's shared addresses (§3.3), so a per-IP bucket could be used up by that provider's other customers. |
+| `/oauth/authorize` and the consent endpoints | 30 per minute per IP: `/api/connect` is in the existing sign-in group, and `/oauth/authorize` has its own count of the same size |
 
 The specification requires servers to rate-limit tool calls [Spec]. A real admin session needs a handful of calls a minute.
+
+**How the counts work** (A139, in [design.md §13](design.md#13-assumed-defaults)). Every count is a fixed window held in memory, so a restart or deploy clears it (A95). Refusals are of two kinds: an endpoint's `429` with `Retry-After: 60`, which is not audited or logged, and the `rate_limited` tool error, which writes one `mcp.refused` row. An assistant recovers from both by waiting. The counts that must come before authentication (the `Origin` count, the token and revoke counts and `/oauth/authorize`) sit in one middleware ahead of the `Origin` rule, because that rule reads the registered applications from the database for every request that carries an `Origin`, and OpenIddict answers its own refusals inside authentication. Of the token and revoke counts, a request's own count comes first, keyed by the stored client ID of an approved assistant (30) or by one empty key for everything else (10), so a request cannot create a count of its own; only a request that its own count admits is charged to the overall 60, so one looping assistant cannot use up the others' cap. Client IDs are public, so anyone can use up an assistant's 30 or the overall 60; nothing is exposed and it stops when the sender stops (A139). The hour of confirmed changes is one window for each user from that user's first counted change, and a refusal does not move it; a paced onboarding therefore invites 10, makes its setup calls, and invites the next 10 when `retryAfterSeconds` is up, and an idle connection lapses after 30 minutes (ops/mcp-switch-on.md, *The limits an assistant meets*).
 
 ---
 
@@ -701,7 +703,7 @@ Every MCP call writes to the existing append-only `AuditEvent` table (design §5
 - `ActorUserId` is the user from the token, so an MCP change appears under the person who made it, like any other change.
 - `IpAddress` is the address the assistant called from: its provider's cloud for a hosted assistant, or the person's own connection for a desktop assistant.
 - Look-ups are audited here although reading is not audited in the app (A28), because each MCP look-up sends personal information to an AI provider. These entries, with the `client` of each, answer "what did we disclose, to which AI provider, and when" for a breach assessment (s 26WC) or a participant's question.
-- There is no audit screen (A28). The operator extracts MCP entries on request, filtering on `JSON_VALUE(Details, '$.via') = 'mcp'` and the `mcp.%` event types, and this goes into the existing audit-extraction runbook (design §14, M5).
+- There is no audit screen (A28). The operator extracts MCP entries on request, filtering on `JSON_VALUE(Details, '$.via') = 'mcp'` and the `mcp.%` event types, and this goes into the existing audit-extraction runbook (design §14, M5): [ops/audit-extraction.md](../ops/audit-extraction.md) takes it as the `Via` variable, and its *Monthly assistant figures* section gives the monthly counts and the list of invites.
 
 ---
 
@@ -719,7 +721,7 @@ Every MCP call writes to the existing append-only `AuditEvent` table (design §5
    - from a client that does not declare form-mode elicitation: a call without `confirm` changes nothing (row and audit compared before and after, apart from the `mcp.read` entry); `confirm: true` without `expectedVersion` is refused where the tool needs one; a client that declares only URL-mode elicitation gets the same path;
    - from a client that declares form-mode elicitation: the first call returns an `InputRequiredResult` with one form and changes nothing; a call with `confirm: true` in the arguments still returns the form; a retry with `accept` and yes acts; `decline`, `cancel`, or `accept` with no changes nothing; a `requestState` that is tampered with, expired, from another user, or for another tool or other arguments is refused; a row changed between the form and the answer gives `precondition.failed`.
 9. **Audit:** each tool writes the expected event with `"via": "mcp"` and the `client`; reads, previews and forms write `mcp.read` with the returned IDs; Support user changes carry the reason.
-10. **Rate limits:** the 61st request in a minute gets `429`; the 11th confirmed user change in an hour gets `rate_limited`.
+10. **Rate limits:** the 61st request in a minute gets `429`; the 11th confirmed user change in an hour gets `rate_limited`. T38 covers (`AssistantRateLimitsTests`, `ConfirmedChangeLimitTests`): the 61st `/mcp` request of a user, from any address, and the 61st `Origin`-bearing request of an address; the 11th confirmed invite, reset or deactivation, which changes nothing and writes one `mcp.refused` row, with previews and declined forms uncounted; the token and revoke counts (30, the shared 10, and the overall 60 charged only to admitted requests); and `/oauth/authorize` and `/api/connect` at 30 an address.
 11. **Telemetry canary** (design §9.5) extended: names, emails and goal wording used in MCP calls never appear in logs or telemetry.
 
 **By hand, on the switch-on run sheet** (`ops/mcp-switch-on.md`; made-up data only, A35; these hold no task open, the owner's rule of 20 October 2026, but switch-on (T39) still waits for them), slice 5:
@@ -732,6 +734,8 @@ Every MCP call writes to the existing append-only `AuditEvent` table (design §5
 ## 11. Operations
 
 ### 11.1 Switch-on checklist (Release 2, per environment)
+
+The ordered run sheet for these lines, with the by-hand tests of §10, is [ops/mcp-switch-on.md](../ops/mcp-switch-on.md): sections A to C come before production, section D is the production steps, and `Mcp:Enabled` stays `false` in production until its step D3. Each line's owner and evidence are in the switch-on table of F07.05.
 
 - [ ] Every automated test in §10 passes in CI, and the by-hand tests are recorded on the run sheet.
 - [ ] The provider has approved the AI assistants its managers will use, and the operator's assistant for the Support person (D57), after the check in §7.1, each used through a business account with a data processing agreement (C2, C3), and the people who will use them have those accounts.
@@ -779,9 +783,9 @@ What the connection can and cannot do (no notes); the Connect an AI assistant sc
 
 ### 11.5 Monitoring and incidents
 
-- **Monthly**, with the existing checks (design §10.9): count of MCP calls, `mcp.refused` entries and `401` or `429` responses on `/mcp`; and a list, sent to the provider, of every account invited through MCP that month, with who invited it, the role and the reason, with the invites made by Support marked (MA7). No new alert.
+- **Monthly**, with the existing checks (design §10.9): count of MCP calls, `mcp.refused` entries and `401` or `429` responses on `/mcp`; and a list, sent to the provider, of every account invited through MCP that month, with who invited it, the role and the reason, with the invites made by Support marked (MA7). No new alert. The figures and the list come from `ops/mcp-monthly.sql` and the Log Analytics query in [ops/audit-extraction.md](../ops/audit-extraction.md#monthly-assistant-figures); the `401` and `429` answers are not audit events, so they come from the application logs.
 - **Quarterly:** repeat the check in §7.1 for each approved AI provider (terms, data processing agreement, data location, retention), with the provider, and for the operator's own AI provider; run `admin mcp-client add` again for each approved assistant to pick up changed redirect URIs; tell the provider about any change that affects §7.
-- **Incident:** contain by setting `Mcp:Enabled = false`, by removing an assistant's registration, or by deactivating the affected account or running `admin signout-all`; assess from the MCP audit entries (`"via": "mcp"`, `mcp.read` and their `client`); ask the affected person to delete the relevant chats; the provider assesses under the NDB scheme, including for a breach at an AI provider (s 26WC), and the operator passes on any breach notice from its own AI provider (§7.5). Add an MCP section to `ops/breach-response.md`.
+- **Incident:** contain by setting `Mcp:Enabled = false`, by removing an assistant's registration, or by deactivating the affected account or running `admin signout-all`; assess from the MCP audit entries (`"via": "mcp"`, `mcp.read` and their `client`); ask the affected person to delete the relevant chats; the provider assesses under the NDB scheme, including for a breach at an AI provider (s 26WC), and the operator passes on any breach notice from its own AI provider (§7.5). The steps are in the *AI-assistant access* section of [ops/breach-response.md](../ops/breach-response.md#ai-assistant-access). `Mcp:Enabled = false` set on the web app lasts only until the next deploy, which writes it from the `mcpEnabled` parameter, so production deploys are held until a pull request sets that parameter to `false` (A139).
 - **Updates:** Dependabot covers the SDK and OpenIddict. A new MCP specification revision, or a change in an approved assistant's behaviour, is checked against §3.6, §4 and §5.3 before upgrading.
 
 ### 11.6 Environments and cost
