@@ -130,7 +130,8 @@ R2  Admin MCP server                                          release   D48–D5
    │  │    Check the audit entry matches an invite from the Users screen, plus "via": "mcp"
    │  ├─ S07.04.02  Deactivate a user                         story · 2
    │  └─ S07.04.03  Reset a user's sign-in                    story · 2
-   └─ F07.05  Hardening, manual tests and switch-on           feature   slice 5
+   ├─ F07.05  Hardening, manual tests and switch-on           feature   slice 5
+   └─ F07.06  Onboarding with Claude Code                     feature   D95
 ```
 
 ## 3. Writing items
@@ -204,8 +205,8 @@ Try these patterns in order. They come from SPIDR [18] and the Humanizing Work p
 | Stories | Draft them feature by feature. Refine them (criteria, points) about two sprints ahead. |
 | Tasks | At sprint planning, or as you find them. |
 
-R2's design is [mcp-server.md](../mcp-server.md). R2 features follow its §1.4 slices one to one (F07.01–F07.05), just
-as R1 epics follow M0–M6.
+R2's design is [mcp-server.md](../mcp-server.md). R2 features follow its §1.4 slices one to one (F07.01–F07.05),
+just as R1 epics follow M0–M6. F07.06, added for D95, is the one feature outside the slices.
 
 ### 3.5 Acceptance criteria
 

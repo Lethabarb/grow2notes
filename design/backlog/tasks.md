@@ -8,6 +8,9 @@ cut ([Cut stories](#cut-stories)).
 T40, added on 28 October 2026 (D94), is a Release 1 task in lane D with one new story, S00.02.08: Resend's settings
 come from GitHub environment secrets.
 
+T41, added on 30 October 2026 (D95), is a Release 2 task in lane A with one new story, S07.06.01: a Claude Code skill
+that leads the owner through onboarding a new provider. T39 waits for it.
+
 - **The stories are the acceptance criteria.** An absorbed story keeps its section in its epic folder: its criteria
   and Notes are the task's acceptance criteria, and the task adds no new spec. Each task links its stories under
   *Absorbs*.
@@ -33,8 +36,8 @@ come from GitHub environment secrets.
 
 Up to four lanes run at once, each one task at a time:
 
-- **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T39, one after another, because each MCP tool edits
-  the shared `tools/list` snapshot and tool matrix.
+- **A:** T01, T04, T11, T16, T19, T24 for Release 1, then T30 to T38, then T41, then T39, one after another, because
+  each MCP tool edits the shared `tools/list` snapshot and tool matrix.
 - **B:** T02, T05, T06, T07, T15, T17, T21, T25, then T29 beside T30.
 - **C:** T03, T08, T09, T10, T12, T13, T14, T18, T20, T26. The note form is one hot spot, so its tasks run back to
   back.
@@ -7723,7 +7726,7 @@ status: new
 release: R2
 lane: A
 size: S
-depends_on: [T29, T38]
+depends_on: [T29, T38, T41]
 stories: [S07.05.09, S07.05.10]
 ```
 
@@ -7832,6 +7835,139 @@ silent the simplest option is taken and recorded as A130 and A131.
 - [x] Infra (#180; v2): the secure `resendApiKey`, the conditional vault secret, no what-if gate, and the deploy step.
 - [x] Docs (#184; v3): D94, design.md, A130 and A131, the infra README table, the first-use and go-live steps, the
       security review, T01 and T22 Notes, S00.02.08 and coverage.md.
+
+---
+
+## T41 Onboard a new provider with Claude Code
+
+```yaml
+id: T41
+status: done
+release: R2
+lane: A
+size: S
+depends_on: [T29, T38]
+stories: [S07.06.01]
+```
+
+### Outcome
+
+The owner runs `/onboard-provider` in Claude Code and is led through onboarding one new provider end to end: the
+preconditions, the by-hand operator steps (the organisation and first manager, Claude Code's registration as an approved
+assistant), and then the set-up through the Release 2 tools, in order: common items, guide prompts, participants' goals,
+then worker invites. It adds no app code, MCP tool, server feature or operator command over MCP (D48).
+
+### Absorbs
+
+- [S07.06.01][] Onboard a new provider with Claude Code
+
+### Notes
+
+- Owner request, 28 October 2026 (D95): "purely ai led through claude code (mcp + skill to onboard)". The owner chose
+  a new provider, end to end, and one provider for now; row-level security stays deferred (D94).
+- A new task, planned on 30 October 2026 against `origin/main` at `1045aef`. Until it merges, this section and the
+  plan are its spec. T39 now waits for it (T39 starts from a main that includes T41).
+- `add_participant` requires a date of birth, which the skill must not handle, so a manager adds each participant in
+  the app and the skill adds only their goals (the owner's brief, (d)).
+- Decisions and defaults: D95 (the owner's request, 30 October 2026) and A140 (design.md section 13; the folder, the
+  settings, Anthropic (Claude) as the operator's AI provider, participants by a manager, input, look-ups, confirmation,
+  reasons, order and pacing, the summary and the research record). The numbers were free on main at `1045aef`. No
+  migration, table, column, audit event type, endpoint, MCP tool, SPA change or app setting was added.
+- Research: Claude Code's documentation was read on 30 October 2026 (newest version named v2.1.304, v2.1.309 for
+  skills). The summary is that a server with a client ID metadata document signs in with no registration by the owner,
+  loopback redirects match on any port, form elicitation is declared (so Grow2Notes' form is expected, and the
+  preview path covers a client without it), `claude mcp logout` revokes tokens and `remove` does not, and how an HTTP
+  429 shows is not documented. The record, with the pages read, is in `ops/onboard-provider.md` (*Claude Code
+  documentation, as read on 30 October 2026*). A pre-registered client ID is the developer's fallback only.
+- Differences from the plan's requirements, stated openly (the R-ids are the plan's; they are named by subject):
+  R09, a pre-registered client ID is recorded for the developer and not given to the owner, because it would change what
+  the operator registers (MA2); R11, the copied settings allow the nine set-up and look-up tools by exact name and ask
+  before the four access tools, where the requirement banned every allow rule; R18, invites come last as the brief
+  orders, with the same arithmetic and no count of the skill's own (`rate_limited` is the stop, A139), where T38's
+  hand-off said to invite the first 10 at the start; R19, the owner paces the waits, because the skill never sleeps
+  and Bash is denied; R22, the parent company's name cannot be tested without writing it, so it is a review check of
+  each diff; R27, one research record, in the ops page, with this summary; the requirements' steps 204 to 211 are
+  merged into first-use steps 204 to 207 (four steps, each holding nothing open, D90); R32, T41 took only the
+  carry-overs in files it touches (design.md's A139 and header: A139 now reads 'It needs no decision' and 'No CI-time
+  default was needed', and agrees with the T38 Notes at 39 minutes 30 seconds), and the closed T38 Notes are left as
+  they are.
+- No test was removed or weakened. Nothing turns `Mcp:Enabled` on, and no `.mcp.json` or settings file with a site
+  address is committed (`OnboardingSkillTests.No_file_in_the_repository_connects_an_agent_to_a_site`).
+- Hand-off to T39, which takes these files in one go: `ops/mcp-switch-on.md` gets a pointer in section E to
+  `ops/onboard-provider.md` as the next step once switched on; its *Pacing an onboarding* paragraph (the T41
+  parenthetical and steps 1 to 3) is reworded to say the skill invites last, with the same arithmetic; step A8 point 2
+  and section E are re-wrapped (150 and 145 characters), and so is line 73 in step A1 (121 characters), which T38's
+  list missed; step A4 point 3's 'send 31' wrap is fixed; step A8 says 'reads True', as D4 and first-use step 165
+  do; the table rows at lines 38 to 41 are an exception, since a table row cannot wrap. `ops/mcp-monthly.sql` line 96
+  gets a comment that 3 is Support (`UserRole.Support`). `UserDeactivationTests.cs` line 15 cites A137 and A138
+  (comment only). T39 names Anthropic (Claude) in the provider's texts (S07.05.10), citing A140, and takes the next
+  free A-number only for a different default of its own. First-use step 165 already shows True and False and is not
+  touched.
+- CI time (Build and test, against the 60-minute timeout): v1 39m02s on its passing run, under 50 minutes, so the
+  timeout stays at 60, no CI-time default was taken and no test was split (step 190 is the owner's). v2 is documents
+  only.
+- Stories: S07.06.01 is done with criterion 8 ticked. Criteria 1 to 7 and 9 stay unticked, each with a dated Note
+  (criteria 3, 4 and 7 are proven by CI only in part); the rehearsal that proves them is first-use steps 204 to 207, by
+  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request, under
+  50 minutes. The story's `sprint` stays blank.
+
+### Plan
+
+Outcome: as above. T41 ships four things and changes no server code: a Claude Code project skill in
+`.claude/skills/onboard-provider/` (`SKILL.md`, `by-hand.md`, `template.csv`), one short ops page
+`ops/onboard-provider.md` (which also holds the record of Claude Code's documentation as read on 30 October 2026), one
+CI test class, and the records (D95, A140, F07.06, S07.06.01, first-use steps 204 to 207).
+
+Design approach:
+- The skill leads and never runs a by-hand step. It reads `ops/break-glass.md` and `ops/go-live.md` at run time and
+  shows their blocks, so it cannot drift from them. It never asks for the setup link.
+- It calls ten tools (the nine set-up and look-up tools and `invite_user`) and names the rest only as never used. It
+  looks up before every add, so a re-run adds nothing twice, and keeps no progress file and no invite counter: the
+  server's `rate_limited` is the stop (A139).
+- It runs from an empty folder outside the repository at local scope, with the owner's own
+  `.claude/settings.local.json`: ask before the four access tools, allow the nine others by exact name, deny web, shell
+  and file writes. `SKILL.md` has `disable-model-invocation: true` and no `allowed-tools`, so agents in this repo never
+  start it, and no `.mcp.json` is committed.
+- Each invite carries a reason and is confirmed by the owner in that turn, on the form path or the preview path.
+- Input is one CSV, `Kind,Name,Text` (Common item, Guide prompt, Goal, Worker), or typed rows.
+
+Domain changes: none. No entity, field, table, migration, audit event type or setting. `Participant.DateOfBirth` stays
+required.
+
+Reuse: the 28 tools on main as they are, the Support rules (MA7), confirmation (A136) and T38's limits; the safe
+look-ups (`includeArchived`, exact-email `list_users`, `changed: false`); `Repository.Root()` and `tools-list.json` for
+the tests.
+
+Tests (CI only): `OnboardingSkillTests` holds every tool name the skill mentions to `tools-list.json`, pins the skill to
+its ten tools, pins the copied settings (ask four, allow nine, deny six), pins the front matter (no `allowed-tools`,
+`disable-model-invocation: true`), the header-only template, no email address or setup link in the skill, and no
+`.mcp.json`. The existing server tests are unchanged.
+
+Decisions where the design is silent (D95 and A140, design.md section 13): the folder and settings above; Anthropic
+(Claude) as the operator's AI provider with Claude Code the Support person's assistant on a commercial account under a
+data processing agreement (T39 cites this); participants by a manager, goals only; one yes per section plan and each
+invite confirmed on its own; one reason per invite; invites last.
+
+Differences from the requirements: the pre-registered client ID path is recorded for the developer only (R09); the
+settings allow nine tools by exact name (R11); invites come last with no own count (R18); the owner paces waits (R19);
+the parent company's name is a review check (R22); one research record, in the ops page (R27).
+
+Hand-off to T39: a pointer from `ops/mcp-switch-on.md` to the skill as the next step once switched on, the reworded
+pacing paragraph, the T38 carry-overs in that file, `ops/mcp-monthly.sql` and `UserDeactivationTests.cs`, and naming
+Anthropic (Claude) in the provider's texts citing A140. Of the carry-overs T41 takes only design.md's A139.
+
+### Verticals
+
+- v1: the onboard-provider skill, its ops page and its CI guard; depends_on none; R01 to R24, R27 to R31, R36.
+- v2: records (D95, A140, A139 reworded, F07.06 and S07.06.01 ticked as CI proves them, the T41 Notes, first-use steps
+  204 to 207); depends_on v1; R25, R26, R32 to R35.
+
+### Steps
+
+- [x] Skill and guard (#203; v1): `SKILL.md`, `by-hand.md`, `template.csv`, `ops/onboard-provider.md`, the ops README
+      bullet, go-live.md section D intro, `.gitignore`, `tests/README.md`, and `OnboardingSkillTests`.
+- [x] Records (v2): D95, A140, the A139 rewording, the T41 Notes and the S07.06.01 criteria CI proves,
+      with first-use steps 204 to 207.
 
 ---
 
@@ -8066,3 +8202,4 @@ assumed defaults, which the owner may overturn:
 [S07.05.08]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070508-briefing-for-managers-and-the-support-person
 [S07.05.09]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070509-switch-on-in-production
 [S07.05.10]: E07-admin-mcp-server/F07.05-hardening-manual-tests-switch-on.md#s070510-name-the-approved-ai-providers-in-the-wording
+[S07.06.01]: E07-admin-mcp-server/F07.06-onboarding-with-claude-code.md#s070601-onboard-a-new-provider-with-claude-code
