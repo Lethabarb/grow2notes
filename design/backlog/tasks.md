@@ -7589,7 +7589,7 @@ is marked answered by A109; A137 and ops step 194 record the owner's 29 October 
 
 ```yaml
 id: T38
-status: new
+status: doing
 release: R2
 lane: A
 size: M
@@ -7619,6 +7619,45 @@ an assistant, and every mcp-server.md §8 control is matched to its test.
 
 - Writes `ops/mcp-switch-on.md`, the ordered list of every by-hand and outside step before switch-on, from the
   mcp-server.md §11.1 lines.
+
+### Plan
+
+Planned 30 October 2026.
+
+Outcome: assistant rate limits, MCP runbooks and the switch-on run sheet. No migration, table, column, audit event
+type, endpoint, SPA change or app setting. Nothing is switched on in production. Step 0 (before v1): a haiku explorer
+maps each mcp-server.md section 8 row (17 threat, 11 specification) to a test or by-hand step and checks for an MCP
+specification revision newer than 2026-07-28 (a page read, no upgrade); in-scope code gaps go into v1, the rest are
+filed as bugs.
+
+Design: the numbers live in `AssistantRateLimitPermits` (a DI-only seam, Design 60, 60, 10, 30, 10, 60). /mcp is 60 a
+minute per user from the token `sub` (Actor.InMcp), never by address, after authorization. Counts that must come before
+authentication sit in one `UseAssistantRateLimits` middleware ahead of `McpOriginRule`: Origin-bearing /mcp requests per
+address; /oauth/token and /oauth/revoke by stored client ID (30), one shared unregistered bucket (10), then an overall
+60 charged only when the client's own count admits; /oauth/authorize per address (30). Consent endpoints join the
+sign-in group. Confirmed invite, reset and deactivate share 10 an hour per user in `ConfirmedChangeLimit`, counted as the
+first statement of each Confirmed branch; the 11th gets `rate_limited` with `retryAfterSeconds`.
+
+Domain: none persisted; in-memory counts reset on restart (A95). `ToolError` gains an optional RetryAfterSeconds.
+
+Reuse: RateLimits (OnRejected, PerMinute, TooManyRequests), PartitionedRateLimiter, Actor.InMcp, MapSignInGroup,
+OpenIddict's FindByClientIdAsync, McpAuditFilter (unchanged), AssistantFlow and the ops SQL harness.
+
+Decisions where the design is silent (A139): Origin count 60 a minute per address in its own field; R4 written from the
+code; the hour window starts at a user's first counted change, so 20 invites take about an hour, and a gap over 30
+minutes lets the connection lapse; revoke shares the token counts; authorize gets its own per-address count; Via
+variable (any or mcp) on audit-extract.sql; mcp-monthly.sql and Log Analytics text for the 401 and 429 figures; Support
+marked by the inviter's current role; the accepted wasted approval at the 11th change. A140 only if a Build and test
+run passes 50 minutes (timeout 60 to 90, no split).
+
+### Verticals
+
+- v1: Limits and the T37 carry-over comments: AssistantRateLimitPermits, AssistantRateLimits, ConfirmedChangeLimit,
+  ToolError.RateLimited, the endpoint wiring, test seams and tests. Depends on: none. R1 to R11, R23.
+- v2: Runbooks and queries: breach-response.md AI-assistant section, audit-extract.sql Via, mcp-monthly.sql,
+  audit-extraction.md, ops/README.md and script tests. Depends on: none. R15 to R18.
+- v3: Records: ops/mcp-switch-on.md, first-use steps 202 and 203, design.md A139, mcp-server.md, coverage.md, F07.05,
+  tasks.md, the section 8 mapping in the PR body. Depends on: v1, v2. R12 to R14, R19 to R22, R24 to R26.
 
 ### Steps
 
