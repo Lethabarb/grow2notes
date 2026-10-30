@@ -234,9 +234,120 @@ public sealed class AuditExtractScriptTests(SqlServerFixture sqlServer)
         foreach (var (why, org, fromDate, toDate, participant, user) in cases)
         {
             var refused = await Assert.ThrowsAsync<SqlException>(() =>
-                RunWithTextAsync(db, org, fromDate, toDate, participant, user, ct));
+                RunWithTextAsync(db, org, fromDate, toDate, participant, user, "any", ct));
             Assert.True(refused.Number == 50000, $"{why} was not refused by the script: {refused.Message}");
         }
+    }
+
+    [Theory]
+    [InlineData("everything")]
+    [InlineData("")]
+    public async Task A_Via_that_is_neither_mcp_nor_any_is_refused_with_its_message(string via)
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(sqlServer, "AuditExtractViaRefusal", ct);
+        var a = await db.Services.AddOrganisationAsync();
+
+        var refused = await Assert.ThrowsAsync<SqlException>(() =>
+            RunAsync(db, a.OrganisationId, "2026-10-01", "2026-10-02", via: via, ct: ct));
+
+        Assert.Equal(50000, refused.Number);
+        Assert.Equal("Via is neither mcp nor any.", refused.Message);
+    }
+
+    [Fact]
+    public async Task Via_mcp_keeps_what_an_assistant_did_and_the_mcp_events_and_leaves_out_the_rest()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(sqlServer, "AuditExtractViaMcp", ct);
+        var a = await db.Services.AddOrganisationAsync();
+        var b = await db.Services.AddOrganisationAsync();
+        const string client = "Example assistant";
+        var appEvent = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 1, 0), "user.invited", actorId: a.ManagerId,
+            details: $$"""{"new":{"email":"x"},"via":"mcp","client":"{{client}}","tool":"invite_user"}""");
+        var read = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 2, 0), "mcp.read", actorId: a.ManagerId,
+            details: $$"""{"via":"mcp","client":"{{client}}","tool":"list_users","count":3}""");
+        var refusal = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 3, 0), "mcp.refused", actorId: a.ManagerId,
+            details: $$"""{"via":"mcp","client":"{{client}}","tool":"invite_user","code":"rate_limited"}""");
+        var authorised = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 4, 0), "mcp.authorised", actorId: a.ManagerId,
+            details: $$"""{"client":"{{client}}","scope":"mcp"}""");
+        var notAuthorised = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 5, 0), "mcp.authorisation_refused", actorId: a.ManagerId,
+            details: $$"""{"client":"{{client}}","why":"declined"}""");
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 6, 0), "user.invited", actorId: a.ManagerId,
+            details: """{"new":{"email":"y"}}""");
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 7, 0), "user.invited", actorId: a.ManagerId,
+            details: """{"new":{"email":"z"},"via":"cookie"}""");
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 8, 0), "admin.mcp_client_added", entityType: "McpClient",
+            details: $$"""{"client":"{{client}}"}""");
+        await AddEventAsync(
+            db, b.OrganisationId, At(2026, 10, 7, 9, 0), "mcp.read", details: """{"via":"mcp","client":"c"}""");
+
+        var results = await RunAsync(db, a.OrganisationId, "2026-10-07", "2026-10-07", via: "mcp", ct: ct);
+
+        var table = Assert.Single(results);
+        Assert.Equal([appEvent, read, refusal, authorised, notAuthorised], RowIds(table));
+        Assert.All(
+            table.Rows.Cast<DataRow>(),
+            row => Assert.Contains(client, (string)row["Details"], StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Via_mcp_combines_with_Participant_and_User_and_keeps_the_columns()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(sqlServer, "AuditExtractViaCombined", ct);
+        var a = await db.Services.AddOrganisationAsync();
+        const string viaMcp = """{"via":"mcp","client":"Example assistant","tool":"get_participant"}""";
+        var wanted = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 1, 0), "mcp.read", actorId: a.ManagerId,
+            participantId: a.ParticipantId, details: viaMcp);
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 2, 0), "mcp.read", actorId: a.WorkerId,
+            participantId: a.ParticipantId, details: viaMcp);
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 3, 0), "mcp.read", actorId: a.ManagerId, details: viaMcp);
+        await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 4, 0), actorId: a.ManagerId, participantId: a.ParticipantId);
+
+        var results = await RunAsync(
+            db, a.OrganisationId, "2026-10-07", "2026-10-07", participant: Text(a.ParticipantId),
+            user: Text(a.ManagerId), via: "mcp", ct: ct);
+
+        var table = Assert.Single(results);
+        Assert.Equal([wanted], RowIds(table));
+        Assert.Equal(
+            [
+                "Time (Melbourne)", "Event", "By", "By ID", "Participant", "Participant ID", "Entity", "Entity ID",
+                "Entity name", "Details", "Row",
+            ],
+            ColumnNames(table));
+    }
+
+    [Fact]
+    public async Task Via_mcp_is_not_broken_by_a_row_with_no_Details_or_Details_that_are_not_JSON()
+    {
+        var ct = TestContext.Current.CancellationToken;
+        await using var db = await OpsScripts.OnDatabaseOfItsOwnAsync(sqlServer, "AuditExtractViaNotJson", ct);
+        var a = await db.Services.AddOrganisationAsync();
+        await AddEventAsync(db, a.OrganisationId, At(2026, 10, 7, 1, 0), details: null);
+        await AddEventAsync(db, a.OrganisationId, At(2026, 10, 7, 2, 0), details: "not json at all");
+        await AddEventAsync(db, a.OrganisationId, At(2026, 10, 7, 3, 0), details: """["via","mcp"]""");
+        var refusal = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 4, 0), "mcp.refused", details: "not json at all");
+        var viaMcp = await AddEventAsync(
+            db, a.OrganisationId, At(2026, 10, 7, 5, 0), details: """{"via":"mcp"}""");
+
+        var results = await RunAsync(db, a.OrganisationId, "2026-10-07", "2026-10-07", via: "mcp", ct: ct);
+
+        Assert.Equal([refusal, viaMcp], RowIds(Assert.Single(results)));
     }
 
     private static DateTime At(int year, int month, int day, int hour, int minute, int second = 0, int millis = 0) =>
@@ -264,12 +375,12 @@ public sealed class AuditExtractScriptTests(SqlServerFixture sqlServer)
 
     private static Task<IReadOnlyList<DataTable>> RunAsync(
         OpsDatabase db, Guid organisationId, string fromDate, string toDate, string participant = "any",
-        string user = "any", CancellationToken ct = default) =>
-        RunWithTextAsync(db, Text(organisationId), fromDate, toDate, participant, user, ct);
+        string user = "any", string via = "any", CancellationToken ct = default) =>
+        RunWithTextAsync(db, Text(organisationId), fromDate, toDate, participant, user, via, ct);
 
     private static Task<IReadOnlyList<DataTable>> RunWithTextAsync(
         OpsDatabase db, string organisation, string fromDate, string toDate, string participant, string user,
-        CancellationToken ct) =>
+        string via, CancellationToken ct) =>
         OpsScripts.RunAsync(
             db.ConnectionString,
             "ops/audit-extract.sql",
@@ -280,6 +391,7 @@ public sealed class AuditExtractScriptTests(SqlServerFixture sqlServer)
                 ["To"] = toDate,
                 ["Participant"] = participant,
                 ["User"] = user,
+                ["Via"] = via,
             },
             ct);
 

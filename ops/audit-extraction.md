@@ -4,7 +4,8 @@ The audit log has no screen in v1, so when a manager asks a question about it, t
 the answer with `ops/audit-extract.sql` ([A28](../design/design.md#13-assumed-defaults)). This is a direct query on
 production data, so it is done the same way every time, from a request that is recorded first
 ([A92](../design/design.md#13-assumed-defaults)). The script only reads. This file says what the log holds, how to
-record a request, and when to run the script, what to have ready, how to run it and what it prints.
+record a request, and when to run the script, what to have ready, how to run it and what it prints. The last section is
+the monthly check of the AI-assistant access, which runs `ops/mcp-monthly.sql` the same way.
 
 ## What the log holds, and what it does not
 
@@ -81,19 +82,28 @@ these columns:
 
    In test, use `sql-grow2notes-test`. The first result set lists the organisations, the second the participants and
    the third the users, each with its ID.
-3. **Run the extract** for the question, with the values from the table below. Every value is an ID, a date, or `any`.
+3. **Run the extract** for the question, with the values from the table below. Every value is an ID, a date, `any` or
+   `mcp`. Via is `mcp` to keep only what an AI assistant did or was let in to do, and `any` otherwise: `sqlcmd` has no
+   optional variable, so `any` is how to leave it off.
 
-   | Question | Participant | User |
-   |---|---|---|
-   | What was done to this participant | their ID | `any` |
-   | What this user did | `any` | their ID |
-   | Everything in the period | `any` | `any` |
+   | Question | Participant | User | Via |
+   |---|---|---|---|
+   | What was done to this participant | their ID | `any` | `any` |
+   | What this user did | `any` | their ID | `any` |
+   | Everything in the period | `any` | `any` | `any` |
+   | What was done through AI assistants ([breach-response.md](breach-response.md#ai-assistant-access)) | `any` | `any` | `mcp` |
+
+   With `mcp` the extract keeps the rows whose Details say `"via": "mcp"` (an assistant made the change or the
+   look-up) and every `mcp.*` event: `mcp.read` and `mcp.refused` for each call, and `mcp.authorised` and
+   `mcp.authorisation_refused` for a person's answer on the consent screen. The operator's `admin.mcp_client_*`
+   commands are left out. `client` in Details names the assistant and `tool` the call. It combines with Participant and
+   User, and the columns are the same.
 
    ```shell
    sqlcmd -S sql-grow2notes-prod.database.windows.net -d sqldb-grow2notes \
      --authentication-method ActiveDirectoryDefault -N strict -b -W \
      -v Organisation=<organisation ID> -v From=<yyyy-mm-dd> -v To=<yyyy-mm-dd> \
-     -v Participant=<participant ID or any> -v User=<user ID or any> \
+     -v Participant=<participant ID or any> -v User=<user ID or any> -v Via=<mcp or any> \
      -s $'\t' -y 0 -o <file>.tsv -i ops/audit-extract.sql
    echo "Exit code: $?"
    sed -i 2d <file>.tsv
@@ -143,10 +153,11 @@ who asked.
 
 - **Exit code 1: refused.** The script checks every value before it reads anything, and writes one line saying what is
   wrong: the organisation is not an ID or is not found (copy it from `find-ids.sql` again), a date is not written
-  `yyyy-mm-dd` or does not exist, From is after To, or Participant or User is neither an ID nor `any`. An empty value
-  is refused as well. Put right what it names and run it again. Delete the file the refused run left, which is empty or
-  partial.
-- **`sqlcmd` stops saying a scripting variable is not defined:** a `-v` was left out. All five are needed.
+  `yyyy-mm-dd` or does not exist, From is after To, Participant or User is neither an ID nor `any`, or Via is neither
+  `mcp` nor `any`. For `mcp-monthly.sql` it is a Month that is not written `yyyy-mm`. An empty value is refused as
+  well. Put right what it names and run it again. Delete the file the refused run left, which is empty or partial.
+- **`sqlcmd` stops saying a scripting variable is not defined:** a `-v` was left out. All six are needed for
+  `audit-extract.sql`, and both for `mcp-monthly.sql`.
 - **Error 40613, or a sign-in or firewall error:** the database is paused or the rule is not open yet. See
   `infra/sql/check-database.sql`'s header, wait a minute and run it again.
 - **Any other exit code, or a file that fails the check in *Running it*:** the file is not to be used. Delete it and run
@@ -157,3 +168,81 @@ who asked.
   pull request once a run in the test environment has shown which flags work.
 - **A file with only the header:** the script ran, and nothing matched. Check the dates and the IDs against
   `find-ids.sql` before telling the manager there is nothing in the log.
+
+## Monthly assistant figures
+
+Once the AI-assistant access is switched on in production, the monthly check of
+[design.md §10.9](../design/design.md#109-routine-operations-developer) gives each provider the month's figures for it
+([mcp-server.md §11.5](../design/mcp-server.md)). There are two parts: `ops/mcp-monthly.sql`, for the figures that are
+in the audit log and the list of invites, and a query on the application logs, for the answers that the log does not
+hold. No alert is set for any of them. In test, run both only on made-up data (A35).
+
+### The audit figures and the invite list
+
+1. Add a row to the request record, with *Why* as the monthly check, the month in the question and `ops/mcp-monthly.sql`
+   with its values in *Script and values*. Get the IDs, open the firewall rule and sign in as *Running it* says.
+2. Run it for each organisation, on the first working day after the month ends:
+
+   ```shell
+   sqlcmd -S sql-grow2notes-prod.database.windows.net -d sqldb-grow2notes \
+     --authentication-method ActiveDirectoryDefault -N strict -b -W \
+     -v Organisation=<organisation ID> -v Month=<yyyy-mm> \
+     -s $'\t' -y 0 -o <file>.tsv -i ops/mcp-monthly.sql
+   echo "Exit code: $?"
+   sed -i '/^-[-\t]*$/d' <file>.tsv
+   ```
+
+   `Month` is a Melbourne month: from Melbourne midnight at its start to Melbourne midnight at the start of the next.
+   The file holds two result sets, one after the other, each under its own header, and `sed` removes the line of
+   dashes under both. Check the file as *Running it* says, and save it in the same way.
+3. **The figures** are the first result set, one row:
+   - **MCP calls:** the audit rows that the assistants' tool calls made in the month: `mcp.read` and `mcp.refused`, and
+     every row whose Details say `"via": "mcp"`, each counted once. The consent screen's `mcp.authorised` and
+     `mcp.authorisation_refused` are not calls.
+   - **Refused:** the `mcp.refused` rows among them: calls that were refused, with the reason in Details.
+
+   Both are counts of rows, so give them as the monthly check's figures and not as an exact number of events: a retried
+   write can add a row (see *What the log holds*).
+4. **The invite list** is the second result set: one row for each user invited through an assistant in the month, with
+   Time (Melbourne), Invited, Email, Role, Reason, Invited by, Support, Assistant and Row. Invited, Email and Role are
+   as they were when the invite was made. **Support** says "Yes" for an invite made by a Support person, judged by that
+   person's role today because the log does not record the role; an invite by a manager is empty, even if the manager
+   gave a reason. Send the file to the provider, with the Support invites marked as they are, and keep it in the records
+   storage as the request record's row (MA7). It holds the invited people's names and email addresses, so it is
+   personal information and goes only to the provider's managers.
+
+### The answers that the log does not hold
+
+The `401` answers on `/mcp` and the `429` answers on `/mcp` and `/oauth/token` are not audit events, so the audit log
+cannot count them. Application Insights keeps the requests for 30 days (design.md §10.1). On the first working day
+after the month ends, sign in to the Azure portal as the operator, open `appi-grow2notes-prod` and run this in its
+*Logs*, with `month` set to the first day of the month that ended, as a Melbourne date:
+
+```kusto
+let month = datetime(2026-10-01);
+let monthStart = datetime_local_to_utc(month, 'Australia/Melbourne');
+let monthEnd = datetime_local_to_utc(datetime_add('month', 1, month), 'Australia/Melbourne');
+let coveredFrom = max_of(monthStart, ago(30d));
+let counts = requests
+    | where timestamp >= coveredFrom and timestamp < monthEnd
+    | extend path = tostring(parse_url(url).Path)
+    | where (path == '/mcp' and resultCode in ('401', '429')) or (path == '/oauth/token' and resultCode == '429')
+    | summarize Count = sum(itemCount) by path, resultCode;
+print path = 'Covered from (Melbourne)',
+    resultCode = format_datetime(datetime_utc_to_local(coveredFrom, 'Australia/Melbourne'), 'yyyy-MM-dd HH:mm'),
+    Count = long(null)
+| union counts
+```
+
+- **It counts requests, not calls:** `sum(itemCount)` adds back the requests that sampling left out. The `401` answers
+  on `/mcp` are calls with a missing, expired or revoked token, so some are normal. A `429` is a request that a limit
+  refused (design.md §9.9; mcp-server.md §5.6).
+- **The first row says how far back the data goes.** The month's first requests may be older than the 30 days. When the
+  covered-from time is later than the month's start, write "from" and that date beside the figures in the request
+  record, so that a short count is not read as a quiet month.
+- **Give the figures with the audit figures above,** in the same request record row. A burst of `429` answers on
+  `/oauth/token` is the accepted signal that [breach-response.md](breach-response.md#ai-assistant-access) describes.
+- **In the workspace,** the table is `AppRequests` and its columns are `TimeGenerated`, `Url`, `ResultCode` and
+  `ItemCount`. The names above are those of the Application Insights *Logs*, which a workspace-based resource
+  accepts. CI does not run this query: the first run, in test, is step A6 of the switch-on run sheet,
+  `ops/mcp-switch-on.md` (T38).
