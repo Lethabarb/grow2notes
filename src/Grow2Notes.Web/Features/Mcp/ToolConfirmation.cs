@@ -42,8 +42,9 @@ internal readonly record struct ConfirmationAnswer(ConfirmationStep Step, string
 /// as the form. <c>McpServer.ElicitAsync</c> is not used, as it keeps a continuation in memory.
 /// <para>
 /// The state holds who was asked, in which organisation, for which tool and arguments (as a hash, so that a changed
-/// email or reason invalidates it), the version of the row, and when. It is checked before the answer is read. It is
-/// not single use: a replay within its lifetime meets the row, and its version.
+/// email or reason invalidates it), the version of the row (an invite holds none, as it has no row yet), and when. It
+/// is checked before the answer is read. It is not single use: a replay within its lifetime meets the row, and its
+/// version.
 /// </para>
 /// <para>
 /// The consent is the client's answer, so a client that lets the model write that answer defeats the form. That is the

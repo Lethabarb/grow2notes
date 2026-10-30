@@ -99,7 +99,7 @@ internal static class RateLimits
 
     // The address after UseForwardedHeaders. An IPv4 client may arrive in its IPv4-mapped form, which would otherwise
     // be a second count for the same client. No address, which only a test host gives, is one count of its own.
-    private static string ClientAddress(HttpContext context) =>
+    internal static string ClientAddress(HttpContext context) =>
         context.Connection.RemoteIpAddress is { } address
             ? (address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address).ToString()
             : string.Empty;

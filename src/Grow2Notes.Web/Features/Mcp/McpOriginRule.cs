@@ -7,7 +7,8 @@ namespace Grow2Notes.Web.Features.Mcp;
 /// assistant that is not in a browser sends none, and one is fine only if it is the origin of an approved assistant's
 /// HTTPS redirect URI. Anything else is a page of another site calling the endpoint from a person's browser, and
 /// gets a 403 before any token is read. No IP restriction is applied, and no response ever carries a cross-origin
-/// (CORS) header: the app configures none.
+/// (CORS) header: the app configures none. A request that carries an Origin is counted by client address before this
+/// rule, so that its read of the approved assistants is never unlimited (A139).
 /// </summary>
 internal static class McpOriginRule
 {

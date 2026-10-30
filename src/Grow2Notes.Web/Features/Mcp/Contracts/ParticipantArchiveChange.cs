@@ -1,7 +1,7 @@
 namespace Grow2Notes.Web.Features.Mcp.Contracts;
 
 /// <summary>
-/// What <c>archive_participant</c> returns (mcp-server.md §5.2, A137): the preview that asks the person to confirm, the
+/// What <c>archive_participant</c> returns (mcp-server.md §5.2, A138): the preview that asks the person to confirm, the
 /// outcome once they have, or the answer that they declined. One record with optional fields serves all three, as the
 /// contract rules allow no union. It names the participant by ID and name and holds no date of birth.
 /// </summary>
