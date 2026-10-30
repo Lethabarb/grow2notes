@@ -40,7 +40,8 @@ internal static class McpEndpoint
     /// </summary>
     public static IEndpointRouteBuilder MapMcpEndpoint(this IEndpointRouteBuilder app)
     {
-        var mcp = app.MapGroup("/mcp").RequireAuthorization(Policies.McpAdmin);
+        var mcp = app.MapGroup("/mcp").RequireAuthorization(Policies.McpAdmin)
+            .RequireRateLimiting(AssistantRateLimits.Requests);
         mcp.MapMcp();
         mcp.MapMethods("", [HttpMethods.Get, HttpMethods.Delete], static (HttpContext http) =>
         {

@@ -13,7 +13,15 @@ namespace Grow2Notes.Web.Features.Mcp.Contracts;
 /// <param name="Code">The code that §5.5 lists, which the audit event <c>mcp.refused</c> records.</param>
 /// <param name="Message">What the model reads: it never echoes a value the model sent.</param>
 /// <param name="Fields">The messages of each field that failed validation, or null.</param>
-internal sealed record ToolError(string Code, string Message, IReadOnlyDictionary<string, string[]>? Fields = null)
+/// <param name="RetryAfterSeconds">
+/// The seconds to wait before the call can succeed, for <c>rate_limited</c> only; every other error leaves it out, and
+/// it is written inside <c>error</c> beside the others.
+/// </param>
+internal sealed record ToolError(
+    string Code,
+    string Message,
+    IReadOnlyDictionary<string, string[]>? Fields = null,
+    int? RetryAfterSeconds = null)
 {
     /// <summary>Anything that no tool refused for: the transaction is rolled back and nothing was changed.</summary>
     public static ToolError Unexpected { get; } = new("unexpected", "Something went wrong. Nothing was changed.");
@@ -58,6 +66,18 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
         new("reason.required", "Support must send a reason: why, and who asked. Nothing was changed.");
 
     /// <summary>
+    /// A confirmed change over the hour's count (<c>rate_limited</c>), an MCP-only code (mcp-server.md §5.5) that stays
+    /// out of <see cref="ErrorCode"/>. <paramref name="retryAfter"/> is the time until the user's hour ends, said in
+    /// whole seconds, rounded up and never less than 1; the message holds no number.
+    /// </summary>
+    public static ToolError RateLimited(TimeSpan retryAfter) =>
+        new(
+            "rate_limited",
+            "This account has confirmed as many invites, sign-in resets and deactivations as an hour allows. " +
+            "Nothing was changed. Try again after retryAfterSeconds seconds; the person may need to confirm again.",
+            RetryAfterSeconds: Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds)));
+
+    /// <summary>
     /// The refusal of the arguments that a handler refused (<c>validation.failed</c>), each message under its
     /// argument's name: the handler's keys are its members' names, which are camel-cased as the arguments are.
     /// </summary>
@@ -95,15 +115,18 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
 
     public CallToolResult ToResult()
     {
-        var body = new JsonObject
+        var error = new JsonObject
         {
-            ["error"] = new JsonObject
-            {
-                ["code"] = Code,
-                ["message"] = Message,
-                ["fields"] = JsonSerializer.SerializeToNode(Fields),
-            },
+            ["code"] = Code,
+            ["message"] = Message,
+            ["fields"] = JsonSerializer.SerializeToNode(Fields),
         };
+        if (RetryAfterSeconds is { } seconds)
+        {
+            error["retryAfterSeconds"] = seconds;
+        }
+
+        var body = new JsonObject { ["error"] = error };
 
         return new()
         {

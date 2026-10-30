@@ -8,13 +8,17 @@
 --   From, To      the first and last day to cover, as yyyy-mm-dd Melbourne dates, both included.
 --   Participant   a participant's ID, or any.
 --   User          a user's ID, or any.
+--   Via           mcp to keep only what an AI assistant did or was let in to do (the rows with via mcp in Details, and
+--                 the mcp.* events), or any for every row. The runbook for an AI-assistant breach uses mcp
+--                 (ops/breach-response.md). sqlcmd has no optional variable, so any is how to leave it off.
 -- The three questions the log's indexes answer (design.md §5.3):
 --   what was done to this participant   Participant=<ID>  User=any
 --   what this user did                  Participant=any   User=<ID>
 --   everything in the period            Participant=any   User=any
 -- An ID with no row is accepted, because audit rows outlive a destruction (design.md §12): the rows still come back,
 -- with the name shown as "(no longer on record)". The script refuses an organisation that is not an ID or does not
--- exist, a date that is not yyyy-mm-dd, From after To, and a Participant or User that is neither an ID nor any.
+-- exist, a date that is not yyyy-mm-dd, From after To, a Participant or User that is neither an ID nor any, and a Via
+-- that is neither mcp nor any.
 --
 -- One result set, oldest first (then by Row): Time (Melbourne) with its offset, Event, By, By ID, Participant,
 -- Participant ID, Entity, Entity ID, Entity name, Details, and Row. By shows "Operator command" for an event with no
@@ -29,7 +33,7 @@
 --
 --   sqlcmd -S <server>.database.windows.net -d <database> \
 --     --authentication-method ActiveDirectoryDefault -N strict -b -W \
---     -v Organisation=<ID> -v From=2026-10-01 -v To=2026-10-31 -v Participant=any -v User=any \
+--     -v Organisation=<ID> -v From=2026-10-01 -v To=2026-10-31 -v Participant=any -v User=any -v Via=any \
 --     -s $'\t' -y 0 -o <file>.tsv -i ops/audit-extract.sql
 --   sed -i 2d <file>.tsv
 
@@ -66,6 +70,9 @@ DECLARE @UserText nvarchar(100) = N'$(User)';
 DECLARE @U uniqueidentifier = TRY_CONVERT(uniqueidentifier, @UserText);
 IF @UserText <> N'any' AND @U IS NULL
     THROW 50000, N'User is neither the ID of a user nor any.', 1;
+DECLARE @Via nvarchar(100) = N'$(Via)';
+IF @Via NOT IN (N'any', N'mcp')
+    THROW 50000, N'Via is neither mcp nor any.', 1;
 
 -- Melbourne midnight at the start of From up to Melbourne midnight after To, as UTC. Melbourne midnight always exists,
 -- because the clocks change at 2 or 3 am.
@@ -111,5 +118,10 @@ WHERE a.OrganisationId = @Org
     AND a.OccurredAtUtc < @ToUtc
     AND (@P IS NULL OR a.ParticipantId = @P)
     AND (@U IS NULL OR a.ActorUserId = @U)
+    -- mcp.authorised and mcp.authorisation_refused are made in the browser and carry no via, so the event type is the
+    -- second way in. admin.mcp_client_* are the operator's commands and are not part of it.
+    AND (@Via = N'any'
+        OR CASE WHEN ISJSON(a.Details) = 1 THEN JSON_VALUE(a.Details, '$.via') END = N'mcp'
+        OR a.EventType LIKE N'mcp.%')
 ORDER BY a.OccurredAtUtc, a.Id
 OPTION (RECOMPILE);

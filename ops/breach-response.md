@@ -118,6 +118,69 @@ Do not run `retention-destroy.sql` while an assessment is open.
 
 Give the managers what was found, in writing and in the records storage, as it is found.
 
+## AI-assistant access
+
+Use this section as well as the parts above when the suspicion is about an AI assistant that managers or Support use
+through the MCP server ([mcp-server.md §11.5](../design/mcp-server.md)): a signed-in device or an account of an
+assistant in the wrong hands, a wrong change made through an assistant, or a breach notice from an AI provider. An
+assistant never receives note text (D49). What it could read is what the MCP look-ups return: participants' names and
+goal wording, common items, guide prompts and staff names and emails.
+
+### Contain, in this order
+
+Stop at the first way that is enough. Each of the four is a decision for the managers, and the decisions table records
+it.
+
+1. **Turn the access off.** Set `Mcp__Enabled` to `false` on the production web app, as the app setting the Bicep file
+   writes from its `mcpEnabled` parameter:
+
+   ```shell
+   az webapp config appsettings set --resource-group rg-grow2notes-prod-ause --name app-grow2notes-prod \
+     --settings Mcp__Enabled=false
+   ```
+
+   The app restarts. Every MCP and OAuth path then answers `404`, so no assistant can connect or refresh, and the rest
+   of the app is as before. Check that `/mcp` answers `404`. **The setting lasts only until the next deploy,** which
+   writes the `mcpEnabled` parameter of `infra/main.bicep` back. So **hold production deploys** until a pull request
+   sets `mcpEnabled = false` in `infra/prod.bicepparam` and is deployed, and turn the access on again only by a pull
+   request that sets it to `true`, with the managers' agreement. This step does not wait for the evidence below: the
+   audit rows are in the database and the setting does not touch them. Export the application logs at once
+   (*Preserve evidence*, step 2), because they keep 30 days.
+2. **Remove the assistant's registration,** with `admin mcp-client remove`
+   ([break-glass.md](break-glass.md#admin-mcp-client)). It deletes the registration with the authorisations and tokens
+   it issued, so that assistant can neither connect nor refresh for anyone, and other assistants are untouched. Use it
+   when the fault is with one assistant and the access can stay on for the others.
+3. **A manager deactivates the affected account,** as in step 1 of *Contain* above. The person's next call through any
+   assistant is refused, and their authorisations are revoked.
+4. **The operator runs `admin signout-all`** ([break-glass.md](break-glass.md#admin-signout-all)) when it is not known
+   whose account is affected, as in step 2 of *Contain* above. It ends every session and every assistant connection in
+   every organisation.
+
+### Assess
+
+Run `ops/audit-extract.sql` with `Via=mcp`, as [audit-extraction.md](audit-extraction.md) says, for the period from
+before the breach was possible to now, and add a request row for each extract. With `Via=mcp` it keeps what was done
+through an assistant (the rows with `"via": "mcp"` in Details) and the `mcp.*` events, among them when a person
+connected an assistant or refused to. The `mcp.read` rows show what was disclosed: each look-up's tool and the IDs and
+number of what it returned. Each row's `client` in Details names the assistant that received it. The `user.*` and
+`participant.*` rows show what was changed. Use `Participant` or `User` with it to narrow the question. The log has
+the same limits as before: it does not say what a person did with the answer in the assistant.
+
+A burst of `429` answers on `/oauth/token` in the monthly Log Analytics query
+([audit-extraction.md](audit-extraction.md#monthly-assistant-figures)) is a known, accepted signal and not a breach:
+client IDs are published, so anyone can use up an assistant's count, which exposes nothing and stops when the sender
+stops.
+
+### Notify
+
+- **Ask the affected person to delete the relevant chats** in the assistant, so that what was returned does not stay
+  in their history.
+- **The provider assesses under the notifiable data breaches scheme** as in *The legal position*, and that includes a
+  breach at an AI provider: the provider stays accountable for information it disclosed to an AI provider overseas
+  (Privacy Act s 26WC; [design.md §9.10](../design/design.md#910-breach-response-notifiable-data-breaches-scheme)).
+- **The operator passes on any breach notice from its own AI provider without delay,** whenever the Support account
+  connected through it ([mcp-server.md §7.5](../design/mcp-server.md)).
+
 ## The decisions table
 
 The managers keep the filled-in copy in their records storage, never in this repository. One row for each decision or
@@ -128,7 +191,8 @@ action, from the first suspicion to the end of the assessment.
 | | | | |
 
 Rows to expect: when the provider was told; each account deactivated; `admin signout-all` run; the web app stopped and
-started; each extract, log export and Activity Log export, with its place in the records storage; the point-in-time
+started; for AI-assistant access, `Mcp__Enabled` set to `false` and the deploy hold lifted, and each registration
+removed; each extract, log export and Activity Log export, with its place in the records storage; the point-in-time
 copy's name, restore point and deletion; the assessment's outcome; and whether the OAIC and the people affected were
 told.
 

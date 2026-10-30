@@ -86,14 +86,17 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
     /// the app also has <see cref="ProbeTools"/>, which no real app has; without it the app has the tools production
     /// has. With <paramref name="telemetry"/> the app runs with its telemetry on, as in Azure, and everything it logs,
     /// traces, measures and sends goes to those sinks, at the app's own log levels; <see cref="Logs"/> is then the
-    /// sinks' log provider.
+    /// sinks' log provider. With <paramref name="limited"/> the app has the design's rate limits, which a test host
+    /// otherwise lifts (<see cref="TestRateLimits"/>): <see cref="RateLimitPermits.Design"/> and
+    /// <see cref="AssistantRateLimitPermits.Design"/>.
     /// </summary>
     public static async Task<AssistantFlow> StartAsync(
         Grow2NotesFactory factory,
         SqlServerFixture sqlServer,
         string name,
         bool probes = true,
-        TelemetrySinks? telemetry = null)
+        TelemetrySinks? telemetry = null,
+        bool limited = false)
     {
         var databaseOfItsOwn = await factory.OnDatabaseOfItsOwnAsync(sqlServer, name);
         var clock = new FakeTimeProvider(TestClock.Start);
@@ -112,6 +115,12 @@ internal sealed partial class AssistantFlow : IAsyncDisposable
                     if (telemetry is null)
                     {
                         services.AddSingleton<ILoggerProvider>(logs);
+                    }
+
+                    if (limited)
+                    {
+                        services.AddSingleton(RateLimitPermits.Design);
+                        services.AddSingleton(AssistantRateLimitPermits.Design);
                     }
 
                     services.AddClientAddressHeader();

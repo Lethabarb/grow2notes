@@ -18,7 +18,8 @@ namespace Grow2Notes.Web.Features.Mcp.Tools;
 /// <see cref="McpCall"/> for the call's audit row. A change finds the account by its email (an invite has none yet),
 /// applies Support's limits from the role claim (<see cref="ToolActor.IsSupport"/>), and asks the person to confirm
 /// (<see cref="ToolConfirmation"/>) before the handler acts. The handler's own refusals come only when the person
-/// confirms (A137).
+/// confirms (A137). A confirmed deactivation, invite or sign-in reset first uses one of the user's permits for the hour
+/// (<see cref="ConfirmedChangeLimit"/>, A139), so everything that returns before the confirmation is read uses none.
 /// </summary>
 [McpServerToolType]
 internal sealed class UsersTools(
@@ -27,6 +28,7 @@ internal sealed class UsersTools(
     UserInvite invite,
     UserSetupLink setupLink,
     ToolConfirmation confirmation,
+    ConfirmedChangeLimit limit,
     IHttpContextAccessor httpContextAccessor,
     McpCall call)
 {
@@ -190,6 +192,11 @@ internal sealed class UsersTools(
                 return ToolResults.Of(new AccessChange(
                     "declined", DeactivateAction, Message: "Nothing was changed."));
             case ConfirmationStep.Confirmed:
+                if (limit.TryCount(actor.UserId) is { } limited)
+                {
+                    return limited.ToResult();
+                }
+
                 var result = await deactivation.DeactivateAsync(
                     actor,
                     target.Id,
@@ -321,6 +328,11 @@ internal sealed class UsersTools(
             case ConfirmationStep.Declined:
                 return ToolResults.Of(new AccessChange("declined", InviteAction, Message: "Nothing was changed."));
             case ConfirmationStep.Confirmed:
+                if (limit.TryCount(actor.UserId) is { } limited)
+                {
+                    return limited.ToResult();
+                }
+
                 var result = await invite.InviteAsync(actor, details, Trimmed(reason), cancellationToken);
                 return RefusalOf(result)?.ToResult()
                     ?? ToolResults.Of(new AccessChange("done", InviteAction, invitee, Changed: true));
@@ -415,6 +427,11 @@ internal sealed class UsersTools(
             case ConfirmationStep.Declined:
                 return ToolResults.Of(new AccessChange("declined", ResetAction, Message: "Nothing was changed."));
             case ConfirmationStep.Confirmed:
+                if (limit.TryCount(actor.UserId) is { } limited)
+                {
+                    return limited.ToResult();
+                }
+
                 var result = await setupLink.SendAsync(
                     actor,
                     target.Id,
