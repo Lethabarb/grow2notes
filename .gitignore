@@ -22,3 +22,6 @@ tests/e2e/test-results/
 
 # Git Bash (msys) crash dumps
 *.stackdump
+
+# The owner's own Claude Code permissions for an onboarding folder (ops/onboard-provider.md)
+.claude/settings.local.json
