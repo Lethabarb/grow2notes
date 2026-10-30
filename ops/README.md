@@ -11,6 +11,9 @@ Runbooks for the developer (design.md §7.3).
 - `go-live.md`: the operator's ordered run sheet for production: set-up as Owner, the read-only checks, the alert
   tries, the provider's organisation and first manager with the email checks, and the go-live lines of design.md §14,
   then the restore test and the cut-over (T22, T27, T28).
+- `mcp-switch-on.md`: the run sheet for turning on the AI-assistant access: the limits an assistant meets, the by-hand
+  tests in test, the provider's lines, the briefing, and the production steps (T38). Production stays off until its
+  step D3.
 - `retention-and-destruction.md`, with `retention-list.sql` and `retention-destroy.sql`: the yearly retention task.
 - `audit-extraction.md`, with `find-ids.sql`, `audit-extract.sql` and `mcp-monthly.sql`: extracting audit records for a
   manager, and the monthly AI-assistant figures.
