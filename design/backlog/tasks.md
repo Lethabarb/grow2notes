@@ -7722,7 +7722,7 @@ run passes 50 minutes (timeout 60 to 90, no split).
 
 ```yaml
 id: T39
-status: new
+status: doing
 release: R2
 lane: A
 size: S
@@ -7745,6 +7745,24 @@ recorded.
 ### Notes
 
 - One of the two tasks that wait for a run sheet: `ops/mcp-switch-on.md`, which T38 writes.
+
+### Plan
+
+Outcome: the run sheet and the provider's texts are ready; nothing is switched on. Approach: documents only, plus one SQL
+comment and one C# doc comment. `ops/mcp-switch-on.md` keeps every step key and Result line; D1 becomes the owner's
+switch-on pull request (adds `param mcpEnabled = true` to `prod.bicepparam`, deletes only the production assertion in
+`InfraTemplateTests`, names it in its body) and D3 deploys that merge's CI run, because production deploys the parameters
+of the run it names. The pacing paragraph points to `ops/onboard-provider.md`, and section E points to it as the next
+step. The pack's part 2 and `mcp-server.md` section 7.4 name Anthropic (Claude) in place of `[AI providers]`; countries
+and any other approved provider are filled on the operator's copy. `mcp-server.md` sections 4.3 and 4.4 are corrected
+to the code (an unregistered client gets a 302 to the site's own `/connect`). T38's carry-overs are done. Domain
+changes: none. Reuse: the existing run sheet, pack fields, operator command and deploy workflow. Where the design was
+silent the simplest option is taken and recorded as A141 (A142 only if a CI run passes 50 minutes). S07.05.09 and
+S07.05.10 become done with their by-hand criteria unticked.
+
+### Verticals
+
+- v1: Run sheet, provider's texts, section 4 corrections, carry-overs and records (A141); depends_on none; R1 to R22.
 
 ### Steps
 
