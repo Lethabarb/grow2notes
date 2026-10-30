@@ -12,7 +12,8 @@ Runbooks for the developer (design.md §7.3).
   tries, the provider's organisation and first manager with the email checks, and the go-live lines of design.md §14,
   then the restore test and the cut-over (T22, T27, T28).
 - `retention-and-destruction.md`, with `retention-list.sql` and `retention-destroy.sql`: the yearly retention task.
-- `audit-extraction.md`, with `find-ids.sql` and `audit-extract.sql`: extracting audit records for a manager.
+- `audit-extraction.md`, with `find-ids.sql`, `audit-extract.sql` and `mcp-monthly.sql`: extracting audit records for a
+  manager, and the monthly AI-assistant figures.
 - `security-review.md`: the OWASP ASVS 5.0.0 level 1 and 2 self-review, the findings register and the ZAP results
   (design.md §14 M6); the operator fills in the ZAP section (`first-use-in-test.md` step 141).
 
