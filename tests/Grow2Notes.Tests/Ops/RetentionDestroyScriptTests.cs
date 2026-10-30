@@ -84,6 +84,7 @@ public sealed class RetentionDestroyScriptTests(SqlServerFixture sqlServer)
                 ["To"] = "2026-10-09",
                 ["Participant"] = scenario.Participant.ToString(),
                 ["User"] = "any",
+                ["Via"] = "any",
             },
             ct);
         var rows = Assert.Single(extract).Rows.Cast<DataRow>().ToList();
