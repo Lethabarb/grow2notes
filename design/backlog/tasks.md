@@ -7786,6 +7786,10 @@ recorded.
 - The mentions of T39 left as they are, because each still names the switch-on, which D3 does: first-use step 165,
   design.md section 10.3 and A110, mcp-server.md section 10, the coverage.md rows, releases.md ("Switch-on date: not
   set yet"), `ops/README.md`, go-live.md section D and the historical T29 Notes in F07.05 and this file.
+- The pacing order. mcp-server.md section 5.6 and A139 (R6) said a paced onboarding invites 10, makes its setup calls
+  while the hour runs, then invites the next 10. They now say set-up calls first, then invite 10, then the next 10,
+  as the run sheet and A140(9) do. The arithmetic is unchanged. The run sheet's "From the merge on" in D1 now reads "A
+  production deploy of that run or a later one", because a rollback to an earlier run writes `Mcp__Enabled` False.
 - CI: the timeout stays 60 minutes and the tests are not split (ops/first-use-in-test.md step 190 is the owner's).
   The Build and test run times are in the pull request bodies; A142 would be taken only if one passed 50 minutes.
 

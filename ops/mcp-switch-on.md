@@ -238,8 +238,8 @@ shared with another production system, so every command here stays inside the tw
   changes (A141).
 - **Merge timing.** Merge it early enough for its push-to-main CI run (up to 47 minutes so far) and that run's test
   deploy to finish before the agreed time.
-- **After the merge.** From the merge on, any production deploy turns the access on, so deploy nothing else to
-  production before D3.
+- **After the merge.** A production deploy of that run or a later one turns the access on, so deploy nothing
+  else to production before D3.
 - **If the switch-on is called off after the merge.** Merge a pull request that sets `param mcpEnabled = false` before
   any production deploy, as [breach-response.md](breach-response.md), *AI-assistant access*, step 1 says.
 - **Picking the run.** Pick that merge's CI run as [go-live.md](go-live.md) A5 does. Its test deploy, titled
