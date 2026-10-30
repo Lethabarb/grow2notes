@@ -1724,3 +1724,24 @@ Record the results in T26's Notes (S06.02.01, S06.02.02), for each item and each
      passwords or codes. The answers are decisions, not tests, and they do not hold T37 open. Rewording changes the
      words the model sees, so it means regenerating `tools-list.json` from the JSON that its snapshot test prints.
      (A138.)
+
+### Assistant rate limits and the MCP-only audit extract (T38)
+
+202. Connected as a made-up manager of a test organisation, with an approved assistant, ask for 11 confirmed
+     deactivations of 11 made-up Active workers, one after another, within an hour. Use a manager who has confirmed no
+     invite, reset or deactivation in the past hour, because the count is for the manager and shared by those three
+     tools, and a restart or a deploy clears it. Deactivations send no email, so none goes out. Look for: the first 10
+     are done; the 11th is refused with the words "This account has confirmed as many invites, sign-in resets and
+     deactivations as an hour allows. Nothing was changed. Try again after retryAfterSeconds seconds; the person may
+     need to confirm again.", the wait shown in seconds (about 3,600 less the time since the first change), the 11th
+     worker still Active in Users, and one `mcp.refused` audit row (step 15) with the code `rate_limited`, the client and
+     the tool. Record what an assistant that shows confirmation forms does with `retryAfterSeconds`, and what an
+     assistant that does not does, for example whether it tells the person the wait, waits itself, or asks again at
+     once; give the record to the operator for the briefing. A person cannot reach 61 requests in a minute by hand,
+     so the `429` is left to CI (`AssistantRateLimitsTests`). This step holds nothing open. (S07.05.01; A139; MA9.)
+203. Run `ops/audit-extract.sql` for the test organisation with `Via=mcp`, as
+     [audit-extraction.md](audit-extraction.md) says, over the time of steps 195 to 202, then again with `Via=any`.
+     Look for: with `mcp`, only the rows an assistant made or that name an assistant (the app events with `via` of
+     `mcp`, and the `mcp.read`, `mcp.refused` and `mcp.authorised` rows), each with its client in Details, and none
+     made in the app itself and no `admin.mcp_client_added` row; with `any`, the rows made in the app too. This step
+     holds nothing open. (S07.05.04; A139.)

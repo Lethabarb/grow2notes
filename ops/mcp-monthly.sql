@@ -14,8 +14,9 @@
 --      event, or any row whose Details say via mcp (what an assistant changed). Each row counts once. mcp.authorised
 --      and mcp.authorisation_refused are a person's answer to a consent screen, not a call, and are not counted.
 --      Refused is the mcp.refused rows among them. These are counts of rows, as ops/audit-extraction.md says of every
---      count, so a call that is repeated after a failure may be counted twice. The refusals of the rate limits, and
---      the 401 answers, are not in the log; ops/audit-extraction.md has the query for them.
+--      count, so a call that is repeated after a failure may be counted twice. The 429 answers of the rate limits, and
+--      the 401 answers, are not in the log (a rate_limited tool error is: it is an mcp.refused row);
+--      ops/audit-extraction.md has the query for them.
 --   2. The invite list: one row per user.invited row made by an assistant, oldest first (then by Row), with the
 --      columns Time (Melbourne) with its offset, Invited, Email, Role (Worker or Manager), Reason (empty when none was
 --      given), Invited by, Support, Assistant and Row. Invited, Email and Role are as they were at the invite, so they
