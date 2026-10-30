@@ -124,7 +124,9 @@ Show the plan, get one yes, then add the goals.
 
 Ask once: who asked for these people to have accounts, how, when, and how the owner confirmed it was them. Draft one
 reason for each worker from that one answer, with the worker's name, such as: Asked by the manager by phone on 5
-November to invite Sam Example; confirmed by calling back. At most 200 characters.
+November to invite Sam Example; confirmed by calling back. At most 200 characters. Tell the owner that each reason is
+kept in Grow2Notes' audit log and is not shown back to them, so it holds the worker's name and who asked, and nothing
+else personal.
 
 For each worker call list_users with search set to the email. Only a result whose email equals it, trimmed and ignoring
 case, counts as already there, and it also finds a deactivated account: report it and leave it alone. Other results are
@@ -136,7 +138,8 @@ Then invite one worker at a time with invite_user: email, displayName, role set 
 - Preview path: the first call has no confirm and returns a preview with the effect. The preview does not repeat the
   reason, so show the effect and the reason, and ask the owner whether to invite that worker, by name. Only after the
   owner's yes in that turn, call again with the same arguments and confirm true.
-- Expect two permission prompts for each invite, and remind the owner to read each as `by-hand.md` A3 says.
+- On the preview path expect two permission prompts for each invite. Either way, remind the owner to read each as
+  `by-hand.md` A3 says.
 - On rate_limited: stop inviting. Give the wait from error.retryAfterSeconds, in minutes. If it is over 30 minutes,
   the owner signs in again from /mcp before going on.
 

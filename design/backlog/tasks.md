@@ -7908,7 +7908,7 @@ then worker invites. It adds no app code, MCP tool, server feature or operator c
   only.
 - Stories: S07.06.01 is done with criterion 8 ticked. Criteria 1 to 7 and 9 stay unticked, each with a dated Note
   (criteria 3, 4 and 7 are proven by CI only in part); the rehearsal that proves them is first-use steps 204 to 207, by
-  hand, and holds nothing open. Criterion 10 is ticked when Build and test is green on the feature pull request. The
+  hand, and holds nothing open. Criterion 10 is ticked: Build and test is green on the feature pull request (40m9s). The
   story's `sprint` stays blank.
 
 ### Plan

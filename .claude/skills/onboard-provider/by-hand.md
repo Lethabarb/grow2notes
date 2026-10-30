@@ -59,7 +59,8 @@ The access tools must always ask, and nothing else may be allowed beyond the nin
 ```
 
 2. Claude Code is in the default permission mode: never auto, bypassPermissions or dontAsk.
-3. Run /permissions. It shows no allow rule for the whole grow2notes server or for any other grow2notes tool.
+3. Run /permissions. It shows allow rules for only the nine tools in
+   the block above, and none for the whole grow2notes server.
 4. Run /hooks. It shows no Elicitation hook, because one could answer Grow2Notes' form for you.
 5. Run /mcp. Every other MCP server is disabled.
 6. Read every invite_user prompt before you choose Yes:
@@ -163,9 +164,9 @@ claude mcp remove grow2notes
 Remove alone revokes nothing, so logout comes first. Then:
 
 1. Delete the input file and the onboarding folder. Its settings file goes with it.
-2. Delete this run's transcript folder under `~/.claude/projects`. Its name is the onboarding folder's path with each
-   colon, backslash and slash made a hyphen. Look at the folder names in the listing first, and delete only the one that
-   matches. Deleting it is the "delete the chat" habit.
+2. Delete this run's transcript folder under `~/.claude/projects`. Its name is the onboarding folder's path with every
+   character other than a letter or digit made a hyphen. Look at the folder names in the listing first, and delete only
+   the one that matches. Deleting it is the "delete the chat" habit.
 3. If you typed rows rather than reading a file, find this run's lines in Claude Code's prompt history,
    `~/.claude/history.jsonl`, and remove them.
 4. Start a new session in a different folder and check that /mcp lists no grow2notes server.
