@@ -7,7 +7,10 @@ using System.Text.Json.Nodes;
 using Grow2Notes.Tests.Fixtures;
 using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp;
+using Grow2Notes.Web.Features.Mcp.Contracts;
 using Grow2Notes.Web.Platform;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Client;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -316,6 +319,25 @@ public sealed class McpEndpointTests(Grow2NotesFactory factory, SqlServerFixture
         var seen = await WhoAmIAsync(tokens.AccessToken);
         Assert.Equal([nameof(UserRole.Support)], seen.Values(Claims.Role, ClaimTypes.Role));
         Assert.Equal([Statuses.Valid], await flow.AuthorisationStatusesAsync(managerId));
+
+        // The same token now invites as Support does: a worker only, and a manager is not allowed.
+        var invitee = $"invitee.{Guid.NewGuid():N}@example.test";
+        await using var client = await flow.McpClientAsync(tokens.AccessToken, "2025-11-25");
+        var invited = await ToolScene.CallAsync(
+            client,
+            "invite_user",
+            new()
+            {
+                ["email"] = invitee,
+                ["displayName"] = "Invitee Manager",
+                ["role"] = "manager",
+                ["reason"] = "Asked by phone",
+                ["confirm"] = true,
+            });
+        Assert.Equal("role.not_allowed", ToolError.CodeOf(invited));
+        await using var scope = flow.App.Services.CreateAsyncScope();
+        Assert.False(await scope.ServiceProvider.GetRequiredService<Grow2NotesDbContext>().Users
+            .AnyAsync(user => user.Email == invitee, TestContext.Current.CancellationToken));
     }
 
     [Fact]

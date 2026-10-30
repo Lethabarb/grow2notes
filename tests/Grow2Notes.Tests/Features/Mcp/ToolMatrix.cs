@@ -192,6 +192,58 @@ internal static class ToolMatrix
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.Participant.Updated),
         new(
+            "archive_participant",
+            async scene =>
+            {
+                var added = await scene.AddParticipantAsync();
+                return ArchiveCall(added.Id.ToString(), confirm: true, ToolScene.ExpectedVersion(added.ETag));
+            },
+            [
+                new("an unknown ID", _ => ArchiveCall(Guid.NewGuid().ToString()), "not_found"),
+                new("not an ID", _ => ArchiveCall("not-a-guid"), "not_found"),
+                new("no ID", _ => Without("participantId", ArchiveCall(Guid.NewGuid().ToString())), "unexpected"),
+                new(
+                    "a confirmation with no version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true),
+                    "precondition.required"),
+                new(
+                    "a confirmation with an empty version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true, ""),
+                    "precondition.required"),
+                new(
+                    "a confirmation with a made-up version",
+                    scene => ArchiveCall(scene.Participant.Id.ToString(), confirm: true, "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.Participant.Archived),
+        new(
+            "restore_participant",
+            async scene =>
+            {
+                var added = await scene.AddParticipantAsync(archived: true);
+                return RestoreCall(added.Id.ToString(), ToolScene.ExpectedVersion(added.ETag));
+            },
+            [
+                new("an unknown ID", _ => RestoreCall(Guid.NewGuid().ToString(), "AAAAAAAAAAA="), "not_found"),
+                new("not an ID", _ => RestoreCall("not-a-guid", "AAAAAAAAAAA="), "not_found"),
+                new("no ID", _ => Without("participantId", RestoreCall(Guid.NewGuid().ToString())), "unexpected"),
+                new(
+                    "no version",
+                    scene => RestoreCall(scene.Archived.Id.ToString()),
+                    "precondition.required"),
+                new(
+                    "an empty version",
+                    scene => RestoreCall(scene.Archived.Id.ToString(), ""),
+                    "precondition.required"),
+                new(
+                    "a made-up version",
+                    scene => RestoreCall(scene.Archived.Id.ToString(), "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.Participant.Restored),
+        new(
             "add_goal",
             async scene =>
             {
@@ -593,41 +645,150 @@ internal static class ToolMatrix
             async scene =>
             {
                 var worker = await scene.AddUserAsync(UserRole.Worker);
-                return DeactivateCall(
+                return UserCall(
                     worker.Email, $"Asked by phone {Unique()}", confirm: true, version: worker.Version);
             },
             [
-                new("an unknown email", _ => DeactivateCall($"nobody.{Unique()}@example.test"), "not_found"),
+                new("an unknown email", _ => UserCall($"nobody.{Unique()}@example.test"), "not_found"),
                 new(
                     "a control character in the email",
-                    scene => DeactivateCall(scene.InvitedUser.Email + "\u0007"),
+                    scene => UserCall(scene.InvitedUser.Email + "\u0007"),
                     "validation.failed"),
                 new(
                     "a line break in the reason",
-                    scene => DeactivateCall(scene.InvitedUser.Email, "Asked\nby phone"),
+                    scene => UserCall(scene.InvitedUser.Email, "Asked\nby phone"),
                     "validation.failed"),
                 new(
                     "a reason of 201 characters",
-                    scene => DeactivateCall(scene.InvitedUser.Email, new string('a', 201)),
+                    scene => UserCall(scene.InvitedUser.Email, new string('a', 201)),
                     "validation.failed"),
                 new(
                     "a confirmation with no version",
-                    scene => DeactivateCall(scene.InvitedUser.Email, confirm: true),
+                    scene => UserCall(scene.InvitedUser.Email, confirm: true),
                     "precondition.required"),
                 new(
                     "a confirmation with a made-up version",
-                    scene => DeactivateCall(scene.InvitedUser.Email, confirm: true, version: "AAAAAAAAAAA="),
+                    scene => UserCall(scene.InvitedUser.Email, confirm: true, version: "AAAAAAAAAAA="),
                     "precondition.failed"),
             ],
             OtherOrganisationCode: "not_found",
             Event: AuditEventTypes.User.Deactivated),
+        new(
+            "invite_user",
+            _ => Task.FromResult(InviteCall(
+                $"invitee.{Unique()}@example.test",
+                $"Invitee {Unique()}",
+                "worker",
+                reason: $"Asked by phone {Unique()}",
+                confirm: true)),
+            [
+                new(
+                    "the role support",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "Invitee Support", "support"),
+                    "role.not_allowed"),
+                new(
+                    "the role Worker in capitals",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "Invitee Capital", "Worker"),
+                    "role.not_allowed"),
+                new(
+                    "the role admin",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "Invitee Admin", "admin"),
+                    "role.not_allowed"),
+                new(
+                    "an empty role",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "Invitee Empty", ""),
+                    "validation.failed"),
+                new(
+                    "a blank name",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "   ", "worker"),
+                    "validation.failed"),
+                new(
+                    "a name of 101 characters",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", new string('a', 101), "worker"),
+                    "validation.failed"),
+                new(
+                    "a control character in the email",
+                    _ => InviteCall($"invitee.{Unique()}@example.test\u0007", "Invitee Control", "worker"),
+                    "validation.failed"),
+                new(
+                    "a bidi character in the role",
+                    _ => InviteCall($"invitee.{Unique()}@example.test", "Invitee Bidi", "work" + Bidi + "er"),
+                    "validation.failed"),
+                new(
+                    "a line break in the reason",
+                    _ => InviteCall(
+                        $"invitee.{Unique()}@example.test", "Invitee Break", "worker", reason: "Asked\nby phone"),
+                    "validation.failed"),
+                new(
+                    "an address that Identity refuses",
+                    _ => InviteCall(
+                        $"zo\u00eb.{Unique()}@example.test", "Invitee Letter", "worker", confirm: true),
+                    "validation.failed"),
+                new(
+                    "an address that has an account",
+                    scene => InviteCall(scene.InvitedUser.Email, "Invitee Twice", "worker", confirm: true),
+                    "user.email_in_use"),
+                new(
+                    "no role",
+                    _ => Without(
+                        "role", InviteCall($"invitee.{Unique()}@example.test", "Invitee No Role", "worker")),
+                    "unexpected"),
+                new(
+                    "no email",
+                    _ => Without(
+                        "email", InviteCall($"invitee.{Unique()}@example.test", "Invitee No Email", "worker")),
+                    "unexpected"),
+                new(
+                    "no name",
+                    _ => Without(
+                        "displayName", InviteCall($"invitee.{Unique()}@example.test", "Invitee No Name", "worker")),
+                    "unexpected"),
+            ],
+            OtherOrganisationCode: null,
+            Event: AuditEventTypes.User.Invited),
+        new(
+            "reset_user_sign_in",
+            async scene =>
+            {
+                var worker = await scene.AddUserAsync(UserRole.Worker);
+                return UserCall(worker.Email, $"Asked by phone {Unique()}", confirm: true, version: worker.Version);
+            },
+            [
+                new("an unknown email", _ => UserCall($"nobody.{Unique()}@example.test"), "not_found"),
+                new(
+                    "a control character in the email",
+                    scene => UserCall(scene.InvitedUser.Email + "\u0007"),
+                    "validation.failed"),
+                new(
+                    "a line break in the reason",
+                    scene => UserCall(scene.InvitedUser.Email, "Asked\nby phone"),
+                    "validation.failed"),
+                new(
+                    "a reason of 201 characters",
+                    scene => UserCall(scene.InvitedUser.Email, new string('a', 201)),
+                    "validation.failed"),
+                new(
+                    "a deactivated account, confirmed",
+                    scene => UserCall(scene.DeactivatedUser.Email, confirm: true, version: "AAAAAAAAAAA="),
+                    "user.not_active"),
+                new(
+                    "a confirmation with no version",
+                    scene => UserCall(scene.InvitedUser.Email, confirm: true),
+                    "precondition.required"),
+                new(
+                    "a confirmation with a made-up version",
+                    scene => UserCall(scene.InvitedUser.Email, confirm: true, version: "AAAAAAAAAAA="),
+                    "precondition.failed"),
+            ],
+            OtherOrganisationCode: "not_found",
+            Event: AuditEventTypes.User.SetupLinkSent),
     ];
 
     private static readonly string Bidi = char.ConvertFromUtf32(0x202E);
 
     private static string Unique() => Guid.NewGuid().ToString("N")[..12];
 
-    private static JsonObject DeactivateCall(
+    private static JsonObject UserCall(
         string email, string? reason = null, bool confirm = false, string? version = null)
     {
         var arguments = new JsonObject { ["email"] = email };
@@ -644,6 +805,42 @@ internal static class ToolMatrix
         if (version is not null)
         {
             arguments["expectedVersion"] = version;
+        }
+
+        return arguments;
+    }
+
+    private static JsonObject ArchiveCall(string participantId, bool confirm = false, string? version = null)
+    {
+        var arguments = new JsonObject { ["participantId"] = participantId };
+        if (confirm)
+        {
+            arguments["confirm"] = true;
+        }
+
+        if (version is not null)
+        {
+            arguments["expectedVersion"] = version;
+        }
+
+        return arguments;
+    }
+
+    private static JsonObject RestoreCall(string participantId, string? version = null) =>
+        ArchiveCall(participantId, confirm: false, version);
+
+    private static JsonObject InviteCall(
+        string email, string displayName, string role, string? reason = null, bool confirm = false)
+    {
+        var arguments = new JsonObject { ["email"] = email, ["displayName"] = displayName, ["role"] = role };
+        if (reason is not null)
+        {
+            arguments["reason"] = reason;
+        }
+
+        if (confirm)
+        {
+            arguments["confirm"] = true;
         }
 
         return arguments;

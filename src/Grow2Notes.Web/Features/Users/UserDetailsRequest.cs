@@ -8,7 +8,7 @@ namespace Grow2Notes.Web.Features.Users;
 /// <remarks>
 /// Each is a string that may be missing, with no data annotations: the handlers check them themselves
 /// (<see cref="UserDetailsChecks"/>), so a missing value, and a role that is no role's name, gets its field's
-/// <c>422 validation.failed</c>, as Release 2's <c>invite_user</c> tool will through the same handler, never the
+/// <c>422 validation.failed</c>, as the <c>invite_user</c> tool does through the same handler, never the
 /// <c>400</c> of a body that cannot be read.
 /// </remarks>
 internal sealed record UserDetailsRequest(string? DisplayName, string? Email, string? Role);

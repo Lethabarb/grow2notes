@@ -58,9 +58,8 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             Assert.Equal(1, await StoredAsync(flow, note));
         }
 
-        var worker = await scene.AddUserAsync(UserRole.Worker);
         var responses = await CallEveryToolAsync(
-            flow, scene, await CallsOfEveryToolAsync(scene), worker, DeactivationReason(), sinks);
+            flow, scene, await CallsOfEveryToolAsync(scene), await ConfirmingCallsAsync(flow, scene), sinks);
 
         // Each text starts with the canary, which alone would find them; each is looked for too, so a failure names it.
         var leaks = notes.Select(note => note.Text).Prepend(canary)
@@ -84,17 +83,18 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         // The arguments are made once and kept, so that what is looked for is what was sent: a tool that changes
         // something makes up names of its own each time it is asked for its arguments.
         var calls = await CallsOfEveryToolAsync(scene);
-        var worker = await scene.AddUserAsync(UserRole.Worker);
-        var reason = DeactivationReason();
-        var responses = await CallEveryToolAsync(flow, scene, calls, worker, reason, sinks);
+        var confirming = await ConfirmingCallsAsync(flow, scene);
+        var responses = await CallEveryToolAsync(flow, scene, calls, confirming, sinks);
 
         // A value that is a letter or two is in almost every text, so it can say nothing about a leak; nor can a
         // boolean, whose JSON is the word true or false, so only the arguments sent as strings are read. The family
         // name is also sent as includeArchived, wrongly typed, which is why that argument is read too.
         var sent = calls
+            .Concat(confirming.Select(call => (call.Tool, call.Arguments)))
             .SelectMany(call => call.Arguments)
             .Where(argument => argument.Key is "search" or "includeArchived"
-                or "givenName" or "familyName" or "text" or "dateOfBirth" or "name" or "email" or "reason")
+                or "givenName" or "familyName" or "text" or "dateOfBirth" or "name" or "email" or "reason"
+                or "displayName")
             .Select(argument => argument.Value is JsonValue value && value.TryGetValue<string>(out var text)
                 ? text
                 : null)
@@ -109,9 +109,7 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             scene.FamilyName,
             .. scene.Goals.Select(goal => goal.Text),
             email,
-            worker.DisplayName,
-            worker.Email,
-            reason,
+            .. confirming.SelectMany(call => call.Named),
             .. sent,
         ];
 
@@ -126,10 +124,15 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
             Assert.Contains(responses, response => Holds(response.Text, returned));
         }
 
-        // The form that asks about the worker holds the worker's name, so the check of it did not pass by seeing a form
-        // with nothing in it.
-        Assert.Contains(
-            responses, response => response.Sink == FormSink && Holds(response.Text, worker.DisplayName));
+        // The form of each confirming call holds the names it is about, so the check of it did not pass by seeing a
+        // form with nothing in it.
+        foreach (var call in confirming)
+        {
+            Assert.Contains(
+                responses,
+                response => response.Sink == FormSink && call.Named.All(named => Holds(response.Text, named)));
+        }
+
         Assert.NotEmpty(sinks.Ingestion.Payloads);
         Assert.NotEmpty(texts);
     }
@@ -215,17 +218,60 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
     }
 
     /// <summary>
+    /// The calls of the tools that ask the person to confirm, which <see cref="CallEveryToolAsync"/> makes through a
+    /// preview, a form and the answer to it: each changes a person or a participant of its own that no other call of
+    /// the canary names, with a reason of its own where the tool takes one. A tool that asks for confirmation adds one
+    /// line here.
+    /// </summary>
+    private static async Task<IReadOnlyList<ConfirmingCall>> ConfirmingCallsAsync(
+        AssistantFlow flow, ToolScene scene)
+    {
+        var deactivated = await scene.AddUserAsync(UserRole.Worker);
+        var reset = await scene.AddUserAsync(UserRole.Worker);
+        var invitee = $"Invitee {Guid.NewGuid():N}";
+        var givenName = $"Zed{Guid.NewGuid():N}";
+        var familyName = $"Mott{Guid.NewGuid():N}";
+        var archived = await flow.App.Services.AddParticipantAsync(
+            scene.Organisation, givenName: givenName, familyName: familyName);
+        return
+        [
+            new(
+                "deactivate_user",
+                new() { ["email"] = deactivated.Email, ["reason"] = Reason() },
+                [deactivated.DisplayName]),
+            new(
+                "reset_user_sign_in",
+                new() { ["email"] = reset.Email, ["reason"] = Reason() },
+                [reset.DisplayName]),
+            new(
+                "invite_user",
+                new()
+                {
+                    ["email"] = $"invitee.{Guid.NewGuid():N}@example.test",
+                    ["displayName"] = invitee,
+                    ["role"] = "worker",
+                    ["reason"] = Reason(),
+                },
+                [invitee]),
+            new(
+                "archive_participant",
+                new() { ["participantId"] = archived.Id.ToString() },
+                [givenName, familyName]),
+        ];
+    }
+
+    /// <summary>
     /// Connects an assistant as the scene's manager and calls every tool the app lists, raw, with the arguments given
-    /// (<see cref="CallsOfEveryToolAsync"/>), and then deactivates <paramref name="worker"/> through a preview, a form
-    /// that a 2026-07-28 client is shown and the answer to it; and gives the bodies and headers of the answers, once
-    /// the telemetry that the calls made has been exported, so that a check of it cannot pass by looking too soon.
+    /// (<see cref="CallsOfEveryToolAsync"/>), and then each of the <paramref name="confirming"/> calls through a
+    /// preview, a form that a 2026-07-28 client is shown and the answer to it; and gives the bodies and headers of the
+    /// answers, once the telemetry that the calls made has been exported, so that a check of it cannot pass by looking
+    /// too soon.
     /// </summary>
     private static async Task<IReadOnlyList<(string Sink, string? Text)>> CallEveryToolAsync(
         AssistantFlow flow,
         ToolScene scene,
         IReadOnlyList<(string Tool, JsonObject Arguments)> calls,
-        SceneUser worker,
-        string reason,
+        IReadOnlyList<ConfirmingCall> confirming,
         TelemetrySinks sinks)
     {
         var token = await scene.ConnectAsync(ToolCaller.Manager);
@@ -245,38 +291,39 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
                 header => ("response header", (string?)$"{header.Key}: {string.Join(", ", header.Value)}")));
         }
 
-        // The worker's deactivation: the preview, then the form and the retry that accepts it, each with the reason.
-        const string deactivate = "deactivate_user";
-        var asked = new JsonObject { ["email"] = worker.Email, ["reason"] = reason };
-        using (var response = await flow.PostMcpAsync(token, body: AssistantFlow.ToolCall(deactivate, asked)))
+        // Each confirming call: the preview, then the form and the retry that accepts it.
+        foreach (var (tool, arguments, _) in confirming)
         {
-            answers.Add(("response body", await response.Content.ReadAsStringAsync(Ct)));
+            using (var response = await flow.PostMcpAsync(token, body: AssistantFlow.ToolCall(tool, arguments)))
+            {
+                answers.Add(("response body", await response.Content.ReadAsStringAsync(Ct)));
+            }
+
+            var form = await flow.PostToolCallAsync(token, tool, Copy(arguments), DeclaresForms());
+            answers.Add((FormSink, form.ToJsonString()));
+            var accepted = await flow.PostToolCallAsync(
+                token,
+                tool,
+                Copy(arguments),
+                DeclaresForms(),
+                form["requestState"]!.GetValue<string>(),
+                new()
+                {
+                    ["confirm"] = new JsonObject
+                    {
+                        ["action"] = "accept",
+                        ["content"] = new JsonObject { ["confirm"] = true },
+                    },
+                });
+            answers.Add(("response body", accepted.ToJsonString()));
         }
 
-        var form = await flow.PostToolCallAsync(token, deactivate, asked.DeepClone().AsObject(), DeclaresForms());
-        answers.Add((FormSink, form.ToJsonString()));
-        var accepted = await flow.PostToolCallAsync(
-            token,
-            deactivate,
-            asked.DeepClone().AsObject(),
-            DeclaresForms(),
-            form["requestState"]!.GetValue<string>(),
-            new()
-            {
-                ["confirm"] = new JsonObject
-                {
-                    ["action"] = "accept",
-                    ["content"] = new JsonObject { ["confirm"] = true },
-                },
-            });
-        answers.Add(("response body", accepted.ToJsonString()));
-
         // The test server answers before a request's span ends, and the exporters send on their own schedules. The
-        // calls are those of the matrix and the three of the deactivation.
+        // calls are those of the matrix and the three of each confirming call.
         Assert.True(
             SpinWait.SpinUntil(
                 () => sinks.Spans.Spans.Count(span => span.Kind == ActivityKind.Server
-                    && span.GetTagItem("url.path") as string == "/mcp") >= calls.Count + 3,
+                    && span.GetTagItem("url.path") as string == "/mcp") >= calls.Count + 3 * confirming.Count,
                 TimeSpan.FromSeconds(10)),
             "The calls' spans did not end.");
         Assert.True(flow.App.Services.GetRequiredService<TracerProvider>().ForceFlush());
@@ -285,12 +332,21 @@ public sealed class McpCanaryTests(Grow2NotesFactory factory, SqlServerFixture s
         return answers;
     }
 
-    // A reason of the deactivation's own, which the check of the second test looks for in the logs and telemetry.
-    private static string DeactivationReason() => $"Asked by phone {Guid.NewGuid():N}";
+    // A reason of a call's own, which the check of the second test looks for in the logs and telemetry.
+    private static string Reason() => $"Asked by phone {Guid.NewGuid():N}";
+
+    // A node has one parent, so each call gets a copy of the arguments.
+    private static JsonObject Copy(JsonObject arguments) => arguments.DeepClone().AsObject();
 
     // The capabilities of a 2026-07-28 client that shows forms; a node has one parent, so each call gets its own.
     private static JsonObject DeclaresForms() =>
         new() { ["elicitation"] = new JsonObject { ["form"] = new JsonObject() } };
+
+    /// <summary>
+    /// A tool that asks the person to confirm, with the arguments that its preview, form and accepted retry send, and
+    /// the names of the people and participants the form is about, which the form must hold.
+    /// </summary>
+    private sealed record ConfirmingCall(string Tool, JsonObject Arguments, string[] Named);
 
     /// <summary>A text that only a note holds, and the query that counts the rows storing it as <c>@text</c>.</summary>
     private sealed record NoteText(string CountSql, string Text);

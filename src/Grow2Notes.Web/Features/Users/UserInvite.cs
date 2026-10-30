@@ -11,8 +11,8 @@ namespace Grow2Notes.Web.Features.Users;
 /// <summary>
 /// The handler that invites a user into the tenant's organisation (design.md §4.11 <i>Invite user</i>, §6.6, §8.1
 /// steps 1 and 2), as a handler class that takes the <see cref="Actor"/> (mcp-server.md §3.5, convention 1):
-/// <c>POST /api/admin/users</c> calls it with <see cref="Actor.InApp"/>, and Release 2's <c>invite_user</c> tool will
-/// call it with <see cref="Channel.Mcp"/>, with the same checks, email and audit event.
+/// <c>POST /api/admin/users</c> calls it with <see cref="Actor.InApp"/>, and the <c>invite_user</c> tool calls it with
+/// <see cref="Channel.Mcp"/>, with the same checks, email and audit event.
 /// </summary>
 /// <remarks>
 /// One per scope, as the invite core, the audit writer and the transaction all use the scope's context. The
@@ -31,6 +31,10 @@ internal sealed class UserInvite(
     /// invited them, writes <c>user.invited</c>, and sends the setup-link email, before the commit, so that a send that
     /// fails leaves no user and no event (T01's Notes).
     /// </summary>
+    /// <param name="actor">Who invites the person, and by which channel.</param>
+    /// <param name="request">The person's name, address and role.</param>
+    /// <param name="reason">The reason to keep in the audit event, trimmed, or <see langword="null"/> for none.</param>
+    /// <param name="cancellationToken">Cancels the work.</param>
     /// <returns>
     /// <see cref="UserChangeResult.Done"/>; <see cref="ErrorCode.ValidationFailed"/> for a missing or overlong name, a
     /// missing or overlong address, one that Identity finds is not an address or cannot be a user name, such as one
@@ -45,7 +49,7 @@ internal sealed class UserInvite(
     /// Identity refused the user for a reason that only a fault can cause, and nothing was created.
     /// </exception>
     public async Task<UserChangeResult> InviteAsync(
-        Actor actor, UserDetailsRequest request, CancellationToken cancellationToken)
+        Actor actor, UserDetailsRequest request, string? reason, CancellationToken cancellationToken)
     {
         if (UserDetailsChecks.Check(request) is { Count: > 0 } fieldErrors)
         {
@@ -70,12 +74,15 @@ internal sealed class UserInvite(
             }
 
             // The values as GET /api/admin/users names them, all of them, as a new row's event has (§6.6).
-            var details = ChangeDetails.Of(before: null, new JsonObject
-            {
-                ["email"] = email,
-                ["displayName"] = displayName,
-                ["role"] = role.ToString(),
-            });
+            var details = ChangeDetails.Of(
+                before: null,
+                new JsonObject
+                {
+                    ["email"] = email,
+                    ["displayName"] = displayName,
+                    ["role"] = role.ToString(),
+                },
+                extraDetails: reason is null ? null : new JsonObject { ["reason"] = reason });
             await audit.WriteAsync(
                 organisationId, actor.UserId, AuditEventTypes.User.Invited, AuditEntityTypes.User, invite.User.Id,
                 participantId: null, details, ct);

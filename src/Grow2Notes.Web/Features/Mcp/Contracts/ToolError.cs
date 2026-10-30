@@ -43,6 +43,14 @@ internal sealed record ToolError(string Code, string Message, IReadOnlyDictionar
         "Support can act on worker accounts only. A manager can do this in Grow2Notes. Nothing was changed.");
 
     /// <summary>
+    /// An invite for a role that is neither <c>worker</c> nor <c>manager</c> (<c>role.not_allowed</c>), for every
+    /// caller: Support accounts are made in Grow2Notes, not through an assistant.
+    /// </summary>
+    public static ToolError InviteRoleNotAllowed { get; } = new(
+        "role.not_allowed",
+        "Invite a worker or a manager. Support accounts are made in Grow2Notes. Nothing was changed.");
+
+    /// <summary>
     /// Support sending no reason (<c>reason.required</c>), an MCP-only code (mcp-server.md §5.5) that stays out of
     /// <see cref="ErrorCode"/>.
     /// </summary>

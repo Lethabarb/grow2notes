@@ -106,7 +106,7 @@ internal sealed class ToolConfirmation(IDataProtectionProvider dataProtection, T
     public CallToolResult Ask(
         RequestContext<CallToolRequestParams> context,
         Actor actor,
-        string version,
+        string? version,
         string message,
         string yesTitle,
         CallToolResult preview)
@@ -194,6 +194,6 @@ internal sealed class ToolConfirmation(IDataProtectionProvider dataProtection, T
         Guid OrganisationId,
         string Tool,
         string ArgumentsHash,
-        string ExpectedVersion,
+        string? ExpectedVersion,
         DateTimeOffset AskedAt);
 }

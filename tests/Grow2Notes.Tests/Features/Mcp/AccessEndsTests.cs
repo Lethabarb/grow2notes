@@ -40,6 +40,10 @@ public sealed class AccessEndsTests(Grow2NotesFactory factory, SqlServerFixture 
             HttpStatusCode.Unauthorized),
         new AccessEnd("reset sign-in", scene => scene.PostAsync("setup-link"), HttpStatusCode.Unauthorized),
         new AccessEnd(
+            "reset sign-in through an assistant",
+            scene => scene.ResetThroughAnAssistantAsync(),
+            HttpStatusCode.Unauthorized),
+        new AccessEnd(
             "admin reset-signin", scene => scene.ResetSignInAsync(), HttpStatusCode.Unauthorized),
         new AccessEnd(
             "admin signout-all", scene => scene.RunAdminCommandAsync("signout-all"), HttpStatusCode.Unauthorized),
@@ -195,6 +199,30 @@ public sealed class AccessEndsTests(Grow2NotesFactory factory, SqlServerFixture 
             var result = await ToolScene.CallAsync(
                 client,
                 "deactivate_user",
+                new()
+                {
+                    ["email"] = person.Email!,
+                    ["confirm"] = true,
+                    ["expectedVersion"] = person.ConcurrencyStamp!,
+                });
+
+            Assert.NotEqual(true, result.IsError);
+            Assert.True(Assert.NotNull(result.StructuredContent).GetProperty("changed").GetBoolean());
+        }
+
+        /// <summary>
+        /// The second manager connects an assistant of their own and calls <c>reset_user_sign_in</c> on the person with
+        /// their current version, which the tool resets on a confirmed call.
+        /// </summary>
+        internal async Task ResetThroughAnAssistantAsync()
+        {
+            var actorTokens = await flow.ConnectAsync(actor);
+            await using var client = await flow.McpClientAsync(actorTokens.AccessToken, ToolWorld.Revision);
+            var person = await flow.UserAsync(PersonId);
+
+            var result = await ToolScene.CallAsync(
+                client,
+                "reset_user_sign_in",
                 new()
                 {
                     ["email"] = person.Email!,

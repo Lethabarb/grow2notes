@@ -5,6 +5,7 @@ using Grow2Notes.Web.Data;
 using Grow2Notes.Web.Features.Mcp.Contracts;
 using Grow2Notes.Web.Platform.Audit;
 using ModelContextProtocol.Protocol;
+using static Grow2Notes.Tests.Features.Mcp.ConfirmationCalls;
 using static Grow2Notes.Tests.Features.Mcp.McpAuditRows;
 using static Grow2Notes.Tests.Features.Mcp.ToolCalls;
 
@@ -22,17 +23,11 @@ namespace Grow2Notes.Tests.Features.Mcp;
 public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<ToolWorld>
 {
     private const string Tool = "deactivate_user";
-    private const string FormCapabilities = """{"elicitation":{"form":{}}}""";
-    private const string StaleVersion = "AAAAAAAAAAA=";
     private const string Reason = "Sam asked by phone";
 
     private const string AccountChanged =
         "This account changed after the person was asked. Nothing was changed. " +
         "Call the tool again to ask them afresh.";
-
-    private const string StateRefused =
-        "This confirmation has expired or does not match this call. Nothing was changed. " +
-        "Call the tool again to ask the person afresh.";
 
     private const string NoSuchUser =
         "No user has that email in this organisation. Nothing was changed. Find them with list_users.";
@@ -45,25 +40,6 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
 
     private const string SupportMustSayWhy =
         "Support must send a reason: why, and who asked. Nothing was changed.";
-
-    private const string AcceptedYes = """{"confirm":{"action":"accept","content":{"confirm":true}}}""";
-
-    public static TheoryData<string> CapabilitiesThatGetThePreview { get; } = ["{}", """{"elicitation":{"url":{}}}"""];
-
-    // A blank elicitation counts as the form: the SDK reads it so.
-    public static TheoryData<string> CapabilitiesThatGetTheForm { get; } =
-        [FormCapabilities, """{"elicitation":{}}"""];
-
-    // The last sends no answer at all.
-    public static TheoryData<string> AnswersThatAreNotYes { get; } =
-    [
-        """{"confirm":{"action":"decline"}}""",
-        """{"confirm":{"action":"cancel"}}""",
-        """{"confirm":{"action":"accept","content":{"confirm":false}}}""",
-        """{"confirm":{"action":"accept","content":{"confirm":"true"}}}""",
-        """{"confirm":{"action":"accept"}}""",
-        "",
-    ];
 
     public static TheoryData<string> StatesThatAreNotForTheCall { get; } =
         ["flipped", "garbage", "the manager's, retried by Support", "another email", "another reason"];
@@ -128,7 +104,7 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
     }
 
     [Theory]
-    [MemberData(nameof(CapabilitiesThatGetThePreview))]
+    [MemberData(nameof(CapabilitiesThatGetThePreview), MemberType = typeof(ConfirmationCalls))]
     public async Task A_2026_client_without_form_elicitation_is_given_the_preview(string capabilities)
     {
         var user = await Scene.AddUserAsync(UserRole.Worker);
@@ -163,7 +139,7 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
     }
 
     [Theory]
-    [MemberData(nameof(CapabilitiesThatGetTheForm))]
+    [MemberData(nameof(CapabilitiesThatGetTheForm), MemberType = typeof(ConfirmationCalls))]
     public async Task A_client_that_shows_forms_is_asked_by_one_even_when_it_sent_confirm_true(string capabilities)
     {
         var token = await world.TokenOf(ToolCaller.Manager);
@@ -195,7 +171,7 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
     }
 
     [Theory]
-    [MemberData(nameof(CapabilitiesThatGetTheForm))]
+    [MemberData(nameof(CapabilitiesThatGetTheForm), MemberType = typeof(ConfirmationCalls))]
     public async Task Accepting_the_form_deactivates_with_the_version_from_the_state(string capabilities)
     {
         var token = await world.TokenOf(ToolCaller.Manager);
@@ -211,7 +187,7 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
     }
 
     [Theory]
-    [MemberData(nameof(AnswersThatAreNotYes))]
+    [MemberData(nameof(AnswersThatAreNotYes), MemberType = typeof(ConfirmationCalls))]
     public async Task Any_answer_but_an_accepted_true_declines_and_changes_nothing(string answer)
     {
         var token = await world.TokenOf(ToolCaller.Manager);
@@ -605,33 +581,6 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
         ["status"] = status,
     };
 
-    private static void AssertJson(JsonObject expected, JsonElement actual) =>
-        AssertJson(expected, JsonNode.Parse(actual.GetRawText()));
-
-    private static void AssertJson(JsonObject expected, JsonNode? actual) =>
-        Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected {expected}, got {actual}.");
-
-    private static void AssertError(CallToolResult result, string code, string message)
-    {
-        Assert.True(result.IsError);
-        Assert.Equal(code, ToolError.CodeOf(result));
-        Assert.Equal(message, Content(result).GetProperty("error").GetProperty("message").GetString());
-    }
-
-    private static void AssertRawError(JsonObject result, string code, string message)
-    {
-        Assert.True(result["isError"]!.GetValue<bool>());
-        var error = result["structuredContent"]!["error"]!;
-        Assert.Equal(code, error["code"]!.GetValue<string>());
-        Assert.Equal(message, error["message"]!.GetValue<string>());
-    }
-
-    private static string Flip(string state)
-    {
-        var at = state.Length / 2;
-        return state[..at] + (state[at] == 'A' ? 'B' : 'A') + state[(at + 1)..];
-    }
-
     // The user is as they were added: nothing was changed, not even the version.
     private async Task AssertUnchangedAsync(SceneUser user)
     {
@@ -641,30 +590,14 @@ public sealed class DeactivateUserToolTests(ToolWorld world) : IClassFixture<Too
         Assert.Null(row.LockoutEnd);
     }
 
-    // A raw 2026-07-28 call with the capabilities given, and the one audit row it wrote.
-    private async Task<(JsonObject Result, AuditRow Row)> RawAsync(
-        string token, JsonObject arguments, string capabilities, string? state = null, string? answer = null)
-    {
-        var lastEventId = await LastEventIdAsync(Flow);
-        var result = await Flow.PostToolCallAsync(
-            token,
-            Tool,
-            arguments,
-            JsonNode.Parse(capabilities)!.AsObject(),
-            state,
-            answer is null ? null : JsonNode.Parse(answer)!.AsObject());
-        return (result, Assert.Single(await EventsAfterAsync(Flow, lastEventId)));
-    }
+    private Task<(JsonObject Result, AuditRow Row)> RawAsync(
+        string token, JsonObject arguments, string capabilities, string? state = null, string? answer = null) =>
+        ConfirmationCalls.RawAsync(Flow, Tool, token, arguments, capabilities, state, answer);
 
     // The first call of a form: the state that comes back with it.
-    private async Task<string> AskAsync(
-        string token, SceneUser user, string capabilities, string? reason = null) =>
-        await AskAsync(token, user.Email, capabilities, reason);
+    private Task<string> AskAsync(string token, SceneUser user, string capabilities, string? reason = null) =>
+        AskAsync(token, user.Email, capabilities, reason);
 
-    private async Task<string> AskAsync(string token, string email, string capabilities, string? reason = null)
-    {
-        var (asked, _) = await RawAsync(token, Args(email, reason), capabilities);
-        Assert.Equal("input_required", asked["resultType"]!.GetValue<string>());
-        return asked["requestState"]!.GetValue<string>();
-    }
+    private Task<string> AskAsync(string token, string email, string capabilities, string? reason = null) =>
+        ConfirmationCalls.AskAsync(Flow, Tool, token, Args(email, reason), capabilities);
 }

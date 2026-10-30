@@ -8,7 +8,10 @@ namespace Grow2Notes.Web.Features.Mcp.Contracts;
 /// </summary>
 /// <param name="Status">The outcome: <c>preview</c>, <c>done</c> or <c>declined</c>.</param>
 /// <param name="Action">The tool that was called.</param>
-/// <param name="User">The account acted on; absent when the person declined.</param>
+/// <param name="User">
+/// The account acted on; absent when the person declined. For <c>invite_user</c>'s preview it is the account that the
+/// invite would make: it does not exist yet, so it has no <paramref name="ExpectedVersion"/>.
+/// </param>
 /// <param name="Effect">For a preview: what the change does.</param>
 /// <param name="ExpectedVersion">For a preview: the account's version, which the confirming call sends back.</param>
 /// <param name="ToConfirm">For a preview: what the assistant does next.</param>
@@ -28,5 +31,8 @@ internal sealed record AccessChange(
 /// <param name="Email">As stored.</param>
 /// <param name="DisplayName">As typed.</param>
 /// <param name="Role"><c>worker</c>, <c>manager</c> or <c>support</c>.</param>
-/// <param name="Status"><c>invited</c>, <c>active</c> or <c>deactivated</c>: the account's state.</param>
+/// <param name="Status">
+/// <c>invited</c>, <c>active</c> or <c>deactivated</c>: the account's state; for an invite's preview, the state that the
+/// account will have.
+/// </param>
 internal sealed record AccessChangeUser(string Email, string DisplayName, string Role, string Status);
