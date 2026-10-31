@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.4" />
+    <PackageVersion Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.5" />
     <!-- Microsoft.Data.SqlClient asks for Azure.Identity 1.17.1, which defines its own credential types. From 1.21.0
          the package only forwards them to Azure.Core, which the Key Vault package brings in at 1.61, so a lower
          Azure.Identity would put a second copy of every credential type in the app. -->
@@ -16,13 +16,13 @@
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.AspNetCore" Version="1.6.0" />
     <PackageVersion Include="Azure.Security.KeyVault.Secrets" Version="4.11.2" />
     <PackageVersion Include="DocumentFormat.OpenXml" Version="3.5.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.14" />
     <!-- The 6.1 line that EF Core 10's SQL Server provider uses; it keeps managed-identity authentication built in
          (design.md §7.5, §9.4). -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.7" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.14" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
     <!-- The six pieces of OpenIddict the app uses, not the metapackage (design.md §7.5). -->
     <PackageVersion Include="OpenIddict.EntityFrameworkCore" Version="7.7.1" />
@@ -31,8 +31,8 @@
     <PackageVersion Include="OpenIddict.Validation.AspNetCore" Version="7.7.1" />
     <PackageVersion Include="OpenIddict.Validation.DataProtection" Version="7.7.1" />
     <PackageVersion Include="OpenIddict.Validation.ServerIntegration" Version="7.7.1" />
-    <PackageVersion Include="PDFsharp-MigraDoc" Version="6.2.4" />
-    <PackageVersion Include="QRCoder" Version="1.8.0" />
+    <PackageVersion Include="PDFsharp-MigraDoc" Version="6.5.0" />
+    <PackageVersion Include="QRCoder" Version="1.8.1" />
   </ItemGroup>
 
   <!-- Transitive packages pinned past high-severity advisories, which fail the restore (Directory.Build.props).
