@@ -46,6 +46,25 @@ internal static class PasskeySignIn
     }
 
     /// <summary>
+    /// Signs <paramref name="client"/> in with a password and a passkey (D97), and returns the passkey step's response:
+    /// sends <paramref name="email"/> and <paramref name="password"/>, checks that the password step asked for the
+    /// passkey, asks for the step's options, and sends <paramref name="authenticator"/>'s assertion over their
+    /// challenge. The client is one from <see cref="AntiforgeryTokens.CreateHttpsClient"/>.
+    /// </summary>
+    public static async Task<HttpResponseMessage> SignInWithPasswordAndPasskeyAsync(
+        this HttpClient client, string email, string password, TestAuthenticator authenticator)
+    {
+        using var passwordStep = await client.SendPasswordAsync(email, password);
+        Assert.Equal(HttpStatusCode.OK, passwordStep.StatusCode);
+        Assert.Equal(
+            """{"next":"passkey"}""",
+            await passwordStep.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var token = await client.FetchTokenAsync();
+        var challenge = await client.FetchPasskeyChallengeAsync(token, StepOptionsPath);
+        return await client.SendPasskeyCredentialAsync(authenticator.GetAssertion(challenge), token);
+    }
+
+    /// <summary>
     /// Asks for passkey request options with <paramref name="token"/>, and returns their challenge. The answer sets the
     /// ceremony's cookie, which replaces any earlier ceremony of <paramref name="client"/>'s. They are the anonymous
     /// options unless <paramref name="optionsPath"/> names the passkey step's, <see cref="StepOptionsPath"/>.

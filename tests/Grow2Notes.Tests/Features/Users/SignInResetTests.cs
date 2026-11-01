@@ -298,7 +298,8 @@ public sealed class SignInResetTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         await using var failing = factory.WithWebHostBuilder(builder => builder
             .UseClock(clock)
             .ConfigureTestServices(FailingEmailSender.ReplaceAppSender));
-        var worker = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active, passkeys: 1);
+        var worker = await AddUserAsync(a.OrganisationId, UserRole.Worker, UserStatus.Active);
+        using var authenticator = await TestAuthenticator.RegisterAsync(app.Services, worker.Id);
         var before = await StoredAsync(worker.Id);
 
         using var response = await PostAsync(failing, a.ManagerId, worker.Id, IfMatch.ETag(before.ConcurrencyStamp));
@@ -307,8 +308,8 @@ public sealed class SignInResetTests : IClassFixture<Grow2NotesFactory>, IAsyncD
         Assert.Equal(before, await StoredAsync(worker.Id));
         Assert.Empty(await StoredEventsAboutAsync(worker.Id));
         using var client = failing.CreateHttpsClient();
-        using var signIn = await client.SignInWithPasswordAsync(
-            worker.Email, PasswordSignIn.Password, AuthenticatorCodes.Now(worker.AuthenticatorKey));
+        using var signIn = await client.SignInWithPasswordAndPasskeyAsync(
+            worker.Email, PasswordSignIn.Password, authenticator);
         Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
     }
 
