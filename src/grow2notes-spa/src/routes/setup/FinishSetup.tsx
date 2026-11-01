@@ -145,8 +145,8 @@ export function FinishSetup({ password, onTimedOut }: FinishSetupProps) {
       <div className={styles.actions}>
         {/* Empty until a request fails, directly above the button that sent it (component 2a). */}
         <RequestAlert>{failure}</RequestAlert>
-        <Button type="submit" variant="primary" busy={busy} busyLabel={words.finishingSetup}>
-          {words.finishSetup}
+        <Button type="submit" variant="primary" busy={busy} busyLabel={strings.setup.finishingSetup}>
+          {strings.setup.finishSetup}
         </Button>
       </div>
     </form>

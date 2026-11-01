@@ -123,10 +123,15 @@ function sent(path: string): unknown[] {
     .map(([, init]) => (typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : undefined));
 }
 
-/** Shows what the setup layout holds. */
+/** Shows what the setup layout holds: the account, and the password choice. */
 function SetupMemory() {
-  const { account: held } = useSetup();
-  return <p data-testid="setup-memory">{held === undefined ? '' : held.email}</p>;
+  const { account: held, passwordChoice } = useSetup();
+  return (
+    <>
+      <p data-testid="setup-memory">{held === undefined ? '' : held.email}</p>
+      <p data-testid="setup-choice">{passwordChoice}</p>
+    </>
+  );
 }
 
 /** The app's route table, with the setup layout's memory shown under each of its pages. */
@@ -252,7 +257,7 @@ afterEach(() => {
 });
 
 describe('ChooseMethod (view E)', () => {
-  it('shows the account and the two methods in order, with their names and hints, and the plain title', async () => {
+  it('shows the account and the four choices in order, with their names and hints, and the plain title', async () => {
     await openViewE();
 
     const main = within(screen.getByRole('main'));
@@ -275,9 +280,21 @@ describe('ChooseMethod (view E)', () => {
     );
     const link = main.getByRole('link', { name: 'Use a password and authenticator app' });
     expect(link).toHaveAttribute('href', '/setup/password');
-    expect(link).toHaveAttribute('class', buttonClass('secondary'));
+    expect(link).toHaveAttribute('class', expect.stringContaining(buttonClass('secondary')));
     expect(link).toHaveAccessibleDescription(
       'You’ll create a password and use a free app that shows a 6-digit code each time you sign in.',
+    );
+    const passwordOnly = main.getByRole('link', { name: 'Use a password only' });
+    expect(passwordOnly).toHaveAttribute('href', '/setup/password');
+    expect(passwordOnly).toHaveAttribute('class', expect.stringContaining(buttonClass('secondary')));
+    expect(passwordOnly).toHaveAccessibleDescription(
+      'You’ll sign in with your email address and a password, and nothing else.',
+    );
+    const passwordAndPasskey = main.getByRole('link', { name: 'Use a password and a passkey' });
+    expect(passwordAndPasskey).toHaveAttribute('href', '/setup/password');
+    expect(passwordAndPasskey).toHaveAttribute('class', expect.stringContaining(buttonClass('secondary')));
+    expect(passwordAndPasskey).toHaveAccessibleDescription(
+      'You’ll create a password, then use your face, fingerprint or PIN after it each time you sign in.',
     );
     // There from the start, and empty until a press fails.
     expect(alert()).toBeEmptyDOMElement();
@@ -291,7 +308,11 @@ describe('ChooseMethod (view E)', () => {
       main.getByText(/^You’ll sign in with your face/),
       main.getByText('or'),
       link,
-      main.getByText(/^You’ll create a password/),
+      main.getByText(/^You’ll create a password and use/),
+      passwordOnly,
+      main.getByText(/^You’ll sign in with your email address/),
+      passwordAndPasskey,
+      main.getByText(/^You’ll create a password, then/),
     );
     expect(document.title).toBe(title);
   });
@@ -593,7 +614,7 @@ describe('ChooseMethod (view E)', () => {
     expect(document.title).toBe(title);
   });
 
-  it('shows the notice for the passkey button with WebAuthn missing, and makes the password primary', async () => {
+  it('shows the notice with WebAuthn missing, the app primary, the password only second and no passkey', async () => {
     webAuthn.supported = false;
     await openViewE();
     await wait(5000);
@@ -608,10 +629,47 @@ describe('ChooseMethod (view E)', () => {
         + 'Safari or Chrome.',
     );
     const link = main.getByRole('link', { name: 'Use a password and authenticator app' });
-    expect(link).toHaveAttribute('class', buttonClass('primary'));
-    expectInOrder(main.getByRole('heading', { level: 2 }), notice, main.getByText('or'), link);
+    expect(link).toHaveAttribute('class', expect.stringContaining(buttonClass('primary')));
+    const passwordOnly = main.getByRole('link', { name: 'Use a password only' });
+    expect(passwordOnly).toHaveAttribute('class', expect.stringContaining(buttonClass('secondary')));
+    expect(passwordOnly).toHaveAccessibleDescription(
+      'You’ll sign in with your email address and a password, and nothing else.',
+    );
+    expectInOrder(main.getByRole('heading', { level: 2 }), notice, main.getByText('or'), link, passwordOnly);
+    // It needs a passkey made on this device, which this browser cannot make.
+    expect(main.queryByRole('link', { name: 'Use a password and a passkey' })).not.toBeInTheDocument();
+    expect(main.queryByText(/^You’ll create a password, then/)).not.toBeInTheDocument();
     expect(main.queryByText(/^You’ll sign in with your face/)).not.toBeInTheDocument();
     expect(sent(optionsPath)).toHaveLength(0);
     expect(webAuthn.startRegistration).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Use a password and authenticator app', 'authenticatorApp'],
+    ['Use a password only', 'passwordOnly'],
+    ['Use a password and a passkey', 'passwordAndPasskey'],
+  ])('records %s in the setup memory as %s, and goes to view F', async (name, choice) => {
+    await openViewE();
+    expect(screen.getByTestId('setup-choice')).toHaveTextContent('authenticatorApp');
+
+    fireEvent.click(screen.getByRole('link', { name }));
+    await wait(0);
+
+    expect(window.location.pathname).toBe('/setup/password');
+    expect(screen.getByTestId('setup-choice')).toHaveTextContent(choice);
+  });
+
+  it('leaves the choice the last link pressed set, so that a password only, then the app, is the app', async () => {
+    const { router } = await openViewE();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Use a password only' }));
+    await wait(0);
+    expect(screen.getByTestId('setup-choice')).toHaveTextContent('passwordOnly');
+    await act(() => router.navigate('/setup'));
+    fireEvent.click(screen.getByRole('link', { name: 'Use a password and authenticator app' }));
+    await wait(0);
+
+    expect(window.location.pathname).toBe('/setup/password');
+    expect(screen.getByTestId('setup-choice')).toHaveTextContent('authenticatorApp');
   });
 });

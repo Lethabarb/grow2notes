@@ -60,3 +60,8 @@
 .or {
   margin-block: var(--space-4);
 }
+
+/* A choice after the first, which the hint of the one before ends the space of. */
+.next {
+  margin-block-start: var(--space-4);
+}
