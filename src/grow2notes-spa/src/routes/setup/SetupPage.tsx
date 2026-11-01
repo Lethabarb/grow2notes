@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { api, ApiError, classify } from '../../api/api.ts';
+import { api, ApiError, classify, signInTimeoutMs } from '../../api/api.ts';
 import { Button } from '../../components/Button.tsx';
 import { focusPageHeading } from '../../components/focusPageHeading.ts';
 import { PageHeading } from '../../components/PageHeading.tsx';
@@ -67,7 +67,12 @@ export function SetupPage() {
 
     // Aborted when the page goes, as by StrictMode's first run of this effect, before the request is sent.
     const controller = new AbortController();
-    api<SetupAccount>('/api/auth/setup/start', { method: 'POST', body: link, signal: controller.signal }).then(
+    api<SetupAccount>('/api/auth/setup/start', {
+      method: 'POST',
+      body: link,
+      timeoutMs: signInTimeoutMs,
+      signal: controller.signal,
+    }).then(
       (found) => {
         setLink(undefined);
         setCheck(undefined);

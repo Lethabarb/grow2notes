@@ -127,15 +127,25 @@ function noAnswer(): Promise<Response> {
   return new Promise(() => {});
 }
 
+/** Like `fetch` to a server that never answers: it rejects only when its signal aborts, with the signal's reason. */
+function noAnswerUntilAborted(init?: RequestInit): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    const signal = init?.signal;
+    signal?.addEventListener('abort', () => {
+      reject(signal.reason as Error);
+    });
+  });
+}
+
 type Server = {
   /** Each `/api/auth/me`'s answer, a `401` for nobody signed in unless given. */
   me?: () => Promise<Response>;
   /** Each passkey sign-in's answer, a `200 Me` unless given. */
-  passkey?: () => Promise<Response>;
+  passkey?: (init?: RequestInit) => Promise<Response>;
   /** The answer to the `n`th request for passkey options, `passkeyOptions(n)` unless given. */
   options?: (n: number) => Promise<Response>;
   /** Each password step's answer, the `200 {"next":"totp"}` of a right password unless given. */
-  password?: () => Promise<Response>;
+  password?: (init?: RequestInit) => Promise<Response>;
   /** Each code step's answer, a `200 Me` unless given. */
   code?: () => Promise<Response>;
 };
@@ -152,7 +162,7 @@ function serve({
   code = () => json(worker),
 }: Server = {}) {
   let issued = 0;
-  fetchMock.mockImplementation((path) => {
+  fetchMock.mockImplementation((path, init) => {
     switch (path) {
       case mePath:
         return me();
@@ -162,9 +172,9 @@ function serve({
         issued += 1;
         return options(issued);
       case passkeyPath:
-        return passkey();
+        return passkey(init);
       case passwordPath:
-        return password();
+        return password(init);
       case codePath:
         return code();
       case todayPath:
@@ -669,6 +679,26 @@ describe('signing in with a passkey', () => {
     expect(alertAbove(button)).toHaveTextContent('Not signed in: no connection. Try again.');
     expect(button).toHaveFocus();
     expect(ceremony).not.toHaveBeenCalled();
+  });
+
+  // The first sign-in after test's free database has paused waits while it resumes (D96).
+  it('waits 3 minutes for the passkey sign-in, busy, before it says there is no connection', async () => {
+    ceremony.mockResolvedValue(credential);
+    serve({ passkey: noAnswerUntilAborted });
+    await renderSignedOut();
+    const button = passkeyButton();
+
+    press(button);
+    await wait(179_999);
+
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(alertAbove(button)).toBeEmptyDOMElement();
+
+    await wait(1);
+
+    expect(alertAbove(button)).toHaveTextContent('Not signed in: no connection. Try again.');
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).toHaveFocus();
   });
 
   it('sends nothing for a second press while busy, and keeps focus on the button', async () => {
@@ -1217,6 +1247,26 @@ describe('signing in with an email address and password', () => {
 
       expect(alertAbove(button)).toHaveTextContent(message);
     });
+  });
+
+  // The first sign-in after test's free database has paused waits while it resumes (D96).
+  it('waits 3 minutes for the password step, busy, before it says there is no connection', async () => {
+    serve({ password: noAnswerUntilAborted });
+    await renderSignedOut();
+    fillIn();
+    const button = continueButton();
+
+    press(button);
+    await wait(179_999);
+
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(alertAbove(button)).toBeEmptyDOMElement();
+
+    await wait(1);
+
+    expect(alertAbove(button)).toHaveTextContent('Not signed in: no connection. Try again.');
+    expect(button).not.toHaveAttribute('aria-disabled');
+    expect(button).toHaveFocus();
   });
 
   // Identity keeps a passkey ceremony and the code step in one cookie, so the options' answer must not come after the
