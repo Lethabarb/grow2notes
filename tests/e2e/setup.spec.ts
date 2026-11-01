@@ -5,6 +5,7 @@ import { expect, test, type Invite } from './fixtures.ts';
 import { expectStops, tabTo } from './focus.ts';
 import { expectFoundationsToPass } from './foundations.ts';
 import { boxOf } from './layout.ts';
+import { expectNoWayBackToSetup, tabHistory } from './setupHistory.ts';
 import { codeLabel } from './setupSignIn.ts';
 
 const linkCheck = '**/api/auth/setup/start';
@@ -33,18 +34,6 @@ function expectNoLinkIn(historyState: string, setupLink: string) {
   for (const part of linkParts(setupLink)) {
     expect(historyState).not.toContain(part);
   }
-}
-
-/**
- * The tab's history, which no script in the page can read, through Chromium's DevTools protocol: every address in it,
- * and the index of the one shown.
- */
-async function tabHistory(page: Page): Promise<{ urls: string[]; currentIndex: number }> {
-  const devTools = await page.context().newCDPSession(page);
-  const { entries, currentIndex } = await devTools.send('Page.getNavigationHistory');
-  // Left attached until the page closes: detaching a DevTools session takes the page's virtual authenticator with it,
-  // and a later passkey prompt would then find none.
-  return { urls: entries.map(({ url }) => url), currentIndex };
 }
 
 /** How far the control's text reaches past either side of its box, in CSS pixels, or 0. */
@@ -106,23 +95,16 @@ async function expectNothingKept(page: Page, invite: Invite, held: string[], met
   expect(kept.historyState).not.toMatch(method);
 }
 
-/**
- * Expects no entry before the current one in the tab's history to be a setup page, and Back to leave the app
- * (sign-in.md *Setup*: "Back from Today does not return to a setup or sign-in step").
- */
-async function expectNoWayBackToSetup(page: Page) {
-  const { urls, currentIndex } = await tabHistory(page);
-  expect(urls.slice(0, currentIndex)).not.toContainEqual(expect.stringContaining('/setup'));
-  const app = new URL(page.url()).origin;
-  await page.goBack();
-  await expect(page).toHaveURL((url) => url.origin !== app);
-}
-
 const passkeyButton = (page: Page) =>
   page.getByRole('main').getByRole('button', { name: 'Use a passkey (recommended)' });
 
 const passwordLink = (page: Page) =>
   page.getByRole('main').getByRole('link', { name: 'Use a password and authenticator app' });
+
+const passwordOnlyLink = (page: Page) => page.getByRole('main').getByRole('link', { name: 'Use a password only' });
+
+const passwordAndPasskeyLink = (page: Page) =>
+  page.getByRole('main').getByRole('link', { name: 'Use a password and a passkey' });
 
 test('a setup link leaves the address bar and the history before it is checked, then view E shows', async ({
   page,
@@ -226,7 +208,7 @@ test('a passkey that the device did not verify is not set up, and both ways on s
   expect(await authenticator.credentials()).toHaveLength(1);
 });
 
-test('without WebAuthn, view E says to open the link in the browser, with the password option primary', async ({
+test('without WebAuthn, view E says to open the link in the browser, with the app primary and no passkey', async ({
   page,
   invite,
 }) => {
@@ -244,6 +226,9 @@ test('without WebAuthn, view E says to open the link in the browser, with the pa
   );
   await expect(passkeyButton(page)).toHaveCount(0);
   await expect(passwordLink(page)).toHaveCSS('background-color', primaryFill);
+  await expect(passwordOnlyLink(page)).toHaveCSS('background-color', secondaryFill);
+  // It needs a passkey made on this device, which this browser cannot make.
+  await expect(passwordAndPasskeyLink(page)).toHaveCount(0);
   await expectAxeToPass(page);
 });
 
@@ -261,7 +246,12 @@ test('at 320 px with text at 200%, view E fits the window, with each label insid
 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
   // "authenticator" is wider than the buttons there, so it breaks inside them rather than running past their edges.
-  for (const control of [passkeyButton(page), passwordLink(page)]) {
+  for (const control of [
+    passkeyButton(page),
+    passwordLink(page),
+    passwordOnlyLink(page),
+    passwordAndPasskeyLink(page),
+  ]) {
     expect(await textPastEdges(control), `${control.toString()} keeps its text inside it`).toBeLessThan(1);
   }
 
@@ -537,7 +527,10 @@ test('view D, a link that was not checked, has Try again as its one stop after t
   await expectStops(page, 'Tab', ['Skip to main content', 'Try again']);
 });
 
-test('view E has the passkey button, then the password link, and passes the foundations', async ({ page, invite }) => {
+test('view E has the passkey button, then the three password links, and passes the foundations', async ({
+  page,
+  invite,
+}) => {
   test.slow();
   await page.goto(invite.setupLink);
   await expect(passwordLink(page)).toBeVisible();
@@ -547,6 +540,8 @@ test('view E has the passkey button, then the password link, and passes the foun
     'Skip to main content',
     'Use a passkey (recommended)',
     'Use a password and authenticator app',
+    'Use a password only',
+    'Use a password and a passkey',
   ]);
   await expectFoundationsToPass(page);
 });

@@ -17,7 +17,7 @@ const committed: string[] = [];
 
 /**
  * Notes the address it is committed on, shows what the setup layout holds, puts the made-up account and password
- * there, refuses the password, finishes setup, and drops it all.
+ * there, chooses a password only, refuses the password, finishes setup, and drops it all.
  */
 function Probe() {
   const setup = useSetup();
@@ -30,11 +30,15 @@ function Probe() {
       <p>{setup.account === undefined ? 'Nothing in memory' : setup.account.email}</p>
       <p data-testid="password">{setup.password ?? ''}</p>
       <p>{setup.passwordRefused ? 'Password refused' : 'Password not refused'}</p>
+      <p data-testid="choice">{setup.passwordChoice}</p>
       <button type="button" onClick={() => setup.setAccount(account)}>
         Remember
       </button>
       <button type="button" onClick={() => setup.setPassword(password)}>
         Remember password
+      </button>
+      <button type="button" onClick={() => setup.choosePassword('passwordOnly')}>
+        Choose password only
       </button>
       <button type="button" onClick={setup.refusePassword}>
         Refuse password
@@ -110,17 +114,29 @@ describe('SetupLayout', () => {
     expect(heldPassword()).toBe(password);
   });
 
-  it('drops the account, the password and its refusal together, as a 401 from a setup call does', () => {
+  it('starts with a password and an authenticator app, and keeps the choice between the setup addresses', async () => {
+    const router = renderApp('/setup');
+    expect(screen.getByTestId('choice')).toHaveTextContent('authenticatorApp');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose password only' }));
+    await act(() => router.navigate('/setup/password'));
+
+    expect(screen.getByTestId('choice')).toHaveTextContent('passwordOnly');
+  });
+
+  it('drops the account, the password, its refusal and the choice together, as a 401 from a setup call does', () => {
     renderApp('/setup/password');
     fireEvent.click(screen.getByRole('button', { name: 'Remember' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remember password' }));
     fireEvent.click(screen.getByRole('button', { name: 'Refuse password' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Choose password only' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Drop' }));
 
     expect(screen.getByText('Nothing in memory')).toBeInTheDocument();
     expect(heldPassword()).toBe('');
     expect(screen.getByText('Password not refused')).toBeInTheDocument();
+    expect(screen.getByTestId('choice')).toHaveTextContent('authenticatorApp');
   });
 
   it('keeps the server\'s refusal of the password until a password is taken again', async () => {
@@ -158,6 +174,27 @@ describe('SetupLayout', () => {
     expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument();
     expect(committed).toEqual([]);
     // The entries after it are Forward's, where the layout starts again with nothing in memory.
+    await act(() => router.navigate(1));
+    expect(router.state.location.pathname).toBe('/setup/password');
+    expect(screen.getByText('Nothing in memory')).toBeInTheDocument();
+  });
+
+  it('makes the setup entry Today by one entry back from view F, as for a password only', async () => {
+    const router = renderApp('/setup');
+    await act(() => router.navigate('/setup/password'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Finish' }));
+
+    expect(router.state.location.pathname).toBe('/setup/password');
+    committed.length = 0;
+
+    await act(() => router.navigate(-1));
+
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(router.state.location.pathname).toBe('/');
+    expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument();
+    expect(committed).toEqual([]);
+    // The entry after it is Forward's, where the layout starts again with nothing in memory.
     await act(() => router.navigate(1));
     expect(router.state.location.pathname).toBe('/setup/password');
     expect(screen.getByText('Nothing in memory')).toBeInTheDocument();

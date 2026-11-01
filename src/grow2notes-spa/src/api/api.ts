@@ -77,14 +77,33 @@ export const signInTimeoutMs = 180_000;
 const antiforgeryPath = '/api/auth/antiforgery';
 const antiforgeryHeader = 'X-XSRF-TOKEN';
 
-// The four calls that sign someone in, those that answer 200 Me (design.md §6.2). A token is bound to the user it was
-// issued to, so after one of them the next change fetches a token for the person now signed in.
+// The calls that sign someone in, those that answer 200 Me (design.md §6.2); the password step does so only for a
+// password only (D97), and its {next} answer signs no one in. A token is bound to the user it was issued to, so after
+// one of them the next change fetches a token for the person now signed in.
 const signIns = new Set([
+  '/api/auth/login',
   '/api/auth/login/totp',
   '/api/auth/passkey',
   '/api/auth/setup/password',
   '/api/auth/setup/passkey',
+  '/api/auth/setup/password-only',
+  '/api/auth/setup/password-and-passkey',
 ]);
+
+// Whether a 2xx answer is the password step's {next}, a second step, which signs no one in. It never throws, as the
+// count that uses it must not be skipped: an empty or other answer is no second step.
+function isNextStep(text: string): boolean {
+  try {
+    const answer: unknown = JSON.parse(text);
+    return typeof answer === 'object' && answer !== null && Object.hasOwn(answer, 'next');
+  } catch {
+    return false;
+  }
+}
+
+function signedInBy(path: string, text: string): boolean {
+  return signIns.has(path) && !(path === '/api/auth/login' && isNextStep(text));
+}
 
 // The antiforgery token, held here only, never in storage or a cookie that script can read (§9.8 item 2), as the
 // promise of its request, so that changes sent together wait on one request.
@@ -172,7 +191,7 @@ async function request<T>(path: string, options: ApiOptions): Promise<Reply<T>> 
   const { response, body: text, signInsWhenSent } = method === 'GET' ? await send() : await sendChange(send);
 
   if (response.ok) {
-    if (signIns.has(path)) {
+    if (signedInBy(path, text)) {
       antiforgeryToken = undefined;
       signedIn();
     }

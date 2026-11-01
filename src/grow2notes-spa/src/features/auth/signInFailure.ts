@@ -14,3 +14,9 @@ export function isRefusal(error: unknown): boolean {
 export function notSignedIn(error: unknown): string {
   return msg.notDone(strings.signIn.notDone, error instanceof ApiError && error.status === 0 ? 'offline' : 'server');
 }
+
+// A cancel, a timeout or no passkey for the app on the device, which the browser makes look the same (WebAuthn §14.5).
+// The prompt has said all there is to say, so the view says nothing (sign-in.md *Passkey prompt dismissed*).
+export function isDismissal(error: unknown): boolean {
+  return error instanceof Error && error.name === 'NotAllowedError';
+}

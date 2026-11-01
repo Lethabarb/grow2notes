@@ -32,6 +32,7 @@ const ceremony = vi.mocked(startAuthentication);
 const mePath = '/api/auth/me';
 const antiforgeryPath = '/api/auth/antiforgery';
 const optionsPath = '/api/auth/passkey/options';
+const stepOptionsPath = '/api/auth/login/passkey/options';
 const passkeyPath = '/api/auth/passkey';
 const passwordPath = '/api/auth/login';
 const codePath = '/api/auth/login/totp';
@@ -539,6 +540,26 @@ describe('the signed-out-in-place view', () => {
     const codeField = screen.getByRole('textbox', { name: codeLabel });
     expect(codeHeading).toContainElement(within(codeHeading).getByText(codeLabel, { selector: 'label' }));
     expect(codeField).toHaveFocus();
+    expect(document.querySelectorAll('h1:not([hidden] h1)')).toHaveLength(1);
+    expect(document.title).toBe('Grow2Notes – Sign in');
+  });
+
+  it('keeps its <h1> over the passkey step, whose heading is an <h2>, its button focused', async () => {
+    withWebAuthn();
+    serve('POST', passwordPath, json({ next: 'passkey' }));
+    serve('POST', stepOptionsPath, json({ challenge: 'c3RlcA', userVerification: 'required' }));
+    await renderApp('/manage/users/new');
+    await endTheSession();
+
+    type(emailField(), 'sam.lee@example.org');
+    type(screen.getByLabelText('Password'), 'correct horse battery staple');
+    press(screen.getByRole('button', { name: 'Continue' }));
+    await settle();
+
+    expect(shownHeading()).toHaveAccessibleName(signedOutHeading);
+    expect(within(main()).getByText(signedOutSentence)).toBeInTheDocument();
+    expect(within(main()).getByRole('heading', { level: 2, name: 'Use your passkey' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in with a passkey' })).toHaveFocus();
     expect(document.querySelectorAll('h1:not([hidden] h1)')).toHaveLength(1);
     expect(document.title).toBe('Grow2Notes – Sign in');
   });

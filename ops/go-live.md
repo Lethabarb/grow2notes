@@ -445,7 +445,7 @@ one text message to their own mobile, while you are with them or on a call you m
 it, tell them four things:
 
 - open it in the phone's browser, such as Safari or Chrome;
-- set up on their own phone, with a passkey or with a password and an authenticator app;
+- set up on their own phone, in the way they choose: a passkey, a password and an authenticator app, a password only, or a password and a passkey;
 - a screen that mentions "the link from your email" means this text message;
 - a screen saying the link has expired and to ask a manager means: tell you, because there is no other manager yet.
 
@@ -459,7 +459,7 @@ Result: ____ (date), ____ (pass or fail), by ____
 ### D5. The passkey prompt
 
 At the first passkey enrolment in production, normally the first manager's in D4, the browser's prompt names
-`app-grow2notes-prod.azurewebsites.net` and not the parent company. If the first manager chose an authenticator app,
+`app-grow2notes-prod.azurewebsites.net` and not the parent company. If the first manager did not choose a passkey,
 check it at the first person who enrols a passkey. (S06.05.01's third criterion, D91.)
 
 Result: ____ (date), ____ (pass or fail), by ____
@@ -522,7 +522,7 @@ work items. Tick each with its evidence and owner on the provider's own copy of 
 3. The data breach response plan names Grow2Notes and the operator's contact ([breach-response.md](breach-response.md)).
 4. A written hosting agreement between the provider and the developer's business is signed, naming Microsoft and Resend
    as sub-processors (A102).
-5. Every staff member has accepted their invite and set up MFA on their own phone, and at least two managers are
+5. Every staff member has accepted their invite and set up how they sign in on their own phone, and at least two managers are
    active.
 6. Staff onboarding (about 30 minutes) is done, by the managers, in test with made-up data (A106; first-use
    step 159). Until the switch-over day nobody starts a note in production, not even to try it: a started note is

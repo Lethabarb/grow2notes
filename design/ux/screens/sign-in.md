@@ -2,7 +2,7 @@
 
 Screen spec for design.md **§4.1**, plus the "sign in again in place" view from §4.0 Sessions and §8.5. It puts
 together the researched component files into one buildable screen. It adds no feature, field, screen, setting,
-notification or stored data. Rules it keeps: D21–D23, D42, D67–D70, A22–A25, A32, §6.2, §8.1–8.6, §9.6–9.9.
+notification or stored data. Rules it keeps: D21–D23, D42, D67–D70, D97, A22–A25, A32, §6.2, §8.1–8.6, §9.6–9.9.
 
 **Evidence tags:** **[Research]** studies and usability testing · **[Standard]** WCAG 2.2, WAI-ARIA, HTML/WebAuthn
 specs, NIST · **[Convention]** established design systems and browser-vendor guidance · **[Opinion]** reasoned
@@ -18,13 +18,15 @@ title, alt text, hidden text, passkey name or authenticator label ever contains 
 
 ## Purpose and who uses it
 
-**Purpose (design.md 4.1):** let invited people in, with MFA always on (D23). It has two jobs:
+**Purpose (design.md 4.1):** let invited people in, each signing in the way they chose (D23, D97). It has two jobs:
 
 1. **Account setup**, used once per person (and again after a manager's Reset sign-in). The person arrives from the
-   emailed setup link, almost always on **their own phone** (D21), and chooses one sign-in method for good (A22):
-   **a passkey** (recommended) or **a password plus an authenticator app**.
+   emailed setup link, almost always on **their own phone** (D21), and chooses one sign-in method for good (A22,
+   D97), with no role check: **a passkey** (recommended), **a password and an authenticator app**, **a password
+   only**, or **a password and a passkey**. A second step is offered to everyone and required of no one.
 2. **Sign in**, used at the start of every shift and after the 30-minute idle sign-out. Passkey users tap one button.
-   Password users type email and password, then a 6-digit code.
+   Password users type email and password, and then whatever they chose: nothing more (a password only), a 6-digit
+   code (a password and an authenticator app), or the device's passkey prompt (a password and a passkey).
 
 **Who:** every worker and manager. Workers are often tired, at the end of a long shift, sometimes in a participant's
 home or in public. Many write English as a second language, digital confidence is mixed, and this is where the
@@ -36,7 +38,8 @@ recovery codes, no self-service method change, no sign-up, no SSO. Recovery is a
 
 **Routes.** Sign-in has **no URL of its own**: when there is no session, it renders at whatever URL was requested, and
 that route renders after sign-in (no redirect, no `returnUrl`; §4.0 URLs hold IDs only). Setup uses `/setup` (from
-the emailed `/setup#u=…&t=…`), `/setup/password` and `/setup/app`.
+the emailed `/setup#u=…&t=…`), `/setup/password` and `/setup/app`. The two new password choices add no route: view F
+serves every password choice, and the choice is held in React memory only (*Privacy and storage*).
 
 ---
 
@@ -101,6 +104,25 @@ above the button that was pressed, and focus stays on that button.
 | reset your sign-in.                     |
 ```
 
+**H. Sign in, passkey step** (replaces A's content in the same place; same URL; for a person who chose a password and
+a passkey, after the password was accepted; no password fields and no anonymous passkey button)
+
+```
+| Grow2Notes                              |
+| [There is a problem ...]                |  only for "Sign-in failed" (A25), on return to A
+| Use your passkey                   (h1) |  (P)
+| To finish signing in, use your face,    |  hint (P)
+| fingerprint or PIN, the same way you    |
+| unlock your device.                     |
+|  (empty)                                |  <p role="alert">: request failures
+| +-------------------------------------+ |
+| |       Sign in with a passkey        | |  PRIMARY <button type=button>, 48 px,
+| +-------------------------------------+ |  no form: Enter submits nothing
+| +-------------------------------------+ |
+| |               Go back               | |  SECONDARY <button type=button>
+| +-------------------------------------+ |
+```
+
 **C. Signed out, in place** (after any `401`; the page behind stays mounted but `hidden`)
 
 ```
@@ -111,7 +133,8 @@ above the button that was pressed, and focus stays on that button.
 | ...then exactly A's content (hint,      |
 | passkey button, or, email, password,    |
 | Continue, help line), then B's code     |
-| step with its label inside an <h2>.     |
+| step, or H's passkey step, with its     |
+| heading or label inside an <h2>.        |
 | Its fields have ids of their own (A62). |
 ```
 
@@ -154,10 +177,23 @@ button appears under it (outside the status element).
 | You'll create a password and use a free |  hint (P)
 | app that shows a 6-digit code each time |
 | you sign in.                            |
+| +-------------------------------------+ |
+| |        Use a password only          | |  SECONDARY router <Link> to
+| +-------------------------------------+ |  /setup/password (P, D97)
+| You'll sign in with your email address  |  hint (P)
+| and a password, and nothing else.       |
+| +-------------------------------------+ |
+| |   Use a password and a passkey      | |  SECONDARY router <Link> to
+| +-------------------------------------+ |  /setup/password (P, D97)
+| You'll create a password, then use your |  hint (P)
+| face, fingerprint or PIN after it each  |
+| time you sign in.                       |
 ```
 
-If the browser has no WebAuthn at all, the passkey button and its hint are replaced by the notice **"Open this link in
-your browser"** (V) with its body, and "Use a password and authenticator app" becomes the primary style.
+The four choices run in this order and none of the new ones says "(recommended)". If the browser has no WebAuthn at
+all, the passkey button and its hint are replaced by the notice **"Open this link in your browser"** (V) with its
+body, "Use a password and authenticator app" becomes the primary style, "Use a password only" follows it as a
+secondary link, and "Use a password and a passkey" is not offered (it needs a passkey made on this device).
 
 **F. Create a password** (`/setup/password`)
 
@@ -175,6 +211,11 @@ your browser"** (V) with its body, and "Use a password and authenticator app" be
 | |               Continue              | |  PRIMARY, type=submit (no request)
 | +-------------------------------------+ |
 ```
+
+For a password only and for a password and a passkey the same view F has one change: the button reads **Finish setup**
+(V) and sends the setup request itself, and for a password and a passkey a hint paragraph sits above it: "When you
+select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey." (P, D97). For a
+password and an authenticator app (View G follows) it is exactly as drawn.
 
 **G. Set up your authenticator app** (`/setup/app`)
 
@@ -235,7 +276,7 @@ hidden or reordered, so the DOM order equals the visual order on every device (S
 - **Type and spacing.** `h1` grows from 28 px to 32 px; gutters and section gaps grow per the tokens. Body stays 18 px.
 - **Buttons** become as wide as their label (minimum 8rem), left-aligned, still 48 px tall
   ([primary-actions.md](../components/primary-actions.md)). Each setup method button keeps its hint directly under it,
-  so the two stay stacked blocks, not a side-by-side group.
+  so the choices stay stacked blocks, not a side-by-side group.
 - **Text inputs** fill the column. The code field stays about 10ch wide at every size, so it reads as "a short code".
   [Convention: GOV.UK fixed-width inputs for known-length content]
 - **Show/Hide** (view F) sits beside the password field (it only wraps underneath at 320 px or 200% text).
@@ -258,25 +299,26 @@ Every visible string lives in `src/copy`.
 
 | # | Component | Used on | Screen-specific settings |
 |---|---|---|---|
-| 1 | Signed-out shell ([app-shell-nav.md](../components/app-shell-nav.md)) | All views | Skip link, `<header>` with the wordmark "Grow2Notes" as plain text (not a link), `<main id="main-content" tabindex="-1">`. No nav, no Account. Page titles from the fixed list only: **"Grow2Notes – Sign in"** (views A, B, C) and **"Grow2Notes – Set up your account"** (D to G). After a failure, prefix "Error: ". `<html lang="en-AU">`. |
+| 1 | Signed-out shell ([app-shell-nav.md](../components/app-shell-nav.md)) | All views | Skip link, `<header>` with the wordmark "Grow2Notes" as plain text (not a link), `<main id="main-content" tabindex="-1">`. No nav, no Account. Page titles from the fixed list only: **"Grow2Notes – Sign in"** (views A, B, C and the passkey step H) and **"Grow2Notes – Set up your account"** (D to G). After a failure, prefix "Error: ". `<html lang="en-AU">`. |
 | 2 | ErrorSummary ([form-validation.md](../components/form-validation.md)) | A, B, C | First child of `<main>`. `tabIndex={-1}`, `<h2>` "There is a problem", `<ul>`. Field errors are links whose text equals the inline message. **The A25 "Sign-in failed" message is the one unlinked item**: it is a credential outcome, not a request failure, and marks no field invalid (form-validation.md's stated exception). Focus moves to it on every failed attempt that shows it. No `role="alert"` (focus does the announcing). Request failures never go here (row 2a). |
-| 2a | Request-failure alert ([primary-actions.md](../components/primary-actions.md), [form-validation.md](../components/form-validation.md)) | A, B, C, E, G | An always-present, empty `<p role="alert">` directly above each button that sends a request: above **Sign in with a passkey** (A, C), above **Continue** (A, C), above **Sign in** (B, C), above **Use a passkey (recommended)** (E), above **Finish setup** (G). It holds no-connection and server failures, passkey ceremony errors and the setup `429`. Bold, `--colour-error`, words first. Focus stays on the pressed button, so pressing it again retries. Cleared on the next press. |
-| 3 | Page heading and hint | A, C, E | A: `h1` "Sign in" + hint (P). C: `h1` "You've been signed out" (P) + "Sign in again to go back to where you were." (P), then A's hint. E: `h1` "Set up your account" (V). `h1` has `tabIndex={-1}` for route focus. |
+| 2a | Request-failure alert ([primary-actions.md](../components/primary-actions.md), [form-validation.md](../components/form-validation.md)) | A, B, C, E, F, G, H | An always-present, empty `<p role="alert">` directly above each button that sends a request: above **Sign in with a passkey** (A, C, H), above **Continue** (A, C), above **Sign in** (B, C), above **Use a passkey (recommended)** (E), above **Finish setup** (F for a password only or a password and a passkey, G). It holds no-connection and server failures, passkey ceremony errors and the setup `429`. Bold, `--colour-error`, words first. Focus stays on the pressed button, so pressing it again retries. Cleared on the next press. |
+| 3 | Page heading and hint | A, C, E, H | A: `h1` "Sign in" + hint (P). C: `h1` "You've been signed out" (P) + "Sign in again to go back to where you were." (P), then A's hint. E: `h1` "Set up your account" (V). H: `h1` "Use your passkey" (P) + the hint "To finish signing in, use your face, fingerprint or PIN, the same way you unlock your device." (P) (an `h2` under C's `h1`). `h1` has `tabIndex={-1}` for route focus. |
 | 4 | Passkey sign-in button ([passkey-flows.md](../components/passkey-flows.md), [primary-actions.md](../components/primary-actions.md)) | A, C | `<Button type="button" variant="primary">` "Sign in with a passkey" (V), **outside** the email/password `<form>`. No icon (see Conflicts). Busy label "Signing in…" (P). Options prefetched on render, and in C brought by the 30:00 clock once the server has surely ended the session (Interactions 2, design.md A61). If `browserSupportsWebAuthn()` is false, render instead the static notice "Passkeys do not work in this browser. To use your passkey, open Grow2Notes in your phone's main browser, such as Safari or Chrome." (P) and drop the "or". |
 | 5 | "or" divider | A, C, E | Plain `<p>` "or" (P), read by screen readers; any rule lines are CSS pseudo-elements. |
 | 6 | EmailInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C | `<label>` "Email address". `id`/`name="email"` (A), or `"signed-out-email"` (C, apart from any field of the screen hidden under it, design.md A62), `type="email"`, `autoComplete="username"`, `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Trimmed before sending. Not pre-filled, no placeholder, no `autoFocus`. |
 | 7 | PasswordInput ([sign-in-form.md](../components/sign-in-form.md)) | A, C (`current-password`); F (`new-password`) | One shared component. Label "Password" (A, C) or "Create a password" inside the `h1` (F). **Show/Hide on F only** (design 4.1: "set a password of at least 12 characters, with show/hide"): a 48 px "Show"/"Hide" button with accessible names "Show password"/"Hide password" (visible word first, SC 2.5.3), `aria-controls`, and a persistent visually hidden `aria-live="polite"` line saying "Your password is visible"/"Your password is hidden" (empty on mount); back to `type="password"` on form submit. On A and C the field has no toggle (D68). `spellCheck={false}`, `autoCapitalize="none"`, `autoCorrect="off"`. Never trimmed, no `maxLength`. F only: `minLength={12}` (guides password generators; `noValidate` stops it blocking) and a hidden `<input type="email" name="username" autoComplete="username" value={email} readOnly hidden>` inside the form. |
-| 8 | Continue button ([primary-actions.md](../components/primary-actions.md)) | A, C (secondary, busy "Checking…" (P)); F (primary, no request, no busy) | `type="submit"`. Never `disabled`. |
+| 8 | Continue button ([primary-actions.md](../components/primary-actions.md)) | A, C (secondary, busy "Checking…" (P)); F for a password and an authenticator app (primary, no request, no busy) | `type="submit"`. Never `disabled`. |
 | 9 | Help line ([microcopy.md](../components/microcopy.md) §9) | A, B, C | Plain `<p>`: "If you cannot sign in, ask a manager to reset your sign-in." (P). Not a link. |
 | 10 | OneTimeCodeField ([totp-setup.md](../components/totp-setup.md)) | B (label inside `h1`); C (label inside an `h2` under C's `h1`, design.md A62); G (plain label inside step 3) | One `<input>`: `type="text"`, `id`/`name="code"` (`"signed-out-code"` in C, A62), `inputMode="numeric"`, `autoComplete="one-time-code"`, `enterKeyHint="go"`, `spellCheck={false}`, `autoCapitalize="off"`, `autoCorrect="off"`. No `maxLength`, `pattern` or placeholder; never auto-submits. Bold tabular digits at `--font-size-h2` (22 px on a phone, 24 px from 40rem), letter-spacing 0.15em, `inline-size: 10ch`, 48 px tall, `scroll-margin-block` so it is never under anything. Label "Enter the 6-digit code from your authenticator app" (P). Hints: B/C "Open your authenticator app and find Grow2Notes. If the code changes while you're typing, you can still use it." (P); G "Find Grow2Notes in the app. If the code changes while you're typing, you can still use it." (P). |
 | 11 | Code-step submit ([primary-actions.md](../components/primary-actions.md)) | B, C | Primary "Sign in" (V), busy "Signing in…" (P). |
 | 12 | Setup link check ([empty-loading-error.md](../components/empty-loading-error.md)) | D | One `<p role="status">` present from first render: "Checking your link…" (P) after 1 s, then the failure sentence. **Try again** (primary, busy "Checking…") sits outside it. Whole-page messages are an `h1` (`tabIndex={-1}`) and one sentence, with no button. |
 | 13 | Account summary | E | `<dl>`: "Name" / display name, "Email address" / email, as text (not disabled or read-only inputs). Hint "If these are wrong, ask a manager." (P). |
-| 14 | Method choice ([passkey-flows.md](../components/passkey-flows.md)) | E | `h2` "Choose how you'll sign in" (P, from design's "Choose"). Primary `<Button type="button">` "Use a passkey (recommended)" (V), busy "Setting up your account…" (P), `aria-describedby` its hint. Secondary router `<Link>` styled as a button, "Use a password and authenticator app" (V), `aria-describedby` its hint. Accessible names equal the visible labels (no `aria-label`). |
+| 14 | Method choice ([passkey-flows.md](../components/passkey-flows.md)) | E | `h2` "Choose how you'll sign in" (P, from design's "Choose"). Four choices, in this order (D97). Primary `<Button type="button">` "Use a passkey (recommended)" (V), busy "Setting up your account…" (P), `aria-describedby` its hint. Then three secondary router `<Link>`s styled as buttons, each to `/setup/password`, each with `aria-describedby` its hint: "Use a password and authenticator app" (V), "Use a password only" (P) and "Use a password and a passkey" (P). Each link records its choice in setup memory when pressed. Accessible names equal the visible labels (no `aria-label`). Without WebAuthn: the notice, then "Use a password and authenticator app" (primary) and "Use a password only" (secondary); "Use a password and a passkey" is not offered. |
 | 15 | Back link (the shared BackLink, [app-shell.md](app-shell.md) component 3a) | F, G | Labelled with the destination: "‹ Set up your account" on F (to `/setup`), "‹ Create a password" on G (to `/setup/password`; the password is still in memory and shown again) (P). Rendered into the shell's before-main bar slot (GOV.UK back-link position), so the error summary or the `h1` is the first thing in `<main>`. Pops when the previous entry is the destination, otherwise pushes: the shell's opened-from record, which each in-app push writes on its new entry, tells it, the link popping when the record names the previous entry and its path has the pathname of the link's `to` (app-shell.md *Where a screen was opened from*). F and G each have one opener, so the link keeps its own label and `to`, and the record decides only pop or push; with no record, as after a reload, it pushes. |
 | 16 | Authenticator setup block ([totp-setup.md](../components/totp-setup.md)) | G | `h1` "Set up your authenticator app" (P), intro, `<ol>` of 3 steps (copy in States). QR `<img src="/api/auth/setup/authenticator/qr.png" width="200" height="200" alt="QR code for adding Grow2Notes to your authenticator app">` on a white panel with the 4-module quiet zone, container `color-scheme: only light`, `image-rendering: pixelated`. SetupKey: term "Setup key", key in capitals, `--font-family-code`, groups of 4 as separate `<span>`s (no space characters), `user-select: all`, `translate="no"`. No Copy button (design 4.1: "type the setup key"; D68). |
 | 18 | Page status region ([app-shell.md](app-shell.md) component 3) | All views | The shared visually hidden `<p role="status">` (`PageStatus`), present from the first render. The shared Button writes its busy labels here ("Checking…", "Signing in…", "Setting up your account…", "Finishing setup…"). There is no app-level region. |
-| 17 | Finish setup ([primary-actions.md](../components/primary-actions.md)) | G | Primary "Finish setup" (V), busy "Finishing setup…" (P), `type="submit"` of the code form. |
+| 17 | Finish setup ([primary-actions.md](../components/primary-actions.md)) | G; F for a password only and a password and a passkey | Primary "Finish setup" (V), busy "Finishing setup…" (P), `type="submit"` of the code form (G) or of the password form (F). |
+| 19 | Passkey step ([passkey-flows.md](../components/passkey-flows.md)) | H | For a person who chose a password and a passkey, shown in A's place once the password is accepted. Heading `h1` "Use your passkey" (P) and hint (P) as in row 3, the request-failure alert (row 2a), a primary `<Button type="button">` "Sign in with a passkey" (the same words as A's, V) with busy "Signing in…" (P) and `aria-describedby` the hint, and a secondary `<Button type="button">` "Go back" (V, the app's existing back words). There is no form, so Enter submits nothing. No password fields and no anonymous passkey button. Without WebAuthn the primary button is replaced by the same "Passkeys do not work in this browser…" notice as A, and Go back stays. |
 
 React Aria is not needed anywhere on this screen: every control is a native `<button>`, `<a>`, `<input>` or `<form>`.
 
@@ -316,9 +358,17 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | Empty fields on Continue | Client check: the email empty once trimmed, or the password empty or only whitespace (`value.trim() === ''`, as the server's `[Required]` refuses one), though the password itself is never trimmed | Inline under each label and linked in the summary: "Enter your email address" (P) · "Enter your password" (P) | Summary | Summary on focus |
 | Email has no "@" with text both sides | Client check | "Enter an email address in the correct format, like name@example.com" (P, GOV.UK) | Summary | Summary on focus |
 | Busy | Continue / passkey / Sign in pressed | Button `aria-disabled="true"`; after 400 ms its label becomes "Checking…" (Continue) or "Signing in…" (passkey, code step). No spinner. | Stays on the button | Busy label through the page status region (`PageStatus`) |
-| **Sign-in failed** (design) | `401` or `429` from `/api/auth/login`, `/api/auth/login/totp` or `/api/auth/passkey` | Summary, unlinked: **"Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes."** (V). No field marked invalid. Password step: email kept, **password cleared**. Code step: code cleared, stays on step B. | Summary | Summary on focus |
+| **Sign-in failed** (design) | `401` or `429` from `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/login/passkey/options` or `/api/auth/passkey` | Summary, unlinked: **"Sign-in failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes."** (V). No field marked invalid. Password step: email kept, **password cleared**. Code step: code cleared, stays on step B. | Summary | Summary on focus |
 | Code step expired | `401`/`429` on the code step **4 min 50 s or more** after the password was accepted (the step lasts 5 minutes, D69) | Back to step A with the email kept, password empty, and the same design message in the summary. Nothing says why. | Summary | Summary on focus |
 | Code empty / wrong format (one-field form) | Client check after removing spaces, hyphens and dashes (NFKC) | Inline only: "Enter the 6-digit code from your authenticator app" (P) · "The code must be 6 digits" (P). `aria-invalid` on the field. Nothing is sent, so no lockout attempt is used. | The code field | Label, "invalid", hint, "Error: …" via `aria-describedby` |
+| Password only signs in | `200 Me` from `/api/auth/login` (no `next`): the person chose a password only (D97) | The success path below, with no further step | As the success path | As the success path |
+| Passkey step shows | `200 {next:"passkey"}` from `/api/auth/login` | View H in A's place, same URL. The password is cleared from memory and the email kept. Its options are fetched as it shows (`POST /api/auth/login/passkey/options`); no anonymous passkey options are fetched while it shows. | The primary button, "Sign in with a passkey" | The heading and hint, then the button |
+| Passkey step: prompt dismissed | `NotAllowedError` on the step (cancel, timeout or no passkey on this device: the page cannot tell which) | **Nothing.** Button back to default, the step stays. Identity still holds the ceremony, so pressing again works until the cookie's 5 minutes end. | Stays on the button | Nothing |
+| Passkey step: refused | `401` or `429` from the step's options or from `/api/auth/passkey`: another account's passkey, a refused credential, the 5 minutes spent, or too many tries | Back to view A with the email kept, the password empty and the same design message in the summary. Nothing says why. | Summary | Summary on focus |
+| Passkey step: other failure | A WebAuthn error other than `NotAllowedError`, no connection, or `5xx` | Alert above the button: "Not signed in: something went wrong. Try again." or "Not signed in: no connection. Try again." (P, as for A). The step stays. | Stays on the button | The alert (assertive) |
+| Passkey step: Go back | The person presses Go back, in any state of the step | View A with the email kept, the password empty and no message. The step's ceremony is dropped, which is harmless. A's own passkey button, or the password again, are the ways on (A142). | The password field | Label on focus |
+| Passkey step: options aged | Pressing the button 4 minutes or more after the options were fetched | The options are fetched again first; if that is refused, as *Passkey step: refused*. | As the case | As the case |
+| Passkey step: passkeys unavailable | `browserSupportsWebAuthn()` false while the step shows | The notice in place of the primary button; nothing is fetched; Go back stays. | The heading | The heading and the notice |
 | Passkey prompt dismissed | `NotAllowedError` (cancel, timeout or no passkey: the page cannot tell which, WebAuthn §14.5) | **Nothing.** Button back to default. | Stays on the button | Nothing |
 | Passkey other client error | Any other WebAuthn error | Alert above the passkey button: "Not signed in: something went wrong. Try again." (P) | Stays on the passkey button | The alert (assertive) |
 | No connection | `fetch` rejects or times out | Alert above the pressed button (passkey, Continue or Sign in): "Not signed in: no connection. Try again." (P). Typed email kept; password kept (it was never checked). Not in the summary. | Stays on the pressed button | The alert (assertive) |
@@ -338,7 +388,7 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | **Setup session timed out** (design) | `401` from any `/api/auth/setup/*` call (enrolment cookie gone after 30 minutes) | Whole page: `h1` "Your setup session timed out", then "Open the link from your email again." (N). No button. In-memory setup state cleared. | `h1` | Heading on focus |
 | No link in memory | `/setup*` opened with no `#u=…&t=…` and nothing in memory (refresh, copied URL, an in-app browser's "Open in browser") | Whole page: `h1` "Set up your account", then "To set up your account, open the link from your email again." (P) | `h1` | Heading on focus |
 | Choose a method | `setup/start` → `{email, displayName}` | View E | `h1` | Heading on focus |
-| **In-app browser cannot create passkeys** (design) | `browserSupportsWebAuthn()` false | In place of the passkey button and its hint: heading (`h2`-styled `<p>` inside a bordered notice) **"Open this link in your browser"** (V), body "Passkeys cannot be set up here. Go back to the email and open the link in your phone's browser, such as Safari or Chrome." (P). "Use a password and authenticator app" becomes primary. | `h1` | Read in order (static) |
+| **In-app browser cannot create passkeys** (design) | `browserSupportsWebAuthn()` false | In place of the passkey button and its hint: heading (`h2`-styled `<p>` inside a bordered notice) **"Open this link in your browser"** (V), body "Passkeys cannot be set up here. Go back to the email and open the link in your phone's browser, such as Safari or Chrome." (P). "Use a password and authenticator app" becomes primary, "Use a password only" follows as a secondary link, and "Use a password and a passkey" is not shown (D97). | `h1` | Read in order (static) |
 | Passkey busy | Tap "Use a passkey (recommended)" | Device prompt (Face ID, fingerprint, PIN, or "use a phone"); button `aria-disabled`, after 400 ms "Setting up your account…" (P) | Stays on the button | Busy label |
 | Passkey not set up | `NotAllowedError`, an `AbortError` we did not start, `InvalidStateError`, any other WebAuthn error, or `422 validation.failed` with `errors.credentialJson` from `/setup/passkey` (A52) | Alert above "Use a passkey (recommended)": "Your passkey was not set up. Try again, or open the link from your email in your phone's browser." (P). Both options stay usable; new options are prefetched. | Stays on the passkey button | The alert (assertive) |
 | No connection / server error (any setup action) | `fetch` rejects / `5xx` | Alert above the pressed button: "Not set up: no connection. Try again." or "Not set up: something went wrong. Try again." (P) | Stays on the pressed button | The alert (assertive) |
@@ -349,9 +399,13 @@ Every state from design.md 4.1, plus loading, empty and error. Copy is exact. "S
 | QR image failed | `<img onError>` | Image hidden; "The QR code did not load. Use the setup key instead." (P) | — | Static |
 | Setup code empty / wrong format | Client check | Inline: "Enter the 6-digit code from your authenticator app" (P) · "The code must be 6 digits" (P) | The field | Via `aria-describedby` |
 | Setup code rejected | `422 validation.failed` with `errors.totpCode` (D70) | Inline on the code field: "That code did not work. Enter the code the app shows for Grow2Notes now." (P). Code cleared, password kept in memory. | The field | Via `aria-describedby` |
+| Finish setup on F (a password only) | The person presses Finish setup | The client check runs first (the two messages above). Then `POST /api/auth/setup/password-only {password}`; busy "Finishing setup…" (P). The password stays in the field. | Stays on the button | Busy label |
+| Finish setup on F (a password and a passkey) | The person presses Finish setup | The client check runs first. Then the device's passkey prompt opens at once, straight from the press, and `POST /api/auth/setup/password-and-passkey {password, credentialJson}` follows. Busy "Finishing setup…" (P). The passkey options are prefetched as F shows and again when the field changes with none held. | Stays on the button | Busy label |
+| Passkey not made on F (a password and a passkey) | A prompt error, or `422 validation.failed` with `errors.credentialJson` | Alert above Finish setup: "Your passkey was not set up. Try again, or open the link from your email in your phone's browser." (P, as on E). The password stays in the field and new options are prefetched, so the person tries again without retyping and with no half-made account. | Stays on the button | The alert (assertive) |
+| Password rejected on F (a password only, a password and a passkey) | `422` with `errors.password` | Inline on F's field: "Password must be 12 characters or more" (P). The client check makes this unreachable unless the rules drift. | The field | Via `aria-describedby` |
 | Password rejected by server | `422` with `errors.password` (only if client and server rules ever drift) | Back one entry to view F, which shows its own words inline, "Password must be 12 characters or more" (P), not the server's, with the password still in the field | F's field | Via `aria-describedby` |
 | Too many tries | `429` on a setup call that a button sent (the key's is *Key did not load*) | Alert above the pressed button: "Too many tries. Wait 1 minute, then try again." (P) | Stays on the pressed button | The alert (assertive) |
-| Done | `200 Me` from `/setup/passkey` or `/setup/password` | Today (design step 5). The `Me` goes into `['me']` first (`setMe`, *Interactions* 5). From `/setup/passkey`, `navigate('/', { replace: true })`. From `/setup/password`, setup is marked finished in memory and G goes back two entries to `/setup`'s, which the setup layout replaces with `/` before anything renders (*Interactions* 12). Leaving `/setup*` clears setup state from memory | Today's `h1` | Heading on focus |
+| Done | `200 Me` from `/setup/passkey`, `/setup/password`, `/setup/password-only` or `/setup/password-and-passkey` | Today (design step 5). The `Me` goes into `['me']` first (`setMe`, *Interactions* 5). From `/setup/passkey`, `navigate('/', { replace: true })`. From `/setup/password`, setup is marked finished in memory and G goes back two entries to `/setup`'s, which the setup layout replaces with `/` before anything renders (*Interactions* 12). From the other two, F marks setup finished and goes back one entry to `/setup`'s, replaced the same way (*Interactions* 16). Leaving `/setup*` clears setup state from memory | Today's `h1` | Heading on focus |
 
 **Copy for view G, in order (all P except the button):** intro "An authenticator app is a free app on your phone. It
 shows a new 6-digit code every 30 seconds. You enter the code after your password each time you sign in." · step 1
@@ -392,9 +446,12 @@ back to this page." · field label and hint as in Components row 10 · button "F
    options answer arriving after the password was accepted would end the code step, and every code would then fail
    until the person started again. For the same reason A asks for no options while the password is out: a passkey
    press with no fresh options, and the prefetch after a failed passkey attempt, wait for its answer and ask only if A
-   still shows. `200 {next:"totp"}` → record `passwordAcceptedAt = Date.now()` in memory, cancel any passkey prompt
-   still open, and replace the form with step B (the form's removal also lets password managers offer to save), which
-   asks for no options. `401`/`429` → generic message, clear the password, keep the email.
+   still shows. The answer then depends on what the person chose (D97). `200 {next:"totp"}` → record
+   `passwordAcceptedAt = Date.now()` in memory, cancel any passkey prompt still open, and replace the form with step B
+   (the form's removal also lets password managers offer to save), which asks for no options. `200 {next:"passkey"}` →
+   the same, but the form is replaced with the passkey step H (interaction 15). `200 Me` (a password only) → the
+   success path (interaction 5) at once, with no further step. `401`/`429` → generic message, clear the password,
+   keep the email.
 4. **Sign in (code).** Normalise (NFKC, remove spaces, hyphens, dashes and minus signs), require exactly 6 ASCII
    digits, else inline error and nothing sent. `POST /api/auth/login/totp {code}` with `retry: false` semantics (never
    retried automatically: every attempt counts towards lockout). `200 Me` → success path. `401`/`429` → if
@@ -425,14 +482,18 @@ back to this page." · field label and hint as in Components row 10 · button "F
    the tap → `POST /api/auth/setup/passkey {credentialJson, name}` with the fixed `name` "Grow2Notes" (D70; never
    shown, no UI asks for one) → `200 Me` → Today. Never start the prompt on page load (SC 3.2.1, 3.2.2; FIDO found
    jumping straight into the OS dialog "disorienting", https://www.passkeycentral.org/design-guidelines/principles).
-9. **Use a password and authenticator app.** A link to `/setup/password`, which fetches nothing. View G fetches the
+9. **Use a password and authenticator app, a password only, or a password and a passkey.** Each is a link to
+   `/setup/password` that records its choice in setup memory when pressed, and that fetches nothing. A password and
+   an authenticator app goes on to view G, which fetches the
    key as it shows (`GET /api/auth/setup/authenticator`: `staleTime: Infinity`, `gcTime: 0`,
    `refetchOnWindowFocus: false`, `retry: false`), not before: with `gcTime: 0` a key fetched while no view uses it
    would be dropped at once, and one that view F used would stay in memory after G unmounts (*Privacy and storage*).
-   The answer is small, so G shows "Loading…" only on a slow connection.
-10. **Continue (Create a password).** Client check only (no request): empty or only whitespace
+   The answer is small, so G shows "Loading…" only on a slow connection. The other two choices never reach G.
+10. **Continue (Create a password).** Client check first, whichever choice was made: empty or only whitespace
     (`value.trim() === ''`) → "Enter a password"; under 12 (`value.length`) → "Password must be 12 characters or
-    more", the 12 from `limits.ts`. Pass → store the password in the setup context (memory) and push `/setup/app`.
+    more", the 12 from `limits.ts`. For a password and an authenticator app, the button is Continue and a pass sends
+    nothing: it stores the password in the setup context (memory) and pushes `/setup/app`. For the other two choices
+    the button is Finish setup (interaction 16).
 11. **Setup key.** Shown as selectable text only. There is no Copy button, so the app never puts the key on the
     clipboard (D68); a person may still select and copy it by hand.
 12. **Finish setup.** Code checked as in step 4 (inline errors, nothing sent). `POST /api/auth/setup/password
@@ -445,9 +506,29 @@ back to this page." · field label and hint as in Components row 10 · button "F
     while it was on its way, still goes into `['me']` and marks setup finished, but moves nobody. A wrong code clears
     the code only; the password is never cleared on this view. A `422` with `errors.password` goes back one entry to
     F, which shows its own message on the field (*Password rejected by server*).
-13. **Leaving `/setup*`** for any reason clears the setup context (password, email, name) from memory.
+13. **Leaving `/setup*`** for any reason clears the setup context (password, email, name, the choice) from memory.
 14. **Back links** (F, G): the shared BackLink pops when the previous entry is the destination (so it is the same as
     browser Back), otherwise it pushes the destination.
+15. **The passkey step (H).** It fetches its options as it shows (`POST /api/auth/login/passkey/options`, a call that
+    works only straight after an accepted password and that replaces the password step in Identity's two-factor
+    cookie, so it is made once and the options are kept). On tap: guard re-entry, set busy, and if the options are
+    under 4 minutes old call `startAuthentication({ optionsJSON })` **straight from the tap with no `await` before
+    it**; otherwise fetch first. Credential → `POST /api/auth/passkey {credentialJson}`, the same call as A's, which
+    fails a credential that is not this account's → `200 Me` → the success path. The step never marks its options
+    spent, since it can get only one set: a dismissed prompt leaves the step as it is and the next tap reuses them.
+    A `401` or `429` from either call returns to A like an expired code step (the generic message in the summary).
+    Go back returns to A with no message, and focuses the password field. Unmounting cancels any prompt. A tired
+    person who cancels the prompt therefore does not retype the password; one whose step has really ended does (A142).
+16. **Finish setup on F (a password only, a password and a passkey).** After the client check, a password only
+    posts `POST /api/auth/setup/password-only {password}` by a direct call. A password and a passkey calls
+    `startRegistration` straight from the press with the options prefetched as F showed (and prefetched again when
+    the field changes and none is held), then posts `POST /api/auth/setup/password-and-passkey {password,
+    credentialJson}` with the fixed passkey name left to the server (D70). `200 Me` → `setMe` (interaction 5), mark
+    setup finished in the setup context, then go back one entry (`navigate(-1)`) to `/setup`'s entry, which the
+    setup layout replaces with `/`, so Back from Today leaves the app. `422` with `errors.password` → F's own field
+    message. A `401` shows the setup-timed-out page, as for the other setup calls. A second press while busy sends
+    nothing. Enter in the password field presses Finish setup, F's only action; a passkey prompt never opens from any
+    other key (Enter's "never opens a prompt" rule is view A's, where the passkey button is outside the form).
 
 ### Focus order (Tab), matching the visual order
 
@@ -456,12 +537,16 @@ back to this page." · field label and hint as in Components row 10 · button "F
   links (if any) are reachable by Tab.
 - **B:** code field → Sign in.
 - **D (failure):** Try again.
-- **E:** Use a passkey (recommended) → Use a password and authenticator app.
-- **F:** back link "Set up your account" → password field → Show → Continue.
+- **E:** Use a passkey (recommended) → Use a password and authenticator app → Use a password only → Use a password
+  and a passkey.
+- **F:** back link "Set up your account" → password field → Show → Continue (Finish setup for a password only and a
+  password and a passkey).
+- **H:** Sign in with a passkey → Go back.
 - **G:** back link "Create a password" → code field → Finish setup. The QR image and key text are not tab stops.
 
 No positive `tabindex`; nothing traps focus; Enter in any single-line field submits its own form (implicit submission),
-and never starts a passkey prompt because the passkey buttons are outside every form.
+and never starts a passkey prompt because the passkey buttons are outside every form. View F for a password and a
+passkey is the one form whose submit opens a prompt, and that submit is Finish setup (interaction 16).
 
 ### Where focus goes after actions
 
@@ -473,6 +558,11 @@ and never starts a passkey prompt because the passkey buttons are outside every 
 | A format error on a one-field view (B, F, G) | The field in error | [Convention: AgDS one-error rule, form-validation.md rule 6] |
 | Password accepted (A → B) | The code field | The person pressed Continue; label is the `h1`, so the step's purpose is read with the field. iOS may not open the keyboard for focus set after a network response (unverified across versions); the field is directly under the hint, so one tap opens it. |
 | Code step expired (B → A) | The summary | Same as any failure |
+| Password accepted, passkey step (A → H) | The primary button, "Sign in with a passkey" | The person pressed Continue; the heading and hint are read with the button, as with the code field for B. Not `autoFocus` on the prompt: the prompt opens only from a press (SC 3.2.1) |
+| Passkey step refused (H → A) | The summary | Same as any failure |
+| Go back (H → A) | The password field | Nothing was wrong; the person chose to retype it |
+| Passkey step dismissed | Stays on the button | Nothing was removed; the person chose to stop |
+| Finish setup on F fails | Stays on the button; the alert above it is announced | Same rule as every request failure |
 | Passkey dismissed | Stays on the passkey button | Nothing was removed; the person chose to stop |
 | Busy | Stays on the pressed button (`aria-disabled`, never `disabled`, which would drop focus to `<body>`) | [Standard: HTML disabled controls swallow clicks, https://html.spec.whatwg.org/multipage/form-control-infrastructure.html#enabling-and-disabling-form-controls:-the-disabled-attribute] |
 | 401 anywhere in the app (→ C) | C's `h1` "You've been signed out" | The focused element is now hidden ([session-timeout.md](../components/session-timeout.md)) |
@@ -505,8 +595,8 @@ errors (it clips the next field's name: [Research] Roselli 2023, https://adrianr
 
 **Headings and landmarks**
 - [ ] One `<h1>` per view: "Sign in" · "Enter the 6-digit code from your authenticator app" (B, the label inside it) ·
-      "You've been signed out" (C) · "Set up your account" · "Create a password" (label inside it) · "Set up your
-      authenticator app" · "This link has expired" · "Your setup session timed out".
+      "Use your passkey" (H) · "You've been signed out" (C) · "Set up your account" · "Create a password" (label
+      inside it) · "Set up your authenticator app" · "This link has expired" · "Your setup session timed out".
 - [ ] `h2` "Choose how you'll sign in" (E); `h2` "There is a problem" inside the summary.
 - [ ] Landmarks: `<header>` (banner, wordmark only) and `<main id="main-content">`. No `<nav>` on these views. Skip
       link "Skip to main content" first in `<body>`.
@@ -527,7 +617,8 @@ errors (it clips the next field's name: [Research] Roselli 2023, https://adrianr
 **Keyboard**
 - [ ] Everything works by keyboard alone; Tab order as listed under Interactions; visible 3 px focus outline on every
       stop, drawn with `outline` (survives forced colours).
-- [ ] Enter submits the form the focus is in; it never triggers a passkey prompt.
+- [ ] Enter submits the form the focus is in; it never triggers a passkey prompt, except that Enter on view F for a
+      password and a passkey is Finish setup, which opens the prompt as its press does (D97).
 - [ ] The OS passkey dialog returns focus to the button when it closes (check per browser on the device test).
 
 **Screen reader**
@@ -574,7 +665,19 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
       failed. Check your details and try again. After 5 failed attempts, sign-in pauses for 15 minutes." with no
       field marked invalid.
 - [ ] After a failed password step the email is still filled in and the password field is empty.
-- [ ] A correct password replaces the form with the code step at the same URL; focus is on the code field.
+- [ ] A correct password of a person who chose a password and an authenticator app replaces the form with the code
+      step at the same URL; focus is on the code field.
+- [ ] A correct password of a person who chose a password only signs them in at once, with no further step.
+- [ ] A correct password of a person who chose a password and a passkey replaces the form with the passkey step (H) at
+      the same URL; focus is on "Sign in with a passkey"; no anonymous passkey options are requested while it shows.
+- [ ] On the passkey step, the device's prompt opens from the press with no `await` before it; the person's passkey
+      signs them in; a dismissed prompt shows nothing and leaves the step and focus where they were; the next press
+      works without retyping the password.
+- [ ] On the passkey step, another account's passkey, a `401` or `429`, or options past the cookie's 5 minutes return
+      to A with the email kept and the generic message; Go back returns to A with no message and focus on the
+      password field, in every state, including a browser without WebAuthn.
+- [ ] A code never signs in a person who chose a password and a passkey (the code step answers `401` for them).
+- [ ] A person who chose a password and a passkey can also sign in with A's passkey button alone (A142).
 - [ ] Pasting "123 456", "123-456" or full-width digits into the code field signs in; "12345" or "abc" shows "The code
       must be 6 digits" and sends nothing (check the network log).
 - [ ] The code is never submitted automatically after the 6th digit.
@@ -608,12 +711,14 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
       link from your email again."
 - [ ] Network failure on the link check shows the failure sentence and Try again; Try again succeeds without the
       fragment (token held in memory).
-- [ ] View E shows name and email as text, then "Use a passkey (recommended)" (primary button) and "Use a password and
-      authenticator app" (secondary link).
+- [ ] View E shows name and email as text, then "Use a passkey (recommended)" (primary button) and the secondary links
+      "Use a password and authenticator app", "Use a password only" and "Use a password and a passkey", in that
+      order, each with its hint; only the first says "(recommended)".
 - [ ] With the CDP virtual authenticator (`hasResidentKey`, `hasUserVerification`, `isUserVerified: true`) the passkey
       path ends on Today; with `isUserVerified: false` it shows "Your passkey was not set up…" in the alert above the
       passkey button, focus stays on that button, and both options still work.
-- [ ] With WebAuthn unavailable, view E shows "Open this link in your browser" and the password option is primary.
+- [ ] With WebAuthn unavailable, view E shows "Open this link in your browser", "Use a password and authenticator
+      app" is primary, "Use a password only" follows it, and "Use a password and a passkey" is not offered.
 - [ ] Create a password rejects an empty value, one of only whitespace (`value.trim() === ''`) and 11 characters with
       the inline messages; 12 characters of any kind, but not all whitespace, continue; no confirm field, no strength
       meter, no rules list, no `maxLength`.
@@ -623,12 +728,20 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
 - [ ] A wrong setup code shows "That code did not work. Enter the code the app shows for Grow2Notes now." on the code
       field, clears the code and keeps the password (Finish setup works with a new code without going back).
 - [ ] Back on view G returns to Create a password with the password still filled in.
-- [ ] Both setup paths end on Today, and Back from Today does not return to a setup or sign-in step.
-- [ ] After setup, signing in a second time works for both paths (design §8.1 invariant test).
+- [ ] Every setup path ends on Today, and Back from Today does not return to a setup or sign-in step (for a password
+      only and a password and a passkey, F goes back one entry and the setup layout replaces it).
+- [ ] After setup, signing in a second time works for all four methods (design §8.1 invariant test); for a password
+      and a passkey, the second sign-in is the password and then the passkey.
+- [ ] On view F for a password only, Finish setup sends the password and nothing else; for a password and a passkey it
+      opens the passkey prompt straight from the press, and a refused prompt keeps the password and lets the person
+      try again without retyping. Enter in the field presses Finish setup.
+- [ ] A refreshed `/setup/password` shows "To set up your account, open the link from your email again." and the
+      choice is not recovered from storage, the URL or `history.state`.
 
 **Privacy and storage (D22, §9.6)**
 - [ ] `localStorage`, `sessionStorage`, IndexedDB, cookies set by script, `history.state` and the URL never contain
-      the email, password, code, setup token, setup key or method used (check in DevTools after each path).
+      the email, password, code, setup token, setup key or method used, the setup choice included (check in DevTools
+      after each path).
 - [ ] Credentials are sent by a direct API call, not through a TanStack `useMutation` (no password in the mutation
       cache); the setup key query is dropped from memory when view G unmounts.
 - [ ] No `<form action={…}>` is used; fields are controlled and submitted with `onSubmit` + `preventDefault`.
@@ -637,7 +750,7 @@ password managers allowed, one code field, passkeys as the non-cognitive route),
 
 **Layout and accessibility**
 - [ ] At 320 px and at 200% text nothing scrolls sideways; Show/Hide wraps under the field.
-- [ ] axe reports no violations on views A–G; the keyboard pass and the NVDA/VoiceOver pass in the checklist are done.
+- [ ] axe reports no violations on views A–H; the keyboard pass and the NVDA/VoiceOver pass in the checklist are done.
 - [ ] On a real iPhone and Android phone, setup from Gmail, Outlook and the built-in mail app is tried, and each
       in-app browser's passkey result is recorded (go-live device check).
 
@@ -680,19 +793,23 @@ orchestrator so the other files can be aligned.
 | 28 | **Pending state source:** `useMutation().isPending` (primary-actions.md) vs a direct API call (sign-in-form.md) | **Direct call with local `pending` state passed to `Button busy`** | The mutation cache would hold the password as `variables`. |
 | 29 | **Code input styling:** ~9ch (sign-in-form.md) vs 10ch, 24 px bold (totp-setup.md); error border 4 px (totp-setup.md) vs 4 px bar + 3 px border (form-validation.md) | **totp-setup.md size, its digits at `--font-size-h2`; form-validation.md error styling** | Each file owns its part. foundations.md keeps four type sizes, and components take theirs from its tokens, none of which is 24 px at every width, so the digits take h2's: 22 px on a phone, 24 px from 40rem, still over the 16 px at which iOS zooms (13 October 2026, S00.04.03 and S00.04.05). |
 | 30 | **Unrequested controls:** Show/Hide on the sign-in password and a Copy setup key button (sign-in-form.md, totp-setup.md) vs design 4.1 (show/hide only when creating a password; "type the setup key") | **Neither in the default build**; both described under "Optional, not built unless approved", and the owner declined both (D68) | The default build matches design 4.1 exactly (owner's simplicity rule); the clipboard concern is recorded with the Copy question. |
+| 31 | **Dismissed passkey prompt on the passkey step (D97):** return to A at once vs stay on the step | **Stay on the step, with a Go back button in every state** | The prompt's cancel, timeout and "no passkey here" are indistinguishable, and Identity still holds the ceremony, so pressing again works. Go back keeps A's password and A's own passkey button reachable, including in a browser without WebAuthn. [Opinion] |
 
 ### Tensions with decisions (recorded once; no change proposed)
 
-1. **A25 vs the two-step flow (§6.2).** `POST /api/auth/login` returns `{next:"totp"}` only after a correct password, so
-   reaching the code step shows the password was right. Wording stays generic; the code still protects the account.
+1. **A25 vs the two-step flow (§6.2).** `POST /api/auth/login` returns `{next:"totp"}`, `{next:"passkey"}` or a `Me`
+   only after a correct password, so reaching a second step shows the password was right. Wording stays generic; the
+   second step still protects the account of a person who chose one (D97).
 2. **Passkey button vs passkey autofill (design 4.1).** FIDO's research found "autofill ensured the highest success"
    for passkey sign-in [Research, sample sizes unpublished,
    https://www.passkeycentral.org/design-guidelines/required-patterns/sign-in-with-a-passkey]. Built as designed.
-3. **One method, no passkey management (D23 via A22/A23).** FIDO lists managing passkeys in account settings as a
+3. **One method, no passkey management (D23 via A22/A23, D97).** FIDO lists managing passkeys in account settings as a
    required pattern; Windows does not sync passkeys out of the box (https://passkeys.dev/device-support/), so a passkey
    made only on a Windows laptop needs a Reset sign-in to move to a phone. Mitigated by the setup hint and §8.2.
-4. **Method chooser at setup (D23).** Microsoft (vendor data) advises passkey-first with no chooser; FIDO's "Offer
-   choice" and NN/g support the design's chooser.
+4. **Method chooser at setup (D23, D97).** Microsoft (vendor data) advises passkey-first with no chooser; FIDO's "Offer
+   choice" and NN/g support the design's chooser, which D97 widens to four choices. A password only is the owner's
+   accepted choice against APP 11.1 and HPP 4.1, and a password and a passkey is no stronger than a passkey alone
+   (A142).
 5. **Generic code-step message (A25).** GOV.UK error guidance and GOV.UK One Login name a wrong code specifically;
    here the generic message gives a tired worker less to go on.
 6. **30-minute setup session with no warning (§8, 4.1).** WCAG 2.2.1's "essential" reading is clear for two-factor

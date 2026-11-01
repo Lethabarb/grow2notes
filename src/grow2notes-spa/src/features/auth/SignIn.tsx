@@ -21,9 +21,10 @@ import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { CodeStep } from './CodeStep.tsx';
 import { cancelPasskey, useOneOptions } from './passkey.ts';
+import { PasskeyStep } from './PasskeyStep.tsx';
 import { PasswordInput } from './PasswordInput.tsx';
 import styles from './SignIn.module.css';
-import { isRefusal, notSignedIn } from './signInFailure.ts';
+import { isDismissal, isRefusal, notSignedIn } from './signInFailure.ts';
 
 // Identity's options JSON, which startAuthentication takes as it comes (design.md §6.2).
 const requestOptions = () =>
@@ -35,6 +36,12 @@ const fieldIds = {
   signIn: { email: 'email', password: 'password', code: 'code' },
   signedOut: { email: 'signed-out-email', password: 'signed-out-password', code: 'signed-out-code' },
 } as const;
+
+/** The password step's answer: the second step that follows (D69, D97), or, for a password only, the `Me` signed in. */
+type PasswordStepAnswer = { next: 'totp' | 'passkey' } | Me;
+
+/** The second step that shows in A's place once the password is accepted: the code, from when, or the passkey. */
+type SecondStep = { next: 'totp'; acceptedAt: number } | { next: 'passkey' };
 
 /** The form's messages, one for each field in error. */
 type FieldErrors = { email?: string; password?: string };
@@ -76,12 +83,6 @@ function summaryItems(failed: boolean, errors: FieldErrors, ids: { email: string
   return items;
 }
 
-// A cancel, a timeout or no passkey for the app on the device, which the browser makes look the same (WebAuthn §14.5).
-// The prompt has said all there is to say, so the view says nothing (sign-in.md *Passkey prompt dismissed*).
-function isDismissal(error: unknown): boolean {
-  return error instanceof Error && error.name === 'NotAllowedError';
-}
-
 /**
  * Sign-in's views A and B (sign-in.md components 1 to 11 and 18), which the shell shows in `<main>` at the address
  * that was opened when nobody is signed in, and titles "Grow2Notes – Sign in". Nothing takes focus as A renders: an
@@ -90,20 +91,22 @@ function isDismissal(error: unknown): boolean {
  * A fetches the passkey options as it renders, so that a press can open the prompt at once (sign-in.md *Interactions*
  * step 2). A sign-in puts its `Me` in the `['me']` query, and the shell then shows the app in its place, at the same
  * address. Under the passkey button, its own form takes an email address and a password, which Continue checks before
- * it sends anything (*Interactions* step 3). Once the password is accepted, the code step, view B, shows in A's place
- * (step 4), until it signs the person in, or a refusal comes after its 5 minutes, which shows A again. A form with a
+ * it sends anything (*Interactions* step 3). A password only signs the person in at once. Otherwise, once the password
+ * is accepted, the second step shows in A's place: the code step, view B (step 4), or, for a person who chose a
+ * password and a passkey, the passkey step (D97). It shows until it signs the person in, or a refusal comes, which
+ * shows A again, with the A25 message; the passkey step's Go back shows A again with none. A form with a
  * message to fix, or a sign-in that the server refuses, shows the summary, which takes focus; a request that got no
  * answer, or a prompt that failed, says so above the button that was pressed, where focus stays for another press.
  *
- * Identity keeps a passkey ceremony in the cookie that keeps the code step (S00.04.05's Notes), so the answer to a
+ * Identity keeps a passkey ceremony in the cookie that keeps the second step (S00.04.05's Notes), so the answer to a
  * request for passkey options must never come after a password is accepted: Continue sends the password once no such
- * request is on its way, none starts while the password is out, and none while B shows.
+ * request is on its way, none starts while the password is out, and none while a second step shows.
  *
  * `inPlace` makes it view C (sign-in.md; app-shell.md component 7), which the shell shows in place of a signed-in
  * screen whose session has ended, with that screen hidden after it: "You’ve been signed out" and its sentence take A's
- * `<h1>`'s place, over A's hint and controls, and stay over B, whose label is then an `<h2>`. The fields have ids of
- * their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs out, it asks for its
- * passkey options only once the server has surely ended the session (A61).
+ * `<h1>`'s place, over A's hint and controls, and stay over the second step, whose heading is then an `<h2>`. The
+ * fields have ids of their own, apart from any that the hidden screen holds (A62). Shown as the session clock runs
+ * out, it asks for its passkey options only once the server has surely ended the session (A61).
  */
 export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   const ids = inPlace ? fieldIds.signedOut : fieldIds.signIn;
@@ -122,10 +125,13 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [checking, setChecking] = useState(false);
   const [passwordFailure, setPasswordFailure] = useState<string>();
-  // When the password was accepted, in memory only, while the code step shows in A's place.
-  const [passwordAcceptedAt, setPasswordAcceptedAt] = useState<number>();
-  // The same, for what ends after an await: whether the code step shows.
-  const codeStepShows = useRef(false);
+  // The second step, in memory only, while it shows in A's place; the code step's 5 minutes run from when the password
+  // was accepted.
+  const [secondStep, setSecondStep] = useState<SecondStep>();
+  // The same, for what ends after an await: whether a second step shows.
+  const secondStepShows = useRef(false);
+  // The number of Go backs from the passkey step, each of which puts focus on the password field.
+  const [backs, setBacks] = useState(0);
   // The password step, from Continue's press until its answer has been shown.
   const passwordOut = useRef<Promise<void>>(undefined);
   // False once the view has gone, after which nothing that ends, its prompt among them, says or fetches anything.
@@ -159,7 +165,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
 
   /**
    * New passkey options, asked for once no password is out and only while A shows, or nothing once the view has gone
-   * or the code step shows. The check and the request come together, with no await between them, so that no password
+   * or a second step shows. The check and the request come together, with no await between them, so that no password
    * goes out in between.
    */
   async function optionsWhileAShows(): Promise<PublicKeyCredentialRequestOptionsJSON | undefined> {
@@ -167,7 +173,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       await passwordOut.current;
     }
 
-    return mounted.current && !codeStepShows.current ? options.prefetch() : undefined;
+    return mounted.current && !secondStepShows.current ? options.prefetch() : undefined;
   }
 
   // Everything before its first await runs in the press itself.
@@ -192,7 +198,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
         }
 
         if (optionsJSON === undefined) {
-          // The password was accepted while this press waited for its answer, and the code step now shows.
+          // The password was accepted while this press waited for its answer, and a second step now shows.
           setPasskeyBusy(false);
           return;
         }
@@ -216,9 +222,9 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       }
 
       setPasskeyBusy(false);
-      // The code step cancelled the prompt as it showed, or now holds the cookie that the sign-in needed: this attempt
-      // ends with no word, and asks for no options.
-      if (codeStepShows.current) {
+      // The second step cancelled the prompt as it showed, or now holds the cookie that the sign-in needed: this
+      // attempt ends with no word, and asks for no options.
+      if (secondStepShows.current) {
         return;
       }
 
@@ -264,9 +270,10 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       return;
     }
 
+    let answer: PasswordStepAnswer;
     try {
       // A direct call, not a mutation, so that the password never sits in TanStack's mutation cache.
-      await api<{ next: 'totp' }>('/api/auth/login', {
+      answer = await api<PasswordStepAnswer>('/api/auth/login', {
         method: 'POST',
         body: { email: sentEmail, password },
         timeoutMs: signInTimeoutMs,
@@ -293,27 +300,50 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
       return;
     }
 
-    // The code step's 5 minutes run from here (D69). A prompt still open would sign a ceremony that the step has
+    if (!('next' in answer)) {
+      // A password only (D97): signed in, and the shell shows the app in this view's place, which cancels any prompt.
+      await setMe(queryClient, answer);
+      return;
+    }
+
+    // The second step's 5 minutes run from here (D69). A prompt still open would sign a ceremony that the step has
     // ended, so it closes, and what A showed goes with A, the password among it, which nothing needs again.
-    codeStepShows.current = true;
+    secondStepShows.current = true;
     cancelPasskey();
     setChecking(false);
     setPassword('');
     setPasskeyFailure(undefined);
-    setPasswordAcceptedAt(Date.now());
+    setSecondStep(answer.next === 'totp' ? { next: 'totp', acceptedAt: Date.now() } : { next: 'passkey' });
   }
 
-  // A refused code once the code step has run out: A again, with the email kept and the password to type again.
-  function codeStepExpired() {
-    codeStepShows.current = false;
-    setPasswordAcceptedAt(undefined);
-    setFailed(true);
-    setAttempt((count) => count + 1);
+  // A again, with the email kept and the password to type again, and options fetched in place of any held, as the
+  // second step has ended the ceremony of those.
+  function backToA() {
+    secondStepShows.current = false;
+    setSecondStep(undefined);
     if (supported) {
-      // As on A's first render: the code step has ended the ceremony of any options held.
       options.prefetch().catch(() => {});
     }
   }
+
+  // A refusal once the second step has run out, or of the passkey step's request: A again, with the A25 message.
+  function secondStepRefused() {
+    backToA();
+    setFailed(true);
+    setAttempt((count) => count + 1);
+  }
+
+  // Go back from the passkey step: A again, with no message, and focus on the password field to type it again.
+  function backToPassword() {
+    backToA();
+    setBacks((count) => count + 1);
+  }
+
+  useEffect(() => {
+    if (backs > 0) {
+      document.getElementById(ids.password)?.focus();
+    }
+  }, [backs, ids.password]);
 
   // View C's <h1>, which the shell focuses as the view shows, and its sentence, in place of A's <h1> and over B.
   const signedOutHeading = inPlace ? (
@@ -326,7 +356,7 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
   return (
     <PageStatus>
       <div className={styles.view}>
-        {passwordAcceptedAt === undefined ? (
+        {secondStep === undefined ? (
           <>
             <ErrorSummary errors={summaryItems(failed, fieldErrors, ids)} attempt={attempt} />
             {signedOutHeading ?? <PageHeading>{pageName.signIn}</PageHeading>}
@@ -397,13 +427,15 @@ export function SignIn({ inPlace = false }: { inPlace?: boolean }) {
               </Button>
             </form>
           </>
-        ) : (
+        ) : secondStep.next === 'totp' ? (
           <CodeStep
             codeId={ids.code}
             heading={signedOutHeading}
-            passwordAcceptedAt={passwordAcceptedAt}
-            onExpired={codeStepExpired}
+            passwordAcceptedAt={secondStep.acceptedAt}
+            onExpired={secondStepRefused}
           />
+        ) : (
+          <PasskeyStep heading={signedOutHeading} onRefused={secondStepRefused} onBack={backToPassword} />
         )}
         <p className={styles.help}>{strings.signIn.help}</p>
       </div>

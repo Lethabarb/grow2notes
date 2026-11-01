@@ -1,33 +1,31 @@
-import {
-  browserSupportsWebAuthn,
-  startRegistration,
-  type PublicKeyCredentialCreationOptionsJSON,
-  type RegistrationResponseJSON,
-} from '@simplewebauthn/browser';
+import { browserSupportsWebAuthn, startRegistration, type RegistrationResponseJSON } from '@simplewebauthn/browser';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { api, ApiError, classify } from '../../api/api.ts';
+import { api, classify } from '../../api/api.ts';
 import { setMe, type Me } from '../../api/me.ts';
 import { Button } from '../../components/Button.tsx';
 import { buttonClass } from '../../components/buttonClass.ts';
 import { PageHeading } from '../../components/PageHeading.tsx';
 import { RequestAlert } from '../../components/RequestAlert.tsx';
 import { useErrorTitle } from '../../components/useErrorTitle.ts';
-import { msg } from '../../copy/messages.ts';
 import { pageName } from '../../copy/pageNames.ts';
 import { strings } from '../../copy/strings.ts';
 import { cancelPasskey, useOneOptions } from '../../features/auth/passkey.ts';
 import styles from './ChooseMethod.module.css';
-import type { SetupAccount } from './setupContext.ts';
-
-// Identity's options JSON, which startRegistration takes as it comes (design.md §6.2).
-const creationOptions = () =>
-  api<PublicKeyCredentialCreationOptionsJSON>('/api/auth/setup/passkey/options', { method: 'POST' });
+import { useSetup, type PasswordChoice, type SetupAccount } from './setupContext.ts';
+import { creationOptions, passkeyAlertFor } from './setupPasskey.ts';
 
 // Sent with every passkey, as design.md §6.2's body has it, and never shown (D70); the server stores each under this
 // name whatever it gets.
 const passkeyName = 'Grow2Notes';
+
+// The password choices in view E's order (sign-in.md component 14), each with its words.
+const passwordChoices: { choice: PasswordChoice; label: string; hint: string }[] = [
+  { choice: 'authenticatorApp', label: strings.setup.password, hint: strings.setup.passwordHint },
+  { choice: 'passwordOnly', label: strings.setup.passwordOnly, hint: strings.setup.passwordOnlyHint },
+  { choice: 'passwordAndPasskey', label: strings.setup.passwordAndPasskey, hint: strings.setup.passwordAndPasskeyHint },
+];
 
 type ChooseMethodProps = {
   /** The account the link named, which setup holds in memory. */
@@ -40,17 +38,20 @@ type ChooseMethodProps = {
 };
 
 /**
- * View E (sign-in.md, its *Setup* states and *Interactions* 8): the account the link named, and the choice between a
- * passkey and a password with an authenticator app. In a browser with WebAuthn, the passkey's creation options are
+ * View E (sign-in.md, its *Setup* states and *Interactions* 8 and 9): the account the link named, and the choice
+ * between a passkey and three password choices (D97). In a browser with WebAuthn, the passkey's creation options are
  * fetched as the view shows, so that a press can open the device's prompt at once, and its passkey finishes setup and
- * goes to Today; the prompt opens only on a press, never as the page loads. In one without, a notice says to open the
- * link in the phone's own browser, and the password becomes the primary choice.
+ * goes to Today; the prompt opens only on a press, never as the page loads. Each password choice is a link to view F
+ * that records the choice in setup's memory. In a browser without WebAuthn, a notice says to open the link in the
+ * phone's own browser, the password and authenticator app becomes the primary choice, and the password and a passkey,
+ * which needs a passkey made on this device, is not offered.
  */
 export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { choosePassword } = useSetup();
   const passkeyHintId = useId();
-  const passwordHintId = useId();
+  const hintIdPrefix = useId();
   const supported = browserSupportsWebAuthn();
   const options = useOneOptions(creationOptions);
   const [busy, setBusy] = useState(false);
@@ -122,7 +123,7 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
         return;
       }
 
-      const words = alertFor(error);
+      const words = passkeyAlertFor(error);
       if (words === undefined) {
         onTimedOut();
         return;
@@ -168,32 +169,27 @@ export function ChooseMethod({ account, onTimedOut }: ChooseMethodProps) {
         </div>
       )}
       <p className={styles.or}>{strings.or}</p>
-      <Link
-        to="/setup/password"
-        className={buttonClass(supported ? 'secondary' : 'primary')}
-        aria-describedby={passwordHintId}
-      >
-        {strings.setup.password}
-      </Link>
-      <p id={passwordHintId} className={styles.hint}>{strings.setup.passwordHint}</p>
+      {passwordChoices
+        .filter(({ choice }) => supported || choice !== 'passwordAndPasskey')
+        .map(({ choice, label, hint }, index) => (
+          <Fragment key={choice}>
+            <Link
+              to="/setup/password"
+              className={choiceClass(!supported && index === 0 ? 'primary' : 'secondary', index > 0)}
+              aria-describedby={`${hintIdPrefix}${choice}`}
+              onClick={() => {
+                choosePassword(choice);
+              }}
+            >
+              {label}
+            </Link>
+            <p id={`${hintIdPrefix}${choice}`} className={styles.hint}>{hint}</p>
+          </Fragment>
+        ))}
     </div>
   );
 }
 
-/** The alert's words for a press that failed, or `undefined` for a `401`. */
-function alertFor(error: unknown): string | undefined {
-  // `api()` fails with an ApiError, so anything else came from the prompt: the browser made no passkey, whatever the
-  // reason, which WebAuthn keeps from the page, an abort that the view did not start among them. A 422 is the
-  // server refusing the passkey that it made.
-  if (!(error instanceof ApiError) || error.status === 422) {
-    return strings.setup.passkeyNotSetUp;
-  }
-
-  if (error.status === 429) {
-    return strings.setup.tooManyTries;
-  }
-
-  // A 401 from a setup call means that its enrolment cookie has ended.
-  const cause = classify(error);
-  return cause === 'signedOut' ? undefined : msg.notSetUp(cause);
+function choiceClass(variant: 'primary' | 'secondary', afterAnother: boolean): string {
+  return afterAnother ? `${buttonClass(variant)} ${styles.next}` : buttonClass(variant);
 }

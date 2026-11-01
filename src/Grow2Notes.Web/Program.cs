@@ -107,8 +107,8 @@ builder.Services.AddDataProtection()
 // wrong passwords and wrong codes together (§9.9), and times the lockout on the system clock, not TimeProvider.
 //
 // The default token providers include Identity's authenticator provider, which checks the codes of the authenticator
-// app that the password path of setup adds (§8.1 step 4) and that a password sign-in asks for (§8.2). Without it,
-// Identity finds no two-factor provider for anyone, and so two-factor off for everyone.
+// app that the password-and-app path of setup adds (§8.1 step 4) and that a sign-in with it asks for (§8.2). Without
+// it, Identity finds no two-factor provider for anyone, and so no second step for anyone who chose one (D97).
 builder.Services.AddIdentityCore<ApplicationUser>(o =>
     {
         o.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -160,9 +160,10 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddEnrolmentCookie()
     .AddIdentityCookies();
 
-// Identity's two-factor cookie holds a password sign-in's code step and a passkey ceremony, for 5 minutes from when it
-// is set (TwoFactorCookie, D69). It does not slide, as Identity's cookies do by default, or a request after half that
-// time, such as a wrong code at 3 minutes, would renew it for another 5.
+// Identity's two-factor cookie holds a password sign-in's second step, its code step or the passkey ceremony that
+// replaces it, and a passkey ceremony, for 5 minutes from when it is set (TwoFactorCookie, D69). It does not slide,
+// as Identity's cookies do by default, or a request after half that time, such as a wrong code at 3 minutes, would
+// renew it for another 5.
 builder.Services.Configure<CookieAuthenticationOptions>(IdentityConstants.TwoFactorUserIdScheme, o =>
 {
     o.ExpireTimeSpan = TwoFactorCookie.Lifetime;
@@ -417,11 +418,14 @@ api.MapSignInGroup()
     .MapSetupStartEndpoint()
     .MapSetupAuthenticatorEndpoints()
     .MapSetupPasswordEndpoint()
+    .MapSetupPasswordOnlyEndpoint()
+    .MapSetupPasswordAndPasskeyEndpoint()
     .MapSetupPasskeyOptionsEndpoint()
     .MapSetupPasskeyEndpoint()
     .MapPasskeyOptionsEndpoint()
     .MapPasskeySignInEndpoint()
     .MapPasswordSignInEndpoint()
+    .MapPasskeyStepOptionsEndpoint()
     .MapTotpSignInEndpoint();
 
 api.MapAdminGroup()

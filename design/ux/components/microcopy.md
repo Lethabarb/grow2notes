@@ -210,7 +210,7 @@ managers.
 | **setup link** | The single-use link in the email, valid 7 days (A23) | "setup link" (noun, one word); "Set up your account" (verb, two words) | activation link, invitation link, magic link | W M |
 | **sign in / sign-in / sign out** | "Sign in" and "sign out" are verbs; "sign-in" is the noun or adjective | "Sign in", "Signed in as …", "Sign-in failed", "Reset sign-in", "Sign out" | log in, login, log on, log out, logout | W M |
 | **passkey** | Signing in with your face, fingerprint or phone PIN | "Use a passkey (recommended)", "Sign in with a passkey" | biometric login, security key, FIDO | W M |
-| **password / authenticator app / 6-digit code / setup key / QR code** | The other sign-in method (A22) | Exactly these | OTP, TOTP, 2FA, MFA, token, one-time password, verification code | W M |
+| **password / authenticator app / 6-digit code / setup key / QR code** | The password sign-in methods (A22, D97): a password and an authenticator app, a password only, a password and a passkey | Exactly these | OTP, TOTP, 2FA, MFA, token, one-time password, verification code | W M |
 | **Reset sign-in** | A manager removes someone’s sign-in method and emails a new setup link | Button and confirmation | reset password, unlock, recover account | M |
 | **Report / Daily report / Download Word / Download PDF** | The day’s submitted notes as a file (D43). Never shown on screen. | Nav "Report", heading "Daily report", buttons | view report, preview, export (here), print | M |
 | **Export record** | One participant’s notes for a date range, as a file | Button and screen name, "Export" | download (here), report, print | M |
@@ -597,6 +597,13 @@ NHS App; [Research] NN/g, https://www.nngroup.com/articles/error-message-guideli
 - Field labels "Email address", "Password", "Create a password" with hint "Use at least 12 characters." (sign-in-form.md).
 - This is where unfamiliar words cluster (passkey, authenticator app, setup key, QR code). Each is explained once, in
   one sentence, where it first appears (sign-in-form.md and totp-setup.md hints); never with jargon such as MFA or OTP.
+- D97 adds seven (P) strings, awaiting the owner's approval (D67): "Use a password only" and its hint "You'll sign in
+  with your email address and a password, and nothing else."; "Use a password and a passkey" and its hint "You'll
+  create a password, then use your face, fingerprint or PIN after it each time you sign in."; the line on view F "When
+  you select Finish setup, this device asks for your face, fingerprint or PIN to make your passkey."; and the passkey
+  step's heading "Use your passkey" and hint "To finish signing in, use your face, fingerprint or PIN, the same way you
+  unlock your device." They use "device", not "phone", so they fit a laptop. The glossary calls the four ways "sign-in
+  methods": a passkey, a password and an authenticator app, a password only, a password and a passkey.
 
 ### 4.2 Today
 

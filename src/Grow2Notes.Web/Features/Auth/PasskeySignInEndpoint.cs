@@ -24,7 +24,9 @@ namespace Grow2Notes.Web.Features.Auth;
 /// if writing it fails, the exception handler's <c>500</c> clears the response's headers, the session cookie's
 /// <c>Set-Cookie</c> among them, so no session starts without its event. A credential of no account is audited
 /// nowhere (§5.4: known accounts only); it is counted in telemetry by one log entry, which holds no value of the
-/// request (§9.5), and Identity is not asked about it.
+/// request (§9.5), and Identity is not asked about it. It also takes the credential of the passkey step of a sign-in
+/// with a password and a passkey (D97), whose options are <c>POST /api/auth/login/passkey/options</c>'s: Identity's
+/// check then also fails a credential that is not the password step's account's.
 /// </remarks>
 internal static partial class PasskeySignInEndpoint
 {

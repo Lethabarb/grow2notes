@@ -168,8 +168,8 @@ every participant's notes (D20), so never run it on a request that came only by 
 alone.
 
 It does what a manager's Reset sign-in does in the app (design.md §4.11, §8.6), and prints the new setup link instead
-of emailing it. For an Active person, it removes their password and passkeys, turns off their authenticator app's
-codes, gives them a new authenticator key and makes them Invited, which ends every session of theirs on every device
+of emailing it. For an Active person, it removes their password and passkeys, turns off their two-factor sign-in
+(whichever method they chose, D97), gives them a new authenticator key and makes them Invited, which ends every session of theirs on every device
 on its next request, and revokes the assistant authorisations they gave (mcp-server.md §4.6), which ends their
 connections of an AI assistant on its next call; they then set up again from the link (§8.1 steps 3 to 5). For an
 Invited person, it gives them a new key and link, as Resend invite does. Either way, every link made for them before
@@ -234,7 +234,7 @@ https://app-grow2notes-test.azurewebsites.net/setup#u=<the person's ID>&t=<the s
 It sends no email, logs nothing and keeps no copy of the link (design.md §9.5). The link is handled as the first
 manager's is (*The setup link*, above): it works once and for 7 days, it goes to the person directly and to no one
 else, and it is kept nowhere else, so close the console's tab once it has gone to them. The person opens it, sets up
-a passkey, or a password and an authenticator app, and is signed in.
+a passkey, a password and an authenticator app, a password only, or a password and a passkey (D97), and is signed in.
 
 ### If it is refused or fails
 
@@ -303,7 +303,7 @@ In one transaction (design.md §5.9), so all of it or none of it, it writes:
 It prints nothing, and the block then prints `Exit code: 0`. It sends no email and logs nothing.
 
 Then each session's next request gets `401`, so the person sees "You've been signed out", and signs in again with
-their passkey, or their password and a code. The stamp is in every setup link too (design.md §5.3), so a link not yet
+their passkey, or their password and whatever second step they chose, if any (D97). The stamp is in every setup link too (design.md §5.3), so a link not yet
 used says "This link has expired": a manager sends a new one with Resend invite on the person's page in Users. An
 organisation whose only manager is still Invited, as straight after `admin bootstrap`, has no one to resend it, so
 run [admin reset-signin](#admin-reset-signin) for that manager.

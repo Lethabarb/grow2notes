@@ -1337,7 +1337,7 @@ count towards the user's lockout.
 - `app.AddPasswordUserAsync(organisation)` (`Grow2Notes.Tests/Fixtures/PasswordSignIn.cs`) adds a worker through the
   app's `UserManager`, as setup's password path leaves one: with `PasswordSignIn.Password`, an authenticator key and
   two-factor on. It returns a `PasswordUser`, with the user's ID, address and key. `status` gives the user another
-  status, and `twoFactorEnabled: false` leaves two-factor off, as setup never does.
+  status, and `twoFactorEnabled: false` leaves two-factor off, as a password only does (D97).
 - `AuthenticatorCodes.Now(key)` (`Grow2Notes.Tests/Fixtures/AuthenticatorCodes.cs`) computes the code that an
   authenticator app holding the key shows now: RFC 6238's, as Identity's authenticator provider checks it, which
   `AuthenticatorCodesTests` checks against the RFC's own test values. Identity checks a code against the system

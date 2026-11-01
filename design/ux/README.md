@@ -58,7 +58,7 @@ and the 200-character group name (D82) and dropped A47's copied-picks line (D83)
 | Screen | What it covers |
 |---|---|
 | [app-shell](screens/app-shell.md) | The frame around every screen (4.0): header and nav, Flagged badge, page titles, before-main bar and BackLink, the route-change focus rule, start-up and whole-page messages, session warning and signing in again in place. |
-| [sign-in](screens/sign-in.md) | Sign in by passkey or by email, password and 6-digit code; signed out in place; account setup from the emailed link (4.1). |
+| [sign-in](screens/sign-in.md) | Sign in the way the person chose at setup (D97): a passkey; email and password with a 6-digit code; email and password alone; or email and password then a passkey. Signed out in place; account setup from the emailed link (4.1). |
 | [today](screens/today.md) | Home for everyone: every active participant with today's note status, unfinished drafts, Find a participant, the banner after Submit (4.2). |
 | [note-form](screens/note-form.md) | Write, autosave, edit and submit one note, including ticking which common-item groups happened; conflicts and refusals; the Submit and Discard confirmations; owns the note URLs (Routes) (4.3). |
 | [participant-notes](screens/participant-notes.md) | Past notes for one participant and the read view of one note, including the manager's review panel, the same on every route (4.4, 4.6). |

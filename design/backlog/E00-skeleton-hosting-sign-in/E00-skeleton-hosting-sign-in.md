@@ -10,7 +10,8 @@ azure:
 ---
 # E00 Skeleton, hosting and sign-in
 
-**Goal:** invited managers and workers set up MFA and sign in to Grow2Notes on a phone or a laptop, managers control
+**Goal:** invited managers and workers set up how they sign in (a passkey, a password and an authenticator app, a
+password only, or a password and a passkey, D97) and sign in to Grow2Notes on a phone or a laptop, managers control
 who can sign in and in which role, every state change can be audited, and every merge to `main` runs in the test
 environment in Azure Australia Southeast, with production ready for manual deploys.
 
@@ -25,6 +26,7 @@ by-hand step on ops/first-use-in-test.md and holds nothing open.
 - F00.04 Sign-in, account setup and sessions
 - F00.05 App shell
 - F00.06 Users
+- F00.07 Sign-in choices
 
 ## Scope coverage
 This epic's rows are in [coverage.md](../coverage.md), under E00.

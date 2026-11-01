@@ -3,6 +3,12 @@ import { createContext, useContext } from 'react';
 /** The account a setup link names, as `POST /api/auth/setup/start` answers it (design.md §6.2). */
 export type SetupAccount = { email: string; displayName: string };
 
+/**
+ * Which password choice view E's link recorded (D97): a password and an authenticator app, a password only, or a
+ * password and a passkey. View F reads it to say what its button does.
+ */
+export type PasswordChoice = 'authenticatorApp' | 'passwordOnly' | 'passwordAndPasskey';
+
 /** What setup keeps between its views (sign-in.md *Interactions* 7, 10 and 12). */
 export type Setup = {
   /** The account the link check found, or `undefined` before it and once setup drops it. */
@@ -18,9 +24,13 @@ export type Setup = {
    */
   passwordRefused: boolean;
   refusePassword: () => void;
+  /** The password choice that view E's link recorded, or `'authenticatorApp'` before one, as it was until D97. */
+  passwordChoice: PasswordChoice;
+  /** Records the password choice, as pressing its link on view E does. The same function on every render. */
+  choosePassword: (choice: PasswordChoice) => void;
   /**
-   * Marks setup finished, as view G does on its `200 Me` before it goes back to `/setup`'s entry, which the setup
-   * layout then replaces with Today's (sign-in.md *Interactions* 12). The same function on every render.
+   * Marks setup finished, as view F or G does on its `200 Me` before it goes back to `/setup`'s entry, which the
+   * setup layout then replaces with Today's (sign-in.md *Interactions* 12 and 16). The same function on every render.
    */
   finish: () => void;
   /**

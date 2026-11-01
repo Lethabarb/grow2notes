@@ -11,7 +11,7 @@ azure:
 # E07 Admin MCP server
 
 **Goal:** a manager, or the operator's Support person, makes the same admin changes as the Manage screens by asking
-any AI assistant the provider has approved. They sign in with their own Grow2Notes account and MFA, the same rules and
+any AI assistant the provider has approved. They sign in with their own Grow2Notes account, by the method they chose (D97), the same rules and
 audit trail apply, and no tool ever returns note content ([mcp-server.md](../../mcp-server.md), D48–D51, D56–D59).
 
 **Done when:** the tests in [mcp-server.md §10](../../mcp-server.md#10-testing) pass in CI (its by-hand tests are on
